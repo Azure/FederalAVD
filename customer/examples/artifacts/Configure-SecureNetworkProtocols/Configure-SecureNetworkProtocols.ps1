@@ -213,8 +213,12 @@ Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProvider
 # weak algorithms at the .NET layer.
 
 Write-Log -Message '=== Phase 4: .NET Framework TLS Hardening ==='
+$dotnetHives = @(
+    'HKLM:\SOFTWARE\Microsoft\.NETFramework',
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework'
+)
 foreach ($fw in @('v4.0.30319', 'v2.0.50727')) {
-    foreach ($hive in @('HKLM:\SOFTWARE\Microsoft\.NETFramework', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework')) {
+    foreach ($hive in $dotnetHives) {
         $path = "$hive\$fw"
         Write-Log -Message "[.NET] $path — SystemDefaultTlsVersions + SchUseStrongCrypto"
         Set-RegistryValue -Path $path -Name 'SystemDefaultTlsVersions' -PropertyType 'DWord' -Value 1
@@ -262,7 +266,10 @@ if ($EnableFipsMode) {
     Write-Log -Message '[FIPS] Enabling system-wide FIPS algorithm policy'
     Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy' `
         -Name 'Enabled' -PropertyType 'DWord' -Value 1
-    Write-Log -Category 'Warning' -Message '[FIPS] FIPS mode enabled. Some applications using non-FIPS crypto will fail. Reboot required.'
+    Write-Log -Category 'Warning' -Message (
+        '[FIPS] FIPS mode enabled. Some applications using non-FIPS crypto ' +
+        'will fail. Reboot required.'
+    )
 } else {
     Write-Log -Message '[FIPS] Skipping FIPS mode (EnableFipsMode not specified).'
 }
