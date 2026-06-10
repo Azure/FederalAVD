@@ -127,9 +127,11 @@ Function Disable-SchannelCipher {
 Function Enable-SchannelCipher {
     param([string]$Cipher)
     Write-Log -Message "[Cipher] Enabling '$Cipher'"
-    # 0xffffffff = enabled marker used by SCHANNEL
+    # -1 as Int32 has bits 0xFFFFFFFF — the SCHANNEL "enabled" marker.
+    # Using -1 instead of 0xffffffff ensures the Set-RegistryValue idempotency
+    # check works correctly (Get-ItemPropertyValue returns Int32, not UInt32).
     Set-RegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Ciphers\$Cipher" `
-        -Name 'Enabled' -PropertyType 'DWord' -Value 0xffffffff
+        -Name 'Enabled' -PropertyType 'DWord' -Value -1
 }
 #endregion
 
@@ -198,11 +200,11 @@ Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProvider
 
 Write-Log -Message '[Hash] Ensuring SHA-256 and SHA-384 are enabled'
 Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\SHA256' `
-    -Name 'Enabled' -PropertyType 'DWord' -Value 0xffffffff
+    -Name 'Enabled' -PropertyType 'DWord' -Value -1
 Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\SHA384' `
-    -Name 'Enabled' -PropertyType 'DWord' -Value 0xffffffff
+    -Name 'Enabled' -PropertyType 'DWord' -Value -1
 Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\SHA512' `
-    -Name 'Enabled' -PropertyType 'DWord' -Value 0xffffffff
+    -Name 'Enabled' -PropertyType 'DWord' -Value -1
 
 # ── .NET Framework TLS ───────────────────────────────────────────────────────
 # Without these settings, .NET apps may negotiate TLS 1.0/1.1 even when SCHANNEL
