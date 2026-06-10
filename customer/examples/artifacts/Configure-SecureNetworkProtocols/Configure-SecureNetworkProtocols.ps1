@@ -33,9 +33,9 @@
     Test in a non-production environment before deploying at scale.
 
     References:
-      NIST SP 800-52 Rev 2 — Guidelines for TLS Implementations
-      NIST SP 800-53 Rev 5 — SC-8, SC-8(1), SC-13
-      CIS Microsoft Windows 11 Benchmark — Section 18.3 (SCHANNEL)
+      NIST SP 800-52 Rev 2  -  Guidelines for TLS Implementations
+      NIST SP 800-53 Rev 5  -  SC-8, SC-8(1), SC-13
+      CIS Microsoft Windows 11 Benchmark  -  Section 18.3 (SCHANNEL)
       https://learn.microsoft.com/en-us/windows-server/security/tls/tls-registry-settings
 #>
 [CmdletBinding()]
@@ -127,7 +127,7 @@ Function Disable-SchannelCipher {
 Function Enable-SchannelCipher {
     param([string]$Cipher)
     Write-Log -Message "[Cipher] Enabling '$Cipher'"
-    # -1 as Int32 has bits 0xFFFFFFFF — the SCHANNEL "enabled" marker.
+    # -1 as Int32 has bits 0xFFFFFFFF  -  the SCHANNEL "enabled" marker.
     # Using -1 instead of 0xffffffff ensures the Set-RegistryValue idempotency
     # check works correctly (Get-ItemPropertyValue returns Int32, not UInt32).
     $p = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Ciphers\$Cipher"
@@ -153,7 +153,7 @@ Function Enable-SchannelHash {
 Write-Log -Message "Starting '$Script:Name'."
 Write-Log -Message "Parameters: EnableFipsMode=$EnableFipsMode, ConfigureCipherSuites=$ConfigureCipherSuites"
 
-# ── Protocols ────────────────────────────────────────────────────────────────
+# -- Protocols ----------------------------------------------------------------
 # SC-8(1) / NIST SP 800-52 Rev 2: Disable all deprecated SSL/TLS versions.
 # PCT 1.0 and Multi-Protocol Unified Hello are legacy Microsoft pre-SSL protocols.
 
@@ -174,7 +174,7 @@ Write-Log -Message '[Protocol] Enabling required protocols (TLS 1.2, TLS 1.3)'
 Enable-SchannelProtocol -Protocol 'TLS 1.2'
 Enable-SchannelProtocol -Protocol 'TLS 1.3'
 
-# ── Ciphers ──────────────────────────────────────────────────────────────────
+# -- Ciphers ------------------------------------------------------------------
 # SC-13: Disable weak / broken symmetric cipher suites.
 
 Write-Log -Message '=== Phase 2: Cipher Configuration ==='
@@ -190,20 +190,20 @@ Disable-SchannelCipher -Cipher 'RC2 40/128'
 Disable-SchannelCipher -Cipher 'RC2 56/128'
 Disable-SchannelCipher -Cipher 'RC2 128/128'
 
-Write-Log -Message '[Cipher] Disabling RC4 (broken stream cipher — RFC 7465)'
+Write-Log -Message '[Cipher] Disabling RC4 (broken stream cipher  -  RFC 7465)'
 Disable-SchannelCipher -Cipher 'RC4 40/128'
 Disable-SchannelCipher -Cipher 'RC4 56/128'
 Disable-SchannelCipher -Cipher 'RC4 64/128'
 Disable-SchannelCipher -Cipher 'RC4 128/128'
 
-Write-Log -Message '[Cipher] Disabling Triple-DES (SWEET32 vulnerability — CVE-2016-2183)'
+Write-Log -Message '[Cipher] Disabling Triple-DES (SWEET32 vulnerability  -  CVE-2016-2183)'
 Disable-SchannelCipher -Cipher 'Triple DES 168'
 
 Write-Log -Message '[Cipher] Ensuring AES is enabled (SC-13)'
 Enable-SchannelCipher -Cipher 'AES 128/128'
 Enable-SchannelCipher -Cipher 'AES 256/256'
 
-# ── Hashes ───────────────────────────────────────────────────────────────────
+# -- Hashes -------------------------------------------------------------------
 # SC-13: MD5 is cryptographically broken (collision attacks).
 # SHA-1 is deprecated by NIST (SP 800-131A Rev 2) for digital signatures.
 
@@ -216,7 +216,7 @@ Enable-SchannelHash -Hash 'SHA256'
 Enable-SchannelHash -Hash 'SHA384'
 Enable-SchannelHash -Hash 'SHA512'
 
-# ── .NET Framework TLS ───────────────────────────────────────────────────────
+# -- .NET Framework TLS -------------------------------------------------------
 # Without these settings, .NET apps may negotiate TLS 1.0/1.1 even when SCHANNEL
 # has them disabled, because legacy .NET defaults can override SCHANNEL settings.
 # SystemDefaultTlsVersions=1 defers to SCHANNEL; SchUseStrongCrypto=1 disables
@@ -230,13 +230,13 @@ $dotnetHives = @(
 foreach ($fw in @('v4.0.30319', 'v2.0.50727')) {
     foreach ($hive in $dotnetHives) {
         $path = "$hive\$fw"
-        Write-Log -Message "[.NET] $path — SystemDefaultTlsVersions + SchUseStrongCrypto"
+        Write-Log -Message "[.NET] $path  -  SystemDefaultTlsVersions + SchUseStrongCrypto"
         Set-RegistryValue -Path $path -Name 'SystemDefaultTlsVersions' -PropertyType 'DWord' -Value 1
         Set-RegistryValue -Path $path -Name 'SchUseStrongCrypto' -PropertyType 'DWord' -Value 1
     }
 }
 
-# ── Cipher Suite Order (optional) ────────────────────────────────────────────
+# -- Cipher Suite Order (optional) --------------------------------------------
 # SC-13: Prefer ECDHE+AES-GCM (forward secrecy, authenticated encryption).
 # Removes CBC+SHA suites from TLS 1.2 negotiation to eliminate potential
 # BEAST/LUCKY13 attack surface. TLS 1.3 suites are controlled by Windows
@@ -249,12 +249,12 @@ if ($ConfigureCipherSuites) {
         'TLS_AES_256_GCM_SHA384',
         'TLS_AES_128_GCM_SHA256',
         'TLS_CHACHA20_POLY1305_SHA256',
-        # TLS 1.2 — ECDHE + AES-GCM (forward secrecy + AEAD)
+        # TLS 1.2  -  ECDHE + AES-GCM (forward secrecy + AEAD)
         'TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384',
         'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256',
         'TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384',
         'TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256',
-        # TLS 1.2 — DHE + AES-GCM (forward secrecy + AEAD, no elliptic curve)
+        # TLS 1.2  -  DHE + AES-GCM (forward secrecy + AEAD, no elliptic curve)
         'TLS_DHE_RSA_WITH_AES_256_GCM_SHA384',
         'TLS_DHE_RSA_WITH_AES_128_GCM_SHA256'
     )
@@ -265,7 +265,7 @@ if ($ConfigureCipherSuites) {
     Write-Log -Message '[CipherSuites] NOTE: A reboot is required for the cipher suite order to take effect.'
 }
 
-# ── FIPS 140 Mode (optional) ─────────────────────────────────────────────────
+# -- FIPS 140 Mode (optional) -------------------------------------------------
 # SC-13: Restricts all Windows cryptographic operations to FIPS 140-validated
 # algorithms. Enforces the most restrictive compliance posture.
 # WARNING: Enabling FIPS mode may break applications that use non-FIPS crypto.
