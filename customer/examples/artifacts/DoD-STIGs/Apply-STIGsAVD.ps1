@@ -838,11 +838,6 @@ foreach ($log in $eventLogMap.Keys) {
         -Value $eventLogSddl
 }
 
-# CVE-2013-3900
-Write-Log -Message "CVE-2013-3900: Mitigating PE Installation risks."
-Set-RegistryValue -Name EnableCertPaddingCheck -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Cryptography\WinTrust\Config' -PropertyType DWORD -Value 1
-Set-RegistryValue -Name EnableCertPaddingCheck -Path 'HKLM:\SOFTWARE\Microsoft\Cryptography\WinTrust\Config' -PropertyType DWORD -Value 1
-
 Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # Stamp STIG version to registry
