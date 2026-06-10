@@ -5,7 +5,9 @@ This solution will allow you to run one or multiple scripts on selected virtual 
 ## Requirements
 
 - Permissions: below are the minimum required permissions to deploy this solution
-  - Virtual Machine Contributor - to execute Run Commands on the Virtual Machines  
+  - **Virtual Machine Contributor** on the resource group containing the target VMs — required to create and manage Run Command resources on the VMs
+
+> **Note:** No subscription-level permissions are required. The deployment is resource group scoped and ARM reads each VM's location automatically, so VMs in different Azure regions within the same resource group are fully supported.
 
 ## Deployment Options
 
@@ -20,10 +22,9 @@ This solution will allow you to run one or multiple scripts on selected virtual 
 Run a single PowerShell script from a public URI on selected VMs. This is the simplest approach when your script is hosted at an accessible URL.
 
 ```powershell
-New-AzSubscriptionDeployment `
-    -Location 'usgovvirginia' `
+New-AzResourceGroupDeployment `
+    -ResourceGroupName 'rg-avd-sessionhosts-usgv' `
     -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/runCommandsOnVms/main.json' `
-    -resourceGroupName 'rg-avd-sessionhosts-usgv' `
     -vmNames @('avd-vm-01', 'avd-vm-02', 'avd-vm-03') `
     -runCommandName 'InstallSoftware' `
     -scriptUri 'https://raw.githubusercontent.com/contoso/scripts/main/Install-Software.ps1' `
@@ -62,10 +63,9 @@ $scripts = @(
 )
 
 # Deploy with storage account and managed identity
-New-AzSubscriptionDeployment `
-    -Location 'usgovvirginia' `
+New-AzResourceGroupDeployment `
+    -ResourceGroupName 'rg-avd-sessionhosts-usgv' `
     -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/runCommandsOnVms/main.json' `
-    -resourceGroupName 'rg-avd-sessionhosts-usgv' `
     -vmNames @('avd-vm-01', 'avd-vm-02', 'avd-vm-03') `
     -scripts $scripts `
     -scriptsStorageAccountName 'sastorageaccountusgv' `
@@ -103,10 +103,9 @@ Write-Host "Windows Defender configured successfully"
 '@
 
 # Deploy with inline script content
-New-AzSubscriptionDeployment `
-    -Location 'usgovvirginia' `
+New-AzResourceGroupDeployment `
+    -ResourceGroupName 'rg-avd-sessionhosts-usgv' `
     -TemplateFile 'https://raw.githubusercontent.com/Azure/federalavd/main/deployments/add-ons/runCommandsOnVms/main.json' `
-    -resourceGroupName 'rg-avd-sessionhosts-usgv' `
     -vmNames @('avd-vm-01', 'avd-vm-02', 'avd-vm-03') `
     -runCommandName 'ConfigureDefender' `
     -scriptContent $scriptContent `
