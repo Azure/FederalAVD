@@ -55,6 +55,12 @@ Use `Overlay` to merge customer artifacts over repo artifacts, or `None` to skip
 Controls whether customer downloads.json content is merged into the base downloads file.
 Use `Merge` to apply customer overrides, or `None` to use only the repo-selected base file.
 
+.PARAMETER CopyDownloadsToCustomerArtifacts
+When specified, each downloaded file is also copied into the customer\artifacts folder (alongside
+the normal staging location). Use this to persist downloads into your customer content so they can
+be committed to source control and used in air-gapped environments on subsequent runs with
+-SkipDownloadingNewSources.
+
 .NOTES
 If `customer\parameters\imageManagement\downloads.json` exists, it is merged on top of the
 auto-selected base environment downloads file. Existing keys are overwritten and new keys are added.
@@ -120,7 +126,10 @@ param(
     [string]$CustomerDownloadsMode = 'Merge',
 
     [Parameter(Mandatory = $false)]
-    [string]$TempDir = "$Env:Temp"
+    [string]$TempDir = "$Env:Temp",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$CopyDownloadsToCustomerArtifacts
 )
 
 #region Variables
@@ -206,6 +215,15 @@ function Get-MsiInfo {
     Begin {
         [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
         Write-Verbose "${CmdletName}: Starting with [$PSBoundParameters]"
+
+        # WindowsInstaller.Installer is a Windows-only COM object.
+        # $IsWindows is available in PowerShell 6+; PSEdition 'Desktop' covers Windows PowerShell 5.x.
+        $runningOnWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or ($IsWindows -eq $true)
+        if (-not $runningOnWindows) {
+            Write-Warning "${CmdletName}: MSI metadata extraction requires the Windows Installer COM object (WindowsInstaller.Installer) and is not supported on this platform ($($PSVersionTable.OS)). Skipping."
+            return
+        }
+
         $winInstaller = New-Object -ComObject WindowsInstaller.Installer
     }
     Process {
@@ -239,8 +257,10 @@ function Get-MsiInfo {
     }
     End {
         try {
-            $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($winInstaller)
-            [GC]::Collect()
+            if ($runningOnWindows) {
+                $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($winInstaller)
+                [GC]::Collect()
+            }
         }
         catch {
             Write-Error 'Failed to release Windows Installer COM reference'
@@ -350,6 +370,9 @@ Function Get-InternetFile {
 function ConvertTo-LongSafePath {
     param([string] $Path)
     $trimmed = $Path.TrimEnd('\')
+    # Long-path prefix (\\?\) is Windows-only; return path unchanged on other platforms.
+    # PSEdition 'Desktop' covers Windows PowerShell 5.x where $IsWindows is not defined.
+    if ($PSVersionTable.PSEdition -ne 'Desktop' -and $IsWindows -ne $true) { return $trimmed }
     if ($trimmed.StartsWith('\\?\')) { return $trimmed }
     if (-not [System.IO.Path]::IsPathRooted($trimmed)) {
         throw "ConvertTo-LongSafePath requires an absolute path. Received: '$trimmed'"
@@ -362,6 +385,8 @@ function ConvertTo-LongSafePath {
 
 function Remove-LongSafePrefix {
     param([string] $Path)
+    # Long-path prefix (\\?\) is Windows-only; return path unchanged on other platforms.
+    if ($PSVersionTable.PSEdition -ne 'Desktop' -and $IsWindows -ne $true) { return $Path }
     if ($Path.StartsWith('\\?\UNC\')) { return '\\' + $Path.Substring(8) }
     if ($Path.StartsWith('\\?\'))     { return $Path.Substring(4) }
     return $Path
@@ -707,6 +732,14 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     $copySize = [math]::Round(((Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1MB, 1)
                     Write-Output "[$SoftwareName] Copying to artifacts directory ($copySize MB)..."
                     Copy-Item -Path "$TempSoftwareDownloadDir\*" -Destination $DestinationDir -Recurse -Force
+                    if ($CopyDownloadsToCustomerArtifacts) {
+                        $CustomerDestinationDir = Join-Path -Path $CustomerArtifactsDir -ChildPath $DestFolder
+                        If (-not (Test-Path -Path $CustomerDestinationDir)) {
+                            New-Item -Path $CustomerDestinationDir -ItemType Directory -Force | Out-Null
+                        }
+                        Write-Output "[$SoftwareName] Copying to customer artifacts directory ($copySize MB)..."
+                        Copy-Item -Path "$TempSoftwareDownloadDir\*" -Destination $CustomerDestinationDir -Recurse -Force
+                    }
                 }
             }
         }
@@ -756,6 +789,14 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 $copySize = [math]::Round((Get-Item $DestFileFullName).Length / 1MB, 1)
                 Write-Output "[$SoftwareName] Copying to artifacts directory ($copySize MB)..."
                 Copy-Item -Path $DestFileFullName -Destination $DestinationDir -Force
+                if ($CopyDownloadsToCustomerArtifacts) {
+                    $CustomerDestinationDir = Join-Path -Path $CustomerArtifactsDir -ChildPath $DestFolder
+                    If (-not (Test-Path -Path $CustomerDestinationDir)) {
+                        New-Item -Path $CustomerDestinationDir -ItemType Directory -Force | Out-Null
+                    }
+                    Write-Output "[$SoftwareName] Copying to customer artifacts directory ($copySize MB)..."
+                    Copy-Item -Path $DestFileFullName -Destination $CustomerDestinationDir -Force
+                }
             }
         }
         Else {
