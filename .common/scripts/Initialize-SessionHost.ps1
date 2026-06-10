@@ -871,6 +871,8 @@ try {
         If ($IdentitySolution -match 'EntraKerberos') {
             Write-Log -message "Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Setting"
             $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters'; PropertyType = 'DWord'; Value = 1 })
+            Write-Log -message "Adding Entra Kerberos Load Cred Key From Profile Setting"
+            $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\Software\Policies\Microsoft\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })
         }
 
         # Windows Defender Exclusions for FSLogix
