@@ -14,8 +14,6 @@
 param agentBootLoaderDownloadUrl string = ''
 @description('Optional. Override download URL for the AVD Agent installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
 param agentDownloadUrl string = ''
-@description('Optional. File name of the AVD Agent DSC configuration package blob used during session host registration.')
-param avdAgentDscPackage string = 'Configuration_1.0.03362.1223.zip'
 @description('Optional. URI of the blob storage container holding scripts and artifacts for session host customizations.')
 param artifactsContainerUri string = ''
 @description('Optional. Resource ID of the user-assigned managed identity with Storage Blob Data Reader access to the artifacts container.')
@@ -289,7 +287,6 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
     agentDownloadUrl: agentDownloadUrl
-    avdAgentDscPackage: avdAgentDscPackage
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     availability: availability

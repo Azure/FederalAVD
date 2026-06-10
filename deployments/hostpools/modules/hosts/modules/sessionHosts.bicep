@@ -7,7 +7,6 @@ param availabilitySetNameConv string
 param availabilitySetsCount int
 param availabilitySetsIndex int
 param availabilityZones array
-param avdAgentDscPackage string
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryption bool
 param customImageResourceId string = ''
@@ -121,9 +120,6 @@ var agentBootLoaderUrl = !empty(agentBootLoaderDownloadUrl)
 var agentUrl = !empty(agentDownloadUrl)
   ? agentDownloadUrl
   : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgent' : 'https://go.microsoft.com/fwlink/?linkid=2310011')
-var dscStorageAccount = startsWith(environment().name, 'USN') ? 'wvdexportalcontainer' : 'wvdportalstorageblob'
-var dscUrl = 'https://${dscStorageAccount}.blob.${environment().suffixes.storage}/galleryartifacts/${avdAgentDscPackage}'
-
 resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
   name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
@@ -156,7 +152,6 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderUrl
     agentDownloadUrl: agentUrl
-    agentFallBackDownloadUrl: dscUrl
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     artifactsUserAssignedIdentityClientId: empty(artifactsUserAssignedIdentityResourceId) ? '' : artifactsUAI!.properties.clientId

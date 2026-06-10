@@ -359,9 +359,6 @@ param agentBootLoaderDownloadUrl string = ''
 @description('Optional. The URL to download the AVD Agent. If not provided, the URL is determined based on the cloud environment.')
 param agentDownloadUrl string = ''
 
-@description('Optional. The name of the PowerShell DSC configuration file containing the avd agent installers. This file is only downloaded and used if the agentDownloadUrl or endpoint download fails.')
-param avdAgentDscPackage string = 'Configuration_1.0.03362.1223.zip'
-
 // User Profiles
 
 @description('Optional. Determines whether resources to support FSLogix profile storage are deployed.')
@@ -1762,7 +1759,6 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     resourceGroupHosts: resourceGroupHosts
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
     agentDownloadUrl: agentDownloadUrl
-    avdAgentDscPackage: avdAgentDscPackage
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     avdInsightsDataCollectionRulesResourceId: enableMonitoring

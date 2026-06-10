@@ -1,6 +1,5 @@
 param agentBootLoaderDownloadUrl string
 param agentDownloadUrl string
-param agentFallBackDownloadUrl string
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityClientId string
 param artifactsUserAssignedIdentityResourceId string
@@ -468,7 +467,6 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
         { name: 'AADJoin', value: !contains(identitySolution, 'DomainServices') ? 'true' : 'false' }
         { name: 'AgentBootLoaderUrl', value: agentBootLoaderDownloadUrl }
         { name: 'AgentUrl', value: agentDownloadUrl }
-        { name: 'FallBackUrl', value: agentFallBackDownloadUrl }
         { name: 'ApiVersion', value: startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01' }
         { name: 'StorageSuffix', value: storageSuffix }
         { name: 'MdmId', value: intuneEnrollment ? '0000000a-0000-0000-c000-000000000000' : '' }

@@ -57,7 +57,6 @@ Unified session host initialization script that combines configuration and AVD a
 | `AgentBootLoaderUrl` | Yes | Direct URL to download the RDAgentBootLoader MSI |
 | `TimeZone` | Yes | Windows time zone ID to configure (e.g. `Eastern Standard Time`) |
 | `AgentUrl` | No | Direct URL to the RDAgent MSI — used if the Azure broker endpoint is unreachable |
-| `FallbackUrl` | No | URL to a `configuration.zip` containing `DeployAgent.zip` — last-resort fallback for agent download |
 | `AADJoin` | No | `'true'` if the VM is Entra ID (Azure AD) joined; default `'false'` |
 | `MdmId` | No | MDM enrollment ID for Intune auto-enrollment with Entra ID join |
 | `UserAssignedIdentityClientId` | No | Client ID of a managed identity for authenticating to Azure Storage |
@@ -101,11 +100,10 @@ Unified session host initialization script that combines configuration and AVD a
 *Phase 2 — AVD Agent Installation*
 - Detects Server OS and installs `RDS-RD-Server` Windows Feature if needed
 - Skips installation if the VM is already registered (`RDInfraAgent` registry key)
-- Downloads the RDAgent MSI using a three-tier fallback strategy:
+- Downloads the RDAgent MSI using a two-tier strategy:
   1. Queries the AVD broker endpoint via the registration token JWT
   2. Falls back to the explicit `AgentUrl` parameter
-  3. Extracts from `configuration.zip` → `DeployAgent.zip` at `FallbackUrl`
-- Downloads the RDAgentBootLoader MSI from `AgentBootLoaderUrl` (with FallbackUrl fallback)
+- Downloads the RDAgentBootLoader MSI from `AgentBootLoaderUrl`
 - Installs RDAgentBootLoader and RDAgent via MSI with automatic retry on `ERROR_INSTALL_ALREADY_RUNNING` (exit code 1618)
 - Waits for the `RDAgentBootLoader` service to start
 - Cleans up the temporary download folder

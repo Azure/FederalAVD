@@ -3,7 +3,6 @@ targetScope = 'subscription'
 param resourceGroupHosts string
 param agentBootLoaderDownloadUrl string = ''
 param agentDownloadUrl string = ''
-param avdAgentDscPackage string
 param artifactsContainerUri string
 param artifactsUserAssignedIdentityResourceId string
 param availability string
@@ -163,7 +162,6 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
     agentDownloadUrl: agentDownloadUrl
-    avdAgentDscPackage: avdAgentDscPackage
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     availability: availability

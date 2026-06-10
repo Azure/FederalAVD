@@ -252,7 +252,6 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 | `timeZone` | string | `Eastern Standard Time` | Windows time zone for session host VMs |
 | `hibernationEnabled` | bool | `false` | Enable VM hibernation |
 | `tags` | object | `{}` | Tags applied to all deployed resources, keyed by resource type |
-| `avdAgentDscPackage` | string | *(version pinned)* | AVD Agent DSC configuration package blob name |
 | `agentBootLoaderDownloadUrl` | string | `''` | Override AVD Agent Boot Loader download URL (air-gapped clouds) |
 | `agentDownloadUrl` | string | `''` | Override AVD Agent download URL (air-gapped clouds) |
 | `virtualMachineNameConv` | string | `''` | VM naming convention override (`SHNAME` placeholder); auto-detected when empty |
