@@ -101,27 +101,27 @@ Function Disable-SchannelProtocol {
     param([string]$Protocol)
     $base = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\$Protocol"
     Write-Log -Message "[Protocol] Disabling $Protocol (Client + Server)"
-    Set-RegistryValue -Path "$base\Client" -Name 'Enabled'           -PropertyType 'DWord' -Value 0
-    Set-RegistryValue -Path "$base\Client" -Name 'DisabledByDefault'  -PropertyType 'DWord' -Value 1
-    Set-RegistryValue -Path "$base\Server" -Name 'Enabled'           -PropertyType 'DWord' -Value 0
-    Set-RegistryValue -Path "$base\Server" -Name 'DisabledByDefault'  -PropertyType 'DWord' -Value 1
+    Set-RegistryValue -Path "$base\Client" -Name 'Enabled' -PropertyType 'DWord' -Value 0
+    Set-RegistryValue -Path "$base\Client" -Name 'DisabledByDefault' -PropertyType 'DWord' -Value 1
+    Set-RegistryValue -Path "$base\Server" -Name 'Enabled' -PropertyType 'DWord' -Value 0
+    Set-RegistryValue -Path "$base\Server" -Name 'DisabledByDefault' -PropertyType 'DWord' -Value 1
 }
 
 Function Enable-SchannelProtocol {
     param([string]$Protocol)
     $base = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\$Protocol"
     Write-Log -Message "[Protocol] Enabling $Protocol (Client + Server)"
-    Set-RegistryValue -Path "$base\Client" -Name 'Enabled'           -PropertyType 'DWord' -Value 1
-    Set-RegistryValue -Path "$base\Client" -Name 'DisabledByDefault'  -PropertyType 'DWord' -Value 0
-    Set-RegistryValue -Path "$base\Server" -Name 'Enabled'           -PropertyType 'DWord' -Value 1
-    Set-RegistryValue -Path "$base\Server" -Name 'DisabledByDefault'  -PropertyType 'DWord' -Value 0
+    Set-RegistryValue -Path "$base\Client" -Name 'Enabled' -PropertyType 'DWord' -Value 1
+    Set-RegistryValue -Path "$base\Client" -Name 'DisabledByDefault' -PropertyType 'DWord' -Value 0
+    Set-RegistryValue -Path "$base\Server" -Name 'Enabled' -PropertyType 'DWord' -Value 1
+    Set-RegistryValue -Path "$base\Server" -Name 'DisabledByDefault' -PropertyType 'DWord' -Value 0
 }
 
 Function Disable-SchannelCipher {
     param([string]$Cipher)
     Write-Log -Message "[Cipher] Disabling '$Cipher'"
-    Set-RegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Ciphers\$Cipher" `
-        -Name 'Enabled' -PropertyType 'DWord' -Value 0
+    $p = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Ciphers\$Cipher"
+    Set-RegistryValue -Path $p -Name 'Enabled' -PropertyType 'DWord' -Value 0
 }
 
 Function Enable-SchannelCipher {
@@ -130,8 +130,22 @@ Function Enable-SchannelCipher {
     # -1 as Int32 has bits 0xFFFFFFFF — the SCHANNEL "enabled" marker.
     # Using -1 instead of 0xffffffff ensures the Set-RegistryValue idempotency
     # check works correctly (Get-ItemPropertyValue returns Int32, not UInt32).
-    Set-RegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Ciphers\$Cipher" `
-        -Name 'Enabled' -PropertyType 'DWord' -Value -1
+    $p = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Ciphers\$Cipher"
+    Set-RegistryValue -Path $p -Name 'Enabled' -PropertyType 'DWord' -Value -1
+}
+
+Function Disable-SchannelHash {
+    param([string]$Hash)
+    Write-Log -Message "[Hash] Disabling '$Hash'"
+    $p = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\$Hash"
+    Set-RegistryValue -Path $p -Name 'Enabled' -PropertyType 'DWord' -Value 0
+}
+
+Function Enable-SchannelHash {
+    param([string]$Hash)
+    Write-Log -Message "[Hash] Enabling '$Hash'"
+    $p = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\$Hash"
+    Set-RegistryValue -Path $p -Name 'Enabled' -PropertyType 'DWord' -Value -1
 }
 #endregion
 
@@ -195,16 +209,12 @@ Enable-SchannelCipher -Cipher 'AES 256/256'
 
 Write-Log -Message '=== Phase 3: Hash Configuration ==='
 Write-Log -Message '[Hash] Disabling MD5 (collision attacks, not FIPS approved for signatures)'
-Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\MD5' `
-    -Name 'Enabled' -PropertyType 'DWord' -Value 0
+Disable-SchannelHash -Hash 'MD5'
 
-Write-Log -Message '[Hash] Ensuring SHA-256 and SHA-384 are enabled'
-Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\SHA256' `
-    -Name 'Enabled' -PropertyType 'DWord' -Value -1
-Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\SHA384' `
-    -Name 'Enabled' -PropertyType 'DWord' -Value -1
-Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Hashes\SHA512' `
-    -Name 'Enabled' -PropertyType 'DWord' -Value -1
+Write-Log -Message '[Hash] Ensuring SHA-256, SHA-384, and SHA-512 are enabled'
+Enable-SchannelHash -Hash 'SHA256'
+Enable-SchannelHash -Hash 'SHA384'
+Enable-SchannelHash -Hash 'SHA512'
 
 # ── .NET Framework TLS ───────────────────────────────────────────────────────
 # Without these settings, .NET apps may negotiate TLS 1.0/1.1 even when SCHANNEL
@@ -222,7 +232,7 @@ foreach ($fw in @('v4.0.30319', 'v2.0.50727')) {
         $path = "$hive\$fw"
         Write-Log -Message "[.NET] $path — SystemDefaultTlsVersions + SchUseStrongCrypto"
         Set-RegistryValue -Path $path -Name 'SystemDefaultTlsVersions' -PropertyType 'DWord' -Value 1
-        Set-RegistryValue -Path $path -Name 'SchUseStrongCrypto'        -PropertyType 'DWord' -Value 1
+        Set-RegistryValue -Path $path -Name 'SchUseStrongCrypto' -PropertyType 'DWord' -Value 1
     }
 }
 
@@ -250,8 +260,8 @@ if ($ConfigureCipherSuites) {
     )
     $suiteList = $suites -join ','
     Write-Log -Message "[CipherSuites] Setting policy order: $suiteList"
-    Set-RegistryValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002' `
-        -Name 'Functions' -PropertyType 'String' -Value $suiteList
+    $sslPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002'
+    Set-RegistryValue -Path $sslPath -Name 'Functions' -PropertyType 'String' -Value $suiteList
     Write-Log -Message '[CipherSuites] NOTE: A reboot is required for the cipher suite order to take effect.'
 }
 
@@ -264,8 +274,8 @@ if ($ConfigureCipherSuites) {
 if ($EnableFipsMode) {
     Write-Log -Message '=== Phase 6: FIPS 140 Mode (SC-13) ==='
     Write-Log -Message '[FIPS] Enabling system-wide FIPS algorithm policy'
-    Set-RegistryValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy' `
-        -Name 'Enabled' -PropertyType 'DWord' -Value 1
+    $fipsPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy'
+    Set-RegistryValue -Path $fipsPath -Name 'Enabled' -PropertyType 'DWord' -Value 1
     Write-Log -Category 'Warning' -Message (
         '[FIPS] FIPS mode enabled. Some applications using non-FIPS crypto ' +
         'will fail. Reboot required.'
