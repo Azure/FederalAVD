@@ -359,7 +359,7 @@ Function Reset-LocalPolicy {
             }
         }
         else {
-            Write-Log -Messagee "${CmdletName}: Skipping gpupdate. (A reboot will also reapply policies.)"
+            Write-Log -Message "${CmdletName}: Skipping gpupdate. (A reboot will also reapply policies.)"
         }
     }
     end {
@@ -453,7 +453,7 @@ Function Write-Log {
 
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 Write-Log -Message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: ApplicationsToSTIG: $($ApplicatonsToSTIG -join ','), AllowLocalUserLogon: $AllowLocalUserLogon, Upgrade: $Upgrade, Version: $Version"
+Write-Log -Category Info -Message "Parameters: ApplicationsToSTIG: $($ApplicationsToSTIG -join ','), AllowLocalUserLogon: $AllowLocalUserLogon, Upgrade: $Upgrade, Version: $Version"
 
 # Use provided version parameter
 [version]$stigVersion = $Version
@@ -593,7 +593,7 @@ ForEach ($gpoFolder in $GPOFolders) {
             Disable-LocalUser -Name $newAdminName
         #>
         $SecEditFile = (Get-ChildItem -Path $gpoFolder -Recurse -Filter "GptTmpl.inf" | Where-Object { $_.DirectoryName -match "SecEdit" }).FullName
-        $Content = Get-Content $SecEditFile
+        $Content = Get-Content -Path $SecEditFile -Encoding Unicode
         Write-Output "Applying AVD exceptions to DoD Windows $osVersion security template: $SecEditFile"
 
         # Remove administrator account disable/rename lines
@@ -727,7 +727,7 @@ If (-not $IsDomainJoined) {
 
 # Apply registry policy overrides built above
 Write-Log -Message "Applying AVD Exceptions registry overrides via lgpo.exe /t"
-$r = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$LgpoTxtFile`"" -Wait -PassThru
+$r = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/t `"$LgpoTxtFile`"" -Wait -PassThru
 Write-Log -Message "lgpo.exe /t exited with code [$($r.ExitCode)]"
 $GPUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/force' -Wait -PassThru
 Write-Log -Message "'gpupdate.exe' exited with code [$($GPUpdate.ExitCode)])."
@@ -754,7 +754,7 @@ If ($Serviceobject) {
 $output = cmd /c netsh interface portproxy show all '2>&1'
 If ($output) {
     Write-Log -Message "V-257592: Disabling PortProxy rules."
-    Start-Process -FilePatch 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -NoNewWindow
+    Start-Process -FilePath 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -NoNewWindow
 }
 
 # V-253396 MEDIUM: Explorer Data Execution Prevention must be enabled.
