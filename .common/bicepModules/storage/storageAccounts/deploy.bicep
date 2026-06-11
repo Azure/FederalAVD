@@ -103,8 +103,12 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     dnsEndpointType: !empty(dnsEndpointType) ? dnsEndpointType : null
     largeFileSharesState: !empty(largeFileSharesState) ? largeFileSharesState : null
     networkAcls: {
-      bypass: hasFirewallRestrictions ? networkAclsBypass : 'AzureServices'
-      defaultAction: hasFirewallRestrictions ? 'Deny' : 'Allow'
+      bypass: networkAclsBypass
+      // Deny by default when explicit firewall rules are present OR when public access is disabled.
+      // Azure Policy "Storage accounts should restrict network access" (and similar deny-effect
+      // policies) audit defaultAction: Allow even when publicNetworkAccess: Disabled, because
+      // the ARM property is evaluated independently of the publicNetworkAccess flag.
+      defaultAction: (hasFirewallRestrictions || publicNetworkAccess == 'Disabled') ? 'Deny' : 'Allow'
       virtualNetworkRules: virtualNetworkRules
       ipRules: ipRules
     }

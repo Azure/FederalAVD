@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "1506710214847508457"
+      "templateHash": "16482954897281803568"
     }
   },
   "parameters": {
@@ -12547,7 +12547,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "15590747213607208675"
+              "templateHash": "11258201635676144829"
             }
           },
           "parameters": {
@@ -13501,7 +13501,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.43.8.12551",
-                      "templateHash": "17726755891083445758"
+                      "templateHash": "3057610195993925550"
                     }
                   },
                   "parameters": {
@@ -13698,7 +13698,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.43.8.12551",
-                              "templateHash": "10800169598555599766"
+                              "templateHash": "8891486545125656717"
                             }
                           },
                           "definitions": {
@@ -14012,8 +14012,8 @@
                                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
                                 "networkAcls": {
-                                  "bypass": "[if(variables('hasFirewallRestrictions'), parameters('networkAclsBypass'), 'AzureServices')]",
-                                  "defaultAction": "[if(variables('hasFirewallRestrictions'), 'Deny', 'Allow')]",
+                                  "bypass": "[parameters('networkAclsBypass')]",
+                                  "defaultAction": "[if(or(variables('hasFirewallRestrictions'), equals(parameters('publicNetworkAccess'), 'Disabled')), 'Deny', 'Allow')]",
                                   "virtualNetworkRules": "[variables('virtualNetworkRules')]",
                                   "ipRules": "[variables('ipRules')]"
                                 },

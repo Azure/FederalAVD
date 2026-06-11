@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "12175029762373167653"
+      "templateHash": "9208855358495440288"
     }
   },
   "parameters": {
@@ -4969,7 +4969,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "10800169598555599766"
+              "templateHash": "8891486545125656717"
             }
           },
           "definitions": {
@@ -5283,8 +5283,8 @@
                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
                 "networkAcls": {
-                  "bypass": "[if(variables('hasFirewallRestrictions'), parameters('networkAclsBypass'), 'AzureServices')]",
-                  "defaultAction": "[if(variables('hasFirewallRestrictions'), 'Deny', 'Allow')]",
+                  "bypass": "[parameters('networkAclsBypass')]",
+                  "defaultAction": "[if(or(variables('hasFirewallRestrictions'), equals(parameters('publicNetworkAccess'), 'Disabled')), 'Deny', 'Allow')]",
                   "virtualNetworkRules": "[variables('virtualNetworkRules')]",
                   "ipRules": "[variables('ipRules')]"
                 },
@@ -6032,7 +6032,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "10800169598555599766"
+              "templateHash": "8891486545125656717"
             }
           },
           "definitions": {
@@ -6346,8 +6346,8 @@
                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
                 "networkAcls": {
-                  "bypass": "[if(variables('hasFirewallRestrictions'), parameters('networkAclsBypass'), 'AzureServices')]",
-                  "defaultAction": "[if(variables('hasFirewallRestrictions'), 'Deny', 'Allow')]",
+                  "bypass": "[parameters('networkAclsBypass')]",
+                  "defaultAction": "[if(or(variables('hasFirewallRestrictions'), equals(parameters('publicNetworkAccess'), 'Disabled')), 'Deny', 'Allow')]",
                   "virtualNetworkRules": "[variables('virtualNetworkRules')]",
                   "ipRules": "[variables('ipRules')]"
                 },
