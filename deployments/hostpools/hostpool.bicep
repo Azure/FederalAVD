@@ -229,9 +229,6 @@ Choose Platform Managed and Customer Managed if you need double encryption. This
 ''')
 param keyManagementDisks string = 'PlatformManaged'
 
-@description('Optional. The resource Id of an existing Disk Encryption Set for session host customer-managed key disk encryption. When provided, skips inline DES creation.')
-param existingDiskEncryptionSetResourceId string = ''
-
 @description('Optional. The rotation period for the customer-managed keys in the Azure Key Vault.')
 param keyExpirationInDays int = 180
 
@@ -1506,10 +1503,10 @@ module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
   ]
 }
 
-// Effective DES resource ID: top-level disk CMK or CVM CMK output takes precedence over a user-provided pre-existing DES.
+// Effective DES resource ID: inline disk CMK or CVM CMK output, or empty when platform-managed.
 var effectiveDiskEncryptionSetResourceId = deployDiskCmk
   ? diskCmk!.outputs.diskEncryptionSetResourceId
-  : deployCvmDiskCmk ? cvmDiskCmk!.outputs.diskEncryptionSetResourceId : existingDiskEncryptionSetResourceId
+  : deployCvmDiskCmk ? cvmDiskCmk!.outputs.diskEncryptionSetResourceId : ''
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.

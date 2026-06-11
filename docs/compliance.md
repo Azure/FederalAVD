@@ -80,7 +80,7 @@ The following security capabilities are active in every deployment regardless of
 | SC-8(1) | Cryptographic Protection | All Azure PaaS endpoints enforce HTTPS-only. Storage accounts reject HTTP. Key Vaults enforce TLS. | Automatic | Built-in |
 | SC-12 | Cryptographic Key Establishment | Encryption keys are stored in Azure Key Vault (Standard or Premium/HSM). Key rotation policy is enforced with configurable expiration period (`keyExpirationInDays`, default 180 days). | Automatic | `keyExpirationInDays` |
 | SC-20 | Secure Name/Address Resolution | Private DNS zones resolve PaaS hostnames to private IP addresses within the VNet, preventing public DNS resolution of internal resources. | Configurable | `deployPrivateEndpoints: true` + DNS zone parameters |
-| SC-28 | Protection of Information at Rest — VM disks | Session host OS and data disks are encrypted using a Disk Encryption Set with customer-managed keys in Key Vault. | Configurable | `keyManagementDisks: CustomerManaged` or `CustomerManagedHSM` |
+| SC-28 | Protection of Information at Rest — VM disks | Session host OS and data disks are encrypted using a Disk Encryption Set with customer-managed keys in Key Vault. The built-in NIST SP 800-53 Rev 5 / FedRAMP High policy initiative includes the policy **"Managed disks should be double encrypted with both platform-managed and customer-managed keys"** (Policy ID `ca91455f-eace-4f96-be59-e6e2c35b4816`), requiring both a platform-managed infrastructure encryption layer and a customer-managed disk encryption layer. Use `PlatformManagedAndCustomerManaged` or `PlatformManagedAndCustomerManagedHSM` to satisfy this policy. Note: double encryption options do not apply to Confidential VMs — use `CustomerManagedHSM` with `securityType: ConfidentialVM`. | Configurable | `keyManagementDisks: PlatformManagedAndCustomerManaged` or `PlatformManagedAndCustomerManagedHSM` |
 | SC-28 | Protection of Information at Rest — FSLogix storage | Azure Files storage accounts are encrypted with customer-managed keys. Infrastructure double encryption is always on. | Configurable | `keyManagementStorage: CustomerManaged` or `CustomerManagedHSM` |
 | SC-28 | Protection of Information at Rest — Recovery Services Vault | Personal host pool RSV is encrypted with a host-pool-scoped customer-managed key using the vault's system-assigned identity. | Configurable | `keyManagementRecoveryServicesVault: CustomerManaged` or `CustomerManagedHSM` |
 | SC-28(1) | Cryptographic Protection — supplemental | Encryption at host encrypts temp disk and disk caches at the physical host. Infrastructure double encryption adds a second platform-managed encryption layer on all storage. | Automatic | `encryptionAtHost: true` (default) |
@@ -121,7 +121,7 @@ IL4 builds on FedRAMP High. All NIST 800-53 / FedRAMP High controls above apply.
 |-------------|---------------|------|---------------------|
 | Data must reside in US Government regions | Deploy to `usgovvirginia`, `usgovarizona`, or `usgovtexas` (or US DoD regions). The solution supports all Azure Government regions. | Configurable | `location` parameter |
 | Encryption in transit for all data flows | TLS enforced on all PaaS endpoints. AVD session traffic encrypted. Storage accounts reject HTTP. | Automatic | Built-in |
-| Customer-managed encryption keys | All data-bearing resources (VM disks, FSLogix storage, RSV) must use CMK. | Configurable | `keyManagementDisks`, `keyManagementStorage`, `keyManagementRecoveryServicesVault` → `CustomerManaged` |
+| Customer-managed encryption keys | All data-bearing resources (VM disks, FSLogix storage, RSV) must use CMK. VM disks additionally require double encryption per the NIST SP 800-53 Rev 5 / FedRAMP High built-in policy initiative ("Managed disks should be double encrypted with both platform-managed and customer-managed keys"). | Configurable | `keyManagementDisks` → `PlatformManagedAndCustomerManaged`; `keyManagementStorage`, `keyManagementRecoveryServicesVault` → `CustomerManaged` |
 | No public internet exposure for sensitive workloads | Private endpoints deployed for storage, Key Vault, RSV, and AVD workspace/host pool. | Configurable | `deployPrivateEndpoints: true` |
 | Audit logging | Log Analytics workspace + AVD Insights DCR active. Key Vault and RSV diagnostic logs enabled. | Automatic | `enableMonitoring: true` (default) |
 | MFA for all administrative access | Enforced via Entra ID Conditional Access Policy — outside this solution's scope but applies to the same identity plane. | External | Entra ID CA Policy |
@@ -141,9 +141,9 @@ IL5 adds compute isolation and HSM requirements on top of IL4. All IL4 controls 
 | Requirement | Implementation | Type | Parameter / Feature |
 |-------------|---------------|------|---------------------|
 | Compute isolation — dedicated physical hosts (US Gov AZ/TX/VA) | Session host VMs are deployed to pre-provisioned Azure Dedicated Host(s) in a Dedicated Host Group. | Configurable | `deployToDedicatedHosts: true`, `dedicatedHostGroupResourceId` |
-| HSM-backed encryption keys (FIPS 140-2 Level 3) | Deploys Azure Key Vault Premium. All CMK keys are generated in and never leave the HSM. Applies to VM disks, FSLogix storage, RSV, and image management resources. | Configurable | `keyManagementDisks: CustomerManagedHSM` `keyManagementStorage: CustomerManagedHSM` `keyManagementRecoveryServicesVault: CustomerManagedHSM` |
+| HSM-backed encryption keys (FIPS 140-2 Level 3) | Deploys Azure Key Vault Premium. All CMK keys are generated in and never leave the HSM. Applies to VM disks, FSLogix storage, RSV, and image management resources. VM disks use `PlatformManagedAndCustomerManagedHSM` to satisfy both the HSM requirement and the double encryption policy from the NIST 800-53 / FedRAMP High built-in initiative. | Configurable | `keyManagementDisks: PlatformManagedAndCustomerManagedHSM` `keyManagementStorage: CustomerManagedHSM` `keyManagementRecoveryServicesVault: CustomerManagedHSM` |
 | HSM keys for image pipeline storage | Build log storage accounts and Compute Gallery image versions are encrypted with HSM-backed CMK. | Configurable | `keyManagementStorageAccounts: CustomerManagedHSM` `keyManagementGalleryImageVersions: CustomerManagedHSM` *(imageManagement.bicep)* |
-| Disk encryption via SSE + CMK (not EAH alone) | Server-Side Encryption with a Disk Encryption Set + CMK is the IL5-compliant mechanism. `encryptionAtHost` is a complementary control but does not satisfy IL5 storage isolation on its own. | Configurable | `keyManagementDisks: CustomerManagedHSM` |
+| Disk encryption via SSE + CMK (not EAH alone) | Server-Side Encryption with a Disk Encryption Set + CMK is the IL5-compliant mechanism. `encryptionAtHost` is a complementary control but does not satisfy IL5 storage isolation on its own. Double encryption (platform infrastructure layer + customer-managed key layer) is required by the NIST 800-53 / FedRAMP High built-in policy initiative. | Configurable | `keyManagementDisks: PlatformManagedAndCustomerManagedHSM` |
 | VM private disk access (optional deep isolation) | Disk Access resource with private endpoint prevents any direct internet access to managed disk URIs. Deployed automatically for personal host pools when `deployPrivateEndpoints: true`. | Automatic (when applicable) | `deployPrivateEndpoints: true` + personal host pool |
 
 ### Complete IL5 Parameter Set
@@ -154,7 +154,7 @@ Apply these in addition to the IL4 values above:
 {
   "deployToDedicatedHosts": { "value": true },
   "dedicatedHostGroupResourceId": { "value": "/subscriptions/.../dedicatedHostGroups/dhg-avd-prod" },
-  "keyManagementDisks": { "value": "CustomerManagedHSM" },
+  "keyManagementDisks": { "value": "PlatformManagedAndCustomerManagedHSM" },
   "keyManagementStorage": { "value": "CustomerManagedHSM" },
   "keyManagementRecoveryServicesVault": { "value": "CustomerManagedHSM" },
   "deployPrivateEndpoints": { "value": true },
@@ -191,7 +191,7 @@ For workloads requiring hardware-level memory encryption and attestation (beyond
 
 | Parameter | FedRAMP High | IL4 | IL5 |
 |-----------|-------------|-----|-----|
-| `keyManagementDisks` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
+| `keyManagementDisks` | `PlatformManagedAndCustomerManaged` | `PlatformManagedAndCustomerManaged` | `PlatformManagedAndCustomerManagedHSM` |
 | `keyManagementStorage` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
 | `keyManagementRecoveryServicesVault` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
 | `deployPrivateEndpoints` | `true` | `true` | `true` |
@@ -253,7 +253,7 @@ The CISA ZTMM v2.0 is the primary implementation framework for federal civilian 
 | Hardware-based attestation | Trusted Launch enables vTPM and Secure Boot. Guest Attestation extension validates boot integrity and is deployed to every session host. | Advanced | Automatic (`securityType: TrustedLaunch`) |
 | Measured boot / boot integrity monitoring | vTPM records measured boot sequence. Deviations from baseline firmware/OS state are detectable via Integrity Monitoring. | Advanced | Automatic |
 | Confidential computing attestation | Confidential VMs use AMD SEV-SNP or Intel TDX with hardware attestation — the hypervisor cannot read or modify guest memory. | Optimal | Configurable (`securityType: ConfidentialVM`) |
-| Encryption of device storage | OS and data disks encrypted via Disk Encryption Set + CMK. Encryption at host adds VM temp disk and cache encryption. | Optimal | Configurable (`keyManagementDisks: CustomerManaged/HSM`) |
+| Encryption of device storage | OS and data disks encrypted via Disk Encryption Set + CMK with a platform-managed infrastructure encryption layer (double encryption). Encryption at host adds VM temp disk and cache encryption. | Optimal | Configurable (`keyManagementDisks: PlatformManagedAndCustomerManaged/HSM`) |
 
 #### Pillar 3: Networks
 

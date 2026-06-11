@@ -417,11 +417,6 @@ Subscription
 - **Default:** `PlatformManaged`
 - **Description:** Session host disk key-management mode.
 
-#### `existingDiskEncryptionSetResourceId`
-- **Type:** String
-- **Optional**
-- **Description:** Disk Encryption Set for customer-managed keys
-
 #### `securityType`
 - **Type:** String
 - **Allowed:** `Standard`, `TrustedLaunch`, `ConfidentialVM`

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "4479477435776456500"
+      "templateHash": "1506710214847508457"
     }
   },
   "parameters": {
@@ -366,13 +366,6 @@
       ],
       "metadata": {
         "description": "Optional. The type of encryption key management used for the storage. (Default: \"PlatformManaged\")\n- Platform-managed keys (PMKs) are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use.\n- Customer-managed keys (CMKs) are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements.\n- Customer-managed keys (CMKs) storage in a premium KeyVault backed by a Hardware Security Module (HSM). The Hardware Security Module is FIPS 140 Level 3 validated.\n- Double encryption is 2 layers of encryption: an infrastructure encryption layer with platform managed keys and a disk encryption layer with customer managed keys defined by disk encryption sets.\nChoose Platform Managed and Customer Managed if you need double encryption. This option does not apply to confidential VMs.\n- Choose Platform Managed and Customer Managed with HSM if you must incorporate double encryption and protect the customer managed key with the Hardware Security Module. This option does not apply to confidential VMs.\n"
-      }
-    },
-    "existingDiskEncryptionSetResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. The resource Id of an existing Disk Encryption Set for session host customer-managed key disk encryption. When provided, skips inline DES creation."
       }
     },
     "keyExpirationInDays": {
@@ -16559,7 +16552,7 @@
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"
           },
-          "diskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('existingDiskEncryptionSetResourceId'))))]",
+          "diskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), if(variables('deployCvmDiskCmk'), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('CVM-Disk-CMK-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetResourceId.value), createObject('value', '')))]",
           "fslogixConfigureSessionHosts": {
             "value": "[parameters('fslogixConfigureSessionHosts')]"
           },
