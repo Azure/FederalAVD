@@ -130,26 +130,19 @@ if (-not (Test-Path -LiteralPath $SecEditFile)) {
 Write-Log -Message "[GptTmpl] Reading '$SecEditFile'."
 $Content = Get-Content -Path $SecEditFile -Encoding Unicode
 
-# Replace or remove the 'ADD YOUR ENTERPRISE ADMINS' / 'ADD YOUR DOMAIN ADMINS'
-# placeholder tokens that the DoD STIG template leaves in the [Privilege Rights] section.
+# GptTmpl.inf already contains real group names ('Enterprise Admins', 'Domain Admins').
+# On domain-joined hosts the template is used as-is.
+# On non-domain-joined hosts, any privilege-right line that references domain groups is
+# removed entirely -- those groups do not exist on Entra-joined / workgroup machines.
 if ($IsDomainJoined) {
-    Write-Log -Message "[GptTmpl] Replacing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' with actual group names — domain-joined host."
-    $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
-        $replaced = $_ -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins' -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
-        Write-Log -Message "[GptTmpl] BEFORE : $_"
-        Write-Log -Message "[GptTmpl] AFTER  : $replaced"
-    }
-    $Content = $Content -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins'
-    $Content = $Content -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
+    Write-Log -Message "[GptTmpl] Domain-joined host -- template already contains real group names, no changes required."
 }
 else {
-    # Non-domain-joined: remove the entire user right lines that contain the placeholders.
-    # SeDenyBatchLogonRight and SeDenyServiceLogonRight are only meaningful for domain groups;
-    # leaving them empty or unconfigured is the correct posture on Entra-joined/workgroup hosts.
-    Write-Log -Message "[GptTmpl] Non-domain-joined host — removing lines containing 'ADD YOUR ENTERPRISE ADMINS' or 'ADD YOUR DOMAIN ADMINS' entirely."
-    $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } |
-        ForEach-Object { Write-Log -Message "[GptTmpl] REMOVED LINE: $_" }
-    $Content = $Content | Where-Object { $_ -notmatch 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' }
+    Write-Log -Message "[GptTmpl] Non-domain-joined host -- removing SeDenyBatchLogonRight and SeDenyServiceLogonRight lines."
+    $Content | Where-Object { $_ -match 'SeDenyBatchLogonRight\s*=|SeDenyServiceLogonRight\s*=' } | ForEach-Object {
+        Write-Log -Message "[GptTmpl] Removing line: $_"
+    }
+    $Content = $Content | Where-Object { $_ -notmatch 'SeDenyBatchLogonRight\s*=|SeDenyServiceLogonRight\s*=' }
 }
 
 Write-Log -Message "[GptTmpl] Writing updated template back to '$SecEditFile'."
