@@ -1445,7 +1445,7 @@
 							"type": "Microsoft.Common.TextBlock",
 							"visible": true,
 							"options": {
-								"text": "For image management, this solution will create a new image version of a image (definition) in the Azure Compute Gallery selected on the Basics tab. You have the option to use an existing image definiton or define a new one.",
+								"text": "For image management, this solution will create a new image version of a image (definition) in the Azure Compute Gallery selected on the Basics tab. You have the option to use an existing image definition or define a new one.",
 								"link": {
 									"label": "Learn more about managing images with an Azure Compute Gallery.",
 									"uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/image-builder-gallery"
