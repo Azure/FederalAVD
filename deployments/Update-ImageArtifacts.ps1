@@ -4,7 +4,7 @@ Downloads the latest software sources, stages repository and customer artifacts,
 zip files, and uploads them to the image management artifacts storage account blob container.
 
 .DESCRIPTION
-Run this script whenever you want to refresh the artifacts in the image management storage account —
+Run this script whenever you want to refresh the artifacts in the image management storage account -
 for example, after adding new software packages or after new versions are released.
 
 The script stages artifacts from both the repository-owned '.common\artifacts' folder and the
@@ -78,14 +78,14 @@ Use a path on a high-performance drive when processing large artifact sets.
 .\Update-ImageArtifacts.ps1 -StorageAccountName "saimgassetsuse2abc123" -ResourceGroupName "rg-avd-image-management-use2"
 
 .EXAMPLE
-# Air-gapped update — skip internet downloads, just re-package and upload existing artifacts
+# Air-gapped update - skip internet downloads, just re-package and upload existing artifacts
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountName "saimgassetsuse2abc123" `
     -ResourceGroupName "rg-avd-image-management-use2" `
     -SkipDownloadingNewSources
 
 .EXAMPLE
-# Clean upload — delete existing blobs first, then upload fresh
+# Clean upload - delete existing blobs first, then upload fresh
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsuse2abc123" `
     -DeleteExistingBlobs
@@ -468,7 +468,7 @@ function Compress-SubFolderContents {
                     }
                     if ($failedFiles.Count -gt 0) {
                         Remove-Item -Path $tempFilePath -Force -ErrorAction SilentlyContinue
-                        throw "Archive for '$($sf.Name)' is incomplete — $($failedFiles.Count) file(s) could not be added."
+                        throw "Archive for '$($sf.Name)' is incomplete - $($failedFiles.Count) file(s) could not be added."
                     }
                     if (Test-Path -Path $destinationFilePath) { Remove-Item -Path $destinationFilePath -Force }
                     Move-Item -Path $tempFilePath -Destination $destinationFilePath
@@ -800,13 +800,13 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             }
         }
         Else {
-            # No download source configured — check whether the file was pre-staged in customer/artifacts/
+            # No download source configured - check whether the file was pre-staged in customer/artifacts/
             $DestFileName = $Download.DestinationFileName
             $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
             $PreStagedPaths = $DestFolders | ForEach-Object { Join-Path -Path $ArtifactsDir -ChildPath (Join-Path -Path $_ -ChildPath $DestFileName) }
             $PreStagedFile = $PreStagedPaths | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
             If ($null -ne $PreStagedFile) {
-                Write-Output "[$SoftwareName] No download URL configured — using pre-staged file found in artifacts directory."
+                Write-Output "[$SoftwareName] No download URL configured - using pre-staged file found in artifacts directory."
             }
             Else {
                 Write-Warning "[$SoftwareName] No download URL configured and '$DestFileName' was not found in the artifacts directory. If you have enabled the corresponding feature in your image build, pre-stage this file in customer/artifacts/ before running. If you are not using this software, no action is needed."
