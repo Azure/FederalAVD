@@ -597,7 +597,7 @@ ForEach ($gpoFolder in $GPOFolders) {
         Write-Output "Applying AVD exceptions to DoD Windows $osVersion security template: $SecEditFile"
 
         # Remove administrator account disable/rename lines
-        Write-Log -Message "[GptTmpl] Removing 'NewAdministratorName' and 'EnableAdminAccount' — Azure manages the built-in administrator account (RID-500) independently; allowing the STIG to rename or disable it breaks local admin access and agent operations."
+        Write-Log -Message "[GptTmpl] Removing 'NewAdministratorName' and 'EnableAdminAccount' - Azure manages the built-in administrator account (RID-500) independently; allowing the STIG to rename or disable it breaks local admin access and agent operations."
         $Content | Where-Object { ($_ -like 'NewAdministratorName*') -or ($_ -like 'EnableAdminAccount*') } |
             ForEach-Object { Write-Output "  [GptTmpl] REMOVED : $_" }
         $Content = $Content | Where-Object { (-not ($_ -like 'NewAdministratorName*')) -and (-not ($_ -like 'EnableAdminAccount*')) }
@@ -605,7 +605,7 @@ ForEach ($gpoFolder in $GPOFolders) {
         # Replace or remove the 'ADD YOUR ENTERPRISE ADMINS' / 'ADD YOUR DOMAIN ADMINS'
         # placeholder tokens that the DoD STIG GPO leaves in the [Privilege Rights] section.
         if ($IsDomainJoined) {
-            Write-Log -Message "[GptTmpl] Replacing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' placeholders with actual group names — required for privilege right assignments to function correctly on domain-joined AVD session hosts."
+            Write-Log -Message "[GptTmpl] Replacing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' placeholders with actual group names - required for privilege right assignments to function correctly on domain-joined AVD session hosts."
             $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
                 $replaced = $_ -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins' -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
                 Write-Output "  [GptTmpl] BEFORE  : $_"
@@ -614,7 +614,7 @@ ForEach ($gpoFolder in $GPOFolders) {
             $Content = $Content -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins'
             $Content = $Content -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
         } else {
-            Write-Log -Message "[GptTmpl] Removing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' placeholders — these domain group tokens are not applicable on non-domain-joined AVD session hosts and must be stripped to prevent policy application errors."
+            Write-Log -Message "[GptTmpl] Removing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' placeholders - these domain group tokens are not applicable on non-domain-joined AVD session hosts and must be stripped to prevent policy application errors."
             $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
                 $cleaned = $_ -replace ",\s*ADD YOUR ENTERPRISE ADMINS", '' -replace "ADD YOUR ENTERPRISE ADMINS\s*,", '' -replace 'ADD YOUR ENTERPRISE ADMINS', ''
                 $cleaned = $cleaned -replace ",\s*ADD YOUR DOMAIN ADMINS", '' -replace "ADD YOUR DOMAIN ADMINS\s*,", '' -replace 'ADD YOUR DOMAIN ADMINS', ''
@@ -632,7 +632,7 @@ ForEach ($gpoFolder in $GPOFolders) {
         # Set SeRemoteInteractiveLogonRight to allow RDS Users (S-1-5-32-555) and Administrators
         # (S-1-5-32-544). The STIG restricts this to Administrators only; AVD requires RDS Users
         # so that session host connections can be established.
-        Write-Log -Message "[GptTmpl] Updating 'SeRemoteInteractiveLogonRight' (Allow log on through Remote Desktop Services): Adding Remote Desktop Users (S-1-5-32-555) alongside Administrators (S-1-5-32-544) — the STIG restricts this right to Administrators only, which prevents AVD users from establishing session host connections."
+        Write-Log -Message "[GptTmpl] Updating 'SeRemoteInteractiveLogonRight' (Allow log on through Remote Desktop Services): Adding Remote Desktop Users (S-1-5-32-555) alongside Administrators (S-1-5-32-544) - the STIG restricts this right to Administrators only, which prevents AVD users from establishing session host connections."
         $Content | Where-Object { $_ -like 'SeRemoteInteractiveLogonRight*' } | ForEach-Object {
             Write-Output "  [GptTmpl] BEFORE  : $_"
             Write-Output "  [GptTmpl] AFTER   : SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544"
@@ -645,7 +645,7 @@ ForEach ($gpoFolder in $GPOFolders) {
             # Remove *S-1-5-113 (Local account SID) from SeDenyRemoteInteractiveLogonRight so that
             # local accounts are permitted to connect via Remote Desktop / AVD.
             # *S-1-5-32-546 (Guests) and any other principals remain untouched.
-            Write-Log -Message "[GptTmpl] Updating 'SeDenyRemoteInteractiveLogonRight' (Deny log on through Remote Desktop Services): Removing Local accounts SID (*S-1-5-113) — AllowLocalUserLogon is enabled, permitting local user accounts to connect via Remote Desktop and AVD. Guests (S-1-5-32-546) and all other deny principals remain."
+            Write-Log -Message "[GptTmpl] Updating 'SeDenyRemoteInteractiveLogonRight' (Deny log on through Remote Desktop Services): Removing Local accounts SID (*S-1-5-113) - AllowLocalUserLogon is enabled, permitting local user accounts to connect via Remote Desktop and AVD. Guests (S-1-5-32-546) and all other deny principals remain."
             $Content | Where-Object { $_ -match 'SeDenyRemoteInteractiveLogonRight' -and $_ -match '\*S-1-5-113' } | ForEach-Object {
                 $cleaned = $_ -replace ',\s*\*S-1-5-113', '' -replace '\*S-1-5-113\s*,', '' -replace '\*S-1-5-113', ''
                 Write-Output "  [GptTmpl] BEFORE  : $_"
@@ -667,10 +667,10 @@ ForEach ($gpoFolder in $GPOFolders) {
 
 Write-Log -Message "Applying AVD Administrative Template-based Exceptions"
 # $LgpoTxtFile is defined here and passed to every Update-LocalGPOTextFile call
-# (-OutputFile) AND to lgpo.exe /t below — one variable, no convention mismatch.
+# (-OutputFile) AND to lgpo.exe /t below - one variable, no convention mismatch.
 $LgpoTxtFile = Join-Path -Path $Script:LGPOTempDir -ChildPath 'AVD-Exceptions.txt'
 
-# ── EccCurves exception (WN11-CC-000195 → V-253363) ──────────────────────────
+# -- EccCurves exception (WN11-CC-000195 -> V-253363) ----------------------------
 # The DoD Windows 11 STIG GPO (WN11-CC-000195) sets the EccCurves policy value
 # under HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002
 # to restrict TLS elliptic curves to NistP384 only (NSA Suite B).
@@ -695,31 +695,31 @@ $LgpoTxtFile = Join-Path -Path $Script:LGPOTempDir -ChildPath 'AVD-Exceptions.tx
 #
 # Reference: STIG rule WN11-CC-000195 / V-253363, TLS cipher suite configuration.
 # AVD TLS requirements: https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint
-Write-Log -Message "[AdminTemplate] Deleting 'EccCurves' (WN11-CC-000195 / V-253363) from HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002 — the STIG locks TLS elliptic curves to NistP384 only; AVD endpoints require NistP256 for TLS negotiation, causing agent registration and session failures. Deleting restores the Windows default curve list."
+Write-Log -Message "[AdminTemplate] Deleting 'EccCurves' (WN11-CC-000195 / V-253363) from HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002 - the STIG locks TLS elliptic curves to NistP384 only; AVD endpoints require NistP256 for TLS negotiation, causing agent registration and session failures. Deleting restores the Windows default curve list."
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002' -RegistryValue 'EccCurves' -Delete -OutputFile $LgpoTxtFile
 
-Write-Log -Message "[AdminTemplate] Deleting 'ProxySettings' from HKLM\SOFTWARE\Policies\Microsoft\Edge — the STIG GPO configures an Edge proxy that blocks AVD gateway and broker connectivity. Deleting allows Edge to use system proxy settings or direct connections."
+Write-Log -Message "[AdminTemplate] Deleting 'ProxySettings' from HKLM\SOFTWARE\Policies\Microsoft\Edge - the STIG GPO configures an Edge proxy that blocks AVD gateway and broker connectivity. Deleting allows Edge to use system proxy settings or direct connections."
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -Delete -OutputFile $LgpoTxtFile
 
-# V-253260 — BitLocker startup PIN requirement (UseAdvancedStartup, UseTPMPIN, UseTPMKeyPIN)
+# V-253260 - BitLocker startup PIN requirement (UseAdvancedStartup, UseTPMPIN, UseTPMKeyPIN)
 # The STIG mandates BitLocker startup authentication with a PIN or PIN+key.
 # Per the finding: "For AVD implementations with no data at rest, this is NA."
-# AVD session hosts are stateless — the OS disk contains no persistent user data and is
+# AVD session hosts are stateless - the OS disk contains no persistent user data and is
 # typically refreshed or deleted on logoff. Enforcing a BitLocker startup PIN on an AVD
 # session host would prevent the VM from booting unattended after reboot (e.g. after
 # Windows Update or a scale event), breaking the session host lifecycle entirely.
-Write-Log -Message "[AdminTemplate] Deleting 'UseAdvancedStartup' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE — BitLocker advanced startup is NA for AVD (stateless session hosts have no data at rest). Enforcing a startup PIN prevents unattended VM boot after reboots triggered by Windows Update or scale events."
+Write-Log -Message "[AdminTemplate] Deleting 'UseAdvancedStartup' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker advanced startup is NA for AVD (stateless session hosts have no data at rest). Enforcing a startup PIN prevents unattended VM boot after reboots triggered by Windows Update or scale events."
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseAdvancedStartup' -Delete -OutputFile $LgpoTxtFile
-Write-Log -Message "[AdminTemplate] Deleting 'UseTPMPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE — BitLocker TPM+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
+Write-Log -Message "[AdminTemplate] Deleting 'UseTPMPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker TPM+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseTPMPIN' -Delete -OutputFile $LgpoTxtFile
-Write-Log -Message "[AdminTemplate] Deleting 'UseTPMKeyPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE — BitLocker TPM+key+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
+Write-Log -Message "[AdminTemplate] Deleting 'UseTPMKeyPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker TPM+key+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseTPMKeyPIN' -Delete -OutputFile $LgpoTxtFile
 
 If (-not $IsDomainJoined) {
     # Remove firewall and CAD settings that break non-domain-joined Remote Desktop.
-    Write-Log -Message "[AdminTemplate] Setting 'DisableCAD' to 0 in HKLM\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows — the STIG enables Ctrl+Alt+Del requirement; disabling it (0) is required for non-domain-joined AVD to allow Remote Desktop connections without a secure attention sequence prompt."
+    Write-Log -Message "[AdminTemplate] Setting 'DisableCAD' to 0 in HKLM\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows - the STIG enables Ctrl+Alt+Del requirement; disabling it (0) is required for non-domain-joined AVD to allow Remote Desktop connections without a secure attention sequence prompt."
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows' -RegistryValue 'DisableCAD' -RegistryData '0' -RegistryType 'DWORD' -OutputFile $LgpoTxtFile
-    Write-Log -Message "[AdminTemplate] Deleting 'AllowLocalPolicyMerge' from DomainProfile, PrivateProfile, and PublicProfile firewall policies — the STIG blocks local firewall rule merging; on non-domain-joined AVD session hosts this prevents local firewall rules (including AVD agent rules) from being applied alongside GPO rules."
+    Write-Log -Message "[AdminTemplate] Deleting 'AllowLocalPolicyMerge' from DomainProfile, PrivateProfile, and PublicProfile firewall policies - the STIG blocks local firewall rule merging; on non-domain-joined AVD session hosts this prevents local firewall rules (including AVD agent rules) from being applied alongside GPO rules."
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PrivateProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PublicProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
@@ -764,7 +764,7 @@ If ($output) {
 # (OS-level DEP boot configuration).  That rule was REMOVED in V2R7 and there is no
 # equivalent bcdedit requirement in the current STIG.  No bcdedit action is needed here.
 
-# ── Windows Optional Features (V-253275, V-253276, V-253277, V-253278, V-253279, V-253286) ────────────
+# -- Windows Optional Features (V-253275, V-253276, V-253277, V-253278, V-253279, V-253286) ----
 # V-253275 HIGH: IIS must not be installed
 Disable-OptionalFeatureIfEnabled -FeatureName 'IIS-WebServer'         -StigId 'V-253275'
 Disable-OptionalFeatureIfEnabled -FeatureName 'IIS-HostableWebCore'   -StigId 'V-253275'
@@ -822,7 +822,7 @@ Set-RegistryValue -Name SuppressionPolicy -Path 'HKLM:\SOFTWARE\Classes\mscfile\
 # cannot read the logs.  The CustomSD registry value is read by the EventLog service on
 # startup and overrides the on-disk ACL.  SDDL grants: SYSTEM Full, Administrators Full,
 # Server Operators Read/Write, Interactive Users Read, Service Users Read, Batch Read,
-# Write-Restricted Read, Event Log Readers (S-1-5-32-573) Read — no BUILTIN\Users entry.
+# Write-Restricted Read, Event Log Readers (S-1-5-32-573) Read - no BUILTIN\Users entry.
 $eventLogSddl = 'O:BAG:SYD:(A;;0xf0007;;;SY)(A;;0x7;;;BA)(A;;0x7;;;SO)(A;;0x3;;;IU)(A;;0x3;;;SU)(A;;0x3;;;S-1-5-3)(A;;0x3;;;S-1-5-33)(A;;0x1;;;S-1-5-32-573)'
 $eventLogMap = @{
     'Application' = 'V-253340'
