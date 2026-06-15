@@ -205,8 +205,16 @@ var operationsResourceGroupName = useCustomNaming
       resourceAbbreviations.resourceGroups
     )
 
-// Stable 6-char unique string seeded on subscription + resource group name (consistent across re-deployments)
-var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, operationsResourceGroupName), 6)
+// Stable 6-char unique string seeded on subscription + resource group name.
+// Add location to the seed when custom naming is active but the convention has no location segment,
+// so deployments to different regions don't produce identical Key Vault names.
+// CAF fallback already embeds the location abbreviation in the name itself.
+var uniqueStringOperations = take(
+  (useCustomNaming && !contains(cnv_segments, 'location'))
+    ? uniqueString(subscription().subscriptionId, operationsResourceGroupName, location)
+    : uniqueString(subscription().subscriptionId, operationsResourceGroupName),
+  6
+)
 
 // Key Vault names are capped at 24 chars to satisfy Azure naming constraints
 var secretsKeyVaultName = useCustomNaming

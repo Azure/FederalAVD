@@ -301,10 +301,16 @@ var privateEndpointName = replace(
 var customNetworkInterfaceName = nameConvResTypeAtEnd
   ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
+// Unique suffix seed: add location when custom naming is active but the convention has no location
+// segment, so deployments to different regions don't produce identical storage account names.
+// CAF fallback already embeds the location abbreviation in the name itself, so no change needed there.
+var saUniqueSuffix = (useCustomNaming && !contains(cnv_segments, 'location'))
+  ? uniqueString(subscription().subscriptionId, resourceGroupName, location)
+  : uniqueString(subscription().subscriptionId, resourceGroupName)
 var artifactsStorageAccountName = take(
   useCustomNaming
-    ? '${customSaArtifactsBase}${uniqueString(subscription().subscriptionId, resourceGroupName)}'
-    : '${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
+    ? '${customSaArtifactsBase}${saUniqueSuffix}'
+    : '${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${saUniqueSuffix}',
   24
 )
 var sasExpirationPeriod = '180.00:00:00' // 180 days
@@ -347,8 +353,8 @@ var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varL
 
 var logsStorageName = take(
   useCustomNaming
-    ? '${customSaLogsBase}${uniqueString(subscription().subscriptionId, resourceGroupName)}'
-    : '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
+    ? '${customSaLogsBase}${saUniqueSuffix}'
+    : '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${saUniqueSuffix}',
   24
 )
 var logsContainerName = 'image-customization-logs'
