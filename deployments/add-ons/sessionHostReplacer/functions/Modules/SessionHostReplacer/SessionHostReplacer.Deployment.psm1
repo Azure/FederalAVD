@@ -218,7 +218,6 @@ function Get-LastDeploymentStatus {
     }
 }
 
-
 function Save-DeploymentState {
     <#
     .SYNOPSIS
@@ -586,6 +585,21 @@ function Deploy-SessionHosts {
 
     Write-LogEntry -Message "Deploying $NewSessionHostsCount session host(s) to resource group $VirtualMachinesResourceGroupName" 
     
+    # For marketplace ImageReferences, ensure 'version' is always present.
+    # The app setting may omit it; ARM accepts 'latest' as a valid value.
+    $imageRef = $sessionHostParameters['ImageReference']
+    if ($imageRef -and ($imageRef.publisher -or ($imageRef -is [hashtable] -and $imageRef['publisher']))) {
+        $hasVersion = if ($imageRef -is [hashtable]) { $imageRef.ContainsKey('version') } else { [bool]$imageRef.PSObject.Properties['version'] }
+        if (-not $hasVersion) {
+            if ($imageRef -is [hashtable]) {
+                $imageRef['version'] = 'latest'
+            } else {
+                $imageRef | Add-Member -NotePropertyName 'version' -NotePropertyValue 'latest' -Force
+            }
+            Write-LogEntry -Message "ImageReference.version was not set for marketplace image — defaulting to 'latest'" -Level Trace
+        }
+    }
+
     # ARM deployment parameters need each value wrapped in a 'value' property
     $deploymentParameters = @{}
     foreach ($key in $sessionHostParameters.Keys) {
