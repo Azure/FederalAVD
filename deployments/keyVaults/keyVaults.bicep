@@ -102,6 +102,9 @@ param tags object = {}
 
 // ── Non-Specified Values ───────────────────────────────────────────────────────
 
+@description('Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { segments: string[], separator: string, enterpriseGroup: string, environment: string, freeform: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string } }. Pass an empty object ({}) or omit to use the default CAF convention.')
+param customNamingConvention object = {}
+
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')
 
@@ -122,6 +125,60 @@ var identifier = 'operations'
 #disable-next-line BCP329
 var locationAbbreviation = locations[varLocation].abbreviation
 
+// ── Custom naming convention support ─────────────────────────────────────────
+var useCustomNaming = !empty(customNamingConvention) && contains(customNamingConvention, 'segments')
+
+var cnv_sep = useCustomNaming ? customNamingConvention.separator : '-'
+var cnv_loc = useCustomNaming
+  ? (!empty(customNamingConvention.?locationAbbreviation ?? '')
+      ? customNamingConvention.locationAbbreviation
+      : locationAbbreviation)
+  : locationAbbreviation
+var cnv_rtCodes = useCustomNaming && contains(customNamingConvention, 'resourceTypeCodes')
+  ? customNamingConvention.resourceTypeCodes
+  : {
+      resourceGroups: resourceAbbreviations.resourceGroups
+      keyVaults: resourceAbbreviations.keyVaults
+      privateEndpoints: resourceAbbreviations.privateEndpoints
+    }
+var cnv_segments = useCustomNaming ? customNamingConvention.segments : []
+
+func resolveSegment(seg string, rtCode string, purpose string, loc string, eg string, env string, ff string) string =>
+  seg == 'resourceType' ? rtCode
+    : seg == 'purpose'   ? purpose
+    : seg == 'location'  ? loc
+    : seg == 'enterpriseGroup' ? eg
+    : seg == 'environment'     ? env
+    : seg == 'freeform'        ? ff
+    : ''
+
+func buildCustomName(segments array, sep string, rtCode string, purpose string, loc string, eg string, env string, ff string) string =>
+  join(
+    filter(
+      map(segments, seg => resolveSegment(seg, rtCode, purpose, loc, eg, env, ff)),
+      s => !empty(s)
+    ),
+    sep
+  )
+
+// Key Vault names allow hyphens but not underscores or dots — replace them.
+func kvSanitize(s string) string =>
+  replace(replace(s, '_', '-'), '.', '-')
+
+var customRgName = useCustomNaming
+  ? buildCustomName(
+      filter(cnv_segments, s => s != 'none'),
+      cnv_sep,
+      cnv_rtCodes.resourceGroups,
+      identifier,
+      cnv_loc,
+      customNamingConvention.?enterpriseGroup ?? '',
+      customNamingConvention.?environment ?? '',
+      customNamingConvention.?freeform ?? ''
+    )
+  : ''
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Resource group naming: rg-avd-foundation-eus (not reversed) or avd-foundation-eus-rg (reversed)
 var nameConv_Operations_ResGroup = nameConvResTypeAtEnd
   ? 'avd-${identifier}-LOCATION-RESOURCETYPE'
@@ -140,41 +197,53 @@ var privateEndpointNICNameConv = nameConvResTypeAtEnd
   ? 'RESOURCE-SUBRESOURCE-VNETID-${resourceAbbreviations.privateEndpoints}-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-${resourceAbbreviations.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
 
-var operationsResourceGroupName = replace(
-  replace(nameConv_Operations_ResGroup, 'LOCATION', locationAbbreviation),
-  'RESOURCETYPE',
-  resourceAbbreviations.resourceGroups
-)
+var operationsResourceGroupName = useCustomNaming
+  ? customRgName
+  : replace(
+      replace(nameConv_Operations_ResGroup, 'LOCATION', locationAbbreviation),
+      'RESOURCETYPE',
+      resourceAbbreviations.resourceGroups
+    )
 
 // Stable 6-char unique string seeded on subscription + resource group name (consistent across re-deployments)
 var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, operationsResourceGroupName), 6)
 
 // Key Vault names are capped at 24 chars to satisfy Azure naming constraints
-var secretsKeyVaultName = take(
-  replace(
-    replace(
-      replace(nameConv_Operations_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'),
-      'LOCATION',
-      locationAbbreviation
-    ),
-    'RESOURCETYPE',
-    resourceAbbreviations.keyVaults
-  ),
-  24
-)
+var secretsKeyVaultName = useCustomNaming
+  ? take(
+      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_loc, customNamingConvention.?enterpriseGroup ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform ?? ''))}-${uniqueStringOperations}',
+      24
+    )
+  : take(
+      replace(
+        replace(
+          replace(nameConv_Operations_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'),
+          'LOCATION',
+          locationAbbreviation
+        ),
+        'RESOURCETYPE',
+        resourceAbbreviations.keyVaults
+      ),
+      24
+    )
 
-var encryptionKeyVaultName = take(
-  replace(
-    replace(
-      replace(nameConv_Operations_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'),
-      'LOCATION',
-      locationAbbreviation
-    ),
-    'RESOURCETYPE',
-    resourceAbbreviations.keyVaults
-  ),
-  24
-)
+var encryptionKeyVaultName = useCustomNaming
+  ? take(
+      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_loc, customNamingConvention.?enterpriseGroup ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform ?? ''))}-${uniqueStringOperations}',
+      24
+    )
+  : take(
+      replace(
+        replace(
+          replace(nameConv_Operations_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'),
+          'LOCATION',
+          locationAbbreviation
+        ),
+        'RESOURCETYPE',
+        resourceAbbreviations.keyVaults
+      ),
+      24
+    )
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 

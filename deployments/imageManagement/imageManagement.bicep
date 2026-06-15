@@ -85,6 +85,9 @@ param deployImageBuildResourceGroup bool = true
 @description('Optional. Custom name for the pre-created image build resource group. Leave empty to use the standard naming convention (matches what imageBuild calculates automatically).')
 param customImageBuildResourceGroupName string = ''
 
+@description('Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all image management resources. Shape: { segments: string[], separator: string, enterpriseGroup: string, environment: string, freeform: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, computeGalleries: string, userAssignedIdentities: string, storageAccounts: string, privateEndpoints: string, diskEncryptionSets: string } }. Pass an empty object ({}) or omit to use the default CAF convention.')
+param customNamingConvention object = {}
+
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddhhmm')
 
@@ -97,6 +100,147 @@ var locations = startsWith(cloud, 'us')
   ? (loadJsonContent('../../.common/data/locations.json')).other
   : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
+
+// ── Custom naming convention support ─────────────────────────────────────────
+// When customNamingConvention is populated from the portal UI, build all resource names
+// from the ordered segments array. When empty, fall through to the existing CAF logic.
+var useCustomNaming = !empty(customNamingConvention) && contains(customNamingConvention, 'segments')
+
+// Resolve per-convention values (safe to evaluate even when useCustomNaming = false)
+var cnv_sep = useCustomNaming ? customNamingConvention.separator : '-'
+var cnv_loc = useCustomNaming
+  ? (!empty(customNamingConvention.locationAbbreviation)
+      ? customNamingConvention.locationAbbreviation
+      : locations[varLocation].abbreviation)
+  : locations[varLocation].abbreviation
+var cnv_rtCodes = useCustomNaming && contains(customNamingConvention, 'resourceTypeCodes')
+  ? customNamingConvention.resourceTypeCodes
+  : {
+      resourceGroups: resourceAbbreviations.resourceGroups
+      computeGalleries: resourceAbbreviations.computeGalleries
+      userAssignedIdentities: resourceAbbreviations.userAssignedIdentities
+      storageAccounts: resourceAbbreviations.storageAccounts
+      privateEndpoints: resourceAbbreviations.privateEndpoints
+      diskEncryptionSets: resourceAbbreviations.diskEncryptionSets
+    }
+
+// Resolve each segment value. 'resourceType' and 'purpose' use per-call placeholders; the
+// others are fixed strings that can be resolved once here.
+// Build one segment-value per slot (slot value = 'none' means stop).
+var cnv_segments = useCustomNaming ? customNamingConvention.segments : []
+
+// For a given resource type key (e.g. 'resourceGroups') and purpose string (e.g. 'image-management'),
+// resolve a flat array of segment values then join with the separator.
+// Bicep map() + filter() + join() replaces the CAF replace() chain.
+func resolveSegment(seg string, rtCode string, purpose string, loc string, eg string, env string, ff string) string =>
+  seg == 'resourceType' ? rtCode
+    : seg == 'purpose'   ? purpose
+    : seg == 'location'  ? loc
+    : seg == 'enterpriseGroup' ? eg
+    : seg == 'environment'     ? env
+    : seg == 'freeform'        ? ff
+    : '' // 'none' or unknown — filtered out below
+
+func buildCustomName(segments array, sep string, rtCode string, purpose string, loc string, eg string, env string, ff string) string =>
+  join(
+    filter(
+      map(segments, seg => resolveSegment(seg, rtCode, purpose, loc, eg, env, ff)),
+      s => !empty(s)
+    ),
+    sep
+  )
+
+// Per-resource custom names (only used when useCustomNaming = true)
+var customResourceGroupName = useCustomNaming
+  ? buildCustomName(
+      filter(cnv_segments, s => s != 'none'),
+      cnv_sep,
+      cnv_rtCodes.resourceGroups,
+      identifier,
+      cnv_loc,
+      customNamingConvention.?enterpriseGroup ?? '',
+      customNamingConvention.?environment ?? '',
+      customNamingConvention.?freeform ?? ''
+    )
+  : ''
+
+var customGalleryName = useCustomNaming
+  ? replace(
+      buildCustomName(
+        filter(cnv_segments, s => s != 'none'),
+        cnv_sep,
+        cnv_rtCodes.computeGalleries,
+        identifier,
+        cnv_loc,
+        customNamingConvention.?enterpriseGroup ?? '',
+        customNamingConvention.?environment ?? '',
+        customNamingConvention.?freeform ?? ''
+      ),
+      '-',
+      '_'
+    )
+  : ''
+
+var customIdentityName = useCustomNaming
+  ? buildCustomName(
+      filter(cnv_segments, s => s != 'none'),
+      cnv_sep,
+      cnv_rtCodes.userAssignedIdentities,
+      identifier,
+      cnv_loc,
+      customNamingConvention.?enterpriseGroup ?? '',
+      customNamingConvention.?environment ?? '',
+      customNamingConvention.?freeform ?? ''
+    )
+  : ''
+
+var customEncryptionIdentityName = useCustomNaming
+  ? buildCustomName(
+      filter(cnv_segments, s => s != 'none'),
+      cnv_sep,
+      cnv_rtCodes.userAssignedIdentities,
+      '${identifier}-encryption',
+      cnv_loc,
+      customNamingConvention.?enterpriseGroup ?? '',
+      customNamingConvention.?environment ?? '',
+      customNamingConvention.?freeform ?? ''
+    )
+  : ''
+
+// Storage account names: alphanumeric only, max 24 chars, globally unique.
+// Apply custom convention as a prefix (separators stripped), then append uniqueString.
+// Use short purpose tokens ('assets' / 'logs') to distinguish the two accounts and
+// leave enough room for the uniqueString suffix to maintain global uniqueness.
+func stripSeparators(s string) string =>
+  replace(replace(replace(s, '-', ''), '_', ''), '.', '')
+
+var customSaArtifactsBase = useCustomNaming
+  ? stripSeparators(buildCustomName(
+      filter(cnv_segments, s => s != 'none'),
+      cnv_sep,
+      cnv_rtCodes.storageAccounts,
+      'assets',
+      cnv_loc,
+      customNamingConvention.?enterpriseGroup ?? '',
+      customNamingConvention.?environment ?? '',
+      customNamingConvention.?freeform ?? ''
+    ))
+  : ''
+
+var customSaLogsBase = useCustomNaming
+  ? stripSeparators(buildCustomName(
+      filter(cnv_segments, s => s != 'none'),
+      cnv_sep,
+      cnv_rtCodes.storageAccounts,
+      'logs',
+      cnv_loc,
+      customNamingConvention.?enterpriseGroup ?? '',
+      customNamingConvention.?environment ?? '',
+      customNamingConvention.?freeform ?? ''
+    ))
+  : ''
+
+// ─────────────────────────────────────────────────────────────────────────────
 var nameConv_Suffix_withoutResType = 'LOCATION'
 var nameConvSuffix = nameConvResTypeAtEnd
   ? '${nameConv_Suffix_withoutResType}-RESOURCETYPE'
@@ -110,11 +254,13 @@ var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd
 var nameConv_ImageManagement_Resources = nameConvResTypeAtEnd
   ? 'avd-${identifier}-${nameConvSuffix}'
   : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
-var resourceGroupName = replace(
-  replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation),
-  'RESOURCETYPE',
-  resourceAbbreviations.resourceGroups
-)
+var resourceGroupName = useCustomNaming
+  ? customResourceGroupName
+  : replace(
+      replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation),
+      'RESOURCETYPE',
+      resourceAbbreviations.resourceGroups
+    )
 // Image build RG name — matches the naming logic in imageBuild.bicep exactly so imageBuild
 // deployments that omit imageBuildResourceGroupId will land in the pre-created RG automatically.
 var imageBuildRgName = empty(customImageBuildResourceGroupName)
@@ -123,20 +269,24 @@ var imageBuildRgName = empty(customImageBuildResourceGroupName)
       : '${resourceAbbreviations.resourceGroups}-avd-image-builds-${locations[varLocation].abbreviation}'
   : customImageBuildResourceGroupName
 var artifactsBlobContainerName = 'artifacts'
-var galleryName = replace(
-  replace(
-    replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries),
-    'LOCATION',
-    locations[varLocation].abbreviation
-  ),
-  '-',
-  '_'
-)
-var identityName = replace(
-  replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
-  'LOCATION',
-  locations[varLocation].abbreviation
-)
+var galleryName = useCustomNaming
+  ? customGalleryName
+  : replace(
+      replace(
+        replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries),
+        'LOCATION',
+        locations[varLocation].abbreviation
+      ),
+      '-',
+      '_'
+    )
+var identityName = useCustomNaming
+  ? customIdentityName
+  : replace(
+      replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
+      'LOCATION',
+      locations[varLocation].abbreviation
+    )
 var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
 var privateEndpointNameConv = replace(
   '${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}',
@@ -152,7 +302,9 @@ var customNetworkInterfaceName = nameConvResTypeAtEnd
   ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
   : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
 var artifactsStorageAccountName = take(
-  '${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
+  useCustomNaming
+    ? '${customSaArtifactsBase}${uniqueString(subscription().subscriptionId, resourceGroupName)}'
+    : '${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
   24
 )
 var sasExpirationPeriod = '180.00:00:00' // 180 days
@@ -168,15 +320,17 @@ var storageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-storage'
 // Single encryption UAI shared by both storage accounts.
 // Result: uai-avd-image-management-encryption-{loc} (nameConvResTypeAtEnd=false)
 //         avd-image-management-encryption-{loc}-uai  (nameConvResTypeAtEnd=true)
-var storageEncryptionIdentityName = replace(
-  replace(
-    replace(nameConv_ImageManagement_Resources, identifier, '${identifier}-encryption'),
-    'RESOURCETYPE',
-    resourceAbbreviations.userAssignedIdentities
-  ),
-  'LOCATION',
-  locations[varLocation].abbreviation
-)
+var storageEncryptionIdentityName = useCustomNaming
+  ? customEncryptionIdentityName
+  : replace(
+      replace(
+        replace(nameConv_ImageManagement_Resources, identifier, '${identifier}-encryption'),
+        'RESOURCETYPE',
+        resourceAbbreviations.userAssignedIdentities
+      ),
+      'LOCATION',
+      locations[varLocation].abbreviation
+    )
 // Both storage accounts share the same key — no operational benefit to separate keys
 // for same-solution, same-sensitivity storage in the same resource group.
 var cmkKeyNames = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) ? [storageEncryptionKeyName] : []
@@ -192,7 +346,9 @@ var galleryConfidentialVmDiskEncryptionSetName = nameConvResTypeAtEnd
 var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt-cvm'
 
 var logsStorageName = take(
-  '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
+  useCustomNaming
+    ? '${customSaLogsBase}${uniqueString(subscription().subscriptionId, resourceGroupName)}'
+    : '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
   24
 )
 var logsContainerName = 'image-customization-logs'
