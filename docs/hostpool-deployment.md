@@ -944,6 +944,20 @@ Ensure your firewall, NSGs, and proxy configurations allow access to the require
 
 > **Important:** Blocking access to required endpoints will prevent session hosts from registering with the host pool and users from connecting to their sessions.
 
+#### Azure Resource Manager (ARM) API
+
+The hostpool deployment uses Run Commands executed on a temporary deployment VM to perform domain join validation and other orchestration tasks. These scripts call the **Azure Resource Manager API** using the VM's managed identity.
+
+**Required outbound access from the session host subnet:**
+
+| Service Tag | Port | Protocol | Purpose |
+|---|---|---|---|
+| `AzureResourceManager` | 443 | HTTPS | Run Command orchestration via ARM API |
+
+> **Air-gapped / restricted networks:** Ensure the `AzureResourceManager` service tag is allowed outbound on port 443 from the subnet where session hosts (and the temporary deployment VM) are deployed. Without this, Run Command-based orchestration steps will fail silently and the deployment will time out.
+
+📖 **[Azure service tags overview](https://learn.microsoft.com/azure/virtual-network/service-tags-overview)**
+
 #### AVD Agent Installation
 
 Session hosts require network access to download and install the AVD Agent and Boot Loader during deployment.
