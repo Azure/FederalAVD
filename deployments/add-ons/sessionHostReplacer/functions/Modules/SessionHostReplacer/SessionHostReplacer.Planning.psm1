@@ -965,8 +965,7 @@ function Get-SessionHosts {
             }
         }
         elseif ($vm.StorageProfile.ImageReference.publisher) {
-            # Marketplace image
-            $vmImageVersion = $vm.StorageProfile.ImageReference.version
+            $vmImageVersion = $vm.StorageProfile.ImageReference.ExactVersion
             $vmImageDefinition = "marketplace:$($vm.StorageProfile.ImageReference.publisher)/$($vm.StorageProfile.ImageReference.offer)/$($vm.StorageProfile.ImageReference.sku)"
         }
         else {

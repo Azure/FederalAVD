@@ -623,7 +623,29 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         }
     }
     If ($RequiresWinget -and -not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
-        Write-Warning "One or more downloads require winget, but winget was not found on this system. Winget-based downloads will be skipped."
+        Write-Output "Winget not found. Attempting to register the App Installer package..."
+        try {
+            # 'Register' re-associates an already-staged Appx package with the current user context.
+            # This is the most common reason winget is absent in automation / build-agent scenarios
+            # even though the App Installer package is physically present on the machine.
+            Add-AppxPackage -RegisterByFamilyName -MainPackage 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe' -ErrorAction Stop
+            Write-Output "App Installer package registered successfully."
+        }
+        catch {
+            Write-Warning "Could not register the App Installer package: $_"
+            Write-Warning "Ensure the App Installer package is present on this machine (Settings > Apps > App Installer) or install winget manually before running this script with winget-based downloads."
+        }
+
+        # Refresh the PATH so the newly registered winget.exe is visible in this session.
+        $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
+                    [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+
+        if (Get-Command -Name 'winget' -ErrorAction SilentlyContinue) {
+            Write-Output "Winget is now available ($(& winget --version))."
+        }
+        else {
+            Write-Warning "Winget is still not available after registration attempt. Winget-based downloads will be skipped."
+        }
     }
 
     $packageCount = ($Downloads.PSObject.Properties.Name).Count
