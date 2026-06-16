@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.44.1.10279",
-      "templateHash": "15191946232300548924"
+      "version": "0.43.8.12551",
+      "templateHash": "18185290082586938828"
     }
   },
   "functions": [
@@ -25,7 +25,7 @@
             },
             {
               "type": "string",
-              "name": "purpose"
+              "name": "component"
             },
             {
               "type": "string",
@@ -33,7 +33,7 @@
             },
             {
               "type": "string",
-              "name": "eg"
+              "name": "ff1"
             },
             {
               "type": "string",
@@ -41,12 +41,16 @@
             },
             {
               "type": "string",
-              "name": "ff"
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
             }
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('seg'), 'resourceType'), parameters('rtCode'), if(equals(parameters('seg'), 'purpose'), parameters('purpose'), if(equals(parameters('seg'), 'location'), parameters('loc'), if(equals(parameters('seg'), 'enterpriseGroup'), parameters('eg'), if(equals(parameters('seg'), 'environment'), parameters('env'), if(equals(parameters('seg'), 'freeform'), parameters('ff'), ''))))))]"
+            "value": "[if(equals(parameters('seg'), 'resourceType'), parameters('rtCode'), if(equals(parameters('seg'), 'component'), parameters('component'), if(equals(parameters('seg'), 'location'), parameters('loc'), if(equals(parameters('seg'), 'freeform1'), parameters('ff1'), if(equals(parameters('seg'), 'environment'), parameters('env'), if(equals(parameters('seg'), 'freeform2'), parameters('ff2'), if(equals(parameters('seg'), 'workload'), parameters('workload'), '')))))))]"
           }
         },
         "buildCustomName": {
@@ -65,7 +69,7 @@
             },
             {
               "type": "string",
-              "name": "purpose"
+              "name": "component"
             },
             {
               "type": "string",
@@ -73,7 +77,7 @@
             },
             {
               "type": "string",
-              "name": "eg"
+              "name": "ff1"
             },
             {
               "type": "string",
@@ -81,12 +85,16 @@
             },
             {
               "type": "string",
-              "name": "ff"
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
             }
           ],
           "output": {
             "type": "string",
-            "value": "[join(filter(map(parameters('segments'), lambda('seg', __bicep.resolveSegment(lambdaVariables('seg'), parameters('rtCode'), parameters('purpose'), parameters('loc'), parameters('eg'), parameters('env'), parameters('ff')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('sep'))]"
+            "value": "[join(filter(map(parameters('segments'), lambda('seg', __bicep.resolveSegment(lambdaVariables('seg'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('sep'))]"
           }
         },
         "kvSanitize": {
@@ -246,7 +254,7 @@
       "type": "object",
       "defaultValue": {},
       "metadata": {
-        "description": "Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { segments: string[], separator: string, enterpriseGroup: string, environment: string, freeform: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string } }. Pass an empty object ({}) or omit to use the default CAF convention."
+        "description": "Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { segments: string[], separator: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string, networkInterfaces: string } }. Pass an empty object ({}) or omit to use the default CAF convention."
       }
     },
     "timeStamp": {
@@ -808,15 +816,16 @@
     "cnv_loc": "[if(variables('useCustomNaming'), if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'locationAbbreviation'), ''))), parameters('customNamingConvention').locationAbbreviation, variables('locationAbbreviation')), variables('locationAbbreviation'))]",
     "cnv_rtCodes": "[if(and(variables('useCustomNaming'), contains(parameters('customNamingConvention'), 'resourceTypeCodes')), parameters('customNamingConvention').resourceTypeCodes, createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints))]",
     "cnv_segments": "[if(variables('useCustomNaming'), parameters('customNamingConvention').segments, createArray())]",
-    "customRgName": "[if(variables('useCustomNaming'), __bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'enterpriseGroup'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform'), '')), '')]",
+    "cnv_rtFirst": "[if(variables('useCustomNaming'), equals(first(variables('cnv_segments')), 'resourceType'), not(parameters('nameConvResTypeAtEnd')))]",
+    "customRgName": "[if(variables('useCustomNaming'), __bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')), '')]",
     "nameConv_Operations_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-LOCATION-RESOURCETYPE', variables('identifier')), format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier')))]",
     "nameConv_Operations_Resources": "[if(parameters('nameConvResTypeAtEnd'), 'avd-TOKEN-LOCATION-RESOURCETYPE', 'RESOURCETYPE-avd-TOKEN-LOCATION')]",
-    "privateEndpointNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('resourceAbbreviations').privateEndpoints), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').privateEndpoints))]",
-    "privateEndpointNICNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('resourceAbbreviations').privateEndpoints, variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').networkInterfaces, variables('resourceAbbreviations').privateEndpoints))]",
+    "privateEndpointNameConv": "[if(variables('cnv_rtFirst'), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('cnv_rtCodes').privateEndpoints))]",
+    "privateEndpointNICNameConv": "[if(variables('cnv_rtFirst'), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('cnv_rtCodes').privateEndpoints, coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
     "operationsResourceGroupName": "[if(variables('useCustomNaming'), variables('customRgName'), replace(replace(variables('nameConv_Operations_ResGroup'), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups))]",
     "uniqueStringOperations": "[take(if(and(variables('useCustomNaming'), not(contains(variables('cnv_segments'), 'location'))), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
-    "secretsKeyVaultName": "[if(variables('useCustomNaming'), take(format('{0}-{1}', __bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'enterpriseGroup'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform'), ''))), variables('uniqueStringOperations')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]",
-    "encryptionKeyVaultName": "[if(variables('useCustomNaming'), take(format('{0}-{1}', __bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'enterpriseGroup'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform'), ''))), variables('uniqueStringOperations')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]"
+    "secretsKeyVaultName": "[if(variables('useCustomNaming'), take(format('{0}-{1}', __bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), ''))), variables('uniqueStringOperations')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]",
+    "encryptionKeyVaultName": "[if(variables('useCustomNaming'), take(format('{0}-{1}', __bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), ''))), variables('uniqueStringOperations')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]"
   },
   "resources": {
     "operationsResourceGroup": {
@@ -846,8 +855,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.43.8.12551",
+              "templateHash": "921857994108552741"
             }
           },
           "parameters": {
@@ -971,8 +980,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "1075813460047825930"
+              "version": "0.43.8.12551",
+              "templateHash": "14244985818155362678"
             }
           },
           "parameters": {
@@ -1136,8 +1145,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6824456759606900246"
+                      "version": "0.43.8.12551",
+                      "templateHash": "8485039422876759494"
                     }
                   },
                   "definitions": {
@@ -1435,8 +1444,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {
@@ -1583,8 +1592,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "13843002736269387529"
+                      "version": "0.43.8.12551",
+                      "templateHash": "17245339863889522044"
                     }
                   },
                   "parameters": {
@@ -1683,8 +1692,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6824456759606900246"
+                      "version": "0.43.8.12551",
+                      "templateHash": "8485039422876759494"
                     }
                   },
                   "definitions": {
@@ -1982,8 +1991,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.43.8.12551",
+                      "templateHash": "9215232199660468920"
                     }
                   },
                   "parameters": {

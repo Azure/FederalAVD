@@ -102,7 +102,7 @@ param tags object = {}
 
 // ── Non-Specified Values ───────────────────────────────────────────────────────
 
-@description('Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { segments: string[], separator: string, enterpriseGroup: string, environment: string, freeform: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string } }. Pass an empty object ({}) or omit to use the default CAF convention.')
+@description('Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { segments: string[], separator: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string, networkInterfaces: string } }. Pass an empty object ({}) or omit to use the default CAF convention.')
 param customNamingConvention object = {}
 
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
@@ -142,20 +142,25 @@ var cnv_rtCodes = useCustomNaming && contains(customNamingConvention, 'resourceT
       privateEndpoints: resourceAbbreviations.privateEndpoints
     }
 var cnv_segments = useCustomNaming ? customNamingConvention.segments : []
+// When custom naming is active, derive resource-type-first ordering from whether segment 1 is 'resourceType'.
+// For the CAF fallback, this is the inverse of nameConvResTypeAtEnd.
+// Used to ensure PE and NIC names follow the same prefix/suffix convention as all other resources.
+var cnv_rtFirst = useCustomNaming ? (first(cnv_segments) == 'resourceType') : !nameConvResTypeAtEnd
 
-func resolveSegment(seg string, rtCode string, purpose string, loc string, eg string, env string, ff string) string =>
+func resolveSegment(seg string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   seg == 'resourceType' ? rtCode
-    : seg == 'purpose'   ? purpose
+    : seg == 'component' ? component
     : seg == 'location'  ? loc
-    : seg == 'enterpriseGroup' ? eg
-    : seg == 'environment'     ? env
-    : seg == 'freeform'        ? ff
+    : seg == 'freeform1'     ? ff1
+    : seg == 'environment'   ? env
+    : seg == 'freeform2' ? ff2
+    : seg == 'workload'  ? workload
     : ''
 
-func buildCustomName(segments array, sep string, rtCode string, purpose string, loc string, eg string, env string, ff string) string =>
+func buildCustomName(segments array, sep string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   join(
     filter(
-      map(segments, seg => resolveSegment(seg, rtCode, purpose, loc, eg, env, ff)),
+      map(segments, seg => resolveSegment(seg, rtCode, component, loc, ff1, env, ff2, workload)),
       s => !empty(s)
     ),
     sep
@@ -172,9 +177,10 @@ var customRgName = useCustomNaming
       cnv_rtCodes.resourceGroups,
       identifier,
       cnv_loc,
-      customNamingConvention.?enterpriseGroup ?? '',
+      customNamingConvention.?freeform1 ?? '',
       customNamingConvention.?environment ?? '',
-      customNamingConvention.?freeform ?? ''
+      customNamingConvention.?freeform2 ?? '',
+      customNamingConvention.?workload ?? ''
     )
   : ''
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,13 +195,13 @@ var nameConv_Operations_Resources = nameConvResTypeAtEnd
   ? 'avd-TOKEN-LOCATION-RESOURCETYPE'
   : 'RESOURCETYPE-avd-TOKEN-LOCATION'
 
-// Private endpoint naming conventions
-var privateEndpointNameConv = nameConvResTypeAtEnd
-  ? 'RESOURCE-SUBRESOURCE-VNETID-${resourceAbbreviations.privateEndpoints}'
-  : '${resourceAbbreviations.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
-var privateEndpointNICNameConv = nameConvResTypeAtEnd
-  ? 'RESOURCE-SUBRESOURCE-VNETID-${resourceAbbreviations.privateEndpoints}-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-${resourceAbbreviations.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
+// Private endpoint naming conventions — follows the same resource-type-first/last convention as all other resources
+var privateEndpointNameConv = cnv_rtFirst
+  ? '${cnv_rtCodes.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
+  : 'RESOURCE-SUBRESOURCE-VNETID-${cnv_rtCodes.privateEndpoints}'
+var privateEndpointNICNameConv = cnv_rtFirst
+  ? '${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}-${cnv_rtCodes.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
+  : 'RESOURCE-SUBRESOURCE-VNETID-${cnv_rtCodes.privateEndpoints}-${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}'
 
 var operationsResourceGroupName = useCustomNaming
   ? customRgName
@@ -219,7 +225,7 @@ var uniqueStringOperations = take(
 // Key Vault names are capped at 24 chars to satisfy Azure naming constraints
 var secretsKeyVaultName = useCustomNaming
   ? take(
-      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_loc, customNamingConvention.?enterpriseGroup ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform ?? ''))}-${uniqueStringOperations}',
+      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_loc, customNamingConvention.?freeform1 ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform2 ?? '', customNamingConvention.?workload ?? ''))}-${uniqueStringOperations}',
       24
     )
   : take(
@@ -237,7 +243,7 @@ var secretsKeyVaultName = useCustomNaming
 
 var encryptionKeyVaultName = useCustomNaming
   ? take(
-      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_loc, customNamingConvention.?enterpriseGroup ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform ?? ''))}-${uniqueStringOperations}',
+      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_loc, customNamingConvention.?freeform1 ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform2 ?? '', customNamingConvention.?workload ?? ''))}-${uniqueStringOperations}',
       24
     )
   : take(
