@@ -527,41 +527,34 @@
 					"label": "Tags & Naming",
 					"elements": [
 						{
-							"name": "namingHeading",
-							"type": "Microsoft.Common.TextBlock",
-							"options": {
-								"text": "Naming Convention"
-							}
-						},
-						{
+							"name": "naming",
+							"type": "Microsoft.Common.Section",
+							"label": "Naming Convention",
+							"elements": [
+								{
 									"name": "nameConvResTypeAtEnd",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Resource Type Abbreviation at End of Name",
-								"visible": "[not(steps('tagsAndNaming').enableCustomNaming)]",
-								"toolTip": "When checked, names follow the pattern 'avd-image-management-eus-gal'. When unchecked (default), names follow 'gal-avd-image-management-eus'. Has no effect when a custom naming convention is enabled — segment order controls resource type placement instead."
-						},
-						{
-							"name": "namingDescription",
-							"type": "Microsoft.Common.TextBlock",
-							"options": {
-								"text": "Optionally define a custom naming convention by selecting up to 5 segments in the order you want them to appear in resource names. When enabled, the Cloud Adoption Framework naming convention (including the 'Resource Type at End' option on the Deployment Basics step) is ignored. Segments marked 'auto-resolved' are substituted per resource at deployment time; segments you define require a value below."
-							}
-						},
-						{
-							"name": "enableCustomNaming",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Enable Custom Naming Convention",
-							"toolTip": "When checked, all image management and image build resources will be named according to the segments and order you define below."
-						},
-						{
-							"name": "customNamingSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Convention Builder",
-							"visible": "[steps('tagsAndNaming').enableCustomNaming]",
-							"elements": [
+									"visible": "[not(steps('tagsAndNaming').naming.enableCustomNaming)]",
+									"toolTip": "When checked, names follow the pattern 'avd-image-management-eus-gal'. When unchecked (default), names follow 'gal-avd-image-management-eus'. Has no effect when a custom naming convention is enabled — segment order controls resource type placement instead."
+								},
+								{
+									"name": "namingDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Optionally define a custom naming convention by selecting up to 5 segments in the order you want them to appear in resource names. When enabled, the Cloud Adoption Framework naming convention (including the 'Resource Type at End' option on the Deployment Basics step) is ignored. Segments marked 'auto-resolved' are substituted per resource at deployment time; segments you define require a value below."
+									}
+								},
+								{
+									"name": "enableCustomNaming",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Custom Naming Convention",
+									"toolTip": "When checked, all image management and image build resources will be named according to the segments and order you define below."
+								},
 								{
 									"name": "builderInfo",
 									"type": "Microsoft.Common.InfoBox",
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
 									"options": {
 										"style": "Info",
 										"text": "Select the segments that make up your naming convention and arrange them in order using Segment 1 through Segment 5. Select 'None (stop here)' to end the sequence. Auto-resolved segments — Resource Type, Component, Location — are substituted per resource at deployment time. Value segments — Workload, Environment, Free-form Text 1, Free-form Text 2 — require you to supply a value in the fields that appear below."
@@ -572,6 +565,7 @@
 									"type": "Microsoft.Common.TextBox",
 									"label": "Separator",
 									"defaultValue": "-",
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
 									"toolTip": "Character(s) placed between each segment. A hyphen (-) is most common. Storage account names cannot contain hyphens — they are stripped automatically for those resources.",
 									"constraints": {
 										"required": true,
@@ -585,16 +579,45 @@
 									"label": "Segment 1",
 									"multiLine": true,
 									"toolTip": "First segment of every resource name.",
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "Free-form Text 1", "description": "A fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform1" },
-											{ "label": "Environment", "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).", "value": "environment" },
-											{ "label": "Resource Type", "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.", "value": "resourceType" },
-											{ "label": "Workload", "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).", "value": "workload" },
-												{ "label": "Component", "description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.", "value": "component" },
-											{ "label": "Location", "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.", "value": "location" },
-											{ "label": "Free-form Text 2", "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform2" }
+											{
+												"label": "Free-form Text 1",
+												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform1"
+											},
+											{
+												"label": "Environment",
+												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+												"value": "environment"
+											},
+											{
+												"label": "Resource Type",
+												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+												"value": "resourceType"
+											},
+											{
+												"label": "Workload",
+												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+												"value": "workload"
+											},
+											{
+												"label": "Component",
+												"description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+												"value": "component"
+											},
+											{
+												"label": "Location",
+												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+												"value": "location"
+											},
+											{
+												"label": "Free-form Text 2",
+												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform2"
+											}
 										]
 									}
 								},
@@ -605,17 +628,50 @@
 									"defaultValue": "none",
 									"multiLine": true,
 									"toolTip": "Second segment. Select 'None (stop here)' to use only 1 segment.",
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "None (stop here)", "description": "End the convention after Segment 1.", "value": "none" },
-											{ "label": "Free-form Text 1", "description": "A fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform1" },
-											{ "label": "Environment", "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).", "value": "environment" },
-											{ "label": "Resource Type", "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.", "value": "resourceType" },
-											{ "label": "Workload", "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).", "value": "workload" },
-												{ "label": "Component", "description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.", "value": "component" },
-											{ "label": "Location", "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.", "value": "location" },
-											{ "label": "Free-form Text 2", "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform2" }
+											{
+												"label": "None (stop here)",
+												"description": "End the convention after Segment 1.",
+												"value": "none"
+											},
+											{
+												"label": "Free-form Text 1",
+												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform1"
+											},
+											{
+												"label": "Environment",
+												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+												"value": "environment"
+											},
+											{
+												"label": "Resource Type",
+												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+												"value": "resourceType"
+											},
+											{
+												"label": "Workload",
+												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+												"value": "workload"
+											},
+											{
+												"label": "Component",
+												"description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+												"value": "component"
+											},
+											{
+												"label": "Location",
+												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+												"value": "location"
+											},
+											{
+												"label": "Free-form Text 2",
+												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform2"
+											}
 										]
 									}
 								},
@@ -625,19 +681,51 @@
 									"label": "Segment 3",
 									"defaultValue": "none",
 									"multiLine": true,
-									"visible": "[not(equals(steps('tagsAndNaming').customNamingSection.segment2, 'none'))]",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.segment2, 'none')))]",
 									"toolTip": "Third segment. Select 'None (stop here)' to use only 2 segments.",
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "None (stop here)", "description": "End the convention after Segment 2.", "value": "none" },
-											{ "label": "Free-form Text 1", "description": "A fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform1" },
-											{ "label": "Environment", "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).", "value": "environment" },
-											{ "label": "Resource Type", "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.", "value": "resourceType" },
-											{ "label": "Workload", "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).", "value": "workload" },
-												{ "label": "Component", "description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.", "value": "component" },
-											{ "label": "Location", "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.", "value": "location" },
-											{ "label": "Free-form Text 2", "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform2" }
+											{
+												"label": "None (stop here)",
+												"description": "End the convention after Segment 2.",
+												"value": "none"
+											},
+											{
+												"label": "Free-form Text 1",
+												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform1"
+											},
+											{
+												"label": "Environment",
+												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+												"value": "environment"
+											},
+											{
+												"label": "Resource Type",
+												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+												"value": "resourceType"
+											},
+											{
+												"label": "Workload",
+												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+												"value": "workload"
+											},
+											{
+												"label": "Component",
+												"description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+												"value": "component"
+											},
+											{
+												"label": "Location",
+												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+												"value": "location"
+											},
+											{
+												"label": "Free-form Text 2",
+												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform2"
+											}
 										]
 									}
 								},
@@ -647,19 +735,51 @@
 									"label": "Segment 4",
 									"defaultValue": "none",
 									"multiLine": true,
-									"visible": "[and(not(equals(steps('tagsAndNaming').customNamingSection.segment2, 'none')), not(equals(steps('tagsAndNaming').customNamingSection.segment3, 'none')))]",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.segment2, 'none')), not(equals(steps('tagsAndNaming').naming.segment3, 'none')))]",
 									"toolTip": "Fourth segment. Select 'None (stop here)' to use only 3 segments.",
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "None (stop here)", "description": "End the convention after Segment 3.", "value": "none" },
-											{ "label": "Free-form Text 1", "description": "A fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform1" },
-											{ "label": "Environment", "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).", "value": "environment" },
-											{ "label": "Resource Type", "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.", "value": "resourceType" },
-											{ "label": "Workload", "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).", "value": "workload" },
-												{ "label": "Component", "description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.", "value": "component" },
-											{ "label": "Location", "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.", "value": "location" },
-											{ "label": "Free-form Text 2", "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform2" }
+											{
+												"label": "None (stop here)",
+												"description": "End the convention after Segment 3.",
+												"value": "none"
+											},
+											{
+												"label": "Free-form Text 1",
+												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform1"
+											},
+											{
+												"label": "Environment",
+												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+												"value": "environment"
+											},
+											{
+												"label": "Resource Type",
+												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+												"value": "resourceType"
+											},
+											{
+												"label": "Workload",
+												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+												"value": "workload"
+											},
+											{
+												"label": "Component",
+												"description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+												"value": "component"
+											},
+											{
+												"label": "Location",
+												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+												"value": "location"
+											},
+											{
+												"label": "Free-form Text 2",
+												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform2"
+											}
 										]
 									}
 								},
@@ -669,19 +789,51 @@
 									"label": "Segment 5",
 									"defaultValue": "none",
 									"multiLine": true,
-									"visible": "[and(not(equals(steps('tagsAndNaming').customNamingSection.segment2, 'none')), and(not(equals(steps('tagsAndNaming').customNamingSection.segment3, 'none')), not(equals(steps('tagsAndNaming').customNamingSection.segment4, 'none'))))]",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.segment2, 'none')), and(not(equals(steps('tagsAndNaming').naming.segment3, 'none')), not(equals(steps('tagsAndNaming').naming.segment4, 'none'))))]",
 									"toolTip": "Fifth segment. Select 'None (stop here)' to use only 4 segments.",
 									"constraints": {
 										"required": true,
 										"allowedValues": [
-											{ "label": "None (stop here)", "description": "End the convention after Segment 4.", "value": "none" },
-											{ "label": "Free-form Text 1", "description": "A fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform1" },
-											{ "label": "Environment", "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).", "value": "environment" },
-											{ "label": "Resource Type", "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.", "value": "resourceType" },
-											{ "label": "Workload", "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).", "value": "workload" },
-												{ "label": "Component", "description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.", "value": "component" },
-											{ "label": "Location", "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.", "value": "location" },
-											{ "label": "Free-form Text 2", "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.", "value": "freeform2" }
+											{
+												"label": "None (stop here)",
+												"description": "End the convention after Segment 4.",
+												"value": "none"
+											},
+											{
+												"label": "Free-form Text 1",
+												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform1"
+											},
+											{
+												"label": "Environment",
+												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+												"value": "environment"
+											},
+											{
+												"label": "Resource Type",
+												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+												"value": "resourceType"
+											},
+											{
+												"label": "Workload",
+												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+												"value": "workload"
+											},
+											{
+												"label": "Component",
+												"description": "Deployment component role — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+												"value": "component"
+											},
+											{
+												"label": "Location",
+												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+												"value": "location"
+											},
+											{
+												"label": "Free-form Text 2",
+												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+												"value": "freeform2"
+											}
 										]
 									}
 								},
@@ -691,7 +843,7 @@
 									"label": "Workload Value",
 									"placeholder": "e.g. avd, sharepoint, navigator",
 									"toolTip": "The workload/application/project name (CAF: Workload). Appears in every resource name when the Workload segment is selected.",
-									"visible": "[or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'workload'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'workload'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'workload'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'workload'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'workload')))))]",
+									"visible": "[or(equals(steps('tagsAndNaming').naming.segment1, 'workload'), or(equals(steps('tagsAndNaming').naming.segment2, 'workload'), or(equals(steps('tagsAndNaming').naming.segment3, 'workload'), or(equals(steps('tagsAndNaming').naming.segment4, 'workload'), equals(steps('tagsAndNaming').naming.segment5, 'workload')))))]",
 									"constraints": {
 										"required": true,
 										"regex": "^[a-z0-9-]{1,20}$",
@@ -704,11 +856,11 @@
 									"label": "Free-form Text 1 Value",
 									"placeholder": "e.g. contoso, shared, corp",
 									"toolTip": "The fixed value used for the Free-form Text 1 segment in all resource names.",
-									"visible": "[or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'freeform1'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'freeform1'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'freeform1'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'freeform1'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'freeform1')))))]",
+									"visible": "[or(equals(steps('tagsAndNaming').naming.segment1, 'freeform1'), or(equals(steps('tagsAndNaming').naming.segment2, 'freeform1'), or(equals(steps('tagsAndNaming').naming.segment3, 'freeform1'), or(equals(steps('tagsAndNaming').naming.segment4, 'freeform1'), equals(steps('tagsAndNaming').naming.segment5, 'freeform1')))))]",
 									"constraints": {
 										"required": true,
-									"regex": "^[a-z0-9-]{1,20}$",
-									"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
+										"regex": "^[a-z0-9-]{1,20}$",
+										"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
 									}
 								},
 								{
@@ -717,7 +869,7 @@
 									"label": "Environment Value",
 									"placeholder": "e.g. pr, np, co, dev, prod",
 									"toolTip": "The fixed value used for the Environment segment in all resource names.",
-									"visible": "[or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'environment'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'environment'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'environment'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'environment'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'environment')))))]",
+									"visible": "[or(equals(steps('tagsAndNaming').naming.segment1, 'environment'), or(equals(steps('tagsAndNaming').naming.segment2, 'environment'), or(equals(steps('tagsAndNaming').naming.segment3, 'environment'), or(equals(steps('tagsAndNaming').naming.segment4, 'environment'), equals(steps('tagsAndNaming').naming.segment5, 'environment')))))]",
 									"constraints": {
 										"required": true,
 										"regex": "^[a-z0-9]{1,10}$",
@@ -730,7 +882,7 @@
 									"label": "Free-form Text 2 Value",
 									"placeholder": "e.g. contoso, shared",
 									"toolTip": "A second fixed text string embedded in every resource name when the Free-form Text 2 segment is used.",
-									"visible": "[or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'freeform2'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'freeform2'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'freeform2'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'freeform2'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'freeform2')))))]",
+									"visible": "[or(equals(steps('tagsAndNaming').naming.segment1, 'freeform2'), or(equals(steps('tagsAndNaming').naming.segment2, 'freeform2'), or(equals(steps('tagsAndNaming').naming.segment3, 'freeform2'), or(equals(steps('tagsAndNaming').naming.segment4, 'freeform2'), equals(steps('tagsAndNaming').naming.segment5, 'freeform2')))))]",
 									"constraints": {
 										"required": true,
 										"regex": "^[a-z0-9-]{1,20}$",
@@ -744,7 +896,7 @@
 									"placeholder": "e.g. east, va, eus2",
 									"defaultValue": "",
 									"toolTip": "Override the auto-resolved region abbreviation. Leave empty to use the standard abbreviation from the locations data file (e.g. eus for East US, va for US Gov Virginia).",
-									"visible": "[or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'location'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'location'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'location'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'location'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'location')))))]",
+									"visible": "[or(equals(steps('tagsAndNaming').naming.segment1, 'location'), or(equals(steps('tagsAndNaming').naming.segment2, 'location'), or(equals(steps('tagsAndNaming').naming.segment3, 'location'), or(equals(steps('tagsAndNaming').naming.segment4, 'location'), equals(steps('tagsAndNaming').naming.segment5, 'location')))))]",
 									"constraints": {
 										"required": false,
 										"regex": "^[a-z0-9]{0,10}$",
@@ -754,7 +906,7 @@
 								{
 									"name": "noLocationWarning",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[not(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'location'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'location'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'location'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'location'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'location'))))))]",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'location'), or(equals(steps('tagsAndNaming').naming.segment2, 'location'), or(equals(steps('tagsAndNaming').naming.segment3, 'location'), or(equals(steps('tagsAndNaming').naming.segment4, 'location'), equals(steps('tagsAndNaming').naming.segment5, 'location')))))))]",
 									"options": {
 										"style": "Warning",
 										"text": "No Location segment selected. If you plan to deploy Image Management in multiple regions (e.g. a primary gallery and a remote gallery in a second region), include Location in your convention to avoid resource name conflicts between deployments."
@@ -763,7 +915,7 @@
 								{
 									"name": "noComponentWarning",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[not(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'component'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'component'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'component'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'component'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'component'))))))]",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'component'), or(equals(steps('tagsAndNaming').naming.segment2, 'component'), or(equals(steps('tagsAndNaming').naming.segment3, 'component'), or(equals(steps('tagsAndNaming').naming.segment4, 'component'), equals(steps('tagsAndNaming').naming.segment5, 'component')))))))]",
 									"options": {
 										"style": "Warning",
 										"text": "No Component segment selected. Resources of the same type in this deployment (e.g. both storage accounts for artifacts and logs) will have identical names. Including Component is strongly recommended."
@@ -774,7 +926,7 @@
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Customize Resource Type Abbreviations",
 									"toolTip": "Override the default Cloud Adoption Framework resource type abbreviations. When unchecked, CAF defaults are used: rg, gal, uai, sa, pe, nic, des.",
-									"visible": "[or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType')))))]",
+									"visible": "[or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType')))))]",
 									"defaultValue": false
 								},
 								{
@@ -783,8 +935,12 @@
 									"label": "Resource Groups abbreviation",
 									"defaultValue": "rg",
 									"toolTip": "Abbreviation substituted for the Resource Type segment in resource group names.",
-									"visible": "[and(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes, true))]",
-									"constraints": { "required": true, "regex": "^[a-z0-9]{1,10}$", "validationMessage": "Use 1 to 10 lowercase letters or digits." }
+									"visible": "[and(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').naming.customizeRtCodes, true))]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,10}$",
+										"validationMessage": "Use 1 to 10 lowercase letters or digits."
+									}
 								},
 								{
 									"name": "rtCodeGal",
@@ -792,8 +948,12 @@
 									"label": "Compute Galleries abbreviation",
 									"defaultValue": "gal",
 									"toolTip": "Abbreviation substituted for the Resource Type segment in gallery names. Gallery names replace hyphens with underscores automatically.",
-									"visible": "[and(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes, true))]",
-									"constraints": { "required": true, "regex": "^[a-z0-9]{1,10}$", "validationMessage": "Use 1 to 10 lowercase letters or digits." }
+									"visible": "[and(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').naming.customizeRtCodes, true))]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,10}$",
+										"validationMessage": "Use 1 to 10 lowercase letters or digits."
+									}
 								},
 								{
 									"name": "rtCodeUai",
@@ -801,8 +961,12 @@
 									"label": "User Assigned Identities abbreviation",
 									"defaultValue": "uai",
 									"toolTip": "Abbreviation substituted for the Resource Type segment in managed identity names.",
-									"visible": "[and(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes, true))]",
-									"constraints": { "required": true, "regex": "^[a-z0-9]{1,10}$", "validationMessage": "Use 1 to 10 lowercase letters or digits." }
+									"visible": "[and(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').naming.customizeRtCodes, true))]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,10}$",
+										"validationMessage": "Use 1 to 10 lowercase letters or digits."
+									}
 								},
 								{
 									"name": "rtCodeSa",
@@ -810,8 +974,12 @@
 									"label": "Storage Accounts abbreviation",
 									"defaultValue": "sa",
 									"toolTip": "Abbreviation substituted for the Resource Type segment in storage account names. Storage names strip hyphens and are capped at 24 characters.",
-									"visible": "[and(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes, true))]",
-									"constraints": { "required": true, "regex": "^[a-z0-9]{1,10}$", "validationMessage": "Use 1 to 10 lowercase letters or digits." }
+									"visible": "[and(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').naming.customizeRtCodes, true))]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,10}$",
+										"validationMessage": "Use 1 to 10 lowercase letters or digits."
+									}
 								},
 								{
 									"name": "rtCodePe",
@@ -819,8 +987,12 @@
 									"label": "Private Endpoints abbreviation",
 									"defaultValue": "pe",
 									"toolTip": "Abbreviation substituted for the Resource Type segment in private endpoint names.",
-									"visible": "[and(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes, true))]",
-									"constraints": { "required": true, "regex": "^[a-z0-9]{1,10}$", "validationMessage": "Use 1 to 10 lowercase letters or digits." }
+									"visible": "[and(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').naming.customizeRtCodes, true))]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,10}$",
+										"validationMessage": "Use 1 to 10 lowercase letters or digits."
+									}
 								},
 								{
 									"name": "rtCodeNic",
@@ -828,8 +1000,12 @@
 									"label": "Network Interfaces abbreviation",
 									"defaultValue": "nic",
 									"toolTip": "Abbreviation substituted for the Resource Type segment in private endpoint network interface names.",
-									"visible": "[and(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes, true))]",
-									"constraints": { "required": true, "regex": "^[a-z0-9]{1,10}$", "validationMessage": "Use 1 to 10 lowercase letters or digits." }
+									"visible": "[and(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').naming.customizeRtCodes, true))]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,10}$",
+										"validationMessage": "Use 1 to 10 lowercase letters or digits."
+									}
 								},
 								{
 									"name": "rtCodeDes",
@@ -837,8 +1013,12 @@
 									"label": "Disk Encryption Sets abbreviation",
 									"defaultValue": "des",
 									"toolTip": "Abbreviation substituted for the Resource Type segment in disk encryption set names.",
-									"visible": "[and(or(equals(steps('tagsAndNaming').customNamingSection.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').customNamingSection.segment4, 'resourceType'), equals(steps('tagsAndNaming').customNamingSection.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes, true))]",
-									"constraints": { "required": true, "regex": "^[a-z0-9]{1,10}$", "validationMessage": "Use 1 to 10 lowercase letters or digits." }
+									"visible": "[and(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))), equals(steps('tagsAndNaming').naming.customizeRtCodes, true))]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,10}$",
+										"validationMessage": "Use 1 to 10 lowercase letters or digits."
+									}
 								},
 								{
 									"name": "previewHeading",
@@ -846,14 +1026,16 @@
 									"options": {
 										"style": "Heading",
 										"text": "Name Preview"
-									}
+									},
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
 								},
 								{
 									"name": "previewRg",
 									"type": "Microsoft.Common.TextBlock",
 									"options": {
-										"text": "[concat('Resource Group:  ', if(equals(steps('tagsAndNaming').customNamingSection.segment1,'resourceType'),if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg',steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').customNamingSection.segment1,'component'),'image-management',if(equals(steps('tagsAndNaming').customNamingSection.segment1,'location'),if(not(empty(steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride)),steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').customNamingSection.segment1,'freeform1'),if(empty(steps('tagsAndNaming').customNamingSection.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').customNamingSection.freeform1Value),if(equals(steps('tagsAndNaming').customNamingSection.segment1,'environment'),if(empty(steps('tagsAndNaming').customNamingSection.environmentValue),'(Environment)',steps('tagsAndNaming').customNamingSection.environmentValue),if(equals(steps('tagsAndNaming').customNamingSection.segment1,'freeform2'),if(empty(steps('tagsAndNaming').customNamingSection.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').customNamingSection.freeform2Value),if(empty(steps('tagsAndNaming').customNamingSection.workloadValue),'(Workload)',steps('tagsAndNaming').customNamingSection.workloadValue))))))),if(not(equals(steps('tagsAndNaming').customNamingSection.segment2,'none')),concat(steps('tagsAndNaming').customNamingSection.separator,if(equals(steps('tagsAndNaming').customNamingSection.segment2,'resourceType'),if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg',steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').customNamingSection.segment2,'component'),'image-management',if(equals(steps('tagsAndNaming').customNamingSection.segment2,'location'),if(not(empty(steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride)),steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').customNamingSection.segment2,'freeform1'),if(empty(steps('tagsAndNaming').customNamingSection.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').customNamingSection.freeform1Value),if(equals(steps('tagsAndNaming').customNamingSection.segment2,'environment'),if(empty(steps('tagsAndNaming').customNamingSection.environmentValue),'(Environment)',steps('tagsAndNaming').customNamingSection.environmentValue),if(equals(steps('tagsAndNaming').customNamingSection.segment2,'freeform2'),if(empty(steps('tagsAndNaming').customNamingSection.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').customNamingSection.freeform2Value),if(empty(steps('tagsAndNaming').customNamingSection.workloadValue),'(Workload)',steps('tagsAndNaming').customNamingSection.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').customNamingSection.segment3,'none')),concat(steps('tagsAndNaming').customNamingSection.separator,if(equals(steps('tagsAndNaming').customNamingSection.segment3,'resourceType'),if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg',steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').customNamingSection.segment3,'component'),'image-management',if(equals(steps('tagsAndNaming').customNamingSection.segment3,'location'),if(not(empty(steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride)),steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').customNamingSection.segment3,'freeform1'),if(empty(steps('tagsAndNaming').customNamingSection.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').customNamingSection.freeform1Value),if(equals(steps('tagsAndNaming').customNamingSection.segment3,'environment'),if(empty(steps('tagsAndNaming').customNamingSection.environmentValue),'(Environment)',steps('tagsAndNaming').customNamingSection.environmentValue),if(equals(steps('tagsAndNaming').customNamingSection.segment3,'freeform2'),if(empty(steps('tagsAndNaming').customNamingSection.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').customNamingSection.freeform2Value),if(empty(steps('tagsAndNaming').customNamingSection.workloadValue),'(Workload)',steps('tagsAndNaming').customNamingSection.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').customNamingSection.segment4,'none')),concat(steps('tagsAndNaming').customNamingSection.separator,if(equals(steps('tagsAndNaming').customNamingSection.segment4,'resourceType'),if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg',steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').customNamingSection.segment4,'component'),'image-management',if(equals(steps('tagsAndNaming').customNamingSection.segment4,'location'),if(not(empty(steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride)),steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').customNamingSection.segment4,'freeform1'),if(empty(steps('tagsAndNaming').customNamingSection.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').customNamingSection.freeform1Value),if(equals(steps('tagsAndNaming').customNamingSection.segment4,'environment'),if(empty(steps('tagsAndNaming').customNamingSection.environmentValue),'(Environment)',steps('tagsAndNaming').customNamingSection.environmentValue),if(equals(steps('tagsAndNaming').customNamingSection.segment4,'freeform2'),if(empty(steps('tagsAndNaming').customNamingSection.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').customNamingSection.freeform2Value),if(empty(steps('tagsAndNaming').customNamingSection.workloadValue),'(Workload)',steps('tagsAndNaming').customNamingSection.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').customNamingSection.segment5,'none')),concat(steps('tagsAndNaming').customNamingSection.separator,if(equals(steps('tagsAndNaming').customNamingSection.segment5,'resourceType'),if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg',steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').customNamingSection.segment5,'component'),'image-management',if(equals(steps('tagsAndNaming').customNamingSection.segment5,'location'),if(not(empty(steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride)),steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').customNamingSection.segment5,'freeform1'),if(empty(steps('tagsAndNaming').customNamingSection.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').customNamingSection.freeform1Value),if(equals(steps('tagsAndNaming').customNamingSection.segment5,'environment'),if(empty(steps('tagsAndNaming').customNamingSection.environmentValue),'(Environment)',steps('tagsAndNaming').customNamingSection.environmentValue),if(equals(steps('tagsAndNaming').customNamingSection.segment5,'freeform2'),if(empty(steps('tagsAndNaming').customNamingSection.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').customNamingSection.freeform2Value),if(empty(steps('tagsAndNaming').customNamingSection.workloadValue),'(Workload)',steps('tagsAndNaming').customNamingSection.workloadValue)))))))), ''))]"
-									}
+										"text": "[concat('Resource Group:  ', if(equals(steps('tagsAndNaming').naming.segment1,'resourceType'),if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').naming.segment1,'component'),'image-management',if(equals(steps('tagsAndNaming').naming.segment1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.segment1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.segment1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.segment1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.segment2,'none')),concat(steps('tagsAndNaming').naming.separator,if(equals(steps('tagsAndNaming').naming.segment2,'resourceType'),if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').naming.segment2,'component'),'image-management',if(equals(steps('tagsAndNaming').naming.segment2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.segment2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.segment2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.segment2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.segment3,'none')),concat(steps('tagsAndNaming').naming.separator,if(equals(steps('tagsAndNaming').naming.segment3,'resourceType'),if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').naming.segment3,'component'),'image-management',if(equals(steps('tagsAndNaming').naming.segment3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.segment3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.segment3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.segment3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.segment4,'none')),concat(steps('tagsAndNaming').naming.separator,if(equals(steps('tagsAndNaming').naming.segment4,'resourceType'),if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').naming.segment4,'component'),'image-management',if(equals(steps('tagsAndNaming').naming.segment4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.segment4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.segment4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.segment4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.segment5,'none')),concat(steps('tagsAndNaming').naming.separator,if(equals(steps('tagsAndNaming').naming.segment5,'resourceType'),if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),'rg'),if(equals(steps('tagsAndNaming').naming.segment5,'component'),'image-management',if(equals(steps('tagsAndNaming').naming.segment5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.segment5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.segment5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.segment5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''))]"
+									},
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
 								},
 								{
 									"name": "previewNotes",
@@ -861,12 +1043,13 @@
 									"options": {
 										"style": "Info",
 										"text": "Preview shows the resource group name. Gallery names use underscores instead of hyphens. Storage account names follow the custom convention but with all separators stripped (alphanumeric only) and use 'assets' / 'logs' as short purpose tokens to keep the two accounts distinct. A uniqueString suffix is always appended and the result is truncated to 24 characters for global uniqueness. Location shows '{loc}' when no custom abbreviation is provided — the actual value (e.g. eus, va) is resolved at deployment time from the selected region."
-									}
+									},
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
 								}
 							]
 						},
 						{
-							"name": "tagsSection",
+							"name": "tags",
 							"type": "Microsoft.Common.Section",
 							"label": "Resource Tags",
 							"elements": [
@@ -915,9 +1098,9 @@
 				"confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
 				"deployImageBuildResourceGroup": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
 				"customImageBuildResourceGroupName": "[if(steps('imageBuildRg').deployImageBuildResourceGroup, steps('imageBuildRg').customImageBuildResourceGroupName, '')]",
-				"nameConvResTypeAtEnd": "[steps('tagsAndNaming').nameConvResTypeAtEnd]",
-				"customNamingConvention": "[if(steps('tagsAndNaming').enableCustomNaming, parse(concat('{\"segments\":[\"', steps('tagsAndNaming').customNamingSection.segment1, '\",\"', steps('tagsAndNaming').customNamingSection.segment2, '\",\"', steps('tagsAndNaming').customNamingSection.segment3, '\",\"', steps('tagsAndNaming').customNamingSection.segment4, '\",\"', steps('tagsAndNaming').customNamingSection.segment5, '\"],\"separator\":\"', steps('tagsAndNaming').customNamingSection.separator, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').customNamingSection.freeform1Value),'',steps('tagsAndNaming').customNamingSection.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').customNamingSection.environmentValue),'',steps('tagsAndNaming').customNamingSection.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').customNamingSection.freeform2Value),'',steps('tagsAndNaming').customNamingSection.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').customNamingSection.workloadValue),'',steps('tagsAndNaming').customNamingSection.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride),'',steps('tagsAndNaming').customNamingSection.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg',steps('tagsAndNaming').customNamingSection.rtCodeRg),'rg'), '\",\"computeGalleries\":\"', if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeGal),'gal',steps('tagsAndNaming').customNamingSection.rtCodeGal),'gal'), '\",\"userAssignedIdentities\":\"', if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeUai),'uai',steps('tagsAndNaming').customNamingSection.rtCodeUai),'uai'), '\",\"storageAccounts\":\"', if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeSa),'sa',steps('tagsAndNaming').customNamingSection.rtCodeSa),'sa'), '\",\"privateEndpoints\":\"', if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodePe),'pe',steps('tagsAndNaming').customNamingSection.rtCodePe),'pe'), '\",\"diskEncryptionSets\":\"', if(equals(steps('tagsAndNaming').customNamingSection.customizeRtCodes,true),if(empty(steps('tagsAndNaming').customNamingSection.rtCodeDes),'des',steps('tagsAndNaming').customNamingSection.rtCodeDes),'des'), '\"}}')), parse('{}'))]",
-				"tags": "[steps('tagsAndNaming').tagsSection.resourceTags]"
+				"nameConvResTypeAtEnd": "[steps('tagsAndNaming').naming.nameConvResTypeAtEnd]",
+				"customNamingConvention": "[if(steps('tagsAndNaming').naming.enableCustomNaming, parse(concat('{\"segments\":[\"', steps('tagsAndNaming').naming.segment1, '\",\"', steps('tagsAndNaming').naming.segment2, '\",\"', steps('tagsAndNaming').naming.segment3, '\",\"', steps('tagsAndNaming').naming.segment4, '\",\"', steps('tagsAndNaming').naming.segment5, '\"],\"separator\":\"', steps('tagsAndNaming').naming.separator, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),'rg'), '\",\"computeGalleries\":\"', if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal),'gal'), '\",\"userAssignedIdentities\":\"', if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai),'uai'), '\",\"storageAccounts\":\"', if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa),'sa'), '\",\"privateEndpoints\":\"', if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe),'pe'), '\",\"diskEncryptionSets\":\"', if(equals(steps('tagsAndNaming').naming.customizeRtCodes,true),if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes),'des'), '\"}}')), parse('{}'))]",
+				"tags": "[steps('tagsAndNaming').tags.resourceTags]"
 			}
 		}
 	}
