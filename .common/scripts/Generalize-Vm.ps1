@@ -44,7 +44,7 @@ Try {
     $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/deallocate?api-version=2024-03-01')
 
     # Wait for deallocated state
-    $DeallocateTimeout = (Get-Date).AddMinutes(5)
+    $DeallocateTimeout = (Get-Date).AddMinutes(15)
     $VMPowerState = $null
     do {
         $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')
@@ -52,7 +52,7 @@ Try {
         Write-Log "VM power state: $VMPowerState"
         if ($VMPowerState -eq 'VM deallocated') { break }
         if ((Get-Date) -ge $DeallocateTimeout) {
-            throw "Timed out after 5 minutes waiting for the VM to deallocate. Current power state: '$VMPowerState'."
+            throw "Timed out after 15 minutes waiting for the VM to deallocate. Current power state: '$VMPowerState'."
         }
         Start-Sleep -Seconds 5
     } while ($VMPowerState -ne 'VM deallocated')
