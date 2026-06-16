@@ -22,39 +22,55 @@ try {
     Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)
     [array]$apps = $AppsToRemove.replace('\"', '"') | ConvertFrom-Json
 
-    $ProvisionedApps = Get-AppxProvisionedPackage -online
-    $InstalledApps = Get-AppxPackage -AllUsers
+    # Image build context: no user profiles exist, so only provisioned package removal is relevant.
+    # Get-AppxPackage -AllUsers is intentionally omitted — it hangs on Windows 11 25H2 in OOBE/image
+    # build scenarios when no user hives are mounted, and provides no value on a fresh image.
+    Write-Log "Enumerating provisioned AppX packages..."
+    $ProvisionedApps = Get-AppxProvisionedPackage -Online
 
-    ForEach ($app in $apps) {
-
-        If ($($ProvisionedApps.DisplayName) -contains $app) {
-            Write-Log "Removing Provisioned AppX Package [$app]"
-            Get-AppxProvisionedPackage -online | Where-Object {$_.DisplayName -eq "$app"} | Remove-AppxProvisionedPackage -Online -AllUsers
+    foreach ($app in $apps) {
+        $match = $ProvisionedApps | Where-Object { $_.DisplayName -eq $app }
+        if ($match) {
+            Write-Log "Removing provisioned AppX package [$app]"
+            try {
+                $match | Remove-AppxProvisionedPackage -Online -ErrorAction Stop
+            }
+            catch {
+                Write-Log "WARNING: Failed to remove provisioned package [$app]: $($_.Exception.Message)"
+            }
         }
-
-        If ($($InstalledApps.Name) -contains $app) {
-            Write-Log "Uninstalling Appx Package [$app] for all users."
-            Get-AppxPackage -AllUsers | Where-Object { $_.Name -eq "$app" } | Remove-AppxPackage -AllUsers
+        else {
+            Write-Log "Provisioned AppX package [$app] not found — skipping."
         }
-
     }
+
     Write-Log "*********************************"
     Write-Log "Removing Built-in Capabilities"
     Write-Log "*********************************"
-    $capabilitylist = "App.Support.ContactSupport", "App.Support.QuickAssist"
+    $capabilityList = "App.Support.ContactSupport", "App.Support.QuickAssist"
 
-    ForEach ($capability in $capabilitylist) {
-        $InstalledCapability = $null
-        $InstalledCapability = Get-WindowsCapability -Online | Where-Object { $_.Name -like "$capability*" -and $_.State -ne "NotPresent" }
-        If ($InstalledCapability) {
-            Write-Log "Removing [$Capability]"
-            $InstalledCapability | Remove-WindowsCapability -Online
+    Write-Log "Enumerating installed Windows capabilities..."
+    $InstalledCapabilities = Get-WindowsCapability -Online
+
+    foreach ($capability in $capabilityList) {
+        $match = $InstalledCapabilities | Where-Object { $_.Name -like "$capability*" -and $_.State -ne 'NotPresent' }
+        if ($match) {
+            Write-Log "Removing capability [$capability]"
+            try {
+                $match | Remove-WindowsCapability -Online -ErrorAction Stop
+            }
+            catch {
+                Write-Log "WARNING: Failed to remove capability [$capability]: $($_.Exception.Message)"
+            }
+        }
+        else {
+            Write-Log "Capability [$capability] not present — skipping."
         }
     }
 }
 catch {
     Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
-    If ($_.Exception.InnerException) { Write-Log "Inner exception: $($_.Exception.InnerException.Message)" }
+    if ($_.Exception.InnerException) { Write-Log "Inner exception: $($_.Exception.InnerException.Message)" }
     Write-Log $_.ScriptStackTrace
     Exit 1
 }
