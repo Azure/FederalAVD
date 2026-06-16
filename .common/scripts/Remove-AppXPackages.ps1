@@ -23,8 +23,71 @@ try {
     [array]$apps = $AppsToRemove.replace('\"', '"') | ConvertFrom-Json
 
     # Image build context: no user profiles exist, so only provisioned package removal is relevant.
-    # Get-AppxPackage -AllUsers is intentionally omitted — it hangs on Windows 11 25H2 in OOBE/image
-    # build scenarios when no user hives are mounted, and provides no value on a fresh image.
+    # Get-AppxPackage -AllUsers is intentionally omitted — it is unnecessary on a fresh image and
+    # can hang in environments where the AppX deployment stack is held by a concurrently-provisioned
+    # extension (e.g. Defender for Endpoint, Guest Configuration) or a locked wsappx service.
+
+    # --- Pre-flight: AppX/DISM readiness checks ---
+
+    # 1. wsappx must be running — it hosts AppXSvc (AppX Deployment Service) and ClipSVC.
+    #    If it is stopped or stuck, every Get-AppxProvisionedPackage / Remove call will hang.
+    Write-Log "Pre-flight: checking wsappx service state..."
+    $wsappx = Get-Service -Name 'wsappx' -ErrorAction SilentlyContinue
+    if ($null -eq $wsappx) {
+        Write-Log "WARNING: wsappx service not found. AppX operations may not function correctly."
+    }
+    elseif ($wsappx.Status -ne 'Running') {
+        Write-Log "WARNING: wsappx is not running (Status: $($wsappx.Status)). Attempting to start..."
+        try {
+            Start-Service -Name 'wsappx' -ErrorAction Stop
+            Start-Sleep -Seconds 3
+            Write-Log "wsappx started successfully."
+        }
+        catch {
+            Write-Log "WARNING: Could not start wsappx: $($_.Exception.Message). AppX operations may hang or fail."
+        }
+    }
+    else {
+        Write-Log "Pre-flight: wsappx is running."
+    }
+
+    # 2. Check whether Windows Modules Installer (TrustedInstaller / TiWorker) is actively running.
+    #    An active CBS/servicing pass holds the DISM session lock — any concurrent DISM call will hang
+    #    until it releases. Wait up to 3 minutes for it to finish; warn and continue if it does not.
+    Write-Log "Pre-flight: checking for active CBS/DISM operations (TiWorker / TrustedInstaller)..."
+    $dismWaitSeconds = 180
+    $dismPollInterval = 10
+    $dismElapsed = 0
+    while ($dismElapsed -lt $dismWaitSeconds) {
+        $cbsActive = Get-Process -Name 'TiWorker', 'TrustedInstaller' -ErrorAction SilentlyContinue |
+                     Where-Object { -not $_.HasExited }
+        if (-not $cbsActive) { break }
+        Write-Log "Pre-flight: CBS/DISM in use ($($cbsActive.Name -join ', ')). Waiting $dismPollInterval s... ($dismElapsed / $dismWaitSeconds s elapsed)"
+        Start-Sleep -Seconds $dismPollInterval
+        $dismElapsed += $dismPollInterval
+    }
+    if ($dismElapsed -ge $dismWaitSeconds) {
+        Write-Log "WARNING: CBS/DISM was still active after $dismWaitSeconds seconds. AppX operations may hang or fail."
+    }
+    else {
+        Write-Log "Pre-flight: no active CBS/DISM operations detected."
+    }
+
+    # 3. Check for a pending reboot from Component Based Servicing (informational — does not abort).
+    #    A pending CBS reboot means component state is not fully committed; AppX operations that touch
+    #    those components can queue behind the pending pass and appear to hang.
+    $pendingReboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+                     (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or
+                     ($null -ne (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'PendingFileRenameOperations' -ErrorAction SilentlyContinue))
+    if ($pendingReboot) {
+        Write-Log "WARNING: A pending reboot was detected. AppX operations may behave unexpectedly. Consider restarting the VM before running this script."
+    }
+    else {
+        Write-Log "Pre-flight: no pending reboot detected."
+    }
+
+    # --- AppX provisioned package removal ---
+
     Write-Log "Enumerating provisioned AppX packages..."
     $ProvisionedApps = Get-AppxProvisionedPackage -Online
 
@@ -34,6 +97,7 @@ try {
             Write-Log "Removing provisioned AppX package [$app]"
             try {
                 $match | Remove-AppxProvisionedPackage -Online -ErrorAction Stop
+                Write-Log "Successfully removed provisioned AppX package [$app]."
             }
             catch {
                 Write-Log "WARNING: Failed to remove provisioned package [$app]: $($_.Exception.Message)"
@@ -58,6 +122,7 @@ try {
             Write-Log "Removing capability [$capability]"
             try {
                 $match | Remove-WindowsCapability -Online -ErrorAction Stop
+                Write-Log "Successfully removed capability [$capability]."
             }
             catch {
                 Write-Log "WARNING: Failed to remove capability [$capability]: $($_.Exception.Message)"
@@ -66,6 +131,7 @@ try {
         else {
             Write-Log "Capability [$capability] not present — skipping."
         }
+    }
     }
 }
 catch {
