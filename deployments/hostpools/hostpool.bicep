@@ -25,6 +25,12 @@ param nameConvResTypeAtEnd bool = false
 @description('Optional. Override Cloud Adoption Framework resource type abbreviations. Provide only the keys you want to change — unspecified keys retain CAF defaults. Shape: { resourceGroups, hostPools, desktopApplicationGroups, workspaces, scalingPlans, virtualMachines, osdisks, diskEncryptionSets, diskAccesses, availabilitySets, storageAccounts, netAppAccounts, netAppCapacityPools, keyVaults, userAssignedIdentities, privateEndpoints, networkInterfaces, logAnalyticsWorkspaces, dataCollectionEndpoints, recoveryServicesVaults }. Pass an empty object ({}) or omit to use CAF defaults.')
 param resourceTypeCodes object = {}
 
+@description('Optional. Override the location abbreviation used in resource names for the Virtual Machines region. Leave empty to use the built-in abbreviation from the locations data file (e.g., "eus" for eastus).')
+param vmsLocationAbbreviation string = ''
+
+@description('Optional. Override the location abbreviation used in resource names for the AVD control plane region. Leave empty to use the built-in abbreviation from the locations data file (e.g., "eus" for eastus).')
+param cpLocationAbbreviation string = ''
+
 // Identity
 
 @allowed([
@@ -363,9 +369,6 @@ param agentDownloadUrl string = ''
 
 @description('Optional. Determines whether resources to support FSLogix profile storage are deployed.')
 param deployFSLogixStorage bool = false
-
-@description('Optional. The custom prefix to use for the name of the Azure files storage accounts to use for FSLogix. If not specified, the name is generated automatically.')
-param fslogixStorageCustomPrefix string = ''
 
 @description('Optional. The file share size(s) in GB for the fslogix storage solution.')
 param fslogixShareSizeInGB int = 100
@@ -844,11 +847,11 @@ var abbr = !empty(resourceTypeCodes) ? union(abbr_base, resourceTypeCodes) : abb
 var locationVms = startsWith(cloud, 'us')
   ? substring(virtualMachinesRegion, 5, max(length(virtualMachinesRegion) - 5, 0))
   : virtualMachinesRegion
-var vmsLocAbbr = locs[locationVms].abbreviation
+var vmsLocAbbr = !empty(vmsLocationAbbreviation) ? vmsLocationAbbreviation : locs[locationVms].abbreviation
 var locationCP = startsWith(cloud, 'us')
   ? substring(effectiveControlPlaneRegion, 5, max(length(effectiveControlPlaneRegion) - 5, 0))
   : effectiveControlPlaneRegion
-var cpLocAbbr = locs[locationCP].abbreviation
+var cpLocAbbr = !empty(cpLocationAbbreviation) ? cpLocationAbbreviation : locs[locationCP].abbreviation
 
 var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : last(split(existingHostPoolResourceId, '/'))
 // nameConvReversed = true means resource type at end (e.g., "avd-01-eus-hp")
@@ -1031,21 +1034,13 @@ var resourceGroupHosts = replace(
   'RESOURCETYPE',
   '${abbr.resourceGroups}'
 )
-var availabilitySetNameConv = nameConvReversed
-  ? replace(
-      replace(
-        replace(
-          replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'),
-          'RESOURCETYPE',
-          abbr.availabilitySets
-        ),
-        'LOCATION',
-        vmsLocAbbr
-      ),
-      'TOKEN-',
-      ''
-    )
-  : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.availabilitySets), 'LOCATION', vmsLocAbbr), 'TOKEN-', '')}-##'
+// ## is placed between TOKEN (purpose/persona) and LOCATION so the AS index
+// sits directly after the purpose segment: as-persona-01-01-eus / persona-01-01-eus-as
+var availabilitySetNameConv = replace(
+  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.availabilitySets), 'LOCATION', vmsLocAbbr),
+  'TOKEN',
+  '##'
+)
 var virtualMachineNameConv = nameConvReversed
   ? 'SHNAME-${abbr.virtualMachines}'
   : '${abbr.virtualMachines}-SHNAME'
@@ -1092,9 +1087,7 @@ var netAppCapacityPoolName = replace(
 
 // FSLogix Storage Account Naming Convention (max 15 characters for domain join)
 var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)
-var fslogixStorageAccountNamePrefix = empty(fslogixStorageCustomPrefix)
-  ? 'fslogix${uniqueStringStorage}'
-  : toLower(fslogixStorageCustomPrefix)
+var fslogixStorageAccountNamePrefix = 'fslogix${uniqueStringStorage}'
 var encryptionKeyNameFSLogix = '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
 var encryptionKeyNameVMs = '${hpBaseName}-encryption-key-vms'
 var encryptionKeyNameConfidentialVMs = '${hpBaseName}-encryption-key-confidential-vms'
