@@ -208,6 +208,28 @@ Function Get-InternetFile {
         Write-Log -Message "Ending ${CmdletName}"
     }
 }
+
+function Wait-MsiexecIdle {
+    # msiexec serializes all MSI transactions through a global Windows Installer mutex.
+    # Only one MSI transaction can run at a time. If an Azure Policy deployIfNotExists
+    # extension or concurrent deployment holds the lock, this waits up to 5 minutes.
+    param ([int]$WaitSeconds = 300)
+    $elapsed = 0
+    Write-Log -Category Info -Message 'Pre-flight: checking for active msiexec processes...'
+    while ($elapsed -lt $WaitSeconds) {
+        if (-not (Get-Process -Name 'msiexec' -ErrorAction SilentlyContinue | Where-Object { -not $_.HasExited })) { break }
+        Write-Log -Category Info -Message "Pre-flight: msiexec is active. Waiting 10 s... ($elapsed / $WaitSeconds s elapsed)"
+        Start-Sleep -Seconds 10
+        $elapsed += 10
+    }
+    if ($elapsed -ge $WaitSeconds) {
+        Write-Log -Category Warning -Message "Pre-flight: msiexec was still active after $WaitSeconds seconds. Installation may queue or fail."
+    }
+    else {
+        Write-Log -Category Info -Message 'Pre-flight: msiexec serialization lock is free.'
+    }
+}
+
 #endregion
 
 New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
@@ -223,22 +245,34 @@ If (!$PathMSI) {
 Else {
     Write-Log -message "Found file '$PathMsi'"
 }
+Wait-MsiexecIdle
 $InstalledApp = Get-InstalledApplication -Name $SoftwareName
 If ($InstalledApp -and $InstalledApp.ProductCode -ne '') {
     $ProductCode = $InstalledApp.ProductCode
     Write-Log -Message "Removing $SoftwareName with Product Code $ProductCode"
-    $uninstall = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/X $ProductCode /qn" -Wait -PassThru
-    If ($Uninstall.ExitCode -eq '0' -or $Uninstall.ExitCode -eq '3010') {
+    $UninstallTimeoutMs = 600000 # 10 minutes
+    $uninstall = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/X $ProductCode /qn" -PassThru
+    if (-not $uninstall.WaitForExit($UninstallTimeoutMs)) {
+        $uninstall.Kill()
+        Write-Log -Category Warning -Message "'$SoftwareName' uninstaller timed out after $($UninstallTimeoutMs / 60000) minutes and was terminated."
+    }
+    elseif ($Uninstall.ExitCode -eq '0' -or $Uninstall.ExitCode -eq '3010') {
         Write-Log -Message "Uninstalled successfully"
     }
-    Else {
+    else {
         Write-Log -Message "$ProductCode uninstall exit code $($uninstall.ExitCode)" -category Warning
     }
 }
 Write-Log -message "Installing '$SoftwareName' via cmdline: 'msiexec /i $pathMSI /qn'"
-$Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /qn" -Wait -PassThru
-If ($($Installer.ExitCode) -eq 0) {
-    Write-Log -message "'$SoftwareName' installed successfully."
+$InstallerTimeoutMs = 600000 # 10 minutes
+$Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /qn" -PassThru
+if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
+    $Installer.Kill()
+    Write-Log -Category Warning -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+}
+elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
+    if ($Installer.ExitCode -eq 3010) { Write-Log -message "'$SoftwareName' installed successfully. A reboot is required." }
+    else { Write-Log -message "'$SoftwareName' installed successfully." }
     $i = 0
     Do {
         Start-Sleep -Seconds 1
@@ -246,7 +280,7 @@ If ($($Installer.ExitCode) -eq 0) {
     } Until ( (Get-ChildItem -Path "$env:SystemDrive\Users\Public\Desktop" -Filter 'InstallRoot*.lnk') -or ($i -eq 20) )
     Get-ChildItem -Path "$env:SystemDrive\Users\Public\Desktop" -Filter 'InstallRoot*.lnk' | Remove-Item -Force
 }
-Else {
+else {
     Write-Log -Category Warning -Message "The Installer exit code is $($Installer.ExitCode)"
 }
 Write-Log -message "Completed '$SoftwareName' Installation."

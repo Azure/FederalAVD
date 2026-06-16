@@ -129,6 +129,27 @@ Function Set-RegistryValue {
     }
 }
 
+function Wait-MsiexecIdle {
+    # msiexec serializes all MSI transactions through a global Windows Installer mutex.
+    # Only one MSI transaction can run at a time. If an Azure Policy deployIfNotExists
+    # extension or concurrent deployment holds the lock, this waits up to 5 minutes.
+    param ([int]$WaitSeconds = 300)
+    $elapsed = 0
+    Write-Log -Category Info -Message 'Pre-flight: checking for active msiexec processes...'
+    while ($elapsed -lt $WaitSeconds) {
+        if (-not (Get-Process -Name 'msiexec' -ErrorAction SilentlyContinue | Where-Object { -not $_.HasExited })) { break }
+        Write-Log -Category Info -Message "Pre-flight: msiexec is active. Waiting 10 s... ($elapsed / $WaitSeconds s elapsed)"
+        Start-Sleep -Seconds 10
+        $elapsed += 10
+    }
+    if ($elapsed -ge $WaitSeconds) {
+        Write-Log -Category Warning -Message "Pre-flight: msiexec was still active after $WaitSeconds seconds. Installation may queue or fail."
+    }
+    else {
+        Write-Log -Category Info -Message 'Pre-flight: msiexec serialization lock is free.'
+    }
+}
+
 #endregion Functions
 
 #region Initialization
@@ -150,9 +171,12 @@ try {
     }
     else {
         Write-Log -Category Warning -Message "No installer executable found in '$PSScriptRoot'. Attempting download from '$DownloadUrl'."
+        Write-Log -Category Warning -Message "NOTE: When run as an Azure Run Command, PSScriptRoot resolves to a temp path, not the artifacts directory. Place the installer .exe alongside this script in the artifacts storage container."
         $DownloadedInstaller = Join-Path -Path $env:Temp -ChildPath 'VSCodeInstaller.exe'
         try {
-            Invoke-WebRequest -Uri $DownloadUrl -OutFile $DownloadedInstaller -UseBasicParsing -ErrorAction Stop
+            # TimeoutSec is required -- Invoke-WebRequest has no default timeout in PowerShell 5.1
+            # and will hang indefinitely in network-restricted image build environments.
+            Invoke-WebRequest -Uri $DownloadUrl -OutFile $DownloadedInstaller -UseBasicParsing -TimeoutSec 120 -ErrorAction Stop
         }
         catch {
             Write-Log -Category Error -Message "Failed to download VS Code installer from '$DownloadUrl'. Error: $_"
@@ -169,15 +193,30 @@ try {
     #endregion
 
     #region Install
+    # Standard silent install switches per VS Code documentation.
+    # /VERYSILENT  -- suppresses all UI including the progress window
+    # /NORESTART   -- prevents automatic reboot (image build handles reboots explicitly)
+    # /MERGETASKS=!runcode -- deselects the "Launch VS Code after install" task
+    #
+    # NOTE: The System installer (linkid=852157) installs machine-wide by default and requires
+    # no additional switches for SYSTEM-context execution.
     $Arguments = '/VERYSILENT /NORESTART /MERGETASKS=!runcode'
+    $InstallerTimeoutMs = 300000 # 5 minutes -- covers the WM_SETTINGCHANGE PATH broadcast delay
     Write-Log -Category Info -Message "Starting installation of VS Code from '$VSCodeExe'."
     Write-Log -Category Info -Message "Executing: '$VSCodeExe $Arguments'."
+    Wait-MsiexecIdle
     try {
-        $installerProcess = Start-Process -FilePath $VSCodeExe -ArgumentList $Arguments -Wait -PassThru -ErrorAction Stop
+        $installerProcess = Start-Process -FilePath $VSCodeExe -ArgumentList $Arguments -PassThru -ErrorAction Stop
     }
     catch {
         Write-Log -Category Error -Message "Failed to launch VS Code installer. Error: $_"
         throw
+    }
+    if (-not $installerProcess.WaitForExit($InstallerTimeoutMs)) {
+        $installerProcess.Kill()
+        $errMsg = "VS Code installer did not complete within $($InstallerTimeoutMs / 60000) minutes and was terminated."
+        Write-Log -Category Error -Message $errMsg
+        throw $errMsg
     }
     if ($installerProcess.ExitCode -eq 0) {
         Write-Log -Category Info -Message 'VS Code installed successfully.'
