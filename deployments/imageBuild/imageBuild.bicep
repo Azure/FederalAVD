@@ -705,6 +705,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     location: computeLocation
     cleanupDesktop: cleanupDesktop
     customizations: uniqueCustomizers
+    deploymentSuffix: deploymentSuffix
     installFsLogix: installFsLogix
     installOneDrive: installOneDrive
     installTeams: installTeams
@@ -761,6 +762,7 @@ module captureImage 'modules/captureImage.bicep' = {
   params: {
     computeGalleryResourceId: computeGalleryResourceId
     depPrefix: depPrefix
+    deploymentSuffix: deploymentSuffix
     hyperVGeneration: galleryImageDefinitionHyperVGeneration
     imageBuildResourceGroupName: imageBuildResourceGroupName
     imageDefinitionSecurityType: effectiveGalleryImageDefinitionSecurityType
@@ -775,7 +777,6 @@ module captureImage 'modules/captureImage.bicep' = {
     imageVersionEndOfLifeDate: imageVersionEndOfLifeDate
     location: computeLocation
     tags: tags
-    deploymentSuffix: deploymentSuffix
     diskEncryptionSetId: diskEncryptionSetResourceId
     confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType
     secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId

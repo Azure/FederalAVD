@@ -20,7 +20,7 @@ param installUpdates bool
 param updateUwpApps bool
 param office365AppsToInstall array
 param teamsCloudType string
-param deploymentSuffix string = utcNow('yyMMddhhmm')
+param deploymentSuffix string
 param updateService string
 param userAssignedIdentityClientId string
 param vdiCustomizations array
