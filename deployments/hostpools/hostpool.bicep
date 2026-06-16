@@ -22,15 +22,6 @@ param index int = -1
 @description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
 param nameConvResTypeAtEnd bool = false
 
-@description('Optional. Override Cloud Adoption Framework resource type abbreviations. Provide only the keys you want to change — unspecified keys retain CAF defaults. Shape: { resourceGroups, hostPools, desktopApplicationGroups, workspaces, scalingPlans, virtualMachines, osdisks, diskEncryptionSets, diskAccesses, availabilitySets, storageAccounts, netAppAccounts, netAppCapacityPools, keyVaults, userAssignedIdentities, privateEndpoints, networkInterfaces, logAnalyticsWorkspaces, dataCollectionEndpoints, recoveryServicesVaults }. Pass an empty object ({}) or omit to use CAF defaults.')
-param resourceTypeCodes object = {}
-
-@description('Optional. Override the location abbreviation used in resource names for the Virtual Machines region. Leave empty to use the built-in abbreviation from the locations data file (e.g., "eus" for eastus).')
-param vmsLocationAbbreviation string = ''
-
-@description('Optional. Override the location abbreviation used in resource names for the AVD control plane region. Leave empty to use the built-in abbreviation from the locations data file (e.g., "eus" for eastus).')
-param cpLocationAbbreviation string = ''
-
 // Identity
 
 @allowed([
@@ -841,17 +832,16 @@ var cloud = toLower(environment().name)
 var allLocs = loadJsonContent('../../.common/data/locations.json')
 var locsEnvProp = startsWith(cloud, 'us') ? 'other' : environment().name
 var locs = allLocs[locsEnvProp]
-var abbr_base = loadJsonContent('../../.common/data/resourceAbbreviations.json')
-var abbr = !empty(resourceTypeCodes) ? union(abbr_base, resourceTypeCodes) : abbr_base
+var abbr = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 
 var locationVms = startsWith(cloud, 'us')
   ? substring(virtualMachinesRegion, 5, max(length(virtualMachinesRegion) - 5, 0))
   : virtualMachinesRegion
-var vmsLocAbbr = !empty(vmsLocationAbbreviation) ? vmsLocationAbbreviation : locs[locationVms].abbreviation
+var vmsLocAbbr = locs[locationVms].abbreviation
 var locationCP = startsWith(cloud, 'us')
   ? substring(effectiveControlPlaneRegion, 5, max(length(effectiveControlPlaneRegion) - 5, 0))
   : effectiveControlPlaneRegion
-var cpLocAbbr = !empty(cpLocationAbbreviation) ? cpLocationAbbreviation : locs[locationCP].abbreviation
+var cpLocAbbr = locs[locationCP].abbreviation
 
 var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : last(split(existingHostPoolResourceId, '/'))
 // nameConvReversed = true means resource type at end (e.g., "avd-01-eus-hp")
