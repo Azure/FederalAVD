@@ -178,6 +178,10 @@ module storageAccountPes '../../../../../.common/bicepModules/network/privateEnd
       groupId: 'file'
       privateDNSZoneIds: !empty(azureFilePrivateDnsZoneResourceId) ? [azureFilePrivateDnsZoneResourceId] : []
     }
+    // File service config and share creation both mutate the storage account; private endpoint
+    // creation also acquires an exclusive lock on it. Serialise by waiting for all storage
+    // configuration to complete before creating the endpoints.
+    dependsOn: [fileServices, shares]
   }
 ]
 
