@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "11531772022537858441"
+      "templateHash": "474889451447116941"
     }
   },
   "parameters": {
@@ -29,6 +29,13 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name."
+      }
+    },
+    "resourceTypeCodes": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Override Cloud Adoption Framework resource type abbreviations. Provide only the keys you want to change — unspecified keys retain CAF defaults. Shape: { resourceGroups, hostPools, desktopApplicationGroups, workspaces, scalingPlans, virtualMachines, osdisks, diskEncryptionSets, diskAccesses, availabilitySets, storageAccounts, netAppAccounts, netAppCapacityPools, keyVaults, userAssignedIdentities, privateEndpoints, networkInterfaces, logAnalyticsWorkspaces, dataCollectionEndpoints, recoveryServicesVaults }. Pass an empty object ({}) or omit to use CAF defaults."
       }
     },
     "identitySolution": {
@@ -1396,7 +1403,8 @@
     "allLocs": "[variables('$fxv#0')]",
     "locsEnvProp": "[if(startsWith(variables('cloud'), 'us'), 'other', environment().name)]",
     "locs": "[variables('allLocs')[variables('locsEnvProp')]]",
-    "abbr": "[variables('$fxv#1')]",
+    "abbr_base": "[variables('$fxv#1')]",
+    "abbr": "[if(not(empty(parameters('resourceTypeCodes'))), union(variables('abbr_base'), parameters('resourceTypeCodes')), variables('abbr_base'))]",
     "existingHostPoolName": "[if(empty(parameters('existingHostPoolResourceId')), '', last(split(parameters('existingHostPoolResourceId'), '/')))]",
     "nameConvReversed": "[if(not(empty(variables('existingHostPoolName'))), if(startsWith(variables('existingHostPoolName'), variables('abbr').hostPools), false(), if(endsWith(variables('existingHostPoolName'), variables('abbr').hostPools), true(), parameters('nameConvResTypeAtEnd'))), parameters('nameConvResTypeAtEnd'))]",
     "arrHostPoolName": "[split(variables('existingHostPoolName'), '-')]",

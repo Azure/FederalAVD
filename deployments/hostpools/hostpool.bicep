@@ -22,6 +22,9 @@ param index int = -1
 @description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
 param nameConvResTypeAtEnd bool = false
 
+@description('Optional. Override Cloud Adoption Framework resource type abbreviations. Provide only the keys you want to change — unspecified keys retain CAF defaults. Shape: { resourceGroups, hostPools, desktopApplicationGroups, workspaces, scalingPlans, virtualMachines, osdisks, diskEncryptionSets, diskAccesses, availabilitySets, storageAccounts, netAppAccounts, netAppCapacityPools, keyVaults, userAssignedIdentities, privateEndpoints, networkInterfaces, logAnalyticsWorkspaces, dataCollectionEndpoints, recoveryServicesVaults }. Pass an empty object ({}) or omit to use CAF defaults.')
+param resourceTypeCodes object = {}
+
 // Identity
 
 @allowed([
@@ -835,7 +838,8 @@ var cloud = toLower(environment().name)
 var allLocs = loadJsonContent('../../.common/data/locations.json')
 var locsEnvProp = startsWith(cloud, 'us') ? 'other' : environment().name
 var locs = allLocs[locsEnvProp]
-var abbr = loadJsonContent('../../.common/data/resourceAbbreviations.json')
+var abbr_base = loadJsonContent('../../.common/data/resourceAbbreviations.json')
+var abbr = !empty(resourceTypeCodes) ? union(abbr_base, resourceTypeCodes) : abbr_base
 
 var locationVms = startsWith(cloud, 'us')
   ? substring(virtualMachinesRegion, 5, max(length(virtualMachinesRegion) - 5, 0))

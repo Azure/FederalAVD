@@ -105,25 +105,6 @@
 											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
 										}
 									}
-								},
-								{
-									"name": "nameConvResTypeAtEnd",
-									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Move the Resource Type to the end of resource names",
-									"defaultValue": "No",
-									"toolTip": "",
-									"constraints": {
-										"allowedValues": [
-											{
-												"label": "Yes",
-												"value": true
-											},
-											{
-												"label": "No",
-												"value": false
-											}
-										]
-									}
 								}
 							]
 						}
@@ -329,41 +310,42 @@
 										"required": true
 									},
 									"visible": "[equals(steps('identity').credentials.source, 'keyVault')]"
-								},                                                                
-                                {
-                                    "name": "deploySecretsKeyVault",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Deploy VM Secrets Key Vault",
-                                    "toolTip": "Deploy a Key Vault and store VM admin credentials as secrets.",
-                                    "visible": "[equals(steps('identity').credentials.source, 'manual')]"
-                                },
-                                {
-                                    "name": "enableSoftDelete",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Enable Soft Delete on Secrets Key Vault",
-                                    "defaultValue": true,
-                                    "toolTip": "Allow recovery of deleted Key Vault objects within the retention period.",
-                                    "visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault)]"
-                                },
-                                {
-                                    "name": "enablePurgeProtection",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Enable Purge Protection on Secrets Key Vault",
-                                    "defaultValue": true,
-                                    "toolTip": "Prevent permanent deletion during the retention period. Requires soft delete.",
-                                    "visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault, steps('identity').credentials.enableSoftDelete)]"
-                                },
-                                {
-                                    "name": "secretsKvRetentionInDays",
-                                    "type": "Microsoft.Common.Slider",
-                                    "label": "Secrets Key Vault Soft Delete Retention (Days)",
-                                    "defaultValue": 90,
-                                    "showStepMarkers": false,
-                                    "toolTip": "Days to retain the Secrets Key Vault after deletion before permanent removal.",
-                                    "min": 7,
-                                    "max": 90,
-                                    "visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault)]"
-                                }							]
+								},
+								{
+									"name": "deploySecretsKeyVault",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Deploy VM Secrets Key Vault",
+									"toolTip": "Deploy a Key Vault and store VM admin credentials as secrets.",
+									"visible": "[equals(steps('identity').credentials.source, 'manual')]"
+								},
+								{
+									"name": "enableSoftDelete",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Soft Delete on Secrets Key Vault",
+									"defaultValue": true,
+									"toolTip": "Allow recovery of deleted Key Vault objects within the retention period.",
+									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault)]"
+								},
+								{
+									"name": "enablePurgeProtection",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Purge Protection on Secrets Key Vault",
+									"defaultValue": true,
+									"toolTip": "Prevent permanent deletion during the retention period. Requires soft delete.",
+									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault, steps('identity').credentials.enableSoftDelete)]"
+								},
+								{
+									"name": "secretsKvRetentionInDays",
+									"type": "Microsoft.Common.Slider",
+									"label": "Secrets Key Vault Soft Delete Retention (Days)",
+									"defaultValue": 90,
+									"showStepMarkers": false,
+									"toolTip": "Days to retain the Secrets Key Vault after deletion before permanent removal.",
+									"min": 7,
+									"max": 90,
+									"visible": "[and(equals(steps('identity').credentials.source, 'manual'), steps('identity').credentials.deploySecretsKeyVault)]"
+								}
+							]
 						}
 					]
 				},
@@ -3335,7 +3317,7 @@
 									"visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)]"
 								}
 							]
-						},						
+						},
 						{
 							"name": "monitoring",
 							"type": "Microsoft.Common.Section",
@@ -3452,7 +3434,7 @@
 									"uri": "https://learn.microsoft.com/en-us/azure/security/fundamentals/zero-trust"
 								}
 							}
-						},						
+						},
 						{
 							"name": "keyManagement",
 							"type": "Microsoft.Common.Section",
@@ -3603,51 +3585,51 @@
 										]
 									}
 								},
-                                {
-                                    "name": "useExistingEncryptionKv",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Use Existing Encryption Key Vault",
-                                    "defaultValue": false,
-                                    "toolTip": "Select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline.",
-                                    "visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
-                                },
-                                {
-                                    "name": "existingEncryptionKeyVault",
-                                    "type": "Microsoft.Solutions.ResourceSelector",
-                                    "label": "Existing Encryption Key Vault",
-                                    "resourceType": "Microsoft.KeyVault/vaults",
-                                    "toolTip": "Select an existing Key Vault for Customer Managed Keys. Only key vaults in the session host location are shown.",
-                                    "constraints": {
-                                        "required": "[steps('zeroTrust').keyManagement.useExistingEncryptionKv]"
-                                    },
-                                    "scope": {
-                                        "subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
-                                        "location": "[steps('hosts').scope.location.name]"
-                                    },
-                                    "visible": "[and(steps('zeroTrust').keyManagement.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
-                                },
-                                {
-                                    "name": "keyExpirationInDays",
-                                    "type": "Microsoft.Common.Slider",
-                                    "label": "Encryption Key Rotation (in Days)",
-                                    "defaultValue": 180,
-                                    "showStepMarkers": false,
-                                    "toolTip": "Days before a new key version is automatically generated in the Azure Key Vault.",
-                                    "min": 30,
-                                    "max": 180,
-                                    "visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
-                                },
-                                {
-                                    "name": "encKvRetentionInDays",
-                                    "type": "Microsoft.Common.Slider",
-                                    "label": "Encryption Key Vault Soft Delete Retention (Days)",
-                                    "defaultValue": 90,
-                                    "showStepMarkers": false,
-                                    "toolTip": "Days to retain the Encryption Key Vault after deletion before permanent removal.",
-                                    "min": 7,
-                                    "max": 90,
-                                    "visible": "[and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))]"
-                                }
+								{
+									"name": "useExistingEncryptionKv",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Use Existing Encryption Key Vault",
+									"defaultValue": false,
+									"toolTip": "Select an existing Encryption Key Vault (e.g., from the Security deployment) instead of creating one inline.",
+									"visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
+								},
+								{
+									"name": "existingEncryptionKeyVault",
+									"type": "Microsoft.Solutions.ResourceSelector",
+									"label": "Existing Encryption Key Vault",
+									"resourceType": "Microsoft.KeyVault/vaults",
+									"toolTip": "Select an existing Key Vault for Customer Managed Keys. Only key vaults in the session host location are shown.",
+									"constraints": {
+										"required": "[steps('zeroTrust').keyManagement.useExistingEncryptionKv]"
+									},
+									"scope": {
+										"subscriptionId": "[steps('hosts').scope.subscription.subscriptionId]",
+										"location": "[steps('hosts').scope.location.name]"
+									},
+									"visible": "[and(steps('zeroTrust').keyManagement.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')))]"
+								},
+								{
+									"name": "keyExpirationInDays",
+									"type": "Microsoft.Common.Slider",
+									"label": "Encryption Key Rotation (in Days)",
+									"defaultValue": 180,
+									"showStepMarkers": false,
+									"toolTip": "Days before a new key version is automatically generated in the Azure Key Vault.",
+									"min": 30,
+									"max": 180,
+									"visible": "[or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
+								},
+								{
+									"name": "encKvRetentionInDays",
+									"type": "Microsoft.Common.Slider",
+									"label": "Encryption Key Vault Soft Delete Retention (Days)",
+									"defaultValue": 90,
+									"showStepMarkers": false,
+									"toolTip": "Days to retain the Encryption Key Vault after deletion before permanent removal.",
+									"min": 7,
+									"max": 90,
+									"visible": "[and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))]"
+								}
 							]
 						},
 						{
@@ -3906,7 +3888,7 @@
 										"allowedValues": "[map(filter(steps('zeroTrust').privateEndpoints.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
 										"required": false
 									}
-								}								
+								}
 							]
 						},
 						{
@@ -4381,33 +4363,418 @@
 					]
 				},
 				{
-					"name": "tags",
-					"label": "Tags",
+					"name": "tagsAndNaming",
+					"label": "Tags & Naming",
 					"elements": [
 						{
+							"name": "naming",
+							"type": "Microsoft.Common.Section",
+							"label": "Naming Convention",
+							"elements": [
+								{
+									"name": "namingDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "By default, resources are named using the Cloud Adoption Framework (CAF) convention. Use the option below to put the resource type abbreviation at the end of names, or expand abbreviation overrides to substitute any CAF default with your organization's preferred tokens.",
+										"link": {
+											"label": "Resource Naming | Microsoft Learn",
+											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
+										}
+									}
+								},
+								{
+									"name": "nameConvResTypeAtEnd",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Resource Type Abbreviation at End of Name",
+									"toolTip": "When checked, names follow the pattern 'avd-hostpool-eus-vdpool'. When unchecked (default), names follow 'vdpool-avd-hostpool-eus'."
+								},
+								{
+									"name": "customizeAbbreviations",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Customize Resource Type Abbreviations",
+									"toolTip": "Override the default Cloud Adoption Framework resource type abbreviations. When unchecked, CAF defaults are used (e.g. vdpool, rg, vm, kv)."
+								},
+								{
+									"name": "customizeInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Info",
+										"text": "Override any abbreviation below. Leave a field at its default to keep the CAF value. Changes apply to all resources in this deployment — resource groups, VMs, Key Vaults, storage, and more."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodeRg",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "Resource Groups"
+									}
+								},
+								{
+									"name": "rtCodeRg",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Resource Groups",
+									"defaultValue": "rg",
+									"toolTip": "Abbreviation for resource group names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodeHp",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "AVD Control Plane"
+									}
+								},
+								{
+									"name": "rtCodeHp",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Host Pools",
+									"defaultValue": "vdpool",
+									"toolTip": "Abbreviation for host pool names (CAF default: vdpool).",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeDag",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Desktop Application Groups",
+									"defaultValue": "vddag",
+									"toolTip": "Abbreviation for desktop application group names (CAF default: vddag).",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeWs",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Workspaces",
+									"defaultValue": "vdws",
+									"toolTip": "Abbreviation for AVD workspace names (CAF default: vdws).",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeSp",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Scaling Plans",
+									"defaultValue": "vdscaling",
+									"toolTip": "Abbreviation for scaling plan names (CAF default: vdscaling).",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodeVm",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "Compute"
+									}
+								},
+								{
+									"name": "rtCodeVm",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Virtual Machines",
+									"defaultValue": "vm",
+									"toolTip": "Abbreviation for virtual machine names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeOsDisk",
+									"type": "Microsoft.Common.TextBox",
+									"label": "OS Disks",
+									"defaultValue": "osdisk",
+									"toolTip": "Abbreviation for OS disk names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeDes",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Disk Encryption Sets",
+									"defaultValue": "des",
+									"toolTip": "Abbreviation for disk encryption set names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeDa",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Disk Accesses",
+									"defaultValue": "da",
+									"toolTip": "Abbreviation for disk access resource names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeAs",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Availability Sets",
+									"defaultValue": "as",
+									"toolTip": "Abbreviation for availability set names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodeSa",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "Storage"
+									}
+								},
+								{
+									"name": "rtCodeSa",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Storage Accounts",
+									"defaultValue": "sa",
+									"toolTip": "Abbreviation for storage account names. FSLogix storage accounts use a fixed prefix and are not affected by this setting.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeNaa",
+									"type": "Microsoft.Common.TextBox",
+									"label": "NetApp Accounts",
+									"defaultValue": "naa",
+									"toolTip": "Abbreviation for Azure NetApp Files account names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeNacp",
+									"type": "Microsoft.Common.TextBox",
+									"label": "NetApp Capacity Pools",
+									"defaultValue": "nacp",
+									"toolTip": "Abbreviation for Azure NetApp Files capacity pool names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodeKv",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "Security & Identity"
+									}
+								},
+								{
+									"name": "rtCodeKv",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Key Vaults",
+									"defaultValue": "kv",
+									"toolTip": "Abbreviation for Key Vault names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeUai",
+									"type": "Microsoft.Common.TextBox",
+									"label": "User Assigned Identities",
+									"defaultValue": "uai",
+									"toolTip": "Abbreviation for user-assigned managed identity names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodePe",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "Networking"
+									}
+								},
+								{
+									"name": "rtCodePe",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Private Endpoints",
+									"defaultValue": "pe",
+									"toolTip": "Abbreviation for private endpoint names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeNic",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Network Interfaces",
+									"defaultValue": "nic",
+									"toolTip": "Abbreviation for network interface names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodeLaw",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "Monitoring"
+									}
+								},
+								{
+									"name": "rtCodeLaw",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Log Analytics Workspaces",
+									"defaultValue": "law",
+									"toolTip": "Abbreviation for Log Analytics workspace names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "rtCodeDce",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Data Collection Endpoints",
+									"defaultValue": "dce",
+									"toolTip": "Abbreviation for data collection endpoint names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								},
+								{
+									"name": "abbr_heading_rtCodeRsv",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"options": {
+										"style": "Heading",
+										"text": "Recovery"
+									}
+								},
+								{
+									"name": "rtCodeRsv",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Recovery Services Vaults",
+									"defaultValue": "rsv",
+									"toolTip": "Abbreviation for Recovery Services Vault names.",
+									"visible": "[steps('tagsAndNaming').naming.customizeAbbreviations]",
+									"constraints": {
+										"required": true,
+										"regex": "^[a-z0-9]{1,15}$",
+										"validationMessage": "Use 1 to 15 lowercase letters or digits."
+									}
+								}
+							]
+						},
+						{
 							"name": "tags",
-							"type": "Microsoft.Common.TagsByResource",
-							"resources": [
-								"Microsoft.Compute/availabilitySets",
-								"Microsoft.Compute/diskAccesses",
-								"Microsoft.Compute/diskEncryptionSets",
-								"Microsoft.Compute/virtualMachines",
-								"Microsoft.DesktopVirtualization/applicationGroups",
-								"Microsoft.DesktopVirtualization/hostPools",
-								"Microsoft.DesktopVirtualization/scalingPlans",
-								"Microsoft.DesktopVirtualization/workspaces",
-								"Microsoft.Insights/dataCollectionEndpoints",
-								"Microsoft.Insights/dataCollectionRules",
-								"Microsoft.KeyVault/vaults",
-								"Microsoft.ManagedIdentity/userAssignedIdentities",
-								"Microsoft.NetApp/netAppAccounts",
-								"Microsoft.Network/networkInterfaces",
-								"Microsoft.Network/privateEndpoints",
-								"Microsoft.OperationalInsights/workspaces",
-								"Microsoft.RecoveryServices/vaults",
-								"Microsoft.Resources/resourceGroups",
-								"Microsoft.Storage/storageAccounts",
-								"Microsoft.Web/serverFarms"
+							"type": "Microsoft.Common.Section",
+							"label": "Resource Tags",
+							"elements": [
+								{
+									"name": "infoBox",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "Apply tags to the deployed resources. Tags are applied per resource type."
+									}
+								},
+								{
+									"name": "tags",
+									"type": "Microsoft.Common.TagsByResource",
+									"resources": [
+										"Microsoft.Compute/availabilitySets",
+										"Microsoft.Compute/diskAccesses",
+										"Microsoft.Compute/diskEncryptionSets",
+										"Microsoft.Compute/virtualMachines",
+										"Microsoft.DesktopVirtualization/applicationGroups",
+										"Microsoft.DesktopVirtualization/hostPools",
+										"Microsoft.DesktopVirtualization/scalingPlans",
+										"Microsoft.DesktopVirtualization/workspaces",
+										"Microsoft.Insights/dataCollectionEndpoints",
+										"Microsoft.Insights/dataCollectionRules",
+										"Microsoft.KeyVault/vaults",
+										"Microsoft.ManagedIdentity/userAssignedIdentities",
+										"Microsoft.NetApp/netAppAccounts",
+										"Microsoft.Network/networkInterfaces",
+										"Microsoft.Network/privateEndpoints",
+										"Microsoft.OperationalInsights/workspaces",
+										"Microsoft.RecoveryServices/vaults",
+										"Microsoft.Resources/resourceGroups",
+										"Microsoft.Storage/storageAccounts",
+										"Microsoft.Web/serverFarms"
+									]
+								}
 							]
 						}
 					]
@@ -4418,7 +4785,7 @@
 			"parameters": {
 				"identifier": "[steps('basics').naming.identifier]",
 				"index": "[if(empty(steps('basics').naming.index), -1, steps('basics').naming.index)]",
-				"nameConvResTypeAtEnd": "[steps('basics').naming.nameConvResTypeAtEnd]",
+				"nameConvResTypeAtEnd": "[steps('tagsAndNaming').naming.nameConvResTypeAtEnd]",
 				"identitySolution": "[steps('identity').solution]",
 				"domainName": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.domainName, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.domainName, ''))]",
 				"vmOUPath": "[if(contains(steps('identity').solution, 'DomainServices'), steps('identity').virtualMachines.ouPath, if(and(equals(steps('identity').solution, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.vmOUPath, ''))]",
@@ -4544,7 +4911,8 @@
 				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
 				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
 				"permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('identity').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
-				"tags": "[steps('tags').tags]"
+				"tags": "[steps('tagsAndNaming').tags.tags]",
+				"resourceTypeCodes": "[if(steps('tagsAndNaming').naming.customizeAbbreviations, parse(concat('{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"hostPools\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp), '\",\"desktopApplicationGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDag),'vddag',steps('tagsAndNaming').naming.rtCodeDag), '\",\"workspaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeWs),'vdws',steps('tagsAndNaming').naming.rtCodeWs), '\",\"scalingPlans\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSp),'vdscaling',steps('tagsAndNaming').naming.rtCodeSp), '\",\"virtualMachines\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm), '\",\"osdisks\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeOsDisk),'osdisk',steps('tagsAndNaming').naming.rtCodeOsDisk), '\",\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes), '\",\"diskAccesses\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDa),'da',steps('tagsAndNaming').naming.rtCodeDa), '\",\"availabilitySets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeAs),'as',steps('tagsAndNaming').naming.rtCodeAs), '\",\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa), '\",\"netAppAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNaa),'naa',steps('tagsAndNaming').naming.rtCodeNaa), '\",\"netAppCapacityPools\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNacp),'nacp',steps('tagsAndNaming').naming.rtCodeNacp), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\",\"logAnalyticsWorkspaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeLaw),'law',steps('tagsAndNaming').naming.rtCodeLaw), '\",\"dataCollectionEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDce),'dce',steps('tagsAndNaming').naming.rtCodeDce), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\"}')), parse('{}'))]"
 			},
 			"kind": "Subscription",
 			"location": "[steps('hosts').scope.location.name]",
