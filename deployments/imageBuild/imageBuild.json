@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "4719200933488359593"
+      "templateHash": "5146481459685342960"
     }
   },
   "parameters": {
@@ -2570,6 +2570,9 @@
           "customizations": {
             "value": "[variables('uniqueCustomizers')]"
           },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
           "installFsLogix": {
             "value": "[parameters('installFsLogix')]"
           },
@@ -2633,7 +2636,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "12144719253595160304"
+              "templateHash": "16537239770062011529"
             }
           },
           "parameters": {
@@ -2699,8 +2702,7 @@
               "type": "string"
             },
             "deploymentSuffix": {
-              "type": "string",
-              "defaultValue": "[utcNow('yyMMddhhmm')]"
+              "type": "string"
             },
             "updateService": {
               "type": "string"
@@ -3935,6 +3937,9 @@
           "depPrefix": {
             "value": "[variables('depPrefix')]"
           },
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
           "hyperVGeneration": {
             "value": "[variables('galleryImageDefinitionHyperVGeneration')]"
           },
@@ -3964,9 +3969,6 @@
           },
           "tags": {
             "value": "[parameters('tags')]"
-          },
-          "deploymentSuffix": {
-            "value": "[variables('deploymentSuffix')]"
           },
           "diskEncryptionSetId": {
             "value": "[parameters('diskEncryptionSetResourceId')]"
