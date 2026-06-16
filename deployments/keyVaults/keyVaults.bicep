@@ -102,7 +102,7 @@ param tags object = {}
 
 // ── Non-Specified Values ───────────────────────────────────────────────────────
 
-@description('Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { segments: string[], separator: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string, networkInterfaces: string } }. Pass an empty object ({}) or omit to use the default CAF convention.')
+@description('Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { components: string[], delimiter: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string, networkInterfaces: string } }. Pass an empty object ({}) or omit to use the default CAF convention.')
 param customNamingConvention object = {}
 
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
@@ -126,9 +126,9 @@ var identifier = 'operations'
 var locationAbbreviation = locations[varLocation].abbreviation
 
 // ── Custom naming convention support ─────────────────────────────────────────
-var useCustomNaming = !empty(customNamingConvention) && contains(customNamingConvention, 'segments')
+var useCustomNaming = !empty(customNamingConvention) && contains(customNamingConvention, 'components')
 
-var cnv_sep = useCustomNaming ? customNamingConvention.separator : '-'
+var cnv_sep = useCustomNaming ? customNamingConvention.delimiter : '-'
 var cnv_loc = useCustomNaming
   ? (!empty(customNamingConvention.?locationAbbreviation ?? '')
       ? customNamingConvention.locationAbbreviation
@@ -140,8 +140,9 @@ var cnv_rtCodes = useCustomNaming && contains(customNamingConvention, 'resourceT
       resourceGroups: resourceAbbreviations.resourceGroups
       keyVaults: resourceAbbreviations.keyVaults
       privateEndpoints: resourceAbbreviations.privateEndpoints
+      networkInterfaces: resourceAbbreviations.networkInterfaces
     }
-var cnv_segments = useCustomNaming ? customNamingConvention.segments : []
+var cnv_segments = useCustomNaming ? customNamingConvention.components : []
 // When custom naming is active, derive resource-type-first ordering from whether segment 1 is 'resourceType'.
 // For the CAF fallback, this is the inverse of nameConvResTypeAtEnd.
 // Used to ensure PE and NIC names follow the same prefix/suffix convention as all other resources.
@@ -149,7 +150,7 @@ var cnv_rtFirst = useCustomNaming ? (first(cnv_segments) == 'resourceType') : !n
 
 func resolveSegment(seg string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   seg == 'resourceType' ? rtCode
-    : seg == 'component' ? component
+    : seg == 'purpose' ? component
     : seg == 'location'  ? loc
     : seg == 'freeform1'     ? ff1
     : seg == 'environment'   ? env

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "10145800085182921835"
+      "templateHash": "15375887258053953032"
     }
   },
   "functions": [
@@ -50,7 +50,7 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('seg'), 'resourceType'), parameters('rtCode'), if(equals(parameters('seg'), 'component'), parameters('component'), if(equals(parameters('seg'), 'location'), parameters('loc'), if(equals(parameters('seg'), 'freeform1'), parameters('ff1'), if(equals(parameters('seg'), 'environment'), parameters('env'), if(equals(parameters('seg'), 'freeform2'), parameters('ff2'), if(equals(parameters('seg'), 'workload'), parameters('workload'), '')))))))]"
+            "value": "[if(equals(parameters('seg'), 'resourceType'), parameters('rtCode'), if(equals(parameters('seg'), 'purpose'), parameters('component'), if(equals(parameters('seg'), 'location'), parameters('loc'), if(equals(parameters('seg'), 'freeform1'), parameters('ff1'), if(equals(parameters('seg'), 'environment'), parameters('env'), if(equals(parameters('seg'), 'freeform2'), parameters('ff2'), if(equals(parameters('seg'), 'workload'), parameters('workload'), '')))))))]"
           }
         },
         "buildCustomName": {
@@ -265,7 +265,7 @@
       "type": "object",
       "defaultValue": {},
       "metadata": {
-        "description": "Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all image management resources. Shape: { segments: string[], separator: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, computeGalleries: string, userAssignedIdentities: string, storageAccounts: string, privateEndpoints: string, networkInterfaces: string, diskEncryptionSets: string } }. Pass an empty object ({}) or omit to use the default CAF convention."
+        "description": "Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all image management resources. Shape: { components: string[], delimiter: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, computeGalleries: string, userAssignedIdentities: string, storageAccounts: string, privateEndpoints: string, networkInterfaces: string, diskEncryptionSets: string } }. Pass an empty object ({}) or omit to use the default CAF convention."
       }
     },
     "timeStamp": {
@@ -819,11 +819,11 @@
     "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
     "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
     "resourceAbbreviations": "[variables('$fxv#2')]",
-    "useCustomNaming": "[and(not(empty(parameters('customNamingConvention'))), contains(parameters('customNamingConvention'), 'segments'))]",
-    "cnv_sep": "[if(variables('useCustomNaming'), parameters('customNamingConvention').separator, '-')]",
+    "useCustomNaming": "[and(not(empty(parameters('customNamingConvention'))), contains(parameters('customNamingConvention'), 'components'))]",
+    "cnv_sep": "[if(variables('useCustomNaming'), parameters('customNamingConvention').delimiter, '-')]",
     "cnv_loc": "[if(variables('useCustomNaming'), if(not(empty(parameters('customNamingConvention').locationAbbreviation)), parameters('customNamingConvention').locationAbbreviation, variables('locations')[variables('varLocation')].abbreviation), variables('locations')[variables('varLocation')].abbreviation)]",
     "cnv_rtCodes": "[if(and(variables('useCustomNaming'), contains(parameters('customNamingConvention'), 'resourceTypeCodes')), parameters('customNamingConvention').resourceTypeCodes, createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'computeGalleries', variables('resourceAbbreviations').computeGalleries, 'userAssignedIdentities', variables('resourceAbbreviations').userAssignedIdentities, 'storageAccounts', variables('resourceAbbreviations').storageAccounts, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'diskEncryptionSets', variables('resourceAbbreviations').diskEncryptionSets))]",
-    "cnv_segments": "[if(variables('useCustomNaming'), parameters('customNamingConvention').segments, createArray())]",
+    "cnv_segments": "[if(variables('useCustomNaming'), parameters('customNamingConvention').components, createArray())]",
     "cnv_rtFirst": "[if(variables('useCustomNaming'), equals(first(variables('cnv_segments')), 'resourceType'), not(parameters('nameConvResTypeAtEnd')))]",
     "customResourceGroupName": "[if(variables('useCustomNaming'), __bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')), '')]",
     "customGalleryName": "[if(variables('useCustomNaming'), replace(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').computeGalleries, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')), '-', '_'), '')]",
@@ -862,7 +862,7 @@
     "logsStorageName": "[take(if(variables('useCustomNaming'), format('{0}{1}', variables('customSaLogsBase'), variables('saUniqueSuffix')), format('{0}imagelogs{1}{2}', variables('resourceAbbreviations').storageAccounts, variables('locations')[variables('varLocation')].abbreviation, variables('saUniqueSuffix'))), 24)]",
     "logsContainerName": "image-customization-logs",
     "logsPrivateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
-    "logsCustomNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', variables('resourceAbbreviations').networkInterfaces, variables('logsPrivateEndpointName')), format('{0}-{1}', variables('logsPrivateEndpointName'), variables('resourceAbbreviations').networkInterfaces))]"
+    "logsCustomNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('logsPrivateEndpointName')), format('{0}-{1}', variables('logsPrivateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]"
   },
   "resources": {
     "resourceGroup": {

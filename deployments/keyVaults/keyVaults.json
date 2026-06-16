@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "18185290082586938828"
+      "version": "0.44.1.10279",
+      "templateHash": "7150879493631959346"
     }
   },
   "functions": [
@@ -50,7 +50,7 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('seg'), 'resourceType'), parameters('rtCode'), if(equals(parameters('seg'), 'component'), parameters('component'), if(equals(parameters('seg'), 'location'), parameters('loc'), if(equals(parameters('seg'), 'freeform1'), parameters('ff1'), if(equals(parameters('seg'), 'environment'), parameters('env'), if(equals(parameters('seg'), 'freeform2'), parameters('ff2'), if(equals(parameters('seg'), 'workload'), parameters('workload'), '')))))))]"
+            "value": "[if(equals(parameters('seg'), 'resourceType'), parameters('rtCode'), if(equals(parameters('seg'), 'purpose'), parameters('component'), if(equals(parameters('seg'), 'location'), parameters('loc'), if(equals(parameters('seg'), 'freeform1'), parameters('ff1'), if(equals(parameters('seg'), 'environment'), parameters('env'), if(equals(parameters('seg'), 'freeform2'), parameters('ff2'), if(equals(parameters('seg'), 'workload'), parameters('workload'), '')))))))]"
           }
         },
         "buildCustomName": {
@@ -254,7 +254,7 @@
       "type": "object",
       "defaultValue": {},
       "metadata": {
-        "description": "Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { segments: string[], separator: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string, networkInterfaces: string } }. Pass an empty object ({}) or omit to use the default CAF convention."
+        "description": "Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { components: string[], delimiter: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string, networkInterfaces: string } }. Pass an empty object ({}) or omit to use the default CAF convention."
       }
     },
     "timeStamp": {
@@ -811,11 +811,11 @@
     "deploymentSuffix": "[parameters('timeStamp')]",
     "identifier": "operations",
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
-    "useCustomNaming": "[and(not(empty(parameters('customNamingConvention'))), contains(parameters('customNamingConvention'), 'segments'))]",
-    "cnv_sep": "[if(variables('useCustomNaming'), parameters('customNamingConvention').separator, '-')]",
+    "useCustomNaming": "[and(not(empty(parameters('customNamingConvention'))), contains(parameters('customNamingConvention'), 'components'))]",
+    "cnv_sep": "[if(variables('useCustomNaming'), parameters('customNamingConvention').delimiter, '-')]",
     "cnv_loc": "[if(variables('useCustomNaming'), if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'locationAbbreviation'), ''))), parameters('customNamingConvention').locationAbbreviation, variables('locationAbbreviation')), variables('locationAbbreviation'))]",
-    "cnv_rtCodes": "[if(and(variables('useCustomNaming'), contains(parameters('customNamingConvention'), 'resourceTypeCodes')), parameters('customNamingConvention').resourceTypeCodes, createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints))]",
-    "cnv_segments": "[if(variables('useCustomNaming'), parameters('customNamingConvention').segments, createArray())]",
+    "cnv_rtCodes": "[if(and(variables('useCustomNaming'), contains(parameters('customNamingConvention'), 'resourceTypeCodes')), parameters('customNamingConvention').resourceTypeCodes, createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
+    "cnv_segments": "[if(variables('useCustomNaming'), parameters('customNamingConvention').components, createArray())]",
     "cnv_rtFirst": "[if(variables('useCustomNaming'), equals(first(variables('cnv_segments')), 'resourceType'), not(parameters('nameConvResTypeAtEnd')))]",
     "customRgName": "[if(variables('useCustomNaming'), __bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')), '')]",
     "nameConv_Operations_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-LOCATION-RESOURCETYPE', variables('identifier')), format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier')))]",
@@ -855,8 +855,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "921857994108552741"
+              "version": "0.44.1.10279",
+              "templateHash": "2538346822060615939"
             }
           },
           "parameters": {
@@ -980,8 +980,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "14244985818155362678"
+              "version": "0.44.1.10279",
+              "templateHash": "1075813460047825930"
             }
           },
           "parameters": {
@@ -1145,8 +1145,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "8485039422876759494"
+                      "version": "0.44.1.10279",
+                      "templateHash": "6824456759606900246"
                     }
                   },
                   "definitions": {
@@ -1444,8 +1444,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "9215232199660468920"
+                      "version": "0.44.1.10279",
+                      "templateHash": "8459238929659221376"
                     }
                   },
                   "parameters": {
@@ -1592,8 +1592,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "17245339863889522044"
+                      "version": "0.44.1.10279",
+                      "templateHash": "13843002736269387529"
                     }
                   },
                   "parameters": {
@@ -1692,8 +1692,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "8485039422876759494"
+                      "version": "0.44.1.10279",
+                      "templateHash": "6824456759606900246"
                     }
                   },
                   "definitions": {
@@ -1991,8 +1991,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "9215232199660468920"
+                      "version": "0.44.1.10279",
+                      "templateHash": "8459238929659221376"
                     }
                   },
                   "parameters": {
