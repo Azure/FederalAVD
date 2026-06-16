@@ -532,25 +532,29 @@
 							"label": "Naming Convention",
 							"elements": [
 								{
+									"name": "namingDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"options": {
+										"text": "By default, resources are named using the Cloud Adoption Framework (CAF) convention: the resource type abbreviation appears first, followed by a workload identifier, component role, and region. For example: rg-avd-image-management-eus (resource group), gal-avd-imagegallery-eus (gallery), saavdartifactseus (storage account). Use the options below to adjust the resource type position or fully customize the segment order and values.",
+										"link": {
+											"label": "Resource Naming | Microsoft Learn",
+											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
+										}
+									}
+								},
+								{
 									"name": "nameConvResTypeAtEnd",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Resource Type Abbreviation at End of Name",
 									"visible": "[not(steps('tagsAndNaming').naming.enableCustomNaming)]",
 									"toolTip": "When checked, names follow the pattern 'avd-image-management-eus-gal'. When unchecked (default), names follow 'gal-avd-image-management-eus'. Has no effect when a custom naming convention is enabled — segment order controls resource type placement instead."
-								},
-								{
-									"name": "namingDescription",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Optionally define a custom naming convention by selecting up to 5 segments in the order you want them to appear in resource names. When enabled, the Cloud Adoption Framework naming convention (including the 'Resource Type at End' option on the Deployment Basics step) is ignored. Segments marked 'auto-resolved' are substituted per resource at deployment time; segments you define require a value below."
-									}
-								},
+								},								
 								{
 									"name": "enableCustomNaming",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable Custom Naming Convention",
 									"toolTip": "When checked, all image management and image build resources will be named according to the segments and order you define below."
-								},
+								},								
 								{
 									"name": "builderInfo",
 									"type": "Microsoft.Common.InfoBox",
@@ -558,6 +562,15 @@
 									"options": {
 										"style": "Info",
 										"text": "Select the segments that make up your naming convention and arrange them in order using Segment 1 through Segment 5. Select 'None (stop here)' to end the sequence. Auto-resolved segments — Resource Type, Component, Location — are substituted per resource at deployment time. Value segments — Workload, Environment, Free-form Text 1, Free-form Text 2 — require you to supply a value in the fields that appear below."
+									}
+								},
+								{
+									"name": "segmentGuidanceInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+									"options": {
+										"style": "Info",
+										"text": "Recommended segments for conflict-free, identifiable names: Required - Resource Type (identifies the resource category: rg, gal, sa, uai, pe, nic, des), Component (distinguishes resources of the same type from one another), Workload (scopes names to your application or project). Highly Recommended - Location (prevents name collisions when deploying across regions)."
 									}
 								},
 								{
@@ -904,6 +917,33 @@
 									}
 								},
 								{
+									"name": "noResourceTypeError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))))))]",
+									"options": {
+										"style": "Error",
+										"text": "No Resource Type segment selected. Including Resource Type is strongly recommended - it identifies the resource category at a glance and follows the Cloud Adoption Framework naming standard (e.g. rg-avd-image-management-eus, gal-avd-imagegallery-eus)."
+									}
+								},
+								{
+									"name": "noComponentError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'component'), or(equals(steps('tagsAndNaming').naming.segment2, 'component'), or(equals(steps('tagsAndNaming').naming.segment3, 'component'), or(equals(steps('tagsAndNaming').naming.segment4, 'component'), equals(steps('tagsAndNaming').naming.segment5, 'component')))))))]",
+									"options": {
+										"style": "Error",
+										"text": "No Component segment selected. Resources of the same type in this deployment (e.g. both storage accounts for artifacts and logs) will have identical names. Including Component is strongly recommended."
+									}
+								},
+								{
+									"name": "noWorkloadWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'workload'), or(equals(steps('tagsAndNaming').naming.segment2, 'workload'), or(equals(steps('tagsAndNaming').naming.segment3, 'workload'), or(equals(steps('tagsAndNaming').naming.segment4, 'workload'), equals(steps('tagsAndNaming').naming.segment5, 'workload'))))))))]",
+									"options": {
+										"style": "Warning",
+										"text": "No Workload segment selected. Including Workload is strongly recommended - it scopes resource names to your application or project and prevents collisions with other deployments using the same convention."
+									}
+								},
+								{
 									"name": "noLocationWarning",
 									"type": "Microsoft.Common.InfoBox",
 									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'location'), or(equals(steps('tagsAndNaming').naming.segment2, 'location'), or(equals(steps('tagsAndNaming').naming.segment3, 'location'), or(equals(steps('tagsAndNaming').naming.segment4, 'location'), equals(steps('tagsAndNaming').naming.segment5, 'location')))))))]",
@@ -911,16 +951,7 @@
 										"style": "Warning",
 										"text": "No Location segment selected. If you plan to deploy Image Management in multiple regions (e.g. a primary gallery and a remote gallery in a second region), include Location in your convention to avoid resource name conflicts between deployments."
 									}
-								},
-								{
-									"name": "noComponentWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'component'), or(equals(steps('tagsAndNaming').naming.segment2, 'component'), or(equals(steps('tagsAndNaming').naming.segment3, 'component'), or(equals(steps('tagsAndNaming').naming.segment4, 'component'), equals(steps('tagsAndNaming').naming.segment5, 'component')))))))]",
-									"options": {
-										"style": "Warning",
-										"text": "No Component segment selected. Resources of the same type in this deployment (e.g. both storage accounts for artifacts and logs) will have identical names. Including Component is strongly recommended."
-									}
-								},
+								},								
 								{
 									"name": "customizeRtCodes",
 									"type": "Microsoft.Common.CheckBox",
