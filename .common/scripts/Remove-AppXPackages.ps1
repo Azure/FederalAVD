@@ -132,7 +132,6 @@ try {
             Write-Log "Capability [$capability] not present — skipping."
         }
     }
-    }
 }
 catch {
     Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
