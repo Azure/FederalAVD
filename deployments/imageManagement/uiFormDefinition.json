@@ -919,7 +919,7 @@
 								{
 									"name": "noResourceTypeError",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType'))))))))]",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.segment4, 'resourceType'), equals(steps('tagsAndNaming').naming.segment5, 'resourceType')))))))]",
 									"options": {
 										"style": "Error",
 										"text": "No Resource Type segment selected. Including Resource Type is strongly recommended - it identifies the resource category at a glance and follows the Cloud Adoption Framework naming standard (e.g. rg-avd-image-management-eus, gal-avd-imagegallery-eus)."
@@ -937,7 +937,7 @@
 								{
 									"name": "noWorkloadWarning",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'workload'), or(equals(steps('tagsAndNaming').naming.segment2, 'workload'), or(equals(steps('tagsAndNaming').naming.segment3, 'workload'), or(equals(steps('tagsAndNaming').naming.segment4, 'workload'), equals(steps('tagsAndNaming').naming.segment5, 'workload'))))))))]",
+									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.segment1, 'workload'), or(equals(steps('tagsAndNaming').naming.segment2, 'workload'), or(equals(steps('tagsAndNaming').naming.segment3, 'workload'), or(equals(steps('tagsAndNaming').naming.segment4, 'workload'), equals(steps('tagsAndNaming').naming.segment5, 'workload')))))))]",
 									"options": {
 										"style": "Warning",
 										"text": "No Workload segment selected. Including Workload is strongly recommended - it scopes resource names to your application or project and prevents collisions with other deployments using the same convention."
