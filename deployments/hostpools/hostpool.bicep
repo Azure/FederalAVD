@@ -1381,7 +1381,12 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     resourceGroupControlPlane: resourceGroupControlPlane
     resourceGroupDeployment: resourceGroupDeployment
     resourceGroupHosts: resourceGroupHosts
-    resourceGroupSecurity: resourceGroupOperations
+    // When an existing KV is provided it lives in a pre-existing RG; use that RG for the
+    // KeyVaultCryptoOfficer / RBACAdmin role assignments instead of the calculated operations
+    // RG name, which may not exist if no inline KV or Recovery Services vault is being deployed.
+    resourceGroupSecurity: !empty(existingEncryptionKeyVaultResourceId)
+      ? split(existingEncryptionKeyVaultResourceId, '/')[4]
+      : resourceGroupOperations
     resourceGroupStorage: resourceGroupStorage
     tags: tags
     userAssignedIdentityNameConv: userAssignedIdentityNameConv
