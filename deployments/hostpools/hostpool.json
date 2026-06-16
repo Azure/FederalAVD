@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "10038643236035974712"
+      "templateHash": "11531772022537858441"
     }
   },
   "parameters": {
@@ -12545,7 +12545,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "2874096971563426289"
+              "templateHash": "1889604387528775409"
             }
           },
           "parameters": {
@@ -13499,7 +13499,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.44.1.10279",
-                      "templateHash": "13162488408044420333"
+                      "templateHash": "12539663073543405248"
                     }
                   },
                   "parameters": {
@@ -14662,6 +14662,8 @@
                         }
                       },
                       "dependsOn": [
+                        "fileServices",
+                        "shares",
                         "[resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix')))]"
                       ]
                     },
