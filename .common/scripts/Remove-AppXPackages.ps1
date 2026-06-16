@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory=$true)]
     [string]$AppsToRemove
 )
@@ -23,13 +23,13 @@ try {
     [array]$apps = $AppsToRemove.replace('\"', '"') | ConvertFrom-Json
 
     # Image build context: no user profiles exist, so only provisioned package removal is relevant.
-    # Get-AppxPackage -AllUsers is intentionally omitted — it is unnecessary on a fresh image and
+    # Get-AppxPackage -AllUsers is intentionally omitted -- it is unnecessary on a fresh image and
     # can hang in environments where the AppX deployment stack is held by a concurrently-provisioned
     # extension (e.g. Defender for Endpoint, Guest Configuration) or a locked wsappx service.
 
     # --- Pre-flight: AppX/DISM readiness checks ---
 
-    # 1. wsappx must be running — it hosts AppXSvc (AppX Deployment Service) and ClipSVC.
+    # 1. wsappx must be running -- it hosts AppXSvc (AppX Deployment Service) and ClipSVC.
     #    If it is stopped or stuck, every Get-AppxProvisionedPackage / Remove call will hang.
     Write-Log "Pre-flight: checking wsappx service state..."
     $wsappx = Get-Service -Name 'wsappx' -ErrorAction SilentlyContinue
@@ -52,7 +52,7 @@ try {
     }
 
     # 2. Check whether Windows Modules Installer (TrustedInstaller / TiWorker) is actively running.
-    #    An active CBS/servicing pass holds the DISM session lock — any concurrent DISM call will hang
+    #    An active CBS/servicing pass holds the DISM session lock -- any concurrent DISM call will hang
     #    until it releases. Wait up to 3 minutes for it to finish; warn and continue if it does not.
     Write-Log "Pre-flight: checking for active CBS/DISM operations (TiWorker / TrustedInstaller)..."
     $dismWaitSeconds = 180
@@ -73,7 +73,7 @@ try {
         Write-Log "Pre-flight: no active CBS/DISM operations detected."
     }
 
-    # 3. Check for a pending reboot from Component Based Servicing (informational — does not abort).
+    # 3. Check for a pending reboot from Component Based Servicing (informational -- does not abort).
     #    A pending CBS reboot means component state is not fully committed; AppX operations that touch
     #    those components can queue behind the pending pass and appear to hang.
     $pendingReboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
@@ -104,7 +104,7 @@ try {
             }
         }
         else {
-            Write-Log "Provisioned AppX package [$app] not found — skipping."
+            Write-Log "Provisioned AppX package [$app] not found -- skipping."
         }
     }
 
@@ -129,7 +129,7 @@ try {
             }
         }
         else {
-            Write-Log "Capability [$capability] not present — skipping."
+            Write-Log "Capability [$capability] not present -- skipping."
         }
     }
 }
