@@ -489,13 +489,17 @@ var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbre
 // Reversed = resource type at the end (e.g., "avd-prod-eus-vdpool" or "avd-prod-eus-hp")
 var nameConvReversed = endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') || endsWith(hostPoolName, '-hp')
 
-// Extract hpBaseName by removing resource type and location from the host pool name
-// Not reversed: hp-{hpBaseName}-{location} → remove first segment (hp) and last segment (location)
-// Reversed: {hpBaseName}-{location}-hp → remove last two segments (location-hp)
+// Extract hpBaseName using known anchors: the location abbreviation and the RT token.
+// Using substring with known-length anchors avoids fragile segment-counting when the persona has many parts.
+// RT-last  (reversed): '{persona}-{loc}-{rt}' → strip '-{loc}-{rt}' suffix
+// RT-first (not reversed): '{rt}-{persona}-{loc}' → strip '{rt}-' prefix and '-{loc}' suffix
 var arrHostPoolName = split(hostPoolName, '-')
+var hpRtToken = nameConvReversed
+  ? (endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') ? resourceAbbreviations.hostPools : 'hp')
+  : arrHostPoolName[0]
 var hpBaseName = nameConvReversed
-  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-hp)
-  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (hp) and last (location)
+  ? substring(hostPoolName, 0, length(hostPoolName) - length('-${virtualMachinesRegionAbbreviation}-${hpRtToken}'))
+  : substring(hostPoolName, length('${hpRtToken}-'), length(hostPoolName) - length('${hpRtToken}-') - length('-${virtualMachinesRegionAbbreviation}'))
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'

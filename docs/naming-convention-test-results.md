@@ -75,6 +75,11 @@ verifies output names match expected patterns.
 | UAI | `uai-avd-image-management-use` |
 | UAI (Encryption) | `uai-avd-image-management-encryption-use` |
 | Key Vault | `kv-avd-image-management-use` |
+| DES (customer-keys) | `des-avd-image-management-customer-keys-use` |
+| DES (platform+customer) | `des-avd-image-management-platform-and-customer-keys-use` |
+| DES (confidential-vm) | `des-avd-image-management-confidential-vm-use` |
+| Artifacts Storage Account | `saimgassetsuse716448f167` |
+| Logs Storage Account | `saimglogsuse716448f167` |
 
 ### Key Vaults Standalone Resources
 
@@ -166,6 +171,11 @@ verifies output names match expected patterns.
 | UAI | `uai-avd-image-management-usw2` |
 | UAI (Encryption) | `uai-avd-image-management-encryption-usw2` |
 | Key Vault | `kv-avd-image-management-usw2` |
+| DES (customer-keys) | `des-avd-image-management-customer-keys-usw2` |
+| DES (platform+customer) | `des-avd-image-management-platform-and-customer-keys-usw2` |
+| DES (confidential-vm) | `des-avd-image-management-confidential-vm-usw2` |
+| Artifacts Storage Account | `saimgassetsusw24db288975` |
+| Logs Storage Account | `saimglogsusw24db288975` |
 
 ### Key Vaults Standalone Resources
 
@@ -257,6 +267,11 @@ verifies output names match expected patterns.
 | UAI | `uai-avd-image-management-use` |
 | UAI (Encryption) | `uai-avd-image-management-encryption-use` |
 | Key Vault | `kv-avd-image-management-use` |
+| DES (customer-keys) | `des-avd-image-management-customer-keys-use` |
+| DES (platform+customer) | `des-avd-image-management-platform-and-customer-keys-use` |
+| DES (confidential-vm) | `des-avd-image-management-confidential-vm-use` |
+| Artifacts Storage Account | `saimgassetsuse716448f167` |
+| Logs Storage Account | `saimglogsuse716448f167` |
 
 ### Key Vaults Standalone Resources
 
@@ -348,6 +363,11 @@ verifies output names match expected patterns.
 | UAI | `avd-image-management-use2-uai` |
 | UAI (Encryption) | `avd-image-management-encryption-use2-uai` |
 | Key Vault | `avd-image-management-use2-kv` |
+| DES (customer-keys) | `avd-image-management-customer-keys-use2-des` |
+| DES (platform+customer) | `avd-image-management-platform-and-customer-keys-use2-des` |
+| DES (confidential-vm) | `avd-image-management-confidential-vm-use2-des` |
+| Artifacts Storage Account | `imgassetsuse2341741a4esa` |
+| Logs Storage Account | `imglogsuse2341741a4esa` |
 
 ### Key Vaults Standalone Resources
 
@@ -439,6 +459,11 @@ verifies output names match expected patterns.
 | UAI | `contoso-avd-image-management-use-uai` |
 | UAI (Encryption) | `contoso-avd-image-management-encryption-use-uai` |
 | Key Vault | `contoso-avd-image-management-use-kv` |
+| DES (customer-keys) | `contoso-avd-image-management-customer-keys-use-des` |
+| DES (platform+customer) | `contoso-avd-image-management-platform-and-customer-keys-use-des` |
+| DES (confidential-vm) | `contoso-avd-image-management-confidential-vm-use-des` |
+| Artifacts Storage Account | `imgassetsuse21984b29a5sa` |
+| Logs Storage Account | `imglogsuse21984b29a5sa` |
 
 ### Key Vaults Standalone Resources
 
@@ -530,6 +555,11 @@ verifies output names match expected patterns.
 | UAI | `uai_avd_prod_image-management_usw2` |
 | UAI (Encryption) | `uai_avd_prod_image-management-encryption_usw2` |
 | Key Vault | `kv_avd_prod_image-management_usw2` |
+| DES (customer-keys) | `des_avd_prod_image-management-customer-keys_usw2` |
+| DES (platform+customer) | `des_avd_prod_image-management-platform-and-customer-keys_usw2` |
+| DES (confidential-vm) | `des_avd_prod_image-management-confidential-vm_usw2` |
+| Artifacts Storage Account | `saimgassetsusw277ff40895` |
+| Logs Storage Account | `saimglogsusw277ff40895` |
 
 ### Key Vaults Standalone Resources
 
@@ -621,6 +651,11 @@ verifies output names match expected patterns.
 | UAI | `uai-avd-image-management` |
 | UAI (Encryption) | `uai-avd-image-management-encryption` |
 | Key Vault | `kv-avd-image-management` |
+| DES (customer-keys) | `des-avd-image-management-customer-keys` |
+| DES (platform+customer) | `des-avd-image-management-platform-and-customer-keys` |
+| DES (confidential-vm) | `des-avd-image-management-confidential-vm` |
+| Artifacts Storage Account | `saimgassetsuse60b62f330d` |
+| Logs Storage Account | `saimglogsuse60b62f330d` |
 
 ### Key Vaults Standalone Resources
 
@@ -712,6 +747,11 @@ verifies output names match expected patterns.
 | UAI | `fabrikam-uai-avd-image-management-use` |
 | UAI (Encryption) | `fabrikam-uai-avd-image-management-encryption-use` |
 | Key Vault | `fabrikam-kv-avd-image-management-use` |
+| DES (customer-keys) | `fabrikam-des-avd-image-management-customer-keys-use` |
+| DES (platform+customer) | `fabrikam-des-avd-image-management-platform-and-customer-keys-use` |
+| DES (confidential-vm) | `fabrikam-des-avd-image-management-confidential-vm-use` |
+| Artifacts Storage Account | `saimgassetsuse935efffdd5` |
+| Logs Storage Account | `saimglogsuse935efffdd5` |
 
 ### Key Vaults Standalone Resources
 

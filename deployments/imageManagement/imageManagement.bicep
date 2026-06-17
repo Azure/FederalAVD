@@ -210,35 +210,12 @@ var customEncryptionIdentityName = buildCustomName(
 )
 
 // Storage account names: alphanumeric only, max 24 chars, globally unique.
-// Apply custom convention as a prefix (delimiters stripped), then append uniqueString.
-// Use short purpose tokens ('assets' / 'logs') to distinguish the two accounts and
-// leave enough room for the uniqueString suffix to maintain global uniqueness.
-func stripDelimiters(s string) string =>
-  replace(replace(replace(s, '-', ''), '_', ''), '.', '')
-
-var customSaArtifactsBase = stripDelimiters(buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.storageAccounts,
-  'assets',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-))
-
-var customSaLogsBase = stripDelimiters(buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.storageAccounts,
-  'logs',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-))
+// Pattern uses only RT abbreviation + purpose + location + uniqueString — no workload,
+// environment, or freeform tokens. Those components eat into the 24-char budget at the
+// expense of the uniqueness suffix without adding meaningful disambiguation (the
+// containing resource group already carries the full convention name).
+// RT position mirrors the convention: prefix when RT-first, suffix when RT-last.
+var saRtCode = toLower(cnv_rtCodes.storageAccounts)  // e.g. 'sa'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 'image-management' is intentionally hardcoded — this solution always deploys a single
@@ -273,7 +250,14 @@ var customNetworkInterfaceName = cnv_rtFirst
 var saUniqueSuffix = !contains(cnv_components, 'location')
   ? uniqueString(subscription().subscriptionId, resourceGroupName, location)
   : uniqueString(subscription().subscriptionId, resourceGroupName)
-var artifactsStorageAccountName = take('${customSaArtifactsBase}${saUniqueSuffix}', 24)
+// Fix the unique suffix length to the budget available for the longer purpose token ('imgassets' = 9
+// chars) so both accounts always carry the same number of unique characters regardless of which
+// account name is being built.
+var saUniqueLen = 24 - length(saRtCode) - 9 - length(cnv_loc)
+var saUnique    = take(saUniqueSuffix, saUniqueLen > 0 ? saUniqueLen : 1)
+var artifactsStorageAccountName = cnv_rtFirst
+  ? '${saRtCode}imgassets${cnv_loc}${saUnique}'
+  : 'imgassets${cnv_loc}${saUnique}${saRtCode}'
 var sasExpirationPeriod = '180.00:00:00' // 180 days
 var storageKind = 'StorageV2'
 var storageSkuName = 'Standard_LRS'
@@ -298,7 +282,7 @@ var galleryDiskEncryptionSetName = buildCustomName(
   filter(cnv_components, s => s != 'none'),
   cnv_delimiter,
   cnv_rtCodes.diskEncryptionSets,
-  contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys',
+  contains(keyManagementGalleryImageVersions, 'Platform') ? '${identifier}-platform-and-customer-keys' : '${identifier}-customer-keys',
   cnv_loc,
   namingConvention.?freeform1 ?? '',
   namingConvention.?environment ?? '',
@@ -311,7 +295,7 @@ var galleryConfidentialVmDiskEncryptionSetName = buildCustomName(
   filter(cnv_components, s => s != 'none'),
   cnv_delimiter,
   cnv_rtCodes.diskEncryptionSets,
-  'confidential-vm',
+  '${identifier}-confidential-vm',
   cnv_loc,
   namingConvention.?freeform1 ?? '',
   namingConvention.?environment ?? '',
@@ -320,7 +304,9 @@ var galleryConfidentialVmDiskEncryptionSetName = buildCustomName(
 )
 var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt-cvm'
 
-var logsStorageName = take('${customSaLogsBase}${saUniqueSuffix}', 24)
+var logsStorageName = cnv_rtFirst
+  ? '${saRtCode}imglogs${cnv_loc}${saUnique}'
+  : 'imglogs${cnv_loc}${saUnique}${saRtCode}'
 var logsContainerName = 'image-customization-logs'
 var logsPrivateEndpointName = replace(
   replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),

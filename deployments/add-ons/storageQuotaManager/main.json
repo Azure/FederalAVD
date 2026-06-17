@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "14561424654784482608"
+      "templateHash": "17535835056898770018"
     }
   },
   "parameters": {
@@ -455,10 +455,7 @@
     "nameConvSourceName": "[if(empty(parameters('hostPoolResourceId')), variables('storageResourceGroupName'), last(split(parameters('hostPoolResourceId'), '/')))]",
     "nameConvReversed": "[if(or(startsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').hostPools), startsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').resourceGroups)), false(), if(or(or(endsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').hostPools), endsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').resourceGroups)), endsWith(variables('nameConvSourceName'), '-hp')), true(), false()))]",
     "arrHostPoolName": "[split(last(split(parameters('hostPoolResourceId'), '/')), '-')]",
-    "lengthArrHostPoolName": "[length(variables('arrHostPoolName'))]",
-    "hpIdentifier": "[if(variables('nameConvReversed'), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[0], format('{0}-{1}', variables('arrHostPoolName')[0], variables('arrHostPoolName')[1])), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[1], format('{0}-{1}', variables('arrHostPoolName')[1], variables('arrHostPoolName')[2])))]",
-    "hpIndex": "[if(equals(variables('lengthArrHostPoolName'), 3), '', if(variables('nameConvReversed'), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[1], variables('arrHostPoolName')[2]), if(less(variables('lengthArrHostPoolName'), 5), variables('arrHostPoolName')[2], variables('arrHostPoolName')[3])))]",
-    "hpBaseName": "[if(empty(parameters('hostPoolResourceId')), 'sqm', if(empty(variables('hpIndex')), variables('hpIdentifier'), format('{0}-{1}', variables('hpIdentifier'), variables('hpIndex'))))]",
+    "hpBaseName": "[if(empty(parameters('hostPoolResourceId')), 'sqm', if(variables('nameConvReversed'), join(take(variables('arrHostPoolName'), sub(length(variables('arrHostPoolName')), 2)), '-'), join(take(skip(variables('arrHostPoolName'), 1), sub(length(variables('arrHostPoolName')), 2)), '-')))]",
     "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
     "nameConvSuffix": "[if(variables('nameConvReversed'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
     "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), variables('nameConvSuffix'))]",

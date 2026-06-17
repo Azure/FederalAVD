@@ -121,6 +121,23 @@ def compute_all(sc):
     im_uai = n('userAssignedIdentities', im_id, vms_loc)
     im_uai_enc = n('userAssignedIdentities', f'{im_id}-encryption', vms_loc)
     im_kv  = n('keyVaults', im_id, vms_loc)
+    # DES names — identifier prefix added to purpose (matches hostpool pattern)
+    im_des_cmk    = build(comps, sep, ABBR['diskEncryptionSets'], f'{im_id}-customer-keys', vms_loc, ff1, env, ff2, workload)
+    im_des_pmcmk  = build(comps, sep, ABBR['diskEncryptionSets'], f'{im_id}-platform-and-customer-keys', vms_loc, ff1, env, ff2, workload)
+    im_des_cvm    = build(comps, sep, ABBR['diskEncryptionSets'], f'{im_id}-confidential-vm', vms_loc, ff1, env, ff2, workload)
+    # SA names — RT + purpose + loc + unique (no workload/env/freeform)
+    sa_rt = 'sa'  # default; custom rtCodes not included in this sim
+    im_sa_unique_full = unique_string(SUBSCRIPTION_ID, im_rg)
+    im_sa_unique_noloc = unique_string(SUBSCRIPTION_ID, im_rg, vms_region)
+    im_sa_u_raw = im_sa_unique_noloc if not location_in_comps else im_sa_unique_full
+    im_sa_unique_len = max(24 - len(sa_rt) - 9 - len(vms_loc), 1)
+    im_sa_unique = im_sa_u_raw[:im_sa_unique_len]
+    if rt_first:
+        im_sa_art  = f'{sa_rt}imgassets{vms_loc}{im_sa_unique}'
+        im_sa_logs = f'{sa_rt}imglogs{vms_loc}{im_sa_unique}'
+    else:
+        im_sa_art  = f'imgassets{vms_loc}{im_sa_unique}{sa_rt}'
+        im_sa_logs = f'imglogs{vms_loc}{im_sa_unique}{sa_rt}'
 
     # ── KV standalone (fixed identifier = operations, uses vms_region for eastus scenarios)
     kv_sa_region = vms_region
@@ -185,6 +202,8 @@ def compute_all(sc):
         # imageManagement
         'im_rg': im_rg, 'im_gal': im_gal, 'im_uai': im_uai,
         'im_uai_enc': im_uai_enc, 'im_kv': im_kv,
+        'im_des_cmk': im_des_cmk, 'im_des_pmcmk': im_des_pmcmk, 'im_des_cvm': im_des_cvm,
+        'im_sa_art': im_sa_art, 'im_sa_logs': im_sa_logs,
         # KV standalone
         'kv_sa_rg': rg_ops_kv, 'kv_sa_sec': kv_sec_sa, 'kv_sa_enc': kv_enc_sa,
         'kv_parity': kv_parity,
@@ -399,11 +418,16 @@ for sc in SCENARIOS:
     section += ['### Image Management Resources', '']
     section += ['| Resource | Generated Name |', '|----------|----------------|']
     im_rows = [
-        ('RG',                names['im_rg']),
-        ('Compute Gallery',   names['im_gal']),
-        ('UAI',               names['im_uai']),
-        ('UAI (Encryption)',  names['im_uai_enc']),
-        ('Key Vault',         names['im_kv']),
+        ('RG',                        names['im_rg']),
+        ('Compute Gallery',           names['im_gal']),
+        ('UAI',                       names['im_uai']),
+        ('UAI (Encryption)',          names['im_uai_enc']),
+        ('Key Vault',                 names['im_kv']),
+        ('DES (customer-keys)',       names['im_des_cmk']),
+        ('DES (platform+customer)',   names['im_des_pmcmk']),
+        ('DES (confidential-vm)',     names['im_des_cvm']),
+        ('Artifacts Storage Account', names['im_sa_art']),
+        ('Logs Storage Account',      names['im_sa_logs']),
     ]
     for res, name in im_rows:
         section += [f'| {res} | `{name}` |']

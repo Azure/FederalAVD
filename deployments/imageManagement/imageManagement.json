@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6785600783929096735"
+      "templateHash": "14630207492086890887"
     }
   },
   "functions": [
@@ -95,18 +95,6 @@
           "output": {
             "type": "string",
             "value": "[join(filter(map(parameters('components'), lambda('comp', __bicep.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
-          }
-        },
-        "stripDelimiters": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "s"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[replace(replace(replace(parameters('s'), '-', ''), '_', ''), '.', '')]"
           }
         }
       }
@@ -830,8 +818,7 @@
     "customGalleryName": "[replace(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').computeGalleries, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')), '-', '_')]",
     "customIdentityName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "customEncryptionIdentityName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-encryption', variables('identifier')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "customSaArtifactsBase": "[__bicep.stripDelimiters(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').storageAccounts, 'assets', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')))]",
-    "customSaLogsBase": "[__bicep.stripDelimiters(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').storageAccounts, 'logs', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')))]",
+    "saRtCode": "[toLower(variables('cnv_rtCodes').storageAccounts)]",
     "identifier": "image-management",
     "resourceGroupName": "[variables('customResourceGroupName')]",
     "imageBuildRgName": "[if(empty(parameters('customImageBuildResourceGroupName')), format('{0}-avd-image-builds-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[variables('varLocation')].abbreviation), parameters('customImageBuildResourceGroupName'))]",
@@ -843,7 +830,9 @@
     "privateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('artifactsStorageAccountName'))]",
     "customNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('privateEndpointName')), format('{0}-{1}', variables('privateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
     "saUniqueSuffix": "[if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('resourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('resourceGroupName')))]",
-    "artifactsStorageAccountName": "[take(format('{0}{1}', variables('customSaArtifactsBase'), variables('saUniqueSuffix')), 24)]",
+    "saUniqueLen": "[sub(sub(sub(24, length(variables('saRtCode'))), 9), length(variables('cnv_loc')))]",
+    "saUnique": "[take(variables('saUniqueSuffix'), if(greater(variables('saUniqueLen'), 0), variables('saUniqueLen'), 1))]",
+    "artifactsStorageAccountName": "[if(variables('cnv_rtFirst'), format('{0}imgassets{1}{2}', variables('saRtCode'), variables('cnv_loc'), variables('saUnique')), format('imgassets{0}{1}{2}', variables('cnv_loc'), variables('saUnique'), variables('saRtCode')))]",
     "sasExpirationPeriod": "180.00:00:00",
     "storageKind": "StorageV2",
     "storageSkuName": "Standard_LRS",
@@ -852,11 +841,11 @@
     "storageEncryptionKeyName": "[format('{0}-encryption-key-imagemgmt-storage', variables('identifier'))]",
     "storageEncryptionIdentityName": "[variables('customEncryptionIdentityName')]",
     "cmkKeyNames": "[if(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), createArray(variables('storageEncryptionKeyName')), createArray())]",
-    "galleryDiskEncryptionSetName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "galleryDiskEncryptionSetName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), format('{0}-platform-and-customer-keys', variables('identifier')), format('{0}-customer-keys', variables('identifier'))), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "galleryDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-imagemgmt', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
-    "galleryConfidentialVmDiskEncryptionSetName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, 'confidential-vm', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "galleryConfidentialVmDiskEncryptionSetName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, format('{0}-confidential-vm', variables('identifier')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "galleryConfidentialVmDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-imagemgmt-cvm', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
-    "logsStorageName": "[take(format('{0}{1}', variables('customSaLogsBase'), variables('saUniqueSuffix')), 24)]",
+    "logsStorageName": "[if(variables('cnv_rtFirst'), format('{0}imglogs{1}{2}', variables('saRtCode'), variables('cnv_loc'), variables('saUnique')), format('imglogs{0}{1}{2}', variables('cnv_loc'), variables('saUnique'), variables('saRtCode')))]",
     "logsContainerName": "image-customization-logs",
     "logsPrivateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
     "logsCustomNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('logsPrivateEndpointName')), format('{0}-{1}', variables('logsPrivateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]"
