@@ -266,11 +266,12 @@ Some Azure resource types impose naming constraints that override the standard s
 
 ### Key Vault — 24-character limit
 
-Key Vault names are capped at **24 characters**. The engine:
+Key Vault names are capped at **24 characters**. The engine uses a two-step approach to balance uniqueness with name length:
 
 1. Assembles the base name from the convention (e.g., `kv-avd-sec-use`).
-2. Appends a 6-character `uniqueString()` suffix separated by `-` (e.g., `-a3b4c5`).
-3. Truncates the full string to 24 characters with `take(name, 24)`.
+2. **If the base name is ≤ 20 characters:** appends a 6-character `uniqueString()` suffix separated by `-` (e.g., `kv-avd-sec-use-a3b4c5`), then truncates to 24 characters with `take(name, 24)` — guaranteeing at least 3 unique characters.
+3. **If the base name is 21–24 characters:** uses the base name as-is (no suffix) to avoid truncating to fewer than 3 meaningful unique characters. A portal warning is shown.
+4. **If the base name is > 24 characters:** the base is still truncated to 24 characters, and a portal error blocks deployment.
 
 The `uniqueString()` seed is:
 
@@ -480,7 +481,7 @@ Results (identifier = `avd`, region = `eastus`):
 ```
 contoso-avd-avd-use-vdpool
 contoso-avd-control-plane-use-rg
-contoso-avd-sec-use-kv-{unique}
+contoso-avd-sec-use-kv
 SHNAME-vm  →  avdhost001-vm
 ```
 

@@ -363,8 +363,8 @@ output names match expected patterns.
 | Scaling Plan | `contoso-avd-avd-use-vdscaling` |
 | Log Analytics WS | `contoso-avd-use-law` |
 | DCE | `contoso-avd-use-dce` |
-| KV (Secrets) | `contoso-avd-sec-use-kv-e` |
-| KV (Encryption) | `contoso-avd-enc-use-kv-e` |
+| KV (Secrets) | `contoso-avd-sec-use-kv` |
+| KV (Encryption) | `contoso-avd-enc-use-kv` |
 | Availability Set | `contoso-avd-avd-##-use-as` |
 | VM | `SHNAME-vm` |
 | OS Disk | `SHNAME-osdisk` |
@@ -392,10 +392,10 @@ output names match expected patterns.
 | Resource | Generated Name |
 |----------|----------------|
 | RG | `contoso-avd-operations-use-rg` |
-| KV (Secrets) | `contoso-avd-sec-use-kv-e` |
-| KV (Encrypt) | `contoso-avd-enc-use-kv-e` |
+| KV (Secrets) | `contoso-avd-sec-use-kv` |
+| KV (Encrypt) | `contoso-avd-enc-use-kv` |
 
-**KV name parity check:** hostpool KV (Secrets) = `contoso-avd-sec-use-kv-e`, standalone = `contoso-avd-sec-use-kv-e` → ✅ Match
+**KV name parity check:** hostpool KV (Secrets) = `contoso-avd-sec-use-kv`, standalone = `contoso-avd-sec-use-kv` → ✅ Match
 
 ### Session Host Replacer Add-On Resources
 
@@ -609,8 +609,8 @@ output names match expected patterns.
 | Scaling Plan | `fabrikam-vdscaling-avd-avd-use` |
 | Log Analytics WS | `fabrikam-law-avd-use` |
 | DCE | `fabrikam-dce-avd-use` |
-| KV (Secrets) | `fabrikam-kv-avd-sec-use-` |
-| KV (Encryption) | `fabrikam-kv-avd-enc-use-` |
+| KV (Secrets) | `fabrikam-kv-avd-sec-use` |
+| KV (Encryption) | `fabrikam-kv-avd-enc-use` |
 | Availability Set | `fabrikam-as-avd-avd-##-use` |
 | VM | `vm-SHNAME` |
 | OS Disk | `osdisk-SHNAME` |
@@ -638,10 +638,10 @@ output names match expected patterns.
 | Resource | Generated Name |
 |----------|----------------|
 | RG | `fabrikam-rg-avd-operations-use` |
-| KV (Secrets) | `fabrikam-kv-avd-sec-use-` |
-| KV (Encrypt) | `fabrikam-kv-avd-enc-use-` |
+| KV (Secrets) | `fabrikam-kv-avd-sec-use` |
+| KV (Encrypt) | `fabrikam-kv-avd-enc-use` |
 
-**KV name parity check:** hostpool KV (Secrets) = `fabrikam-kv-avd-sec-use-`, standalone = `fabrikam-kv-avd-sec-use-` → ✅ Match
+**KV name parity check:** hostpool KV (Secrets) = `fabrikam-kv-avd-sec-use`, standalone = `fabrikam-kv-avd-sec-use` → ✅ Match
 
 ### Session Host Replacer Add-On Resources
 
