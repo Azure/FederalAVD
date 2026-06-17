@@ -10,8 +10,8 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 
 1. [How naming works](#how-naming-works)
 2. [The built-in CAF default](#the-built-in-caf-default)
-3. [The `customNamingConvention` parameter](#the-customnamingconvention-parameter)
-4. [The eight naming segments](#the-eight-naming-segments)
+3. [The `namingConvention` parameter](#the-namingconvention-parameter)
+4. [The eight naming components](#the-eight-naming-components)
 5. [The `purpose` component](#the-purpose-component)
 6. [Special resource-type constraints](#special-resource-type-constraints)
 7. [Aligning naming across solutions](#aligning-naming-across-solutions)
@@ -23,15 +23,15 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 
 ## How naming works
 
-Every resource name in FederalAVD is assembled from an ordered list of **segments**. Each segment is a named slot that the engine fills with a context-specific value at deployment time:
+Every resource name in FederalAVD is assembled from an ordered list of **components**. Each component is a named slot that the engine fills with a context-specific value at deployment time:
 
 ```
-[segment1][delimiter][segment2][delimiter]...[segmentN]
+[component1][delimiter][component2][delimiter]...[componentN]
 ```
 
 For each resource, the engine substitutes:
 
-| Segment | Filled with |
+| Component | Filled with |
 |---------|-------------|
 | `resourceType` | The resource type abbreviation (e.g., `kv`, `vm`, `vdpool`) |
 | `purpose` | A per-resource differentiator (e.g., `avd-01`, `control-plane`, `sec`) |
@@ -41,21 +41,21 @@ For each resource, the engine substitutes:
 | `freeform1` / `freeform2` | Static free-text slots (e.g., organisation name, team) |
 | `none` | Ignored — removed from the output entirely |
 
-Empty-valued segments are automatically removed before joining, so there are no leading, trailing, or doubled delimiters.
+Empty-valued components are automatically removed before joining, so there are no leading, trailing, or doubled delimiters.
 
-**Naming is driven by a single parameter**, `customNamingConvention`, passed to each solution. When the parameter is omitted (or left as `{}`), the built-in CAF default is used. When it is supplied, all resource names across the deployment are assembled from the same ordered segment array — giving you a fully consistent naming convention in one place.
+**Naming is driven by a single parameter**, `namingConvention`, passed to each solution. The default value produces CAF-aligned names. When it is supplied with custom values, all resource names across the deployment are assembled from the same ordered component array — giving you a fully consistent naming convention in one place.
 
 ---
 
-## The built-in CAF default
+## The built-in CAF-aligned default
 
-When `customNamingConvention` is not set, FederalAVD uses this pattern:
+When `namingConvention` is left at its default value, FederalAVD uses this pattern:
 
 ```
 {resourceType}-avd-{purpose}-{location}
 ```
 
-This follows the CAF recommendation: *abbreviation → workload → component → region*.
+This follows the CAF recommendation of *abbreviation → workload → component → region*. It is CAF-**aligned** rather than a strict implementation: CAF does not define a `purpose` component, but FederalAVD adds it to disambiguate resources of the same type within a deployment (e.g., separate key vaults for secrets vs. encryption, or multiple host pool resource groups by identifier).
 
 ### Default name examples (identifier = `avd`, region = `eastus` → `use`)
 
@@ -111,7 +111,7 @@ Key abbreviations:
 
 ---
 
-## The `customNamingConvention` parameter
+## The `namingConvention` parameter
 
 ### Parameter shape
 
@@ -134,10 +134,10 @@ Key abbreviations:
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `components` | `string[]` | Yes | Ordered array of segment names. Each element must be one of the [eight segment names](#the-eight-naming-segments). |
-| `delimiter` | `string` | Yes | Separator inserted between non-empty segments. Typically `-`. |
-| `workload` | `string` | No | Static label for the solution workload. Fills the `workload` segment. Example: `avd`. |
-| `environment` | `string` | No | Static environment label. Fills the `environment` segment. Example: `prod`, `dev`, `test`. |
+| `components` | `string[]` | Yes | Ordered array of component names. Each element must be one of the [eight component names](#the-eight-naming-components). |
+| `delimiter` | `string` | Yes | Character inserted between non-empty components. Typically `-`. |
+| `workload` | `string` | No | Static label for the solution workload. Fills the `workload` component. Example: `avd`. |
+| `environment` | `string` | No | Static environment label. Fills the `environment` component. Example: `prod`, `dev`, `test`. |
 | `freeform1` | `string` | No | First free-text slot. Use for organisation or team prefix. |
 | `freeform2` | `string` | No | Second free-text slot. Use for any additional static token. |
 | `vmsLocationAbbreviation` | `string` | No | Override for the session hosts (VMs) region abbreviation. Leave blank to auto-derive from the deployment location. |
@@ -154,7 +154,7 @@ Key abbreviations:
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "customNamingConvention": {
+    "namingConvention": {
       "value": {
         "components": ["resourceType", "workload", "purpose", "location"],
         "delimiter": "-",
@@ -171,7 +171,7 @@ Key abbreviations:
 **Bicep parameter file (`.bicepparam`):**
 
 ```bicep
-param customNamingConvention = {
+param namingConvention = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -181,15 +181,15 @@ param customNamingConvention = {
 }
 ```
 
-**Portal (Custom Naming step):** Use the six-slot segment picker in the *Tags & Naming* step. The UI assembles this object automatically and writes it to the deployment as `customNamingConvention`. Copy the resulting object to align other solution deployments.
+**Portal (Tags & Naming step):** Use the component picker in the *Tags & Naming* step. The UI assembles this object automatically and writes it to the deployment as `namingConvention`. Copy the resulting object to align other solution deployments.
 
 ---
 
-## The eight naming segments
+## The eight naming components
 
 Each element of `components` must be one of these values:
 
-| Segment name | Description | Example value |
+| Component name | Description | Example value |
 |-------------|-------------|--------------|
 | `resourceType` | Resource type abbreviation from the abbreviation table | `kv`, `vm`, `vdpool` |
 | `purpose` | Per-resource differentiator — see [below](#the-purpose-component) | `avd-01`, `sec`, `control-plane` |
@@ -200,7 +200,7 @@ Each element of `components` must be one of these values:
 | `freeform2` | The static `freeform2` property value | anything |
 | `none` | Placeholder that is always removed — use to hold a slot in the Portal UI without including it in the output | — |
 
-### Minimum required segments
+### Minimum required components
 
 A valid `components` array must include at least:
 
@@ -215,10 +215,10 @@ The position of `resourceType` in the array controls the naming style for **all*
 
 | Style | Example | When to use |
 |-------|---------|-------------|
-| **RT-first** (prefix) | `vm-avd-prod-use` | CAF default; most Azure portal views sort by type |
+| **RT-first** (prefix) | `vm-avd-prod-use` | CAF-aligned default; most Azure portal views sort by type |
 | **RT-last** (suffix) | `avd-prod-use-vm` | Some organisations prefer alphabetic sorting by workload |
 
-RT-last is detected when `resourceType` is the **last non-`none` segment** in the array. Any other position (first, middle) is treated as RT-first.
+RT-last is detected when `resourceType` is the **last non-`none` component** in the array. Any other position (first, middle) is treated as RT-first.
 
 > **Important for add-ons:** The Session Host Replacer, Session Hosts, and Storage Quota Manager add-ons infer RT-first/RT-last from the existing host pool name. They detect RT-last by checking whether the host pool name ends with `-vdpool` or `-hp`. They will default to RT-first for any other pattern.
 
@@ -226,7 +226,7 @@ RT-last is detected when `resourceType` is the **last non-`none` segment** in th
 
 ## The `purpose` component
 
-The `purpose` segment is the most powerful part of the naming system. It is the value that makes each resource in a deployment **unique** while keeping the rest of the name segments static.
+The `purpose` component is the most powerful part of the naming system. It is the value that makes each resource in a deployment **unique** while keeping the rest of the name components static.
 
 ### How purpose is set
 
@@ -256,13 +256,13 @@ You never set `purpose` manually. The Bicep engine assigns the correct purpose s
 
 ### The `identifier` variable
 
-`identifier` is derived from the `hostPoolIdentifier` (hostpool deployment) or equivalent parameter. It is the stable "name" for this host pool or resource group that makes it distinct from others in the same subscription. For example, with `hostPoolIdentifier = 'desktop'` and `index = 1`, `identifier = desktop-01`.
+`identifier` is derived from the `identifier` parameter. It is the stable name for this host pool or resource group that makes it distinct from others in the same subscription. For example, with `identifier = 'desktop'` and `index = 1`, the base name becomes `desktop-01`.
 
 ---
 
 ## Special resource-type constraints
 
-Some Azure resource types impose naming constraints that override the standard segment assembly:
+Some Azure resource types impose naming constraints that override the standard component assembly:
 
 ### Key Vault — 24-character limit
 
@@ -275,14 +275,14 @@ Key Vault names are capped at **24 characters**. The engine uses a two-step appr
 
 The `uniqueString()` seed is:
 
-- With a `location` segment: `uniqueString(subscriptionId, resourceGroupName)`
-- Without a `location` segment: `uniqueString(subscriptionId, resourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
+- With a `location` component: `uniqueString(subscriptionId, resourceGroupName)`
+- Without a `location` component: `uniqueString(subscriptionId, resourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
 
 > **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `keyVaults.bicep` deployment when the `identifier` is `operations`. Deploy `keyVaults.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
 
 ### Storage Account — alphanumeric only, max 24
 
-Storage account names (FSLogix, Function App backing store) must be lowercase alphanumeric with no hyphens or special characters. The engine strips all separators with `stripSeps()` after assembling the name.
+Storage account names (FSLogix, Function App backing store) must be lowercase alphanumeric with no hyphens or special characters. The engine strips all delimiters with `stripSeps()` after assembling the name.
 
 ### Compute Gallery — underscores only
 
@@ -305,16 +305,16 @@ The `##` token in availability set names is replaced with the padded availabilit
 
 ## Aligning naming across solutions
 
-To produce a **consistent naming convention** across all solutions, pass the **same `customNamingConvention` object** to every deployment. The segments, delimiter, and static values must be identical.
+To produce a **consistent naming convention** across all solutions, pass the **same `namingConvention` object** to every deployment. The segments, delimiter, and static values must be identical.
 
 ### Alignment matrix
 
 | Solution | Parameter name | Notes |
 |----------|---------------|-------|
-| `hostpools/hostpool.bicep` | `customNamingConvention` | Full object |
-| `keyVaults/keyVaults.bicep` | `customNamingConvention` | Use `identifier = 'operations'` |
-| `imageManagement/imageManagement.bicep` | `customNamingConvention` | Use `identifier = 'image-management'` |
-| `imageBuild/imageBuild.bicep` | `customNamingConvention` | Shared gallery/identity names only |
+| `hostpools/hostpool.bicep` | `namingConvention` | Full object; naming resolved in `modules/naming.bicep` |
+| `keyVaults/keyVaults.bicep` | `namingConvention` | Inline naming; fixed identifier `operations` |
+| `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
+| `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
 | Add-ons (SHR, SH, SQM) | *(none — auto-inferred)* | Names inferred from HP name; override per-resource if needed |
 
 ### Shared parameter file pattern
@@ -325,7 +325,7 @@ The recommended approach is to define the naming convention once in a shared par
 
 ```json
 {
-  "customNamingConvention": {
+  "namingConvention": {
     "value": {
       "components": ["resourceType", "workload", "purpose", "location"],
       "delimiter": "-",
@@ -357,13 +357,13 @@ When CP and VMs are in different regions, both locations appear in the name:
 - Control plane resources (Host Pool, DAG, Workspace, Scaling Plan, CP RG) use `cpLocationAbbreviation`.
 - VMs, disks, storage, operations RGs use `vmsLocationAbbreviation`.
 
-If your convention omits `location`, set **both** `vmsLocationAbbreviation` and `cpLocationAbbreviation` in `customNamingConvention` to ensure the uniqueString seed for Key Vaults remains stable across regions.
+If your convention omits `location`, set **both** `vmsLocationAbbreviation` and `cpLocationAbbreviation` in `namingConvention` to ensure the uniqueString seed for Key Vaults remains stable across regions.
 
 ---
 
 ## Add-on naming — brownfield inference
 
-The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) are deployed **after** the host pool exists. They do not accept a `customNamingConvention` parameter; instead they infer the naming convention from the existing host pool name:
+The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) are deployed **after** the host pool exists. They do not accept a `namingConvention` parameter; instead they infer the naming convention from the existing host pool name:
 
 ### Convention detection
 
@@ -379,8 +379,8 @@ Once the convention direction is known:
 
 | Direction | HP name example | Base name |
 |-----------|----------------|-----------|
-| RT-first | `vdpool-avd-prod-use` | `avd-prod` (drop first + last segment) |
-| RT-last | `avd-prod-use-vdpool` | `avd-prod` (drop last two segments) |
+| RT-first | `vdpool-avd-prod-use` | `avd-prod` (drop first + last component) |
+| RT-last | `avd-prod-use-vdpool` | `avd-prod` (drop last two components) |
 
 ### Derived add-on resource names
 
@@ -411,9 +411,9 @@ The add-on Portal UIs show a **live preview** of the inferred names in the *Adva
 
 ## Examples
 
-### Example 1 — CAF default (no customNamingConvention)
+### Example 1 — CAF default
 
-Do nothing. Deploy using the Portal or parameter files without setting `customNamingConvention`. Resources are named:
+Do nothing. Deploy using the Portal or parameter files without overriding `namingConvention`. Resources are named:
 
 ```
 vdpool-avd-use
@@ -539,11 +539,11 @@ The 8 scenarios cover:
 |---|---------|
 | 1 | CAF default, single region |
 | 2 | CAF default, split CP / VMs regions |
-| 3 | Custom RT-first, 4 segments, workload + environment |
-| 4 | Custom RT-last, 4 segments |
+| 3 | Custom RT-first, 4 components, workload + environment |
+| 4 | Custom RT-last, 4 components |
 | 5 | Custom with org prefix in `freeform1`, RT-last |
-| 6 | Custom with `environment` segment, underscore delimiter |
-| 7 | Custom with no `location` segment (tests KV seed fallback) |
+| 6 | Custom with `environment` component, underscore delimiter |
+| 7 | Custom with no `location` component (tests KV seed fallback) |
 | 8 | Custom with RT in mid-position (not first, not last) |
 
 ---

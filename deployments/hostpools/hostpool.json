@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "18235483414366695955"
+      "templateHash": "6590239641407568435"
     }
   },
   "parameters": {
@@ -36,7 +36,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces Cloud Adoption Framework (CAF)-compliant names in the format: resourceType-workload-purpose-location.\nAll properties are optional when using the default convention; override only what needs to change.\nKey properties:\n  components          — ordered array of name segments, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — separator between segments, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1           — static text slot before the workload\n  environment         — environment token, e.g. \"prod\"\n  freeform2           — static text slot after the environment\n  vmsLocationAbbreviation  — override for the VMs region abbreviation\n  cpLocationAbbreviation   — override for the control plane region abbreviation\n  fslogixStoragePrefix     — custom prefix for FSLogix storage accounts (≤13 lowercase alphanumeric)\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\nThis object is produced automatically when deploying via the Azure Portal UI."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nAll properties are optional when using the default convention; override only what needs to change.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  environment         — environment token, e.g. \"prod\"\n  freeform1           — static text slot before the workload\n  freeform2           — static text slot after the environment\n  vmsLocationAbbreviation  — override for the VMs region abbreviation\n  cpLocationAbbreviation   — override for the control plane region abbreviation\n  fslogixStoragePrefix     — custom prefix for FSLogix storage accounts (≤13 lowercase alphanumeric)\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\nThis object is produced automatically when deploying via the Azure Portal UI."
       }
     },
     "identitySolution": {
@@ -1167,18 +1167,18 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "2873293242636821433"
+              "templateHash": "2101052914326229644"
             }
           },
           "functions": [
             {
               "namespace": "__bicep",
               "members": {
-                "resolveSegment": {
+                "resolveComponent": {
                   "parameters": [
                     {
                       "type": "string",
-                      "name": "seg"
+                      "name": "comp"
                     },
                     {
                       "type": "string",
@@ -1211,18 +1211,18 @@
                   ],
                   "output": {
                     "type": "string",
-                    "value": "[if(equals(parameters('seg'), 'resourceType'), parameters('rtCode'), if(equals(parameters('seg'), 'purpose'), parameters('component'), if(equals(parameters('seg'), 'location'), parameters('loc'), if(equals(parameters('seg'), 'freeform1'), parameters('ff1'), if(equals(parameters('seg'), 'environment'), parameters('env'), if(equals(parameters('seg'), 'freeform2'), parameters('ff2'), if(equals(parameters('seg'), 'workload'), parameters('workload'), '')))))))]"
+                    "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
                   }
                 },
                 "buildCustomName": {
                   "parameters": [
                     {
                       "type": "array",
-                      "name": "segments"
+                      "name": "components"
                     },
                     {
                       "type": "string",
-                      "name": "sep"
+                      "name": "delimiter"
                     },
                     {
                       "type": "string",
@@ -1255,7 +1255,7 @@
                   ],
                   "output": {
                     "type": "string",
-                    "value": "[join(filter(map(parameters('segments'), lambda('seg', __bicep.resolveSegment(lambdaVariables('seg'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('sep'))]"
+                    "value": "[join(filter(map(parameters('components'), lambda('comp', __bicep.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
                   }
                 },
                 "stripSeps": {
@@ -1286,11 +1286,11 @@
                   "parameters": [
                     {
                       "type": "array",
-                      "name": "segments"
+                      "name": "components"
                     },
                     {
                       "type": "string",
-                      "name": "sep"
+                      "name": "delimiter"
                     },
                     {
                       "type": "string",
@@ -1323,7 +1323,7 @@
                   ],
                   "output": {
                     "type": "string",
-                    "value": "[__bicep.buildCustomName(filter(parameters('segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), parameters('sep'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload'))]"
+                    "value": "[__bicep.buildCustomName(filter(parameters('components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), parameters('delimiter'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload'))]"
                   }
                 }
               }
@@ -1343,7 +1343,7 @@
                 "workload": "avd"
               },
               "metadata": {
-                "description": "Naming convention controlling how all resources are named. The default value produces CAF-compliant names (resourceType-workload-purpose-location). Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
+                "description": "Naming convention controlling how all resources are named. The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention (resourceType-workload-purpose-location). Note: purpose is a FederalAVD addition with no direct CAF equivalent. Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
               }
             },
             "virtualMachinesRegion": {
@@ -1677,8 +1677,8 @@
             "vmsLocAbbr": "[variables('locs')[variables('locationVms')].abbreviation]",
             "locationCP": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('controlPlaneRegion'), 5, max(sub(length(parameters('controlPlaneRegion')), 5), 0)), parameters('controlPlaneRegion'))]",
             "cpLocAbbr": "[variables('locs')[variables('locationCP')].abbreviation]",
-            "cnv_sep": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
-            "cnv_segments": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
+            "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
+            "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
             "cnv_vmsloc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'vmsLocationAbbreviation'), ''))), parameters('namingConvention').vmsLocationAbbreviation, variables('vmsLocAbbr'))]",
             "cnv_cploc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'cpLocationAbbreviation'), ''))), parameters('namingConvention').cpLocationAbbreviation, variables('cpLocAbbr'))]",
             "cnv_rtCodes": "[if(contains(parameters('namingConvention'), 'resourceTypeCodes'), union(variables('abbr'), parameters('namingConvention').resourceTypeCodes), variables('abbr'))]",
@@ -1686,48 +1686,48 @@
             "cnv_env": "[coalesce(tryGet(parameters('namingConvention'), 'environment'), '')]",
             "cnv_ff2": "[coalesce(tryGet(parameters('namingConvention'), 'freeform2'), '')]",
             "cnv_workload": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')]",
-            "nameConvReversed": "[and(not(empty(variables('cnv_segments'))), equals(last(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType'))]",
+            "nameConvReversed": "[and(not(empty(variables('cnv_components'))), equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType'))]",
             "cnv_rtFirst": "[not(variables('nameConvReversed'))]",
-            "resourceGroupDeployment": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, format('{0}-deployment', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "depVirtualMachineNameTemp": "[__bicep.stripSeps(__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), '', parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
+            "resourceGroupDeployment": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}-deployment', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "depVirtualMachineNameTemp": "[__bicep.stripSeps(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), '', parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
             "depVirtualMachineName": "[take(format('{0}{1}', variables('depVirtualMachineNameTemp'), uniqueString(variables('depVirtualMachineNameTemp'))), 15)]",
             "depVirtualMachineDiskName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('cnv_rtCodes').osdisks)]",
             "depVirtualMachineNicName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('cnv_rtCodes').networkInterfaces)]",
-            "resourceGroupOperations": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, 'operations', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "resourceGroupMonitoring": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "uniqueStringOperations": "[take(if(not(contains(variables('cnv_segments'), 'location')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'), parameters('virtualMachinesRegion')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'))), 6)]",
-            "kvBaseSecrets": "[__bicep.kvSanitize(__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
-            "kvBaseEncryption": "[__bicep.kvSanitize(__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
+            "resourceGroupOperations": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'operations', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupMonitoring": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'), parameters('virtualMachinesRegion')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'))), 6)]",
+            "kvBaseSecrets": "[__bicep.kvSanitize(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
+            "kvBaseEncryption": "[__bicep.kvSanitize(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
             "keyVaultNameSecrets": "[take(if(lessOrEquals(length(variables('kvBaseSecrets')), 20), format('{0}-{1}', variables('kvBaseSecrets'), variables('uniqueStringOperations')), variables('kvBaseSecrets')), 24)]",
             "keyVaultNameEncryption": "[take(if(lessOrEquals(length(variables('kvBaseEncryption')), 20), format('{0}-{1}', variables('kvBaseEncryption'), variables('uniqueStringOperations')), variables('kvBaseEncryption')), 24)]",
-            "dataCollectionEndpointName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').dataCollectionEndpoints, '', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "logAnalyticsWorkspaceName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').logAnalyticsWorkspaces, '', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedRegion'))), __bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, 'global-feed', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), '')]",
-            "globalFeedWorkspaceName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').workspaces, 'global-feed', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "resourceGroupControlPlane": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, 'control-plane', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), split(parameters('existingFeedWorkspaceResourceId'), '/')[4])]",
-            "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').workspaces, '', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
-            "desktopApplicationGroupName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').desktopApplicationGroups, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "hostPoolName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').hostPools, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "scalingPlanName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').scalingPlans, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "dataCollectionEndpointName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').dataCollectionEndpoints, '', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "logAnalyticsWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').logAnalyticsWorkspaces, '', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedRegion'))), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'global-feed', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), '')]",
+            "globalFeedWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, 'global-feed', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupControlPlane": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'control-plane', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), split(parameters('existingFeedWorkspaceResourceId'), '/')[4])]",
+            "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, '', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
+            "desktopApplicationGroupName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').desktopApplicationGroups, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "hostPoolName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').hostPools, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "scalingPlanName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').scalingPlans, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "privateEndpointNameConv": "[replace(if(variables('cnv_rtFirst'), 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID', 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE'), 'RESOURCETYPE', variables('cnv_rtCodes').privateEndpoints)]",
             "privateEndpointNICNameConvTemp": "[if(variables('cnv_rtFirst'), format('RESOURCETYPE-{0}', variables('privateEndpointNameConv')), format('{0}-RESOURCETYPE', variables('privateEndpointNameConv')))]",
             "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('cnv_rtCodes').networkInterfaces)]",
-            "recoveryServicesVaultNameVMs": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').recoveryServicesVaults, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "recoveryServicesVaultNameFSLogix": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').recoveryServicesVaults, 'files', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "userAssignedIdentityNameConv": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-TOKEN', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "resourceGroupHosts": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, format('{0}-hosts', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "availabilitySetNameConv": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').availabilitySets, format('{0}-##', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "recoveryServicesVaultNameVMs": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').recoveryServicesVaults, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "recoveryServicesVaultNameFSLogix": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').recoveryServicesVaults, 'files', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "userAssignedIdentityNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-TOKEN', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupHosts": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}-hosts', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "availabilitySetNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').availabilitySets, format('{0}-##', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "virtualMachineNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').virtualMachines), format('SHNAME-{0}', variables('cnv_rtCodes').virtualMachines))]",
             "diskNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').osdisks), format('SHNAME-{0}', variables('cnv_rtCodes').osdisks))]",
             "networkInterfaceNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').networkInterfaces), format('SHNAME-{0}', variables('cnv_rtCodes').networkInterfaces))]",
-            "diskAccessName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').diskAccesses, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "diskEncryptionSetNameConv": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').diskEncryptionSets, format('{0}-TOKEN', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "diskAccessName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').diskAccesses, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "diskEncryptionSetNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, format('{0}-TOKEN', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "diskEncryptionSetNameConfidentialVMs": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', 'confvm-customer-keys')]",
             "diskEncryptionSetNameCustomerManaged": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', 'customer-keys')]",
             "diskEncryptionSetNamePlatformAndCustomerManaged": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', 'platform-and-customer-keys')]",
-            "resourceGroupStorage": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, format('{0}-storage', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "netAppAccountName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').netAppAccounts, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "netAppCapacityPoolName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').netAppCapacityPools, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupStorage": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}-storage', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "netAppAccountName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').netAppAccounts, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "netAppCapacityPoolName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').netAppCapacityPools, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "uniqueStringStorage": "[take(uniqueString(subscription().subscriptionId, variables('resourceGroupStorage')), 6)]",
             "fslogixStorageAccountNamePrefix": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'fslogixStoragePrefix'), ''))), take(toLower(replace(parameters('namingConvention').fslogixStoragePrefix, '-', '')), 13), format('fslogix{0}', variables('uniqueStringStorage')))]",
             "encryptionKeyNameFSLogix": "[format('{0}-encryption-key-{1}##', parameters('identifier'), variables('fslogixStorageAccountNamePrefix'))]",

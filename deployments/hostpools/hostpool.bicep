@@ -21,14 +21,15 @@ Valid values are 0-99. If not provided, the host pool will be created without an
 param index int = -1
 
 @description('''Optional. Naming convention controlling how all resources in this deployment are named.
-The default value produces Cloud Adoption Framework (CAF)-compliant names in the format: resourceType-workload-purpose-location.
+The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
+Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
 All properties are optional when using the default convention; override only what needs to change.
 Key properties:
-  components          — ordered array of name segments, e.g. ["resourceType","workload","purpose","location"]
-  delimiter           — separator between segments, e.g. "-"
+  components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
+  delimiter           — character inserted between components, e.g. "-"
   workload            — solution identifier inserted into names, e.g. "avd"
-  freeform1           — static text slot before the workload
   environment         — environment token, e.g. "prod"
+  freeform1           — static text slot before the workload
   freeform2           — static text slot after the environment
   vmsLocationAbbreviation  — override for the VMs region abbreviation
   cpLocationAbbreviation   — override for the control plane region abbreviation

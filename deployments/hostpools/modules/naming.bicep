@@ -7,7 +7,7 @@
 // Called by: deployments/hostpools/hostpool.bicep
 // ============================================================================
 
-@description('Naming convention controlling how all resources are named. The default value produces CAF-compliant names (resourceType-workload-purpose-location). Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.')
+@description('Naming convention controlling how all resources are named. The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention (resourceType-workload-purpose-location). Note: purpose is a FederalAVD addition with no direct CAF equivalent. Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.')
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -50,8 +50,8 @@ var locationCP  = startsWith(cloud, 'us')
 var cpLocAbbr   = locs[locationCP].abbreviation
 
 // ── Naming convention components ──────────────────────────────────────────────
-var cnv_sep      = namingConvention.?delimiter    ?? '-'
-var cnv_segments = namingConvention.?components   ?? ['resourceType', 'workload', 'purpose', 'location']
+var cnv_delimiter      = namingConvention.?delimiter    ?? '-'
+var cnv_components = namingConvention.?components   ?? ['resourceType', 'workload', 'purpose', 'location']
 var cnv_vmsloc   = !empty(namingConvention.?vmsLocationAbbreviation ?? '')
   ? namingConvention.vmsLocationAbbreviation : vmsLocAbbr
 var cnv_cploc    = !empty(namingConvention.?cpLocationAbbreviation  ?? '')
@@ -65,23 +65,23 @@ var cnv_ff2      = namingConvention.?freeform2    ?? ''
 var cnv_workload = !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 
 // ── User-defined functions ────────────────────────────────────────────────────
-func resolveSegment(seg string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  seg == 'resourceType' ? rtCode
-    : seg == 'purpose'     ? component
-    : seg == 'location'    ? loc
-    : seg == 'freeform1'   ? ff1
-    : seg == 'environment' ? env
-    : seg == 'freeform2'   ? ff2
-    : seg == 'workload'    ? workload
+func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  comp == 'resourceType' ? rtCode
+    : comp == 'purpose'     ? component
+    : comp == 'location'    ? loc
+    : comp == 'freeform1'   ? ff1
+    : comp == 'environment' ? env
+    : comp == 'freeform2'   ? ff2
+    : comp == 'workload'    ? workload
     : ''
 
-func buildCustomName(segments array, sep string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   join(
     filter(
-      map(segments, seg => resolveSegment(seg, rtCode, component, loc, ff1, env, ff2, workload)),
+      map(components, comp => resolveComponent(comp, rtCode, component, loc, ff1, env, ff2, workload)),
       s => !empty(s)
     ),
-    sep
+    delimiter
   )
 
 func stripSeps(s string) string =>
@@ -91,35 +91,35 @@ func stripSeps(s string) string =>
 func kvSanitize(s string) string =>
   replace(replace(s, '_', '-'), '.', '-')
 
-func cnv(segments array, sep string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  buildCustomName(filter(segments, s => s != 'none'), sep, rtCode, component, loc, ff1, env, ff2, workload)
+func cnv(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  buildCustomName(filter(components, s => s != 'none'), delimiter, rtCode, component, loc, ff1, env, ff2, workload)
 
 // ── Derived flags ─────────────────────────────────────────────────────────────
-// RT is considered last only when resourceType is explicitly the final non-'none' segment.
-var nameConvReversed = !empty(cnv_segments) && last(filter(cnv_segments, s => s != 'none')) == 'resourceType'
+// RT is considered last only when resourceType is explicitly the final non-'none' component.
+var nameConvReversed = !empty(cnv_components) && last(filter(cnv_components, s => s != 'none')) == 'resourceType'
 var cnv_rtFirst      = !nameConvReversed
 
 // ── Temporary Deployment Resources ───────────────────────────────────────────
-var resourceGroupDeployment    = cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, '${identifier}-deployment', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var depVirtualMachineNameTemp  = stripSeps(cnv(cnv_segments, cnv_sep, '', identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
+var resourceGroupDeployment    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, '${identifier}-deployment', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var depVirtualMachineNameTemp  = stripSeps(cnv(cnv_components, cnv_delimiter, '', identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
 var depVirtualMachineName      = take('${depVirtualMachineNameTemp}${uniqueString(depVirtualMachineNameTemp)}', 15)
 var depVirtualMachineDiskName  = '${depVirtualMachineName}-${cnv_rtCodes.osdisks}'
 var depVirtualMachineNicName   = '${depVirtualMachineName}-${cnv_rtCodes.networkInterfaces}'
 
 // ── Operations / Monitoring Resource Groups ───────────────────────────────────
-var resourceGroupOperations = cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'operations', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var resourceGroupMonitoring = cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'monitoring', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupOperations = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'operations', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupMonitoring = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'monitoring', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // Seed matches keyVaults.bicep exactly.
 var uniqueStringOperations = take(
-  !contains(cnv_segments, 'location')
+  !contains(cnv_components, 'location')
     ? uniqueString(subscription().subscriptionId, resourceGroupOperations, virtualMachinesRegion)
     : uniqueString(subscription().subscriptionId, resourceGroupOperations),
   6
 )
 
-var kvBaseSecrets    = kvSanitize(cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
-var kvBaseEncryption = kvSanitize(cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
+var kvBaseSecrets    = kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
+var kvBaseEncryption = kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
 
 var keyVaultNameSecrets = take(
   length(kvBaseSecrets) <= 20
@@ -135,27 +135,27 @@ var keyVaultNameEncryption = take(
 )
 
 // ── Monitoring ────────────────────────────────────────────────────────────────
-var dataCollectionEndpointName = cnv(cnv_segments, cnv_sep, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var logAnalyticsWorkspaceName  = cnv(cnv_segments, cnv_sep, cnv_rtCodes.logAnalyticsWorkspaces,  '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var dataCollectionEndpointName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var logAnalyticsWorkspaceName  = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.logAnalyticsWorkspaces,  '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Global Feed Resources ─────────────────────────────────────────────────────
 var globalFeedResourceGroupName = !empty(globalFeedRegion)
-  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : ''
-var globalFeedWorkspaceName = cnv(cnv_segments, cnv_sep, cnv_rtCodes.workspaces, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Control Plane Shared Resources ───────────────────────────────────────────
 var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
-  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'control-plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control-plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : split(existingFeedWorkspaceResourceId, '/')[4]
 var workspaceName = empty(existingFeedWorkspaceResourceId)
-  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : last(split(existingFeedWorkspaceResourceId, '/'))
 
 // ── Control Plane HostPool Resources ──────────────────────────────────────────
-var desktopApplicationGroupName = cnv(cnv_segments, cnv_sep, cnv_rtCodes.desktopApplicationGroups, identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var hostPoolName                = cnv(cnv_segments, cnv_sep, cnv_rtCodes.hostPools,                 identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var scalingPlanName             = cnv(cnv_segments, cnv_sep, cnv_rtCodes.scalingPlans,              identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var desktopApplicationGroupName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.desktopApplicationGroups, identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var hostPoolName                = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.hostPools,                 identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var scalingPlanName             = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.scalingPlans,              identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Common HostPool Naming Conventions ───────────────────────────────────────
 var privateEndpointNameConv = replace(
@@ -168,27 +168,27 @@ var privateEndpointNICNameConvTemp = cnv_rtFirst
   : '${privateEndpointNameConv}-RESOURCETYPE'
 var privateEndpointNICNameConv = replace(privateEndpointNICNameConvTemp, 'RESOURCETYPE', cnv_rtCodes.networkInterfaces)
 
-var recoveryServicesVaultNameVMs     = cnv(cnv_segments, cnv_sep, cnv_rtCodes.recoveryServicesVaults,  identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var recoveryServicesVaultNameFSLogix = cnv(cnv_segments, cnv_sep, cnv_rtCodes.recoveryServicesVaults,  'files',    cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var userAssignedIdentityNameConv     = cnv(cnv_segments, cnv_sep, cnv_rtCodes.userAssignedIdentities, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var recoveryServicesVaultNameVMs     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var recoveryServicesVaultNameFSLogix = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  'files',    cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var userAssignedIdentityNameConv     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.userAssignedIdentities, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Compute Resources ─────────────────────────────────────────────────────────
-var resourceGroupHosts    = cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups,   '${identifier}-hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var availabilitySetNameConv = cnv(cnv_segments, cnv_sep, cnv_rtCodes.availabilitySets, '${identifier}-##',   cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupHosts    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,   '${identifier}-hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var availabilitySetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.availabilitySets, '${identifier}-##',   cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var virtualMachineNameConv  = cnv_rtFirst ? '${cnv_rtCodes.virtualMachines}-SHNAME'  : 'SHNAME-${cnv_rtCodes.virtualMachines}'
 var diskNameConv            = cnv_rtFirst ? '${cnv_rtCodes.osdisks}-SHNAME'          : 'SHNAME-${cnv_rtCodes.osdisks}'
 var networkInterfaceNameConv = cnv_rtFirst ? '${cnv_rtCodes.networkInterfaces}-SHNAME' : 'SHNAME-${cnv_rtCodes.networkInterfaces}'
 
-var diskAccessName    = cnv(cnv_segments, cnv_sep, cnv_rtCodes.diskAccesses,      identifier,            cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var diskEncryptionSetNameConv = cnv(cnv_segments, cnv_sep, cnv_rtCodes.diskEncryptionSets, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var diskAccessName    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskAccesses,      identifier,            cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var diskEncryptionSetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskEncryptionSets, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var diskEncryptionSetNameConfidentialVMs             = replace(diskEncryptionSetNameConv, 'TOKEN', 'confvm-customer-keys')
 var diskEncryptionSetNameCustomerManaged             = replace(diskEncryptionSetNameConv, 'TOKEN', 'customer-keys')
 var diskEncryptionSetNamePlatformAndCustomerManaged  = replace(diskEncryptionSetNameConv, 'TOKEN', 'platform-and-customer-keys')
 
 // ── Storage Resources ─────────────────────────────────────────────────────────
-var resourceGroupStorage     = cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups,      '${identifier}-storage', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var netAppAccountName        = cnv(cnv_segments, cnv_sep, cnv_rtCodes.netAppAccounts,        identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var netAppCapacityPoolName   = cnv(cnv_segments, cnv_sep, cnv_rtCodes.netAppCapacityPools,   identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupStorage     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,      '${identifier}-storage', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var netAppAccountName        = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.netAppAccounts,        identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var netAppCapacityPoolName   = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.netAppCapacityPools,   identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // FSLogix storage account naming (max 15 chars for domain-join compatibility)
 var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)

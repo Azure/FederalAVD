@@ -100,10 +100,11 @@ param tags object = {}
 // ── Non-Specified Values ───────────────────────────────────────────────────────
 
 @description('''Optional. Naming convention controlling how all resources in this deployment are named.
-The default value produces Cloud Adoption Framework (CAF)-compliant names in the format: resourceType-workload-purpose-location.
+The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
+Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
 Key properties:
-  components          — ordered array of name segments, e.g. ["resourceType","workload","purpose","location"]
-  delimiter           — separator between segments, e.g. "-"
+  components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
+  delimiter           — character inserted between components, e.g. "-"
   workload            — solution identifier inserted into names, e.g. "avd"
   freeform1, environment, freeform2 — optional static/context tokens
   locationAbbreviation — override for the region abbreviation
@@ -140,39 +141,37 @@ var locationAbbreviation = locations[varLocation].abbreviation
 // Default: Cloud Adoption Framework (CAF) — resourceType-workload-purpose-location.
 // Override any component via the namingConvention parameter.
 
-var cnv_sep      = namingConvention.?delimiter  ?? '-'
+var cnv_delimiter      = namingConvention.?delimiter  ?? '-'
 var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
   ? namingConvention.locationAbbreviation
   : locationAbbreviation
-var cnv_rtCodes  = contains(namingConvention, 'resourceTypeCodes')
-  ? namingConvention.resourceTypeCodes
-  : {
-      resourceGroups: resourceAbbreviations.resourceGroups
-      keyVaults: resourceAbbreviations.keyVaults
-      privateEndpoints: resourceAbbreviations.privateEndpoints
-      networkInterfaces: resourceAbbreviations.networkInterfaces
-    }
-var cnv_segments = namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
+var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
+  resourceGroups: resourceAbbreviations.resourceGroups
+  keyVaults: resourceAbbreviations.keyVaults
+  privateEndpoints: resourceAbbreviations.privateEndpoints
+  networkInterfaces: resourceAbbreviations.networkInterfaces
+}
+var cnv_components = namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
 // RT is last only when resourceType is explicitly the last non-'none' component.
-var cnv_rtFirst  = !empty(cnv_segments) ? (last(filter(cnv_segments, s => s != 'none')) != 'resourceType') : true
+var cnv_rtFirst  = !empty(cnv_components) ? (last(filter(cnv_components, s => s != 'none')) != 'resourceType') : true
 
-func resolveSegment(seg string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  seg == 'resourceType' ? rtCode
-    : seg == 'purpose' ? component
-    : seg == 'location'  ? loc
-    : seg == 'freeform1'     ? ff1
-    : seg == 'environment'   ? env
-    : seg == 'freeform2' ? ff2
-    : seg == 'workload'  ? workload
+func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  comp == 'resourceType' ? rtCode
+    : comp == 'purpose' ? component
+    : comp == 'location'  ? loc
+    : comp == 'freeform1'     ? ff1
+    : comp == 'environment'   ? env
+    : comp == 'freeform2' ? ff2
+    : comp == 'workload'  ? workload
     : ''
 
-func buildCustomName(segments array, sep string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   join(
     filter(
-      map(segments, seg => resolveSegment(seg, rtCode, component, loc, ff1, env, ff2, workload)),
+      map(components, comp => resolveComponent(comp, rtCode, component, loc, ff1, env, ff2, workload)),
       s => !empty(s)
     ),
-    sep
+    delimiter
   )
 
 // Key Vault names allow hyphens but not underscores or dots — replace them.
@@ -180,8 +179,8 @@ func kvSanitize(s string) string =>
   replace(replace(s, '_', '-'), '.', '-')
 
 var customRgName = buildCustomName(
-  filter(cnv_segments, s => s != 'none'),
-  cnv_sep,
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
   cnv_rtCodes.resourceGroups,
   identifier,
   cnv_loc,
@@ -192,7 +191,7 @@ var customRgName = buildCustomName(
 )
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Resource group and resource naming now always use buildCustomName via cnv_segments.
+// Resource group and resource naming now always use buildCustomName via cnv_components.
 
 // Private endpoint naming conventions — follows the same resource-type-first/last convention as all other resources
 var privateEndpointNameConv = cnv_rtFirst
@@ -205,11 +204,11 @@ var privateEndpointNICNameConv = cnv_rtFirst
 var operationsResourceGroupName = customRgName
 
 // Stable 6-char unique string seeded on subscription + resource group name.
-// Add location to the seed when custom naming is active but the convention has no location segment,
+// Add location to the seed when the convention has no location component,
 // so deployments to different regions don't produce identical Key Vault names.
 // CAF fallback already embeds the location abbreviation in the name itself.
 var uniqueStringOperations = take(
-  !contains(cnv_segments, 'location')
+  !contains(cnv_components, 'location')
     ? uniqueString(subscription().subscriptionId, operationsResourceGroupName, location)
     : uniqueString(subscription().subscriptionId, operationsResourceGroupName),
   6
@@ -221,8 +220,8 @@ var uniqueStringOperations = take(
 //   base len <= 20  → append '-{6chars}'  (at least 3 unique chars after the delimiter)
 //   base len 21-24  → use base only; appending a suffix would leave fewer than 3 unique chars
 //   base len > 24   → still use take(..., 24); portal blocks deployment via the Error infobox
-var kvBaseSecrets    = kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'))
-var kvBaseEncryption = kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'))
+var kvBaseSecrets    = kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'sec', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'))
+var kvBaseEncryption = kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'))
 var secretsKeyVaultName = take(
   length(kvBaseSecrets) <= 20
     ? '${kvBaseSecrets}-${uniqueStringOperations}'
