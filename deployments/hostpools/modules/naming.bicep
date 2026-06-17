@@ -118,31 +118,22 @@ var uniqueStringOperations = take(
   6
 )
 
-var kvBaseSecrets    = kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
-var kvBaseEncryption = kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
-
-var keyVaultNameSecrets = take(
-  length(kvBaseSecrets) <= 20
-    ? '${kvBaseSecrets}-${uniqueStringOperations}'
-    : kvBaseSecrets,
-  24
-)
-var keyVaultNameEncryption = take(
-  length(kvBaseEncryption) <= 20
-    ? '${kvBaseEncryption}-${uniqueStringOperations}'
-    : kvBaseEncryption,
-  24
-)
+// Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
+// kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
+// kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
+var keyVaultNameSecrets    = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var keyVaultNameEncryption = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
 
 // ── Monitoring ────────────────────────────────────────────────────────────────
 var dataCollectionEndpointName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var logAnalyticsWorkspaceName  = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.logAnalyticsWorkspaces,  '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Global Feed Resources ─────────────────────────────────────────────────────
+// Global feed is a single shared resource — no location component in its name.
 var globalFeedResourceGroupName = !empty(globalFeedRegion)
-  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'global-feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : ''
-var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global-feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Control Plane Shared Resources ───────────────────────────────────────────
 var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
@@ -191,7 +182,14 @@ var netAppAccountName        = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.ne
 var netAppCapacityPoolName   = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.netAppCapacityPools,   identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // FSLogix storage account naming (max 15 chars for domain-join compatibility)
-var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)
+// Add location to the seed when it is not in the naming convention components,
+// matching the same logic used for Key Vault unique strings.
+var uniqueStringStorage = take(
+  !contains(cnv_components, 'location')
+    ? uniqueString(subscription().subscriptionId, resourceGroupStorage, virtualMachinesRegion)
+    : uniqueString(subscription().subscriptionId, resourceGroupStorage),
+  6
+)
 var fslogixStorageAccountNamePrefix = !empty(namingConvention.?fslogixStoragePrefix ?? '')
   ? take(toLower(replace(namingConvention.fslogixStoragePrefix, '-', '')), 13)
   : 'fslogix${uniqueStringStorage}'

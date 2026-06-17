@@ -214,27 +214,12 @@ var uniqueStringOperations = take(
   6
 )
 
-// Key Vault names are capped at 24 chars to satisfy Azure naming constraints.
-//
-// Unique suffix behaviour:
-//   base len <= 20  → append '-{6chars}'  (at least 3 unique chars after the delimiter)
-//   base len 21-24  → use base only; appending a suffix would leave fewer than 3 unique chars
-//   base len > 24   → still use take(..., 24); portal blocks deployment via the Error infobox
-var kvBaseSecrets    = kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'sec', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'))
-var kvBaseEncryption = kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'))
-var secretsKeyVaultName = take(
-  length(kvBaseSecrets) <= 20
-    ? '${kvBaseSecrets}-${uniqueStringOperations}'
-    : kvBaseSecrets,
-  24
-)
+// Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
+// kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
+// kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
+var secretsKeyVaultName    = take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
 
-var encryptionKeyVaultName = take(
-  length(kvBaseEncryption) <= 20
-    ? '${kvBaseEncryption}-${uniqueStringOperations}'
-    : kvBaseEncryption,
-  24
-)
+var encryptionKeyVaultName = take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 

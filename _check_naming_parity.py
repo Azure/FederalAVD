@@ -84,10 +84,8 @@ def compute_hostpool_names(convention: dict, location_vms: str, location_cp: str
         if 'location' not in segments \
         else arm_unique_string(SUBSCRIPTION_ID, rg_ops)[:6]
 
-    kv_base_sec = kv_sanitize(cnv(rt_codes['keyVaults'], 'sec', cnv_vmsloc))
-    kv_base_enc = kv_sanitize(cnv(rt_codes['keyVaults'], 'enc', cnv_vmsloc))
-    kv_sec = (f'{kv_base_sec}-{unique_ops}' if len(kv_base_sec) <= 20 else kv_base_sec)[:24]
-    kv_enc = (f'{kv_base_enc}-{unique_ops}' if len(kv_base_enc) <= 20 else kv_base_enc)[:24]
+    kv_sec = kv_sanitize(cnv(rt_codes['keyVaults'], f'sec-{unique_ops}', cnv_vmsloc))[:24]
+    kv_enc = kv_sanitize(cnv(rt_codes['keyVaults'], f'enc-{unique_ops}', cnv_vmsloc))[:24]
 
     pe = f'{rt_codes["privateEndpoints"]}-RESOURCE-SUBRESOURCE-VNETID' if rt_first \
          else f'RESOURCE-SUBRESOURCE-VNETID-{rt_codes["privateEndpoints"]}'
@@ -100,7 +98,6 @@ def compute_hostpool_names(convention: dict, location_vms: str, location_cp: str
         'encryptionKV':      kv_enc,
         'peNameConv':        pe,
         'peNicNameConv':     pe_nic,
-        '_kvBaseSec':        kv_base_sec,
         '_uniqueOps':        unique_ops,
     }
 
@@ -143,12 +140,10 @@ def compute_keyvaults_names(convention: dict, location: str):
         if 'location' not in segments \
         else arm_unique_string(SUBSCRIPTION_ID, rg_ops)[:6]
 
-    kv_base_sec = kv_sanitize(build_custom_name(segs_no_none, sep, rt_codes['keyVaults'], 'sec',
-        cnv_loc, ff1, env, ff2, convention.get('workload') or 'avd'))
-    kv_base_enc = kv_sanitize(build_custom_name(segs_no_none, sep, rt_codes['keyVaults'], 'enc',
-        cnv_loc, ff1, env, ff2, convention.get('workload') or 'avd'))
-    kv_sec = (f'{kv_base_sec}-{unique_ops}' if len(kv_base_sec) <= 20 else kv_base_sec)[:24]
-    kv_enc = (f'{kv_base_enc}-{unique_ops}' if len(kv_base_enc) <= 20 else kv_base_enc)[:24]
+    kv_sec = kv_sanitize(build_custom_name(segs_no_none, sep, rt_codes['keyVaults'], f'sec-{unique_ops}',
+        cnv_loc, ff1, env, ff2, convention.get('workload') or 'avd'))[:24]
+    kv_enc = kv_sanitize(build_custom_name(segs_no_none, sep, rt_codes['keyVaults'], f'enc-{unique_ops}',
+        cnv_loc, ff1, env, ff2, convention.get('workload') or 'avd'))[:24]
 
     pe = f'{rt_codes["privateEndpoints"]}-RESOURCE-SUBRESOURCE-VNETID' if rt_first \
          else f'RESOURCE-SUBRESOURCE-VNETID-{rt_codes["privateEndpoints"]}'
@@ -161,7 +156,6 @@ def compute_keyvaults_names(convention: dict, location: str):
         'encryptionKV':  kv_enc,
         'peNameConv':    pe,
         'peNicNameConv': pe_nic,
-        '_kvBaseSec':    kv_base_sec,
         '_uniqueOps':    unique_ops,
     }
 

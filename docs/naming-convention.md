@@ -57,24 +57,27 @@ When `namingConvention` is left at its default value, FederalAVD uses this patte
 
 This follows the CAF recommendation of *abbreviation → workload → component → region*. It is CAF-**aligned** rather than a strict implementation: CAF does not define a `purpose` component, but FederalAVD adds it to disambiguate resources of the same type within a deployment (e.g., separate key vaults for secrets vs. encryption, or multiple host pool resource groups by identifier).
 
-### Default name examples (identifier = `avd`, region = `eastus` → `use`)
+### Default name examples (identifier = `desktop`, index = `1`, region = `eastus` → `use`)
 
 | Resource | Default name |
 |----------|-------------|
 | Resource Group (Control Plane) | `rg-avd-control-plane-use` |
-| Resource Group (Hosts) | `rg-avd-avd-hosts-use` |
+| Resource Group (Hosts) | `rg-avd-desktop-01-hosts-use` |
 | Resource Group (Operations) | `rg-avd-operations-use` |
-| Host Pool | `vdpool-avd-use` |
-| Desktop Application Group | `vddag-avd-use` |
+| Host Pool | `vdpool-avd-desktop-01-use` |
+| Desktop Application Group | `vddag-avd-desktop-01-use` |
 | AVD Workspace | `vdws-avd-use` |
-| Scaling Plan | `vdscaling-avd-use` |
+| Scaling Plan | `vdscaling-avd-desktop-01-use` |
 | Log Analytics Workspace | `law-avd-use` |
-| Key Vault (Secrets) | `kv-avd-sec-use-{6-char suffix}` |
-| Key Vault (Encryption) | `kv-avd-enc-use-{6-char suffix}` |
-| Availability Set | `as-avd-##-use` |
+| Key Vault (Secrets) | `kv-avd-sec-{unique}-use` |
+| Key Vault (Encryption) | `kv-avd-enc-{unique}-use` |
+| Global Feed Workspace | `ws-avd-global-feed` |
+| Availability Set | `as-avd-desktop-01-##-use` |
 | VM naming pattern | `vm-SHNAME` |
 | OS Disk naming pattern | `osdisk-SHNAME` |
 | NIC naming pattern | `nic-SHNAME` |
+
+> The `workload` component (`avd`) and the `purpose` component (`desktop-01`) are both present in the name. When `identifier` equals the `workload` value (e.g., both are `avd`), the workload token appears twice — this is intentional and consistent.
 
 Where `SHNAME` is the session host name token and `##` is the availability set index token, both resolved at runtime by the session host deployment module.
 
@@ -243,9 +246,10 @@ You never set `purpose` manually. The Bicep engine assigns the correct purpose s
 | RG (Storage) | `{identifier}-storage` |
 | RG (Operations) | `operations` |
 | RG (Monitoring) | `monitoring` |
-| Key Vault (Secrets) | `sec` |
-| Key Vault (Encryption) | `enc` |
-| KV unique suffix | 6-char `uniqueString()` appended after assembly |
+| Key Vault (Secrets) | `sec-{unique}` — the 6-char `uniqueString()` is **embedded in the purpose slot** |
+| Key Vault (Encryption) | `enc-{unique}` — same; e.g., `enc-d527e9` |
+
+> **Why embed in purpose?** Embedding the unique suffix in the purpose slot ensures it always appears in a predictable position relative to the other components — before the `location` component in RT-first convention, before the `resourceType` suffix in RT-last. This matches the expected reading order of the name.
 | Availability Set | `{identifier}-##` |
 | Disk Encryption Set | `{identifier}-customer-keys` / `{identifier}-platform-and-customer-keys` |
 | RSV (VMs) | `{identifier}` |
@@ -266,19 +270,19 @@ Some Azure resource types impose naming constraints that override the standard c
 
 ### Key Vault — 24-character limit
 
-Key Vault names are capped at **24 characters**. The engine uses a two-step approach to balance uniqueness with name length:
+Key Vault names are capped at **24 characters**. The unique suffix is **embedded in the `purpose` slot** rather than appended after assembly. This guarantees a consistent position for the unique token in the final name regardless of the component ordering:
 
-1. Assembles the base name from the convention (e.g., `kv-avd-sec-use`).
-2. **If the base name is ≤ 20 characters:** appends a 6-character `uniqueString()` suffix separated by `-` (e.g., `kv-avd-sec-use-a3b4c5`), then truncates to 24 characters with `take(name, 24)` — guaranteeing at least 3 unique characters.
-3. **If the base name is 21–24 characters:** uses the base name as-is (no suffix) to avoid truncating to fewer than 3 meaningful unique characters. A portal warning is shown.
-4. **If the base name is > 24 characters:** the base is still truncated to 24 characters, and a portal error blocks deployment.
+- RT-first default: `kv-avd-sec-d527e9-use` (unique is the 3rd component, before location)
+- RT-last: `avd-sec-d527e9-use2-kv` (unique is part of the 2nd component, before location and RT)
+
+The full name is assembled from `purpose = 'sec-{unique}'` or `'enc-{unique}'`, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. For longer conventions (e.g., with a `freeform1` org prefix), the name may be truncated — the portal shows a warning and a live name preview.
 
 The `uniqueString()` seed is:
 
-- With a `location` component: `uniqueString(subscriptionId, resourceGroupName)`
-- Without a `location` component: `uniqueString(subscriptionId, resourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
+- With a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName)`
+- Without a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
 
-> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `keyVaults.bicep` deployment when the `identifier` is `operations`. Deploy `keyVaults.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
+> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `keyVaults.bicep` deployment. Deploy `keyVaults.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
 
 ### Storage Account — alphanumeric only, max 24
 
@@ -413,13 +417,13 @@ The add-on Portal UIs show a **live preview** of the inferred names in the *Adva
 
 ### Example 1 — CAF default
 
-Do nothing. Deploy using the Portal or parameter files without overriding `namingConvention`. Resources are named:
+Do nothing. Deploy using the Portal or parameter files without overriding `namingConvention`. With `identifier = 'desktop'`, `index = 1`, `region = 'eastus'`, resources are named:
 
 ```
-vdpool-avd-use
+vdpool-avd-desktop-01-use
 rg-avd-control-plane-use
-kv-avd-sec-use-{unique}
-vm-SHNAME  →  vm-avdhost001
+kv-avd-sec-d527e9-use
+vm-SHNAME  →  vm-desktophost001
 ```
 
 ### Example 2 — Standard custom convention, RT-first
@@ -435,12 +439,12 @@ Four segments, RT first, workload `avd`, environment `prod`:
 }
 ```
 
-Results (identifier = `desktop-01`, region = `eastus`):
+Results (identifier = `desktop`, index = `1`, region = `eastus`):
 
 ```
 vdpool-avd-desktop-01-use
 rg-avd-desktop-01-hosts-use
-kv-avd-sec-use-{unique}
+kv-avd-sec-d527e9-use
 vm-SHNAME  →  vm-desktophost001
 ```
 
@@ -460,7 +464,7 @@ Results (identifier = `prod`, region = `eastus2`):
 ```
 avd-prod-use2-vdpool
 avd-prod-use2-vddag
-avd-sec-use2-kv-{unique}
+avd-sec-75d05c-use2-kv
 SHNAME-vm  →  avdhost001-vm
 ```
 
@@ -481,9 +485,11 @@ Results (identifier = `avd`, region = `eastus`):
 ```
 contoso-avd-avd-use-vdpool
 contoso-avd-control-plane-use-rg
-contoso-avd-sec-use-kv
+contoso-avd-sec-9ef5b1-u
 SHNAME-vm  →  avdhost001-vm
 ```
+
+> **Note:** The KV name is truncated to 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). The `location` and `resourceType` suffix are lost to truncation. If you use long org prefixes, consider keeping `location` before `resourceType` and keeping the total component length short.
 
 ### Example 5 — Underscore delimiter (no hyphens in names)
 
@@ -501,9 +507,11 @@ Results (identifier = `avd`, region = `westus2`):
 ```
 vdpool_avd_prod_avd_usw2
 rg_avd_prod_control-plane_usw2
-kv_avd_prod_sec_usw2_{unique}
+kv-avd-prod-sec-f0485a-u
 vm-SHNAME  (VM/disk/NIC always use hyphens in the SHNAME pattern)
 ```
+
+> **Note:** `kvSanitize()` converts underscores and dots to hyphens in Key Vault names, so the KV name always uses `-` regardless of the convention delimiter. The KV name is also truncated to 24 characters here.
 
 ### Example 6 — Abbreviation override
 
@@ -523,8 +531,8 @@ Override `keyVaults` abbreviation to `vault` for an organisation standard:
 Results:
 
 ```
-vault-avd-sec-use-{unique}    ← instead of kv-avd-sec-use-{unique}
-vdpool-avd-use                ← other types unchanged
+vault-avd-sec-d527e9-use    ← instead of kv-avd-sec-d527e9-use
+vdpool-avd-desktop-01-use   ← other types unchanged
 ```
 
 ---
@@ -548,4 +556,4 @@ The 8 scenarios cover:
 
 ---
 
-*Last updated: 2026-06-16*
+*Last updated: 2026-06-17*
