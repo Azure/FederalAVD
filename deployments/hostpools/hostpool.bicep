@@ -7,11 +7,12 @@ targetScope = 'subscription'
 // Basics
 
 @maxLength(9)
-@description('''Required. Identifier used to describe the persona of the hostpool(s).
-This identifier combined with the index parameter (when provided) is used to create the host pool, desktop application group,
-and other host pool specific resource names.
+@description('''Required. Short name identifying the host pool persona (e.g. "finance", "developers"). Max 9 characters.
+Used as the primary component of all resource names in this deployment. Combined with the index parameter
+(when provided) to form the base name for the host pool, desktop application group, session hosts, and all
+associated resources.
 ''')
-param identifier string = ''
+param identifier string
 
 @description('''Optional. An index value used to distinquish each host pool with the same persona identifier.
 This can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.
@@ -19,22 +20,22 @@ Valid values are 0-99. If not provided, the host pool will be created without an
 ''')
 param index int = -1
 
-@description('''Optional. Custom naming convention for all resources in this deployment.
-When provided, all resource names are assembled from the ordered components array instead of the CAF
-defaults. The object shape matches the output of the tagsAndNaming step in the Portal UI.
+@description('''Optional. Naming convention controlling how all resources in this deployment are named.
+The default value produces Cloud Adoption Framework (CAF)-compliant names in the format: resourceType-workload-purpose-location.
+All properties are optional when using the default convention; override only what needs to change.
 Key properties:
-  components          (required) — ordered array of segment names, e.g. ["freeform1","workload","resourceType","purpose","location"]
-  delimiter           (required) — separator character, e.g. "-"
-  freeform1           (optional) — static text slot 1
-  environment         (optional) — environment token, e.g. "prod"
-  freeform2           (optional) — static text slot 2
-  workload            (optional) — solution name, e.g. "avd"
-  vmsLocationAbbreviation  (optional) — override for the VMs region abbreviation
-  cpLocationAbbreviation   (optional) — override for the control plane region abbreviation
-  fslogixStoragePrefix     (optional) — custom prefix for FSLogix storage accounts (≤13 lowercase alphanum)
-  resourceTypeCodes   (optional) — object with per-resource-type abbreviation overrides
-Pass an empty object ({}) or omit to use CAF defaults.''')
-param customNamingConvention object = {
+  components          — ordered array of name segments, e.g. ["resourceType","workload","purpose","location"]
+  delimiter           — separator between segments, e.g. "-"
+  workload            — solution identifier inserted into names, e.g. "avd"
+  freeform1           — static text slot before the workload
+  environment         — environment token, e.g. "prod"
+  freeform2           — static text slot after the environment
+  vmsLocationAbbreviation  — override for the VMs region abbreviation
+  cpLocationAbbreviation   — override for the control plane region abbreviation
+  fslogixStoragePrefix     — custom prefix for FSLogix storage accounts (≤13 lowercase alphanumeric)
+  resourceTypeCodes   — object with per-resource-type abbreviation overrides
+This object is produced automatically when deploying via the Azure Portal UI.''')
+param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -846,7 +847,7 @@ module naming './modules/naming.bicep' = {
   name: 'Naming-${deploymentSuffix}'
   scope: subscription()
   params: {
-    customNamingConvention: customNamingConvention
+    namingConvention: namingConvention
     virtualMachinesRegion: virtualMachinesRegion
     controlPlaneRegion: effectiveControlPlaneRegion
     identifier: hpBaseName

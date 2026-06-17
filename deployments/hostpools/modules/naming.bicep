@@ -7,8 +7,8 @@
 // Called by: deployments/hostpools/hostpool.bicep
 // ============================================================================
 
-@description('Naming convention overrides. Defaults produce CAF-compliant names.')
-param customNamingConvention object = {
+@description('Naming convention controlling how all resources are named. The default value produces CAF-compliant names (resourceType-workload-purpose-location). Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.')
+param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -20,7 +20,7 @@ param virtualMachinesRegion string
 @description('Azure region for control plane resources (host pool, workspace, app groups).')
 param controlPlaneRegion string = virtualMachinesRegion
 
-@description('Base name for this host pool (identifier + zero-padded index, already computed by caller).')
+@description('The zero-padded host pool base name (identifier + optional index), already computed by the caller. Required.')
 param identifier string
 
 @description('Global feed region. Pass empty string when there is no global feed workspace.')
@@ -50,19 +50,19 @@ var locationCP  = startsWith(cloud, 'us')
 var cpLocAbbr   = locs[locationCP].abbreviation
 
 // ── Naming convention components ──────────────────────────────────────────────
-var cnv_sep      = customNamingConvention.?delimiter    ?? '-'
-var cnv_segments = customNamingConvention.?components   ?? ['resourceType', 'workload', 'purpose', 'location']
-var cnv_vmsloc   = !empty(customNamingConvention.?vmsLocationAbbreviation ?? '')
-  ? customNamingConvention.vmsLocationAbbreviation : vmsLocAbbr
-var cnv_cploc    = !empty(customNamingConvention.?cpLocationAbbreviation  ?? '')
-  ? customNamingConvention.cpLocationAbbreviation  : cpLocAbbr
-var cnv_rtCodes  = contains(customNamingConvention, 'resourceTypeCodes')
-  ? union(abbr, customNamingConvention.resourceTypeCodes)
+var cnv_sep      = namingConvention.?delimiter    ?? '-'
+var cnv_segments = namingConvention.?components   ?? ['resourceType', 'workload', 'purpose', 'location']
+var cnv_vmsloc   = !empty(namingConvention.?vmsLocationAbbreviation ?? '')
+  ? namingConvention.vmsLocationAbbreviation : vmsLocAbbr
+var cnv_cploc    = !empty(namingConvention.?cpLocationAbbreviation  ?? '')
+  ? namingConvention.cpLocationAbbreviation  : cpLocAbbr
+var cnv_rtCodes  = contains(namingConvention, 'resourceTypeCodes')
+  ? union(abbr, namingConvention.resourceTypeCodes)
   : abbr
-var cnv_ff1      = customNamingConvention.?freeform1    ?? ''
-var cnv_env      = customNamingConvention.?environment  ?? ''
-var cnv_ff2      = customNamingConvention.?freeform2    ?? ''
-var cnv_workload = !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+var cnv_ff1      = namingConvention.?freeform1    ?? ''
+var cnv_env      = namingConvention.?environment  ?? ''
+var cnv_ff2      = namingConvention.?freeform2    ?? ''
+var cnv_workload = !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 
 // ── User-defined functions ────────────────────────────────────────────────────
 func resolveSegment(seg string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
@@ -86,6 +86,10 @@ func buildCustomName(segments array, sep string, rtCode string, component string
 
 func stripSeps(s string) string =>
   replace(replace(replace(s, '-', ''), '_', ''), '.', '')
+
+// Key Vault names allow hyphens but not underscores or dots.
+func kvSanitize(s string) string =>
+  replace(replace(s, '_', '-'), '.', '-')
 
 func cnv(segments array, sep string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   buildCustomName(filter(segments, s => s != 'none'), sep, rtCode, component, loc, ff1, env, ff2, workload)
@@ -114,8 +118,8 @@ var uniqueStringOperations = take(
   6
 )
 
-var kvBaseSecrets    = cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var kvBaseEncryption = cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var kvBaseSecrets    = kvSanitize(cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
+var kvBaseEncryption = kvSanitize(cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
 
 var keyVaultNameSecrets = take(
   length(kvBaseSecrets) <= 20
@@ -188,8 +192,8 @@ var netAppCapacityPoolName   = cnv(cnv_segments, cnv_sep, cnv_rtCodes.netAppCapa
 
 // FSLogix storage account naming (max 15 chars for domain-join compatibility)
 var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)
-var fslogixStorageAccountNamePrefix = !empty(customNamingConvention.?fslogixStoragePrefix ?? '')
-  ? take(toLower(replace(customNamingConvention.fslogixStoragePrefix, '-', '')), 13)
+var fslogixStorageAccountNamePrefix = !empty(namingConvention.?fslogixStoragePrefix ?? '')
+  ? take(toLower(replace(namingConvention.fslogixStoragePrefix, '-', '')), 13)
   : 'fslogix${uniqueStringStorage}'
 
 // ── Encryption Key Names ──────────────────────────────────────────────────────

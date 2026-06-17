@@ -82,8 +82,18 @@ param deployImageBuildResourceGroup bool = true
 @description('Optional. Custom name for the pre-created image build resource group. Leave empty to use the standard naming convention (matches what imageBuild calculates automatically).')
 param customImageBuildResourceGroupName string = ''
 
-@description('Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all image management resources. Shape: { components: string[], delimiter: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, computeGalleries: string, userAssignedIdentities: string, storageAccounts: string, privateEndpoints: string, networkInterfaces: string, diskEncryptionSets: string } }. Pass an empty object ({}) or omit to use the default CAF convention.')
-param customNamingConvention object = {
+@description('''Optional. Naming convention controlling how all resources in this deployment are named.
+The default value produces Cloud Adoption Framework (CAF)-compliant names in the format: resourceType-workload-purpose-location.
+Key properties:
+  components          — ordered array of name segments, e.g. ["resourceType","workload","purpose","location"]
+  delimiter           — separator between segments, e.g. "-"
+  workload            — solution identifier inserted into names, e.g. "avd"
+  freeform1, environment, freeform2 — optional static/context tokens
+  locationAbbreviation — override for the region abbreviation
+  resourceTypeCodes   — object with per-resource-type abbreviation overrides
+    { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }
+This object is produced automatically when deploying via the Azure Portal UI.''')
+param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -93,6 +103,7 @@ param customNamingConvention object = {
 param timeStamp string = utcNow('yyyyMMddhhmm')
 
 // Naming conventions
+// Override any component via the namingConvention parameter.
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
@@ -104,14 +115,14 @@ var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbrevia
 
 // ── Naming convention ────────────────────────────────────────────────────────
 // Default: Cloud Adoption Framework (CAF) — resourceType-workload-purpose-location.
-// Override any component via the customNamingConvention parameter.
+// Override any component via the namingConvention parameter.
 
-var cnv_sep      = customNamingConvention.?delimiter  ?? '-'
-var cnv_loc      = !empty(customNamingConvention.?locationAbbreviation ?? '')
-  ? customNamingConvention.locationAbbreviation
+var cnv_sep      = namingConvention.?delimiter  ?? '-'
+var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
+  ? namingConvention.locationAbbreviation
   : locations[varLocation].abbreviation
-var cnv_rtCodes  = contains(customNamingConvention, 'resourceTypeCodes')
-  ? customNamingConvention.resourceTypeCodes
+var cnv_rtCodes  = contains(namingConvention, 'resourceTypeCodes')
+  ? namingConvention.resourceTypeCodes
   : {
       resourceGroups: resourceAbbreviations.resourceGroups
       computeGalleries: resourceAbbreviations.computeGalleries
@@ -120,7 +131,7 @@ var cnv_rtCodes  = contains(customNamingConvention, 'resourceTypeCodes')
       privateEndpoints: resourceAbbreviations.privateEndpoints
       diskEncryptionSets: resourceAbbreviations.diskEncryptionSets
     }
-var cnv_segments = customNamingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
+var cnv_segments = namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
 // RT is last only when resourceType is explicitly the last non-'none' component.
 var cnv_rtFirst  = !empty(cnv_segments) ? (last(filter(cnv_segments, s => s != 'none')) != 'resourceType') : true
 
@@ -153,10 +164,10 @@ var customResourceGroupName = buildCustomName(
   cnv_rtCodes.resourceGroups,
   identifier,
   cnv_loc,
-  customNamingConvention.?freeform1 ?? '',
-  customNamingConvention.?environment ?? '',
-  customNamingConvention.?freeform2 ?? '',
-  !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 
 var customGalleryName = replace(
@@ -166,10 +177,10 @@ var customGalleryName = replace(
     cnv_rtCodes.computeGalleries,
     identifier,
     cnv_loc,
-    customNamingConvention.?freeform1 ?? '',
-    customNamingConvention.?environment ?? '',
-    customNamingConvention.?freeform2 ?? '',
-    !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+    namingConvention.?freeform1 ?? '',
+    namingConvention.?environment ?? '',
+    namingConvention.?freeform2 ?? '',
+    !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
   ),
   '-',
   '_'
@@ -181,10 +192,10 @@ var customIdentityName = buildCustomName(
   cnv_rtCodes.userAssignedIdentities,
   identifier,
   cnv_loc,
-  customNamingConvention.?freeform1 ?? '',
-  customNamingConvention.?environment ?? '',
-  customNamingConvention.?freeform2 ?? '',
-  !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 
 var customEncryptionIdentityName = buildCustomName(
@@ -193,10 +204,10 @@ var customEncryptionIdentityName = buildCustomName(
   cnv_rtCodes.userAssignedIdentities,
   '${identifier}-encryption',
   cnv_loc,
-  customNamingConvention.?freeform1 ?? '',
-  customNamingConvention.?environment ?? '',
-  customNamingConvention.?freeform2 ?? '',
-  !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 
 // Storage account names: alphanumeric only, max 24 chars, globally unique.
@@ -212,10 +223,10 @@ var customSaArtifactsBase = stripSeparators(buildCustomName(
   cnv_rtCodes.storageAccounts,
   'assets',
   cnv_loc,
-  customNamingConvention.?freeform1 ?? '',
-  customNamingConvention.?environment ?? '',
-  customNamingConvention.?freeform2 ?? '',
-  !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 ))
 
 var customSaLogsBase = stripSeparators(buildCustomName(
@@ -224,10 +235,10 @@ var customSaLogsBase = stripSeparators(buildCustomName(
   cnv_rtCodes.storageAccounts,
   'logs',
   cnv_loc,
-  customNamingConvention.?freeform1 ?? '',
-  customNamingConvention.?environment ?? '',
-  customNamingConvention.?freeform2 ?? '',
-  !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 ))
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -290,10 +301,10 @@ var galleryDiskEncryptionSetName = buildCustomName(
   cnv_rtCodes.diskEncryptionSets,
   contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys',
   cnv_loc,
-  customNamingConvention.?freeform1 ?? '',
-  customNamingConvention.?environment ?? '',
-  customNamingConvention.?freeform2 ?? '',
-  !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 var galleryDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt'
 
@@ -303,10 +314,10 @@ var galleryConfidentialVmDiskEncryptionSetName = buildCustomName(
   cnv_rtCodes.diskEncryptionSets,
   'confidential-vm',
   cnv_loc,
-  customNamingConvention.?freeform1 ?? '',
-  customNamingConvention.?environment ?? '',
-  customNamingConvention.?freeform2 ?? '',
-  !empty(customNamingConvention.?workload ?? '') ? customNamingConvention.workload : 'avd'
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt-cvm'
 

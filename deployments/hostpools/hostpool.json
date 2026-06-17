@@ -5,16 +5,15 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6994414361591448584"
+      "templateHash": "18235483414366695955"
     }
   },
   "parameters": {
     "identifier": {
       "type": "string",
-      "defaultValue": "",
       "maxLength": 9,
       "metadata": {
-        "description": "Required. Identifier used to describe the persona of the hostpool(s).\nThis identifier combined with the index parameter (when provided) is used to create the host pool, desktop application group,\nand other host pool specific resource names.\n"
+        "description": "Required. Short name identifying the host pool persona (e.g. \"finance\", \"developers\"). Max 9 characters.\nUsed as the primary component of all resource names in this deployment. Combined with the index parameter\n(when provided) to form the base name for the host pool, desktop application group, session hosts, and all\nassociated resources.\n"
       }
     },
     "index": {
@@ -24,7 +23,7 @@
         "description": "Optional. An index value used to distinquish each host pool with the same persona identifier.\nThis can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.\nValid values are 0-99. If not provided, the host pool will be created without an index in the name.\n"
       }
     },
-    "customNamingConvention": {
+    "namingConvention": {
       "type": "object",
       "defaultValue": {
         "components": [
@@ -37,7 +36,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Custom naming convention for all resources in this deployment.\nWhen provided, all resource names are assembled from the ordered components array instead of the CAF\ndefaults. The object shape matches the output of the tagsAndNaming step in the Portal UI.\nKey properties:\n  components          (required) — ordered array of segment names, e.g. [\"freeform1\",\"workload\",\"resourceType\",\"purpose\",\"location\"]\n  delimiter           (required) — separator character, e.g. \"-\"\n  freeform1           (optional) — static text slot 1\n  environment         (optional) — environment token, e.g. \"prod\"\n  freeform2           (optional) — static text slot 2\n  workload            (optional) — solution name, e.g. \"avd\"\n  vmsLocationAbbreviation  (optional) — override for the VMs region abbreviation\n  cpLocationAbbreviation   (optional) — override for the control plane region abbreviation\n  fslogixStoragePrefix     (optional) — custom prefix for FSLogix storage accounts (≤13 lowercase alphanum)\n  resourceTypeCodes   (optional) — object with per-resource-type abbreviation overrides\nPass an empty object ({}) or omit to use CAF defaults."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces Cloud Adoption Framework (CAF)-compliant names in the format: resourceType-workload-purpose-location.\nAll properties are optional when using the default convention; override only what needs to change.\nKey properties:\n  components          — ordered array of name segments, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — separator between segments, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1           — static text slot before the workload\n  environment         — environment token, e.g. \"prod\"\n  freeform2           — static text slot after the environment\n  vmsLocationAbbreviation  — override for the VMs region abbreviation\n  cpLocationAbbreviation   — override for the control plane region abbreviation\n  fslogixStoragePrefix     — custom prefix for FSLogix storage accounts (≤13 lowercase alphanumeric)\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\nThis object is produced automatically when deploying via the Azure Portal UI."
       }
     },
     "identitySolution": {
@@ -1145,8 +1144,8 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "customNamingConvention": {
-            "value": "[parameters('customNamingConvention')]"
+          "namingConvention": {
+            "value": "[parameters('namingConvention')]"
           },
           "virtualMachinesRegion": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
@@ -1168,7 +1167,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "16750758740814167439"
+              "templateHash": "2873293242636821433"
             }
           },
           "functions": [
@@ -1271,6 +1270,18 @@
                     "value": "[replace(replace(replace(parameters('s'), '-', ''), '_', ''), '.', '')]"
                   }
                 },
+                "kvSanitize": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "s"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[replace(replace(parameters('s'), '_', '-'), '.', '-')]"
+                  }
+                },
                 "cnv": {
                   "parameters": [
                     {
@@ -1319,7 +1330,7 @@
             }
           ],
           "parameters": {
-            "customNamingConvention": {
+            "namingConvention": {
               "type": "object",
               "defaultValue": {
                 "components": [
@@ -1332,7 +1343,7 @@
                 "workload": "avd"
               },
               "metadata": {
-                "description": "Naming convention overrides. Defaults produce CAF-compliant names."
+                "description": "Naming convention controlling how all resources are named. The default value produces CAF-compliant names (resourceType-workload-purpose-location). Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
               }
             },
             "virtualMachinesRegion": {
@@ -1351,7 +1362,7 @@
             "identifier": {
               "type": "string",
               "metadata": {
-                "description": "Base name for this host pool (identifier + zero-padded index, already computed by caller)."
+                "description": "The zero-padded host pool base name (identifier + optional index), already computed by the caller. Required."
               }
             },
             "globalFeedRegion": {
@@ -1666,15 +1677,15 @@
             "vmsLocAbbr": "[variables('locs')[variables('locationVms')].abbreviation]",
             "locationCP": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('controlPlaneRegion'), 5, max(sub(length(parameters('controlPlaneRegion')), 5), 0)), parameters('controlPlaneRegion'))]",
             "cpLocAbbr": "[variables('locs')[variables('locationCP')].abbreviation]",
-            "cnv_sep": "[coalesce(tryGet(parameters('customNamingConvention'), 'delimiter'), '-')]",
-            "cnv_segments": "[coalesce(tryGet(parameters('customNamingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
-            "cnv_vmsloc": "[if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'vmsLocationAbbreviation'), ''))), parameters('customNamingConvention').vmsLocationAbbreviation, variables('vmsLocAbbr'))]",
-            "cnv_cploc": "[if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'cpLocationAbbreviation'), ''))), parameters('customNamingConvention').cpLocationAbbreviation, variables('cpLocAbbr'))]",
-            "cnv_rtCodes": "[if(contains(parameters('customNamingConvention'), 'resourceTypeCodes'), union(variables('abbr'), parameters('customNamingConvention').resourceTypeCodes), variables('abbr'))]",
-            "cnv_ff1": "[coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), '')]",
-            "cnv_env": "[coalesce(tryGet(parameters('customNamingConvention'), 'environment'), '')]",
-            "cnv_ff2": "[coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), '')]",
-            "cnv_workload": "[if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'workload'), ''))), parameters('customNamingConvention').workload, 'avd')]",
+            "cnv_sep": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
+            "cnv_segments": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
+            "cnv_vmsloc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'vmsLocationAbbreviation'), ''))), parameters('namingConvention').vmsLocationAbbreviation, variables('vmsLocAbbr'))]",
+            "cnv_cploc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'cpLocationAbbreviation'), ''))), parameters('namingConvention').cpLocationAbbreviation, variables('cpLocAbbr'))]",
+            "cnv_rtCodes": "[if(contains(parameters('namingConvention'), 'resourceTypeCodes'), union(variables('abbr'), parameters('namingConvention').resourceTypeCodes), variables('abbr'))]",
+            "cnv_ff1": "[coalesce(tryGet(parameters('namingConvention'), 'freeform1'), '')]",
+            "cnv_env": "[coalesce(tryGet(parameters('namingConvention'), 'environment'), '')]",
+            "cnv_ff2": "[coalesce(tryGet(parameters('namingConvention'), 'freeform2'), '')]",
+            "cnv_workload": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')]",
             "nameConvReversed": "[and(not(empty(variables('cnv_segments'))), equals(last(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType'))]",
             "cnv_rtFirst": "[not(variables('nameConvReversed'))]",
             "resourceGroupDeployment": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, format('{0}-deployment', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
@@ -1685,8 +1696,8 @@
             "resourceGroupOperations": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, 'operations', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "resourceGroupMonitoring": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "uniqueStringOperations": "[take(if(not(contains(variables('cnv_segments'), 'location')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'), parameters('virtualMachinesRegion')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'))), 6)]",
-            "kvBaseSecrets": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "kvBaseEncryption": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "kvBaseSecrets": "[__bicep.kvSanitize(__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
+            "kvBaseEncryption": "[__bicep.kvSanitize(__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
             "keyVaultNameSecrets": "[take(if(lessOrEquals(length(variables('kvBaseSecrets')), 20), format('{0}-{1}', variables('kvBaseSecrets'), variables('uniqueStringOperations')), variables('kvBaseSecrets')), 24)]",
             "keyVaultNameEncryption": "[take(if(lessOrEquals(length(variables('kvBaseEncryption')), 20), format('{0}-{1}', variables('kvBaseEncryption'), variables('uniqueStringOperations')), variables('kvBaseEncryption')), 24)]",
             "dataCollectionEndpointName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').dataCollectionEndpoints, '', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
@@ -1718,7 +1729,7 @@
             "netAppAccountName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').netAppAccounts, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "netAppCapacityPoolName": "[__bicep.cnv(variables('cnv_segments'), variables('cnv_sep'), variables('cnv_rtCodes').netAppCapacityPools, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "uniqueStringStorage": "[take(uniqueString(subscription().subscriptionId, variables('resourceGroupStorage')), 6)]",
-            "fslogixStorageAccountNamePrefix": "[if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'fslogixStoragePrefix'), ''))), take(toLower(replace(parameters('customNamingConvention').fslogixStoragePrefix, '-', '')), 13), format('fslogix{0}', variables('uniqueStringStorage')))]",
+            "fslogixStorageAccountNamePrefix": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'fslogixStoragePrefix'), ''))), take(toLower(replace(parameters('namingConvention').fslogixStoragePrefix, '-', '')), 13), format('fslogix{0}', variables('uniqueStringStorage')))]",
             "encryptionKeyNameFSLogix": "[format('{0}-encryption-key-{1}##', parameters('identifier'), variables('fslogixStorageAccountNamePrefix'))]",
             "encryptionKeyNameVMs": "[format('{0}-encryption-key-vms', parameters('identifier'))]",
             "encryptionKeyNameConfidentialVMs": "[format('{0}-encryption-key-confidential-vms', parameters('identifier'))]",

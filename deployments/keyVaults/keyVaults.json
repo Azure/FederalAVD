@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6696112917517263659"
+      "templateHash": "4170240469328631293"
     }
   },
   "functions": [
@@ -243,7 +243,7 @@
         "description": "Optional. Tags to apply to deployed resources, keyed by resource type (e.g., \"Microsoft.KeyVault/vaults\", \"Microsoft.Resources/resourceGroups\")."
       }
     },
-    "customNamingConvention": {
+    "namingConvention": {
       "type": "object",
       "defaultValue": {
         "components": [
@@ -256,7 +256,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Custom naming convention object produced by the portal UI. When provided, overrides the Cloud Adoption Framework naming convention for all key vault resources. Shape: { components: string[], delimiter: string, workload: string, freeform1: string, environment: string, freeform2: string, locationAbbreviation: string, resourceTypeCodes: { resourceGroups: string, keyVaults: string, privateEndpoints: string, networkInterfaces: string } }. Pass an empty object ({}) or omit to use the default CAF convention."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces Cloud Adoption Framework (CAF)-compliant names in the format: resourceType-workload-purpose-location.\nKey properties:\n  components          — ordered array of name segments, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — separator between segments, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI."
       }
     },
     "timeStamp": {
@@ -813,18 +813,18 @@
     "deploymentSuffix": "[parameters('timeStamp')]",
     "identifier": "operations",
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
-    "cnv_sep": "[coalesce(tryGet(parameters('customNamingConvention'), 'delimiter'), '-')]",
-    "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'locationAbbreviation'), ''))), parameters('customNamingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
-    "cnv_rtCodes": "[if(contains(parameters('customNamingConvention'), 'resourceTypeCodes'), parameters('customNamingConvention').resourceTypeCodes, createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
-    "cnv_segments": "[coalesce(tryGet(parameters('customNamingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
+    "cnv_sep": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
+    "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
+    "cnv_rtCodes": "[if(contains(parameters('namingConvention'), 'resourceTypeCodes'), parameters('namingConvention').resourceTypeCodes, createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
+    "cnv_segments": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
     "cnv_rtFirst": "[if(not(empty(variables('cnv_segments'))), not(equals(last(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
-    "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'workload'), ''))), parameters('customNamingConvention').workload, 'avd'))]",
+    "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "privateEndpointNameConv": "[if(variables('cnv_rtFirst'), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('cnv_rtCodes').privateEndpoints))]",
     "privateEndpointNICNameConv": "[if(variables('cnv_rtFirst'), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('cnv_rtCodes').privateEndpoints, coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
     "operationsResourceGroupName": "[variables('customRgName')]",
     "uniqueStringOperations": "[take(if(not(contains(variables('cnv_segments'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
-    "kvBaseSecrets": "[__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')))]",
-    "kvBaseEncryption": "[__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')))]",
+    "kvBaseSecrets": "[__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')))]",
+    "kvBaseEncryption": "[__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')))]",
     "secretsKeyVaultName": "[take(if(lessOrEquals(length(variables('kvBaseSecrets')), 20), format('{0}-{1}', variables('kvBaseSecrets'), variables('uniqueStringOperations')), variables('kvBaseSecrets')), 24)]",
     "encryptionKeyVaultName": "[take(if(lessOrEquals(length(variables('kvBaseEncryption')), 20), format('{0}-{1}', variables('kvBaseEncryption'), variables('uniqueStringOperations')), variables('kvBaseEncryption')), 24)]"
   },
