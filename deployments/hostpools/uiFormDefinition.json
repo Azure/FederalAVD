@@ -4433,13 +4433,13 @@
                       }
                     ]
                   },
-                  "defaultValue": "resourceType"
+                  "defaultValue": "Resource Type"
                 },
                 {
                   "name": "component2",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 2",
-                  "defaultValue": "workload",
+                  "defaultValue": "Workload",
                   "multiLine": true,
                   "toolTip": "Component 2. Select 'None (stop here)' to end after Component 1.",
                   "constraints": {
@@ -4492,7 +4492,7 @@
                   "name": "component3",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 3",
-                  "defaultValue": "purpose",
+                  "defaultValue": "Purpose",
                   "multiLine": true,
                   "toolTip": "Component 3. Select 'None (stop here)' to end after Component 2.",
                   "visible": "[not(equals(steps('tagsAndNaming').naming.component2, 'none'))]",
@@ -4546,7 +4546,7 @@
                   "name": "component4",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 4",
-                  "defaultValue": "location",
+                  "defaultValue": "Location",
                   "multiLine": true,
                   "toolTip": "Component 4. Select 'None (stop here)' to end after Component 3.",
                   "visible": "[and(not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')))]",
@@ -4600,7 +4600,7 @@
                   "name": "component5",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 5",
-                  "defaultValue": "none",
+                  "defaultValue": "None (stop here)",
                   "multiLine": true,
                   "toolTip": "Component 5. Select 'None (stop here)' to end after Component 4.",
                   "visible": "[and(and(not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none'))), not(equals(steps('tagsAndNaming').naming.component4, 'none')))]",
@@ -4654,7 +4654,7 @@
                   "name": "component6",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 6",
-                  "defaultValue": "none",
+                  "defaultValue": "None (stop here)",
                   "multiLine": true,
                   "toolTip": "Component 6. Select 'None (stop here)' to end after Component 5.",
                   "visible": "[and(and(and(not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none'))), not(equals(steps('tagsAndNaming').naming.component4, 'none'))), not(equals(steps('tagsAndNaming').naming.component5, 'none')))]",

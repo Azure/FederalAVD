@@ -615,13 +615,13 @@
                       }
                     ]
                   },
-                  "defaultValue": "resourceType"
+                  "defaultValue": "Resource Type"
                 },
                 {
                   "name": "component2",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 2",
-                  "defaultValue": "workload",
+                  "defaultValue": "Workload",
                   "multiLine": true,
                   "toolTip": "Second component. Select 'None (stop here)' to use only 1 component.",
                   "constraints": {
@@ -674,7 +674,7 @@
                   "name": "component3",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 3",
-                  "defaultValue": "purpose",
+                  "defaultValue": "Purpose",
                   "multiLine": true,
                   "visible": "[not(equals(steps('tagsAndNaming').naming.component2, 'none'))]",
                   "toolTip": "Third component. Select 'None (stop here)' to use only 2 components.",
@@ -728,7 +728,7 @@
                   "name": "component4",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 4",
-                  "defaultValue": "location",
+                  "defaultValue": "Location",
                   "multiLine": true,
                   "visible": "[and(not(equals(steps('tagsAndNaming').naming.component2, 'none')),not(equals(steps('tagsAndNaming').naming.component3, 'none')))]",
                   "toolTip": "Fourth component. Select 'None (stop here)' to use only 3 components.",
@@ -782,7 +782,7 @@
                   "name": "component5",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 5",
-                  "defaultValue": "none",
+                  "defaultValue": "None (stop here)",
                   "multiLine": true,
                   "visible": "[and(not(equals(steps('tagsAndNaming').naming.component2, 'none')),and(not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none'))))]",
                   "toolTip": "Fifth component. Select 'None (stop here)' to use only 4 components.",
@@ -836,7 +836,7 @@
                   "name": "component6",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Component 6",
-                  "defaultValue": "none",
+                  "defaultValue": "None (stop here)",
                   "multiLine": true,
                   "visible": "[and(not(equals(steps('tagsAndNaming').naming.component2, 'none')),not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none')), not(equals(steps('tagsAndNaming').naming.component5, 'none')))]",
                   "toolTip": "Sixth component. Select 'None (stop here)' to use only 5 components.",
