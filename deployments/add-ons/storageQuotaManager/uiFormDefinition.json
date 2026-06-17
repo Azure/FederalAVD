@@ -530,7 +530,7 @@
               }
             }
           ]
-        },        
+        },
         {
           "name": "monitoring",
           "label": "Monitoring",
@@ -624,6 +624,63 @@
               "label": "Use Custom Naming Overrides",
               "defaultValue": false,
               "toolTip": "Check this box to explicitly define resource names. Required for brownfield deployments with non-standard host pool naming (e.g., 'prod-avd-hostpool-01' instead of 'hp-avd-prod-eus'). If unchecked, names are automatically derived from the host pool name."
+            },
+            {
+              "name": "derivedNamesPreview",
+              "type": "Microsoft.Common.Section",
+              "label": "Derived Resource Names (preview)",
+              "visible": "[not(steps('advanced').enableCustomNaming)]",
+              "elements": [
+                {
+                  "name": "previewInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "These names will be automatically derived from your host pool name. To override any of them, enable 'Use Custom Naming Overrides' above."
+                  }
+                },
+                {
+                  "name": "previewNoHpWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(steps('basics').associateWithHostPool)]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No host pool associated — automatic naming preview is unavailable. You must provide custom names on the Advanced page."
+                  }
+                },
+                {
+                  "name": "previewConventionNote",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[steps('basics').associateWithHostPool]",
+                  "options": {
+                    "text": "[concat('Detected convention: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'Resource type LAST (e.g. avd-prod-eus-vdpool)', 'Resource type FIRST (e.g. vdpool-avd-prod-eus)'))]"
+                  }
+                },
+                {
+                  "name": "previewFunctionApp",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[steps('basics').associateWithHostPool]",
+                  "options": {
+                    "text": "[concat('Function App: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-sqm-{unique}-', steps('basics').location.name, '-fa'), concat('fa-', steps('basics').hostPool.name, '-sqm-{unique}-', steps('basics').location.name)))]"
+                  }
+                },
+                {
+                  "name": "previewStorageAccount",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[steps('basics').associateWithHostPool]",
+                  "options": {
+                    "text": "[concat('Storage Account: ', toLower(replace(concat(steps('basics').hostPool.name, 'sqm{unique}', steps('basics').location.name), '-', '')))]"
+                  }
+                },
+                {
+                  "name": "previewEncryptionIdentity",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[and(steps('basics').associateWithHostPool, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'))]",
+                  "options": {
+                    "text": "[concat('Storage Encryption Identity: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-sqm{unique}-storage-encryption-', steps('basics').location.name, '-uai'), concat('uai-', steps('basics').hostPool.name, '-sqm{unique}-storage-encryption-', steps('basics').location.name)))]"
+                  }
+                }
+              ]
             },
             {
               "name": "functionApp_checkNameAvailability",
@@ -737,27 +794,27 @@
                   }
                 },
                 {
-              "name": "tagsSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Resource Tags",
-              "elements": [
-                {
-                  "name": "tags",
-                  "type": "Microsoft.Common.TagsByResource",
-                  "resources": [
-                    "Microsoft.ManagedIdentity/userAssignedIdentities",
-                    "Microsoft.Network/networkInterfaces",
-                    "Microsoft.Network/privateEndpoints",
-                    "Microsoft.Storage/storageAccounts",
-                    "Microsoft.Web/serverFarms",
-                    "Microsoft.Web/sites"
+                  "name": "tagsSection",
+                  "type": "Microsoft.Common.Section",
+                  "label": "Resource Tags",
+                  "elements": [
+                    {
+                      "name": "tags",
+                      "type": "Microsoft.Common.TagsByResource",
+                      "resources": [
+                        "Microsoft.ManagedIdentity/userAssignedIdentities",
+                        "Microsoft.Network/networkInterfaces",
+                        "Microsoft.Network/privateEndpoints",
+                        "Microsoft.Storage/storageAccounts",
+                        "Microsoft.Web/serverFarms",
+                        "Microsoft.Web/sites"
+                      ]
+                    }
                   ]
                 }
               ]
             }
           ]
-        }
-      ]
         }
       ]
     },

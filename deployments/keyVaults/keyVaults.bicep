@@ -9,9 +9,6 @@ targetScope = 'subscription'
 @description('Required. The Azure region for all foundation resources.')
 param location string = deployment().location
 
-@description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
-param nameConvResTypeAtEnd bool = false
-
 // ── Secrets Key Vault ──────────────────────────────────────────────────────────
 
 @description('Optional. Deploy the Secrets Key Vault (Standard SKU) for storing AVD credentials (VM admin password, domain join credentials).')
@@ -144,9 +141,10 @@ var cnv_rtCodes = useCustomNaming && contains(customNamingConvention, 'resourceT
     }
 var cnv_segments = useCustomNaming ? customNamingConvention.components : []
 // When custom naming is active, derive resource-type-first ordering from whether segment 1 is 'resourceType'.
-// For the CAF fallback, this is the inverse of nameConvResTypeAtEnd.
+// In the CAF path, resource type always appears first (standard CAF convention).
+// RT is considered last only when it is explicitly the last non-'none' component.
 // Used to ensure PE and NIC names follow the same prefix/suffix convention as all other resources.
-var cnv_rtFirst = useCustomNaming ? (first(cnv_segments) == 'resourceType') : !nameConvResTypeAtEnd
+var cnv_rtFirst = useCustomNaming ? (last(filter(cnv_segments, s => s != 'none')) != 'resourceType') : true
 
 func resolveSegment(seg string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   seg == 'resourceType' ? rtCode
@@ -186,15 +184,11 @@ var customRgName = useCustomNaming
   : ''
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Resource group naming: rg-avd-foundation-eus (not reversed) or avd-foundation-eus-rg (reversed)
-var nameConv_Operations_ResGroup = nameConvResTypeAtEnd
-  ? 'avd-${identifier}-LOCATION-RESOURCETYPE'
-  : 'RESOURCETYPE-avd-${identifier}-LOCATION'
+// Resource group naming: rg-avd-operations-eus
+var nameConv_Operations_ResGroup = 'RESOURCETYPE-avd-${identifier}-LOCATION'
 
 // Shared resource naming with TOKEN placeholder for sub-type differentiation (sec, enc)
-var nameConv_Operations_Resources = nameConvResTypeAtEnd
-  ? 'avd-TOKEN-LOCATION-RESOURCETYPE'
-  : 'RESOURCETYPE-avd-TOKEN-LOCATION'
+var nameConv_Operations_Resources = 'RESOURCETYPE-avd-TOKEN-LOCATION'
 
 // Private endpoint naming conventions — follows the same resource-type-first/last convention as all other resources
 var privateEndpointNameConv = cnv_rtFirst
@@ -223,10 +217,19 @@ var uniqueStringOperations = take(
   6
 )
 
-// Key Vault names are capped at 24 chars to satisfy Azure naming constraints
+// Key Vault names are capped at 24 chars to satisfy Azure naming constraints.
+//
+// Unique suffix behaviour:
+//   base len <= 20  → append '-{6chars}'  (at least 3 unique chars after the delimiter)
+//   base len 21-24  → use base only; appending a suffix would leave fewer than 3 unique chars
+//   base len > 24   → still use take(..., 24); portal blocks deployment via the Error infobox
+var kvBaseSecrets    = kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_loc, customNamingConvention.?freeform1 ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform2 ?? '', customNamingConvention.?workload ?? ''))
+var kvBaseEncryption = kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_loc, customNamingConvention.?freeform1 ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform2 ?? '', customNamingConvention.?workload ?? ''))
 var secretsKeyVaultName = useCustomNaming
   ? take(
-      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_loc, customNamingConvention.?freeform1 ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform2 ?? '', customNamingConvention.?workload ?? ''))}-${uniqueStringOperations}',
+      length(kvBaseSecrets) <= 20
+        ? '${kvBaseSecrets}-${uniqueStringOperations}'
+        : kvBaseSecrets,
       24
     )
   : take(
@@ -244,7 +247,9 @@ var secretsKeyVaultName = useCustomNaming
 
 var encryptionKeyVaultName = useCustomNaming
   ? take(
-      '${kvSanitize(buildCustomName(filter(cnv_segments, s => s != 'none'), cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_loc, customNamingConvention.?freeform1 ?? '', customNamingConvention.?environment ?? '', customNamingConvention.?freeform2 ?? '', customNamingConvention.?workload ?? ''))}-${uniqueStringOperations}',
+      length(kvBaseEncryption) <= 20
+        ? '${kvBaseEncryption}-${uniqueStringOperations}'
+        : kvBaseEncryption,
       24
     )
   : take(

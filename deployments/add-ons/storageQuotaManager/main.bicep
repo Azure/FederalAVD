@@ -127,9 +127,9 @@ var nameConvSourceName = empty(hostPoolResourceId)
   ? storageResourceGroupName
   : last(split(hostPoolResourceId, '/'))
 var nameConvReversed = startsWith(nameConvSourceName, resourceAbbreviations.hostPools) || startsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
-  ? false // Resource type is at the beginning (e.g., "hp-avd-01" or "rg-avd-storage-eus")
-  : endsWith(nameConvSourceName, resourceAbbreviations.hostPools) || endsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
-      ? true // Resource type is at the end (e.g., "avd-01-hp" or "avd-storage-eus-rg")
+  ? false // Resource type is at the beginning (e.g., "vdpool-avd-01" or "rg-avd-storage-eus")
+  : endsWith(nameConvSourceName, resourceAbbreviations.hostPools) || endsWith(nameConvSourceName, resourceAbbreviations.resourceGroups) || endsWith(nameConvSourceName, '-hp')
+      ? true // Resource type is at the end (e.g., "avd-01-vdpool", "avd-storage-eus-rg", or "avd-01-hp")
       : false // Default fallback
 
 // When a host pool is provided, extract base name from its name segments.

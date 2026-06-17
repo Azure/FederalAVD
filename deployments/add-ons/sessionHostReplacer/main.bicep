@@ -486,11 +486,8 @@ var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].ab
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
 // Dynamically determine naming convention from existing host pool name
-var nameConvReversed = startsWith(hostPoolName, '${resourceAbbreviations.hostPools}-')
-  ? false // Resource type is at the beginning (e.g., "hp-avd-01-eus")
-  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}')
-      ? true // Resource type is at the end (e.g., "avd-01-eus-hp")
-      : false // Default fallback
+// Reversed = resource type at the end (e.g., "avd-prod-eus-vdpool" or "avd-prod-eus-hp")
+var nameConvReversed = endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') || endsWith(hostPoolName, '-hp')
 
 // Extract hpBaseName by removing resource type and location from the host pool name
 // Not reversed: hp-{hpBaseName}-{location} → remove first segment (hp) and last segment (location)

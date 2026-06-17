@@ -14,9 +14,6 @@ param location string = deployment().location
 @maxLength(6)
 param deploymentPrefix string = ''
 
-@description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
-param nameConvResTypeAtEnd bool = false
-
 // Required Existing Resources
 @description('Azure Compute Gallery Resource Id.')
 param computeGalleryResourceId string
@@ -349,9 +346,7 @@ var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
 // The orchestration VM deletes the entire resource group at the end of the build.
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
-      ? nameConvResTypeAtEnd
-          ? '${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${deploymentSuffix}-${resourceAbbreviations.resourceGroups}'
-          : '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${deploymentSuffix}'
+      ? '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${deploymentSuffix}'
       : '${customBuildResourceGroupName}-${deploymentSuffix}')
   : last(split(imageBuildResourceGroupId, '/'))
 
@@ -380,17 +375,11 @@ var imageDefinitionFeatures = empty(imageDefinitionResourceId)
 var galleryImageDefinitionHyperVGeneration = endsWith(mpSku, 'g2') || startsWith(mpSku, 'win11') ? 'V2' : 'V1'
 var galleryImageDefinitionName = empty(imageDefinitionResourceId)
   ? empty(customImageDefinitionName)
-      ? nameConvResTypeAtEnd
-          ? replace(
-              '${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}-${resourceAbbreviations.imageDefinitions}',
-              ' ',
-              ''
-            )
-          : replace(
-              '${resourceAbbreviations.imageDefinitions}-${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}',
-              ' ',
-              ''
-            )
+      ? replace(
+          '${resourceAbbreviations.imageDefinitions}-${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}',
+          ' ',
+          ''
+        )
       : customImageDefinitionName
   : last(split(imageDefinitionResourceId, '/'))
 var effectiveGalleryImageDefinitionOffer = !empty(imageDefinitionOffer)

@@ -19,8 +19,22 @@ Valid values are 0-99. If not provided, the host pool will be created without an
 ''')
 param index int = -1
 
-@description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
-param nameConvResTypeAtEnd bool = false
+@description('''Optional. Custom naming convention for all resources in this deployment.
+When provided, all resource names are assembled from the ordered components array instead of the CAF
+defaults. The object shape matches the output of the tagsAndNaming step in the Portal UI.
+Key properties:
+  components          (required) — ordered array of segment names, e.g. ["freeform1","workload","resourceType","purpose","location"]
+  delimiter           (required) — separator character, e.g. "-"
+  freeform1           (optional) — static text slot 1
+  environment         (optional) — environment token, e.g. "prod"
+  freeform2           (optional) — static text slot 2
+  workload            (optional) — solution name, e.g. "avd"
+  vmsLocationAbbreviation  (optional) — override for the VMs region abbreviation
+  cpLocationAbbreviation   (optional) — override for the control plane region abbreviation
+  fslogixStoragePrefix     (optional) — custom prefix for FSLogix storage accounts (≤13 lowercase alphanum)
+  resourceTypeCodes   (optional) — object with per-resource-type abbreviation overrides
+Pass an empty object ({}) or omit to use CAF defaults.''')
+param customNamingConvention object = {}
 
 // Identity
 
@@ -71,9 +85,6 @@ param controlPlaneLocation string = ''
 
 @description('Optional. The subscription Id where the AVD Control Plane resources are deployed. If not provided, the deployment subscription will be used.')
 param controlPlaneSubscriptionId string = ''
-
-@description('Optional. The resource Id of an existing AVD host pool. Reserved for future use.')
-param existingHostPoolResourceId string = ''
 
 @description('Optional. The resource Id of an existing AVD workspace to which the desktop application group will be registered.')
 param existingFeedWorkspaceResourceId string = ''
@@ -843,28 +854,70 @@ var locationCP = startsWith(cloud, 'us')
   : effectiveControlPlaneRegion
 var cpLocAbbr = locs[locationCP].abbreviation
 
-var existingHostPoolName = empty(existingHostPoolResourceId) ? '' : last(split(existingHostPoolResourceId, '/'))
-// nameConvReversed = true means resource type at end (e.g., "avd-01-eus-hp")
-// nameConvReversed = false means resource type at beginning (e.g., "hp-avd-01-eus")
-var nameConvReversed = !empty(existingHostPoolName)
-  ? startsWith(existingHostPoolName, abbr.hostPools)
-      ? false // Resource type is at the beginning
-      : endsWith(existingHostPoolName, abbr.hostPools)
-          ? true // Resource type is at the end
-          : nameConvResTypeAtEnd // Fallback to parameter if unclear
-  : nameConvResTypeAtEnd
+// ── Custom naming convention support ─────────────────────────────────────────
+var useCustomNaming = !empty(customNamingConvention) && contains(customNamingConvention, 'components')
 
-var arrHostPoolName = split(existingHostPoolName, '-')
+var cnv_sep      = useCustomNaming ? customNamingConvention.delimiter : '-'
+var cnv_segments = useCustomNaming ? customNamingConvention.components : []
+// Location abbreviations: custom override → runtime locs lookup
+var cnv_vmsloc = useCustomNaming && !empty(customNamingConvention.?vmsLocationAbbreviation ?? '')
+  ? customNamingConvention.vmsLocationAbbreviation : vmsLocAbbr
+var cnv_cploc  = useCustomNaming && !empty(customNamingConvention.?cpLocationAbbreviation ?? '')
+  ? customNamingConvention.cpLocationAbbreviation : cpLocAbbr
+// Merge per-resource-type abbreviation overrides onto the base data file.
+// In the non-custom path cnv_rtCodes == abbr — no overhead.
+var cnv_rtCodes = useCustomNaming && contains(customNamingConvention, 'resourceTypeCodes')
+  ? union(abbr, customNamingConvention.resourceTypeCodes)
+  : abbr
+// Fixed value segments
+var cnv_ff1      = customNamingConvention.?freeform1  ?? ''
+var cnv_env      = customNamingConvention.?environment ?? ''
+var cnv_ff2      = customNamingConvention.?freeform2  ?? ''
+var cnv_workload = customNamingConvention.?workload    ?? ''
+
+// Resolve one segment value given per-call context.
+func resolveSegment(seg string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  seg == 'resourceType' ? rtCode
+    : seg == 'purpose'      ? component
+    : seg == 'location'     ? loc
+    : seg == 'freeform1'    ? ff1
+    : seg == 'environment'  ? env
+    : seg == 'freeform2'    ? ff2
+    : seg == 'workload'     ? workload
+    : '' // 'none' or unknown — filtered out below
+
+// Build a full custom name from an ordered segment array.
+func buildCustomName(segments array, sep string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  join(
+    filter(
+      map(segments, seg => resolveSegment(seg, rtCode, component, loc, ff1, env, ff2, workload)),
+      s => !empty(s)
+    ),
+    sep
+  )
+
+// Helper: strip separators for storage account names (must be alphanumeric only).
+func stripSeps(s string) string => replace(replace(replace(s, '-', ''), '_', ''), '.', '')
+
+// Convenience macro — captures all fixed convention values.
+// Usage: cnv(rtCode, purpose, loc) — pass cnv_vmsloc or cnv_cploc as loc.
+func cnv(segments array, sep string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  buildCustomName(filter(segments, s => s != 'none'), sep, rtCode, component, loc, ff1, env, ff2, workload)
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 var hpIndexString = index >= 0 ? format('{0:00}', index) : ''
-// Extract hpBaseName from existing host pool name by removing resource type and location
-// Not reversed: vdpool-{hpBaseName}-{location} → remove first segment (vdpool) and last segment (location)
-// Reversed: {hpBaseName}-{location}-vdpool → remove last two segments (location-vdpool)
-// For new deployments, construct hpBaseName from identifier and index
-var hpBaseName = !empty(existingHostPoolName)
-  ? nameConvReversed
-      ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-vdpool)
-      : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (vdpool) and last (location)
-  : empty(hpIndexString) ? toLower(identifier) : '${toLower(identifier)}-${hpIndexString}'
+var hpBaseName = empty(hpIndexString) ? toLower(identifier) : '${toLower(identifier)}-${hpIndexString}'
+
+// nameConvReversed: true = RT at end, false = RT at start.
+// RT is considered "last" only when resourceType is explicitly the last non-'none' segment.
+// This means freeform1|resourceType|purpose|location → RT-first (position 2 ≠ last).
+// Covers resources that don't use cnv() directly: VM, Disk, NIC, PE, PE-NIC.
+// In the CAF path RT always appears first (standard CAF convention).
+var nameConvReversed = useCustomNaming && (!empty(cnv_segments) && last(filter(cnv_segments, s => s != 'none')) == 'resourceType')
+// Unified RT-first flag used by ALL paths (VM/disk/NIC/PE conventions, CAF templates, etc.)
+var cnv_rtFirst = !nameConvReversed
+
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
@@ -880,204 +933,279 @@ var nameConv_HP_ResGroups = nameConvReversed
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
 
 // Temporary Deployment Resources for run commands
-var resourceGroupDeployment = replace(
-  replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'deployment'), 'LOCATION', '${vmsLocAbbr}'),
-  'RESOURCETYPE',
-  '${abbr.resourceGroups}'
-)
-var depVirtualMachineNameTemp = replace(
-  replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', vmsLocAbbr), 'TOKEN-', ''),
-  '-',
-  ''
-)
+var resourceGroupDeployment = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, '${hpBaseName}-deployment', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'deployment'), 'LOCATION', '${vmsLocAbbr}'),
+      'RESOURCETYPE',
+      '${abbr.resourceGroups}'
+    )
+var depVirtualMachineNameTemp = useCustomNaming
+  ? stripSeps(cnv(cnv_segments, cnv_sep, '', hpBaseName, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
+  : replace(
+      replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', vmsLocAbbr), 'TOKEN-', ''),
+      '-',
+      ''
+    )
 var depVirtualMachineName = take('${depVirtualMachineNameTemp}${uniqueString(depVirtualMachineNameTemp)}', 15)
-var depVirtualMachineDiskName = '${depVirtualMachineName}-${abbr.osdisks}'
-var depVirtualMachineNicName = '${depVirtualMachineName}-${abbr.networkInterfaces}'
+var depVirtualMachineDiskName = '${depVirtualMachineName}-${cnv_rtCodes.osdisks}'
+var depVirtualMachineNicName = '${depVirtualMachineName}-${cnv_rtCodes.networkInterfaces}'
 
 // Operations / Monitoring Resource Groups (shared infrastructure)
 // The standalone keyVaults.bicep deployment also targets the operations RG (identifier defaults
 // to 'operations'), so both the inline fallback and the standalone path produce KVs in the same
 // RG with identical names — preventing duplicates.
-var resourceGroupOperations = replace(
-  replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'operations'), 'LOCATION', vmsLocAbbr),
-  'RESOURCETYPE',
-  abbr.resourceGroups
+var resourceGroupOperations = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'operations', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'operations'), 'LOCATION', vmsLocAbbr),
+      'RESOURCETYPE',
+      abbr.resourceGroups
+    )
+var resourceGroupMonitoring = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'monitoring', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'monitoring'), 'LOCATION', vmsLocAbbr),
+      'RESOURCETYPE',
+      abbr.resourceGroups
+    )
+// Seed matches keyVaults.bicep exactly:
+// - With a location segment: seed on (subscriptionId, rgName) — location is already in the name
+// - Without a location segment: add virtualMachinesRegion to the seed so cross-region deployments
+//   don't collide, matching the keyVaults.bicep behaviour (which seeds on location param).
+var uniqueStringOperations = take(
+  (useCustomNaming && !contains(cnv_segments, 'location'))
+    ? uniqueString(subscription().subscriptionId, resourceGroupOperations, virtualMachinesRegion)
+    : uniqueString(subscription().subscriptionId, resourceGroupOperations),
+  6
 )
-var resourceGroupMonitoring = replace(
-  replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'monitoring'), 'LOCATION', vmsLocAbbr),
-  'RESOURCETYPE',
-  abbr.resourceGroups
-)
-var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, resourceGroupOperations), 6)
 // Key Vault names are seeded on resourceGroupOperations so the standalone keyVaults.bicep
 // deployment produces identical names to the inline fallback, preventing duplicates.
+//
+// Unique suffix behaviour:
+//   base len <= 20  → append '-{6chars}'  (at least 3 unique chars after the delimiter)
+//   base len 21-24  → use base only; appending a suffix would leave fewer than 3 unique chars
+//   base len > 24   → still use take(..., 24); portal blocks deployment via the Error infobox
+var kvBaseSecrets    = cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'sec', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var kvBaseEncryption = cnv(cnv_segments, cnv_sep, cnv_rtCodes.keyVaults, 'enc', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var keyVaultNameSecrets = take(
-  replace(
-    replace(replace(nameConv_Shared_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'), 'LOCATION', vmsLocAbbr),
-    'RESOURCETYPE',
-    abbr.keyVaults
-  ),
+  useCustomNaming
+    ? (length(kvBaseSecrets) <= 20
+        ? '${kvBaseSecrets}-${uniqueStringOperations}'
+        : kvBaseSecrets)
+    : replace(
+        replace(replace(nameConv_Shared_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'), 'LOCATION', vmsLocAbbr),
+        'RESOURCETYPE',
+        abbr.keyVaults
+      ),
   24
 )
 var keyVaultNameEncryption = take(
-  replace(
-    replace(replace(nameConv_Shared_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'), 'LOCATION', vmsLocAbbr),
-    'RESOURCETYPE',
-    abbr.keyVaults
-  ),
+  useCustomNaming
+    ? (length(kvBaseEncryption) <= 20
+        ? '${kvBaseEncryption}-${uniqueStringOperations}'
+        : kvBaseEncryption)
+    : replace(
+        replace(replace(nameConv_Shared_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'), 'LOCATION', vmsLocAbbr),
+        'RESOURCETYPE',
+        abbr.keyVaults
+      ),
   24
 )
 
-var dataCollectionEndpointName = replace(
-  replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.dataCollectionEndpoints), 'LOCATION', vmsLocAbbr),
-  'TOKEN-',
-  ''
-)
-var logAnalyticsWorkspaceName = replace(
-  replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.logAnalyticsWorkspaces), 'LOCATION', vmsLocAbbr),
-  'TOKEN-',
-  ''
-)
+var dataCollectionEndpointName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.dataCollectionEndpoints), 'LOCATION', vmsLocAbbr),
+      'TOKEN-',
+      ''
+    )
+var logAnalyticsWorkspaceName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.logAnalyticsWorkspaces, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.logAnalyticsWorkspaces), 'LOCATION', vmsLocAbbr),
+      'TOKEN-',
+      ''
+    )
 
 // Global Feed Resources
 var globalFeedResourceGroupName = !(empty(globalFeedRegion))
-  ? replace(
-      replace(
-        (nameConvReversed ? 'avd-global-feed-${nameConvSuffix}' : 'RESOURCETYPE-avd-global-feed-${nameConvSuffix}'),
-        'LOCATION',
-        cpLocAbbr
-      ),
-      'RESOURCETYPE',
-      '${abbr.resourceGroups}'
-    )
+  ? useCustomNaming
+      ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+      : replace(
+          replace(
+            (nameConvReversed ? 'avd-global-feed-${nameConvSuffix}' : 'RESOURCETYPE-avd-global-feed-${nameConvSuffix}'),
+            'LOCATION',
+            cpLocAbbr
+          ),
+          'RESOURCETYPE',
+          '${abbr.resourceGroups}'
+        )
   : ''
-var globalFeedWorkspaceName = replace(
-  (nameConvReversed ? 'avd-global-feed-RESOURCETYPE' : 'RESOURCETYPE-avd-global-feed'),
-  'RESOURCETYPE',
-  abbr.workspaces
-)
+var globalFeedWorkspaceName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.workspaces, 'global-feed', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      (nameConvReversed ? 'avd-global-feed-RESOURCETYPE' : 'RESOURCETYPE-avd-global-feed'),
+      'RESOURCETYPE',
+      abbr.workspaces
+    )
 
 // Control Plane Shared Resources
-var resourceGroupControlPlane = empty(existingHostPoolResourceId)
-  ? empty(existingFeedWorkspaceResourceId)
-      ? replace(
+var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
+  ? useCustomNaming
+      ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, 'control-plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+      : replace(
           replace(replace(nameConv_Shared_ResGroup, 'TOKEN', 'control-plane'), 'LOCATION', '${cpLocAbbr}'),
           'RESOURCETYPE',
           '${abbr.resourceGroups}'
         )
-      : split(existingFeedWorkspaceResourceId, '/')[4]
-  : split(existingHostPoolResourceId, '/')[4]
+  : split(existingFeedWorkspaceResourceId, '/')[4]
 var workspaceName = empty(existingFeedWorkspaceResourceId)
-  ? replace(
-      replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.workspaces), 'LOCATION', cpLocAbbr),
-      'TOKEN-',
-      ''
-    )
+  ? useCustomNaming
+      ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+      : replace(
+          replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.workspaces), 'LOCATION', cpLocAbbr),
+          'TOKEN-',
+          ''
+        )
   : last(split(existingFeedWorkspaceResourceId, '/'))
 
 // Control Plane HostPool Resources
-var desktopApplicationGroupName = replace(
-  replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', abbr.desktopApplicationGroups),
-  'LOCATION',
-  cpLocAbbr
-)
-var hostPoolName = replace(
-  replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', abbr.hostPools),
-  'LOCATION',
-  cpLocAbbr
-)
-var scalingPlanName = replace(
-  replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', abbr.scalingPlans),
-  'LOCATION',
-  cpLocAbbr
-)
+var desktopApplicationGroupName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.desktopApplicationGroups, hpBaseName, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', abbr.desktopApplicationGroups),
+      'LOCATION',
+      cpLocAbbr
+    )
+var hostPoolName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.hostPools, hpBaseName, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', abbr.hostPools),
+      'LOCATION',
+      cpLocAbbr
+    )
+var scalingPlanName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.scalingPlans, hpBaseName, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'TOKEN-', ''), 'RESOURCETYPE', abbr.scalingPlans),
+      'LOCATION',
+      cpLocAbbr
+    )
 
 // Common HostPool Resource Naming
+// PE/NIC naming follows RT-first/last ordering from the active convention.
+// cnv_rtFirst = true  → RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID
+// cnv_rtFirst = false → RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE
 var privateEndpointNameConv = replace(
-  nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
+  cnv_rtFirst ? 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID' : 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE',
   'RESOURCETYPE',
-  abbr.privateEndpoints
+  cnv_rtCodes.privateEndpoints
 )
-var privateEndpointNICNameConvTemp = nameConvReversed
-  ? '${privateEndpointNameConv}-RESOURCETYPE'
-  : 'RESOURCETYPE-${privateEndpointNameConv}'
-var privateEndpointNICNameConv = replace(privateEndpointNICNameConvTemp, 'RESOURCETYPE', abbr.networkInterfaces)
-var recoveryServicesVaultNameVMs = replace(
-  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
-  'TOKEN-',
-  ''
-)
-var recoveryServicesVaultNameFSLogix = replace(
-  replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
-  'TOKEN',
-  'files'
-)
-var userAssignedIdentityNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.userAssignedIdentities),
-  'LOCATION',
-  vmsLocAbbr
-)
+var privateEndpointNICNameConvTemp = cnv_rtFirst
+  ? 'RESOURCETYPE-${privateEndpointNameConv}'
+  : '${privateEndpointNameConv}-RESOURCETYPE'
+var privateEndpointNICNameConv = replace(privateEndpointNICNameConvTemp, 'RESOURCETYPE', cnv_rtCodes.networkInterfaces)
+var recoveryServicesVaultNameVMs = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.recoveryServicesVaults, hpBaseName, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
+      'TOKEN-',
+      ''
+    )
+var recoveryServicesVaultNameFSLogix = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.recoveryServicesVaults, 'files', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', abbr.recoveryServicesVaults), 'LOCATION', vmsLocAbbr),
+      'TOKEN',
+      'files'
+    )
+var userAssignedIdentityNameConv = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.userAssignedIdentities, '${hpBaseName}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.userAssignedIdentities),
+      'LOCATION',
+      vmsLocAbbr
+    )
 
 // Compute Resources
-var resourceGroupHosts = replace(
-  replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'hosts'), 'LOCATION', '${vmsLocAbbr}'),
-  'RESOURCETYPE',
-  '${abbr.resourceGroups}'
-)
-// ## is placed between TOKEN (purpose/persona) and LOCATION so the AS index
+var resourceGroupHosts = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, '${hpBaseName}-hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'hosts'), 'LOCATION', '${vmsLocAbbr}'),
+      'RESOURCETYPE',
+      '${abbr.resourceGroups}'
+    )
+// ## is placed between purpose/persona and LOCATION so the AS index
 // sits directly after the purpose segment: as-persona-01-01-eus / persona-01-01-eus-as
-var availabilitySetNameConv = replace(
-  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.availabilitySets), 'LOCATION', vmsLocAbbr),
-  'TOKEN',
-  '##'
-)
-var virtualMachineNameConv = nameConvReversed
-  ? 'SHNAME-${abbr.virtualMachines}'
-  : '${abbr.virtualMachines}-SHNAME'
-var diskNameConv = nameConvReversed
-  ? 'SHNAME-${abbr.osdisks}'
-  : '${abbr.osdisks}-SHNAME'
-var networkInterfaceNameConv = nameConvReversed
-  ? 'SHNAME-${abbr.networkInterfaces}'
-  : '${abbr.networkInterfaces}-SHNAME'
-var diskAccessName = replace(
-  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.diskAccesses), 'LOCATION', vmsLocAbbr),
-  'TOKEN-',
-  ''
-)
-var diskEncryptionSetNameConv = replace(
-  replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.diskEncryptionSets),
-  'LOCATION',
-  vmsLocAbbr
-)
-var diskEncryptionSetNameConfidentialVMs = replace(diskEncryptionSetNameConv, 'TOKEN-', 'confvm-customer-keys-')
-var diskEncryptionSetNameCustomerManaged = replace(diskEncryptionSetNameConv, 'TOKEN-', 'customer-keys-')
+var availabilitySetNameConv = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.availabilitySets, '${hpBaseName}-##', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.availabilitySets), 'LOCATION', vmsLocAbbr),
+      'TOKEN',
+      '##'
+    )
+var virtualMachineNameConv = cnv_rtFirst
+  ? '${cnv_rtCodes.virtualMachines}-SHNAME'
+  : 'SHNAME-${cnv_rtCodes.virtualMachines}'
+var diskNameConv = cnv_rtFirst
+  ? '${cnv_rtCodes.osdisks}-SHNAME'
+  : 'SHNAME-${cnv_rtCodes.osdisks}'
+var networkInterfaceNameConv = cnv_rtFirst
+  ? '${cnv_rtCodes.networkInterfaces}-SHNAME'
+  : 'SHNAME-${cnv_rtCodes.networkInterfaces}'
+var diskAccessName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.diskAccesses, hpBaseName, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.diskAccesses), 'LOCATION', vmsLocAbbr),
+      'TOKEN-',
+      ''
+    )
+// diskEncryptionSetNameConv retains TOKEN as a differentiator; resolved to specific key-type names below.
+// Using 'TOKEN' (not 'TOKEN-') works correctly for both CAF ('-' separator) and custom (any separator) paths.
+var diskEncryptionSetNameConv = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.diskEncryptionSets, '${hpBaseName}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.diskEncryptionSets),
+      'LOCATION',
+      vmsLocAbbr
+    )
+var diskEncryptionSetNameConfidentialVMs = replace(diskEncryptionSetNameConv, 'TOKEN', 'confvm-customer-keys')
+var diskEncryptionSetNameCustomerManaged = replace(diskEncryptionSetNameConv, 'TOKEN', 'customer-keys')
 var diskEncryptionSetNamePlatformAndCustomerManaged = replace(
   diskEncryptionSetNameConv,
-  'TOKEN-',
-  'platform-and-customer-keys-'
+  'TOKEN',
+  'platform-and-customer-keys'
 )
 
 // Storage Resources
-var resourceGroupStorage = replace(
-  replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'storage'), 'LOCATION', '${vmsLocAbbr}'),
-  'RESOURCETYPE',
-  '${abbr.resourceGroups}'
-)
-var netAppAccountName = replace(
-  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.netAppAccounts), 'LOCATION', vmsLocAbbr),
-  'TOKEN-',
-  ''
-)
-var netAppCapacityPoolName = replace(
-  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.netAppCapacityPools), 'LOCATION', vmsLocAbbr),
-  'TOKEN-',
-  ''
-)
+var resourceGroupStorage = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.resourceGroups, '${hpBaseName}-storage', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_ResGroups, 'TOKEN', 'storage'), 'LOCATION', '${vmsLocAbbr}'),
+      'RESOURCETYPE',
+      '${abbr.resourceGroups}'
+    )
+var netAppAccountName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.netAppAccounts, hpBaseName, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.netAppAccounts), 'LOCATION', vmsLocAbbr),
+      'TOKEN-',
+      ''
+    )
+var netAppCapacityPoolName = useCustomNaming
+  ? cnv(cnv_segments, cnv_sep, cnv_rtCodes.netAppCapacityPools, hpBaseName, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', abbr.netAppCapacityPools), 'LOCATION', vmsLocAbbr),
+      'TOKEN-',
+      ''
+    )
 
 // FSLogix Storage Account Naming Convention (max 15 characters for domain join)
 var uniqueStringStorage = take(uniqueString(subscription().subscriptionId, resourceGroupStorage), 6)
-var fslogixStorageAccountNamePrefix = 'fslogix${uniqueStringStorage}'
+var fslogixStorageAccountNamePrefix = useCustomNaming && !empty(customNamingConvention.?fslogixStoragePrefix ?? '')
+  ? take(toLower(replace(customNamingConvention.fslogixStoragePrefix, '-', '')), 13)
+  : 'fslogix${uniqueStringStorage}'
 var encryptionKeyNameFSLogix = '${hpBaseName}-encryption-key-${fslogixStorageAccountNamePrefix}##'
 var encryptionKeyNameVMs = '${hpBaseName}-encryption-key-vms'
 var encryptionKeyNameConfidentialVMs = '${hpBaseName}-encryption-key-confidential-vms'

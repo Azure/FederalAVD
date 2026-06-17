@@ -1,1182 +1,1174 @@
-﻿{
-	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
-	"view": {
-		"kind": "Form",
-		"properties": {
-			"title": "AVD Image Management",
-			"steps": [
-				{
-					"name": "basics",
-					"label": "Deployment Basics",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "This template deploys AVD image management infrastructure in the selected region. An Azure Compute Gallery is always deployed to store and version custom OS images. Optionally deploy an artifacts storage account (for image build scripts and software installers) and a build logs storage account (for customization logs, auto-purged after 7 days). Zero Trust storage hardening is applied by default: shared key access is disabled, Entra ID authentication is enforced, and network access can be restricted to private endpoints, service endpoints, or permitted IP ranges. Encryption at rest can use platform-managed keys or customer-managed keys (including HSM-backed keys) stored in a Premium Key Vault — the same key vault and rotation policy apply to both storage accounts and gallery image versions."
-							}
-						},
-						{
-							"name": "subscriptionsApi",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"request": {
-								"method": "GET",
-								"path": "/subscriptions?api-version=2022-12-01"
-							}
-						},
-						{
-							"name": "scope",
-							"type": "Microsoft.Common.ResourceScope",
-							"instanceDetailsLabel": "Image Management Location",
-							"location": {
-								"label": "Region",
-								"resourceTypes": [
-									"Microsoft.Compute/galleries"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "storageAccounts",
-					"label": "Storage Accounts",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "Optionally deploy an artifacts storage account (for image build scripts and installers) and/or a build logs storage account (for image customization logs, auto-purged after 7 days). A shared managed identity is deployed when either account is enabled. Shared key access is disabled on all accounts — Entra ID authentication is enforced."
-							}
-						},
-						{
-							"name": "deployArtifactsStorageAccount",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Deploy Artifacts Storage Account",
-							"defaultValue": true,
-							"toolTip": "Deploy the artifacts storage account and managed identity. The managed identity is granted Storage Blob Data Reader. Disable only when all image customizations use fully-qualified public URIs or an external storage account."
-						},
-						{
-							"name": "deployBuildLogsStorageAccount",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Deploy Build Logs Storage Account",
-							"defaultValue": true,
-							"toolTip": "Deploy a dedicated storage account for image build logs. Blobs are automatically purged after 7 days. The managed identity is granted Storage Blob Data Contributor. Pass the buildLogsStorageAccountResourceId output to imageBuild deployments as existingLogStorageAccountResourceId."
-						},
-						{
-							"name": "storageSettings",
-							"type": "Microsoft.Common.Section",
-							"label": "Storage Configuration",
-							"visible": "[or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount)]",
-							"elements": [
-								{
-									"name": "storageNetworkAccess",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Network Access",
-									"defaultValue": "PublicEndpoint",
-									"toolTip": "Network access configuration applied to both storage accounts. Private Endpoint disables public access and routes traffic over the Microsoft backbone. Service Endpoint restricts access to specific subnets — this template configures the storage network ACL rules but does NOT deploy service endpoints to the subnets.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Public Endpoint",
-												"value": "PublicEndpoint"
-											},
-											{
-												"label": "Private Endpoint",
-												"value": "PrivateEndpoint"
-											},
-											{
-												"label": "Service Endpoint",
-												"value": "ServiceEndpoint"
-											}
-										]
-									}
-								},
-								{
-									"name": "permittedIPsInfo",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Permitted IP Addresses / CIDR Ranges (optional)",
-										"style": "Heading"
-									}
-								},
-								{
-									"name": "permittedIPsDescription",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Restrict public access to specific IP addresses or CIDR ranges. Leave empty to allow all public traffic (or fully disable it via Private Endpoint with no IPs). When Private Endpoint is selected alongside IP rules, the private endpoint handles internal traffic while those IPs are permitted over the public endpoint. Has no effect on service endpoint subnet rules."
-									}
-								},
-								{
-									"name": "storagePermittedIPs",
-									"type": "Microsoft.Common.EditableGrid",
-									"label": "Permitted IP Addresses / CIDR Ranges",
-									"visible": true,
-									"toolTip": "",
-									"ariaLabel": "Permitted IP Addresses or CIDR Ranges",
-									"constraints": {
-										"width": "Full",
-										"rows": {
-											"count": {
-												"min": 0,
-												"max": 10
-											}
-										},
-										"columns": [
-											{
-												"id": "ipAddress",
-												"header": "IP Address or CIDR Range",
-												"width": "1fr",
-												"element": {
-													"type": "Microsoft.Common.TextBox",
-													"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
-													"constraints": {
-														"required": true,
-														"validations": [
-															{
-																"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-																"message": "Must be a valid IPv4 address or CIDR range (e.g. 10.0.0.1 or 10.0.0.0/24)."
-															}
-														]
-													}
-												}
-											}
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "privateEndpointSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Private Endpoint Configuration",
-							"visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
-							"elements": [
-								{
-									"name": "virtualNetworksApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), not(empty(steps('basics').scope.subscription)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-									}
-								},
-								{
-									"name": "virtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the primary region are shown.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
-									}
-								},
-								{
-									"name": "subnetsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('storageAccounts').privateEndpointSection.virtualNetwork))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('storageAccounts').privateEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "privateEndpointSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoint Subnet",
-									"toolTip": "Select the subnet for storage account private endpoints. Subnets with delegations are excluded.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-									}
-								}
-							]
-						},
-						{
-							"name": "privateDnsSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Private DNS Zone",
-							"visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
-							"elements": [
-								{
-									"name": "enablePrivateDNSIntegration",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Private DNS Zone Integration",
-									"defaultValue": true,
-									"toolTip": "Register storage private endpoint A records in an Azure Private DNS Zone for proper name resolution."
-								},
-								{
-									"name": "privateDNSZonesSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-									"label": "Private DNS Zone Subscription",
-									"defaultValue": "[steps('basics').scope.subscription.displayName]",
-									"toolTip": "Select the subscription containing your Private DNS Zones. In hub-and-spoke topologies this is typically the connectivity subscription.",
-									"constraints": {
-										"required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-									}
-								},
-								{
-									"name": "privateDNSZonesApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-									}
-								},
-								{
-									"name": "blobPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-									"label": "Blob Storage Private DNS Zone",
-									"multiLine": true,
-									"defaultValue": "[first(map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => zone.name))]",
-									"toolTip": "Select the Private DNS Zone for Blob storage (privatelink.blob.core.windows.net or privatelink.blob.core.usgovcloudapi.net for Azure Government).",
-									"constraints": {
-										"required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-										"allowedValues": "[map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-									}
-								}
-							]
-						},
-						{
-							"name": "serviceEndpointSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Service Endpoint Configuration",
-							"visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'))]",
-							"elements": [
-								{
-									"name": "serviceEndpointInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Warning",
-										"text": "This template adds the selected subnets to the storage account network ACL to allow access via service endpoints. It does NOT deploy service endpoints to the subnets. Microsoft.Storage service endpoints must already be configured on each subnet. Only subnets with an existing Microsoft.Storage service endpoint are listed below."
-									}
-								},
-								{
-									"name": "virtualNetworksApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), not(empty(steps('basics').scope.subscription)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-									}
-								},
-								{
-									"name": "virtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network containing the subnets that will access storage via service endpoints.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
-									}
-								},
-								{
-									"name": "subnetsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('storageAccounts').serviceEndpointSection.virtualNetwork))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('storageAccounts').serviceEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "serviceEndpointSubnets",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Subnets with Microsoft.Storage Service Endpoint",
-									"multiSelect": true,
-									"selectAll": true,
-									"toolTip": "Select all subnets that need access to the storage accounts via service endpoint. Only subnets with an existing Microsoft.Storage service endpoint are listed.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.subnetsApi.value, (snet) => not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage'))))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-									}
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "encryption",
-					"label": "Encryption Key Management",
-					"elements": [
-						{
-							"name": "storage",
-							"type": "Microsoft.Common.Section",
-							"label": "Storage Account Encryption",
-							"elements": [
-								{
-									"name": "storageEncryptionInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Info",
-										"text": "Storage accounts are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
-									}
-								},
-								{
-									"name": "keyManagement",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Key Management",
-									"defaultValue": "PlatformManaged",
-									"toolTip": "Encryption key management applied to all resources in this deployment — storage accounts and gallery image versions. Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Platform-Managed Keys",
-												"value": "PlatformManaged"
-											},
-											{
-												"label": "Customer-Managed Keys",
-												"value": "CustomerManaged"
-											},
-											{
-												"label": "Customer-Managed Keys (HSM-backed)",
-												"value": "CustomerManagedHSM"
-											}
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "gallery",
-							"type": "Microsoft.Common.Section",
-							"label": "Gallery Image Version Encryption",
-							"elements": [
-								{
-									"name": "galleryEncryptionInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Info",
-										"text": "Gallery image versions are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
-									}
-								},
-								{
-									"name": "keyManagement",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Key Management",
-									"defaultValue": "PlatformManaged",
-									"toolTip": "Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Platform-Managed Keys",
-												"value": "PlatformManaged"
-											},
-											{
-												"label": "Customer-Managed Keys",
-												"value": "CustomerManaged"
-											},
-											{
-												"label": "Customer-Managed Keys (HSM-backed)",
-												"value": "CustomerManagedHSM"
-											},
-											{
-												"label": "Platform-Managed and Customer-Managed Keys (Double Encryption)",
-												"value": "PlatformManagedAndCustomerManaged"
-											},
-											{
-												"label": "Platform-Managed and Customer-Managed Keys, HSM-backed (Double Encryption)",
-												"value": "PlatformManagedAndCustomerManagedHSM"
-											}
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "keyVaultSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Key Vault & Rotation",
-							"visible": "[or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged')))]",
-							"elements": [
-								{
-									"name": "cmkInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Info",
-										"text": "Customer-managed keys require an existing Premium SKU Key Vault with soft delete and purge protection enabled. Deploy the Key Vault using the keyVaults template before running this deployment. The deploying identity requires the Key Vault Crypto Officer role on the vault. The same vault and key rotation policy apply to both storage accounts and gallery image versions."
-									}
-								},
-								{
-									"name": "keyVaultsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('basics').scope.subscription))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
-									}
-								},
-								{
-									"name": "encryptionKeyVault",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Encryption Key Vault",
-									"multiLine": true,
-									"toolTip": "Select the Premium SKU Key Vault that holds the customer-managed encryption keys. Only Premium SKU vaults are listed. The same vault is used for storage account and gallery image version encryption.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('encryption').keyVaultSection.keyVaultsApi.value, (kv) => equals(kv.properties.sku.name, 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
-									}
-								},
-								{
-									"name": "keyExpirationInDays",
-									"type": "Microsoft.Common.Slider",
-									"label": "Key Rotation (Days)",
-									"toolTip": "Number of days before the customer-managed encryption key expires and auto-rotates. Applies to all encrypted resources in this deployment.",
-									"min": 7,
-									"max": 365,
-									"defaultValue": 180,
-									"showStepMarkers": false
-								}
-							]
-						},
-						{
-							"name": "cvmDesSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Confidential VM Gallery Disk Encryption Set",
-							"visible": "[not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))]",
-							"elements": [
-								{
-									"name": "cvmDesInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Info",
-										"text": "A Confidential VM Disk Encryption Set (ConfidentialVmEncryptedWithCustomerKey) is required to encrypt gallery image versions that will be used to deploy ConfidentialVM session hosts with customer-managed key encryption of the VM Guest State. This option requires an HSM-backed key management selection. The CVM Orchestrator enterprise application (app ID: bf7b6499-ff71-4aa2-97a4-f372087be7f0) must be created in your tenant before proceeding."
-									}
-								},
-								{
-									"name": "cvmDesWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Warning",
-										"text": "IMPORTANT: The Confidential VM encryption key release policy is immutable once set. This deployment will fail on subsequent runs if the key already exists. Enable this option only on the first deployment per region. Disable it on all future redeployments."
-									}
-								},
-								{
-									"name": "createConfidentialVmGalleryDes",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Create Confidential VM Gallery Disk Encryption Set",
-									"toolTip": "Creates a second DES of type ConfidentialVmEncryptedWithCustomerKey for encrypting gallery image versions intended for ConfidentialVM session host deployments. First deployment only — see warning above.",
-									"defaultValue": false
-								},
-								{
-									"name": "confidentialVMOrchestratorObjectId",
-									"type": "Microsoft.Common.TextBox",
-									"label": "CVM Orchestrator Object ID",
-									"toolTip": "Object ID of the Confidential VM Orchestrator enterprise application in your tenant. Run: Get-AzADServicePrincipal -ApplicationId 'bf7b6499-ff71-4aa2-97a4-f372087be7f0' | Select-Object -ExpandProperty Id",
-									"visible": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
-									"constraints": {
-										"required": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
-										"regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-										"validationMessage": "Must be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
-									}
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "imageBuildRg",
-					"label": "Image Build Resource Group",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "Pre-creates a stable, persistent resource group dedicated to image builds and grants the imageManagement managed identity Contributor on it. The primary purpose is delegation: image build operators who do not have subscription-level permissions to create resource groups can run image builds by pointing imageBuild to this pre-created resource group. Pass the imageBuildResourceGroupResourceId output from this deployment directly to imageBuild as imageBuildResourceGroupId."
-							}
-						},
-						{
-							"name": "deployImageBuildResourceGroup",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Pre-create Image Build Resource Group",
-							"defaultValue": true,
-							"toolTip": "Creates a persistent resource group for image builds and grants the managed identity Contributor on it. Enables image build operators who lack subscription-level resource group creation rights to run image builds. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level."
-						},
-						{
-							"name": "customImageBuildResourceGroupName",
-							"type": "Microsoft.Common.TextBox",
-							"label": "Custom Resource Group Name",
-							"defaultValue": "",
-							"toolTip": "Optional. Override the auto-generated resource group name. Leave empty to use the standard naming convention. Pass the imageBuildResourceGroupResourceId output directly to imageBuild as imageBuildResourceGroupId.",
-							"visible": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
-							"constraints": {
-								"required": false,
-								"validations": [
-									{
-										"regex": "^[a-zA-Z0-9_()\\-.]{0,90}$",
-										"message": "Resource group names may contain letters, numbers, underscores, parentheses, hyphens, and periods, up to 90 characters."
-									}
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "tagsAndNaming",
-					"label": "Tags & Naming",
-					"elements": [
-						{
-							"name": "naming",
-							"type": "Microsoft.Common.Section",
-							"label": "Naming Convention",
-							"elements": [
-								{
-									"name": "namingDescription",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "By default, resources are named using the Cloud Adoption Framework (CAF) convention: the resource type abbreviation appears first, followed by a workload identifier, component role, and region. For example: rg-avd-image-management-eus (resource group), gal-avd-imagegallery-eus (gallery), saavdartifactseus (storage account). Use the options below to adjust the resource type position or fully customize the component order and values.",
-										"link": {
-											"label": "Resource Naming | Microsoft Learn",
-											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
-										}
-									}
-								},
-								{
-									"name": "nameConvResTypeAtEnd",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Resource Type Abbreviation at End of Name",
-									"visible": "[not(steps('tagsAndNaming').naming.enableCustomNaming)]",
-									"toolTip": "When checked, names follow the pattern 'avd-image-management-eus-gal'. When unchecked (default), names follow 'gal-avd-image-management-eus'. Has no effect when a custom naming convention is enabled — component order controls resource type placement instead."
-								},
-								{
-									"name": "enableCustomNaming",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Custom Naming Convention",
-									"toolTip": "When checked, all image management and image build resources will be named according to the components and order you define below."
-								},
-								{
-									"name": "builderInfo",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"options": {
-										"text": "Select the components that make up your naming convention and arrange them in order using Component 1 through Component 6. Select 'None (stop here)' to end the sequence. Auto-resolved components — Resource Type, Purpose, Location — are substituted per resource at deployment time. Value components — Workload, Environment, Free-form Text 1, Free-form Text 2 — require you to supply a value in the fields that appear below."
-									}
-								},
-								{
-									"name": "componentGuidanceInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"options": {
-										"style": "Success",
-										"text": "Recommended components for conflict-free, identifiable names: Required - Resource Type (identifies the resource category: rg, gal, sa, uai, pe, nic, des), Purpose (distinguishes resources of the same type from one another), Workload (scopes names to your application or project). Highly Recommended - Location (prevents name collisions when deploying across regions)."
-									}
-								},
-								{
-									"name": "delimiter",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Delimiter",
-									"defaultValue": "-",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"toolTip": "Character(s) placed between each component. A hyphen (-) is most common. Storage account names cannot contain hyphens — they are stripped automatically for those resources.",
-									"constraints": {
-										"required": true,
-										"regex": "^[-_.]{1,3}$",
-										"validationMessage": "Use 1 to 3 characters: hyphens (-), underscores (_), or dots (.) only."
-									}
-								},
-								{
-									"name": "component1",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 1",
-									"multiLine": true,
-									"toolTip": "First component of every resource name.",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component2",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 2",
-									"defaultValue": "none",
-									"multiLine": true,
-									"toolTip": "Second component. Select 'None (stop here)' to use only 1 component.",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 1.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component3",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 3",
-									"defaultValue": "none",
-									"multiLine": true,
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')))]",
-									"toolTip": "Third component. Select 'None (stop here)' to use only 2 components.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 2.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component4",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 4",
-									"defaultValue": "none",
-									"multiLine": true,
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')))]",
-									"toolTip": "Fourth component. Select 'None (stop here)' to use only 3 components.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 3.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component5",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 5",
-									"defaultValue": "none",
-									"multiLine": true,
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), and(not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none'))))]",
-									"toolTip": "Fifth component. Select 'None (stop here)' to use only 4 components.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 4.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component6",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 6",
-									"defaultValue": "none",
-									"multiLine": true,
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none')), not(equals(steps('tagsAndNaming').naming.component5, 'none')))]",
-									"toolTip": "Sixth component. Select 'None (stop here)' to use only 5 components.",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 5.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "workloadValue",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Workload Value",
-									"placeholder": "e.g. avd, sharepoint, navigator",
-									"toolTip": "The workload/application/project name (CAF: Workload). Appears in every resource name when the Workload component is selected.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9-]{1,20}$",
-										"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
-									}
-								},
-								{
-									"name": "freeform1Value",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Free-form Text 1 Value",
-									"placeholder": "e.g. contoso, shared, corp",
-									"toolTip": "The fixed value used for the Free-form Text 1 component in all resource names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform1'), equals(steps('tagsAndNaming').naming.component6, 'freeform1'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9-]{1,20}$",
-										"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
-									}
-								},
-								{
-									"name": "environmentValue",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Environment Value",
-									"placeholder": "e.g. pr, np, co, dev, prod",
-									"toolTip": "The fixed value used for the Environment component in all resource names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'environment'), or(equals(steps('tagsAndNaming').naming.component2, 'environment'), or(equals(steps('tagsAndNaming').naming.component3, 'environment'), or(equals(steps('tagsAndNaming').naming.component4, 'environment'), or(equals(steps('tagsAndNaming').naming.component5, 'environment'), equals(steps('tagsAndNaming').naming.component6, 'environment'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,4}$",
-										"validationMessage": "Use 1 to 4 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "freeform2Value",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Free-form Text 2 Value",
-									"placeholder": "e.g. contoso, shared",
-									"toolTip": "A second fixed text string embedded in every resource name when the Free-form Text 2 component is used.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform2'), equals(steps('tagsAndNaming').naming.component6, 'freeform2'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9-]{1,20}$",
-										"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
-									}
-								},
-								{
-									"name": "locationAbbreviationOverride",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Custom Location Abbreviation",
-									"placeholder": "e.g. east, va, eus2",
-									"defaultValue": "",
-									"toolTip": "Override the auto-resolved region abbreviation. Leave empty to use the standard abbreviation from the locations data file (e.g. eus for East US, va for US Gov Virginia).",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))]",
-									"constraints": {
-										"required": false,
-										"regex": "^[a-z0-9]{0,10}$",
-										"validationMessage": "Use up to 10 lowercase letters or digits. Leave empty to use the auto-resolved abbreviation."
-									}
-								},
-								{
-									"name": "noResourceTypeError",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))))]",
-									"options": {
-										"style": "Error",
-										"text": "No Resource Type component selected. Including Resource Type is strongly recommended - it identifies the resource category at a glance and follows the Cloud Adoption Framework naming standard (e.g. rg-avd-image-management-eus, gal-avd-imagegallery-eus)."
-									}
-								},
-								{
-									"name": "noPurposeError",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'purpose'), or(equals(steps('tagsAndNaming').naming.component2, 'purpose'), or(equals(steps('tagsAndNaming').naming.component3, 'purpose'), or(equals(steps('tagsAndNaming').naming.component4, 'purpose'), or(equals(steps('tagsAndNaming').naming.component5, 'purpose'), equals(steps('tagsAndNaming').naming.component6, 'purpose'))))))))]",
-									"options": {
-										"style": "Error",
-										"text": "No 'Purpose' component selected. Resources of the same type in this deployment (e.g. both storage accounts for artifacts and logs) will have identical names. Including 'Purpose' is required."
-									}
-								},
-								{
-									"name": "noWorkloadWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))))]",
-									"options": {
-										"style": "Warning",
-										"text": "No 'Workload' component selected. Including Workload is strongly recommended - it scopes resource names to your application or project and prevents collisions with other deployments using the same convention."
-									}
-								},
-								{
-									"name": "noLocationWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))))]",
-									"options": {
-										"style": "Warning",
-										"text": "No 'Location' component selected. If you plan to deploy Image Management in multiple regions (e.g. a primary gallery and a remote gallery in a second region), include Location in your convention to avoid resource name conflicts between deployments."
-									}
-								},
-								{
-									"name": "rtCodeRg",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Resource Groups abbreviation",
-									"defaultValue": "rg",
-									"toolTip": "Abbreviation substituted for the Resource Type component in resource group names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodeGal",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Compute Galleries abbreviation",
-									"defaultValue": "gal",
-									"toolTip": "Abbreviation substituted for the Resource Type component in gallery names. Gallery names replace hyphens with underscores automatically.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodeUai",
-									"type": "Microsoft.Common.TextBox",
-									"label": "User Assigned Identities abbreviation",
-									"defaultValue": "uai",
-									"toolTip": "Abbreviation substituted for the Resource Type component in managed identity names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodeSa",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Storage Accounts abbreviation",
-									"defaultValue": "sa",
-									"toolTip": "Abbreviation substituted for the Resource Type component in storage account names. Storage names strip hyphens and are capped at 24 characters.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodePe",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Private Endpoints abbreviation",
-									"defaultValue": "pe",
-									"toolTip": "Abbreviation substituted for the Resource Type component in private endpoint names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodeNic",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Network Interfaces abbreviation",
-									"defaultValue": "nic",
-									"toolTip": "Abbreviation substituted for the Resource Type component in private endpoint network interface names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodeDes",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Disk Encryption Sets abbreviation",
-									"defaultValue": "des",
-									"toolTip": "Abbreviation substituted for the Resource Type component in disk encryption set names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "previewHeading",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Name Preview"
-									},
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
-								},
-								{
-									"name": "previewRg",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "[concat('Resource Group: ', if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))),''))]"
-									},
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
-								},
-								{
-									"name": "previewNotes",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Info",
-										"text": "Preview shows the resource group name. Gallery names use underscores instead of hyphens. Storage account names follow the custom convention but with all delimiters stripped (alphanumeric only) and use 'assets' / 'logs' as short purpose tokens to keep the two accounts distinct. A uniqueString suffix is always appended and the result is truncated to 24 characters for global uniqueness. Location shows '{loc}' when no custom abbreviation is provided — the actual value (e.g. eus, va) is resolved at deployment time from the selected region."
-									},
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
-								}
-							]
-						},
-						{
-							"name": "tags",
-							"type": "Microsoft.Common.Section",
-							"label": "Resource Tags",
-							"elements": [
-								{
-									"name": "infoBox",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Apply tags to the deployed resources. Tags are applied per resource type."
-									}
-								},
-								{
-									"name": "resourceTags",
-									"type": "Microsoft.Common.TagsByResource",
-									"resources": [
-										"Microsoft.Resources/resourceGroups",
-										"Microsoft.Compute/galleries",
-										"Microsoft.Storage/storageAccounts",
-										"Microsoft.ManagedIdentity/userAssignedIdentities",
-										"Microsoft.Network/privateEndpoints"
-									]
-								}
-							]
-						}
-					]
-				}
-			]
-		},
-		"outputs": {
-			"kind": "Subscription",
-			"location": "[steps('basics').scope.location.name]",
-			"subscriptionId": "[steps('basics').scope.subscription.id]",
-			"parameters": {
-				"location": "[steps('basics').scope.location.name]",
-				"deployArtifactsStorageAccount": "[steps('storageAccounts').deployArtifactsStorageAccount]",
-				"deployBuildLogsStorageAccount": "[steps('storageAccounts').deployBuildLogsStorageAccount]",
-				"storageNetworkAccess": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.storageNetworkAccess, 'PublicEndpoint')]",
-				"privateEndpointSubnetResourceId": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateEndpointSection.privateEndpointSubnet, '')]",
-				"azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
-				"storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
-				"storagePermittedIPs": "[filter(map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
-				"keyManagementStorageAccounts": "[steps('encryption').storage.keyManagement]",
-				"keyManagementGalleryImageVersions": "[steps('encryption').gallery.keyManagement]",
-				"encryptionKeyVaultResourceId": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.encryptionKeyVault, '')]",
-				"keyExpirationInDays": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.keyExpirationInDays, 180)]",
-				"createConfidentialVmGalleryDes": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
-				"confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
-				"deployImageBuildResourceGroup": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
-				"customImageBuildResourceGroupName": "[if(steps('imageBuildRg').deployImageBuildResourceGroup, steps('imageBuildRg').customImageBuildResourceGroupName, '')]",
-				"nameConvResTypeAtEnd": "[steps('tagsAndNaming').naming.nameConvResTypeAtEnd]",
-				"customNamingConvention": "[if(steps('tagsAndNaming').naming.enableCustomNaming, parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', steps('tagsAndNaming').naming.component2, '\",\"', steps('tagsAndNaming').naming.component3, '\",\"', steps('tagsAndNaming').naming.component4, '\",\"', steps('tagsAndNaming').naming.component5, '\",\"', steps('tagsAndNaming').naming.component6, '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"computeGalleries\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\",\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes), '\"}}')), parse('{}'))]",
-				"tags": "[steps('tagsAndNaming').tags.resourceTags]"
-			}
-		}
-	}
+{
+    "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+    "view": {
+        "kind": "Form",
+        "properties": {
+            "title": "AVD Image Management",
+            "steps": [
+                {
+                    "name": "basics",
+                    "label": "Deployment Basics",
+                    "elements": [
+                        {
+                            "name": "infoBox",
+                            "type": "Microsoft.Common.InfoBox",
+                            "options": {
+                                "style": "Info",
+                                "text": "This template deploys AVD image management infrastructure in the selected region. An Azure Compute Gallery is always deployed to store and version custom OS images. Optionally deploy an artifacts storage account (for image build scripts and software installers) and a build logs storage account (for customization logs, auto-purged after 7 days). Zero Trust storage hardening is applied by default: shared key access is disabled, Entra ID authentication is enforced, and network access can be restricted to private endpoints, service endpoints, or permitted IP ranges. Encryption at rest can use platform-managed keys or customer-managed keys (including HSM-backed keys) stored in a Premium Key Vault — the same key vault and rotation policy apply to both storage accounts and gallery image versions."
+                            }
+                        },
+                        {
+                            "name": "subscriptionsApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "GET",
+                                "path": "/subscriptions?api-version=2022-12-01"
+                            }
+                        },
+                        {
+                            "name": "scope",
+                            "type": "Microsoft.Common.ResourceScope",
+                            "instanceDetailsLabel": "Image Management Location",
+                            "location": {
+                                "label": "Region",
+                                "resourceTypes": [
+                                    "Microsoft.Compute/galleries"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "storageAccounts",
+                    "label": "Storage Accounts",
+                    "elements": [
+                        {
+                            "name": "infoBox",
+                            "type": "Microsoft.Common.InfoBox",
+                            "options": {
+                                "style": "Info",
+                                "text": "Optionally deploy an artifacts storage account (for image build scripts and installers) and/or a build logs storage account (for image customization logs, auto-purged after 7 days). A shared managed identity is deployed when either account is enabled. Shared key access is disabled on all accounts — Entra ID authentication is enforced."
+                            }
+                        },
+                        {
+                            "name": "deployArtifactsStorageAccount",
+                            "type": "Microsoft.Common.CheckBox",
+                            "label": "Deploy Artifacts Storage Account",
+                            "defaultValue": true,
+                            "toolTip": "Deploy the artifacts storage account and managed identity. The managed identity is granted Storage Blob Data Reader. Disable only when all image customizations use fully-qualified public URIs or an external storage account."
+                        },
+                        {
+                            "name": "deployBuildLogsStorageAccount",
+                            "type": "Microsoft.Common.CheckBox",
+                            "label": "Deploy Build Logs Storage Account",
+                            "defaultValue": true,
+                            "toolTip": "Deploy a dedicated storage account for image build logs. Blobs are automatically purged after 7 days. The managed identity is granted Storage Blob Data Contributor. Pass the buildLogsStorageAccountResourceId output to imageBuild deployments as existingLogStorageAccountResourceId."
+                        },
+                        {
+                            "name": "storageSettings",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Storage Configuration",
+                            "visible": "[or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount)]",
+                            "elements": [
+                                {
+                                    "name": "storageNetworkAccess",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Network Access",
+                                    "defaultValue": "PublicEndpoint",
+                                    "toolTip": "Network access configuration applied to both storage accounts. Private Endpoint disables public access and routes traffic over the Microsoft backbone. Service Endpoint restricts access to specific subnets — this template configures the storage network ACL rules but does NOT deploy service endpoints to the subnets.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Public Endpoint",
+                                                "value": "PublicEndpoint"
+                                            },
+                                            {
+                                                "label": "Private Endpoint",
+                                                "value": "PrivateEndpoint"
+                                            },
+                                            {
+                                                "label": "Service Endpoint",
+                                                "value": "ServiceEndpoint"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "permittedIPsInfo",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "Permitted IP Addresses / CIDR Ranges (optional)",
+                                        "style": "Heading"
+                                    }
+                                },
+                                {
+                                    "name": "permittedIPsDescription",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "Restrict public access to specific IP addresses or CIDR ranges. Leave empty to allow all public traffic (or fully disable it via Private Endpoint with no IPs). When Private Endpoint is selected alongside IP rules, the private endpoint handles internal traffic while those IPs are permitted over the public endpoint. Has no effect on service endpoint subnet rules."
+                                    }
+                                },
+                                {
+                                    "name": "storagePermittedIPs",
+                                    "type": "Microsoft.Common.EditableGrid",
+                                    "label": "Permitted IP Addresses / CIDR Ranges",
+                                    "visible": true,
+                                    "toolTip": "",
+                                    "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+                                    "constraints": {
+                                        "width": "Full",
+                                        "rows": {
+                                            "count": {
+                                                "min": 0,
+                                                "max": 10
+                                            }
+                                        },
+                                        "columns": [
+                                            {
+                                                "id": "ipAddress",
+                                                "header": "IP Address or CIDR Range",
+                                                "width": "1fr",
+                                                "element": {
+                                                    "type": "Microsoft.Common.TextBox",
+                                                    "placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+                                                    "constraints": {
+                                                        "required": true,
+                                                        "validations": [
+                                                            {
+                                                                "regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+                                                                "message": "Must be a valid IPv4 address or CIDR range (e.g. 10.0.0.1 or 10.0.0.0/24)."
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "privateEndpointSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Private Endpoint Configuration",
+                            "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
+                            "elements": [
+                                {
+                                    "name": "virtualNetworksApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), not(empty(steps('basics').scope.subscription)))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "virtualNetwork",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Virtual Network",
+                                    "multiLine": true,
+                                    "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the primary region are shown.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "subnetsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[not(empty(steps('storageAccounts').privateEndpointSection.virtualNetwork))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('storageAccounts').privateEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "privateEndpointSubnet",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Private Endpoint Subnet",
+                                    "toolTip": "Select the subnet for storage account private endpoints. Subnets with delegations are excluded.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "privateDnsSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Private DNS Zone",
+                            "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
+                            "elements": [
+                                {
+                                    "name": "enablePrivateDNSIntegration",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Enable Private DNS Zone Integration",
+                                    "defaultValue": true,
+                                    "toolTip": "Register storage private endpoint A records in an Azure Private DNS Zone for proper name resolution."
+                                },
+                                {
+                                    "name": "privateDNSZonesSubscription",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+                                    "label": "Private DNS Zone Subscription",
+                                    "defaultValue": "[steps('basics').scope.subscription.displayName]",
+                                    "toolTip": "Select the subscription containing your Private DNS Zones. In hub-and-spoke topologies this is typically the connectivity subscription.",
+                                    "constraints": {
+                                        "required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+                                        "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "privateDNSZonesApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[and(steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription)))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "blobPrivateDnsZone",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+                                    "label": "Blob Storage Private DNS Zone",
+                                    "multiLine": true,
+                                    "defaultValue": "[first(map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => zone.name))]",
+                                    "toolTip": "Select the Private DNS Zone for Blob storage (privatelink.blob.core.windows.net or privatelink.blob.core.usgovcloudapi.net for Azure Government).",
+                                    "constraints": {
+                                        "required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
+                                        "allowedValues": "[map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "serviceEndpointSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Service Endpoint Configuration",
+                            "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'))]",
+                            "elements": [
+                                {
+                                    "name": "serviceEndpointInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "This template adds the selected subnets to the storage account network ACL to allow access via service endpoints. It does NOT deploy service endpoints to the subnets. Microsoft.Storage service endpoints must already be configured on each subnet. Only subnets with an existing Microsoft.Storage service endpoint are listed below."
+                                    }
+                                },
+                                {
+                                    "name": "virtualNetworksApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), not(empty(steps('basics').scope.subscription)))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "virtualNetwork",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Virtual Network",
+                                    "multiLine": true,
+                                    "toolTip": "Select the virtual network containing the subnets that will access storage via service endpoints.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "subnetsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[not(empty(steps('storageAccounts').serviceEndpointSection.virtualNetwork))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('storageAccounts').serviceEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "serviceEndpointSubnets",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Subnets with Microsoft.Storage Service Endpoint",
+                                    "multiSelect": true,
+                                    "selectAll": true,
+                                    "toolTip": "Select all subnets that need access to the storage accounts via service endpoint. Only subnets with an existing Microsoft.Storage service endpoint are listed.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.subnetsApi.value, (snet) => not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage'))))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "encryption",
+                    "label": "Encryption Key Management",
+                    "elements": [
+                        {
+                            "name": "storage",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Storage Account Encryption",
+                            "elements": [
+                                {
+                                    "name": "storageEncryptionInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Storage accounts are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
+                                    }
+                                },
+                                {
+                                    "name": "keyManagement",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Key Management",
+                                    "defaultValue": "PlatformManaged",
+                                    "toolTip": "Encryption key management applied to all resources in this deployment — storage accounts and gallery image versions. Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Platform-Managed Keys",
+                                                "value": "PlatformManaged"
+                                            },
+                                            {
+                                                "label": "Customer-Managed Keys",
+                                                "value": "CustomerManaged"
+                                            },
+                                            {
+                                                "label": "Customer-Managed Keys (HSM-backed)",
+                                                "value": "CustomerManagedHSM"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "gallery",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Gallery Image Version Encryption",
+                            "elements": [
+                                {
+                                    "name": "galleryEncryptionInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Gallery image versions are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
+                                    }
+                                },
+                                {
+                                    "name": "keyManagement",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Key Management",
+                                    "defaultValue": "PlatformManaged",
+                                    "toolTip": "Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Platform-Managed Keys",
+                                                "value": "PlatformManaged"
+                                            },
+                                            {
+                                                "label": "Customer-Managed Keys",
+                                                "value": "CustomerManaged"
+                                            },
+                                            {
+                                                "label": "Customer-Managed Keys (HSM-backed)",
+                                                "value": "CustomerManagedHSM"
+                                            },
+                                            {
+                                                "label": "Platform-Managed and Customer-Managed Keys (Double Encryption)",
+                                                "value": "PlatformManagedAndCustomerManaged"
+                                            },
+                                            {
+                                                "label": "Platform-Managed and Customer-Managed Keys, HSM-backed (Double Encryption)",
+                                                "value": "PlatformManagedAndCustomerManagedHSM"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "keyVaultSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Key Vault & Rotation",
+                            "visible": "[or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged')))]",
+                            "elements": [
+                                {
+                                    "name": "cmkInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Customer-managed keys require an existing Premium SKU Key Vault with soft delete and purge protection enabled. Deploy the Key Vault using the keyVaults template before running this deployment. The deploying identity requires the Key Vault Crypto Officer role on the vault. The same vault and key rotation policy apply to both storage accounts and gallery image versions."
+                                    }
+                                },
+                                {
+                                    "name": "keyVaultsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[not(empty(steps('basics').scope.subscription))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "encryptionKeyVault",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Encryption Key Vault",
+                                    "multiLine": true,
+                                    "toolTip": "Select the Premium SKU Key Vault that holds the customer-managed encryption keys. Only Premium SKU vaults are listed. The same vault is used for storage account and gallery image version encryption.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('encryption').keyVaultSection.keyVaultsApi.value, (kv) => equals(kv.properties.sku.name, 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "keyExpirationInDays",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Key Rotation (Days)",
+                                    "toolTip": "Number of days before the customer-managed encryption key expires and auto-rotates. Applies to all encrypted resources in this deployment.",
+                                    "min": 7,
+                                    "max": 365,
+                                    "defaultValue": 180,
+                                    "showStepMarkers": false
+                                }
+                            ]
+                        },
+                        {
+                            "name": "cvmDesSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Confidential VM Gallery Disk Encryption Set",
+                            "visible": "[not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))]",
+                            "elements": [
+                                {
+                                    "name": "cvmDesInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "A Confidential VM Disk Encryption Set (ConfidentialVmEncryptedWithCustomerKey) is required to encrypt gallery image versions that will be used to deploy ConfidentialVM session hosts with customer-managed key encryption of the VM Guest State. This option requires an HSM-backed key management selection. The CVM Orchestrator enterprise application (app ID: bf7b6499-ff71-4aa2-97a4-f372087be7f0) must be created in your tenant before proceeding."
+                                    }
+                                },
+                                {
+                                    "name": "cvmDesWarning",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "IMPORTANT: The Confidential VM encryption key release policy is immutable once set. This deployment will fail on subsequent runs if the key already exists. Enable this option only on the first deployment per region. Disable it on all future redeployments."
+                                    }
+                                },
+                                {
+                                    "name": "createConfidentialVmGalleryDes",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Create Confidential VM Gallery Disk Encryption Set",
+                                    "toolTip": "Creates a second DES of type ConfidentialVmEncryptedWithCustomerKey for encrypting gallery image versions intended for ConfidentialVM session host deployments. First deployment only — see warning above.",
+                                    "defaultValue": false
+                                },
+                                {
+                                    "name": "confidentialVMOrchestratorObjectId",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "CVM Orchestrator Object ID",
+                                    "toolTip": "Object ID of the Confidential VM Orchestrator enterprise application in your tenant. Run: Get-AzADServicePrincipal -ApplicationId 'bf7b6499-ff71-4aa2-97a4-f372087be7f0' | Select-Object -ExpandProperty Id",
+                                    "visible": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+                                    "constraints": {
+                                        "required": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+                                        "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                        "validationMessage": "Must be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "imageBuildRg",
+                    "label": "Image Build Resource Group",
+                    "elements": [
+                        {
+                            "name": "infoBox",
+                            "type": "Microsoft.Common.InfoBox",
+                            "options": {
+                                "style": "Info",
+                                "text": "Pre-creates a stable, persistent resource group dedicated to image builds and grants the imageManagement managed identity Contributor on it. The primary purpose is delegation: image build operators who do not have subscription-level permissions to create resource groups can run image builds by pointing imageBuild to this pre-created resource group. Pass the imageBuildResourceGroupResourceId output from this deployment directly to imageBuild as imageBuildResourceGroupId."
+                            }
+                        },
+                        {
+                            "name": "deployImageBuildResourceGroup",
+                            "type": "Microsoft.Common.CheckBox",
+                            "label": "Pre-create Image Build Resource Group",
+                            "defaultValue": true,
+                            "toolTip": "Creates a persistent resource group for image builds and grants the managed identity Contributor on it. Enables image build operators who lack subscription-level resource group creation rights to run image builds. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level."
+                        },
+                        {
+                            "name": "customImageBuildResourceGroupName",
+                            "type": "Microsoft.Common.TextBox",
+                            "label": "Custom Resource Group Name",
+                            "defaultValue": "",
+                            "toolTip": "Optional. Override the auto-generated resource group name. Leave empty to use the standard naming convention. Pass the imageBuildResourceGroupResourceId output directly to imageBuild as imageBuildResourceGroupId.",
+                            "visible": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
+                            "constraints": {
+                                "required": false,
+                                "validations": [
+                                    {
+                                        "regex": "^[a-zA-Z0-9_()\\-.]{0,90}$",
+                                        "message": "Resource group names may contain letters, numbers, underscores, parentheses, hyphens, and periods, up to 90 characters."
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "tagsAndNaming",
+                    "label": "Tags & Naming",
+                    "elements": [
+                        {
+                            "name": "naming",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Naming Convention",
+                            "elements": [
+                                {
+                                    "name": "namingDescription",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "By default, resources are named using the Cloud Adoption Framework (CAF) convention: the resource type abbreviation appears first, followed by a workload identifier, component role, and region. For example: rg-avd-image-management-eus (resource group), gal-avd-imagegallery-eus (gallery), saavdartifactseus (storage account). Use the options below to adjust the resource type position or fully customize the component order and values.",
+                                        "link": {
+                                            "label": "Resource Naming | Microsoft Learn",
+                                            "uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "enableCustomNaming",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Enable Custom Naming Convention",
+                                    "toolTip": "When checked, all image management and image build resources will be named according to the components and order you define below."
+                                },
+                                {
+                                    "name": "builderInfo",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                                    "options": {
+                                        "text": "Select the components that make up your naming convention and arrange them in order using Component 1 through Component 6. Select 'None (stop here)' to end the sequence. Auto-resolved components — Resource Type, Purpose, Location — are substituted per resource at deployment time. Value components — Workload, Environment, Free-form Text 1, Free-form Text 2 — require you to supply a value in the fields that appear below."
+                                    }
+                                },
+                                {
+                                    "name": "componentGuidanceInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                                    "options": {
+                                        "style": "Success",
+                                        "text": "Recommended components for conflict-free, identifiable names: Required - Resource Type (identifies the resource category: rg, gal, sa, uai, pe, nic, des), Purpose (distinguishes resources of the same type from one another), Workload (scopes names to your application or project). Highly Recommended - Location (prevents name collisions when deploying across regions)."
+                                    }
+                                },
+                                {
+                                    "name": "delimiter",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Delimiter",
+                                    "defaultValue": "-",
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                                    "toolTip": "Character(s) placed between each component. A hyphen (-) is most common. Storage account names cannot contain hyphens — they are stripped automatically for those resources.",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[-_.]{1,3}$",
+                                        "validationMessage": "Use 1 to 3 characters: hyphens (-), underscores (_), or dots (.) only."
+                                    }
+                                },
+                                {
+                                    "name": "component1",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Component 1",
+                                    "multiLine": true,
+                                    "toolTip": "First component of every resource name.",
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Free-form Text 1",
+                                                "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform1"
+                                            },
+                                            {
+                                                "label": "Environment",
+                                                "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                                                "value": "environment"
+                                            },
+                                            {
+                                                "label": "Resource Type",
+                                                "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+                                                "value": "resourceType"
+                                            },
+                                            {
+                                                "label": "Workload",
+                                                "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                                                "value": "workload"
+                                            },
+                                            {
+                                                "label": "Purpose",
+                                                "description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+                                                "value": "purpose"
+                                            },
+                                            {
+                                                "label": "Location",
+                                                "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                                                "value": "location"
+                                            },
+                                            {
+                                                "label": "Free-form Text 2",
+                                                "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform2"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "component2",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Component 2",
+                                    "defaultValue": "none",
+                                    "multiLine": true,
+                                    "toolTip": "Second component. Select 'None (stop here)' to use only 1 component.",
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "None (stop here)",
+                                                "description": "End the convention after Component 1.",
+                                                "value": "none"
+                                            },
+                                            {
+                                                "label": "Free-form Text 1",
+                                                "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform1"
+                                            },
+                                            {
+                                                "label": "Environment",
+                                                "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                                                "value": "environment"
+                                            },
+                                            {
+                                                "label": "Resource Type",
+                                                "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+                                                "value": "resourceType"
+                                            },
+                                            {
+                                                "label": "Workload",
+                                                "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                                                "value": "workload"
+                                            },
+                                            {
+                                                "label": "Purpose",
+                                                "description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+                                                "value": "purpose"
+                                            },
+                                            {
+                                                "label": "Location",
+                                                "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                                                "value": "location"
+                                            },
+                                            {
+                                                "label": "Free-form Text 2",
+                                                "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform2"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "component3",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Component 3",
+                                    "defaultValue": "none",
+                                    "multiLine": true,
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')))]",
+                                    "toolTip": "Third component. Select 'None (stop here)' to use only 2 components.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "None (stop here)",
+                                                "description": "End the convention after Component 2.",
+                                                "value": "none"
+                                            },
+                                            {
+                                                "label": "Free-form Text 1",
+                                                "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform1"
+                                            },
+                                            {
+                                                "label": "Environment",
+                                                "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                                                "value": "environment"
+                                            },
+                                            {
+                                                "label": "Resource Type",
+                                                "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+                                                "value": "resourceType"
+                                            },
+                                            {
+                                                "label": "Workload",
+                                                "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                                                "value": "workload"
+                                            },
+                                            {
+                                                "label": "Purpose",
+                                                "description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+                                                "value": "purpose"
+                                            },
+                                            {
+                                                "label": "Location",
+                                                "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                                                "value": "location"
+                                            },
+                                            {
+                                                "label": "Free-form Text 2",
+                                                "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform2"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "component4",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Component 4",
+                                    "defaultValue": "none",
+                                    "multiLine": true,
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')))]",
+                                    "toolTip": "Fourth component. Select 'None (stop here)' to use only 3 components.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "None (stop here)",
+                                                "description": "End the convention after Component 3.",
+                                                "value": "none"
+                                            },
+                                            {
+                                                "label": "Free-form Text 1",
+                                                "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform1"
+                                            },
+                                            {
+                                                "label": "Environment",
+                                                "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                                                "value": "environment"
+                                            },
+                                            {
+                                                "label": "Resource Type",
+                                                "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+                                                "value": "resourceType"
+                                            },
+                                            {
+                                                "label": "Workload",
+                                                "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                                                "value": "workload"
+                                            },
+                                            {
+                                                "label": "Purpose",
+                                                "description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+                                                "value": "purpose"
+                                            },
+                                            {
+                                                "label": "Location",
+                                                "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                                                "value": "location"
+                                            },
+                                            {
+                                                "label": "Free-form Text 2",
+                                                "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform2"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "component5",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Component 5",
+                                    "defaultValue": "none",
+                                    "multiLine": true,
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), and(not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none'))))]",
+                                    "toolTip": "Fifth component. Select 'None (stop here)' to use only 4 components.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "None (stop here)",
+                                                "description": "End the convention after Component 4.",
+                                                "value": "none"
+                                            },
+                                            {
+                                                "label": "Free-form Text 1",
+                                                "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform1"
+                                            },
+                                            {
+                                                "label": "Environment",
+                                                "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                                                "value": "environment"
+                                            },
+                                            {
+                                                "label": "Resource Type",
+                                                "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+                                                "value": "resourceType"
+                                            },
+                                            {
+                                                "label": "Workload",
+                                                "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                                                "value": "workload"
+                                            },
+                                            {
+                                                "label": "Purpose",
+                                                "description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+                                                "value": "purpose"
+                                            },
+                                            {
+                                                "label": "Location",
+                                                "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                                                "value": "location"
+                                            },
+                                            {
+                                                "label": "Free-form Text 2",
+                                                "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform2"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "component6",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Component 6",
+                                    "defaultValue": "none",
+                                    "multiLine": true,
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none')), not(equals(steps('tagsAndNaming').naming.component5, 'none')))]",
+                                    "toolTip": "Sixth component. Select 'None (stop here)' to use only 5 components.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "None (stop here)",
+                                                "description": "End the convention after Component 5.",
+                                                "value": "none"
+                                            },
+                                            {
+                                                "label": "Free-form Text 1",
+                                                "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform1"
+                                            },
+                                            {
+                                                "label": "Environment",
+                                                "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                                                "value": "environment"
+                                            },
+                                            {
+                                                "label": "Resource Type",
+                                                "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, gal, uai). Optionally customize abbreviations below.",
+                                                "value": "resourceType"
+                                            },
+                                            {
+                                                "label": "Workload",
+                                                "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                                                "value": "workload"
+                                            },
+                                            {
+                                                "label": "Purpose",
+                                                "description": "Resource purpose — auto-resolved per resource (e.g. image-management, assets, logs). No value required.",
+                                                "value": "purpose"
+                                            },
+                                            {
+                                                "label": "Location",
+                                                "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                                                "value": "location"
+                                            },
+                                            {
+                                                "label": "Free-form Text 2",
+                                                "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                                                "value": "freeform2"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "workloadValue",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Workload Value",
+                                    "placeholder": "e.g. avd, sharepoint, navigator",
+                                    "toolTip": "The workload/application/project name (CAF: Workload). Appears in every resource name when the Workload component is selected.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9-]{1,20}$",
+                                        "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
+                                    }
+                                },
+                                {
+                                    "name": "freeform1Value",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Free-form Text 1 Value",
+                                    "placeholder": "e.g. contoso, shared, corp",
+                                    "toolTip": "The fixed value used for the Free-form Text 1 component in all resource names.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform1'), equals(steps('tagsAndNaming').naming.component6, 'freeform1'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9-]{1,20}$",
+                                        "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
+                                    }
+                                },
+                                {
+                                    "name": "environmentValue",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Environment Value",
+                                    "placeholder": "e.g. pr, np, co, dev, prod",
+                                    "toolTip": "The fixed value used for the Environment component in all resource names.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'environment'), or(equals(steps('tagsAndNaming').naming.component2, 'environment'), or(equals(steps('tagsAndNaming').naming.component3, 'environment'), or(equals(steps('tagsAndNaming').naming.component4, 'environment'), or(equals(steps('tagsAndNaming').naming.component5, 'environment'), equals(steps('tagsAndNaming').naming.component6, 'environment'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,4}$",
+                                        "validationMessage": "Use 1 to 4 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "freeform2Value",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Free-form Text 2 Value",
+                                    "placeholder": "e.g. contoso, shared",
+                                    "toolTip": "A second fixed text string embedded in every resource name when the Free-form Text 2 component is used.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform2'), equals(steps('tagsAndNaming').naming.component6, 'freeform2'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9-]{1,20}$",
+                                        "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
+                                    }
+                                },
+                                {
+                                    "name": "locationAbbreviationOverride",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Custom Location Abbreviation",
+                                    "placeholder": "e.g. east, va, eus2",
+                                    "defaultValue": "",
+                                    "toolTip": "Override the auto-resolved region abbreviation. Leave empty to use the standard abbreviation from the locations data file (e.g. eus for East US, va for US Gov Virginia).",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))]",
+                                    "constraints": {
+                                        "required": false,
+                                        "regex": "^[a-z0-9]{0,10}$",
+                                        "validationMessage": "Use up to 10 lowercase letters or digits. Leave empty to use the auto-resolved abbreviation."
+                                    }
+                                },
+                                {
+                                    "name": "noResourceTypeError",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))))]",
+                                    "options": {
+                                        "style": "Error",
+                                        "text": "No Resource Type component selected. Including Resource Type is strongly recommended - it identifies the resource category at a glance and follows the Cloud Adoption Framework naming standard (e.g. rg-avd-image-management-eus, gal-avd-imagegallery-eus)."
+                                    }
+                                },
+                                {
+                                    "name": "noPurposeError",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'purpose'), or(equals(steps('tagsAndNaming').naming.component2, 'purpose'), or(equals(steps('tagsAndNaming').naming.component3, 'purpose'), or(equals(steps('tagsAndNaming').naming.component4, 'purpose'), or(equals(steps('tagsAndNaming').naming.component5, 'purpose'), equals(steps('tagsAndNaming').naming.component6, 'purpose'))))))))]",
+                                    "options": {
+                                        "style": "Error",
+                                        "text": "No 'Purpose' component selected. Resources of the same type in this deployment (e.g. both storage accounts for artifacts and logs) will have identical names. Including 'Purpose' is required."
+                                    }
+                                },
+                                {
+                                    "name": "noWorkloadWarning",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))))]",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "No 'Workload' component selected. Including Workload is strongly recommended - it scopes resource names to your application or project and prevents collisions with other deployments using the same convention."
+                                    }
+                                },
+                                {
+                                    "name": "noLocationWarning",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))))]",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "No 'Location' component selected. If you plan to deploy Image Management in multiple regions (e.g. a primary gallery and a remote gallery in a second region), include Location in your convention to avoid resource name conflicts between deployments."
+                                    }
+                                },
+                                {
+                                    "name": "rtCodeRg",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Resource Groups abbreviation",
+                                    "defaultValue": "rg",
+                                    "toolTip": "Abbreviation substituted for the Resource Type component in resource group names.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,10}$",
+                                        "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "rtCodeGal",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Compute Galleries abbreviation",
+                                    "defaultValue": "gal",
+                                    "toolTip": "Abbreviation substituted for the Resource Type component in gallery names. Gallery names replace hyphens with underscores automatically.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,10}$",
+                                        "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "rtCodeUai",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "User Assigned Identities abbreviation",
+                                    "defaultValue": "uai",
+                                    "toolTip": "Abbreviation substituted for the Resource Type component in managed identity names.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,10}$",
+                                        "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "rtCodeSa",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Storage Accounts abbreviation",
+                                    "defaultValue": "sa",
+                                    "toolTip": "Abbreviation substituted for the Resource Type component in storage account names. Storage names strip hyphens and are capped at 24 characters.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,10}$",
+                                        "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "rtCodePe",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Private Endpoints abbreviation",
+                                    "defaultValue": "pe",
+                                    "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint names.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,10}$",
+                                        "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "rtCodeNic",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Network Interfaces abbreviation",
+                                    "defaultValue": "nic",
+                                    "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint network interface names.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,10}$",
+                                        "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "rtCodeDes",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Disk Encryption Sets abbreviation",
+                                    "defaultValue": "des",
+                                    "toolTip": "Abbreviation substituted for the Resource Type component in disk encryption set names.",
+                                    "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-z0-9]{1,10}$",
+                                        "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                                    }
+                                },
+                                {
+                                    "name": "previewHeading",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "Name Preview"
+                                    },
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
+                                },
+                                {
+                                    "name": "previewRg",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "[concat('Resource Group: ', if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))),''))]"
+                                    },
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
+                                },
+                                {
+                                    "name": "previewNotes",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Preview shows the resource group name. Gallery names use underscores instead of hyphens. Storage account names follow the custom convention but with all delimiters stripped (alphanumeric only) and use 'assets' / 'logs' as short purpose tokens to keep the two accounts distinct. A uniqueString suffix is always appended and the result is truncated to 24 characters for global uniqueness. Location shows '{loc}' when no custom abbreviation is provided — the actual value (e.g. eus, va) is resolved at deployment time from the selected region."
+                                    },
+                                    "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "tags",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Resource Tags",
+                            "elements": [
+                                {
+                                    "name": "infoBox",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "Apply tags to the deployed resources. Tags are applied per resource type."
+                                    }
+                                },
+                                {
+                                    "name": "resourceTags",
+                                    "type": "Microsoft.Common.TagsByResource",
+                                    "resources": [
+                                        "Microsoft.Resources/resourceGroups",
+                                        "Microsoft.Compute/galleries",
+                                        "Microsoft.Storage/storageAccounts",
+                                        "Microsoft.ManagedIdentity/userAssignedIdentities",
+                                        "Microsoft.Network/privateEndpoints"
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "outputs": {
+            "kind": "Subscription",
+            "location": "[steps('basics').scope.location.name]",
+            "subscriptionId": "[steps('basics').scope.subscription.id]",
+            "parameters": {
+                "location": "[steps('basics').scope.location.name]",
+                "deployArtifactsStorageAccount": "[steps('storageAccounts').deployArtifactsStorageAccount]",
+                "deployBuildLogsStorageAccount": "[steps('storageAccounts').deployBuildLogsStorageAccount]",
+                "storageNetworkAccess": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.storageNetworkAccess, 'PublicEndpoint')]",
+                "privateEndpointSubnetResourceId": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateEndpointSection.privateEndpointSubnet, '')]",
+                "azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
+                "storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
+                "storagePermittedIPs": "[filter(map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+                "keyManagementStorageAccounts": "[steps('encryption').storage.keyManagement]",
+                "keyManagementGalleryImageVersions": "[steps('encryption').gallery.keyManagement]",
+                "encryptionKeyVaultResourceId": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.encryptionKeyVault, '')]",
+                "keyExpirationInDays": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.keyExpirationInDays, 180)]",
+                "createConfidentialVmGalleryDes": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
+                "confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
+                "deployImageBuildResourceGroup": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
+                "customImageBuildResourceGroupName": "[if(steps('imageBuildRg').deployImageBuildResourceGroup, steps('imageBuildRg').customImageBuildResourceGroupName, '')]",
+                "customNamingConvention": "[if(steps('tagsAndNaming').naming.enableCustomNaming, parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', steps('tagsAndNaming').naming.component2, '\",\"', steps('tagsAndNaming').naming.component3, '\",\"', steps('tagsAndNaming').naming.component4, '\",\"', steps('tagsAndNaming').naming.component5, '\",\"', steps('tagsAndNaming').naming.component6, '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"computeGalleries\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\",\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes), '\"}}')), parse('{}'))]",
+                "tags": "[steps('tagsAndNaming').tags.resourceTags]"
+            }
+        }
+    }
 }

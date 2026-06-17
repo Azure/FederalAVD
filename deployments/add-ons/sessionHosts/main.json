@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6551096739238712595"
+      "templateHash": "11131392946450920199"
     }
   },
   "parameters": {
@@ -793,7 +793,7 @@
     "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
     "regionAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
     "hostPoolName": "[last(split(parameters('hostPoolResourceId'), '/'))]",
-    "nameConvReversed": "[if(startsWith(variables('hostPoolName'), format('{0}-', variables('resourceAbbreviations').hostPools)), false(), if(endsWith(variables('hostPoolName'), format('-{0}', variables('resourceAbbreviations').hostPools)), true(), false()))]",
+    "nameConvReversed": "[or(endsWith(variables('hostPoolName'), format('-{0}', variables('resourceAbbreviations').hostPools)), endsWith(variables('hostPoolName'), '-hp'))]",
     "arrHostPoolName": "[split(variables('hostPoolName'), '-')]",
     "hpBaseName": "[if(variables('nameConvReversed'), join(take(variables('arrHostPoolName'), sub(length(variables('arrHostPoolName')), 2)), '-'), join(take(skip(variables('arrHostPoolName'), 1), sub(length(variables('arrHostPoolName')), 2)), '-'))]",
     "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",

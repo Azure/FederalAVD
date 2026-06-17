@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "5146481459685342960"
+      "templateHash": "5463353977354100931"
     }
   },
   "parameters": {
@@ -29,13 +29,6 @@
       "maxLength": 6,
       "metadata": {
         "description": "Value to prepend to the deployment names."
-      }
-    },
-    "nameConvResTypeAtEnd": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name."
       }
     },
     "computeGalleryResourceId": {
@@ -958,13 +951,13 @@
     "downloads": "[if(startsWith(variables('cloud'), 'usn'), variables('$fxv#2'), if(startsWith(variables('cloud'), 'uss'), variables('$fxv#3'), variables('$fxv#4')))]",
     "artifactsContainerUriNormalized": "[if(endsWith(parameters('artifactsContainerUri'), '/'), take(parameters('artifactsContainerUri'), max(sub(length(parameters('artifactsContainerUri')), 1), 0)), parameters('artifactsContainerUri'))]",
     "depPrefix": "[if(not(empty(parameters('deploymentPrefix'))), format('{0}-', parameters('deploymentPrefix')), '')]",
-    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), if(parameters('nameConvResTypeAtEnd'), format('{0}avd-image-builds-{1}-{2}-{3}', variables('depPrefix'), variables('locations')[variables('varLocation')].abbreviation, variables('deploymentSuffix'), variables('resourceAbbreviations').resourceGroups), format('{0}-{1}avd-image-builds-{2}-{3}', variables('resourceAbbreviations').resourceGroups, variables('depPrefix'), variables('locations')[variables('varLocation')].abbreviation, variables('deploymentSuffix'))), format('{0}-{1}', parameters('customBuildResourceGroupName'), variables('deploymentSuffix'))), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
+    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), format('{0}-{1}avd-image-builds-{2}-{3}', variables('resourceAbbreviations').resourceGroups, variables('depPrefix'), variables('locations')[variables('varLocation')].abbreviation, variables('deploymentSuffix')), format('{0}-{1}', parameters('customBuildResourceGroupName'), variables('deploymentSuffix'))), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
     "adminPw": "[format('1qaz@WSX{0}', uniqueString(subscription().id, variables('imageBuildResourceGroupName')))]",
     "adminUserName": "vmadmin",
     "existingLogStorageAccountName": "[if(empty(parameters('logStorageAccountResourceId')), '', last(split(parameters('logStorageAccountResourceId'), '/')))]",
     "logContainerUri": "[if(and(parameters('collectCustomizationLogs'), not(empty(parameters('logStorageAccountResourceId')))), format('https://{0}.blob.{1}/{2}/', variables('existingLogStorageAccountName'), environment().suffixes.storage, parameters('logContainerName')), '')]",
     "galleryImageDefinitionHyperVGeneration": "[if(or(endsWith(parameters('mpSku'), 'g2'), startsWith(parameters('mpSku'), 'win11')), 'V2', 'V1')]",
-    "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), if(parameters('nameConvResTypeAtEnd'), replace(format('{0}-{1}-{2}-{3}', replace(variables('effectiveGalleryImageDefinitionPublisher'), '-', ''), replace(variables('effectiveGalleryImageDefinitionOffer'), '-', ''), replace(variables('effectiveGalleryImageDefinitionSku'), '-', ''), variables('resourceAbbreviations').imageDefinitions), ' ', ''), replace(format('{0}-{1}-{2}-{3}', variables('resourceAbbreviations').imageDefinitions, replace(variables('effectiveGalleryImageDefinitionPublisher'), '-', ''), replace(variables('effectiveGalleryImageDefinitionOffer'), '-', ''), replace(variables('effectiveGalleryImageDefinitionSku'), '-', '')), ' ', '')), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
+    "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), replace(format('{0}-{1}-{2}-{3}', variables('resourceAbbreviations').imageDefinitions, replace(variables('effectiveGalleryImageDefinitionPublisher'), '-', ''), replace(variables('effectiveGalleryImageDefinitionOffer'), '-', ''), replace(variables('effectiveGalleryImageDefinitionSku'), '-', '')), ' ', ''), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
     "effectiveGalleryImageDefinitionOffer": "[if(not(empty(parameters('imageDefinitionOffer'))), replace(parameters('imageDefinitionOffer'), ' ', ''), parameters('mpOffer'))]",
     "effectiveGalleryImageDefinitionPublisher": "[if(not(empty(parameters('imageDefinitionPublisher'))), replace(parameters('imageDefinitionPublisher'), ' ', ''), parameters('mpPublisher'))]",
     "effectiveGalleryImageDefinitionSku": "[if(not(empty(parameters('imageDefinitionSku'))), replace(parameters('imageDefinitionSku'), ' ', ''), parameters('mpSku'))]",

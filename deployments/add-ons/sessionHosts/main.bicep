@@ -195,9 +195,8 @@ var regionAbbreviation = locations[varLocation].abbreviation
 // ── Naming convention auto-detection ─────────────────────────────────────────
 // Mirrors the same logic used in the Session Host Replacer function app.
 var hostPoolName = last(split(hostPoolResourceId, '/'))
-var nameConvReversed = startsWith(hostPoolName, '${resourceAbbreviations.hostPools}-')
-  ? false
-  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') ? true : false
+// Naming convention auto-detection: reversed = resource type at the end (e.g., "avd-prod-eus-vdpool" or "avd-prod-eus-hp")
+var nameConvReversed = endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') || endsWith(hostPoolName, '-hp')
 
 var arrHostPoolName = split(hostPoolName, '-')
 var hpBaseName = nameConvReversed

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "15222911218786510444"
+      "templateHash": "17087430970767258195"
     }
   },
   "parameters": {
@@ -5765,6 +5765,57 @@
                   "toolTip": "Check this box to explicitly define resource names. Required for brownfield deployments with non-standard host pool naming (e.g., 'prod-avd-hostpool-01' instead of 'hp-avd-prod-eus'). If unchecked, names are automatically derived from the host pool name."
                 },
                 {
+                  "name": "derivedNamesPreview",
+                  "type": "Microsoft.Common.Section",
+                  "label": "Derived Resource Names (preview)",
+                  "visible": "[[not(steps('advanced').enableCustomNaming)]",
+                  "elements": [
+                    {
+                      "name": "previewInfo",
+                      "type": "Microsoft.Common.InfoBox",
+                      "options": {
+                        "style": "Info",
+                        "text": "These naming patterns will be automatically derived from your host pool name. To override any of them, enable 'Use Custom Naming Overrides' above."
+                      }
+                    },
+                    {
+                      "name": "previewConventionNote",
+                      "type": "Microsoft.Common.TextBlock",
+                      "options": {
+                        "text": "[[concat('Detected convention: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'Resource type LAST (e.g. avd-prod-eus-vdpool)', 'Resource type FIRST (e.g. vdpool-avd-prod-eus)'))]"
+                      }
+                    },
+                    {
+                      "name": "previewVmConv",
+                      "type": "Microsoft.Common.TextBlock",
+                      "options": {
+                        "text": "[[concat('VM Naming Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-vm', 'vm-SHNAME'))]"
+                      }
+                    },
+                    {
+                      "name": "previewDiskConv",
+                      "type": "Microsoft.Common.TextBlock",
+                      "options": {
+                        "text": "[[concat('OS Disk Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-osdisk', 'osdisk-SHNAME'))]"
+                      }
+                    },
+                    {
+                      "name": "previewNicConv",
+                      "type": "Microsoft.Common.TextBlock",
+                      "options": {
+                        "text": "[[concat('NIC Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-nic', 'nic-SHNAME'))]"
+                      }
+                    },
+                    {
+                      "name": "previewAsConv",
+                      "type": "Microsoft.Common.TextBlock",
+                      "options": {
+                        "text": "[[concat('Availability Set Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-##-{location}-as'), concat('as-', steps('basics').hostPool.name, '-##-{location}')))]"
+                      }
+                    }
+                  ]
+                },
+                {
                   "name": "sessionHostNaming",
                   "type": "Microsoft.Common.Section",
                   "label": "Session Host Resource Naming",
@@ -5943,7 +5994,7 @@
     "graphEndpoint": "[if(equals(variables('cloud'), 'azureusgovernment'), 'https://graph.microsoft.us', if(startsWith(variables('cloud'), 'us'), format('https://graph.{0}', environment().suffixes.storage), 'https://graph.microsoft.com'))]",
     "functionAppRegionAbbreviation": "[variables('locations')[parameters('location')].abbreviation]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
-    "nameConvReversed": "[if(startsWith(variables('hostPoolName'), format('{0}-', variables('resourceAbbreviations').hostPools)), false(), if(endsWith(variables('hostPoolName'), format('-{0}', variables('resourceAbbreviations').hostPools)), true(), false()))]",
+    "nameConvReversed": "[or(endsWith(variables('hostPoolName'), format('-{0}', variables('resourceAbbreviations').hostPools)), endsWith(variables('hostPoolName'), '-hp'))]",
     "arrHostPoolName": "[split(variables('hostPoolName'), '-')]",
     "hpBaseName": "[if(variables('nameConvReversed'), join(take(variables('arrHostPoolName'), sub(length(variables('arrHostPoolName')), 2)), '-'), join(take(skip(variables('arrHostPoolName'), 1), sub(length(variables('arrHostPoolName')), 2)), '-'))]",
     "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",

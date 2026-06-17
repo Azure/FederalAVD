@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "7150879493631959346"
+      "templateHash": "1497428934730629628"
     }
   },
   "functions": [
@@ -118,13 +118,6 @@
       "defaultValue": "[deployment().location]",
       "metadata": {
         "description": "Required. The Azure region for all foundation resources."
-      }
-    },
-    "nameConvResTypeAtEnd": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name."
       }
     },
     "deploySecretsKeyVault": {
@@ -816,16 +809,18 @@
     "cnv_loc": "[if(variables('useCustomNaming'), if(not(empty(coalesce(tryGet(parameters('customNamingConvention'), 'locationAbbreviation'), ''))), parameters('customNamingConvention').locationAbbreviation, variables('locationAbbreviation')), variables('locationAbbreviation'))]",
     "cnv_rtCodes": "[if(and(variables('useCustomNaming'), contains(parameters('customNamingConvention'), 'resourceTypeCodes')), parameters('customNamingConvention').resourceTypeCodes, createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
     "cnv_segments": "[if(variables('useCustomNaming'), parameters('customNamingConvention').components, createArray())]",
-    "cnv_rtFirst": "[if(variables('useCustomNaming'), equals(first(variables('cnv_segments')), 'resourceType'), not(parameters('nameConvResTypeAtEnd')))]",
+    "cnv_rtFirst": "[if(variables('useCustomNaming'), not(equals(last(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
     "customRgName": "[if(variables('useCustomNaming'), __bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')), '')]",
-    "nameConv_Operations_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-LOCATION-RESOURCETYPE', variables('identifier')), format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier')))]",
-    "nameConv_Operations_Resources": "[if(parameters('nameConvResTypeAtEnd'), 'avd-TOKEN-LOCATION-RESOURCETYPE', 'RESOURCETYPE-avd-TOKEN-LOCATION')]",
+    "nameConv_Operations_ResGroup": "[format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier'))]",
+    "nameConv_Operations_Resources": "RESOURCETYPE-avd-TOKEN-LOCATION",
     "privateEndpointNameConv": "[if(variables('cnv_rtFirst'), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('cnv_rtCodes').privateEndpoints))]",
     "privateEndpointNICNameConv": "[if(variables('cnv_rtFirst'), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('cnv_rtCodes').privateEndpoints, coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
     "operationsResourceGroupName": "[if(variables('useCustomNaming'), variables('customRgName'), replace(replace(variables('nameConv_Operations_ResGroup'), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups))]",
     "uniqueStringOperations": "[take(if(and(variables('useCustomNaming'), not(contains(variables('cnv_segments'), 'location'))), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
-    "secretsKeyVaultName": "[if(variables('useCustomNaming'), take(format('{0}-{1}', __bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), ''))), variables('uniqueStringOperations')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]",
-    "encryptionKeyVaultName": "[if(variables('useCustomNaming'), take(format('{0}-{1}', __bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), ''))), variables('uniqueStringOperations')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]"
+    "kvBaseSecrets": "[__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'sec', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')))]",
+    "kvBaseEncryption": "[__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_segments'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_sep'), variables('cnv_rtCodes').keyVaults, 'enc', variables('cnv_loc'), coalesce(tryGet(parameters('customNamingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'environment'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'freeform2'), ''), coalesce(tryGet(parameters('customNamingConvention'), 'workload'), '')))]",
+    "secretsKeyVaultName": "[if(variables('useCustomNaming'), take(if(lessOrEquals(length(variables('kvBaseSecrets')), 20), format('{0}-{1}', variables('kvBaseSecrets'), variables('uniqueStringOperations')), variables('kvBaseSecrets')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]",
+    "encryptionKeyVaultName": "[if(variables('useCustomNaming'), take(if(lessOrEquals(length(variables('kvBaseEncryption')), 20), format('{0}-{1}', variables('kvBaseEncryption'), variables('uniqueStringOperations')), variables('kvBaseEncryption')), 24), take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24))]"
   },
   "resources": {
     "operationsResourceGroup": {

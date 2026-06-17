@@ -1,1034 +1,1062 @@
-{
-	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
-	"view": {
-		"kind": "Form",
-		"properties": {
-			"title": "AVD Security Infrastructure",
-			"steps": [
-				{
-					"name": "basics",
-					"label": "Deployment Basics",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "Deploy shared AVD security infrastructure: a Secrets Key Vault for storing AVD credentials, and an Encryption Key Vault for Customer-Managed Key (CMK) encryption. Run this deployment before deploying host pools, image management, or add-ons that use CMK. The resource IDs output by this deployment are used as inputs to downstream solutions."
-							}
-						},
-						{
-							"name": "subscriptionsApi",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"request": {
-								"method": "GET",
-								"path": "/subscriptions?api-version=2022-12-01"
-							}
-						},
-						{
-							"name": "scope",
-							"type": "Microsoft.Common.ResourceScope",
-							"instanceDetailsLabel": "Security Resources Location",
-							"location": {
-								"label": "Region",
-								"resourceTypes": [
-									"Microsoft.KeyVault/vaults"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "secretsKeyVault",
-					"label": "Secrets Key Vault",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "The Secrets Key Vault (Standard SKU) stores AVD credentials: VM local administrator and domain join account. Downstream deployers reference this vault by resource ID only — they do not need read access to the secrets themselves. To read secrets at deployment time (e.g., for getSecret() ARM references), the deploying identity needs the 'Key Vault Secrets User' role."
-							}
-						},
-						{
-							"name": "deploySecretsKeyVault",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Deploy Secrets Key Vault",
-							"defaultValue": true,
-							"toolTip": "Deploy a Standard SKU Key Vault for storing AVD credentials."
-						},
-						{
-							"name": "kvSettings",
-							"type": "Microsoft.Common.Section",
-							"label": "Key Vault Settings",
-							"visible": "[steps('secretsKeyVault').deploySecretsKeyVault]",
-							"elements": [
-								{
-									"name": "enableSoftDelete",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Soft Delete",
-									"defaultValue": true,
-									"toolTip": "Allow recovery of deleted Key Vault objects within the retention period."
-								},
-								{
-									"name": "enablePurgeProtection",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Purge Protection",
-									"defaultValue": true,
-									"toolTip": "Prevent permanent deletion of the Key Vault and its objects during the retention period. Strongly recommended for production environments."
-								},
-								{
-									"name": "retentionDays",
-									"type": "Microsoft.Common.Slider",
-									"label": "Soft Delete Retention (Days)",
-									"toolTip": "Number of days to retain soft-deleted Key Vault objects before permanent deletion.",
-									"min": 7,
-									"max": 90,
-									"defaultValue": 90,
-									"showStepMarkers": false
-								}
-							]
-						},
-						{
-							"name": "credentials",
-							"type": "Microsoft.Common.Section",
-							"label": "AVD Credentials",
-							"visible": "[steps('secretsKeyVault').deploySecretsKeyVault]",
-							"elements": [
-								{
-									"name": "credentialsInfoBox",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Provide the AVD session host credentials to store in the Secrets Key Vault. All fields are optional — you can store credentials later by re-running this deployment. Domain join credentials are only required for ADDS or Entra Kerberos hybrid environments."
-									}
-								},
-								{
-									"name": "virtualMachineAdminUserName",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Admin Username",
-									"toolTip": "Local administrator username for AVD session hosts. Stored as 'VirtualMachineAdminUserName' in the Key Vault.",
-									"constraints": {
-										"required": false,
-										"regex": "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,19}$",
-										"validationMessage": "Must start with a letter. Alphanumeric, underscores, hyphens allowed. Maximum 20 characters."
-									}
-								},
-								{
-									"name": "virtualMachineAdminPassword",
-									"type": "Microsoft.Common.PasswordBox",
-									"label": {
-										"password": "Admin Password",
-										"confirmPassword": "Confirm Admin Password"
-									},
-									"toolTip": "Local administrator password for AVD session hosts. Stored as 'VirtualMachineAdminPassword' in the Key Vault. Must meet Windows password complexity requirements.",
-									"constraints": {
-										"required": false,
-										"regex": "^$|^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z\\d]).{12,123}$",
-										"validationMessage": "Must be 12-123 characters and include uppercase, lowercase, a digit, and a special character."
-									},
-									"options": {
-										"hideConfirmation": false
-									}
-								},
-								{
-									"name": "domainJoinUserPrincipalName",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Domain Join UPN",
-									"placeholder": "svc-avd-join@contoso.com",
-									"toolTip": "UPN of the privileged account used to domain join session hosts. Stored as 'DomainJoinUserPrincipalName' in the Key Vault.",
-									"constraints": {
-										"required": false,
-										"regex": "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
-										"validationMessage": "Must be a valid UPN format (user@domain.tld)."
-									}
-								},
-								{
-									"name": "domainJoinUserPassword",
-									"type": "Microsoft.Common.PasswordBox",
-									"label": {
-										"password": "Domain Join Password",
-										"confirmPassword": "Confirm Domain Join Password"
-									},
-									"toolTip": "Password for the domain join account. Stored as 'DomainJoinUserPassword' in the Key Vault.",
-									"constraints": {
-										"required": false
-									},
-									"options": {
-										"hideConfirmation": false
-									}
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "encryptionKeyVault",
-					"label": "Encryption Key Vault",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "The Encryption Key Vault (Premium SKU) stores RSA-4096 keys for Customer-Managed Key (CMK) encryption of VM disks, FSLogix storage, image management storage, image build storage, and function app storage. Required when any AVD solution uses CMK. The deploying identity requires the 'Key Vault Crypto Officer' role on this vault at deployment time to create encryption keys."
-							}
-						},
-						{
-							"name": "deployEncryptionKeyVault",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Deploy Encryption Key Vault",
-							"defaultValue": true,
-							"toolTip": "Deploy a Premium SKU Key Vault (HSM-backed) for Customer-Managed Key encryption across all AVD solutions."
-						},
-						{
-							"name": "encKvRetentionInDays",
-							"type": "Microsoft.Common.Slider",
-							"label": "Encryption Key Vault Soft Delete Retention (Days)",
-							"defaultValue": 90,
-							"showStepMarkers": false,
-							"toolTip": "Number of days the Encryption Key Vault and its objects are retained after deletion before permanent removal.",
-							"min": 7,
-							"max": 90,
-							"visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
-						},
-						{
-							"name": "forcePublicAccess",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Allow public network access on Encryption Key Vault",
-							"defaultValue": false,
-							"toolTip": "When checked, the Encryption Key Vault is deployed with public network access enabled. Required when this vault will be used for Customer-Managed Key encryption on a Recovery Services Vault with private endpoints, because Azure Backup does not support the AzureServices trusted service bypass.",
-							"visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
-						}
-					]
-				},
-				{
-					"name": "networking",
-					"label": "Networking",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.InfoBox",
-							"options": {
-								"style": "Info",
-								"text": "Configure private endpoints to disable public network access on the Key Vaults and route all traffic over the Microsoft backbone. Requires an existing virtual network with a dedicated subnet (no delegations) and a Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net)."
-							}
-						},
-						{
-							"name": "privateEndpoint",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Deploy Private Endpoints",
-							"toolTip": "When enabled, public network access is disabled on both Key Vaults and private endpoints are deployed into the selected subnet."
-						},
-						{
-							"name": "networkSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Network Configuration",
-							"visible": "[steps('networking').privateEndpoint]",
-							"elements": [
-								{
-									"name": "virtualNetworksApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('networking').privateEndpoint, not(empty(steps('basics').scope.subscription)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-									}
-								},
-								{
-									"name": "virtualNetwork",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Virtual Network",
-									"multiLine": true,
-									"toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('networking').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
-									}
-								},
-								{
-									"name": "subnetsApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[not(empty(steps('networking').networkSection.virtualNetwork))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('networking').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-									}
-								},
-								{
-									"name": "privateEndpointSubnet",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Private Endpoint Subnet",
-									"toolTip": "Select the subnet for Key Vault private endpoints. Must not have any service delegations.",
-									"constraints": {
-										"required": true,
-										"allowedValues": "[map(filter(steps('networking').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-									}
-								}
-							]
-						},
-						{
-							"name": "privateDnsSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Private DNS Zone",
-							"visible": "[steps('networking').privateEndpoint]",
-							"elements": [
-								{
-									"name": "enablePrivateDNSIntegration",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Private DNS Zone Integration",
-									"defaultValue": true,
-									"toolTip": "Automatically register Key Vault private endpoints with an Azure Private DNS Zone for proper name resolution."
-								},
-								{
-									"name": "privateDNSZonesSubscription",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
-									"label": "Private DNS Zone Subscription",
-									"defaultValue": "[steps('basics').scope.subscription.displayName]",
-									"toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
-									"constraints": {
-										"required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
-										"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-									}
-								},
-								{
-									"name": "privateDNSZonesApi",
-									"type": "Microsoft.Solutions.ArmApiControl",
-									"condition": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('networking').privateDnsSection.privateDNSZonesSubscription)))]",
-									"request": {
-										"method": "GET",
-										"path": "[concat(steps('networking').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-									}
-								},
-								{
-									"name": "keyVaultPrivateDnsZone",
-									"type": "Microsoft.Common.DropDown",
-									"visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
-									"label": "Key Vault Private DNS Zone",
-									"multiLine": true,
-									"defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
-									"toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
-									"constraints": {
-										"required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
-										"allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-									}
-								}
-							]
-						},
-						{
-							"name": "permittedIPsSection",
-							"type": "Microsoft.Common.Section",
-							"label": "Permitted IP Addresses",
-							"elements": [
-								{
-									"name": "infoBox",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Info",
-										"text": "Restrict public access to the Key Vaults to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
-									}
-								},
-								{
-									"name": "permittedIPs",
-									"type": "Microsoft.Common.EditableGrid",
-									"ariaLabel": "Permitted IP Addresses or CIDR Ranges",
-									"label": "Permitted IP Addresses / CIDR Ranges",
-									"constraints": {
-										"width": "Full",
-										"rows": {
-											"count": {
-												"min": 0,
-												"max": 50
-											}
-										},
-										"columns": [
-											{
-												"id": "ipAddress",
-												"header": "IP Address or CIDR Range",
-												"width": "1fr",
-												"element": {
-													"type": "Microsoft.Common.TextBox",
-													"placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
-													"constraints": {
-														"required": false,
-														"regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-														"validationMessage": "Enter a valid IPv4 address or CIDR range."
-													}
-												}
-											}
-										]
-									}
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "monitoring",
-					"label": "Monitoring",
-					"elements": [
-						{
-							"name": "infoBox",
-							"type": "Microsoft.Common.TextBlock",
-							"options": {
-								"text": "Optionally send Key Vault audit and diagnostic logs to an existing Log Analytics Workspace. Key Vault logs capture secret access, key operations, and access control changes — security and compliance telemetry best suited for a security-team-owned workspace or SIEM."
-							}
-						},
-						{
-							"name": "enableMonitoring",
-							"type": "Microsoft.Common.CheckBox",
-							"label": "Send Key Vault Diagnostic Logs to Log Analytics"
-						},
-						{
-							"name": "monitoringSubscription",
-							"type": "Microsoft.Common.DropDown",
-							"visible": "[steps('monitoring').enableMonitoring]",
-							"label": "Log Analytics Workspace Subscription",
-							"defaultValue": "[steps('basics').scope.subscription.displayName]",
-							"toolTip": "Select the subscription containing the target Log Analytics Workspace.",
-							"constraints": {
-								"required": "[steps('monitoring').enableMonitoring]",
-								"allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-							}
-						},
-						{
-							"name": "logAnalyticsWorkspacesApi",
-							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
-							"request": {
-								"method": "GET",
-								"path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
-							}
-						},
-						{
-							"name": "logAnalyticsWorkspace",
-							"type": "Microsoft.Common.DropDown",
-							"visible": "[steps('monitoring').enableMonitoring]",
-							"label": "Log Analytics Workspace",
-							"multiLine": true,
-							"toolTip": "Select the Log Analytics Workspace for Key Vault diagnostic logs.",
-							"constraints": {
-								"required": "[steps('monitoring').enableMonitoring]",
-								"allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
-							}
-						}
-					]
-				},
-				{
-					"name": "tagsAndNaming",
-					"label": "Tags & Naming",
-					"elements": [
-						{
-							"name": "naming",
-							"type": "Microsoft.Common.Section",
-							"label": "Naming Convention",
-							"elements": [
-								{
-									"name": "namingDescription",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "By default, resources are named using the Cloud Adoption Framework (CAF) convention: the resource type abbreviation appears first, followed by a workload identifier, component role, and region. For example: rg-avd-operations-eus (resource group), kv-avd-sec-eus (secrets Key Vault), kv-avd-enc-eus (encryption Key Vault). Use the options below to adjust the resource type position or fully customize the component order and values.",
-										"link": {
-											"label": "Resource Naming | Microsoft Learn",
-											"uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
-										}
-									}
-								},
-								{
-									"name": "nameConvResTypeAtEnd",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Resource Type Abbreviation at End of Name",
-									"visible": "[not(steps('tagsAndNaming').naming.enableCustomNaming)]",
-									"toolTip": "When checked, names follow the pattern 'avd-operations-eus-rg'. When unchecked (default), names follow 'rg-avd-operations-eus'. Has no effect when a custom naming convention is enabled — component order controls resource type placement instead."
-								},
-								{
-									"name": "enableCustomNaming",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Custom Naming Convention",
-									"toolTip": "When checked, all key vault resources will be named according to the components and order you define below."
-								},
-								{
-									"name": "builderInfo",
-									"type": "Microsoft.Common.TextBlock",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"options": {										
-										"text": "Select the components that make up your naming convention and arrange them in order using Component 1 through Component 6. Select 'None (stop here)' to end the sequence. Auto-resolved components — Resource Type, Purpose, Location — are substituted per resource at deployment time. Value components — Workload, Environment, Free-form Text 1, Free-form Text 2 — require you to supply a value in the fields that appear below."
-									}
-								},
-								{
-									"name": "componentGuidanceInfo",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"options": {
-										"style": "Success",
-										"text": "Recommended components for conflict-free, identifiable names: Required - Resource Type (identifies the resource category: rg, kv, pe, nic), Purpose (distinguishes the secrets and encryption Key Vaults), Workload (scopes names to your application or project). Highly Recommended - Location (prevents name collisions when deploying across regions)."
-									}
-								},
-								{
-									"name": "delimiter",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Delimiter",
-									"defaultValue": "-",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"toolTip": "Character(s) placed between each component. A hyphen (-) is most common. Note: Key Vault names allow only hyphens — underscores and dots are automatically replaced with hyphens in Key Vault names.",
-									"constraints": {
-										"required": true,
-										"regex": "^[-_.]{1,3}$",
-										"validationMessage": "Use 1 to 3 characters: hyphens (-), underscores (_), or dots (.) only."
-									}
-								},
-								{
-									"name": "component1",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 1",
-									"multiLine": true,
-									"toolTip": "First component of every resource name.",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component2",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 2",
-									"defaultValue": "none",
-									"multiLine": true,
-									"toolTip": "Second component. Select 'None (stop here)' to use only 1 component.",
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 1.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component3",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 3",
-									"defaultValue": "none",
-									"multiLine": true,
-									"toolTip": "Third component. Select 'None (stop here)' to use only 2 components.",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')))]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 2.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component4",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 4",
-									"defaultValue": "none",
-									"multiLine": true,
-									"toolTip": "Fourth component. Select 'None (stop here)' to use only 3 components.",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')))]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 3.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component5",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 5",
-									"defaultValue": "none",
-									"multiLine": true,
-									"toolTip": "Fifth component. Select 'None (stop here)' to use only 4 components.",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), and(not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none'))))]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 4.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "component6",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Component 6",
-									"defaultValue": "none",
-									"multiLine": true,
-									"toolTip": "Sixth component. Select 'None (stop here)' to use only 5 components.",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none')), not(equals(steps('tagsAndNaming').naming.component5, 'none')))]",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "None (stop here)",
-												"description": "End the convention after Component 5.",
-												"value": "none"
-											},
-											{
-												"label": "Free-form Text 1",
-												"description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform1"
-											},
-											{
-												"label": "Environment",
-												"description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
-												"value": "environment"
-											},
-											{
-												"label": "Resource Type",
-												"description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
-												"value": "resourceType"
-											},
-											{
-												"label": "Workload",
-												"description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
-												"value": "workload"
-											},
-											{
-												"label": "Purpose",
-												"description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
-												"value": "purpose"
-											},
-											{
-												"label": "Location",
-												"description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
-												"value": "location"
-											},
-											{
-												"label": "Free-form Text 2",
-												"description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
-												"value": "freeform2"
-											}
-										]
-									}
-								},
-								{
-									"name": "workloadValue",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Workload Value",
-									"placeholder": "e.g. avd, sharepoint, navigator",
-									"toolTip": "The workload/application/project name (CAF: Workload). Appears in every resource name when the Workload component is selected.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9-]{1,20}$",
-										"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
-									}
-								},
-								{
-									"name": "freeform1Value",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Free-form Text 1 Value",
-									"placeholder": "e.g. contoso, shared, corp",
-									"toolTip": "The fixed value used for the Free-form Text 1 component in all resource names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform1'), equals(steps('tagsAndNaming').naming.component6, 'freeform1'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9-]{1,20}$",
-										"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
-									}
-								},
-								{
-									"name": "environmentValue",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Environment Value",
-									"placeholder": "e.g. pr, np, co, dev, prod",
-									"toolTip": "The fixed value used for the Environment component in all resource names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'environment'), or(equals(steps('tagsAndNaming').naming.component2, 'environment'), or(equals(steps('tagsAndNaming').naming.component3, 'environment'), or(equals(steps('tagsAndNaming').naming.component4, 'environment'), or(equals(steps('tagsAndNaming').naming.component5, 'environment'), equals(steps('tagsAndNaming').naming.component6, 'environment'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,4}$",
-										"validationMessage": "Use 1 to 4 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "freeform2Value",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Free-form Text 2 Value",
-									"placeholder": "e.g. contoso, shared",
-									"toolTip": "A second fixed text string embedded in every resource name when the Free-form Text 2 component is used.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform2'), equals(steps('tagsAndNaming').naming.component6, 'freeform2'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9-]{1,20}$",
-										"validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
-									}
-								},
-								{
-									"name": "locationAbbreviationOverride",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Custom Location Abbreviation",
-									"placeholder": "e.g. east, va, eus2",
-									"defaultValue": "",
-									"toolTip": "Override the auto-resolved region abbreviation. Leave empty to use the standard abbreviation from the locations data file (e.g. eus for East US, va for US Gov Virginia).",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))]",
-									"constraints": {
-										"required": false,
-										"regex": "^[a-z0-9]{0,10}$",
-										"validationMessage": "Use up to 10 lowercase letters or digits. Leave empty to use the auto-resolved abbreviation."
-									}
-								},
-								{
-									"name": "noResourceTypeError",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))))]",
-									"options": {
-										"style": "Error",
-										"text": "No Resource Type component selected. Including Resource Type is strongly recommended - it identifies the resource category at a glance and follows the Cloud Adoption Framework naming standard (e.g. rg-avd-operations-eus, kv-avd-sec-eus)."
-									}
-								},
-								{
-									"name": "noPurposeError",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'purpose'), or(equals(steps('tagsAndNaming').naming.component2, 'purpose'), or(equals(steps('tagsAndNaming').naming.component3, 'purpose'), or(equals(steps('tagsAndNaming').naming.component4, 'purpose'), or(equals(steps('tagsAndNaming').naming.component5, 'purpose'), equals(steps('tagsAndNaming').naming.component6, 'purpose'))))))))]",
-									"options": {
-										"style": "Error",
-										"text": "No 'Purpose' component selected. Both Key Vaults in this deployment (secrets and encryption) will have identical names. Including 'Purpose' is required."
-									}
-								},
-								{
-									"name": "noWorkloadWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))))]",
-									"options": {
-										"style": "Warning",
-										"text": "No 'Workload' component selected. Including Workload is strongly recommended - it scopes resource names to your application or project and prevents collisions with other deployments using the same convention."
-									}
-								},
-								{
-									"name": "noLocationWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))))]",
-									"options": {
-										"style": "Warning",
-										"text": "No 'Location' component selected. If you plan to deploy Key Vaults in multiple regions, include Location in your convention to avoid resource name conflicts between deployments."
-									}
-								},
-								{
-									"name": "rtCodeRg",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Resource Groups abbreviation",
-									"defaultValue": "rg",
-									"toolTip": "Abbreviation substituted for the Resource Type component in resource group names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodeKv",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Key Vaults abbreviation",
-									"defaultValue": "kv",
-									"toolTip": "Abbreviation substituted for the Resource Type component in Key Vault names. Key Vault names allow only alphanumeric characters and hyphens.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodePe",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Private Endpoints abbreviation",
-									"defaultValue": "pe",
-									"toolTip": "Abbreviation substituted for the Resource Type component in private endpoint names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "rtCodeNic",
-									"type": "Microsoft.Common.TextBox",
-									"label": "Network Interfaces abbreviation",
-									"defaultValue": "nic",
-									"toolTip": "Abbreviation substituted for the Resource Type component in private endpoint network interface names.",
-									"visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
-									"constraints": {
-										"required": true,
-										"regex": "^[a-z0-9]{1,10}$",
-										"validationMessage": "Use 1 to 10 lowercase letters or digits."
-									}
-								},
-								{
-									"name": "previewHeading",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Name Preview"
-									},
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
-								},
-								{
-									"name": "previewRg",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "[concat('Resource Group: ', if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))),''))]"
-									},
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
-								},
-								{
-									"name": "previewNotes",
-									"type": "Microsoft.Common.InfoBox",
-									"options": {
-										"style": "Info",
-										"text": "Preview shows the resource group name. Key Vault names use the same convention with 'sec' and 'enc' as purpose tokens to distinguish the two vaults, are capped at 24 characters, and always include a 6-character unique suffix. Underscores and dots in the delimiter are replaced with hyphens in Key Vault names. Location shows '{loc}' when no custom abbreviation is provided — the actual value (e.g. eus, va) is resolved at deployment time from the selected region."
-									},
-									"visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
-								}
-							]
-						},
-						{
-							"name": "tags",
-							"type": "Microsoft.Common.Section",
-							"label": "Resource Tags",
-							"elements": [
-								{
-									"name": "infoBox",
-									"type": "Microsoft.Common.TextBlock",
-									"options": {
-										"text": "Apply tags to the deployed resources. Tags are applied per resource type."
-									}
-								},
-								{
-									"name": "resourceTags",
-									"type": "Microsoft.Common.TagsByResource",
-									"resources": [
-										"Microsoft.Resources/resourceGroups",
-										"Microsoft.KeyVault/vaults",
-										"Microsoft.Network/privateEndpoints"
-									]
-								}
-							]
-						}
-					]
-				}
-			]
-		},
-		"outputs": {
-			"kind": "Subscription",
-			"location": "[steps('basics').scope.location.name]",
-			"subscriptionId": "[steps('basics').scope.subscription.id]",
-			"parameters": {
-				"location": "[steps('basics').scope.location.name]",
-				"deploySecretsKeyVault": "[steps('secretsKeyVault').deploySecretsKeyVault]",
-				"secretsKeyVaultEnableSoftDelete": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enableSoftDelete, true)]",
-				"secretsKeyVaultEnablePurgeProtection": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enablePurgeProtection, true)]",
-				"secretsKeyVaultRetentionInDays": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.retentionDays, 90)]",
-				"virtualMachineAdminUserName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminUserName, '')]",
-				"virtualMachineAdminPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminPassword, '')]",
-				"domainJoinUserPrincipalName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPrincipalName, '')]",
-				"domainJoinUserPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPassword, '')]",
-				"deployEncryptionKeyVault": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
-				"encryptionKeyVaultRetentionInDays": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').encKvRetentionInDays, 90)]",
-				"encryptionKeyVaultForcePublicAccess": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').forcePublicAccess, false)]",
-				"privateEndpoint": "[steps('networking').privateEndpoint]",
-				"privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
-				"azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
-				"permittedIPs": "[filter(map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
-				"logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
-				"nameConvResTypeAtEnd": "[steps('tagsAndNaming').naming.nameConvResTypeAtEnd]",
-				"customNamingConvention": "[if(steps('tagsAndNaming').naming.enableCustomNaming, parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', steps('tagsAndNaming').naming.component2, '\",\"', steps('tagsAndNaming').naming.component3, '\",\"', steps('tagsAndNaming').naming.component4, '\",\"', steps('tagsAndNaming').naming.component5, '\",\"', steps('tagsAndNaming').naming.component6, '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}')), parse('{}'))]",
-				"tags": "[steps('tagsAndNaming').tags.resourceTags]"
-			}
-		}
-	}
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "AVD Security Infrastructure",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "Deployment Basics",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Deploy shared AVD security infrastructure: a Secrets Key Vault for storing AVD credentials, and an Encryption Key Vault for Customer-Managed Key (CMK) encryption. Run this deployment before deploying host pools, image management, or add-ons that use CMK. The resource IDs output by this deployment are used as inputs to downstream solutions."
+              }
+            },
+            {
+              "name": "subscriptionsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "GET",
+                "path": "/subscriptions?api-version=2022-12-01"
+              }
+            },
+            {
+              "name": "scope",
+              "type": "Microsoft.Common.ResourceScope",
+              "instanceDetailsLabel": "Security Resources Location",
+              "location": {
+                "label": "Region",
+                "resourceTypes": [
+                  "Microsoft.KeyVault/vaults"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "secretsKeyVault",
+          "label": "Secrets Key Vault",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "The Secrets Key Vault (Standard SKU) stores AVD credentials: VM local administrator and domain join account. Downstream deployers reference this vault by resource ID only — they do not need read access to the secrets themselves. To read secrets at deployment time (e.g., for getSecret() ARM references), the deploying identity needs the 'Key Vault Secrets User' role."
+              }
+            },
+            {
+              "name": "deploySecretsKeyVault",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Secrets Key Vault",
+              "defaultValue": true,
+              "toolTip": "Deploy a Standard SKU Key Vault for storing AVD credentials."
+            },
+            {
+              "name": "kvSettings",
+              "type": "Microsoft.Common.Section",
+              "label": "Key Vault Settings",
+              "visible": "[steps('secretsKeyVault').deploySecretsKeyVault]",
+              "elements": [
+                {
+                  "name": "enableSoftDelete",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Soft Delete",
+                  "defaultValue": true,
+                  "toolTip": "Allow recovery of deleted Key Vault objects within the retention period."
+                },
+                {
+                  "name": "enablePurgeProtection",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Purge Protection",
+                  "defaultValue": true,
+                  "toolTip": "Prevent permanent deletion of the Key Vault and its objects during the retention period. Strongly recommended for production environments."
+                },
+                {
+                  "name": "retentionDays",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Soft Delete Retention (Days)",
+                  "toolTip": "Number of days to retain soft-deleted Key Vault objects before permanent deletion.",
+                  "min": 7,
+                  "max": 90,
+                  "defaultValue": 90,
+                  "showStepMarkers": false
+                }
+              ]
+            },
+            {
+              "name": "credentials",
+              "type": "Microsoft.Common.Section",
+              "label": "AVD Credentials",
+              "visible": "[steps('secretsKeyVault').deploySecretsKeyVault]",
+              "elements": [
+                {
+                  "name": "credentialsInfoBox",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Provide the AVD session host credentials to store in the Secrets Key Vault. All fields are optional — you can store credentials later by re-running this deployment. Domain join credentials are only required for ADDS or Entra Kerberos hybrid environments."
+                  }
+                },
+                {
+                  "name": "virtualMachineAdminUserName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Admin Username",
+                  "toolTip": "Local administrator username for AVD session hosts. Stored as 'VirtualMachineAdminUserName' in the Key Vault.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[a-zA-Z][a-zA-Z0-9_-]{0,19}$",
+                    "validationMessage": "Must start with a letter. Alphanumeric, underscores, hyphens allowed. Maximum 20 characters."
+                  }
+                },
+                {
+                  "name": "virtualMachineAdminPassword",
+                  "type": "Microsoft.Common.PasswordBox",
+                  "label": {
+                    "password": "Admin Password",
+                    "confirmPassword": "Confirm Admin Password"
+                  },
+                  "toolTip": "Local administrator password for AVD session hosts. Stored as 'VirtualMachineAdminPassword' in the Key Vault. Must meet Windows password complexity requirements.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z\\d]).{12,123}$",
+                    "validationMessage": "Must be 12-123 characters and include uppercase, lowercase, a digit, and a special character."
+                  },
+                  "options": {
+                    "hideConfirmation": false
+                  }
+                },
+                {
+                  "name": "domainJoinUserPrincipalName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Domain Join UPN",
+                  "placeholder": "svc-avd-join@contoso.com",
+                  "toolTip": "UPN of the privileged account used to domain join session hosts. Stored as 'DomainJoinUserPrincipalName' in the Key Vault.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+                    "validationMessage": "Must be a valid UPN format (user@domain.tld)."
+                  }
+                },
+                {
+                  "name": "domainJoinUserPassword",
+                  "type": "Microsoft.Common.PasswordBox",
+                  "label": {
+                    "password": "Domain Join Password",
+                    "confirmPassword": "Confirm Domain Join Password"
+                  },
+                  "toolTip": "Password for the domain join account. Stored as 'DomainJoinUserPassword' in the Key Vault.",
+                  "constraints": {
+                    "required": false
+                  },
+                  "options": {
+                    "hideConfirmation": false
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "encryptionKeyVault",
+          "label": "Encryption Key Vault",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "The Encryption Key Vault (Premium SKU) stores RSA-4096 keys for Customer-Managed Key (CMK) encryption of VM disks, FSLogix storage, image management storage, image build storage, and function app storage. Required when any AVD solution uses CMK. The deploying identity requires the 'Key Vault Crypto Officer' role on this vault at deployment time to create encryption keys."
+              }
+            },
+            {
+              "name": "deployEncryptionKeyVault",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Encryption Key Vault",
+              "defaultValue": true,
+              "toolTip": "Deploy a Premium SKU Key Vault (HSM-backed) for Customer-Managed Key encryption across all AVD solutions."
+            },
+            {
+              "name": "encKvRetentionInDays",
+              "type": "Microsoft.Common.Slider",
+              "label": "Encryption Key Vault Soft Delete Retention (Days)",
+              "defaultValue": 90,
+              "showStepMarkers": false,
+              "toolTip": "Number of days the Encryption Key Vault and its objects are retained after deletion before permanent removal.",
+              "min": 7,
+              "max": 90,
+              "visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
+            },
+            {
+              "name": "forcePublicAccess",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Allow public network access on Encryption Key Vault",
+              "defaultValue": false,
+              "toolTip": "When checked, the Encryption Key Vault is deployed with public network access enabled. Required when this vault will be used for Customer-Managed Key encryption on a Recovery Services Vault with private endpoints, because Azure Backup does not support the AzureServices trusted service bypass.",
+              "visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
+            }
+          ]
+        },
+        {
+          "name": "networking",
+          "label": "Networking",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Configure private endpoints to disable public network access on the Key Vaults and route all traffic over the Microsoft backbone. Requires an existing virtual network with a dedicated subnet (no delegations) and a Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net)."
+              }
+            },
+            {
+              "name": "privateEndpoint",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Private Endpoints",
+              "toolTip": "When enabled, public network access is disabled on both Key Vaults and private endpoints are deployed into the selected subnet."
+            },
+            {
+              "name": "networkSection",
+              "type": "Microsoft.Common.Section",
+              "label": "Network Configuration",
+              "visible": "[steps('networking').privateEndpoint]",
+              "elements": [
+                {
+                  "name": "virtualNetworksApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('networking').privateEndpoint, not(empty(steps('basics').scope.subscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+                  }
+                },
+                {
+                  "name": "virtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Virtual Network",
+                  "multiLine": true,
+                  "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('networking').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "subnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('networking').networkSection.virtualNetwork))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('networking').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private Endpoint Subnet",
+                  "toolTip": "Select the subnet for Key Vault private endpoints. Must not have any service delegations.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('networking').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "privateDnsSection",
+              "type": "Microsoft.Common.Section",
+              "label": "Private DNS Zone",
+              "visible": "[steps('networking').privateEndpoint]",
+              "elements": [
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Private DNS Zone Integration",
+                  "defaultValue": true,
+                  "toolTip": "Automatically register Key Vault private endpoints with an Azure Private DNS Zone for proper name resolution."
+                },
+                {
+                  "name": "privateDNSZonesSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+                  "label": "Private DNS Zone Subscription",
+                  "defaultValue": "[steps('basics').scope.subscription.displayName]",
+                  "toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
+                  "constraints": {
+                    "required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "privateDNSZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('networking').privateDnsSection.privateDNSZonesSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('networking').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "keyVaultPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+                  "label": "Key Vault Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
+                  "toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
+                  "constraints": {
+                    "required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "permittedIPsSection",
+              "type": "Microsoft.Common.Section",
+              "label": "Permitted IP Addresses",
+              "elements": [
+                {
+                  "name": "infoBox",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Restrict public access to the Key Vaults to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
+                  }
+                },
+                {
+                  "name": "permittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+                  "label": "Permitted IP Addresses / CIDR Ranges",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 50
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "ipAddress",
+                        "header": "IP Address or CIDR Range",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+                          "constraints": {
+                            "required": false,
+                            "regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+                            "validationMessage": "Enter a valid IPv4 address or CIDR range."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "monitoring",
+          "label": "Monitoring",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Optionally send Key Vault audit and diagnostic logs to an existing Log Analytics Workspace. Key Vault logs capture secret access, key operations, and access control changes — security and compliance telemetry best suited for a security-team-owned workspace or SIEM."
+              }
+            },
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Send Key Vault Diagnostic Logs to Log Analytics"
+            },
+            {
+              "name": "monitoringSubscription",
+              "type": "Microsoft.Common.DropDown",
+              "visible": "[steps('monitoring').enableMonitoring]",
+              "label": "Log Analytics Workspace Subscription",
+              "defaultValue": "[steps('basics').scope.subscription.displayName]",
+              "toolTip": "Select the subscription containing the target Log Analytics Workspace.",
+              "constraints": {
+                "required": "[steps('monitoring').enableMonitoring]",
+                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspacesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspace",
+              "type": "Microsoft.Common.DropDown",
+              "visible": "[steps('monitoring').enableMonitoring]",
+              "label": "Log Analytics Workspace",
+              "multiLine": true,
+              "toolTip": "Select the Log Analytics Workspace for Key Vault diagnostic logs.",
+              "constraints": {
+                "required": "[steps('monitoring').enableMonitoring]",
+                "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
+              }
+            }
+          ]
+        },
+        {
+          "name": "tagsAndNaming",
+          "label": "Tags & Naming",
+          "elements": [
+            {
+              "name": "naming",
+              "type": "Microsoft.Common.Section",
+              "label": "Naming Convention",
+              "elements": [
+                {
+                  "name": "namingDescription",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "By default, resources are named using the Cloud Adoption Framework (CAF) convention: the resource type abbreviation appears first, followed by a workload identifier, component role, and region. For example: rg-avd-operations-eus (resource group), kv-avd-sec-eus (secrets Key Vault), kv-avd-enc-eus (encryption Key Vault). Use the options below to adjust the resource type position or fully customize the component order and values.",
+                    "link": {
+                      "label": "Resource Naming | Microsoft Learn",
+                      "uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
+                    }
+                  }
+                },
+                {
+                  "name": "enableCustomNaming",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Custom Naming Convention",
+                  "toolTip": "When checked, all key vault resources will be named according to the components and order you define below."
+                },
+                {
+                  "name": "builderInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                  "options": {
+                    "text": "Select the components that make up your naming convention and arrange them in order using Component 1 through Component 6. Select 'None (stop here)' to end the sequence. Auto-resolved components — Resource Type, Purpose, Location — are substituted per resource at deployment time. Value components — Workload, Environment, Free-form Text 1, Free-form Text 2 — require you to supply a value in the fields that appear below."
+                  }
+                },
+                {
+                  "name": "componentGuidanceInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                  "options": {
+                    "style": "Success",
+                    "text": "Recommended components for conflict-free, identifiable names: Required - Resource Type (identifies the resource category: rg, kv, pe, nic), Purpose (distinguishes the secrets and encryption Key Vaults), Workload (scopes names to your application or project). Highly Recommended - Location (prevents name collisions when deploying across regions)."
+                  }
+                },
+                {
+                  "name": "delimiter",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Delimiter",
+                  "defaultValue": "-",
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                  "toolTip": "Character(s) placed between each component. A hyphen (-) is most common. Note: Key Vault names allow only hyphens — underscores and dots are automatically replaced with hyphens in Key Vault names.",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[-_.]{1,3}$",
+                    "validationMessage": "Use 1 to 3 characters: hyphens (-), underscores (_), or dots (.) only."
+                  }
+                },
+                {
+                  "name": "component1",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Component 1",
+                  "multiLine": true,
+                  "toolTip": "First component of every resource name.",
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Free-form Text 1",
+                        "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform1"
+                      },
+                      {
+                        "label": "Environment",
+                        "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                        "value": "environment"
+                      },
+                      {
+                        "label": "Resource Type",
+                        "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
+                        "value": "resourceType"
+                      },
+                      {
+                        "label": "Workload",
+                        "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                        "value": "workload"
+                      },
+                      {
+                        "label": "Purpose",
+                        "description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
+                        "value": "purpose"
+                      },
+                      {
+                        "label": "Location",
+                        "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                        "value": "location"
+                      },
+                      {
+                        "label": "Free-form Text 2",
+                        "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform2"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "component2",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Component 2",
+                  "defaultValue": "none",
+                  "multiLine": true,
+                  "toolTip": "Second component. Select 'None (stop here)' to use only 1 component.",
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "None (stop here)",
+                        "description": "End the convention after Component 1.",
+                        "value": "none"
+                      },
+                      {
+                        "label": "Free-form Text 1",
+                        "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform1"
+                      },
+                      {
+                        "label": "Environment",
+                        "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                        "value": "environment"
+                      },
+                      {
+                        "label": "Resource Type",
+                        "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
+                        "value": "resourceType"
+                      },
+                      {
+                        "label": "Workload",
+                        "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                        "value": "workload"
+                      },
+                      {
+                        "label": "Purpose",
+                        "description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
+                        "value": "purpose"
+                      },
+                      {
+                        "label": "Location",
+                        "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                        "value": "location"
+                      },
+                      {
+                        "label": "Free-form Text 2",
+                        "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform2"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "component3",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Component 3",
+                  "defaultValue": "none",
+                  "multiLine": true,
+                  "toolTip": "Third component. Select 'None (stop here)' to use only 2 components.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "None (stop here)",
+                        "description": "End the convention after Component 2.",
+                        "value": "none"
+                      },
+                      {
+                        "label": "Free-form Text 1",
+                        "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform1"
+                      },
+                      {
+                        "label": "Environment",
+                        "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                        "value": "environment"
+                      },
+                      {
+                        "label": "Resource Type",
+                        "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
+                        "value": "resourceType"
+                      },
+                      {
+                        "label": "Workload",
+                        "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                        "value": "workload"
+                      },
+                      {
+                        "label": "Purpose",
+                        "description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
+                        "value": "purpose"
+                      },
+                      {
+                        "label": "Location",
+                        "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                        "value": "location"
+                      },
+                      {
+                        "label": "Free-form Text 2",
+                        "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform2"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "component4",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Component 4",
+                  "defaultValue": "none",
+                  "multiLine": true,
+                  "toolTip": "Fourth component. Select 'None (stop here)' to use only 3 components.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "None (stop here)",
+                        "description": "End the convention after Component 3.",
+                        "value": "none"
+                      },
+                      {
+                        "label": "Free-form Text 1",
+                        "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform1"
+                      },
+                      {
+                        "label": "Environment",
+                        "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                        "value": "environment"
+                      },
+                      {
+                        "label": "Resource Type",
+                        "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
+                        "value": "resourceType"
+                      },
+                      {
+                        "label": "Workload",
+                        "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                        "value": "workload"
+                      },
+                      {
+                        "label": "Purpose",
+                        "description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
+                        "value": "purpose"
+                      },
+                      {
+                        "label": "Location",
+                        "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                        "value": "location"
+                      },
+                      {
+                        "label": "Free-form Text 2",
+                        "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform2"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "component5",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Component 5",
+                  "defaultValue": "none",
+                  "multiLine": true,
+                  "toolTip": "Fifth component. Select 'None (stop here)' to use only 4 components.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), and(not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none'))))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "None (stop here)",
+                        "description": "End the convention after Component 4.",
+                        "value": "none"
+                      },
+                      {
+                        "label": "Free-form Text 1",
+                        "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform1"
+                      },
+                      {
+                        "label": "Environment",
+                        "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                        "value": "environment"
+                      },
+                      {
+                        "label": "Resource Type",
+                        "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
+                        "value": "resourceType"
+                      },
+                      {
+                        "label": "Workload",
+                        "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                        "value": "workload"
+                      },
+                      {
+                        "label": "Purpose",
+                        "description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
+                        "value": "purpose"
+                      },
+                      {
+                        "label": "Location",
+                        "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                        "value": "location"
+                      },
+                      {
+                        "label": "Free-form Text 2",
+                        "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform2"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "component6",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Component 6",
+                  "defaultValue": "none",
+                  "multiLine": true,
+                  "toolTip": "Sixth component. Select 'None (stop here)' to use only 5 components.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(equals(steps('tagsAndNaming').naming.component2, 'none')), not(equals(steps('tagsAndNaming').naming.component3, 'none')), not(equals(steps('tagsAndNaming').naming.component4, 'none')), not(equals(steps('tagsAndNaming').naming.component5, 'none')))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "None (stop here)",
+                        "description": "End the convention after Component 5.",
+                        "value": "none"
+                      },
+                      {
+                        "label": "Free-form Text 1",
+                        "description": "A fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform1"
+                      },
+                      {
+                        "label": "Environment",
+                        "description": "Deployment environment tier — provide a value below (e.g. pr, np, co, dev).",
+                        "value": "environment"
+                      },
+                      {
+                        "label": "Resource Type",
+                        "description": "Resource type abbreviation — auto-resolved per resource (e.g. rg, kv, pe). Optionally customize abbreviations below.",
+                        "value": "resourceType"
+                      },
+                      {
+                        "label": "Workload",
+                        "description": "User-supplied workload/application/project name — provide a value below (e.g. avd, sharepoint).",
+                        "value": "workload"
+                      },
+                      {
+                        "label": "Purpose",
+                        "description": "Resource purpose — auto-resolved per resource (e.g. operations, sec, enc). No value required.",
+                        "value": "purpose"
+                      },
+                      {
+                        "label": "Location",
+                        "description": "Region abbreviation — auto-resolved from the deployment location (e.g. eus, va). Optionally override below.",
+                        "value": "location"
+                      },
+                      {
+                        "label": "Free-form Text 2",
+                        "description": "A second fixed string you define — provide a value below. The same text appears in every resource name.",
+                        "value": "freeform2"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "workloadValue",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Workload Value",
+                  "placeholder": "e.g. avd, sharepoint, navigator",
+                  "toolTip": "The workload/application/project name (CAF: Workload). Appears in every resource name when the Workload component is selected.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9-]{1,20}$",
+                    "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
+                  }
+                },
+                {
+                  "name": "freeform1Value",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Free-form Text 1 Value",
+                  "placeholder": "e.g. contoso, shared, corp",
+                  "toolTip": "The fixed value used for the Free-form Text 1 component in all resource names.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform1'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform1'), equals(steps('tagsAndNaming').naming.component6, 'freeform1'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9-]{1,20}$",
+                    "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
+                  }
+                },
+                {
+                  "name": "environmentValue",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Environment Value",
+                  "placeholder": "e.g. pr, np, co, dev, prod",
+                  "toolTip": "The fixed value used for the Environment component in all resource names.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'environment'), or(equals(steps('tagsAndNaming').naming.component2, 'environment'), or(equals(steps('tagsAndNaming').naming.component3, 'environment'), or(equals(steps('tagsAndNaming').naming.component4, 'environment'), or(equals(steps('tagsAndNaming').naming.component5, 'environment'), equals(steps('tagsAndNaming').naming.component6, 'environment'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,4}$",
+                    "validationMessage": "Use 1 to 4 lowercase letters or digits."
+                  }
+                },
+                {
+                  "name": "freeform2Value",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Free-form Text 2 Value",
+                  "placeholder": "e.g. contoso, shared",
+                  "toolTip": "A second fixed text string embedded in every resource name when the Free-form Text 2 component is used.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component2, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component3, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component4, 'freeform2'), or(equals(steps('tagsAndNaming').naming.component5, 'freeform2'), equals(steps('tagsAndNaming').naming.component6, 'freeform2'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9-]{1,20}$",
+                    "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
+                  }
+                },
+                {
+                  "name": "locationAbbreviationOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Custom Location Abbreviation",
+                  "placeholder": "e.g. east, va, eus2",
+                  "defaultValue": "",
+                  "toolTip": "Override the auto-resolved region abbreviation. Leave empty to use the standard abbreviation from the locations data file (e.g. eus for East US, va for US Gov Virginia).",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))]",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9]{0,10}$",
+                    "validationMessage": "Use up to 10 lowercase letters or digits. Leave empty to use the auto-resolved abbreviation."
+                  }
+                },
+                {
+                  "name": "noResourceTypeError",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "No Resource Type component selected. Including Resource Type is strongly recommended - it identifies the resource category at a glance and follows the Cloud Adoption Framework naming standard (e.g. rg-avd-operations-eus, kv-avd-sec-eus)."
+                  }
+                },
+                {
+                  "name": "noPurposeError",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'purpose'), or(equals(steps('tagsAndNaming').naming.component2, 'purpose'), or(equals(steps('tagsAndNaming').naming.component3, 'purpose'), or(equals(steps('tagsAndNaming').naming.component4, 'purpose'), or(equals(steps('tagsAndNaming').naming.component5, 'purpose'), equals(steps('tagsAndNaming').naming.component6, 'purpose'))))))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "No 'Purpose' component selected. Both Key Vaults in this deployment (secrets and encryption) will have identical names. Including 'Purpose' is required."
+                  }
+                },
+                {
+                  "name": "noWorkloadWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No 'Workload' component selected. Including Workload is strongly recommended - it scopes resource names to your application or project and prevents collisions with other deployments using the same convention."
+                  }
+                },
+                {
+                  "name": "noLocationWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming, not(or(equals(steps('tagsAndNaming').naming.component1, 'location'), or(equals(steps('tagsAndNaming').naming.component2, 'location'), or(equals(steps('tagsAndNaming').naming.component3, 'location'), or(equals(steps('tagsAndNaming').naming.component4, 'location'), or(equals(steps('tagsAndNaming').naming.component5, 'location'), equals(steps('tagsAndNaming').naming.component6, 'location'))))))))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No 'Location' component selected. If you plan to deploy Key Vaults in multiple regions, include Location in your convention to avoid resource name conflicts between deployments."
+                  }
+                },
+                {
+                  "name": "duplicateComponentError",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming,or(greater(add(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),1,0),add(if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),1,0),add(if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),1,0),add(if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),1,0),add(if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),1,0),if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),1,0)))))),1),or(greater(add(if(equals(steps('tagsAndNaming').naming.component1,'purpose'),1,0),add(if(equals(steps('tagsAndNaming').naming.component2,'purpose'),1,0),add(if(equals(steps('tagsAndNaming').naming.component3,'purpose'),1,0),add(if(equals(steps('tagsAndNaming').naming.component4,'purpose'),1,0),add(if(equals(steps('tagsAndNaming').naming.component5,'purpose'),1,0),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),1,0)))))),1),or(greater(add(if(equals(steps('tagsAndNaming').naming.component1,'location'),1,0),add(if(equals(steps('tagsAndNaming').naming.component2,'location'),1,0),add(if(equals(steps('tagsAndNaming').naming.component3,'location'),1,0),add(if(equals(steps('tagsAndNaming').naming.component4,'location'),1,0),add(if(equals(steps('tagsAndNaming').naming.component5,'location'),1,0),if(equals(steps('tagsAndNaming').naming.component6,'location'),1,0)))))),1),or(greater(add(if(equals(steps('tagsAndNaming').naming.component1,'workload'),1,0),add(if(equals(steps('tagsAndNaming').naming.component2,'workload'),1,0),add(if(equals(steps('tagsAndNaming').naming.component3,'workload'),1,0),add(if(equals(steps('tagsAndNaming').naming.component4,'workload'),1,0),add(if(equals(steps('tagsAndNaming').naming.component5,'workload'),1,0),if(equals(steps('tagsAndNaming').naming.component6,'workload'),1,0)))))),1),or(greater(add(if(equals(steps('tagsAndNaming').naming.component1,'environment'),1,0),add(if(equals(steps('tagsAndNaming').naming.component2,'environment'),1,0),add(if(equals(steps('tagsAndNaming').naming.component3,'environment'),1,0),add(if(equals(steps('tagsAndNaming').naming.component4,'environment'),1,0),add(if(equals(steps('tagsAndNaming').naming.component5,'environment'),1,0),if(equals(steps('tagsAndNaming').naming.component6,'environment'),1,0)))))),1),or(greater(add(if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),1,0),add(if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),1,0),add(if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),1,0),add(if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),1,0),add(if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),1,0),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),1,0)))))),1),greater(add(if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),1,0),add(if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),1,0),add(if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),1,0),add(if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),1,0),add(if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),1,0),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),1,0)))))),1))))))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Duplicate component detected. Each component type can only appear once in the naming convention. Please ensure each selected component is unique."
+                  }
+                },
+                {
+                  "name": "kvNameTooLongError",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming,greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''))),24))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "[concat('Key Vault base name is ',string(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),'')))),' characters — Azure Key Vault names cannot exceed 24 characters. Shorten your naming convention before deploying Key Vaults.')]"
+                  }
+                },
+                {
+                  "name": "kvShortUniqueWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming,and(greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''))),20),not(greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''))),24))))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "[concat('Key Vault base name is ',string(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),'')))),' characters — the uniqueness suffix will be omitted to stay within the 24-character limit. Key Vault names may collide if this convention is reused in the same resource group.')]"
+                  }
+                },
+                {
+                  "name": "kvNoLocationInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableCustomNaming,not(or(equals(steps('tagsAndNaming').naming.component1,'location'),or(equals(steps('tagsAndNaming').naming.component2,'location'),or(equals(steps('tagsAndNaming').naming.component3,'location'),or(equals(steps('tagsAndNaming').naming.component4,'location'),or(equals(steps('tagsAndNaming').naming.component5,'location'),equals(steps('tagsAndNaming').naming.component6,'location'))))))))]",
+                  "options": {
+                    "style": "Info",
+                    "text": "No location segment in your naming convention — a location code is automatically included in the Key Vault unique string seed to prevent name collisions across regions."
+                  }
+                },
+                {
+                  "name": "rtCodeRg",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Resource Groups abbreviation",
+                  "defaultValue": "rg",
+                  "toolTip": "Abbreviation substituted for the Resource Type component in resource group names.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,10}$",
+                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
+                  "name": "rtCodeKv",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Key Vaults abbreviation",
+                  "defaultValue": "kv",
+                  "toolTip": "Abbreviation substituted for the Resource Type component in Key Vault names. Key Vault names allow only alphanumeric characters and hyphens.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,10}$",
+                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
+                  "name": "rtCodePe",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private Endpoints abbreviation",
+                  "defaultValue": "pe",
+                  "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint names.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,10}$",
+                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
+                  "name": "rtCodeNic",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Network Interfaces abbreviation",
+                  "defaultValue": "nic",
+                  "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint network interface names.",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,10}$",
+                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
+                  "name": "previewHeading",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Name Preview"
+                  },
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
+                },
+                {
+                  "name": "previewRg",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "[concat('Resource Group: ', if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))), ''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'operations',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(Free-form Text 1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(Environment)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(Free-form Text 2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'(Workload)',steps('tagsAndNaming').naming.workloadValue)))))))),''))]"
+                  },
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
+                },
+                {
+                  "name": "previewNotes",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Preview shows the resource group name. Key Vault names use the same convention with 'sec' and 'enc' as purpose tokens to distinguish the two vaults, are capped at 24 characters, and always include a 6-character unique suffix. Underscores and dots in the delimiter are replaced with hyphens in Key Vault names. Location shows '{loc}' when no custom abbreviation is provided — the actual value (e.g. eus, va) is resolved at deployment time from the selected region."
+                  },
+                  "visible": "[steps('tagsAndNaming').naming.enableCustomNaming]"
+                }
+              ]
+            },
+            {
+              "name": "tags",
+              "type": "Microsoft.Common.Section",
+              "label": "Resource Tags",
+              "elements": [
+                {
+                  "name": "infoBox",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Apply tags to the deployed resources. Tags are applied per resource type."
+                  }
+                },
+                {
+                  "name": "resourceTags",
+                  "type": "Microsoft.Common.TagsByResource",
+                  "resources": [
+                    "Microsoft.Resources/resourceGroups",
+                    "Microsoft.KeyVault/vaults",
+                    "Microsoft.Network/privateEndpoints"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "kind": "Subscription",
+      "location": "[steps('basics').scope.location.name]",
+      "subscriptionId": "[steps('basics').scope.subscription.id]",
+      "parameters": {
+        "location": "[steps('basics').scope.location.name]",
+        "deploySecretsKeyVault": "[steps('secretsKeyVault').deploySecretsKeyVault]",
+        "secretsKeyVaultEnableSoftDelete": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enableSoftDelete, true)]",
+        "secretsKeyVaultEnablePurgeProtection": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enablePurgeProtection, true)]",
+        "secretsKeyVaultRetentionInDays": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.retentionDays, 90)]",
+        "virtualMachineAdminUserName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminUserName, '')]",
+        "virtualMachineAdminPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminPassword, '')]",
+        "domainJoinUserPrincipalName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPrincipalName, '')]",
+        "domainJoinUserPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPassword, '')]",
+        "deployEncryptionKeyVault": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
+        "encryptionKeyVaultRetentionInDays": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').encKvRetentionInDays, 90)]",
+        "encryptionKeyVaultForcePublicAccess": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').forcePublicAccess, false)]",
+        "privateEndpoint": "[steps('networking').privateEndpoint]",
+        "privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
+        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
+        "permittedIPs": "[filter(map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+        "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
+        "customNamingConvention": "[if(steps('tagsAndNaming').naming.enableCustomNaming, parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', steps('tagsAndNaming').naming.component2, '\",\"', steps('tagsAndNaming').naming.component3, '\",\"', steps('tagsAndNaming').naming.component4, '\",\"', steps('tagsAndNaming').naming.component5, '\",\"', steps('tagsAndNaming').naming.component6, '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}')), parse('{}'))]",
+        "tags": "[steps('tagsAndNaming').tags.resourceTags]"
+      }
+    }
+  }
 }
