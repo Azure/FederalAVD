@@ -136,7 +136,27 @@ try {
         Write-Log "Downloading updates..."
         $Downloader = $UpdateSession.CreateUpdateDownloader()
         $Downloader.Updates = $UpdatesToDownload
-        $Downloader.Download()
+
+        # Use BeginDownload (async) so we can enforce a timeout on slow or restricted networks.
+        # $Downloader.Download() is fully synchronous with no built-in timeout -- on slow
+        # connectivity (e.g. AzureUSGovernment image builds) it will block indefinitely.
+        $DownloadTimeoutSeconds = 1800  # 30 minutes
+        $DownloadPollInterval   = 30
+        $DownloadElapsed        = 0
+        $DownloadJob = $Downloader.BeginDownload($null, $null, $null)
+        Write-Log "Download started. Waiting up to $DownloadTimeoutSeconds seconds..."
+        while (-not $DownloadJob.IsCompleted -and $DownloadElapsed -lt $DownloadTimeoutSeconds) {
+            Start-Sleep -Seconds $DownloadPollInterval
+            $DownloadElapsed += $DownloadPollInterval
+            Write-Log "Downloading... ($DownloadElapsed / $DownloadTimeoutSeconds s elapsed)"
+        }
+        if (-not $DownloadJob.IsCompleted) {
+            $DownloadJob.RequestAbort()
+            $DownloadJob.CleanUp()
+            Write-Log "WARNING: Update download timed out after $DownloadTimeoutSeconds seconds. This likely indicates slow or restricted network connectivity. Skipping update installation."
+            Exit 0
+        }
+        $null = $Downloader.EndDownload($DownloadJob)
         Write-Log "Successfully downloaded updates:"        
         For ($i = 0; $i -lt $UpdatesToDownload.Count; $i++) {
             $Update = $UpdatesToDownload[$i]

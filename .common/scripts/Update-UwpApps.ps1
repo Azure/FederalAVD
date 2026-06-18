@@ -23,6 +23,43 @@ function Get-ProvisionedPackageVersionMap {
 try {
     Write-Log "Updating Built-In UWP Apps via InstallService"
 
+    # --- Pre-flight: DISM readiness checks ---
+
+    # Check whether Windows Modules Installer (TrustedInstaller / TiWorker) is actively running.
+    # An active CBS/servicing pass holds the DISM session lock -- any concurrent DISM call will hang
+    # until it releases. Wait up to 3 minutes for it to finish; warn and continue if it does not.
+    Write-Log "Pre-flight: checking for active CBS/DISM operations (TiWorker / TrustedInstaller)..."
+    $dismWaitSeconds = 180
+    $dismPollInterval = 10
+    $dismElapsed = 0
+    while ($dismElapsed -lt $dismWaitSeconds) {
+        $cbsActive = Get-Process -Name 'TiWorker', 'TrustedInstaller' -ErrorAction SilentlyContinue |
+                     Where-Object { -not $_.HasExited }
+        if (-not $cbsActive) { break }
+        Write-Log "Pre-flight: CBS/DISM in use ($($cbsActive.Name -join ', ')). Waiting $dismPollInterval s... ($dismElapsed / $dismWaitSeconds s elapsed)"
+        Start-Sleep -Seconds $dismPollInterval
+        $dismElapsed += $dismPollInterval
+    }
+    if ($dismElapsed -ge $dismWaitSeconds) {
+        Write-Log "WARNING: CBS/DISM was still active after $dismWaitSeconds seconds. AppX operations may hang or fail."
+    }
+    else {
+        Write-Log "Pre-flight: no active CBS/DISM operations detected."
+    }
+
+    # Check for a pending reboot from Component Based Servicing (informational -- does not abort).
+    # A pending CBS reboot means component state is not fully committed; AppX operations that touch
+    # those components can queue behind the pending pass and appear to hang.
+    $pendingReboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+                     (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or
+                     ($null -ne (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'PendingFileRenameOperations' -ErrorAction SilentlyContinue))
+    if ($pendingReboot) {
+        Write-Log "WARNING: A pending reboot was detected. AppX operations may behave unexpectedly."
+    }
+    else {
+        Write-Log "Pre-flight: no pending reboot detected."
+    }
+
     $TaskPath = '\Microsoft\Windows\InstallService\'
     $TaskName = 'ScanForUpdates'
 
