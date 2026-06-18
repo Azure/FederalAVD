@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "14630207492086890887"
+      "templateHash": "7997885348104525707"
     }
   },
   "functions": [
@@ -235,13 +235,6 @@
         "description": "Optional. Pre-create a persistent resource group dedicated to image builds and grant the managed identity Contributor on it. Enables image build operators who do not have subscription-level resource group creation rights to run image builds by pointing imageBuild to this resource group via imageBuildResourceGroupId. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level."
       }
     },
-    "customImageBuildResourceGroupName": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Custom name for the pre-created image build resource group. Leave empty to use the standard naming convention (matches what imageBuild calculates automatically)."
-      }
-    },
     "namingConvention": {
       "type": "object",
       "defaultValue": {
@@ -255,7 +248,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }\nThis object is produced automatically when deploying via the Azure Portal UI."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Multiple resources of the same type exist in this deployment (two storage accounts,\n                 two UAIs, multiple DES). Without 'purpose' they produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still embedded in storage account names\n                 and added to unique-string seeds so cross-region deployments remain collision-free, but other\n                 resource names will not contain a location segment.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
       }
     },
     "timeStamp": {
@@ -821,7 +814,7 @@
     "saRtCode": "[toLower(variables('cnv_rtCodes').storageAccounts)]",
     "identifier": "image-management",
     "resourceGroupName": "[variables('customResourceGroupName')]",
-    "imageBuildRgName": "[if(empty(parameters('customImageBuildResourceGroupName')), format('{0}-avd-image-builds-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[variables('varLocation')].abbreviation), parameters('customImageBuildResourceGroupName'))]",
+    "imageBuildRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'image-builds', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "artifactsBlobContainerName": "artifacts",
     "galleryName": "[variables('customGalleryName')]",
     "identityName": "[variables('customIdentityName')]",

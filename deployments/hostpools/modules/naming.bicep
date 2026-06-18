@@ -7,7 +7,18 @@
 // Called by: deployments/hostpools/hostpool.bicep
 // ============================================================================
 
-@description('Naming convention controlling how all resources are named. The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention (resourceType-workload-purpose-location). Note: purpose is a FederalAVD addition with no direct CAF equivalent. Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.')
+@description('''Naming convention controlling how all resources are named.
+The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
+Note: purpose is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
+Component requirements:
+  purpose      — REQUIRED. Many resources share a type across a host pool deployment (multiple RGs, UAIs,
+                 Key Vaults, DES). Without purpose they produce identical names and the deployment fails.
+  resourceType — Strongly recommended. Without it resource names carry no type identifier.
+  location     — Optional. When omitted the location abbreviation is still embedded in storage account names
+                 and added to Key Vault unique-string seeds so cross-region deployments remain collision-free,
+                 but other resource names will not contain a location segment.
+  workload, freeform1, environment, freeform2 — Optional static tokens.
+Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "11974707180297761012"
+      "templateHash": "11526635761791423907"
     }
   },
   "functions": [
@@ -256,7 +256,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
       }
     },
     "timeStamp": {

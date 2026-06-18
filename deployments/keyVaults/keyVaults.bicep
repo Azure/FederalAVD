@@ -102,6 +102,14 @@ param tags object = {}
 @description('''Optional. Naming convention controlling how all resources in this deployment are named.
 The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
 Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
+Component requirements:
+  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they
+                 produce identical names and the deployment fails.
+  resourceType — Strongly recommended. Without it resource names carry no type identifier.
+  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds
+                 so cross-region deployments produce distinct Key Vault names, but the location segment
+                 will not appear in resource names.
+  workload, freeform1, environment, freeform2 — Optional static tokens.
 Key properties:
   components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
   delimiter           — character inserted between components, e.g. "-"
@@ -110,7 +118,8 @@ Key properties:
   locationAbbreviation — override for the region abbreviation
   resourceTypeCodes   — object with per-resource-type abbreviation overrides
     { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }
-This object is produced automatically when deploying via the Azure Portal UI.''')
+This object is produced automatically when deploying via the Azure Portal UI.
+When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'

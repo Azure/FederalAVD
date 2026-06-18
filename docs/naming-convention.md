@@ -205,12 +205,12 @@ Each element of `components` must be one of these values:
 
 ### Minimum required components
 
-A valid `components` array must include at least:
-
-- **`resourceType`** — required. Without it, resources of different types produce identical names.
-- **`purpose`** — strongly recommended. Without it, multiple resources of the same type in the same deployment collide.
-
-A warning is shown in the Portal UI if `workload` or `location` are omitted, because those are the most common differentiators between environments and regions.
+| Component | Requirement | What happens without it |
+|-----------|-------------|------------------------|
+| `purpose` | **Required** | Multiple resources of the same type share an identical name → ARM conflict error. Every deployment creates several same-type resources (multiple RGs, two Key Vaults, two UAIs, etc.). The Portal UI blocks submission with an **Error** when `purpose` is absent. |
+| `resourceType` | Strongly recommended | Resource names carry no type identifier, making them hard to distinguish in the portal. |
+| `location` | Optional | The location abbreviation is still embedded in storage account names and added to Key Vault unique-string seeds, so cross-region deployments remain collision-free. Other resource names simply won't contain a location segment. The Portal UI shows a **Warning** (not an error) when `location` is absent. |
+| `workload` | Optional | Names are scoped less tightly to your application; collisions with other deployments using the same convention become more likely. The Portal UI shows a **Warning** when `workload` is absent. |
 
 ### RT-first vs RT-last
 

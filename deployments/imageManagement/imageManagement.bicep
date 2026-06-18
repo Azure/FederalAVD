@@ -79,12 +79,17 @@ param deployBuildLogsStorageAccount bool = true
 @description('Optional. Pre-create a persistent resource group dedicated to image builds and grant the managed identity Contributor on it. Enables image build operators who do not have subscription-level resource group creation rights to run image builds by pointing imageBuild to this resource group via imageBuildResourceGroupId. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level.')
 param deployImageBuildResourceGroup bool = true
 
-@description('Optional. Custom name for the pre-created image build resource group. Leave empty to use the standard naming convention (matches what imageBuild calculates automatically).')
-param customImageBuildResourceGroupName string = ''
-
 @description('''Optional. Naming convention controlling how all resources in this deployment are named.
 The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
 Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
+Component requirements:
+  purpose      — REQUIRED. Multiple resources of the same type exist in this deployment (two storage accounts,
+                 two UAIs, multiple DES). Without 'purpose' they produce identical names and the deployment fails.
+  resourceType — Strongly recommended. Without it resource names carry no type identifier.
+  location     — Optional. When omitted the location abbreviation is still embedded in storage account names
+                 and added to unique-string seeds so cross-region deployments remain collision-free, but other
+                 resource names will not contain a location segment.
+  workload, freeform1, environment, freeform2 — Optional static tokens.
 Key properties:
   components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
   delimiter           — character inserted between components, e.g. "-"
@@ -93,7 +98,8 @@ Key properties:
   locationAbbreviation — override for the region abbreviation
   resourceTypeCodes   — object with per-resource-type abbreviation overrides
     { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }
-This object is produced automatically when deploying via the Azure Portal UI.''')
+This object is produced automatically when deploying via the Azure Portal UI.
+When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -222,11 +228,19 @@ var saRtCode = toLower(cnv_rtCodes.storageAccounts)  // e.g. 'sa'
 // shared environment and has no identifier or index parameter like host pool deployments.
 var identifier = 'image-management'
 var resourceGroupName = customResourceGroupName
-// Image build RG name — matches the naming logic in imageBuild.bicep exactly so imageBuild
-// deployments that omit imageBuildResourceGroupId will land in the pre-created RG automatically.
-var imageBuildRgName = empty(customImageBuildResourceGroupName)
-  ? '${resourceAbbreviations.resourceGroups}-avd-image-builds-${locations[varLocation].abbreviation}'
-  : customImageBuildResourceGroupName
+// Image build RG: uses the same naming convention framework as all other resources.
+// Purpose is 'image-builds' to distinguish it from the management RG ('image-management').
+var imageBuildRgName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  'image-builds',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
 var artifactsBlobContainerName = 'artifacts'
 var galleryName = customGalleryName
 var identityName = customIdentityName

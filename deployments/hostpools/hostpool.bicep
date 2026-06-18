@@ -1314,7 +1314,7 @@ module monitoring 'modules/monitoring/monitoring.bicep' = if (enableMonitoring &
 }
 
 // AVD Control Plane Resources: workspace, host pool, and desktop application group
-module controlPlane 'modules/controlPlane/controlPlane.bicep' = {
+module controlPlane 'modules/control-plane/controlPlane.bicep' = {
   name: 'ControlPlane-${deploymentSuffix}'
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
@@ -1643,7 +1643,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
 }
 
 // Clean Up Deployment VM and Role Assignments
-module cleanUp 'modules/cleanUp/cleanUp.bicep' = if (createDeploymentVm) {
+module cleanUp 'modules/clean-up/cleanUp.bicep' = if (createDeploymentVm) {
   name: 'CleanUp-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion

@@ -214,14 +214,7 @@ Image version replication to a remote region is configured per imageBuild deploy
 
 - **Type:** Boolean
 - **Default:** `true`
-- **Description:** Pre-creates a persistent resource group dedicated to image builds and grants the imageManagement managed identity **Contributor** on it. The primary purpose is **delegation**: image build operators who do not have subscription-level permissions to create resource groups can run image builds by pointing imageBuild to this pre-created resource group via the `imageBuildResourceGroupId` parameter. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level. Pass the `imageBuildResourceGroupResourceId` output directly to imageBuild as `imageBuildResourceGroupId`.
-
-#### `customImageBuildResourceGroupName`
-
-- **Type:** String
-- **Optional**
-- **Description:** Override the auto-generated image build resource group name. Leave empty to use the standard naming convention. Pass the `imageBuildResourceGroupResourceId` output directly to imageBuild as `imageBuildResourceGroupId`.
-- **Example:** `rg-avd-image-builds-use2`
+- **Description:** Pre-creates a persistent resource group dedicated to image builds and grants the imageManagement managed identity **Contributor** on it. The primary purpose is **delegation**: image build operators who do not have subscription-level permissions to create resource groups can run image builds by pointing imageBuild to this pre-created resource group via the `imageBuildResourceGroupId` parameter. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level. Pass the `imageBuildResourceGroupResourceId` output directly to imageBuild as `imageBuildResourceGroupId`. The name is derived automatically from the `namingConvention` parameter (purpose: `image-builds`).
 
 ## Parameter Files
 
