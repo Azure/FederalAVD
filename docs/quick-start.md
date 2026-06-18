@@ -667,6 +667,7 @@ graph LR
 - 🚧 **[Limitations](limitations.md)** - Known limitations and workarounds
 - 🔧 **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
 - ⚙️ **[Parameters Reference](parameters.md)** - Per-solution parameter documentation index
+- 🏷️ **[Naming Convention](naming-convention.md)** - Customize how all resources are named across solutions
 
 ---
 

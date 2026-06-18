@@ -89,13 +89,11 @@ The Azure identity running this deployment needs:
 - **Default:** `deployment().location`
 - **Description:** Azure region for primary resources
 
-#### `nameConvResTypeAtEnd`
+#### `namingConvention`
 
-- **Type:** Boolean
-- **Default:** `false`
-- **Description:** Reverse CAF naming convention
-  - `false` - `rg-avd-image-management-use2`
-  - `true` - `avd-image-management-use2-rg`
+- **Type:** Object
+- **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (keyVaults, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
 
 ### Storage Configuration
 

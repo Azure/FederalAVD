@@ -160,13 +160,6 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 - **Description:** Prefix for deployment names
 - **Example:** `imgbld`, `avd`
 
-#### `nameConvResTypeAtEnd`
-
-- **Type:** Boolean
-- **Default:** `false`
-- **Description:** Reverse CAF naming (resource type at end)
-- **Example:** `false` = `rg-image-build`, `true` = `image-build-rg`
-
 ### Resource Groups
 
 #### `imageBuildResourceGroupId`

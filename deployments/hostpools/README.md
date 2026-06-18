@@ -157,10 +157,10 @@ Subscription
 - **Default:** `-1` (no index)
 - **Description:** Index for sharding host pools with same persona
 
-#### `nameConvResTypeAtEnd`
-- **Type:** Boolean
-- **Default:** `false`
-- **Description:** Reverse CAF naming convention
+#### `namingConvention`
+- **Type:** Object
+- **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (keyVaults, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
 
 ### Identity & Authentication
 

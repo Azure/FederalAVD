@@ -14,6 +14,20 @@
             "value": "eastus2"
         },
 
+        // ── Naming Convention (optional) ───────────────────────────────────────
+        //    Omit this parameter to use the CAF default: resourceType-avd-purpose-location
+        //    Supply it (and the same object to keyVaults/imageManagement) for a consistent
+        //    enterprise naming convention. See docs/naming-convention.md for full schema.
+        //
+        // "namingConvention": {
+        //     "value": {
+        //         "components": ["workload", "environment", "purpose", "location", "resourceType"],
+        //         "delimiter": "-",
+        //         "workload": "avd",
+        //         "environment": "prod"
+        //     }
+        // },
+
         // ── Identity ───────────────────────────────────────────────────────────
         "identitySolution": {
             "value": "ActiveDirectoryDomainServices"
