@@ -1,26 +1,123 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "16536545935961896332"
+      "version": "0.44.1.10279",
+      "templateHash": "11526635761791423907"
     }
   },
+  "functions": [
+    {
+      "namespace": "__bicep",
+      "members": {
+        "resolveComponent": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "comp"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+          }
+        },
+        "buildCustomName": {
+          "parameters": [
+            {
+              "type": "array",
+              "name": "components"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[join(filter(map(parameters('components'), lambda('comp', __bicep.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
+          }
+        },
+        "kvSanitize": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "s"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[replace(replace(parameters('s'), '_', '-'), '.', '-')]"
+          }
+        }
+      }
+    }
+  ],
   "parameters": {
     "location": {
       "type": "string",
       "defaultValue": "[deployment().location]",
       "metadata": {
         "description": "Required. The Azure region for all foundation resources."
-      }
-    },
-    "nameConvResTypeAtEnd": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name."
       }
     },
     "deploySecretsKeyVault": {
@@ -50,7 +147,7 @@
       "minValue": 7,
       "maxValue": 90,
       "metadata": {
-        "description": "Optional. The retention period in days for soft-deleted objects in the Secrets Key Vault."
+        "description": "Optional. The retention period in days for soft-deleted objects in the Secrets Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production."
       }
     },
     "virtualMachineAdminPassword": {
@@ -94,7 +191,7 @@
       "minValue": 7,
       "maxValue": 90,
       "metadata": {
-        "description": "Optional. Soft delete retention days for the Encryption Key Vault."
+        "description": "Optional. Soft delete retention days for the Encryption Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production."
       }
     },
     "encryptionKeyVaultForcePublicAccess": {
@@ -144,6 +241,22 @@
       "defaultValue": {},
       "metadata": {
         "description": "Optional. Tags to apply to deployed resources, keyed by resource type (e.g., \"Microsoft.KeyVault/vaults\", \"Microsoft.Resources/resourceGroups\")."
+      }
+    },
+    "namingConvention": {
+      "type": "object",
+      "defaultValue": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
+      "metadata": {
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
       }
     },
     "timeStamp": {
@@ -700,17 +813,21 @@
     "deploymentSuffix": "[parameters('timeStamp')]",
     "identifier": "operations",
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
-    "nameConv_Operations_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-LOCATION-RESOURCETYPE', variables('identifier')), format('RESOURCETYPE-avd-{0}-LOCATION', variables('identifier')))]",
-    "nameConv_Operations_Resources": "[if(parameters('nameConvResTypeAtEnd'), 'avd-TOKEN-LOCATION-RESOURCETYPE', 'RESOURCETYPE-avd-TOKEN-LOCATION')]",
-    "privateEndpointNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('resourceAbbreviations').privateEndpoints), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').privateEndpoints))]",
-    "privateEndpointNICNameConv": "[if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('resourceAbbreviations').privateEndpoints, variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', variables('resourceAbbreviations').networkInterfaces, variables('resourceAbbreviations').privateEndpoints))]",
-    "operationsResourceGroupName": "[replace(replace(variables('nameConv_Operations_ResGroup'), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
-    "uniqueStringOperations": "[take(uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName')), 6)]",
-    "secretsKeyVaultName": "[take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('sec-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]",
-    "encryptionKeyVaultName": "[take(replace(replace(replace(variables('nameConv_Operations_Resources'), 'TOKEN', format('enc-{0}', variables('uniqueStringOperations'))), 'LOCATION', variables('locationAbbreviation')), 'RESOURCETYPE', variables('resourceAbbreviations').keyVaults), 24)]"
+    "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
+    "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
+    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
+    "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
+    "cnv_rtFirst": "[if(not(empty(variables('cnv_components'))), not(equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
+    "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "privateEndpointNameConv": "[if(variables('cnv_rtFirst'), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('cnv_rtCodes').privateEndpoints))]",
+    "privateEndpointNICNameConv": "[if(variables('cnv_rtFirst'), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('cnv_rtCodes').privateEndpoints, coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
+    "operationsResourceGroupName": "[variables('customRgName')]",
+    "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
+    "secretsKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]",
+    "encryptionKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]"
   },
-  "resources": [
-    {
+  "resources": {
+    "operationsResourceGroup": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Operations-ResourceGroup-{0}', variables('deploymentSuffix'))]",
@@ -737,8 +854,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "921857994108552741"
+              "version": "0.44.1.10279",
+              "templateHash": "2538346822060615939"
             }
           },
           "parameters": {
@@ -775,7 +892,7 @@
         }
       }
     },
-    {
+    "keyVaults": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))]",
@@ -862,8 +979,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "14244985818155362678"
+              "version": "0.44.1.10279",
+              "templateHash": "1075813460047825930"
             }
           },
           "parameters": {
@@ -1027,8 +1144,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "8485039422876759494"
+                      "version": "0.44.1.10279",
+                      "templateHash": "6824456759606900246"
                     }
                   },
                   "definitions": {
@@ -1326,8 +1443,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "9215232199660468920"
+                      "version": "0.44.1.10279",
+                      "templateHash": "8459238929659221376"
                     }
                   },
                   "parameters": {
@@ -1474,8 +1591,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "17245339863889522044"
+                      "version": "0.44.1.10279",
+                      "templateHash": "13843002736269387529"
                     }
                   },
                   "parameters": {
@@ -1574,8 +1691,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "8485039422876759494"
+                      "version": "0.44.1.10279",
+                      "templateHash": "6824456759606900246"
                     }
                   },
                   "definitions": {
@@ -1873,8 +1990,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "9215232199660468920"
+                      "version": "0.44.1.10279",
+                      "templateHash": "8459238929659221376"
                     }
                   },
                   "parameters": {
@@ -2007,10 +2124,10 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-ResourceGroup-{0}', variables('deploymentSuffix')))]"
+        "operationsResourceGroup"
       ]
     }
-  ],
+  },
   "outputs": {
     "resourceGroupName": {
       "type": "string",
@@ -2031,7 +2148,7 @@
       "metadata": {
         "description": "The resource ID of the Secrets Key Vault. Pass as \"credentialsKeyVaultResourceId\" to the host pool and Session Host Replacer deployments."
       },
-      "value": "[if(parameters('deploySecretsKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.secretsKeyVaultResourceId.value, '')]"
+      "value": "[if(parameters('deploySecretsKeyVault'), reference('keyVaults').outputs.secretsKeyVaultResourceId.value, '')]"
     },
     "encryptionKeyVaultName": {
       "type": "string",
@@ -2045,14 +2162,14 @@
       "metadata": {
         "description": "The resource ID of the Encryption Key Vault. Pass as \"encryptionKeyVaultResourceId\" to any AVD solution using Customer-Managed Keys."
       },
-      "value": "[if(parameters('deployEncryptionKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultResourceId.value, '')]"
+      "value": "[if(parameters('deployEncryptionKeyVault'), reference('keyVaults').outputs.encryptionKeyVaultResourceId.value, '')]"
     },
     "encryptionKeyVaultUri": {
       "type": "string",
       "metadata": {
         "description": "The URI of the Encryption Key Vault."
       },
-      "value": "[if(parameters('deployEncryptionKeyVault'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyVaultUri.value, '')]"
+      "value": "[if(parameters('deployEncryptionKeyVault'), reference('keyVaults').outputs.encryptionKeyVaultUri.value, '')]"
     }
   }
 }

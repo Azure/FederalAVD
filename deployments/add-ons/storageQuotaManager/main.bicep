@@ -127,29 +127,22 @@ var nameConvSourceName = empty(hostPoolResourceId)
   ? storageResourceGroupName
   : last(split(hostPoolResourceId, '/'))
 var nameConvReversed = startsWith(nameConvSourceName, resourceAbbreviations.hostPools) || startsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
-  ? false // Resource type is at the beginning (e.g., "hp-avd-01" or "rg-avd-storage-eus")
-  : endsWith(nameConvSourceName, resourceAbbreviations.hostPools) || endsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
-      ? true // Resource type is at the end (e.g., "avd-01-hp" or "avd-storage-eus-rg")
+  ? false // Resource type is at the beginning (e.g., "vdpool-avd-01" or "rg-avd-storage-eus")
+  : endsWith(nameConvSourceName, resourceAbbreviations.hostPools) || endsWith(nameConvSourceName, resourceAbbreviations.resourceGroups) || endsWith(nameConvSourceName, '-hp')
+      ? true // Resource type is at the end (e.g., "avd-01-vdpool", "avd-storage-eus-rg", or "avd-01-hp")
       : false // Default fallback
 
-// When a host pool is provided, extract base name from its name segments.
+// When a host pool is provided, extract hpBaseName by stripping the outer RT and location segments.
+// This is more robust than hardcoded index positions — it works for any number of persona segments.
+// RT-last  (reversed): strip last 2 segments ({loc}-{rt})
+// RT-first (not reversed): strip first segment ({rt}) and last segment ({loc})
 // When no host pool, use 'sqm' as the fixed base token.
 var arrHostPoolName = split(last(split(hostPoolResourceId, '/')), '-')
-var lengthArrHostPoolName = length(arrHostPoolName)
-
-var hpIdentifier = nameConvReversed
-  ? lengthArrHostPoolName < 5 ? arrHostPoolName[0] : '${arrHostPoolName[0]}-${arrHostPoolName[1]}'
-  : lengthArrHostPoolName < 5 ? arrHostPoolName[1] : '${arrHostPoolName[1]}-${arrHostPoolName[2]}'
-
-var hpIndex = lengthArrHostPoolName == 3
-  ? ''
-  : nameConvReversed
-      ? lengthArrHostPoolName < 5 ? arrHostPoolName[1] : arrHostPoolName[2]
-      : lengthArrHostPoolName < 5 ? arrHostPoolName[2] : arrHostPoolName[3]
-
 var hpBaseName = empty(hostPoolResourceId)
   ? 'sqm'
-  : empty(hpIndex) ? hpIdentifier : '${hpIdentifier}-${hpIndex}'
+  : nameConvReversed
+    ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-')
+    : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-')
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'

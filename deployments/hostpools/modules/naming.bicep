@@ -1,0 +1,269 @@
+// ============================================================================
+// Hostpool Naming Module
+// Computes all resource names for a host pool deployment.
+// No resources are deployed — this module is purely for name resolution.
+//
+// Location: deployments/hostpools/modules/naming.bicep
+// Called by: deployments/hostpools/hostpool.bicep
+// ============================================================================
+
+@description('''Naming convention controlling how all resources are named.
+The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
+Note: purpose is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
+Component requirements:
+  purpose      — REQUIRED. Many resources share a type across a host pool deployment (multiple RGs, UAIs,
+                 Key Vaults, DES). Without purpose they produce identical names and the deployment fails.
+  resourceType — Strongly recommended. Without it resource names carry no type identifier.
+  location     — Optional. When omitted the location abbreviation is still embedded in storage account names
+                 and added to Key Vault unique-string seeds so cross-region deployments remain collision-free,
+                 but other resource names will not contain a location segment.
+  workload, freeform1, environment, freeform2 — Optional static tokens.
+Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
+param namingConvention object = {
+  components: ['resourceType', 'workload', 'purpose', 'location']
+  delimiter: '-'
+  workload: 'avd'
+}
+
+@description('Azure region for VM / session host resources.')
+param virtualMachinesRegion string
+
+@description('Azure region for control plane resources (host pool, workspace, app groups).')
+param controlPlaneRegion string = virtualMachinesRegion
+
+@description('The zero-padded host pool base name (identifier + optional index), already computed by the caller. Required.')
+param identifier string
+
+@description('Global feed region. Pass empty string when there is no global feed workspace.')
+param globalFeedRegion string = ''
+
+@description('Existing feed workspace resource ID. Pass empty string when creating a new workspace.')
+param existingFeedWorkspaceResourceId string = ''
+
+targetScope = 'subscription'
+
+// ── Location resolution ───────────────────────────────────────────────────────
+var cloud      = toLower(environment().name)
+var allLocs    = loadJsonContent('../../../.common/data/locations.json')
+var locsEnvProp = startsWith(cloud, 'us') ? 'other' : environment().name
+var locs       = allLocs[locsEnvProp]
+var abbr       = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+
+// Air-gapped clouds prefix location strings with the cloud slug (e.g. 'usgov', 'ussec').
+var locationVms = startsWith(cloud, 'us')
+  ? substring(virtualMachinesRegion, 5, max(length(virtualMachinesRegion) - 5, 0))
+  : virtualMachinesRegion
+var vmsLocAbbr  = locs[locationVms].abbreviation
+
+var locationCP  = startsWith(cloud, 'us')
+  ? substring(controlPlaneRegion, 5, max(length(controlPlaneRegion) - 5, 0))
+  : controlPlaneRegion
+var cpLocAbbr   = locs[locationCP].abbreviation
+
+// ── Naming convention components ──────────────────────────────────────────────
+var cnv_delimiter      = namingConvention.?delimiter    ?? '-'
+var cnv_components = namingConvention.?components   ?? ['resourceType', 'workload', 'purpose', 'location']
+var cnv_vmsloc   = !empty(namingConvention.?vmsLocationAbbreviation ?? '')
+  ? namingConvention.vmsLocationAbbreviation : vmsLocAbbr
+var cnv_cploc    = !empty(namingConvention.?cpLocationAbbreviation  ?? '')
+  ? namingConvention.cpLocationAbbreviation  : cpLocAbbr
+var cnv_rtCodes  = contains(namingConvention, 'resourceTypeCodes')
+  ? union(abbr, namingConvention.resourceTypeCodes)
+  : abbr
+var cnv_ff1      = namingConvention.?freeform1    ?? ''
+var cnv_env      = namingConvention.?environment  ?? ''
+var cnv_ff2      = namingConvention.?freeform2    ?? ''
+var cnv_workload = !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+
+// ── User-defined functions ────────────────────────────────────────────────────
+func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  comp == 'resourceType' ? rtCode
+    : comp == 'purpose'     ? component
+    : comp == 'location'    ? loc
+    : comp == 'freeform1'   ? ff1
+    : comp == 'environment' ? env
+    : comp == 'freeform2'   ? ff2
+    : comp == 'workload'    ? workload
+    : ''
+
+func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  join(
+    filter(
+      map(components, comp => resolveComponent(comp, rtCode, component, loc, ff1, env, ff2, workload)),
+      s => !empty(s)
+    ),
+    delimiter
+  )
+
+func stripSeps(s string) string =>
+  replace(replace(replace(s, '-', ''), '_', ''), '.', '')
+
+// Key Vault names allow hyphens but not underscores or dots.
+func kvSanitize(s string) string =>
+  replace(replace(s, '_', '-'), '.', '-')
+
+func cnv(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  buildCustomName(filter(components, s => s != 'none'), delimiter, rtCode, component, loc, ff1, env, ff2, workload)
+
+// ── Derived flags ─────────────────────────────────────────────────────────────
+// RT is considered last only when resourceType is explicitly the final non-'none' component.
+var nameConvReversed = !empty(cnv_components) && last(filter(cnv_components, s => s != 'none')) == 'resourceType'
+var cnv_rtFirst      = !nameConvReversed
+
+// ── Temporary Deployment Resources ───────────────────────────────────────────
+var resourceGroupDeployment    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, '${identifier}-deployment', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var depVirtualMachineNameTemp  = stripSeps(cnv(cnv_components, cnv_delimiter, '', identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
+var depVirtualMachineName      = take('${depVirtualMachineNameTemp}${uniqueString(depVirtualMachineNameTemp)}', 15)
+var depVirtualMachineDiskName  = '${depVirtualMachineName}-${cnv_rtCodes.osdisks}'
+var depVirtualMachineNicName   = '${depVirtualMachineName}-${cnv_rtCodes.networkInterfaces}'
+
+// ── Operations / Monitoring Resource Groups ───────────────────────────────────
+var resourceGroupOperations = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'operations', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupMonitoring = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'monitoring', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+
+// Seed matches keyVaults.bicep exactly.
+var uniqueStringOperations = take(
+  !contains(cnv_components, 'location')
+    ? uniqueString(subscription().subscriptionId, resourceGroupOperations, virtualMachinesRegion)
+    : uniqueString(subscription().subscriptionId, resourceGroupOperations),
+  6
+)
+
+// Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
+// kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
+// kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
+var keyVaultNameSecrets    = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var keyVaultNameEncryption = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+
+// ── Monitoring ────────────────────────────────────────────────────────────────
+var dataCollectionEndpointName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var logAnalyticsWorkspaceName  = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.logAnalyticsWorkspaces,  '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+
+// ── Global Feed Resources ─────────────────────────────────────────────────────
+// Global feed is a single shared resource — no location component in its name.
+var globalFeedResourceGroupName = !empty(globalFeedRegion)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'global-feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : ''
+var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global-feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+
+// ── Control Plane Shared Resources ───────────────────────────────────────────
+var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control-plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : split(existingFeedWorkspaceResourceId, '/')[4]
+var workspaceName = empty(existingFeedWorkspaceResourceId)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : last(split(existingFeedWorkspaceResourceId, '/'))
+
+// ── Control Plane HostPool Resources ──────────────────────────────────────────
+var desktopApplicationGroupName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.desktopApplicationGroups, identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var hostPoolName                = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.hostPools,                 identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var scalingPlanName             = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.scalingPlans,              identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+
+// ── Common HostPool Naming Conventions ───────────────────────────────────────
+var privateEndpointNameConv = replace(
+  cnv_rtFirst ? 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID' : 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE',
+  'RESOURCETYPE',
+  cnv_rtCodes.privateEndpoints
+)
+var privateEndpointNICNameConvTemp = cnv_rtFirst
+  ? 'RESOURCETYPE-${privateEndpointNameConv}'
+  : '${privateEndpointNameConv}-RESOURCETYPE'
+var privateEndpointNICNameConv = replace(privateEndpointNICNameConvTemp, 'RESOURCETYPE', cnv_rtCodes.networkInterfaces)
+
+var recoveryServicesVaultNameVMs     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var recoveryServicesVaultNameFSLogix = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  'files',    cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var userAssignedIdentityNameConv     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.userAssignedIdentities, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+
+// ── Compute Resources ─────────────────────────────────────────────────────────
+var resourceGroupHosts    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,   '${identifier}-hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var availabilitySetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.availabilitySets, '${identifier}-##',   cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var virtualMachineNameConv  = cnv_rtFirst ? '${cnv_rtCodes.virtualMachines}-SHNAME'  : 'SHNAME-${cnv_rtCodes.virtualMachines}'
+var diskNameConv            = cnv_rtFirst ? '${cnv_rtCodes.osdisks}-SHNAME'          : 'SHNAME-${cnv_rtCodes.osdisks}'
+var networkInterfaceNameConv = cnv_rtFirst ? '${cnv_rtCodes.networkInterfaces}-SHNAME' : 'SHNAME-${cnv_rtCodes.networkInterfaces}'
+
+var diskAccessName    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskAccesses,      identifier,            cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var diskEncryptionSetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskEncryptionSets, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var diskEncryptionSetNameConfidentialVMs             = replace(diskEncryptionSetNameConv, 'TOKEN', 'confvm-customer-keys')
+var diskEncryptionSetNameCustomerManaged             = replace(diskEncryptionSetNameConv, 'TOKEN', 'customer-keys')
+var diskEncryptionSetNamePlatformAndCustomerManaged  = replace(diskEncryptionSetNameConv, 'TOKEN', 'platform-and-customer-keys')
+
+// ── Storage Resources ─────────────────────────────────────────────────────────
+var resourceGroupStorage     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,      '${identifier}-storage', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var netAppAccountName        = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.netAppAccounts,        identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var netAppCapacityPoolName   = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.netAppCapacityPools,   identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+
+// FSLogix storage account naming (max 15 chars for domain-join compatibility)
+// Add location to the seed when it is not in the naming convention components,
+// matching the same logic used for Key Vault unique strings.
+var uniqueStringStorage = take(
+  !contains(cnv_components, 'location')
+    ? uniqueString(subscription().subscriptionId, resourceGroupStorage, virtualMachinesRegion)
+    : uniqueString(subscription().subscriptionId, resourceGroupStorage),
+  6
+)
+var fslogixStorageAccountNamePrefix = !empty(namingConvention.?fslogixStoragePrefix ?? '')
+  ? take(toLower(replace(namingConvention.fslogixStoragePrefix, '-', '')), 13)
+  : 'fslogix${uniqueStringStorage}'
+
+// ── Encryption Key Names ──────────────────────────────────────────────────────
+var encryptionKeyNameFSLogix           = '${identifier}-encryption-key-${fslogixStorageAccountNamePrefix}##'
+var encryptionKeyNameVMs               = '${identifier}-encryption-key-vms'
+var encryptionKeyNameConfidentialVMs   = '${identifier}-encryption-key-confidential-vms'
+var encryptionKeyNameRecoveryServices  = '${identifier}-encryption-key-rsv'
+
+// ── Outputs ───────────────────────────────────────────────────────────────────
+output resourceGroupDeployment   string = resourceGroupDeployment
+output depVirtualMachineName     string = depVirtualMachineName
+output depVirtualMachineDiskName string = depVirtualMachineDiskName
+output depVirtualMachineNicName  string = depVirtualMachineNicName
+
+output resourceGroupOperations   string = resourceGroupOperations
+output resourceGroupMonitoring   string = resourceGroupMonitoring
+output uniqueStringOperations    string = uniqueStringOperations
+output keyVaultNameSecrets       string = keyVaultNameSecrets
+output keyVaultNameEncryption    string = keyVaultNameEncryption
+
+output dataCollectionEndpointName string = dataCollectionEndpointName
+output logAnalyticsWorkspaceName   string = logAnalyticsWorkspaceName
+
+output globalFeedResourceGroupName string = globalFeedResourceGroupName
+output globalFeedWorkspaceName      string = globalFeedWorkspaceName
+
+output resourceGroupControlPlane    string = resourceGroupControlPlane
+output workspaceName                string = workspaceName
+output desktopApplicationGroupName  string = desktopApplicationGroupName
+output hostPoolName                 string = hostPoolName
+output scalingPlanName              string = scalingPlanName
+
+output privateEndpointNameConv    string = privateEndpointNameConv
+output privateEndpointNICNameConv string = privateEndpointNICNameConv
+
+output recoveryServicesVaultNameVMs     string = recoveryServicesVaultNameVMs
+output recoveryServicesVaultNameFSLogix string = recoveryServicesVaultNameFSLogix
+output userAssignedIdentityNameConv     string = userAssignedIdentityNameConv
+
+output resourceGroupHosts        string = resourceGroupHosts
+output availabilitySetNameConv   string = availabilitySetNameConv
+output virtualMachineNameConv    string = virtualMachineNameConv
+output diskNameConv              string = diskNameConv
+output networkInterfaceNameConv  string = networkInterfaceNameConv
+
+output diskAccessName                               string = diskAccessName
+output diskEncryptionSetNameConv                    string = diskEncryptionSetNameConv
+output diskEncryptionSetNameConfidentialVMs         string = diskEncryptionSetNameConfidentialVMs
+output diskEncryptionSetNameCustomerManaged         string = diskEncryptionSetNameCustomerManaged
+output diskEncryptionSetNamePlatformAndCustomerManaged string = diskEncryptionSetNamePlatformAndCustomerManaged
+
+output resourceGroupStorage          string = resourceGroupStorage
+output netAppAccountName             string = netAppAccountName
+output netAppCapacityPoolName        string = netAppCapacityPoolName
+output uniqueStringStorage           string = uniqueStringStorage
+output fslogixStorageAccountNamePrefix string = fslogixStorageAccountNamePrefix
+
+output encryptionKeyNameFSLogix          string = encryptionKeyNameFSLogix
+output encryptionKeyNameVMs              string = encryptionKeyNameVMs
+output encryptionKeyNameConfidentialVMs  string = encryptionKeyNameConfidentialVMs
+output encryptionKeyNameRecoveryServices string = encryptionKeyNameRecoveryServices
+
+@description('Location abbreviation for the VM/session host region (used by callers for non-naming-convention purposes).')
+output vmsLocAbbr string = vmsLocAbbr

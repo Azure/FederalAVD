@@ -10,7 +10,7 @@ The deployment utilizes the Cloud Adoption Framework naming conventions and orga
 
 - Host Pool Index (***index***): This *optional* parameter is used when we must shard the unique persona across multiple host pools. For more information, see [Sharding Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/sharding).
 
-- Name Convention Reversed (***nameConvResTypeAtEnd***): This boolean parameter, which is by default 'false', will move the resource type abbreviation to the end of the resource names effectively reversing the CAF naming standard.
+- Naming Convention (`namingConvention`): An optional object parameter that controls how every resource in the deployment is named. The default value produces CAF-aligned names (`resourceType-avd-purpose-location`). The `purpose` component is a FederalAVD addition with no direct CAF equivalent — it disambiguates resources of the same type within a deployment. When customized, the engine assembles names from an ordered array of components (resourceType, purpose, location, workload, environment, freeform1, freeform2). See the **[Naming Convention guide](naming-convention.md)** for the full parameter schema, examples, and cross-solution alignment.
 
 The diagram below highlights how the resource groups are created based on the parameters.
 
@@ -102,7 +102,7 @@ The diagram illustrates the following resource group distribution. In the table 
 - **index**: '01', '02'
 - locationVirtualMachines (determined by **virtualMachineSubnetResourceId** location): 'USGovVirginia'
 - **locationControlPlane**: 'USGovVirginia'
-- **nameConvResTypeAtEnd**: false
+- **namingConvention**: *(default — CAF convention)*
 
 | Purpose | Resources | Example Name | Notes |
 | ------- | :-------: | ------------ | ----- |
@@ -121,46 +121,30 @@ Both a personal or pooled host pool can be deployed with this solution. Either o
 
 ## Naming Convention Internals
 
-> **Audience:** contributors extending or debugging the naming logic. Operators deploying the template only need the parameter descriptions and the table above.
+> **Audience:** contributors extending or debugging the naming logic. Operators deploying the template only need the parameter descriptions and the table above. For the full naming reference, see [Naming Convention](naming-convention.md).
 
-All resource names are assembled at Bicep compile time from four base template strings. Each string contains one or more uppercase placeholders that are resolved through `replace()` calls before a name is ever emitted:
+All resource names are assembled from an ordered array of **components** — named slots that the engine fills with resource-type abbreviations, location abbreviations, static labels, and per-resource differentiators. The active convention is controlled by the `namingConvention` parameter object.
 
-| Placeholder | Resolved to |
-| ----------- | ----------- |
-| `RESOURCETYPE` | Resource type abbreviation from `resourceAbbreviations.json` (e.g. `rg`, `vm`, `kv`) |
-| `LOCATION` | Region abbreviation from `locations.json` (e.g. `va`, `tx`, `eus`) |
-| `TOKEN` | Per-resource differentiator — `hosts`, `storage`, `operations`, `sec-<uid>`, etc. |
+### Key concepts
 
-### Four base naming templates
+| Concept | Description |
+|---------|-------------|
+| components array | Ordered list of component names (esourceType\, `purpose`, \location\, \workload\, \nvironment\, \reeform1\, \reeform2\, one\) |
+| purpose | Per-resource differentiator (e.g., \vd-01\, \sec\, \control-plane\) — set automatically by the engine for each resource; no direct CAF equivalent |
+| RT-first | esourceType\ is the first non-one\ component — produces \dpool-avd-use\ style names |
+| RT-last | esourceType\ is the last non-one\ component — produces \vd-use-vdpool\ style names |
+### CAF-aligned default
 
-```
-nameConv_Shared_ResGroup   – shared resource groups  (monitoring, operations, control-plane)
-nameConv_Shared_Resources  – shared resources        (log analytics, key vaults, DCE/DCR)
-nameConv_HP_ResGroups      – host-pool resource groups (hosts, storage, deployment)
-nameConv_HP_Resources      – host-pool resources      (VMs, disk encryption sets, UAIs, …)
-```
+The default `namingConvention` value produces names following `{resourceType}-avd-{purpose}-{location}` via the same `cnv()` user-defined function used for all resources. This is CAF-aligned but not a strict CAF implementation: CAF does not define a `purpose` component.
 
-Their shape depends on `nameConvResTypeAtEnd`:
+### Custom naming path
 
-| `nameConvResTypeAtEnd` | `nameConv_Shared_*` pattern | `nameConv_HP_Resources` pattern |
-| ---------------------- | --------------------------- | ------------------------------- |
-| `false` (default — CAF) | `RESOURCETYPE-avd-TOKEN-LOCATION` | `RESOURCETYPE-avd-<hpBaseName>-TOKEN-LOCATION` |
-| `true` (reversed) | `avd-TOKEN-LOCATION-RESOURCETYPE` | `avd-<hpBaseName>-TOKEN-LOCATION-RESOURCETYPE` |
+The `cnv()` user-defined function maps each component name to its value, filters out empty values, and joins with the configured delimiter. The same function is called for every resource, with only the `purpose` argument varying per resource.
 
-### Concrete examples (`identifier: hr`, `index: 01`, `location: va`)
+### Add-on convention inference
 
-| Resource | Default (`false`) | Reversed (`true`) |
-| -------- | ----------------- | ----------------- |
-| Operations RG | `rg-avd-operations-va` | `avd-operations-va-rg` |
-| Secrets Key Vault | `kv-avd-sec-<uid>-va` *(truncated to 24 chars)* | `avd-sec-<uid>-va-kv` |
-| Hosts RG | `rg-avd-hr-01-hosts-va` | `avd-hr-01-hosts-va-rg` |
-| Host Pool | `hp-avd-hr-01-va` | `avd-hr-01-va-hp` |
-| VM name convention | `vm-hr###-va` | `hr###-va-vm` |
-
-### When `existingHostPoolResourceId` is provided
-
-The convention is **auto-detected** from the existing host pool name: if it starts with the `hp` abbreviation the convention is forward; if it ends with `hp` it is reversed. This drives `nameConvReversed` so that every other resource in the deployment matches the existing host pool's style, regardless of the `nameConvResTypeAtEnd` parameter.
+The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) infer the naming convention from the existing host pool name. They detect RT-last when the host pool name ends with -vdpool or -hp, and default to RT-first otherwise.
 
 ### Implementation location
 
-The full implementation lives in the **Naming Convention** section of [`deployments/hostpools/hostpool.bicep`](../deployments/hostpools/hostpool.bicep), directly above the resource group module declarations.
+The full naming engine lives in [deployments/hostpools/modules/naming.bicep](../deployments/hostpools/modules/naming.bicep) (user-defined functions: `resolveSegment`, `buildCustomName`, `cnv`, `stripSeps`, `kvSanitize`). KeyVaults and imageManagement solutions use the same functions inline.

@@ -486,19 +486,20 @@ var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].ab
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
 // Dynamically determine naming convention from existing host pool name
-var nameConvReversed = startsWith(hostPoolName, '${resourceAbbreviations.hostPools}-')
-  ? false // Resource type is at the beginning (e.g., "hp-avd-01-eus")
-  : endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}')
-      ? true // Resource type is at the end (e.g., "avd-01-eus-hp")
-      : false // Default fallback
+// Reversed = resource type at the end (e.g., "avd-prod-eus-vdpool" or "avd-prod-eus-hp")
+var nameConvReversed = endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') || endsWith(hostPoolName, '-hp')
 
-// Extract hpBaseName by removing resource type and location from the host pool name
-// Not reversed: hp-{hpBaseName}-{location} → remove first segment (hp) and last segment (location)
-// Reversed: {hpBaseName}-{location}-hp → remove last two segments (location-hp)
+// Extract hpBaseName using known anchors: the location abbreviation and the RT token.
+// Using substring with known-length anchors avoids fragile segment-counting when the persona has many parts.
+// RT-last  (reversed): '{persona}-{loc}-{rt}' → strip '-{loc}-{rt}' suffix
+// RT-first (not reversed): '{rt}-{persona}-{loc}' → strip '{rt}-' prefix and '-{loc}' suffix
 var arrHostPoolName = split(hostPoolName, '-')
+var hpRtToken = nameConvReversed
+  ? (endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') ? resourceAbbreviations.hostPools : 'hp')
+  : arrHostPoolName[0]
 var hpBaseName = nameConvReversed
-  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-') // Remove last 2 segments (location-hp)
-  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-') // Remove first (hp) and last (location)
+  ? substring(hostPoolName, 0, length(hostPoolName) - length('-${virtualMachinesRegionAbbreviation}-${hpRtToken}'))
+  : substring(hostPoolName, length('${hpRtToken}-'), length(hostPoolName) - length('${hpRtToken}-') - length('-${virtualMachinesRegionAbbreviation}'))
 var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
 var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
@@ -600,24 +601,15 @@ var templateSpecNameFinal = !empty(templateSpecName)
       ? 'avd-session-hosts-${functionAppRegionAbbreviation}-${resourceAbbreviations.templateSpecs}'
       : '${resourceAbbreviations.templateSpecs}-avd-session-hosts-${functionAppRegionAbbreviation}'
 
-// Virtual Machine naming conventions - use overrides if provided, otherwise derive from host pool naming
+// ## is placed between TOKEN (purpose/persona) and LOCATION so the AS index
+// sits directly after the purpose segment: as-persona-01-01-eus / persona-01-01-eus-as
 var availabilitySetNameConv = !empty(availabilitySetNameConvOverride)
   ? availabilitySetNameConvOverride
-  : nameConvReversed
-      ? replace(
-          replace(
-            replace(
-              replace(nameConv_HP_Resources, 'RESOURCETYPE', '##-RESOURCETYPE'),
-              'RESOURCETYPE',
-              resourceAbbreviations.availabilitySets
-            ),
-            'LOCATION',
-            virtualMachinesRegionAbbreviation
-          ),
-          'TOKEN-',
-          ''
-        )
-      : '${replace(replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation), 'TOKEN-', '')}-##'
+  : replace(
+      replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation),
+      'TOKEN',
+      '##'
+    )
 
 var virtualMachineNameConv = !empty(virtualMachineNameConvOverride)
   ? virtualMachineNameConvOverride

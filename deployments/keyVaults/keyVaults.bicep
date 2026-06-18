@@ -9,9 +9,6 @@ targetScope = 'subscription'
 @description('Required. The Azure region for all foundation resources.')
 param location string = deployment().location
 
-@description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
-param nameConvResTypeAtEnd bool = false
-
 // ── Secrets Key Vault ──────────────────────────────────────────────────────────
 
 @description('Optional. Deploy the Secrets Key Vault (Standard SKU) for storing AVD credentials (VM admin password, domain join credentials).')
@@ -102,6 +99,33 @@ param tags object = {}
 
 // ── Non-Specified Values ───────────────────────────────────────────────────────
 
+@description('''Optional. Naming convention controlling how all resources in this deployment are named.
+The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
+Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
+Component requirements:
+  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they
+                 produce identical names and the deployment fails.
+  resourceType — Strongly recommended. Without it resource names carry no type identifier.
+  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds
+                 so cross-region deployments produce distinct Key Vault names, but the location segment
+                 will not appear in resource names.
+  workload, freeform1, environment, freeform2 — Optional static tokens.
+Key properties:
+  components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
+  delimiter           — character inserted between components, e.g. "-"
+  workload            — solution identifier inserted into names, e.g. "avd"
+  freeform1, environment, freeform2 — optional static/context tokens
+  locationAbbreviation — override for the region abbreviation
+  resourceTypeCodes   — object with per-resource-type abbreviation overrides
+    { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }
+This object is produced automatically when deploying via the Azure Portal UI.
+When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
+param namingConvention object = {
+  components: ['resourceType', 'workload', 'purpose', 'location']
+  delimiter: '-'
+  workload: 'avd'
+}
+
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddHHmmss')
 
@@ -122,59 +146,89 @@ var identifier = 'operations'
 #disable-next-line BCP329
 var locationAbbreviation = locations[varLocation].abbreviation
 
-// Resource group naming: rg-avd-foundation-eus (not reversed) or avd-foundation-eus-rg (reversed)
-var nameConv_Operations_ResGroup = nameConvResTypeAtEnd
-  ? 'avd-${identifier}-LOCATION-RESOURCETYPE'
-  : 'RESOURCETYPE-avd-${identifier}-LOCATION'
+// ── Naming convention ────────────────────────────────────────────────────────
+// Default: Cloud Adoption Framework (CAF) — resourceType-workload-purpose-location.
+// Override any component via the namingConvention parameter.
 
-// Shared resource naming with TOKEN placeholder for sub-type differentiation (sec, enc)
-var nameConv_Operations_Resources = nameConvResTypeAtEnd
-  ? 'avd-TOKEN-LOCATION-RESOURCETYPE'
-  : 'RESOURCETYPE-avd-TOKEN-LOCATION'
+var cnv_delimiter      = namingConvention.?delimiter  ?? '-'
+var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
+  ? namingConvention.locationAbbreviation
+  : locationAbbreviation
+var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
+  resourceGroups: resourceAbbreviations.resourceGroups
+  keyVaults: resourceAbbreviations.keyVaults
+  privateEndpoints: resourceAbbreviations.privateEndpoints
+  networkInterfaces: resourceAbbreviations.networkInterfaces
+}
+var cnv_components = namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
+// RT is last only when resourceType is explicitly the last non-'none' component.
+var cnv_rtFirst  = !empty(cnv_components) ? (last(filter(cnv_components, s => s != 'none')) != 'resourceType') : true
 
-// Private endpoint naming conventions
-var privateEndpointNameConv = nameConvResTypeAtEnd
-  ? 'RESOURCE-SUBRESOURCE-VNETID-${resourceAbbreviations.privateEndpoints}'
-  : '${resourceAbbreviations.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
-var privateEndpointNICNameConv = nameConvResTypeAtEnd
-  ? 'RESOURCE-SUBRESOURCE-VNETID-${resourceAbbreviations.privateEndpoints}-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-${resourceAbbreviations.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
+func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  comp == 'resourceType' ? rtCode
+    : comp == 'purpose' ? component
+    : comp == 'location'  ? loc
+    : comp == 'freeform1'     ? ff1
+    : comp == 'environment'   ? env
+    : comp == 'freeform2' ? ff2
+    : comp == 'workload'  ? workload
+    : ''
 
-var operationsResourceGroupName = replace(
-  replace(nameConv_Operations_ResGroup, 'LOCATION', locationAbbreviation),
-  'RESOURCETYPE',
-  resourceAbbreviations.resourceGroups
-)
-
-// Stable 6-char unique string seeded on subscription + resource group name (consistent across re-deployments)
-var uniqueStringOperations = take(uniqueString(subscription().subscriptionId, operationsResourceGroupName), 6)
-
-// Key Vault names are capped at 24 chars to satisfy Azure naming constraints
-var secretsKeyVaultName = take(
-  replace(
-    replace(
-      replace(nameConv_Operations_Resources, 'TOKEN', 'sec-${uniqueStringOperations}'),
-      'LOCATION',
-      locationAbbreviation
+func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  join(
+    filter(
+      map(components, comp => resolveComponent(comp, rtCode, component, loc, ff1, env, ff2, workload)),
+      s => !empty(s)
     ),
-    'RESOURCETYPE',
-    resourceAbbreviations.keyVaults
-  ),
-  24
+    delimiter
+  )
+
+// Key Vault names allow hyphens but not underscores or dots — replace them.
+func kvSanitize(s string) string =>
+  replace(replace(s, '_', '-'), '.', '-')
+
+var customRgName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  identifier,
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Resource group and resource naming now always use buildCustomName via cnv_components.
+
+// Private endpoint naming conventions — follows the same resource-type-first/last convention as all other resources
+var privateEndpointNameConv = cnv_rtFirst
+  ? '${cnv_rtCodes.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
+  : 'RESOURCE-SUBRESOURCE-VNETID-${cnv_rtCodes.privateEndpoints}'
+var privateEndpointNICNameConv = cnv_rtFirst
+  ? '${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}-${cnv_rtCodes.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
+  : 'RESOURCE-SUBRESOURCE-VNETID-${cnv_rtCodes.privateEndpoints}-${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}'
+
+var operationsResourceGroupName = customRgName
+
+// Stable 6-char unique string seeded on subscription + resource group name.
+// Add location to the seed when the convention has no location component,
+// so deployments to different regions don't produce identical Key Vault names.
+// CAF fallback already embeds the location abbreviation in the name itself.
+var uniqueStringOperations = take(
+  !contains(cnv_components, 'location')
+    ? uniqueString(subscription().subscriptionId, operationsResourceGroupName, location)
+    : uniqueString(subscription().subscriptionId, operationsResourceGroupName),
+  6
 )
 
-var encryptionKeyVaultName = take(
-  replace(
-    replace(
-      replace(nameConv_Operations_Resources, 'TOKEN', 'enc-${uniqueStringOperations}'),
-      'LOCATION',
-      locationAbbreviation
-    ),
-    'RESOURCETYPE',
-    resourceAbbreviations.keyVaults
-  ),
-  24
-)
+// Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
+// kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
+// kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
+var secretsKeyVaultName    = take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
+
+var encryptionKeyVaultName = take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 

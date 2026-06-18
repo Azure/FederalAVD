@@ -1,24 +1,109 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "9208855358495440288"
+      "version": "0.44.1.10279",
+      "templateHash": "7997885348104525707"
     }
   },
+  "functions": [
+    {
+      "namespace": "__bicep",
+      "members": {
+        "resolveComponent": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "comp"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+          }
+        },
+        "buildCustomName": {
+          "parameters": [
+            {
+              "type": "array",
+              "name": "components"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[join(filter(map(parameters('components'), lambda('comp', __bicep.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
+          }
+        }
+      }
+    }
+  ],
   "parameters": {
     "location": {
       "type": "string",
       "defaultValue": "[deployment().location]"
-    },
-    "nameConvResTypeAtEnd": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name."
-      }
     },
     "storageAllowSharedKeyAccess": {
       "type": "bool",
@@ -150,11 +235,20 @@
         "description": "Optional. Pre-create a persistent resource group dedicated to image builds and grant the managed identity Contributor on it. Enables image build operators who do not have subscription-level resource group creation rights to run image builds by pointing imageBuild to this resource group via imageBuildResourceGroupId. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level."
       }
     },
-    "customImageBuildResourceGroupName": {
-      "type": "string",
-      "defaultValue": "",
+    "namingConvention": {
+      "type": "object",
+      "defaultValue": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
       "metadata": {
-        "description": "Optional. Custom name for the pre-created image build resource group. Leave empty to use the standard naming convention (matches what imageBuild calculates automatically)."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Multiple resources of the same type exist in this deployment (two storage accounts,\n                 two UAIs, multiple DES). Without 'purpose' they produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still embedded in storage account names\n                 and added to unique-string seeds so cross-region deployments remain collision-free, but other\n                 resource names will not contain a location segment.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
       }
     },
     "timeStamp": {
@@ -708,47 +802,65 @@
     "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
     "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
     "resourceAbbreviations": "[variables('$fxv#2')]",
-    "nameConv_Suffix_withoutResType": "LOCATION",
-    "nameConvSuffix": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-RESOURCETYPE', variables('nameConv_Suffix_withoutResType')), variables('nameConv_Suffix_withoutResType'))]",
+    "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
+    "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locations')[variables('varLocation')].abbreviation)]",
+    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'computeGalleries', variables('resourceAbbreviations').computeGalleries, 'userAssignedIdentities', variables('resourceAbbreviations').userAssignedIdentities, 'storageAccounts', variables('resourceAbbreviations').storageAccounts, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'diskEncryptionSets', variables('resourceAbbreviations').diskEncryptionSets))]",
+    "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
+    "cnv_rtFirst": "[if(not(empty(variables('cnv_components'))), not(equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
+    "customResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "customGalleryName": "[replace(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').computeGalleries, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')), '-', '_')]",
+    "customIdentityName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "customEncryptionIdentityName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-encryption', variables('identifier')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "saRtCode": "[toLower(variables('cnv_rtCodes').storageAccounts)]",
     "identifier": "image-management",
-    "nameConv_ImageManagement_ResGroup": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')))]",
-    "nameConv_ImageManagement_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}-{1}', variables('identifier'), variables('nameConvSuffix')))]",
-    "resourceGroupName": "[replace(replace(variables('nameConv_ImageManagement_ResGroup'), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation), 'RESOURCETYPE', variables('resourceAbbreviations').resourceGroups)]",
-    "imageBuildRgName": "[if(empty(parameters('customImageBuildResourceGroupName')), if(parameters('nameConvResTypeAtEnd'), format('avd-image-builds-{0}-{1}', variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').resourceGroups), format('{0}-avd-image-builds-{1}', variables('resourceAbbreviations').resourceGroups, variables('locations')[variables('varLocation')].abbreviation)), parameters('customImageBuildResourceGroupName'))]",
+    "resourceGroupName": "[variables('customResourceGroupName')]",
+    "imageBuildRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'image-builds', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "artifactsBlobContainerName": "artifacts",
-    "galleryName": "[replace(replace(replace(variables('nameConv_ImageManagement_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').computeGalleries), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation), '-', '_')]",
-    "identityName": "[replace(replace(variables('nameConv_ImageManagement_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation)]",
+    "galleryName": "[variables('customGalleryName')]",
+    "identityName": "[variables('customIdentityName')]",
     "vnetName": "[if(not(empty(parameters('privateEndpointSubnetResourceId'))), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
-    "privateEndpointNameConv": "[replace(format('{0}', if(parameters('nameConvResTypeAtEnd'), format('RESOURCE-SUBRESOURCE-{0}-RESOURCETYPE', variables('vnetName')), format('RESOURCETYPE-RESOURCE-SUBRESOURCE-{0}', variables('vnetName')))), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
+    "privateEndpointNameConv": "[replace(format('{0}', if(variables('cnv_rtFirst'), format('RESOURCETYPE-RESOURCE-SUBRESOURCE-{0}', variables('vnetName')), format('RESOURCE-SUBRESOURCE-{0}-RESOURCETYPE', variables('vnetName')))), 'RESOURCETYPE', variables('cnv_rtCodes').privateEndpoints)]",
     "privateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('artifactsStorageAccountName'))]",
-    "customNetworkInterfaceName": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-{1}', variables('privateEndpointName'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}', variables('resourceAbbreviations').networkInterfaces, variables('privateEndpointName')))]",
-    "artifactsStorageAccountName": "[take(format('{0}imageassets{1}{2}', variables('resourceAbbreviations').storageAccounts, variables('locations')[variables('varLocation')].abbreviation, uniqueString(subscription().subscriptionId, variables('resourceGroupName'))), 24)]",
+    "customNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('privateEndpointName')), format('{0}-{1}', variables('privateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
+    "saUniqueSuffix": "[if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('resourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('resourceGroupName')))]",
+    "saUniqueLen": "[sub(sub(sub(24, length(variables('saRtCode'))), 9), length(variables('cnv_loc')))]",
+    "saUnique": "[take(variables('saUniqueSuffix'), if(greater(variables('saUniqueLen'), 0), variables('saUniqueLen'), 1))]",
+    "artifactsStorageAccountName": "[if(variables('cnv_rtFirst'), format('{0}imgassets{1}{2}', variables('saRtCode'), variables('cnv_loc'), variables('saUnique')), format('imgassets{0}{1}{2}', variables('cnv_loc'), variables('saUnique'), variables('saRtCode')))]",
     "sasExpirationPeriod": "180.00:00:00",
     "storageKind": "StorageV2",
     "storageSkuName": "Standard_LRS",
     "artifactsStorageAccessTier": "Hot",
     "logsStorageAccessTier": "Hot",
     "storageEncryptionKeyName": "[format('{0}-encryption-key-imagemgmt-storage', variables('identifier'))]",
-    "storageEncryptionIdentityName": "[replace(replace(replace(variables('nameConv_ImageManagement_Resources'), variables('identifier'), format('{0}-encryption', variables('identifier'))), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'LOCATION', variables('locations')[variables('varLocation')].abbreviation)]",
+    "storageEncryptionIdentityName": "[variables('customEncryptionIdentityName')]",
     "cmkKeyNames": "[if(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), createArray(variables('storageEncryptionKeyName')), createArray())]",
-    "galleryDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-{0}-{1}-{2}', if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-{1}-{2}', variables('resourceAbbreviations').diskEncryptionSets, if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'platform-and-customer-keys', 'customer-keys'), variables('locations')[variables('varLocation')].abbreviation))]",
+    "galleryDiskEncryptionSetName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), format('{0}-platform-and-customer-keys', variables('identifier')), format('{0}-customer-keys', variables('identifier'))), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "galleryDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-imagemgmt', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
-    "galleryConfidentialVmDiskEncryptionSetName": "[if(parameters('nameConvResTypeAtEnd'), format('image-management-confidential-vm-{0}-{1}', variables('locations')[variables('varLocation')].abbreviation, variables('resourceAbbreviations').diskEncryptionSets), format('{0}-image-management-confidential-vm-{1}', variables('resourceAbbreviations').diskEncryptionSets, variables('locations')[variables('varLocation')].abbreviation))]",
+    "galleryConfidentialVmDiskEncryptionSetName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, format('{0}-confidential-vm', variables('identifier')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "galleryConfidentialVmDiskEncryptionKeyName": "[format('{0}-{1}-encryption-key-imagemgmt-cvm', variables('identifier'), variables('locations')[variables('varLocation')].abbreviation)]",
-    "logsStorageName": "[take(format('{0}imagelogs{1}{2}', variables('resourceAbbreviations').storageAccounts, variables('locations')[variables('varLocation')].abbreviation, uniqueString(subscription().subscriptionId, variables('resourceGroupName'))), 24)]",
+    "logsStorageName": "[if(variables('cnv_rtFirst'), format('{0}imglogs{1}{2}', variables('saRtCode'), variables('cnv_loc'), variables('saUnique')), format('imglogs{0}{1}{2}', variables('cnv_loc'), variables('saUnique'), variables('saRtCode')))]",
     "logsContainerName": "image-customization-logs",
     "logsPrivateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
-    "logsCustomNetworkInterfaceName": "[if(parameters('nameConvResTypeAtEnd'), format('{0}-{1}', variables('logsPrivateEndpointName'), variables('resourceAbbreviations').networkInterfaces), format('{0}-{1}', variables('resourceAbbreviations').networkInterfaces, variables('logsPrivateEndpointName')))]"
+    "logsCustomNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('logsPrivateEndpointName')), format('{0}-{1}', variables('logsPrivateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]"
   },
-  "resources": [
-    {
+  "resources": {
+    "resourceGroup": {
       "type": "Microsoft.Resources/resourceGroups",
       "apiVersion": "2021-04-01",
       "name": "[variables('resourceGroupName')]",
       "location": "[parameters('location')]",
       "tags": "[coalesce(tryGet(parameters('tags'), 'resourceGroups'), createObject())]"
     },
-    {
+    "encryptionKeyVault": {
+      "condition": "[and(or(or(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged'))), parameters('createConfidentialVmGalleryDes')), not(empty(parameters('encryptionKeyVaultResourceId'))))]",
+      "existing": true,
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "subscriptionId": "[split(parameters('encryptionKeyVaultResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('encryptionKeyVaultResourceId'), '/')[4]]",
+      "name": "[last(split(parameters('encryptionKeyVaultResourceId'), '/'))]"
+    },
+    "imageGallery": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Image-Gallery-{0}', parameters('timeStamp'))]",
@@ -775,8 +887,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "18385742736043084155"
+              "version": "0.44.1.10279",
+              "templateHash": "9320967708484210953"
             }
           },
           "parameters": {
@@ -834,10 +946,10 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+        "resourceGroup"
       ]
     },
-    {
+    "imageBuildResourceGroup": {
       "condition": "[parameters('deployImageBuildResourceGroup')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -865,8 +977,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "921857994108552741"
+              "version": "0.44.1.10279",
+              "templateHash": "2538346822060615939"
             }
           },
           "parameters": {
@@ -903,7 +1015,7 @@
         }
       }
     },
-    {
+    "imageBuildRgContributorAssignment": {
       "condition": "[parameters('deployImageBuildResourceGroup')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -916,7 +1028,7 @@
         "mode": "Incremental",
         "parameters": {
           "principalId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp'))), '2025-04-01').outputs.principalId.value]"
+            "value": "[reference('managedIdentity').outputs.principalId.value]"
           },
           "roleDefinitionId": {
             "value": "b24988ac-6180-42a0-ab88-20f7382dd24c"
@@ -931,8 +1043,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "11766629778045529073"
+              "version": "0.44.1.10279",
+              "templateHash": "17199828385253577684"
             }
           },
           "parameters": {
@@ -996,11 +1108,11 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('Image-Build-ResourceGroup-{0}', parameters('timeStamp')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp')))]"
+        "imageBuildResourceGroup",
+        "managedIdentity"
       ]
     },
-    {
+    "managedIdentity": {
       "condition": "[or(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), parameters('deployImageBuildResourceGroup'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -1028,8 +1140,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "3176829335966308983"
+              "version": "0.44.1.10279",
+              "templateHash": "18121928468382400839"
             }
           },
           "parameters": {
@@ -1075,10 +1187,10 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+        "resourceGroup"
       ]
     },
-    {
+    "storageCmk": {
       "condition": "[and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -1120,8 +1232,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "7123932894855210232"
+              "version": "0.44.1.10279",
+              "templateHash": "16904075698300234972"
             }
           },
           "definitions": {
@@ -1339,8 +1451,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3058719336033375780"
+                      "version": "0.44.1.10279",
+                      "templateHash": "7955233160800436934"
                     }
                   },
                   "parameters": {
@@ -1478,8 +1590,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3176829335966308983"
+                      "version": "0.44.1.10279",
+                      "templateHash": "18121928468382400839"
                     }
                   },
                   "parameters": {
@@ -1564,8 +1676,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -1735,8 +1847,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3058719336033375780"
+                      "version": "0.44.1.10279",
+                      "templateHash": "7955233160800436934"
                     }
                   },
                   "parameters": {
@@ -1888,8 +2000,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "1494202011118404825"
+                      "version": "0.44.1.10279",
+                      "templateHash": "10550470109364136870"
                     }
                   },
                   "parameters": {
@@ -2034,8 +2146,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -2196,8 +2308,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -2350,10 +2462,10 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+        "resourceGroup"
       ]
     },
-    {
+    "diskCmk": {
       "condition": "[not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -2398,8 +2510,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "7123932894855210232"
+              "version": "0.44.1.10279",
+              "templateHash": "16904075698300234972"
             }
           },
           "definitions": {
@@ -2617,8 +2729,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3058719336033375780"
+                      "version": "0.44.1.10279",
+                      "templateHash": "7955233160800436934"
                     }
                   },
                   "parameters": {
@@ -2756,8 +2868,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3176829335966308983"
+                      "version": "0.44.1.10279",
+                      "templateHash": "18121928468382400839"
                     }
                   },
                   "parameters": {
@@ -2842,8 +2954,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -3013,8 +3125,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3058719336033375780"
+                      "version": "0.44.1.10279",
+                      "templateHash": "7955233160800436934"
                     }
                   },
                   "parameters": {
@@ -3166,8 +3278,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "1494202011118404825"
+                      "version": "0.44.1.10279",
+                      "templateHash": "10550470109364136870"
                     }
                   },
                   "parameters": {
@@ -3312,8 +3424,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -3474,8 +3586,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -3628,10 +3740,10 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+        "resourceGroup"
       ]
     },
-    {
+    "confidentialVmCmk": {
       "condition": "[parameters('createConfidentialVmGalleryDes')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -3676,8 +3788,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "7123932894855210232"
+              "version": "0.44.1.10279",
+              "templateHash": "16904075698300234972"
             }
           },
           "definitions": {
@@ -3895,8 +4007,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3058719336033375780"
+                      "version": "0.44.1.10279",
+                      "templateHash": "7955233160800436934"
                     }
                   },
                   "parameters": {
@@ -4034,8 +4146,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3176829335966308983"
+                      "version": "0.44.1.10279",
+                      "templateHash": "18121928468382400839"
                     }
                   },
                   "parameters": {
@@ -4120,8 +4232,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -4291,8 +4403,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "3058719336033375780"
+                      "version": "0.44.1.10279",
+                      "templateHash": "7955233160800436934"
                     }
                   },
                   "parameters": {
@@ -4444,8 +4556,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "1494202011118404825"
+                      "version": "0.44.1.10279",
+                      "templateHash": "10550470109364136870"
                     }
                   },
                   "parameters": {
@@ -4590,8 +4702,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -4752,8 +4864,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "15091676289629671152"
+                      "version": "0.44.1.10279",
+                      "templateHash": "118124187100797841"
                     }
                   },
                   "definitions": {
@@ -4906,10 +5018,10 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+        "resourceGroup"
       ]
     },
-    {
+    "assetsStorageAccount": {
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -4955,8 +5067,8 @@
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },
-          "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
-          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.identityResourceId.value), createObject('value', ''))]",
+          "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference('encryptionKeyVault').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
+          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference('storageCmk').outputs.identityResourceId.value), createObject('value', ''))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
@@ -4968,8 +5080,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8891486545125656717"
+              "version": "0.44.1.10279",
+              "templateHash": "13704591995247444667"
             }
           },
           "definitions": {
@@ -5346,11 +5458,12 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp')))]"
+        "encryptionKeyVault",
+        "resourceGroup",
+        "storageCmk"
       ]
     },
-    {
+    "assetsBlobService": {
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -5391,8 +5504,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8107797458221694044"
+              "version": "0.44.1.10279",
+              "templateHash": "12218782005009686712"
             }
           },
           "definitions": {
@@ -5591,10 +5704,10 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Assets-Storage-Account-{0}', parameters('timeStamp')))]"
+        "assetsStorageAccount"
       ]
     },
-    {
+    "assetsBlobContainer": {
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -5622,8 +5735,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "15401430760596725183"
+              "version": "0.44.1.10279",
+              "templateHash": "4045233667318377109"
             }
           },
           "parameters": {
@@ -5666,10 +5779,10 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Assets-Blob-Service-{0}', parameters('timeStamp')))]"
+        "assetsBlobService"
       ]
     },
-    {
+    "assetsStoragePrivateEndpoint": {
       "condition": "[and(parameters('deployArtifactsStorageAccount'), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -5694,7 +5807,7 @@
             "value": "[parameters('privateEndpointSubnetResourceId')]"
           },
           "privateLinkServiceId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Assets-Storage-Account-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value]"
+            "value": "[reference('assetsStorageAccount').outputs.resourceId.value]"
           },
           "groupId": {
             "value": "blob"
@@ -5710,8 +5823,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "9215232199660468920"
+              "version": "0.44.1.10279",
+              "templateHash": "8459238929659221376"
             }
           },
           "parameters": {
@@ -5823,10 +5936,10 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Assets-Storage-Account-{0}', parameters('timeStamp')))]"
+        "assetsStorageAccount"
       ]
     },
-    {
+    "assetsStorageBlobReaderAssignment": {
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -5844,7 +5957,7 @@
           "assignments": {
             "value": [
               {
-                "principalId": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp'))), '2025-04-01').outputs.principalId.value]",
+                "principalId": "[reference('managedIdentity').outputs.principalId.value]",
                 "roleDefinitionId": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
                 "principalType": "ServicePrincipal"
               }
@@ -5858,8 +5971,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "16589231915538834957"
+              "version": "0.44.1.10279",
+              "templateHash": "15968606400318218391"
             }
           },
           "definitions": {
@@ -5968,11 +6081,11 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Assets-Storage-Account-{0}', parameters('timeStamp')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp')))]"
+        "assetsStorageAccount",
+        "managedIdentity"
       ]
     },
-    {
+    "logsStorageAccount": {
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -6018,8 +6131,8 @@
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },
-          "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('encryptionKeyVaultResourceId'), '/')[2], split(parameters('encryptionKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('encryptionKeyVaultResourceId'), '/'))), '2023-07-01').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
-          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.identityResourceId.value), createObject('value', ''))]",
+          "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference('encryptionKeyVault').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
+          "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference('storageCmk').outputs.identityResourceId.value), createObject('value', ''))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
@@ -6031,8 +6144,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8891486545125656717"
+              "version": "0.44.1.10279",
+              "templateHash": "13704591995247444667"
             }
           },
           "definitions": {
@@ -6409,11 +6522,12 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('timeStamp')))]"
+        "encryptionKeyVault",
+        "resourceGroup",
+        "storageCmk"
       ]
     },
-    {
+    "logsBlobService": {
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -6442,8 +6556,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8107797458221694044"
+              "version": "0.44.1.10279",
+              "templateHash": "12218782005009686712"
             }
           },
           "definitions": {
@@ -6642,10 +6756,10 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Logs-Storage-Account-{0}', parameters('timeStamp')))]"
+        "logsStorageAccount"
       ]
     },
-    {
+    "logsStorageBlobContainer": {
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -6673,8 +6787,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "15401430760596725183"
+              "version": "0.44.1.10279",
+              "templateHash": "4045233667318377109"
             }
           },
           "parameters": {
@@ -6717,10 +6831,10 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Logs-Blob-Service-{0}', parameters('timeStamp')))]"
+        "logsBlobService"
       ]
     },
-    {
+    "logsStorageLifecyclePolicy": {
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -6766,8 +6880,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "5313244616959033159"
+              "version": "0.44.1.10279",
+              "templateHash": "2933169125790181622"
             }
           },
           "parameters": {
@@ -6803,10 +6917,10 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Logs-Storage-Account-{0}', parameters('timeStamp')))]"
+        "logsStorageAccount"
       ]
     },
-    {
+    "logsStoragePrivateEndpoint": {
       "condition": "[and(parameters('deployBuildLogsStorageAccount'), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -6831,7 +6945,7 @@
             "value": "[parameters('privateEndpointSubnetResourceId')]"
           },
           "privateLinkServiceId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Logs-Storage-Account-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value]"
+            "value": "[reference('logsStorageAccount').outputs.resourceId.value]"
           },
           "groupId": {
             "value": "blob"
@@ -6847,8 +6961,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "9215232199660468920"
+              "version": "0.44.1.10279",
+              "templateHash": "8459238929659221376"
             }
           },
           "parameters": {
@@ -6960,10 +7074,10 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Logs-Storage-Account-{0}', parameters('timeStamp')))]"
+        "logsStorageAccount"
       ]
     },
-    {
+    "logsStorageBlobContributorAssignment": {
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -6981,7 +7095,7 @@
           "assignments": {
             "value": [
               {
-                "principalId": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp'))), '2025-04-01').outputs.principalId.value]",
+                "principalId": "[reference('managedIdentity').outputs.principalId.value]",
                 "roleDefinitionId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
                 "principalType": "ServicePrincipal"
               }
@@ -6995,8 +7109,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "16589231915538834957"
+              "version": "0.44.1.10279",
+              "templateHash": "15968606400318218391"
             }
           },
           "definitions": {
@@ -7105,19 +7219,19 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Logs-Storage-Account-{0}', parameters('timeStamp')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp')))]"
+        "logsStorageAccount",
+        "managedIdentity"
       ]
     }
-  ],
+  },
   "outputs": {
     "artifactsStorageAccountResourceId": {
       "type": "string",
-      "value": "[if(parameters('deployArtifactsStorageAccount'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Assets-Storage-Account-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value, '')]"
+      "value": "[if(parameters('deployArtifactsStorageAccount'), reference('assetsStorageAccount').outputs.resourceId.value, '')]"
     },
     "artifactsBlobContainerName": {
       "type": "string",
-      "value": "[if(parameters('deployArtifactsStorageAccount'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Assets-Blob-Container-{0}', parameters('timeStamp'))), '2025-04-01').outputs.name.value, '')]"
+      "value": "[if(parameters('deployArtifactsStorageAccount'), reference('assetsBlobContainer').outputs.name.value, '')]"
     },
     "artifactsBlobContainerUrl": {
       "type": "string",
@@ -7125,15 +7239,15 @@
     },
     "managedIdentityResourceId": {
       "type": "string",
-      "value": "[if(or(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), parameters('deployImageBuildResourceGroup')), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Managed-Identity-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value, '')]"
+      "value": "[if(or(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), parameters('deployImageBuildResourceGroup')), reference('managedIdentity').outputs.resourceId.value, '')]"
     },
     "computeGalleryResourceId": {
       "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Image-Gallery-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value]"
+      "value": "[reference('imageGallery').outputs.resourceId.value]"
     },
     "buildLogsStorageAccountResourceId": {
       "type": "string",
-      "value": "[if(parameters('deployBuildLogsStorageAccount'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Logs-Storage-Account-{0}', parameters('timeStamp'))), '2025-04-01').outputs.resourceId.value, '')]"
+      "value": "[if(parameters('deployBuildLogsStorageAccount'), reference('logsStorageAccount').outputs.resourceId.value, '')]"
     },
     "buildLogsContainerUri": {
       "type": "string",
@@ -7141,11 +7255,11 @@
     },
     "diskEncryptionSetResourceId": {
       "type": "string",
-      "value": "[if(not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged')), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('Disk-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
+      "value": "[if(not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged')), reference('diskCmk').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
     },
     "confidentialVmDiskEncryptionSetResourceId": {
       "type": "string",
-      "value": "[if(parameters('createConfidentialVmGalleryDes'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('ConfidentialVM-CMK-{0}', parameters('timeStamp'))), '2025-04-01').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
+      "value": "[if(parameters('createConfidentialVmGalleryDes'), reference('confidentialVmCmk').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
     },
     "imageBuildResourceGroupResourceId": {
       "type": "string",

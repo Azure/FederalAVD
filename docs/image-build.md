@@ -110,6 +110,22 @@ customer/parameters/imageBuild/
 
 ---
 
+### Required - Network Connectivity
+
+The image build VMs make direct calls to the **Azure Resource Manager (ARM) API** during the build process. The orchestration VM uses Run Commands and a system-assigned managed identity to call ARM for VM generalization, restart, and cleanup operations. These calls originate from the image build subnet.
+
+**Required outbound access from the image build subnet:**
+
+| Service Tag | Port | Protocol | Purpose |
+|---|---|---|---|
+| `AzureResourceManager` | 443 | HTTPS | VM generalization, restart, and resource cleanup via ARM API |
+
+> **Air-gapped / restricted networks:** If your firewall or NSG blocks outbound internet and you use service tags to limit traffic, ensure the `AzureResourceManager` service tag is allowed outbound on port 443 from the image build subnet. Without this, the Run Command scripts that call ARM (sysprep, restart, generalize) will time out and the build will fail.
+
+📖 **[Azure service tags overview](https://learn.microsoft.com/azure/virtual-network/service-tags-overview)** — explains how to use service tags in NSG rules and Azure Firewall policies.
+
+---
+
 ## Image Build Architecture
 
 ### How Image Building Works

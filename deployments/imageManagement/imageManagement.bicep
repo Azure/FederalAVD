@@ -5,9 +5,6 @@ targetScope = 'subscription'
 
 param location string = deployment().location
 
-@description('Optional. Reverse the normal Cloud Adoption Framework naming convention by putting the resource type abbreviation at the end of the resource name.')
-param nameConvResTypeAtEnd bool = false
-
 @description('Optional. Indicates whether the storage account permits requests to be authorized with the account access key via Shared Key. If false, then all requests, including shared access signatures, must be authorized with Azure Active Directory (Azure AD). The default value is null, which is equivalent to true.')
 param storageAllowSharedKeyAccess bool = false
 
@@ -82,13 +79,38 @@ param deployBuildLogsStorageAccount bool = true
 @description('Optional. Pre-create a persistent resource group dedicated to image builds and grant the managed identity Contributor on it. Enables image build operators who do not have subscription-level resource group creation rights to run image builds by pointing imageBuild to this resource group via imageBuildResourceGroupId. Disable only if all image build operators have sufficient permissions to create resource groups at the subscription level.')
 param deployImageBuildResourceGroup bool = true
 
-@description('Optional. Custom name for the pre-created image build resource group. Leave empty to use the standard naming convention (matches what imageBuild calculates automatically).')
-param customImageBuildResourceGroupName string = ''
+@description('''Optional. Naming convention controlling how all resources in this deployment are named.
+The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
+Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
+Component requirements:
+  purpose      — REQUIRED. Multiple resources of the same type exist in this deployment (two storage accounts,
+                 two UAIs, multiple DES). Without 'purpose' they produce identical names and the deployment fails.
+  resourceType — Strongly recommended. Without it resource names carry no type identifier.
+  location     — Optional. When omitted the location abbreviation is still embedded in storage account names
+                 and added to unique-string seeds so cross-region deployments remain collision-free, but other
+                 resource names will not contain a location segment.
+  workload, freeform1, environment, freeform2 — Optional static tokens.
+Key properties:
+  components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
+  delimiter           — character inserted between components, e.g. "-"
+  workload            — solution identifier inserted into names, e.g. "avd"
+  freeform1, environment, freeform2 — optional static/context tokens
+  locationAbbreviation — override for the region abbreviation
+  resourceTypeCodes   — object with per-resource-type abbreviation overrides
+    { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }
+This object is produced automatically when deploying via the Azure Portal UI.
+When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
+param namingConvention object = {
+  components: ['resourceType', 'workload', 'purpose', 'location']
+  delimiter: '-'
+  workload: 'avd'
+}
 
 @description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
 param timeStamp string = utcNow('yyyyMMddhhmm')
 
 // Naming conventions
+// Override any component via the namingConvention parameter.
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
@@ -97,64 +119,159 @@ var locations = startsWith(cloud, 'us')
   ? (loadJsonContent('../../.common/data/locations.json')).other
   : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
-var nameConv_Suffix_withoutResType = 'LOCATION'
-var nameConvSuffix = nameConvResTypeAtEnd
-  ? '${nameConv_Suffix_withoutResType}-RESOURCETYPE'
-  : nameConv_Suffix_withoutResType
-// 'image-management' is intentionally hardcoded — this solution always deploys a single
-// shared environment and has no identifier or index parameter like host pool deployments.
-var identifier = 'image-management'
-var nameConv_ImageManagement_ResGroup = nameConvResTypeAtEnd
-  ? 'avd-${identifier}-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
-var nameConv_ImageManagement_Resources = nameConvResTypeAtEnd
-  ? 'avd-${identifier}-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-${identifier}-${nameConvSuffix}'
-var resourceGroupName = replace(
-  replace(nameConv_ImageManagement_ResGroup, 'LOCATION', locations[varLocation].abbreviation),
-  'RESOURCETYPE',
-  resourceAbbreviations.resourceGroups
+
+// ── Naming convention ────────────────────────────────────────────────────────
+// Default: Cloud Adoption Framework (CAF) — resourceType-workload-purpose-location.
+// Override any component via the namingConvention parameter.
+
+var cnv_delimiter      = namingConvention.?delimiter  ?? '-'
+var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
+  ? namingConvention.locationAbbreviation
+  : locations[varLocation].abbreviation
+var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
+  resourceGroups: resourceAbbreviations.resourceGroups
+  computeGalleries: resourceAbbreviations.computeGalleries
+  userAssignedIdentities: resourceAbbreviations.userAssignedIdentities
+  storageAccounts: resourceAbbreviations.storageAccounts
+  privateEndpoints: resourceAbbreviations.privateEndpoints
+  diskEncryptionSets: resourceAbbreviations.diskEncryptionSets
+}
+var cnv_components = namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
+// RT is last only when resourceType is explicitly the last non-'none' component.
+var cnv_rtFirst  = !empty(cnv_components) ? (last(filter(cnv_components, s => s != 'none')) != 'resourceType') : true
+
+// For a given resource type key (e.g. 'resourceGroups') and purpose string (e.g. 'image-management'),
+// resolve a flat array of component values then join with the delimiter.
+// Bicep map() + filter() + join() replaces the CAF replace() chain.
+func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  comp == 'resourceType' ? rtCode
+    : comp == 'purpose' ? component
+    : comp == 'location'  ? loc
+    : comp == 'freeform1'     ? ff1
+    : comp == 'environment'   ? env
+    : comp == 'freeform2' ? ff2
+    : comp == 'workload'  ? workload
+    : '' // 'none' or unknown — filtered out below
+
+func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
+  join(
+    filter(
+      map(components, comp => resolveComponent(comp, rtCode, component, loc, ff1, env, ff2, workload)),
+      s => !empty(s)
+    ),
+    delimiter
+  )
+
+// Per-resource names always built from cnv_components
+var customResourceGroupName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  identifier,
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
-// Image build RG name — matches the naming logic in imageBuild.bicep exactly so imageBuild
-// deployments that omit imageBuildResourceGroupId will land in the pre-created RG automatically.
-var imageBuildRgName = empty(customImageBuildResourceGroupName)
-  ? nameConvResTypeAtEnd
-      ? 'avd-image-builds-${locations[varLocation].abbreviation}-${resourceAbbreviations.resourceGroups}'
-      : '${resourceAbbreviations.resourceGroups}-avd-image-builds-${locations[varLocation].abbreviation}'
-  : customImageBuildResourceGroupName
-var artifactsBlobContainerName = 'artifacts'
-var galleryName = replace(
-  replace(
-    replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.computeGalleries),
-    'LOCATION',
-    locations[varLocation].abbreviation
+
+var customGalleryName = replace(
+  buildCustomName(
+    filter(cnv_components, s => s != 'none'),
+    cnv_delimiter,
+    cnv_rtCodes.computeGalleries,
+    identifier,
+    cnv_loc,
+    namingConvention.?freeform1 ?? '',
+    namingConvention.?environment ?? '',
+    namingConvention.?freeform2 ?? '',
+    !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
   ),
   '-',
   '_'
 )
-var identityName = replace(
-  replace(nameConv_ImageManagement_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
-  'LOCATION',
-  locations[varLocation].abbreviation
+
+var customIdentityName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.userAssignedIdentities,
+  identifier,
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
+
+var customEncryptionIdentityName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.userAssignedIdentities,
+  '${identifier}-encryption',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+// Storage account names: alphanumeric only, max 24 chars, globally unique.
+// Pattern uses only RT abbreviation + purpose + location + uniqueString — no workload,
+// environment, or freeform tokens. Those components eat into the 24-char budget at the
+// expense of the uniqueness suffix without adding meaningful disambiguation (the
+// containing resource group already carries the full convention name).
+// RT position mirrors the convention: prefix when RT-first, suffix when RT-last.
+var saRtCode = toLower(cnv_rtCodes.storageAccounts)  // e.g. 'sa'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 'image-management' is intentionally hardcoded — this solution always deploys a single
+// shared environment and has no identifier or index parameter like host pool deployments.
+var identifier = 'image-management'
+var resourceGroupName = customResourceGroupName
+// Image build RG: uses the same naming convention framework as all other resources.
+// Purpose is 'image-builds' to distinguish it from the management RG ('image-management').
+var imageBuildRgName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  'image-builds',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+var artifactsBlobContainerName = 'artifacts'
+var galleryName = customGalleryName
+var identityName = customIdentityName
 var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
 var privateEndpointNameConv = replace(
-  '${nameConvResTypeAtEnd ? 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}'}',
+  '${cnv_rtFirst ? 'RESOURCETYPE-RESOURCE-SUBRESOURCE-${vnetName}' : 'RESOURCE-SUBRESOURCE-${vnetName}-RESOURCETYPE'}',
   'RESOURCETYPE',
-  resourceAbbreviations.privateEndpoints
+  cnv_rtCodes.privateEndpoints
 )
 var privateEndpointName = replace(
   replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
   'RESOURCE',
   artifactsStorageAccountName
 )
-var customNetworkInterfaceName = nameConvResTypeAtEnd
-  ? '${privateEndpointName}-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
-var artifactsStorageAccountName = take(
-  '${resourceAbbreviations.storageAccounts}imageassets${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
-  24
-)
+var customNetworkInterfaceName = cnv_rtFirst
+  ? '${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}-${privateEndpointName}'
+  : '${privateEndpointName}-${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}'
+// Unique suffix seed: add location when the convention has no location
+// component, so deployments to different regions don't produce identical storage account names.
+// CAF fallback already embeds the location abbreviation in the name itself, so no change needed there.
+var saUniqueSuffix = !contains(cnv_components, 'location')
+  ? uniqueString(subscription().subscriptionId, resourceGroupName, location)
+  : uniqueString(subscription().subscriptionId, resourceGroupName)
+// Fix the unique suffix length to the budget available for the longer purpose token ('imgassets' = 9
+// chars) so both accounts always carry the same number of unique characters regardless of which
+// account name is being built.
+var saUniqueLen = 24 - length(saRtCode) - 9 - length(cnv_loc)
+var saUnique    = take(saUniqueSuffix, saUniqueLen > 0 ? saUniqueLen : 1)
+var artifactsStorageAccountName = cnv_rtFirst
+  ? '${saRtCode}imgassets${cnv_loc}${saUnique}'
+  : 'imgassets${cnv_loc}${saUnique}${saRtCode}'
 var sasExpirationPeriod = '180.00:00:00' // 180 days
 var storageKind = 'StorageV2'
 var storageSkuName = 'Standard_LRS'
@@ -166,44 +283,53 @@ var logsStorageAccessTier = 'Hot'
 
 var storageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-storage'
 // Single encryption UAI shared by both storage accounts.
-// Result: uai-avd-image-management-encryption-{loc} (nameConvResTypeAtEnd=false)
-//         avd-image-management-encryption-{loc}-uai  (nameConvResTypeAtEnd=true)
-var storageEncryptionIdentityName = replace(
-  replace(
-    replace(nameConv_ImageManagement_Resources, identifier, '${identifier}-encryption'),
-    'RESOURCETYPE',
-    resourceAbbreviations.userAssignedIdentities
-  ),
-  'LOCATION',
-  locations[varLocation].abbreviation
-)
+// Result: uai-avd-image-management-encryption-{loc}
+var storageEncryptionIdentityName = customEncryptionIdentityName
 // Both storage accounts share the same key — no operational benefit to separate keys
 // for same-solution, same-sensitivity storage in the same resource group.
 var cmkKeyNames = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) ? [storageEncryptionKeyName] : []
 
-var galleryDiskEncryptionSetName = nameConvResTypeAtEnd
-  ? 'image-management-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
-  : '${resourceAbbreviations.diskEncryptionSets}-image-management-${contains(keyManagementGalleryImageVersions, 'Platform') ? 'platform-and-customer-keys' : 'customer-keys'}-${locations[varLocation].abbreviation}'
+// Disk encryption set names — one for standard CMK gallery encryption, one for Confidential VM DES.
+// galleryDiskEncryptionKeyName / galleryConfidentialVmDiskEncryptionKeyName are Key Vault key names
+// (not ARM resources) so they use a fixed descriptive format independent of the naming convention.
+var galleryDiskEncryptionSetName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.diskEncryptionSets,
+  contains(keyManagementGalleryImageVersions, 'Platform') ? '${identifier}-platform-and-customer-keys' : '${identifier}-customer-keys',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
 var galleryDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt'
 
-var galleryConfidentialVmDiskEncryptionSetName = nameConvResTypeAtEnd
-  ? 'image-management-confidential-vm-${locations[varLocation].abbreviation}-${resourceAbbreviations.diskEncryptionSets}'
-  : '${resourceAbbreviations.diskEncryptionSets}-image-management-confidential-vm-${locations[varLocation].abbreviation}'
+var galleryConfidentialVmDiskEncryptionSetName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.diskEncryptionSets,
+  '${identifier}-confidential-vm',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
 var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt-cvm'
 
-var logsStorageName = take(
-  '${resourceAbbreviations.storageAccounts}imagelogs${locations[varLocation].abbreviation}${uniqueString(subscription().subscriptionId, resourceGroupName)}',
-  24
-)
+var logsStorageName = cnv_rtFirst
+  ? '${saRtCode}imglogs${cnv_loc}${saUnique}'
+  : 'imglogs${cnv_loc}${saUnique}${saRtCode}'
 var logsContainerName = 'image-customization-logs'
 var logsPrivateEndpointName = replace(
   replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
   'RESOURCE',
   logsStorageName
 )
-var logsCustomNetworkInterfaceName = nameConvResTypeAtEnd
-  ? '${logsPrivateEndpointName}-${resourceAbbreviations.networkInterfaces}'
-  : '${resourceAbbreviations.networkInterfaces}-${logsPrivateEndpointName}'
+var logsCustomNetworkInterfaceName = cnv_rtFirst
+  ? '${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}-${logsPrivateEndpointName}'
+  : '${logsPrivateEndpointName}-${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}'
 
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName

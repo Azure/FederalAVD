@@ -352,6 +352,8 @@ The Key Vaults deployment creates a **dedicated operations resource group** (`rg
 | **Secrets Key Vault** | `kv-avd-sec-{unique}-{loc}` | Stores VM admin credentials and domain join credentials referenced by the host pool deployment |
 | **Encryption Key Vault** | `kv-avd-enc-{unique}-{loc}` | Stores CMK encryption keys for disk encryption sets and FSLogix storage accounts (Premium SKU, purge-protected) |
 
+> **Custom naming:** These patterns reflect the CAF default. To use a consistent naming convention across all solutions, see the **[Naming Convention guide](naming-convention.md)**.
+
 > **Why deploy this separately?** Deploying Key Vaults before image management lets you:
 > - Encrypt the compute gallery and artifacts storage account with CMK from the start
 > - Pre-populate credential secrets so the portal form can reference them

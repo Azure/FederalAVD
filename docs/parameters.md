@@ -18,6 +18,20 @@ Parameter documentation lives alongside each deployment template. Find the secti
 
 ---
 
+## Naming Convention
+
+All resource names across solutions are controlled by the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, the same parameter object should be passed to every solution for a consistent enterprise naming strategy.
+
+See the **[Naming Convention guide](naming-convention.md)** for:
+- Full `namingConvention` parameter schema and property descriptions
+- How the built-in CAF default works
+- The eight naming segments and how `purpose` drives per-resource uniqueness
+- How to align naming across hostpool, keyVaults, imageManagement, and add-ons
+- Named examples for six common conventions
+- [Scenario test results](naming-convention-test-results.md) for 8 scenarios across all solutions
+
+---
+
 ## Add-Ons
 
 | Add-On | Parameters |
