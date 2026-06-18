@@ -1,0 +1,1152 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "17701719212205997677"
+    }
+  },
+  "parameters": {
+    "applyWindowsDesktopOptimizations": {
+      "type": "bool"
+    },
+    "disableSoftwareUpdates": {
+      "type": "array"
+    },
+    "appsToRemove": {
+      "type": "array"
+    },
+    "cloud": {
+      "type": "string"
+    },
+    "downloads": {
+      "type": "object"
+    },
+    "downloadLatestMicrosoftContent": {
+      "type": "bool"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "artifactsContainerUri": {
+      "type": "string"
+    },
+    "customizations": {
+      "type": "array"
+    },
+    "cleanupDesktop": {
+      "type": "bool"
+    },
+    "logBlobContainerUri": {
+      "type": "string"
+    },
+    "orchestrationVmName": {
+      "type": "string"
+    },
+    "imageVmName": {
+      "type": "string"
+    },
+    "installFsLogix": {
+      "type": "bool"
+    },
+    "installOneDrive": {
+      "type": "bool"
+    },
+    "installTeams": {
+      "type": "bool"
+    },
+    "installUpdates": {
+      "type": "bool"
+    },
+    "updateUwpApps": {
+      "type": "bool"
+    },
+    "office365AppsToInstall": {
+      "type": "array"
+    },
+    "teamsCloudType": {
+      "type": "string"
+    },
+    "deploymentSuffix": {
+      "type": "string"
+    },
+    "updateService": {
+      "type": "string"
+    },
+    "userAssignedIdentityClientId": {
+      "type": "string"
+    },
+    "vdiCustomizations": {
+      "type": "array"
+    },
+    "wsusServer": {
+      "type": "string"
+    }
+  },
+  "variables": {
+    "copy": [
+      {
+        "name": "customizers",
+        "count": "[length(parameters('customizations'))]",
+        "input": {
+          "name": "[replace(parameters('customizations')[copyIndex('customizers')].name, ' ', '-')]",
+          "uri": "[if(or(startsWith(toLower(parameters('customizations')[copyIndex('customizers')].blobNameOrUri), 'https://'), startsWith(toLower(parameters('customizations')[copyIndex('customizers')].blobNameOrUri), 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))]",
+          "arguments": "[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'arguments'), '')]",
+          "restart": "[coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'restart'), false())]"
+        }
+      },
+      {
+        "name": "vdiCustomizers",
+        "count": "[length(parameters('vdiCustomizations'))]",
+        "input": {
+          "name": "[replace(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].name, ' ', '-')]",
+          "uri": "[if(or(startsWith(toLower(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri), 'https://'), startsWith(toLower(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri), 'http://')), parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('vdiCustomizations')[copyIndex('vdiCustomizers')].blobNameOrUri))]",
+          "arguments": "[coalesce(tryGet(parameters('vdiCustomizations')[copyIndex('vdiCustomizers')], 'arguments'), '')]"
+        }
+      }
+    ],
+    "$fxv#0": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$AppsToRemove\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Remove-Apps.log\"\r\n\r\nfunction Write-Log {\r\n    param(\r\n        [parameter(ValueFromPipeline=$True, Mandatory=$True, Position=0)]\r\n        [AllowEmptyString()]\r\n        [string]$Message\r\n    )\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\n    Write-Log \"Starting Remove-Apps script with the following parameters:\"\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n    [array]$apps = $AppsToRemove.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n    # Image build context: no user profiles exist, so only provisioned package removal is relevant.\r\n    # Get-AppxPackage -AllUsers is intentionally omitted -- it is unnecessary on a fresh image and\r\n    # can hang in environments where the AppX deployment stack is held by a concurrently-provisioned\r\n    # extension (e.g. Defender for Endpoint, Guest Configuration) or a locked wsappx service.\r\n\r\n    # --- Pre-flight: AppX/DISM readiness checks ---\r\n\r\n    # 1. wsappx must be running -- it hosts AppXSvc (AppX Deployment Service) and ClipSVC.\r\n    #    If it is stopped or stuck, every Get-AppxProvisionedPackage / Remove call will hang.\r\n    Write-Log \"Pre-flight: checking wsappx service state...\"\r\n    $wsappx = Get-Service -Name 'wsappx' -ErrorAction SilentlyContinue\r\n    if ($null -eq $wsappx) {\r\n        Write-Log \"WARNING: wsappx service not found. AppX operations may not function correctly.\"\r\n    }\r\n    elseif ($wsappx.Status -ne 'Running') {\r\n        Write-Log \"WARNING: wsappx is not running (Status: $($wsappx.Status)). Attempting to start...\"\r\n        try {\r\n            Start-Service -Name 'wsappx' -ErrorAction Stop\r\n            Start-Sleep -Seconds 3\r\n            Write-Log \"wsappx started successfully.\"\r\n        }\r\n        catch {\r\n            Write-Log \"WARNING: Could not start wsappx: $($_.Exception.Message). AppX operations may hang or fail.\"\r\n        }\r\n    }\r\n    else {\r\n        Write-Log \"Pre-flight: wsappx is running.\"\r\n    }\r\n\r\n    # 2. Check whether Windows Modules Installer (TrustedInstaller / TiWorker) is actively running.\r\n    #    An active CBS/servicing pass holds the DISM session lock -- any concurrent DISM call will hang\r\n    #    until it releases. Wait up to 3 minutes for it to finish; warn and continue if it does not.\r\n    Write-Log \"Pre-flight: checking for active CBS/DISM operations (TiWorker / TrustedInstaller)...\"\r\n    $dismWaitSeconds = 180\r\n    $dismPollInterval = 10\r\n    $dismElapsed = 0\r\n    while ($dismElapsed -lt $dismWaitSeconds) {\r\n        $cbsActive = Get-Process -Name 'TiWorker', 'TrustedInstaller' -ErrorAction SilentlyContinue |\r\n                     Where-Object { -not $_.HasExited }\r\n        if (-not $cbsActive) { break }\r\n        Write-Log \"Pre-flight: CBS/DISM in use ($($cbsActive.Name -join ', ')). Waiting $dismPollInterval s... ($dismElapsed / $dismWaitSeconds s elapsed)\"\r\n        Start-Sleep -Seconds $dismPollInterval\r\n        $dismElapsed += $dismPollInterval\r\n    }\r\n    if ($dismElapsed -ge $dismWaitSeconds) {\r\n        Write-Log \"WARNING: CBS/DISM was still active after $dismWaitSeconds seconds. AppX operations may hang or fail.\"\r\n    }\r\n    else {\r\n        Write-Log \"Pre-flight: no active CBS/DISM operations detected.\"\r\n    }\r\n\r\n    # 3. Check for a pending reboot from Component Based Servicing (informational -- does not abort).\r\n    #    A pending CBS reboot means component state is not fully committed; AppX operations that touch\r\n    #    those components can queue behind the pending pass and appear to hang.\r\n    $pendingReboot = (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending') -or\r\n                     (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired') -or\r\n                     ($null -ne (Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager' -Name 'PendingFileRenameOperations' -ErrorAction SilentlyContinue))\r\n    if ($pendingReboot) {\r\n        Write-Log \"WARNING: A pending reboot was detected. AppX operations may behave unexpectedly. Consider restarting the VM before running this script.\"\r\n    }\r\n    else {\r\n        Write-Log \"Pre-flight: no pending reboot detected.\"\r\n    }\r\n\r\n    # --- AppX provisioned package removal ---\r\n\r\n    Write-Log \"Enumerating provisioned AppX packages...\"\r\n    $ProvisionedApps = Get-AppxProvisionedPackage -Online\r\n\r\n    foreach ($app in $apps) {\r\n        $match = $ProvisionedApps | Where-Object { $_.DisplayName -eq $app }\r\n        if ($match) {\r\n            Write-Log \"Removing provisioned AppX package [$app]\"\r\n            try {\r\n                $match | Remove-AppxProvisionedPackage -Online -ErrorAction Stop\r\n                Write-Log \"Successfully removed provisioned AppX package [$app].\"\r\n            }\r\n            catch {\r\n                Write-Log \"WARNING: Failed to remove provisioned package [$app]: $($_.Exception.Message)\"\r\n            }\r\n        }\r\n        else {\r\n            Write-Log \"Provisioned AppX package [$app] not found -- skipping.\"\r\n        }\r\n    }\r\n\r\n    Write-Log \"*********************************\"\r\n    Write-Log \"Removing Built-in Capabilities\"\r\n    Write-Log \"*********************************\"\r\n    $capabilityList = \"App.Support.ContactSupport\", \"App.Support.QuickAssist\"\r\n\r\n    Write-Log \"Enumerating installed Windows capabilities...\"\r\n    $InstalledCapabilities = Get-WindowsCapability -Online\r\n\r\n    foreach ($capability in $capabilityList) {\r\n        $match = $InstalledCapabilities | Where-Object { $_.Name -like \"$capability*\" -and $_.State -ne 'NotPresent' }\r\n        if ($match) {\r\n            Write-Log \"Removing capability [$capability]\"\r\n            try {\r\n                $match | Remove-WindowsCapability -Online -ErrorAction Stop\r\n                Write-Log \"Successfully removed capability [$capability].\"\r\n            }\r\n            catch {\r\n                Write-Log \"WARNING: Failed to remove capability [$capability]: $($_.Exception.Message)\"\r\n            }\r\n        }\r\n        else {\r\n            Write-Log \"Capability [$capability] not present -- skipping.\"\r\n        }\r\n    }\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    if ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#1": "param(\r\n    [string]$APIVersion,\r\n    [string]$BlobStorageSuffix,\r\n    [string]$BuildDir='',\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$Uri\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$Name = 'FSLogix'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Install-$Name.log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\n    Write-Log \"Starting '$SoftwareName' install script with following Parameters:\"\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\n    If ($BuildDir -ne '') {\r\n        $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n    }\r\n    Else {\r\n        $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n    }\r\n    New-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n    $WebClient = New-Object System.Net.WebClient\r\n    If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n        $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n        $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n        $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n        $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n        $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n    }\r\n    $DestFile = Join-Path -Path $TempDir -ChildPath 'FSLogix.zip'\r\n    Write-Log \"Downloading 'FSLogix.zip' from '$uri' to '$DestFile'.\"\r\n    $webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\n    Start-Sleep -seconds 10\r\n    If (!(Test-Path -Path $DestFile)) { Write-Log \"Failed to download $SourceFileName\"; Exit 1 }\r\n    Unblock-File -Path $DestFile\r\n    Write-Log \"Extracting Contents of Zip File\"\r\n    Expand-Archive -Path $destFile -DestinationPath $TempDir -Force\r\n    $Installer = (Get-ChildItem -Path $TempDir -File -Recurse -Filter 'FSLogixAppsSetup.exe' | Where-Object { $_.FullName -like '*x64*' }).FullName\r\n    Write-Log \"Installation file found: [$Installer], executing installation.\"\r\n    $Install = Start-Process -FilePath $Installer -ArgumentList \"/install /quiet /norestart\" -Wait -PassThru\r\n    If ($($Install.ExitCode) -eq 0) {\r\n        Write-Log \"'Microsoft FSLogix Apps' installed successfully.\"\r\n    }\r\n    Else {\r\n        Write-Log \"The Install exit code is $($Install.ExitCode)\"\r\n        Exit 1\r\n    }\r\n    Write-Log \"Copying the FSLogix ADMX and ADML files to the PolicyDefinitions folders.\"\r\n    Get-ChildItem -Path $TempDir -File -Recurse -Filter '*.admx' | ForEach-Object { Write-Log \"Copying $($_.Name)\"; Copy-Item -Path $_.FullName -Destination \"$env:WINDIR\\PolicyDefinitions\\\" -Force }\r\n    Get-ChildItem -Path $TempDir -File -Recurse -Filter '*.adml' | ForEach-Object { Write-Log \"Copying $($_.Name)\"; Copy-Item -Path $_.FullName -Destination \"$env:WINDIR\\PolicyDefinitions\\en-us\\\" -Force }\r\n    If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }\r\n    Write-Log \"Installation complete.\"\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#10": "param(\r\n    [string]$BuildDir = ''\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Invoke-DiskCleanup.log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\n    If (-not [string]::IsNullOrEmpty($BuildDir) -and (Test-Path -Path $BuildDir)) {\r\n        Write-Log \"Removing build directory: $BuildDir\"\r\n        Remove-Item -Path $BuildDir -Recurse -Force -ErrorAction SilentlyContinue\r\n    }\r\n\r\n    Write-Log \"Clearing temp folders\"\r\n    Remove-Item -Path $env:SystemRoot\\Temp\\* -Recurse -Force -ErrorAction SilentlyContinue\r\n    Remove-Item -Path $env:TEMP\\* -Recurse -Force -ErrorAction SilentlyContinue\r\n\r\n    Write-Log \"Removing temp/log files from common locations\"\r\n    $scanPaths = @(\r\n        \"$env:SystemRoot\\Prefetch\",\r\n        \"$env:SystemRoot\\SoftwareDistribution\\Download\",\r\n        'C:\\Windows\\Logs\\CBS',\r\n        'C:\\Windows\\Logs\\DISM',\r\n        'C:\\ProgramData\\USOShared\\Logs'\r\n    )\r\n    foreach ($scanPath in $scanPaths) {\r\n        if (Test-Path -Path $scanPath) {\r\n            Get-ChildItem -Path $scanPath -Include *.tmp, *.dmp, *.etl, *.log -File -Recurse -Force -ErrorAction SilentlyContinue |\r\n                ForEach-Object {\r\n                    try { Remove-Item $_.FullName -Force -ErrorAction Stop }\r\n                    catch { Write-Log \"  Skipped (locked/in-use): $($_.FullName)\" }\r\n                }\r\n        }\r\n    }\r\n\r\n    Write-Log \"Clearing WER folders\"\r\n    Remove-Item -Path $env:ProgramData\\Microsoft\\Windows\\WER\\Temp\\* -Recurse -Force -ErrorAction SilentlyContinue\r\n    Remove-Item -Path $env:ProgramData\\Microsoft\\Windows\\WER\\ReportArchive\\* -Recurse -Force -ErrorAction SilentlyContinue\r\n    Remove-Item -Path $env:ProgramData\\Microsoft\\Windows\\WER\\ReportQueue\\* -Recurse -Force -ErrorAction SilentlyContinue\r\n\r\n    Write-Log \"Clearing BranchCache\"\r\n    Clear-BCCache -Force -ErrorAction SilentlyContinue\r\n\r\n    Write-Log \"Clearing Delivery Optimization cache\"\r\n    Delete-DeliveryOptimizationCache -Force -ErrorAction SilentlyContinue\r\n\r\n    Write-Log \"Clearing recycle bin\"\r\n    Clear-RecycleBin -Force -ErrorAction SilentlyContinue\r\n\r\n    Write-Log \"Clearing event logs\"\r\n    Get-WinEvent -ListLog * -ErrorAction SilentlyContinue |\r\n        Where-Object { $_.RecordCount -gt 0 } |\r\n        ForEach-Object {\r\n            Write-Log \"  Clearing event log '$($_.LogName)' with $($_.RecordCount) record(s)\"\r\n            try {\r\n                wevtutil cl $_.LogName 2>&1 | Out-Null\r\n                if ($LASTEXITCODE -ne 0) { Write-Log \"  Failed to clear event log '$($_.LogName)' - Exit Code [$LASTEXITCODE]\" }\r\n                else { Write-Log \"  Cleared event log '$($_.LogName)'\" }\r\n            }\r\n            catch { Write-Log $($_.Exception.Message) }\r\n        }\r\n\r\n    Write-Log \"Disk cleanup complete.\"\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#2": "param(\r\n    [string]$APIVersion,\r\n    [string]$AppsToInstall,\r\n    [string]$BlobStorageSuffix,\r\n    [string]$BuildDir='',\r\n    [string]$Environment,\r\n    [string]$Uri,\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n$ErrorActionPreference = \"Stop\"\r\n\r\n$EnvSuffix = $BlobStorageSuffix.Substring(10, ($BlobStorageSuffix.length - 10))\r\n\r\n$SoftwareName = 'Microsoft-365-Applications'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Install-$SoftwareName.log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\nWrite-Log \"Starting Script to install '$SoftwareName' with the following parameters:\"\r\nWrite-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\nIf ($AppsToInstall -ne '' -and $null -ne $AppsToInstall) {\r\n    [array]$AppsToInstall = $AppsToInstall.Replace('\\\"', '\"') | ConvertFrom-Json\r\n}\r\nElse {\r\n    [array]$AppsToInstall = @(\"Access\", \"Excel\", \"OneNote\", \"Outlook\", \"PowerPoint\", \"Word\")\r\n}\r\n\r\nIf ($BuildDir -ne '') {\r\n    $TempDir = Join-Path $BuildDir -ChildPath $SoftwareName\r\n}\r\nElse {\r\n    $TempDir = Join-Path $Env:TEMP -ChildPath $SoftwareName\r\n}\r\nNew-Item -Path $TempDir -ItemType Directory -Force | Out-Null  \r\n$WebClient = New-Object System.Net.WebClient\r\nIf ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n    $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n    $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n    $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n    $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n    $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n}\r\n$SourceFileName = ($Uri -Split \"/\")[-1]\r\n$DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\nWrite-Log \"Downloading '$Uri' to '$DestFile'.\"\r\n$webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\nStart-Sleep -Seconds 5\r\nIf (!(Test-Path -Path $DestFile)) { Write-Log \"Failed to download $SourceFileName\"; Exit 1 }\r\nWrite-Log \"Finished downloading\"\r\n$Setup = $DestFile\r\n\r\nWrite-Log \"Dynamically creating $SoftwareName configuration file for setup.\"\r\n$ConfigFile = Join-Path -Path $TempDir -ChildPath 'office365x64.xml'\r\n[array]$Content = @()\r\n[array]$ExcludedApps = @()\r\n$ExcludedApps += '      <ExcludeApp ID=\"Groove\" />'\r\n$ExcludedApps += '      <ExcludeApp ID=\"OneDrive\" />'\r\n$ExcludedApps += '      <ExcludeApp ID=\"Teams\" />'\r\nif ($AppsToInstall -notcontains 'Access') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"Access\" />'\r\n}\r\nif ($AppsToInstall -notcontains 'Excel') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"Excel\" />'\r\n}\r\nif ($AppsToInstall -notcontains 'OneNote') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"OneNote\" />'\r\n}\r\nif ($AppsToInstall -notcontains 'Outlook') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"Outlook\" />'\r\n}\r\nif ($AppsToInstall -notcontains 'PowerPoint') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"PowerPoint\" />'\r\n}\r\nif ($AppsToInstall -notcontains 'Publisher') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"Publisher\" />'\r\n}\r\nif ($AppsToInstall -notcontains 'SkypeForBusiness') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"Lync\" />'\r\n}\r\nif ($AppsToInstall -notcontains 'Word') {\r\n    $ExcludedApps += '      <ExcludeApp ID=\"Word\" />'\r\n}\r\n\r\n$Content += '<Configuration>'\r\nIf ($Environment -match '^us') {\r\n    $Content += '  <Add AllowCdnFallback=\"TRUE\" SourcePath=\"https://officexo.azurefd.' + $EnvSuffix + '/prsstelecontainer/55336b82-a18d-4dd6-b5f6-9e5095c314a6/\" Channel=\"MonthlyEnterprise\" OfficeClientEdition=\"64\">'\r\n}\r\nElse {\r\n    $Content += '  <Add OfficeClientEdition=\"64\" Channel=\"MonthlyEnterprise\">'\r\n}\r\n\r\nIf ($AppsToInstall -contains 'Access' -or $AppsToInstall -contains 'Excel' -or $AppsToInstall -contains 'OneNote' -or $AppsToInstall -contains 'Outlook' -or $AppsToInstall -contains 'PowerPoint' -or $AppsToInstall -contains 'Publisher' -or $AppsToInstall -contains 'Word') {\r\n    $Content += '    <Product ID=\"O365ProPlusRetail\">'\r\n    $Content += '      <Language ID=\"en-us\" />'\r\n    $Content += $ExcludedApps\r\n    $Content += '    </Product>'\r\n}\r\nif ($AppsToInstall -contains 'Project') {\r\n    $Content += '    <Product ID=\"ProjectProRetail\">'\r\n    $Content += '      <Language ID=\"en-us\" />'\r\n    $Content += $ExcludedApps\r\n    $Content += '    </Product>'\r\n}\r\nif ($AppsToInstall -contains 'Visio') {\r\n    $Content += '    <Product ID=\"VisioProRetail\">'\r\n    $Content += '      <Language ID=\"en-us\" />'\r\n    $Content += $ExcludedApps\r\n    $Content += '    </Product>'\r\n}\r\n$Content += '  </Add>'\r\n$Content += '  <Property Name=\"SharedComputerLicensing\" Value=\"1\" />'\r\n$Content += '  <Property Name=\"FORCEAPPSHUTDOWN\" Value=\"TRUE\" />'\r\n$Content += '  <Updates Enabled=\"FALSE\" />'\r\n$Content += '  <Display Level=\"None\" AcceptEULA=\"TRUE\" />'\r\n$Content += '</Configuration>'\r\nAdd-Content -Path $ConfigFile -Value $Content\r\nWrite-Log \"Config File Content:\"\r\nWrite-Log \"---------------------------------------------------------------------------------------------------------\"\r\n$ConfigFileContent = Get-Content -Path $ConfigFile\r\nWrite-Log $ConfigFileContent\r\nWrite-Log \"---------------------------------------------------------------------------------------------------------\"\r\nWrite-Log \"Starting setup process.\"\r\nWrite-Log \"Command Line: $Setup /configure `\"$ConfigFile`\"\"\r\n$Install = Start-Process -FilePath $Setup -ArgumentList \"/configure `\"$ConfigFile`\"\" -Wait -PassThru -ErrorAction \"Stop\"\r\nIf ($($Install.ExitCode) -eq 0) {\r\n    Write-Log \"'$SoftwareName' installed successfully.\"\r\n}\r\nElse {\r\n    Write-Log \"'$SoftwareName' install exit code is $($Install.ExitCode)\"\r\n    Exit 1\r\n}\r\nIf ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#3": "param(\r\n    [string]$APIVersion,\r\n    [string]$BlobStorageSuffix,\r\n    [string]$BuildDir = '',\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$Uri\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n\r\n$SoftwareName = 'OneDrive'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Install-$SoftwareName.log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\n    Write-Log \"Starting Script to install '$SoftwareName' with the following parameters:\"\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\nIf ($BuildDir -ne '') {\r\n    $TempDir = Join-Path $BuildDir -ChildPath $SoftwareName\r\n}\r\nElse {\r\n    $TempDir = Join-Path $Env:TEMP -ChildPath $SoftwareName\r\n}\r\nNew-Item -Path $TempDir -ItemType Directory -Force | Out-Null \r\n\r\n$RegPath = 'HKLM:\\SOFTWARE\\Microsoft\\OneDrive'\r\nIf (Test-Path -Path $RegPath) {\r\n    If (Get-ItemProperty -Path $RegPath -Name AllUsersInstall -ErrorAction SilentlyContinue) {\r\n        $AllUsersInstall = Get-ItemPropertyValue -Path $RegPath -Name AllUsersInstall\r\n    }\r\n}\r\nIf ($AllUsersInstall -eq '1') {\r\n    Write-Log \"$SoftwareName is already setup per-machine. Quiting.\"\r\n}\r\nElse {\r\n    Write-Log \"Starting '$SoftwareName' install script with following Parameters:\"\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n    $WebClient = New-Object System.Net.WebClient\r\n    If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n        $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n        $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n        $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n        $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n        $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n    }\r\n    $DestFile = Join-Path -Path $TempDir -ChildPath 'OneDriveSetup.exe'\r\n    Write-Log \"Downloading 'OneDriveSetup.exe' from '$Uri' to '$DestFile'.\"\r\n    $webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\n    Start-Sleep -Seconds 5\r\n    If (!(Test-Path -Path $DestFile)) { Write-Log \"Failed to download $SourceFileName\"; Exit 1 }\r\n    $OneDriveSetup = $DestFile\r\n    #Find existing OneDriveSetup\r\n    $RegPath = 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OneDriveSetup.exe'\r\n    If (Test-Path -Path $RegPath) {\r\n        Write-Log \"Found Per-Machine Installation, determining uninstallation command.\"\r\n        If (Get-ItemProperty -Path $RegPath -name UninstallString -ErrorAction SilentlyContinue) {\r\n            $UninstallString = (Get-ItemPropertyValue -Path $RegPath -Name UninstallString).toLower()\r\n            $OneDriveSetupindex = $UninstallString.IndexOf('onedrivesetup.exe') + 17\r\n            $Uninstaller = $UninstallString.Substring(0, $OneDriveSetupindex)\r\n            $Arguments = $UninstallString.Substring($OneDriveSetupindex).replace('  ', ' ').trim()\r\n        }\r\n    }\r\n    Else {\r\n        $Uninstaller = $OneDriveSetup\r\n        $Arguments = '/uninstall'\r\n    }    \r\n    # Uninstall existing version\r\n    Write-Log \"Running [$Uninstaller $Arguments] to remove any existing versions.\"\r\n    Start-Process -FilePath $Uninstaller -ArgumentList $Arguments\r\n    If (get-process onedrivesetup) { Wait-Process -Name OneDriveSetup }\r\n    # Set OneDrive for All Users Install\r\n    Write-Log \"Setting registry values to indicate a per-machine (AllUsersInstall)\"\r\n    New-Item -Path \"HKLM:\\SOFTWARE\\Microsoft\\OneDrive\" -Force | Out-Null\r\n    New-ItemProperty -Path \"HKLM:\\SOFTWARE\\Microsoft\\OneDrive\" -Name AllUsersInstall -PropertyType DWORD -Value 1 -Force | Out-Null\r\n    $Install = Start-Process -FilePath $OneDriveSetup -ArgumentList '/allusers' -Wait -Passthru\r\n    If ($($Install.ExitCode) -eq 0) {\r\n        Write-Log \"'$SoftwareName' installed successfully.\"\r\n    }\r\n    Else {\r\n        Write-Log \"'$SoftwareName' install exit code is $($Install.ExitCode)\"\r\n        Exit 1\r\n    }\r\n    Write-Log \"Configuring OneDrive to startup for each user upon logon.\"\r\n    New-ItemProperty -Path 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name OneDrive -PropertyType String -Value 'C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe /background' -Force | Out-Null\r\n    Write-Log \"Installed OneDrive Per-Machine\"\r\n    If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }\r\n}\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#4": "param(\r\n    [string]$APIVersion,\r\n    [string]$BlobStorageSuffix,\r\n    [string]$BuildDir = '',\r\n    [string]$UserAssignedIdentityClientId = '',\r\n    [string]$TeamsCloudType,\r\n    [string]$Uris,\r\n    [string]$DestFileNames\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n$SoftwareName = 'Teams'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Install-$SoftwareName.log\"\r\n\r\nfunction Write-Log {\r\n    param(\r\n        [Parameter(Mandatory = $true, Position = 0)]\r\n        [AllowEmptyString()]\r\n        [string]$Message\r\n    )\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n    If ($null -ne $BuildDir -and $BuildDir -ne '') {\r\n        $TempDir = Join-Path $BuildDir -ChildPath $SoftwareName\r\n    }\r\n    Else {\r\n        $TempDir = Join-Path $Env:TEMP -ChildPath $SoftwareName\r\n    }\r\n    New-Item -Path $TempDir -ItemType Directory -Force | Out-Null  \r\n\r\n    [array]$Uris = $Uris.Replace('\\\"', '\"') | ConvertFrom-Json\r\n    Write-Log \"Uris:\"\r\n    ForEach ($Uri in $Uris) {\r\n        Write-Log \" $Uri\"\r\n    }\r\n    [array]$DestFileNames = $DestFileNames.Replace('\\\"', '\"') | ConvertFrom-Json\r\n    Write-Log \"DestFileNames:\"\r\n    ForEach ($DestFileName in $DestFileNames) {\r\n        Write-Log \" $DestFileName\"\r\n    }\r\n    For ($i = 0; $i -lt $Uris.Length; $i++) {\r\n        $WebClient = New-Object System.Net.WebClient\r\n        $Uri = $Uris[$i]\r\n        $DestFileName = $DestFileNames[$i]\r\n        if ($Uri -match $BlobStorageSuffix) {\r\n            $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n            $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n            $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n            $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n            $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n        }\r\n        $DestFile = Join-Path -Path $TempDir -ChildPath $DestFileName\r\n        Write-Log \"Downloading '$Uri' to '$DestFile'.\"\r\n        $ErrorActionPreference = 'SilentlyContinue'\r\n        $webClient.DownloadFile($Uri, $DestFile)\r\n        Unblock-File -Path $DestFile\r\n        $ErrorActionPreference = 'Stop'\r\n        $WebClient = $null\r\n    }\r\n    $BootStrapperFile = Join-Path -Path $TempDir -ChildPath $DestFileNames[0]\r\n    If (!(Test-Path -Path $BootStrapperFile)) {\r\n        Write-Log \"Failed to download the Teams bootstrapper file.\"\r\n        Exit 1\r\n    }\r\n    $MSIXFile = Join-Path -Path $TempDir -ChildPath $DestFileNames[1]\r\n    If (!(Test-Path -Path $MSIXFile)) {\r\n        Write-Log \"Failed to download the Teams MSIX file.\"\r\n        Exit 1\r\n    }\r\n    If ($Uris.Length -gt 2) {\r\n        $WebView2File = Join-Path -Path $TempDir -ChildPath $DestFileNames[2]\r\n        If (!(Test-Path -Path $WebView2File)) {\r\n            Write-Log -Message \"Failed to download the WebView2 file.\"\r\n            $WebView2File = $null\r\n        }    \r\n        $vcRedistFile = Join-Path -Path $TempDir -ChildPath $DestFileNames[3]\r\n        If (!(Test-Path -Path $vcRedistFile)) {\r\n            Write-Log -Message \"Failed to download the Visual C++ Redistributable file.\"\r\n            $vcRedistFile = $null\r\n        }\r\n        $webRTCFile = Join-Path -Path $TempDir -ChildPath $DestFileNames[4]\r\n        If (!(Test-Path -Path $webRTCFile)) {\r\n            Write-Log -Message \"Failed to download the WebRTC file.\"\r\n            $webRTCFile = $null\r\n        }\r\n    }\r\n    Else {\r\n        $WebView2File = $null\r\n        $vcRedistFile = $null\r\n        $webRTCFile = $null\r\n    }\r\n\r\n    If ($WebView2File -or $vcRedistFile -or $webRTCFile) {\r\n        Write-Log \"Starting installation of Teams dependencies.\"\r\n    }\r\n    Else {\r\n        Write-Log \"No dependencies to install.\"\r\n    }\r\n\r\n    # Enable media optimizations for Team\r\n    New-Item -Path \"HKLM:\\SOFTWARE\\Microsoft\\Teams\" -Force | Out-Null\r\n    New-ItemProperty -Path \"HKLM:\\SOFTWARE\\Microsoft\\Teams\" -Name IsWVDEnvironment -PropertyType DWORD -Value 1 -Force | Out-Null\r\n\r\n    # Check to see if WebView2 is already installed\r\n    Write-Log \"Checking if WebView2 Runtime is already installed.\"\r\n    If (Test-Path -Path 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}') {\r\n        If (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -Name pv -ErrorAction SilentlyContinue) {\r\n            $WebView2Installed = $True\r\n            $InstalledVersion = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -Name pv).pv\r\n            Write-Log \"WebView2 Runtime is already installed. Version: $InstalledVersion\"\r\n        }\r\n    }\r\n    If (-not $WebView2Installed -and $null -ne $WebView2File) {\r\n        Write-Log \"WebView2 runtime not installed, installing the latest version.\"\r\n        $WebView2Installer = Start-Process -FilePath $WebView2File -ArgumentList \"/silent /install\" -Wait -PassThru\r\n        If ($($WebView2Installer.ExitCode) -eq 0 ) {\r\n            Write-Log \"Installed the latest version of the Microsoft WebView2 Runtime\"\r\n        }\r\n        Else {\r\n            Write-Log \"Installion of the Microsoft WebView2 Runtime failed with exit code $($WebView2Installer.ExitCode)\"\r\n        }\r\n    }\r\n    If ($null -ne $vcRedistFile) {\r\n        Write-Log \"Installing Microsoft Visual C++ Redistributables.\"\r\n        $VCRedistInstall = Start-Process -FilePath $vcRedistFile -ArgumentList \"/install /passive /norestart\" -Wait -PassThru\r\n        If ($VCRedistInstall.ExitCode -eq 0 ) {\r\n            Write-Log \"Installed the latest version of Microsoft Visual C++ Redistributable\"\r\n        }\r\n        Else {\r\n            Write-Log \"Installion of the Microsoft Visual C++ Redistributable failed with exit code $($VCRedistInstall.ExitCode)\"\r\n        }\r\n    }\r\n    If ($null -ne $webRTCFile) {\r\n        Write-Log \"Installing the Remote Desktop WebRTC Redirector Service\"\r\n        $WebRTCInstall = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $webRTCFile /quiet /norestart\" -Wait -PassThru\r\n        If ($($WebRTCInstall.ExitCode) -eq 0) {\r\n            Write-Log \"Installed the Remote Desktop WebRTC Redirector Service\"\r\n        }\r\n        Else {\r\n            Write-Log \"Installation of the Remote Desktop WebRTC Redirector Service failed with exit code $($WebRTCInstall.ExitCode)\"\r\n        }\r\n    }\r\n    Write-Log \"Starting Teams installation.\"\r\n    $TeamsInstall = Start-Process -FilePath \"$BootStrapperFile\" -ArgumentList \"-p -o `\"$MSIXFile`\"\" -Wait -PassThru\r\n    If ($($TeamsInstall.ExitCode) -eq 0) {\r\n        # Get Version of currently installed new Teams Package\r\n        $TeamsVersion = (Get-AppxPackage -Name MSTeams).Version\r\n        Write-Log \"Installed Teams Version $TeamsVersion successfully.\"\r\n    }\r\n    Else {\r\n        Write-Log \"Teams installation failed with exit code $($TeamsInstall.ExitCode)\"\r\n    }\r\n\r\n    Switch ($TeamsCloudType) {\r\n        \"GCC\" {\r\n            $CloudType = 2\r\n        }\r\n        \"GCCH\" {\r\n            $CloudType = 3\r\n        }\r\n        \"DOD\" {\r\n            $CloudType = 4\r\n        }\r\n        \"GovSecret\" {\r\n            $CloudType = 5\r\n        }\r\n        \"GovTopSecret\" {\r\n            $CloudType = 6\r\n        }\r\n        \"Gallatin\" {\r\n            $CloudType = 7\r\n        }\r\n    }\r\n    If ($CloudType) {\r\n        $null = Start-Process -FilePath reg.exe -ArgumentList \"LOAD HKLM\\Default $env:SystemDrive\\Users\\Default\\ntuser.dat\" -Wait\r\n        $null = Start-Process -FilePath reg.exe -ArgumentList \"ADD HKLM\\Default\\SOFTWARE\\Microsoft\\Office\\16.0\\Teams /n CloudType /t REG_DWORD /v $CloudType /f\" -Wait -PassThru\r\n        Start-Sleep -Seconds 5\r\n        [System.GC]::Collect()\r\n        $null = Start-Process -FilePath reg.exe -ArgumentList \"UNLOAD HKLM\\Default\" -Wait -PassThru\r\n    }\r\n    # Teams Meeting Add-in\r\n    # Get Teams Meeting Addin Version\r\n    If (-not ($CloudType -eq 5 -or $CloudType -eq 6 -or $CloudType -eq 7)) {\r\n        #https://learn.microsoft.com/en-us/microsoftteams/teams-client-vdi-requirements-deploy#deployment-method-for-non-persistent-environments-where-teams-autoupdate-is-disabled\r\n        $TeamsMeetingAddinInstall = Start-Process -FilePath \"$BootStrapperFile\" -ArgumentList \"--installTMA\" -Wait -PassThru\r\n        If ($($TeamsMeetingAddinInstall.ExitCode) -eq 0) {\r\n            Write-Log \"Installed Teams Meeting Add-in successfully.\"\r\n            $TMAInstalled\r\n        }\r\n        Else {\r\n            Write-Log \"Teams Meeting Add-in installation failed with exit code $($TeamsMeetingAddinInstall.ExitCode)\"\r\n        }\r\n    }\r\n    If (-not $TMAInstalled) {\r\n        Write-Log \"Attempting to install the Teams Meeting Add-in via msi installer.\"\r\n        $TMAPath = \"{0}\\WindowsApps\\MSTeams_{1}_x64__8wekyb3d8bbwe\\MicrosoftTeamsMeetingAddInInstaller.msi\" -f $env:programfiles, $TeamsVersion    \r\n        If ($TMAPath -and (Test-Path -Path $TMAPath)) {\r\n\r\n            Write-Log \"Found Teams Meeting Add-in installer at path: $TMAPath\"\r\n            $TMAVersion = (Get-AppLockerFileInformation -Path $TMAPath | Select-Object -ExpandProperty Publisher).BinaryVersion\r\n            Write-Log \"Found Teams Meeting Addin Version: $TMAVersion\"\r\n            # Install parameters\r\n            $TargetDir = \"{0}\\Microsoft\\TeamsMeetingAdd-in\\{1}\\\" -f ${env:ProgramFiles(x86)}, $TMAVersion\r\n            $params = '/i \"{0}\" TARGETDIR=\"{1}\" /qn ALLUSERS=1' -f $TMAPath, $TargetDir\r\n            # Start the install process\r\n            Write-Log \"executing msiexec.exe $params\"\r\n            $install = Start-Process -FilePath 'msiexec.exe' -ArgumentList $params -PassThru\r\n            $timeout = 30\r\n\r\n            for ($elapsed = 0; $elapsed -lt $timeout; $elapsed++) {\r\n                if ($install.HasExited) {\r\n                    Write-Log \"msiexec closed with exit code: $($install.ExitCode)\"\r\n                    break\r\n                }\r\n                Start-Sleep -Seconds 1\r\n            }\r\n\r\n            if (-not $install.HasExited) {\r\n                Write-Log \"msiexec did not exit within $timeout seconds. Terminating process.\"\r\n                Stop-Process -Id $install.Id -Force\r\n            }\r\n        }\r\n        Else {\r\n            Write-Log \"Error: Teams Meeting Add-in installer not found at path: $TMAPath\"\r\n        }\r\n    \r\n    }\r\n\r\n    If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }\r\n    Write-Log \"Completed Installation of all components.\"\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#5": "Param(    \r\n    [string]$ResourceManagerUri,\r\n    [string]$SubscriptionId,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$VirtualMachineNames,\r\n    [string]$VirtualMachinesResourceGroup\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\n[array]$VirtualMachineNames = $VirtualMachineNames.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n# Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n$TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\nif (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n$AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n$ResourceGroupId = '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $VirtualMachinesResourceGroup\r\n\r\nForEach ($VMName in $VirtualMachineNames) {\r\n    $RunCommands = (Invoke-RestMethod `\r\n                        -Headers $AzureManagementHeader `\r\n                        -Method 'GET' `\r\n                        -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/' + $VMName + '/runCommands?api-version=2024-03-01')).value.name\r\n    ForEach ($RunCommand in $RunCommands) {\r\n        Invoke-RestMethod `\r\n            -Headers $AzureManagementHeader `\r\n            -Method 'DELETE' `\r\n            -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/' + $VmName + '/runCommands/' + $RunCommand + '?api-version=2024-03-01') | Out-Null\r\n    }\r\n}",
+    "$fxv#6": "param (\r\n    # The App Name to pass to the WUA API as the calling application.\r\n    [Parameter()]\r\n    [String]$AppName = \"Windows Update API Script\",\r\n    # The search criteria to be used.\r\n    [Parameter()]\r\n    [String]$Criteria = \"IsInstalled=0 and Type='Software' and IsHidden=0\",\r\n    [Parameter()]\r\n    [bool]$ExcludePreviewUpdates = $true,\r\n    [Parameter()]\r\n    [ValidateSet(\"MU\", \"WSUS\")]\r\n    [string]$Service = 'MU',\r\n    # The http/https fqdn for the Windows Server Update Server\r\n    [Parameter()]\r\n    [string]$WSUSServer\r\n)\r\n  \r\nFunction ConvertFrom-InstallationResult {\r\n    [CmdletBinding()]\r\n    param (\r\n        [Parameter()]\r\n        [int]$Result\r\n    )        \r\n    switch ($Result) {\r\n        2 { $Text = 'Succeeded' }\r\n        3 { $Text = 'Succeeded with errors' }\r\n        4 { $Text = 'Failed' }\r\n        5 { $Text = 'Cancelled' }\r\n        Default { $Text = \"Unexpected ($Result)\" }\r\n    }        \r\n    Return $Text\r\n}\r\n\r\n$LogFile = \"$env:SystemRoot\\Logs\\Install-Updates.log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\n    Write-Log \"Starting Windows Update Script with the following parameters:\"\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\n    Switch ($Service.ToUpper()) {\r\n        'MU' { $ServerSelection = 3; $ServiceId = \"7971f918-a847-4430-9279-4a52d1efe18d\" }\r\n        'WSUS' { $ServerSelection = 1 }\r\n    }        \r\n    If ($Service -eq 'MU') {\r\n        $UpdateServiceManager = New-Object -ComObject Microsoft.Update.ServiceManager\r\n        $UpdateServiceManager.ClientApplicationID = $AppName\r\n        $null = $UpdateServiceManager.AddService2($ServiceId, 7, \"\")\r\n        $null = cmd /c reg.exe ADD \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU\" /v AllowMUUpdateService /t REG_DWORD /d 1 /f '2>&1'\r\n        Write-Log \"Added Registry entry to configure Microsoft Update. Exit Code: [$LastExitCode]\"\r\n    }\r\n    Elseif ($Service -eq 'WSUS' -and $WSUSServer) {\r\n        $null = cmd /c reg.exe ADD \"HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v WUServer /t REG_SZ /d $WSUSServer /f '2>&1'\r\n        $null = cmd /c reg.exe ADD \"HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v WUStatusServer /t REG_SZ /d $WSUSServer /f '2>&1'\r\n        Write-Log \"Added Registry entry to configure WSUS Server. Exit Code: [$LastExitCode]\"\r\n    }        \r\n    $UpdateSession = New-Object -ComObject Microsoft.Update.Session\r\n    $updateSession.ClientApplicationID = $AppName   \r\n    $UpdateSearcher = New-Object -ComObject Microsoft.Update.Searcher\r\n    $UpdateSearcher.ServerSelection = $ServerSelection\r\n    If ($ServerSelection -eq 3) {\r\n        $UpdateSearcher.ServiceId = $ServiceId\r\n    }\r\n    Write-Log -Message \"Searching for Updates...\"\r\n    $SearchResult = $null\r\n    $SearchAttempts = 0\r\n    $SearchMaxAttempts = 5\r\n    do {\r\n        $SearchAttempts++\r\n        try {\r\n            $SearchResult = $UpdateSearcher.Search($Criteria)\r\n        } catch {\r\n            if ($SearchAttempts -lt $SearchMaxAttempts -and $_.Exception.HResult -eq [int]'0x8024001E') {\r\n                Write-Log \"Search attempt $SearchAttempts/$SearchMaxAttempts failed (WU_E_SERVICE_NOT_REGISTERED). Retrying in 30s...\"\r\n                Start-Sleep -Seconds 30\r\n            } else {\r\n                throw\r\n            }\r\n        }\r\n    } while ($null -eq $SearchResult -and $SearchAttempts -lt $SearchMaxAttempts)\r\n    If ($($SearchResult.Updates).Count -gt 0) {\r\n        Write-Log \"List of applicable items found for this computer:\"\r\n        For ($i = 0; $i -lt $($SearchResult.Updates).Count; $i++) {\r\n            $Update = $SearchResult.Updates[$i]\r\n            Write-Log \"$($i + 1) > $($update.Title)\"\r\n        }\r\n        $AtLeastOneAdded = $false\r\n        $ExclusiveAdded = $false   \r\n        $UpdatesToDownload = New-Object -ComObject Microsoft.Update.UpdateColl\r\n        Write-Log \"Checking search results:\"\r\n        For ($i = 0; $i -lt $($SearchResult.Updates).Count; $i++) {\r\n            $Update = $SearchResult.Updates[$i]\r\n            $AddThisUpdate = $false        \r\n            If ($ExclusiveAdded) {\r\n                Write-Log \"$($i + 1) > skipping: '$($update.Title)' because an exclusive update has already been selected.\"\r\n            }\r\n            Else {\r\n                $AddThisUpdate = $true\r\n            }        \r\n            if ($ExcludePreviewUpdates -and $update.Title -like '*Preview*') {\r\n                Write-Log \"$($i + 1) > Skipping: '$($update.Title)' because it is a preview update.\"\r\n                $AddThisUpdate = $false\r\n            }        \r\n            If ($AddThisUpdate) {\r\n                $PropertyTest = 0\r\n                $ErrorActionPreference = 'SilentlyContinue'\r\n                $PropertyTest = $Update.InstallationBehavior.Impact\r\n                $ErrorActionPreference = 'Stop'\r\n                If ($PropertyTest -eq 2) {\r\n                    If ($AtLeastOneAdded) {\r\n                        Write-Log \"$($i + 1) > skipping: '$($update.Title)' because it is exclusive and other updates are being installed first.\"\r\n                        $AddThisUpdate = $false\r\n                    }\r\n                }\r\n            }\r\n            If ($AddThisUpdate) {\r\n                Write-Log \"$($i + 1) > adding: '$($update.Title)'\"\r\n                $UpdatesToDownload.Add($Update) | out-null\r\n                $AtLeastOneAdded = $true\r\n                $ErrorActionPreference = 'SilentlyContinue'\r\n                $PropertyTest = $Update.InstallationBehavior.Impact\r\n                $ErrorActionPreference = 'Stop'\r\n                If ($PropertyTest -eq 2) {\r\n                    Write-Log \"This update is exclusive; skipping remaining updates\"\r\n                    $ExclusiveAdded = $true\r\n                }\r\n            }\r\n        }        \r\n        $UpdatesToInstall = New-Object -ComObject Microsoft.Update.UpdateColl\r\n        Write-Log \"Downloading updates...\"\r\n        $Downloader = $UpdateSession.CreateUpdateDownloader()\r\n        $Downloader.Updates = $UpdatesToDownload\r\n        $Downloader.Download()\r\n        Write-Log \"Successfully downloaded updates:\"        \r\n        For ($i = 0; $i -lt $UpdatesToDownload.Count; $i++) {\r\n            $Update = $UpdatesToDownload[$i]\r\n            If ($Update.IsDownloaded -eq $true) {\r\n                Write-Log \"$($i + 1) > $($update.title)\"\r\n                $UpdatesToInstall.Add($Update) | out-null\r\n            }\r\n        }        \r\n        If ($UpdatesToInstall.Count -gt 0) {\r\n            Write-Log \"Now installing updates...\"\r\n            $Installer = New-Object -ComObject Microsoft.Update.Installer\r\n            $Installer.Updates = $UpdatesToInstall\r\n            $InstallationResult = $Installer.Install()\r\n            $Text = ConvertFrom-InstallationResult -Result $InstallationResult.ResultCode\r\n            Write-Log \"Installation Result: $($Text)\"        \r\n            If ($InstallationResult.RebootRequired) {\r\n                Write-Log \"Atleast one update requires a reboot to complete the installation.\"\r\n            }\r\n        }\r\n    }\r\n    Else {\r\n        Write-Log \"No missing updates found.\"\r\n    }\r\n\r\n    If ($service -eq 'MU') {\r\n        Reg.exe DELETE \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU\" /v AllowMUUpdateService /f\r\n    }\r\n    Elseif ($Service -eq 'WSUS' -and $WSUSServer) {\r\n        reg.exe DELETE \"HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v WUServer /f\r\n        reg.exe DELETE \"HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v WUStatusServer /f\r\n    }\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#7": "$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Update-UwpApps.log\"\r\n\r\nfunction Write-Log {\r\n    param(\r\n        [parameter(ValueFromPipeline = $True, Mandatory = $True, Position = 0)]\r\n        [AllowEmptyString()]\r\n        [string]$Message\r\n    )\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\nfunction Get-ProvisionedPackageVersionMap {\r\n    $map = @{}\r\n    Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | ForEach-Object {\r\n        $map[$_.DisplayName] = $_.Version\r\n    }\r\n    return $map\r\n}\r\n\r\ntry {\r\n    Write-Log \"Updating Built-In UWP Apps via InstallService\"\r\n\r\n    $TaskPath = '\\Microsoft\\Windows\\InstallService\\'\r\n    $TaskName = 'ScanForUpdates'\r\n\r\n    $Task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue\r\n    If (-not $Task) {\r\n        Write-Log \"Scheduled task '$TaskPath$TaskName' not found. Skipping Store app updates.\"\r\n        Exit 0\r\n    }\r\n\r\n    # Snapshot versions before triggering the scan so we can detect and report actual changes.\r\n    Write-Log \"Snapshotting current provisioned package versions...\"\r\n    $VersionsBefore = Get-ProvisionedPackageVersionMap\r\n    Write-Log \"Found $($VersionsBefore.Count) provisioned package(s).\"\r\n\r\n    # Snapshot the task's LastRunTime before triggering so we can confirm this invocation\r\n    # actually executed (vs. reading a stale result from a previous run).\r\n    $TaskInfoBefore = Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName\r\n    $LastRunTimeBefore = $TaskInfoBefore.LastRunTime\r\n    Write-Log \"Task LastRunTime before trigger: $LastRunTimeBefore\"\r\n\r\n    # Trigger the scan, then wait until the task enters Running state (or give up after\r\n    # a startup window). This is more reliable than a blind sleep on a loaded build VM.\r\n    Write-Log \"Starting scheduled task '$TaskName'...\"\r\n    Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName\r\n\r\n    $StartupTimeoutSeconds = 60\r\n    $StartupElapsed        = 0\r\n    $StartupPollInterval   = 2\r\n    do {\r\n        Start-Sleep -Seconds $StartupPollInterval\r\n        $StartupElapsed += $StartupPollInterval\r\n        $StartupState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State\r\n    } while ($StartupState -ne 'Running' -and $StartupElapsed -lt $StartupTimeoutSeconds)\r\n\r\n    if ($StartupState -eq 'Running') {\r\n        Write-Log \"Task entered Running state after $($StartupElapsed) seconds.\"\r\n    } else {\r\n        Write-Log \"Task did not enter Running state within $($StartupTimeoutSeconds) seconds. (current state: $($StartupState)). It may have started and completed very quickly.\"\r\n    }\r\n\r\n    # Wait for the task itself to finish. The task orchestrates the scan and kicks off\r\n    # downloads/installs in the background - it does not block until they complete.\r\n    $TaskTimeoutSeconds = 300\r\n    $TaskPollInterval = 10\r\n    $TaskElapsed = 0\r\n\r\n    Write-Log \"Waiting for task to complete (timeout: $($TaskTimeoutSeconds) seconds)...\"\r\n    do {\r\n        Start-Sleep -Seconds $TaskPollInterval\r\n        $TaskElapsed += $TaskPollInterval\r\n        $TaskState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State\r\n        Write-Log \"Task state: ($($TaskState) $($TaskElapsed)/$($TaskTimeoutSeconds) seconds elapsed)\"\r\n    } while ($TaskState -eq 'Running' -and $TaskElapsed -lt $TaskTimeoutSeconds)\r\n\r\n    $TaskInfoAfter = Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName\r\n    $LastRunTimeAfter = $TaskInfoAfter.LastRunTime\r\n    $LastTaskResult = $TaskInfoAfter.LastTaskResult\r\n\r\n    $TaskActuallyRan = $LastRunTimeAfter -gt $LastRunTimeBefore\r\n    if ($TaskActuallyRan) {\r\n        Write-Log \"Task completed. LastRunTime: $LastRunTimeAfter | LastTaskResult: $LastTaskResult (0x0 = success)\"\r\n    }\r\n    else {\r\n        Write-Log \"WARNING: Task LastRunTime ($LastRunTimeAfter) did not advance beyond pre-trigger value ($LastRunTimeBefore). The task did not execute this run. Skipping stability polling.\"\r\n    }\r\n\r\n    # Poll provisioned package versions until they stop changing across two consecutive\r\n    # checks. The task orchestrates the scan and kicks off downloads/installs in the\r\n    # background; polling is the most reliable signal that all async installs have settled.\r\n    if ($TaskActuallyRan) {\r\n        $StabilityTimeoutSeconds = 600\r\n        $StabilityPollInterval = 30\r\n        $StableChecksRequired = 2\r\n        $StableCount = 0\r\n        $StabilityElapsed = 0\r\n        $LastVersionMap = Get-ProvisionedPackageVersionMap\r\n\r\n        Write-Log \"Polling for version stability (interval: $StabilityPollInterval, timeout: $StabilityTimeoutSeconds)...\"\r\n\r\n        while ($StabilityElapsed -lt $StabilityTimeoutSeconds) {\r\n            Start-Sleep -Seconds $StabilityPollInterval\r\n            $StabilityElapsed += $StabilityPollInterval\r\n\r\n            $CurrentVersionMap = Get-ProvisionedPackageVersionMap\r\n            $Changed = $CurrentVersionMap.Keys | Where-Object {\r\n                $LastVersionMap.ContainsKey($_) -and $LastVersionMap[$_] -ne $CurrentVersionMap[$_]\r\n            }\r\n\r\n            if ($Changed) {\r\n                $StableCount = 0\r\n                foreach ($pkg in $Changed) {\r\n                    Write-Log \"  [updating] $pkg : $($LastVersionMap[$pkg]) -> $($CurrentVersionMap[$pkg])\"\r\n                }\r\n                Write-Log \"$(@($Changed).Count) package(s) changed this interval. Resetting stability counter. $($StabilityElapsed)/$($StabilityTimeoutSeconds) elapsed\"\r\n            }\r\n            else {\r\n                $StableCount++\r\n                Write-Log \"No version changes detected (stable check $($StableCount)/$($StableChecksRequired)). $($StabilityElapsed)/$($StabilityTimeoutSeconds) elapsed\"\r\n            }\r\n\r\n            $LastVersionMap = $CurrentVersionMap\r\n\r\n            if ($StableCount -ge $StableChecksRequired) {\r\n                Write-Log \"Version map stable for $StableChecksRequired consecutive checks. Updates complete.\"\r\n                break\r\n            }\r\n        }\r\n\r\n        if ($StabilityElapsed -ge $StabilityTimeoutSeconds -and $StableCount -lt $StableChecksRequired) {\r\n            Write-Log \"Timed out after $StabilityTimeoutSeconds seconds before versions fully stabilized. Some packages may still be updating.\"\r\n        }\r\n    } # end if ($TaskActuallyRan)\r\n\r\n    # Final summary — report everything that changed relative to the pre-scan snapshot.\r\n    Write-Log \"*********************************\"\r\n    Write-Log \"Update Summary\"\r\n    Write-Log \"*********************************\"\r\n    $FinalVersionMap = Get-ProvisionedPackageVersionMap\r\n    $Updated = $FinalVersionMap.Keys | Where-Object {\r\n        $VersionsBefore.ContainsKey($_) -and $VersionsBefore[$_] -ne $FinalVersionMap[$_]\r\n    }\r\n    $NewPackages = $FinalVersionMap.Keys | Where-Object { -not $VersionsBefore.ContainsKey($_) }\r\n\r\n    if ($Updated) {\r\n        Write-Log \"Packages updated ($(@($Updated).Count)):\"\r\n        foreach ($pkg in ($Updated | Sort-Object)) {\r\n            Write-Log \"  $pkg : $($VersionsBefore[$pkg]) -> $($FinalVersionMap[$pkg])\"\r\n        }\r\n    }\r\n    else {\r\n        Write-Log \"No provisioned package versions changed. The image may already be up to date.\"\r\n    }\r\n    if ($NewPackages) {\r\n        Write-Log \"New packages added ($(@($NewPackages).Count)):\"\r\n        foreach ($pkg in ($NewPackages | Sort-Object)) {\r\n            Write-Log \"  $pkg : $($FinalVersionMap[$pkg])\"\r\n        }\r\n    }\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#8": "param(\r\n    [string]$APIVersion,\r\n    [string]$BlobStorageSuffix,\r\n    [string]$BuildDir='',\r\n    [string]$Uri,\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n$ErrorActionPreference = \"Stop\"\r\n\r\n$SoftwareName = 'WDOT'\r\n$LogFile = \"$env:SystemRoot\\Logs\\$SoftwareName.log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\ntry {\r\n    Write-Log \"Starting Script to run '$SoftwareName' with the following parameters:\"\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n    If ($null -eq $Uri -or $Uri -eq '') {\r\n        $Uri = 'https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main'\r\n    }\r\n    If ($BuildDir -ne '') {\r\n        $TempDir = Join-Path $BuildDir -ChildPath $SoftwareName\r\n    }\r\n    Else {\r\n        $TempDir = Join-Path $Env:TEMP -ChildPath $SoftwareName\r\n    }\r\n    New-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n\r\n    Write-Log \"Starting '$SoftwareName' script with the following parameters:\"\r\n    Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\n    $WebClient = New-Object System.Net.WebClient\r\n    If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n        $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n        $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n        $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n        $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n        $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n    }\r\n    $DestFile = Join-Path -Path $TempDir -ChildPath 'WDOT.zip'\r\n    Write-Log \"Downloading '$Uri' to '$DestFile'.\"\r\n    $webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\n    Start-Sleep -seconds 5\r\n    If (!(Test-Path -Path $DestFile)) { Write-Log \"Failed to download $Uri\"; Exit 1 }\r\n    Unblock-File -Path $DestFile\r\n    Expand-Archive -LiteralPath $DestFile -DestinationPath $TempDir -Force\r\n    $NewConfigScriptPath = (Get-ChildItem -Path $TempDir -Recurse | Where-Object { $_.Name -eq \"New-WVDConfigurationFiles.ps1\" }).FullName\r\n    & $NewConfigScriptPath -FolderName 'AVD'\r\n    Write-Log \"Created new WDOT configuration files for AVD\"\r\n    $ScriptPath = (Get-ChildItem -Path $TempDir -Recurse | Where-Object { $_.Name -eq \"Windows_Optimization.ps1\" }).FullName\r\n    If ($null -eq $ScriptPath) { Write-Log \"Failed to find the script in the downloaded archive\"; Exit 1 }\r\n    $ScriptContents = Get-Content -Path $ScriptPath\r\n    $ScriptUpdate = $ScriptContents.Replace(\"Set-NetAdapterAdvancedProperty\", \"#Set-NetAdapterAdvancedProperty\")\r\n    $ScriptUpdate | Set-Content -Path $ScriptPath\r\n    & $ScriptPath -ConfigProfile 'AVD' -Optimizations @(\"Autologgers\", \"DefaultUserSettings\", \"LocalPolicy\", \"NetworkOptimizations\", \"ScheduledTasks\", \"Services\", \"WindowsMediaPlayer\") -AdvancedOptimizations @(\"Edge\", \"RemoveLegacyIE\") -AcceptEULA\r\n    Write-Log \"Optimized the operating system using the Windows Desktop Optimization Tool\"\r\n    If ((Split-Path $TempDir -Parent) -eq $Env:Temp) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}",
+    "$fxv#9": "<#\r\n.SYNOPSIS\r\n    Disables selected software update channels in a Windows image for AVD pooled host pool scenarios.\r\n\r\n.DESCRIPTION\r\n    Intended for use during image customization via Azure VM Run Command. Each parameter selects an\r\n    update channel to permanently disable by setting policy registry keys, disabling related Windows\r\n    services, and disabling scheduled tasks. Parameters are passed as strings ('true'/'false') because\r\n    Azure Run Command passes all parameters as strings.\r\n\r\n    Designed for pooled AVD host pools where VMs are regularly replaced from a golden image rather\r\n    than patched in place. Disabling update channels prevents unwanted background downloads, restarts,\r\n    and policy drift after deployment.\r\n\r\n.PARAMETER DisableWindowsUpdate\r\n    Disables the Windows Update (wuauserv) and Update Orchestrator (UsoSvc) services, sets AU policy\r\n    to never check for updates (AUOptions=1, NoAutoUpdate=1), and disables Delivery Optimization peer\r\n    sharing (DODownloadMode=0).\r\n\r\n.PARAMETER DisableM365Update\r\n    Disables Click-to-Run automatic updates for Microsoft 365 / Office apps via policy keys and\r\n    disables the 'Office Automatic Updates 2.0' scheduled task.\r\n\r\n.PARAMETER DisableTeamsUpdate\r\n    Sets the DisableAutoUpdate registry value for new Teams (MSTeams) to prevent automatic updates.\r\n\r\n.PARAMETER DisableOneDriveUpdate\r\n    Sets the OneDrive sync app update ring to Deferred (GPOSetUpdateRing=0) via the documented policy\r\n    key, which defers updates for up to 60 days. Also disables the OneDrive standalone update\r\n    scheduled tasks that apply when OneDrive is not running.\r\n\r\n.PARAMETER DisableEdgeUpdate\r\n    Disables the Edge update services (edgeupdate / edgeupdatem), sets the EdgeUpdate policy to block\r\n    all updates (UpdateDefault=0 and the Edge app-specific GUID), and disables the Edge update\r\n    scheduled tasks.\r\n\r\n.PARAMETER DisableWebView2Update\r\n    Sets the EdgeUpdate policy for the WebView2 Runtime GUID to block updates. Shared scheduled tasks\r\n    with Edge are handled idempotently.\r\n\r\n.PARAMETER DisableStoreAutoUpdate\r\n    Disables Store auto-download (AutoDownload policy and InstallService scheduled tasks) and\r\n    cloud content delivery (DisableWindowsConsumerFeatures, DisableCloudOptimizedContent) that\r\n    allows pre-installed UWP apps to silently refresh.\r\n\r\n.NOTES\r\n    - All parameters default to 'true'. Pass 'false' to leave a channel enabled.\r\n    - WaaSMedicSvc (Windows Update Medic) is a protected service; disabling via Set-Service is\r\n      best-effort. The Start registry value is set directly as a fallback.\r\n    - Run as SYSTEM or with local administrator privileges.\r\n    - Log written to %SystemRoot%\\Logs\\Disable-SoftwareUpdates.log.\r\n\r\n.LINK\r\n    Windows Update AU policy keys:\r\n    https://learn.microsoft.com/en-us/windows/deployment/update/waas-wu-settings#configuring-automatic-updates-by-editing-the-registry\r\n\r\n.LINK\r\n    Delivery Optimization DODownloadMode:\r\n    https://learn.microsoft.com/en-us/windows/deployment/update/waas-delivery-optimization-reference#download-mode\r\n\r\n.LINK\r\n    Microsoft 365 / Office update management:\r\n    https://learn.microsoft.com/en-us/deployoffice/updates/manage-updates-office-deployment-tool\r\n\r\n.LINK\r\n    New Teams VDI deployment and update policy:\r\n    https://learn.microsoft.com/en-us/microsoftteams/new-teams-vdi-requirements-deploy\r\n\r\n.LINK\r\n    OneDrive sync app update process (rings, update checks, scheduled tasks):\r\n    https://learn.microsoft.com/en-us/sharepoint/sync-client-update-process\r\n\r\n.LINK\r\n    OneDrive GPOSetUpdateRing policy (Set the sync app update ring):\r\n    https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring\r\n\r\n.LINK\r\n    Microsoft Edge Update policies (UpdateDefault, per-app GUIDs):\r\n    https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies\r\n\r\n.LINK\r\n    WebView2 Runtime enterprise management:\r\n    https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/enterprise\r\n\r\n.LINK\r\n    Microsoft Store ApplicationManagement policy CSP:\r\n    https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-applicationmanagement\r\n\r\n.LINK\r\n    CloudContent / consumer features policy CSP:\r\n    https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience#allowwindowsconsumerfeatures\r\n\r\n#>\r\nparam(\r\n    [string]$DisableWindowsUpdate = 'false',\r\n    [string]$DisableM365Update = 'false',\r\n    [string]$DisableTeamsUpdate = 'false',\r\n    [string]$DisableOneDriveUpdate = 'false',\r\n    [string]$DisableEdgeUpdate = 'false',\r\n    [string]$DisableWebView2Update = 'false',\r\n    [string]$DisableStoreAutoUpdate = 'false'\r\n)\r\n\r\n$DisableWindowsUpdate = [System.Convert]::ToBoolean($DisableWindowsUpdate)\r\n$DisableM365Update = [System.Convert]::ToBoolean($DisableM365Update)\r\n$DisableTeamsUpdate = [System.Convert]::ToBoolean($DisableTeamsUpdate)\r\n$DisableOneDriveUpdate = [System.Convert]::ToBoolean($DisableOneDriveUpdate)\r\n$DisableEdgeUpdate = [System.Convert]::ToBoolean($DisableEdgeUpdate)\r\n$DisableWebView2Update = [System.Convert]::ToBoolean($DisableWebView2Update)\r\n$DisableStoreAutoUpdate = [System.Convert]::ToBoolean($DisableStoreAutoUpdate)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n$LogFile = \"$env:SystemRoot\\Logs\\Disable-SoftwareUpdates.log\"\r\n\r\nfunction Write-Log {\r\n    param(\r\n        [Parameter(Mandatory = $true, Position = 0)]\r\n        [AllowEmptyString()]\r\n        [string]$Message\r\n    )\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\nfunction Set-RegistryValue {\r\n    param(\r\n        [string]$Path,\r\n        [string]$Name,\r\n        [string]$PropertyType,\r\n        $Value\r\n    )\r\n    If (!(Test-Path -Path $Path)) {\r\n        Write-Log \"Creating registry key: $Path\"\r\n        New-Item -Path $Path -Force | Out-Null\r\n    }\r\n    $existing = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue\r\n    If ($existing) {\r\n        $current = Get-ItemPropertyValue -Path $Path -Name $Name\r\n        If ($current -ne $Value) {\r\n            Write-Log \"Setting $Path\\$Name : $current -> $Value\"\r\n            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null\r\n        }\r\n        Else {\r\n            Write-Log \"$Path\\$Name is already $Value\"\r\n        }\r\n    }\r\n    Else {\r\n        Write-Log \"Creating $Path\\$Name = $Value\"\r\n        New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null\r\n    }\r\n}\r\n\r\nfunction Disable-Service {\r\n    param([string]$Name)\r\n    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue\r\n    If ($svc) {\r\n        If ($svc.StartType -ne 'Disabled') {\r\n            Write-Log \"Disabling service: $Name\"\r\n            Set-Service -Name $Name -StartupType Disabled -ErrorAction SilentlyContinue\r\n            Stop-Service -Name $Name -Force -ErrorAction SilentlyContinue\r\n        }\r\n        Else {\r\n            Write-Log \"Service already disabled: $Name\"\r\n        }\r\n    }\r\n    Else {\r\n        Write-Log \"Service not found (skipping): $Name\"\r\n    }\r\n}\r\n\r\ntry {\r\nWrite-Log 'Starting Disable-SoftwareUpdates'\r\n\r\n#region Windows Update\r\nIf ($DisableWindowsUpdate) {\r\n    Write-Log '--- Windows Update ---'\r\n    # Disable Windows Update via policy (NoAutoUpdate + AUOptions=1 = never check)\r\n    Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name 'NoAutoUpdate'    -PropertyType 'DWORD' -Value 1\r\n    Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name 'AUOptions'       -PropertyType 'DWORD' -Value 1\r\n    # Disable delivery optimisation peer sharing\r\n    Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization' -Name 'DODownloadMode' -PropertyType 'DWORD' -Value 0\r\n    # Disable Windows Update services\r\n    Disable-Service -Name 'wuauserv'    # Windows Update\r\n    Disable-Service -Name 'UsoSvc'      # Update Orchestrator Service\r\n    Disable-Service -Name 'WaaSMedicSvc' # Windows Update Medic (protected — best-effort via reg)\r\n    # Prevent WaaSMedicSvc from being re-enabled (image-safe workaround)\r\n    Set-RegistryValue -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\WaaSMedicSvc' -Name 'Start' -PropertyType 'DWORD' -Value 4\r\n    $updateTaskName = 'Scheduled Start'\r\n    $updateTaskPath = '\\Microsoft\\Windows\\WindowsUpdate\\'\r\n    $updateTask = Get-ScheduledTask -TaskName $updateTaskName -TaskPath $updateTaskPath -ErrorAction SilentlyContinue\r\n    if ($updateTask) {\r\n            Write-Log \"Disabling scheduled task: $updateTaskPath$updateTaskName\"\r\n            Disable-ScheduledTask -TaskName $updateTaskName -TaskPath $updateTaskPath -ErrorAction SilentlyContinue | Out-Null\r\n        }\r\n    }\r\n    #endregion\r\n\r\n    #region Microsoft 365 / Office Updates\r\n    If ($DisableM365Update) {\r\n        Write-Log '--- Microsoft 365 / Office Updates ---'\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\office\\16.0\\common\\officeupdate' -Name 'enableautomaticupdates' -PropertyType 'DWORD' -Value 0\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\office\\16.0\\common\\officeupdate' -Name 'hideupdatenotifications' -PropertyType 'DWORD' -Value 1\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\office\\16.0\\common\\officeupdate' -Name 'hideenabledisableupdates'  -PropertyType 'DWORD' -Value 1\r\n        # Disable Click-to-Run update task\r\n        $c2rTaskName = 'Office Automatic Updates 2.0'\r\n        $c2rTask = Get-ScheduledTask -TaskName $c2rTaskName -ErrorAction SilentlyContinue\r\n        If ($c2rTask) {\r\n            Write-Log \"Disabling scheduled task: $c2rTaskName\"\r\n            Disable-ScheduledTask -TaskName $c2rTaskName -TaskPath $c2rTask.TaskPath -ErrorAction SilentlyContinue | Out-Null\r\n        }\r\n    }\r\n    #endregion\r\n\r\n    #region Teams for VDI\r\n    If ($DisableTeamsUpdate) {\r\n        Write-Log '--- Teams for VDI Updates ---'\r\n        # New Teams (MSTeams) — disable auto-update via policy\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Microsoft\\Teams' -Name 'DisableAutoUpdate' -PropertyType 'DWORD' -Value 1\r\n    }\r\n    #endregion\r\n\r\n    #region OneDrive\r\n    If ($DisableOneDriveUpdate) {\r\n        Write-Log '--- OneDrive Updates ---'\r\n        # Set the OneDrive update ring to Deferred (value 0) via the documented GPOSetUpdateRing policy.\r\n        # Deferred ring defers new builds for up to 60 days and allows controlled update deployment.\r\n        # Ref: https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\OneDrive' -Name 'GPOSetUpdateRing' -PropertyType 'DWORD' -Value 0\r\n        # Disable the OneDrive standalone update scheduled task that triggers updates when OneDrive is not running.\r\n        # Ref: https://learn.microsoft.com/en-us/sharepoint/sync-client-update-process#how-the-sync-app-checks-for-and-applies-updates\r\n        foreach ($taskName in @('OneDrive Reporting Task-S-*', 'OneDrive Standalone Update Task-S-*')) {\r\n            Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | ForEach-Object {\r\n                Write-Log \"Disabling scheduled task: $($_.TaskName)\"\r\n                $_ | Disable-ScheduledTask -ErrorAction SilentlyContinue | Out-Null\r\n            }\r\n        }\r\n    }\r\n    #endregion\r\n\r\n    #region Microsoft Edge\r\n    If ($DisableEdgeUpdate) {\r\n        Write-Log '--- Microsoft Edge Updates ---'\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate' -Name 'UpdateDefault'                        -PropertyType 'DWORD'  -Value 0\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate' -Name 'Update{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}' -PropertyType 'DWORD' -Value 0\r\n        # Disable Edge Update services\r\n        Disable-Service -Name 'edgeupdate'\r\n        Disable-Service -Name 'edgeupdatem'\r\n        # Disable Edge update scheduled tasks\r\n        foreach ($taskName in @('MicrosoftEdgeUpdateTaskMachineCore', 'MicrosoftEdgeUpdateTaskMachineUA')) {\r\n            $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue\r\n            If ($task) {\r\n                Write-Log \"Disabling scheduled task: $taskName\"\r\n                Disable-ScheduledTask -TaskName $taskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null\r\n            }\r\n        }\r\n    }\r\n    #endregion\r\n\r\n    #region WebView2\r\n    If ($DisableWebView2Update) {\r\n        Write-Log '--- WebView2 Runtime Updates ---'\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate' -Name 'Update{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -PropertyType 'DWORD' -Value 0\r\n        # Disable WebView2 updater scheduled tasks\r\n        foreach ($taskName in @('MicrosoftEdgeUpdateTaskMachineCore', 'MicrosoftEdgeUpdateTaskMachineUA')) {\r\n            # Shared with Edge above — already handled if $DisableEdgeUpdate was true; idempotent\r\n            $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue\r\n            If ($task) {\r\n                Disable-ScheduledTask -TaskName $taskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue | Out-Null\r\n            }\r\n        }\r\n    }\r\n    #endregion\r\n\r\n    #region Microsoft Store / UWP App Auto-Update\r\n    If ($DisableStoreAutoUpdate) {\r\n        Write-Log '--- Microsoft Store / UWP App Auto-Update ---'\r\n        # Disable automatic app updates from the Store\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\WindowsStore' -Name 'AutoDownload' -PropertyType 'DWORD' -Value 2\r\n        # Disable Store update scheduled tasks\r\n        $storeTasks = @(\r\n            @{ Name = 'ScanForUpdates'; Path = '\\Microsoft\\Windows\\InstallService\\' },\r\n            @{ Name = 'ScanForUpdatesAsUser'; Path = '\\Microsoft\\Windows\\InstallService\\' },\r\n            @{ Name = 'SmartRetry'; Path = '\\Microsoft\\Windows\\InstallService\\' }\r\n        )\r\n        foreach ($entry in $storeTasks) {\r\n            $task = Get-ScheduledTask -TaskName $entry.Name -TaskPath $entry.Path -ErrorAction SilentlyContinue\r\n            If ($task) {\r\n                Write-Log \"Disabling scheduled task: $($entry.Path)$($entry.Name)\"\r\n                Disable-ScheduledTask -TaskName $entry.Name -TaskPath $entry.Path -ErrorAction SilentlyContinue | Out-Null\r\n            }\r\n        }\r\n        # Prevent pre-installed app content from updating silently via cloud content delivery\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent' -Name 'DisableWindowsConsumerFeatures' -PropertyType 'DWORD' -Value 1\r\n        Set-RegistryValue -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent' -Name 'DisableCloudOptimizedContent'   -PropertyType 'DWORD' -Value 1\r\n    }\r\n    #endregion\r\n\r\n    Write-Log 'Disable-SoftwareUpdates complete.'\r\n}\r\ncatch {\r\n    Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n    If ($_.Exception.InnerException) { Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\" }\r\n    Write-Log $_.ScriptStackTrace\r\n    Exit 1\r\n}\r\n",
+    "apiVersion": "[if(startsWith(parameters('cloud'), 'usn'), '2017-08-01', '2018-02-01')]",
+    "envSuffix": "[substring(environment().suffixes.storage, 5, sub(length(environment().suffixes.storage), 5))]",
+    "buildDir": "c:\\BuildDir",
+    "restartVmScript": "param(\r\n    [string]$ResourceManagerUri,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Restart the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/restart?api-version=2024-03-01')\r\n    $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n    $provisioningState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).code\r\n    While ($provisioningState -ne \"PowerState/running\") {\r\n        Start-Sleep -Seconds 5\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        $provisioningState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).code\r\n    }\r\n    Start-Sleep -Seconds 15   \r\n}\r\ncatch {\r\n    throw\r\n}",
+    "customizationScript": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments = '',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$BuildDir = '',\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\$Name.log\"\r\n\r\nfunction Write-Log {\r\n  param([string]$Message)\r\n  $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n  Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n  Write-Output $Entry\r\n}\r\n\r\nfunction Split-ArgumentString {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @() }\r\n\r\n  $arguments = @()\r\n  $currentArg = ''\r\n  $inQuotes = $false\r\n  $quoteChar = $null\r\n\r\n  for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n    $char = $ArgumentString[$i]\r\n    if (!$inQuotes -and (($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i - 1] -ne '\\')) -or $char -eq \"'\")) {\r\n      $inQuotes = $true\r\n      $quoteChar = $char\r\n      $currentArg += $char\r\n    }\r\n    elseif ($inQuotes -and $char -eq $quoteChar) {\r\n      $inQuotes = $false\r\n      $quoteChar = $null\r\n      $currentArg += $char\r\n    }\r\n    elseif ($char -eq ' ' -and !$inQuotes) {\r\n      if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"').Trim(\"'\")\r\n        if ($value -eq 'true') { $arguments += '$true' }\r\n        elseif ($value -eq 'false') { $arguments += '$false' }\r\n        else { $arguments += $value }\r\n        $currentArg = ''\r\n      }\r\n    }\r\n    else {\r\n      $currentArg += $char\r\n    }\r\n  }\r\n  if ($currentArg.Length -gt 0) {\r\n    $value = $currentArg.Trim('\"').Trim(\"'\")\r\n    if ($value -eq 'true') { $arguments += '$true' }\r\n    elseif ($value -eq 'false') { $arguments += '$false' }\r\n    else { $arguments += $value }\r\n  }\r\n  return $arguments\r\n}\r\n\r\nfunction ConvertTo-ParametersSplat {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @{} }\r\n\r\n  $tokens = Split-ArgumentString -ArgumentString $ArgumentString\r\n  $parameters = @{}\r\n  $i = 0\r\n  while ($i -lt $tokens.Count) {\r\n    $token = $tokens[$i]\r\n    if ($token -match '^-(\\w+)$') {\r\n      $paramName = $matches[1]\r\n      if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n        $i++\r\n        $value = $tokens[$i]\r\n        if ($value -eq '$true') { $parameters[$paramName] = $true }\r\n        elseif ($value -eq '$false') { $parameters[$paramName] = $false }\r\n        else { $parameters[$paramName] = $value.Trim('\"') }\r\n      }\r\n      else {\r\n        $parameters[$paramName] = $true\r\n      }\r\n    }\r\n    $i++\r\n  }\r\n  return $parameters\r\n}\r\n\r\ntry {\r\n  Write-Log \"Starting '$Name' customization.\"\r\n  Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\n  If ($Arguments -eq '') { $Arguments = $null }\r\n\r\n  If ($BuildDir -ne '') {\r\n    $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n  }\r\n  Else {\r\n    $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n  }\r\n  New-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n\r\n  $WebClient = New-Object System.Net.WebClient\r\n  If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n    Write-Log \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n    $StorageEndpoint = ($Uri -split '://')[0] + '://' + ($Uri -split '/')[2] + '/'\r\n    $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n    $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true} -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n    $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n    $WebClient.Headers.Add('Authorization', \"Bearer $AccessToken\")\r\n  }\r\n\r\n  $SourceFileName = ($Uri -split '/')[-1]\r\n  Write-Log \"Downloading '$Uri' to '$TempDir'.\"\r\n  $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n  $WebClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\n  Start-Sleep -Seconds 10\r\n\r\n  If (!(Test-Path -Path $DestFile)) {\r\n    Write-Log \"Download completed but '$DestFile' not found on disk.\"\r\n    Exit 1\r\n  }\r\n  Write-Log 'Download complete.'\r\n\r\n  Set-Location -Path $TempDir\r\n  $Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.', '')\r\n  $env:SUPPRESS_FILELOG = '1'\r\n  try {\r\n    switch ($Ext) {\r\n      'exe' {\r\n        If ($Arguments) {\r\n          Write-Log \"Executing '`\"$DestFile`\" $Arguments'\"\r\n          $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n        }\r\n        Else {\r\n          Write-Log \"Executing '$DestFile'\"\r\n          $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n        }\r\n      }\r\n      'msi' {\r\n        If ($Arguments) {\r\n          $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n          If ($Arguments -notcontains $DestFile) {\r\n            $Arguments = @(\"/i $DestFile\") + $Arguments\r\n          }\r\n          Write-Log \"Executing 'msiexec.exe $Arguments'\"\r\n          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n        }\r\n        Else {\r\n          Write-Log \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n        }\r\n      }\r\n      'bat' {\r\n        If ($Arguments) {\r\n          Write-Log \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n          $BatArgs = Split-ArgumentString -ArgumentString $Arguments\r\n          If ($BatArgs -notcontains $DestFile) { $BatArgs = @(\"$DestFile\") + $BatArgs }\r\n          Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait\r\n        }\r\n        Else {\r\n          Write-Log \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n          Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n        }\r\n      }\r\n      'ps1' {\r\n        If ($Arguments) {\r\n          Write-Log \"Calling '$DestFile' with arguments '$Arguments'\"\r\n          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n          & $DestFile @parameterSplat\r\n        }\r\n        Else {\r\n          Write-Log \"Calling '$DestFile'\"\r\n          & $DestFile\r\n        }\r\n      }\r\n      'zip' {\r\n        $DestinationPath = Join-Path -Path $TempDir -ChildPath ([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n        Write-Log \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n        Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n        Write-Log \"Finding PowerShell script in '$DestinationPath'.\"\r\n        $PSScript = (Get-ChildItem -Path $DestinationPath -Filter '*.ps1').FullName\r\n        If ($PSScript.Count -gt 1) { $PSScript = $PSScript[0] }\r\n        If ($Arguments) {\r\n          Write-Log \"Calling '$PSScript' with arguments '$Arguments'\"\r\n          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n          & $PSScript @parameterSplat\r\n        }\r\n        Else {\r\n          Write-Log \"Calling '$PSScript'\"\r\n          & $PSScript\r\n        }\r\n      }\r\n    }\r\n  }\r\n  finally {\r\n    $env:SUPPRESS_FILELOG = $null\r\n  }\r\n\r\n  If ((Split-Path $TempDir -Parent) -eq $Env:TEMP) {\r\n    Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue\r\n  }\r\n  Write-Log \"'$Name' customization complete.\"\r\n}\r\ncatch {\r\n  Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n  If ($_.Exception.InnerException) {\r\n    Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\"\r\n  }\r\n  Write-Log $_.ScriptStackTrace\r\n  Exit 1\r\n}",
+    "useBuildDir": "[or(or(or(or(or(or(not(empty(parameters('customizations'))), parameters('installFsLogix')), not(empty(parameters('office365AppsToInstall')))), parameters('installOneDrive')), parameters('installTeams')), parameters('applyWindowsDesktopOptimizations')), not(empty(parameters('vdiCustomizations'))))]",
+    "customizationBatchSize": 20,
+    "customizersCount": "[length(variables('customizers'))]",
+    "batchCount": "[add(div(variables('customizersCount'), variables('customizationBatchSize')), if(greater(mod(variables('customizersCount'), variables('customizationBatchSize')), 0), 1, 0))]",
+    "commonScriptParams": [
+      {
+        "name": "APIVersion",
+        "value": "[variables('apiVersion')]"
+      },
+      {
+        "name": "BlobStorageSuffix",
+        "value": "[format('blob.{0}', environment().suffixes.storage)]"
+      },
+      {
+        "name": "BuildDir",
+        "value": "[variables('buildDir')]"
+      },
+      {
+        "name": "UserAssignedIdentityClientId",
+        "value": "[parameters('userAssignedIdentityClientId')]"
+      }
+    ],
+    "restartVMParameters": [
+      {
+        "name": "ResourceManagerUri",
+        "value": "[environment().resourceManager]"
+      },
+      {
+        "name": "UserAssignedIdentityClientId",
+        "value": "[parameters('userAssignedIdentityClientId')]"
+      },
+      {
+        "name": "VmResourceId",
+        "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('imageVmName'))]"
+      }
+    ],
+    "teamsUris": "[if(not(startsWith(parameters('cloud'), 'us')), if(or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri'))), createArray(parameters('downloads').TeamsBootstrapper.DownloadUrl, parameters('downloads').Teams64BitMSIX.DownloadUrl, parameters('downloads').WebView2RunTime.DownloadUrl, parameters('downloads').VisualStudioRedistributables.DownloadUrl, parameters('downloads').RemoteDesktopWebRTCRedirectorService.DownloadUrl), createArray(format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').TeamsBootstrapper.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').Teams64BitMSIX.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').WebView2RunTime.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').VisualStudioRedistributables.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').RemoteDesktopWebRTCRedirectorService.DestinationFileName))), if(empty(parameters('artifactsContainerUri')), createArray(replace(parameters('downloads').TeamsBootstrapper.DownloadUrl, 'ENVSUFFIX', variables('envSuffix')), replace(parameters('downloads').Teams64BitMSIX.DownloadUrl, 'ENVSUFFIX', variables('envSuffix'))), if(parameters('downloadLatestMicrosoftContent'), createArray(replace(parameters('downloads').TeamsBootstrapper.DownloadUrl, 'ENVSUFFIX', variables('envSuffix')), replace(parameters('downloads').Teams64BitMSIX.DownloadUrl, 'ENVSUFFIX', variables('envSuffix')), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').WebView2RunTime.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').VisualStudioRedistributables.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').RemoteDesktopWebRTCRedirectorService.DestinationFileName)), createArray(format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').TeamsBootstrapper.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').Teams64BitMSIX.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').WebView2RunTime.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').VisualStudioRedistributables.DestinationFileName), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').RemoteDesktopWebRTCRedirectorService.DestinationFileName)))))]",
+    "teamsDestFileNames": "[if(equals(length(variables('teamsUris')), 2), createArray(parameters('downloads').TeamsBootstrapper.DestinationFileName, parameters('downloads').Teams64BitMSIX.DestinationFileName), createArray(parameters('downloads').TeamsBootstrapper.DestinationFileName, parameters('downloads').Teams64BitMSIX.DestinationFileName, parameters('downloads').WebView2RunTime.DestinationFileName, parameters('downloads').VisualStudioRedistributables.DestinationFileName, parameters('downloads').RemoteDesktopWebRTCRedirectorService.DestinationFileName))]",
+    "disableSoftwareUpdatesKeys": [
+      "disableWindowsUpdate",
+      "disableM365Update",
+      "disableTeamsUpdate",
+      "disableOneDriveUpdate",
+      "disableEdgeUpdate",
+      "disableWebView2Update",
+      "disableStoreAutoUpdate"
+    ]
+  },
+  "resources": [
+    {
+      "condition": "[variables('useBuildDir')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'create-BuildDir')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "parameters": [
+          {
+            "name": "BuildDir",
+            "value": "[variables('buildDir')]"
+          }
+        ],
+        "source": {
+          "script": "        param(\r\n          [string]$BuildDir\r\n        )\r\n        New-Item -Path $BuildDir -ItemType Directory -Force | Out-Null\r\n      "
+        },
+        "treatFailureAsDeploymentFailure": true
+      }
+    },
+    {
+      "condition": "[not(empty(parameters('appsToRemove')))]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'remove-appxPackages')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-Remove-AppxPackages-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": [
+          {
+            "name": "AppsToRemove",
+            "value": "[string(parameters('appsToRemove'))]"
+          }
+        ],
+        "source": {
+          "script": "[variables('$fxv#0')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      }
+    },
+    {
+      "condition": "[parameters('installFsLogix')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'fslogix')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-FSLogix-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'FSLogix'), createObject('name', 'Uri', 'value', if(and(not(startsWith(parameters('cloud'), 'us')), or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri')))), parameters('downloads').FSLogix.DownloadUrl, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').FSLogix.DestinationFileName)))))]",
+        "source": {
+          "script": "[variables('$fxv#1')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('office365AppsToInstall')))]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'm365Apps')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-Office-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Environment', 'value', parameters('cloud')), createObject('name', 'AppsToInstall', 'value', string(parameters('office365AppsToInstall'))), createObject('name', 'Name', 'value', 'Office-365-ProPlus'), createObject('name', 'Uri', 'value', if(or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri'))), replace(parameters('downloads').Office365DeploymentTool.DownloadUrl, 'ENVSUFFIX', variables('envSuffix')), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').Office365DeploymentTool.DestinationFileName)))))]",
+        "source": {
+          "script": "[variables('$fxv#2')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'fslogix')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]"
+      ]
+    },
+    {
+      "condition": "[parameters('installOneDrive')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'onedrive')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-OneDrive-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'OneDrive'), createObject('name', 'Uri', 'value', if(or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri'))), replace(parameters('downloads').OneDrive.DownloadUrl, 'ENVSUFFIX', variables('envSuffix')), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').OneDrive.DestinationFileName)))))]",
+        "source": {
+          "script": "[variables('$fxv#3')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'fslogix')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'm365Apps')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]"
+      ]
+    },
+    {
+      "condition": "[parameters('installTeams')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'teams')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-Teams-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'Teams'), createObject('name', 'Uris', 'value', string(variables('teamsUris'))), createObject('name', 'DestFileNames', 'value', string(variables('teamsDestFileNames'))), createObject('name', 'TeamsCloudType', 'value', parameters('teamsCloudType'))))]",
+        "source": {
+          "script": "[variables('$fxv#4')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'fslogix')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'm365Apps')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'onedrive')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]"
+      ]
+    },
+    {
+      "condition": "[greater(add(length(parameters('customizations')), length(parameters('vdiCustomizations'))), 13)]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}/{1}', parameters('orchestrationVmName'), 'remove-microsoft-software-runCommands')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": true,
+        "parameters": [
+          {
+            "name": "ResourceManagerUri",
+            "value": "[environment().resourceManager]"
+          },
+          {
+            "name": "SubscriptionId",
+            "value": "[subscription().subscriptionId]"
+          },
+          {
+            "name": "UserAssignedIdentityClientId",
+            "value": "[parameters('userAssignedIdentityClientId')]"
+          },
+          {
+            "name": "VirtualMachineNames",
+            "value": "[string(createArray(parameters('imageVmName')))]"
+          },
+          {
+            "name": "virtualMachinesResourceGroup",
+            "value": "[resourceGroup().name]"
+          }
+        ],
+        "source": {
+          "script": "[variables('$fxv#5')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'fslogix')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'm365Apps')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'onedrive')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'teams')]"
+      ]
+    },
+    {
+      "condition": "[or(or(or(or(not(empty(parameters('appsToRemove'))), parameters('installFsLogix')), not(empty(parameters('office365AppsToInstall')))), parameters('installOneDrive')), parameters('installTeams'))]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "parameters": "[variables('restartVMParameters')]",
+        "source": {
+          "script": "[variables('restartVmScript')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'fslogix')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'm365Apps')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'onedrive')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'remove-microsoft-software-runCommands')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'teams')]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('customizations')))]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "parameters": "[variables('restartVMParameters')]",
+        "source": {
+          "script": "[variables('restartVmScript')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "customizationBatches"
+      ]
+    },
+    {
+      "condition": "[parameters('installUpdates')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'microsoft-updates')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-Install-Updates-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": "[if(equals(parameters('updateService'), 'WSUS'), createArray(createObject('name', 'Service', 'value', parameters('updateService')), createObject('name', 'WSUSServer', 'value', parameters('wsusServer'))), createArray(createObject('name', 'Service', 'value', parameters('updateService'))))]",
+        "source": {
+          "script": "[variables('$fxv#6')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]"
+      ]
+    },
+    {
+      "condition": "[parameters('installUpdates')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('orchestrationVmName'), 'restart-post-updates')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "parameters": "[variables('restartVMParameters')]",
+        "source": {
+          "script": "[variables('restartVmScript')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'microsoft-updates')]"
+      ]
+    },
+    {
+      "condition": "[parameters('updateUwpApps')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'update-builtInUwpApps')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-Update-UwpApps-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": [],
+        "source": {
+          "script": "[variables('$fxv#7')]"
+        },
+        "treatFailureAsDeploymentFailure": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'conditional-restart-post-updates')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]"
+      ]
+    },
+    {
+      "condition": "[parameters('applyWindowsDesktopOptimizations')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'wdot')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-wdot-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'WDOT'), createObject('name', 'Uri', 'value', if(and(not(startsWith(parameters('cloud'), 'us')), or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri')))), parameters('downloads').WindowsDesktopOptimizationTool.DownloadUrl, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').WindowsDesktopOptimizationTool.DestinationFileName)))))]",
+        "source": {
+          "script": "[variables('$fxv#8')]"
+        },
+        "timeoutInSeconds": 600,
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'conditional-restart-post-updates')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]"
+      ]
+    },
+    {
+      "condition": "[parameters('applyWindowsDesktopOptimizations')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('orchestrationVmName'), 'restart-post-wdot')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "parameters": "[variables('restartVMParameters')]",
+        "source": {
+          "script": "[variables('restartVmScript')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'wdot')]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "vdiApplications",
+        "count": "[length(variables('vdiCustomizers'))]",
+        "mode": "serial",
+        "batchSize": 1
+      },
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), variables('vdiCustomizers')[copyIndex()].name)]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-{2}-{3}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), variables('vdiCustomizers')[copyIndex()].name, parameters('deploymentSuffix')))]",
+        "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Uri', 'value', variables('vdiCustomizers')[copyIndex()].uri), createObject('name', 'Name', 'value', variables('vdiCustomizers')[copyIndex()].name), createObject('name', 'Arguments', 'value', variables('vdiCustomizers')[copyIndex()].arguments)))]",
+        "source": {
+          "script": "[variables('customizationScript')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'conditional-restart-post-updates')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-wdot')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]"
+      ]
+    },
+    {
+      "condition": "[parameters('cleanupDesktop')]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'clean-PublicDesktop')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "source": {
+          "script": "        Remove-Item \"$Env:Public\\Desktop\\*\" -Force -ErrorAction SilentlyContinue\r\n      "
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'conditional-restart-post-updates')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-wdot')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]",
+        "vdiApplications"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('disableSoftwareUpdates')))]",
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'disable-SoftwareUpdates')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "copy": [
+          {
+            "name": "parameters",
+            "count": "[length(variables('disableSoftwareUpdatesKeys'))]",
+            "input": {
+              "name": "[format('{0}{1}', toUpper(substring(variables('disableSoftwareUpdatesKeys')[copyIndex('parameters')], 0, 1)), substring(variables('disableSoftwareUpdatesKeys')[copyIndex('parameters')], 1))]",
+              "value": "[if(contains(parameters('disableSoftwareUpdates'), variables('disableSoftwareUpdatesKeys')[copyIndex('parameters')]), 'true', 'false')]"
+            }
+          }
+        ],
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-Disable-SoftwareUpdates-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "source": {
+          "script": "[variables('$fxv#9')]"
+        },
+        "treatFailureAsDeploymentFailure": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-updates')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-wdot')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]",
+        "vdiApplications"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/runCommands",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('imageVmName'), 'cleanup-image')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "asyncExecution": false,
+        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-Cleanup-Image-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
+        "parameters": [
+          {
+            "name": "BuildDir",
+            "value": "[variables('buildDir')]"
+          }
+        ],
+        "source": {
+          "script": "[variables('$fxv#10')]"
+        },
+        "treatFailureAsDeploymentFailure": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'conditional-restart-post-updates')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'disable-SoftwareUpdates')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-wdot')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]",
+        "vdiApplications"
+      ]
+    },
+    {
+      "copy": {
+        "name": "customizationBatches",
+        "count": "[length(range(0, variables('batchCount')))]",
+        "mode": "serial",
+        "batchSize": 1
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('customization-batch-{0}-{1}', range(0, variables('batchCount'))[copyIndex()], parameters('deploymentSuffix'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "batchIndex": {
+            "value": "[range(0, variables('batchCount'))[copyIndex()]]"
+          },
+          "commonScriptParams": {
+            "value": "[variables('commonScriptParams')]"
+          },
+          "customizations": {
+            "value": "[map(filter(range(0, variables('customizationBatchSize')), lambda('j', less(add(mul(range(0, variables('batchCount'))[copyIndex()], variables('customizationBatchSize')), lambdaVariables('j')), variables('customizersCount')))), lambda('j', createObject('name', variables('customizers')[add(mul(range(0, variables('batchCount'))[copyIndex()], variables('customizationBatchSize')), lambdaVariables('j'))].name, 'uri', variables('customizers')[add(mul(range(0, variables('batchCount'))[copyIndex()], variables('customizationBatchSize')), lambdaVariables('j'))].uri, 'arguments', variables('customizers')[add(mul(range(0, variables('batchCount'))[copyIndex()], variables('customizationBatchSize')), lambdaVariables('j'))].arguments, 'restart', variables('customizers')[add(mul(range(0, variables('batchCount'))[copyIndex()], variables('customizationBatchSize')), lambdaVariables('j'))].restart)))]"
+          },
+          "deploymentSuffix": {
+            "value": "[parameters('deploymentSuffix')]"
+          },
+          "imageVmName": {
+            "value": "[parameters('imageVmName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logBlobContainerUri": {
+            "value": "[parameters('logBlobContainerUri')]"
+          },
+          "orchestrationVmName": {
+            "value": "[parameters('orchestrationVmName')]"
+          },
+          "resourceGroupName": {
+            "value": "[resourceGroup().name]"
+          },
+          "resourceManagerUri": {
+            "value": "[environment().resourceManager]"
+          },
+          "subscriptionId": {
+            "value": "[subscription().subscriptionId]"
+          },
+          "userAssignedIdentityClientId": {
+            "value": "[parameters('userAssignedIdentityClientId')]"
+          },
+          "restartVMParameters": {
+            "value": "[variables('restartVMParameters')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "7659021278334063295"
+            }
+          },
+          "parameters": {
+            "customizations": {
+              "type": "array"
+            },
+            "location": {
+              "type": "string"
+            },
+            "imageVmName": {
+              "type": "string"
+            },
+            "orchestrationVmName": {
+              "type": "string"
+            },
+            "userAssignedIdentityClientId": {
+              "type": "string"
+            },
+            "logBlobContainerUri": {
+              "type": "string"
+            },
+            "deploymentSuffix": {
+              "type": "string"
+            },
+            "commonScriptParams": {
+              "type": "array"
+            },
+            "restartVMParameters": {
+              "type": "array"
+            },
+            "batchIndex": {
+              "type": "int"
+            },
+            "resourceManagerUri": {
+              "type": "string"
+            },
+            "subscriptionId": {
+              "type": "string"
+            },
+            "resourceGroupName": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "$fxv#0": "Param(    \r\n    [string]$ResourceManagerUri,\r\n    [string]$SubscriptionId,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$VirtualMachineNames,\r\n    [string]$VirtualMachinesResourceGroup\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\n[array]$VirtualMachineNames = $VirtualMachineNames.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n# Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n$TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\nif (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n$AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n$ResourceGroupId = '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $VirtualMachinesResourceGroup\r\n\r\nForEach ($VMName in $VirtualMachineNames) {\r\n    $RunCommands = (Invoke-RestMethod `\r\n                        -Headers $AzureManagementHeader `\r\n                        -Method 'GET' `\r\n                        -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/' + $VMName + '/runCommands?api-version=2024-03-01')).value.name\r\n    ForEach ($RunCommand in $RunCommands) {\r\n        Invoke-RestMethod `\r\n            -Headers $AzureManagementHeader `\r\n            -Method 'DELETE' `\r\n            -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/' + $VmName + '/runCommands/' + $RunCommand + '?api-version=2024-03-01') | Out-Null\r\n    }\r\n}"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('orchestrationVmName'), format('remove-custom-software-runCommands-batch-{0}', parameters('batchIndex')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "asyncExecution": true,
+                "parameters": [
+                  {
+                    "name": "ResourceManagerUri",
+                    "value": "[parameters('resourceManagerUri')]"
+                  },
+                  {
+                    "name": "SubscriptionId",
+                    "value": "[parameters('subscriptionId')]"
+                  },
+                  {
+                    "name": "UserAssignedIdentityClientId",
+                    "value": "[parameters('userAssignedIdentityClientId')]"
+                  },
+                  {
+                    "name": "VirtualMachineNames",
+                    "value": "[string(createArray(parameters('imageVmName')))]"
+                  },
+                  {
+                    "name": "virtualMachinesResourceGroup",
+                    "value": "[parameters('resourceGroupName')]"
+                  }
+                ],
+                "source": {
+                  "script": "[variables('$fxv#0')]"
+                },
+                "treatFailureAsDeploymentFailure": true
+              },
+              "dependsOn": [
+                "applyCustomizations"
+              ]
+            },
+            {
+              "copy": {
+                "name": "applyCustomizations",
+                "count": "[length(parameters('customizations'))]",
+                "mode": "serial",
+                "batchSize": 1
+              },
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('{0}-{1}', parameters('customizations')[copyIndex()].name, parameters('deploymentSuffix'))]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "customization": {
+                    "value": "[parameters('customizations')[copyIndex()]]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "imageVmName": {
+                    "value": "[parameters('imageVmName')]"
+                  },
+                  "orchestrationVmName": {
+                    "value": "[parameters('orchestrationVmName')]"
+                  },
+                  "userAssignedIdentityClientId": {
+                    "value": "[parameters('userAssignedIdentityClientId')]"
+                  },
+                  "logBlobContainerUri": {
+                    "value": "[parameters('logBlobContainerUri')]"
+                  },
+                  "deploymentSuffix": {
+                    "value": "[parameters('deploymentSuffix')]"
+                  },
+                  "commonScriptParams": {
+                    "value": "[parameters('commonScriptParams')]"
+                  },
+                  "restartVMParameters": {
+                    "value": "[parameters('restartVMParameters')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.44.1.10279",
+                      "templateHash": "7542099219916186814"
+                    }
+                  },
+                  "parameters": {
+                    "customization": {
+                      "type": "object"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "imageVmName": {
+                      "type": "string"
+                    },
+                    "orchestrationVmName": {
+                      "type": "string"
+                    },
+                    "userAssignedIdentityClientId": {
+                      "type": "string"
+                    },
+                    "logBlobContainerUri": {
+                      "type": "string"
+                    },
+                    "deploymentSuffix": {
+                      "type": "string"
+                    },
+                    "commonScriptParams": {
+                      "type": "array"
+                    },
+                    "restartVMParameters": {
+                      "type": "array"
+                    }
+                  },
+                  "variables": {
+                    "$fxv#0": "param(\r\n    [string]$ResourceManagerUri,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Restart the VM\r\n    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/restart?api-version=2024-03-01')\r\n    $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n    $provisioningState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).code\r\n    While ($provisioningState -ne \"PowerState/running\") {\r\n        Start-Sleep -Seconds 5\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        $provisioningState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).code\r\n    }\r\n    Start-Sleep -Seconds 15   \r\n}\r\ncatch {\r\n    throw\r\n}",
+                    "customizationScript": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments = '',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$BuildDir = '',\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\$Name.log\"\r\n\r\nfunction Write-Log {\r\n  param([string]$Message)\r\n  $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n  Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n  Write-Output $Entry\r\n}\r\n\r\nfunction Split-ArgumentString {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @() }\r\n\r\n  $arguments = @()\r\n  $currentArg = ''\r\n  $inQuotes = $false\r\n  $quoteChar = $null\r\n\r\n  for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n    $char = $ArgumentString[$i]\r\n    if (!$inQuotes -and (($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i - 1] -ne '\\')) -or $char -eq \"'\")) {\r\n      $inQuotes = $true\r\n      $quoteChar = $char\r\n      $currentArg += $char\r\n    }\r\n    elseif ($inQuotes -and $char -eq $quoteChar) {\r\n      $inQuotes = $false\r\n      $quoteChar = $null\r\n      $currentArg += $char\r\n    }\r\n    elseif ($char -eq ' ' -and !$inQuotes) {\r\n      if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"').Trim(\"'\")\r\n        if ($value -eq 'true') { $arguments += '$true' }\r\n        elseif ($value -eq 'false') { $arguments += '$false' }\r\n        else { $arguments += $value }\r\n        $currentArg = ''\r\n      }\r\n    }\r\n    else {\r\n      $currentArg += $char\r\n    }\r\n  }\r\n  if ($currentArg.Length -gt 0) {\r\n    $value = $currentArg.Trim('\"').Trim(\"'\")\r\n    if ($value -eq 'true') { $arguments += '$true' }\r\n    elseif ($value -eq 'false') { $arguments += '$false' }\r\n    else { $arguments += $value }\r\n  }\r\n  return $arguments\r\n}\r\n\r\nfunction ConvertTo-ParametersSplat {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @{} }\r\n\r\n  $tokens = Split-ArgumentString -ArgumentString $ArgumentString\r\n  $parameters = @{}\r\n  $i = 0\r\n  while ($i -lt $tokens.Count) {\r\n    $token = $tokens[$i]\r\n    if ($token -match '^-(\\w+)$') {\r\n      $paramName = $matches[1]\r\n      if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n        $i++\r\n        $value = $tokens[$i]\r\n        if ($value -eq '$true') { $parameters[$paramName] = $true }\r\n        elseif ($value -eq '$false') { $parameters[$paramName] = $false }\r\n        else { $parameters[$paramName] = $value.Trim('\"') }\r\n      }\r\n      else {\r\n        $parameters[$paramName] = $true\r\n      }\r\n    }\r\n    $i++\r\n  }\r\n  return $parameters\r\n}\r\n\r\ntry {\r\n  Write-Log \"Starting '$Name' customization.\"\r\n  Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\n  If ($Arguments -eq '') { $Arguments = $null }\r\n\r\n  If ($BuildDir -ne '') {\r\n    $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n  }\r\n  Else {\r\n    $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n  }\r\n  New-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n\r\n  $WebClient = New-Object System.Net.WebClient\r\n  If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n    Write-Log \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n    $StorageEndpoint = ($Uri -split '://')[0] + '://' + ($Uri -split '/')[2] + '/'\r\n    $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n    $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true} -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n    $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n    $WebClient.Headers.Add('Authorization', \"Bearer $AccessToken\")\r\n  }\r\n\r\n  $SourceFileName = ($Uri -split '/')[-1]\r\n  Write-Log \"Downloading '$Uri' to '$TempDir'.\"\r\n  $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n  $WebClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\n  Start-Sleep -Seconds 10\r\n\r\n  If (!(Test-Path -Path $DestFile)) {\r\n    Write-Log \"Download completed but '$DestFile' not found on disk.\"\r\n    Exit 1\r\n  }\r\n  Write-Log 'Download complete.'\r\n\r\n  Set-Location -Path $TempDir\r\n  $Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.', '')\r\n  $env:SUPPRESS_FILELOG = '1'\r\n  try {\r\n    switch ($Ext) {\r\n      'exe' {\r\n        If ($Arguments) {\r\n          Write-Log \"Executing '`\"$DestFile`\" $Arguments'\"\r\n          $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n        }\r\n        Else {\r\n          Write-Log \"Executing '$DestFile'\"\r\n          $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n        }\r\n      }\r\n      'msi' {\r\n        If ($Arguments) {\r\n          $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n          If ($Arguments -notcontains $DestFile) {\r\n            $Arguments = @(\"/i $DestFile\") + $Arguments\r\n          }\r\n          Write-Log \"Executing 'msiexec.exe $Arguments'\"\r\n          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n        }\r\n        Else {\r\n          Write-Log \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n        }\r\n      }\r\n      'bat' {\r\n        If ($Arguments) {\r\n          Write-Log \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n          $BatArgs = Split-ArgumentString -ArgumentString $Arguments\r\n          If ($BatArgs -notcontains $DestFile) { $BatArgs = @(\"$DestFile\") + $BatArgs }\r\n          Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait\r\n        }\r\n        Else {\r\n          Write-Log \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n          Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n        }\r\n      }\r\n      'ps1' {\r\n        If ($Arguments) {\r\n          Write-Log \"Calling '$DestFile' with arguments '$Arguments'\"\r\n          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n          & $DestFile @parameterSplat\r\n        }\r\n        Else {\r\n          Write-Log \"Calling '$DestFile'\"\r\n          & $DestFile\r\n        }\r\n      }\r\n      'zip' {\r\n        $DestinationPath = Join-Path -Path $TempDir -ChildPath ([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n        Write-Log \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n        Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n        Write-Log \"Finding PowerShell script in '$DestinationPath'.\"\r\n        $PSScript = (Get-ChildItem -Path $DestinationPath -Filter '*.ps1').FullName\r\n        If ($PSScript.Count -gt 1) { $PSScript = $PSScript[0] }\r\n        If ($Arguments) {\r\n          Write-Log \"Calling '$PSScript' with arguments '$Arguments'\"\r\n          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n          & $PSScript @parameterSplat\r\n        }\r\n        Else {\r\n          Write-Log \"Calling '$PSScript'\"\r\n          & $PSScript\r\n        }\r\n      }\r\n    }\r\n  }\r\n  finally {\r\n    $env:SUPPRESS_FILELOG = $null\r\n  }\r\n\r\n  If ((Split-Path $TempDir -Parent) -eq $Env:TEMP) {\r\n    Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue\r\n  }\r\n  Write-Log \"'$Name' customization complete.\"\r\n}\r\ncatch {\r\n  Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n  If ($_.Exception.InnerException) {\r\n    Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\"\r\n  }\r\n  Write-Log $_.ScriptStackTrace\r\n  Exit 1\r\n}"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Compute/virtualMachines/runCommands",
+                      "apiVersion": "2023-03-01",
+                      "name": "[format('{0}/{1}', parameters('imageVmName'), parameters('customization').name)]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "asyncExecution": false,
+                        "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+                        "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-{2}-{3}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('customization').name, parameters('deploymentSuffix')))]",
+                        "parameters": "[union(parameters('commonScriptParams'), createArray(createObject('name', 'Uri', 'value', parameters('customization').uri), createObject('name', 'Name', 'value', parameters('customization').name), createObject('name', 'Arguments', 'value', parameters('customization').arguments)))]",
+                        "source": {
+                          "script": "[variables('customizationScript')]"
+                        },
+                        "treatFailureAsDeploymentFailure": true
+                      }
+                    },
+                    {
+                      "condition": "[parameters('customization').restart]",
+                      "type": "Microsoft.Compute/virtualMachines/runCommands",
+                      "apiVersion": "2023-03-01",
+                      "name": "[format('{0}/{1}', parameters('orchestrationVmName'), format('{0}-restart', parameters('customization').name))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "asyncExecution": false,
+                        "parameters": "[parameters('restartVMParameters')]",
+                        "source": {
+                          "script": "[variables('$fxv#0')]"
+                        },
+                        "treatFailureAsDeploymentFailure": true
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), parameters('customization').name)]"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]"
+      ]
+    },
+    {
+      "condition": "[parameters('installUpdates')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "conditional-restart-post-updates",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "imageVmName": {
+            "value": "[parameters('imageVmName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logBlobContainerUri": {
+            "value": "[parameters('logBlobContainerUri')]"
+          },
+          "orchestrationVmName": {
+            "value": "[parameters('orchestrationVmName')]"
+          },
+          "userAssignedIdentityClientId": {
+            "value": "[parameters('userAssignedIdentityClientId')]"
+          },
+          "deploymentSuffix": {
+            "value": "[parameters('deploymentSuffix')]"
+          },
+          "context": {
+            "value": "PostUpdates"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "3963574749255748373"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "logBlobContainerUri": {
+              "type": "string"
+            },
+            "orchestrationVmName": {
+              "type": "string"
+            },
+            "imageVmName": {
+              "type": "string"
+            },
+            "deploymentSuffix": {
+              "type": "string",
+              "defaultValue": "[utcNow('yyyyMMddhhmm')]"
+            },
+            "userAssignedIdentityClientId": {
+              "type": "string"
+            },
+            "context": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "$fxv#0": "$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Check-CbsAndRestart-$(Get-Date -Format 'yyyyMMdd-HHmmss').log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\nWrite-Log \"Checking CBS (Component Based Servicing) state.\"\r\n\r\n$RebootPendingPaths = @(\r\n    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'\r\n    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootInProgress'\r\n    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'\r\n)\r\n\r\n$RebootRequired = $false\r\nforeach ($Path in $RebootPendingPaths) {\r\n    if (Test-Path $Path) {\r\n        Write-Log \"Pending reboot detected: $Path\"\r\n        $RebootRequired = $true\r\n        break\r\n    }\r\n}\r\n\r\nif (-not $RebootRequired) {\r\n    if (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\SessionsPending') {\r\n        $Exclusive = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\SessionsPending' -ErrorAction SilentlyContinue).Exclusive\r\n        if ($Exclusive -gt 0) {\r\n            Write-Log \"CBS has $Exclusive pending exclusive session(s). Scheduling restart to allow CBS to settle.\"\r\n            $RebootRequired = $true\r\n        }\r\n    }\r\n}\r\n\r\nif ($RebootRequired) {\r\n    # shutdown /r /t N is fire-and-forget - the command returns immediately and the timer runs independently.\r\n    # The script exits and ARM records success before the restart happens. No scheduled task needed.\r\n    Write-Log \"Initiating restart in 30 seconds to allow pending CBS operations to complete before sysprep.\"\r\n    shutdown /r /t 30 /f\r\n} else {\r\n    Write-Log \"No restart required. CBS is settled.\"\r\n}\r\n",
+            "$fxv#1": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    $ResourceManagerUriFixed = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }\r\n\r\n    # Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata = \"true\" } -Uri $TokenUri).access_token\r\n\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    function Get-VmPowerState {\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        return ($VmStatus.statuses | Where-Object { $_.code -like 'PowerState*' }).code\r\n    }\r\n\r\n    # Give the image VM a window to start restarting. The CBS check script issues 'shutdown /r /t 30',\r\n    # so the restart fires ~30 seconds after that Run Command exits. Poll for 90 seconds to detect a\r\n    # power state change. If the VM never goes down, no restart was triggered.\r\n    Write-Output \"Waiting to detect if image VM is restarting due to pending CBS operations...\"\r\n    $WentDown = $false\r\n    $DownCheckEnd = (Get-Date).AddSeconds(90)\r\n\r\n    while ((Get-Date) -lt $DownCheckEnd) {\r\n        $PowerState = Get-VmPowerState\r\n        if ($PowerState -ne 'PowerState/running') {\r\n            Write-Output \"Image VM power state changed to '$PowerState'. Waiting for restart to complete...\"\r\n            $WentDown = $true\r\n            break\r\n        }\r\n        Start-Sleep -Seconds 5\r\n    }\r\n\r\n    if ($WentDown) {\r\n        $UpTimeout = (Get-Date).AddMinutes(10)\r\n        $PowerState = Get-VmPowerState\r\n        while ($PowerState -ne 'PowerState/running') {\r\n            if ((Get-Date) -ge $UpTimeout) {\r\n                throw \"Timed out after 10 minutes waiting for the image VM to come back online after CBS restart. Last power state: $PowerState\"\r\n            }\r\n            Start-Sleep -Seconds 10\r\n            $PowerState = Get-VmPowerState\r\n        }\r\n        # Allow the guest agent time to fully initialize before the next Run Command is issued.\r\n        Write-Output \"Image VM is running. Waiting 90 seconds for guest agent and IMDS to initialize...\"\r\n        Start-Sleep -Seconds 90\r\n        Write-Output \"Image VM is ready. Proceeding.\"\r\n    } else {\r\n        Write-Output \"Image VM did not restart within the detection window. No CBS reboot was required. Proceeding.\"\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}\r\n",
+            "waitForRestartParameters": [
+              {
+                "name": "ResourceManagerUri",
+                "value": "[environment().resourceManager]"
+              },
+              {
+                "name": "UserAssignedIdentityClientId",
+                "value": "[parameters('userAssignedIdentityClientId')]"
+              },
+              {
+                "name": "VmResourceId",
+                "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('imageVmName'))]"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-03-01",
+              "name": "[format('{0}/{1}', parameters('imageVmName'), format('cbs-check-and-restart-{0}', parameters('context')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "asyncExecution": false,
+                "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+                "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-CbsCheck-{2}-{3}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('context'), parameters('deploymentSuffix')))]",
+                "source": {
+                  "script": "[variables('$fxv#0')]"
+                },
+                "treatFailureAsDeploymentFailure": true
+              }
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-03-01",
+              "name": "[format('{0}/{1}', parameters('orchestrationVmName'), format('wait-for-cbs-restart-{0}', parameters('context')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "asyncExecution": false,
+                "parameters": "[variables('waitForRestartParameters')]",
+                "source": {
+                  "script": "[variables('$fxv#1')]"
+                },
+                "treatFailureAsDeploymentFailure": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), format('cbs-check-and-restart-{0}', parameters('context')))]"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-updates')]"
+      ]
+    },
+    {
+      "condition": "[empty(variables('vdiCustomizers'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "conditional-restart-post-cleanup",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "imageVmName": {
+            "value": "[parameters('imageVmName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logBlobContainerUri": {
+            "value": "[parameters('logBlobContainerUri')]"
+          },
+          "orchestrationVmName": {
+            "value": "[parameters('orchestrationVmName')]"
+          },
+          "userAssignedIdentityClientId": {
+            "value": "[parameters('userAssignedIdentityClientId')]"
+          },
+          "deploymentSuffix": {
+            "value": "[parameters('deploymentSuffix')]"
+          },
+          "context": {
+            "value": "PostCleanup"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "3963574749255748373"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "logBlobContainerUri": {
+              "type": "string"
+            },
+            "orchestrationVmName": {
+              "type": "string"
+            },
+            "imageVmName": {
+              "type": "string"
+            },
+            "deploymentSuffix": {
+              "type": "string",
+              "defaultValue": "[utcNow('yyyyMMddhhmm')]"
+            },
+            "userAssignedIdentityClientId": {
+              "type": "string"
+            },
+            "context": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "$fxv#0": "$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\Check-CbsAndRestart-$(Get-Date -Format 'yyyyMMdd-HHmmss').log\"\r\n\r\nfunction Write-Log {\r\n    param([string]$Message)\r\n    $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n    Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n    Write-Output $Entry\r\n}\r\n\r\nWrite-Log \"Checking CBS (Component Based Servicing) state.\"\r\n\r\n$RebootPendingPaths = @(\r\n    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'\r\n    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootInProgress'\r\n    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'\r\n)\r\n\r\n$RebootRequired = $false\r\nforeach ($Path in $RebootPendingPaths) {\r\n    if (Test-Path $Path) {\r\n        Write-Log \"Pending reboot detected: $Path\"\r\n        $RebootRequired = $true\r\n        break\r\n    }\r\n}\r\n\r\nif (-not $RebootRequired) {\r\n    if (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\SessionsPending') {\r\n        $Exclusive = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\SessionsPending' -ErrorAction SilentlyContinue).Exclusive\r\n        if ($Exclusive -gt 0) {\r\n            Write-Log \"CBS has $Exclusive pending exclusive session(s). Scheduling restart to allow CBS to settle.\"\r\n            $RebootRequired = $true\r\n        }\r\n    }\r\n}\r\n\r\nif ($RebootRequired) {\r\n    # shutdown /r /t N is fire-and-forget - the command returns immediately and the timer runs independently.\r\n    # The script exits and ARM records success before the restart happens. No scheduled task needed.\r\n    Write-Log \"Initiating restart in 30 seconds to allow pending CBS operations to complete before sysprep.\"\r\n    shutdown /r /t 30 /f\r\n} else {\r\n    Write-Log \"No restart required. CBS is settled.\"\r\n}\r\n",
+            "$fxv#1": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$VmResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    $ResourceManagerUriFixed = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }\r\n\r\n    # Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata = \"true\" } -Uri $TokenUri).access_token\r\n\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    function Get-VmPowerState {\r\n        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')\r\n        return ($VmStatus.statuses | Where-Object { $_.code -like 'PowerState*' }).code\r\n    }\r\n\r\n    # Give the image VM a window to start restarting. The CBS check script issues 'shutdown /r /t 30',\r\n    # so the restart fires ~30 seconds after that Run Command exits. Poll for 90 seconds to detect a\r\n    # power state change. If the VM never goes down, no restart was triggered.\r\n    Write-Output \"Waiting to detect if image VM is restarting due to pending CBS operations...\"\r\n    $WentDown = $false\r\n    $DownCheckEnd = (Get-Date).AddSeconds(90)\r\n\r\n    while ((Get-Date) -lt $DownCheckEnd) {\r\n        $PowerState = Get-VmPowerState\r\n        if ($PowerState -ne 'PowerState/running') {\r\n            Write-Output \"Image VM power state changed to '$PowerState'. Waiting for restart to complete...\"\r\n            $WentDown = $true\r\n            break\r\n        }\r\n        Start-Sleep -Seconds 5\r\n    }\r\n\r\n    if ($WentDown) {\r\n        $UpTimeout = (Get-Date).AddMinutes(10)\r\n        $PowerState = Get-VmPowerState\r\n        while ($PowerState -ne 'PowerState/running') {\r\n            if ((Get-Date) -ge $UpTimeout) {\r\n                throw \"Timed out after 10 minutes waiting for the image VM to come back online after CBS restart. Last power state: $PowerState\"\r\n            }\r\n            Start-Sleep -Seconds 10\r\n            $PowerState = Get-VmPowerState\r\n        }\r\n        # Allow the guest agent time to fully initialize before the next Run Command is issued.\r\n        Write-Output \"Image VM is running. Waiting 90 seconds for guest agent and IMDS to initialize...\"\r\n        Start-Sleep -Seconds 90\r\n        Write-Output \"Image VM is ready. Proceeding.\"\r\n    } else {\r\n        Write-Output \"Image VM did not restart within the detection window. No CBS reboot was required. Proceeding.\"\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}\r\n",
+            "waitForRestartParameters": [
+              {
+                "name": "ResourceManagerUri",
+                "value": "[environment().resourceManager]"
+              },
+              {
+                "name": "UserAssignedIdentityClientId",
+                "value": "[parameters('userAssignedIdentityClientId')]"
+              },
+              {
+                "name": "VmResourceId",
+                "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('imageVmName'))]"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-03-01",
+              "name": "[format('{0}/{1}', parameters('imageVmName'), format('cbs-check-and-restart-{0}', parameters('context')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "asyncExecution": false,
+                "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
+                "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-CbsCheck-{2}-{3}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('context'), parameters('deploymentSuffix')))]",
+                "source": {
+                  "script": "[variables('$fxv#0')]"
+                },
+                "treatFailureAsDeploymentFailure": true
+              }
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-03-01",
+              "name": "[format('{0}/{1}', parameters('orchestrationVmName'), format('wait-for-cbs-restart-{0}', parameters('context')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "asyncExecution": false,
+                "parameters": "[variables('waitForRestartParameters')]",
+                "source": {
+                  "script": "[variables('$fxv#1')]"
+                },
+                "treatFailureAsDeploymentFailure": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), format('cbs-check-and-restart-{0}', parameters('context')))]"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'cleanup-image')]"
+      ]
+    }
+  ]
+}

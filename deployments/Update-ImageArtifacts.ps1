@@ -206,61 +206,56 @@ Write-Output ("[{0} entered]" -f $MyInvocation.MyCommand)
 function Get-MsiInfo {
     [CmdletBinding()]
     param(
-        [parameter(Mandatory=$True, ValueFromPipeline=$true)]
-        [IO.FileInfo[]]$Path,
+        [parameter(Mandatory=$True)]
+        [IO.FileInfo]$Path,
         [AllowEmptyString()]
         [AllowNull()]
         [string[]]$Property
     )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Verbose "${CmdletName}: Starting with [$PSBoundParameters]"
 
-        # WindowsInstaller.Installer is a Windows-only COM object.
-        # $IsWindows is available in PowerShell 6+; PSEdition 'Desktop' covers Windows PowerShell 5.x.
-        $runningOnWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or ($IsWindows -eq $true)
-        if (-not $runningOnWindows) {
-            Write-Warning "${CmdletName}: MSI metadata extraction requires the Windows Installer COM object (WindowsInstaller.Installer) and is not supported on this platform ($($PSVersionTable.OS)). Skipping."
-            return
-        }
+    [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
+    Write-Verbose "${CmdletName}: Starting with [$PSBoundParameters]"
 
-        $winInstaller = New-Object -ComObject WindowsInstaller.Installer
+    # WindowsInstaller.Installer is a Windows-only COM object.
+    # $IsWindows is available in PowerShell 6+; PSEdition 'Desktop' covers Windows PowerShell 5.x.
+    $runningOnWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or ($IsWindows -eq $true)
+    if (-not $runningOnWindows) {
+        Write-Warning "${CmdletName}: MSI metadata extraction requires the Windows Installer COM object (WindowsInstaller.Installer) and is not supported on this platform ($($PSVersionTable.OS)). Skipping."
+        return
     }
-    Process {
-        try {
-            Write-Verbose "${CmdletName}: Opening MSIFile: $Path"
-            $msiDb = $winInstaller.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $winInstaller, @($Path.FullName, 0))
-            if ($Property) {
-                Write-Verbose "${CmdletName}: Property: $Property specified"
-                $propQuery = 'WHERE ' + (($Property | ForEach-Object { "Property = '$($_)'" }) -join ' OR ')
-            }
-            $query = ("SELECT Property,Value FROM Property {0}" -f ($propQuery))
-            $view = $msiDb.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $msiDb, ($query))
-            $null = $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null)
-            $msiInfo = [PSCustomObject]@{ 'File' = $Path }
-            do {
-                $null = $view.GetType().InvokeMember('ColumnInfo', 'GetProperty', $null, $view, 0)
-                $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
-                if (-not $record) { break }
-                $propName = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 1) | Select-Object -First 1
-                $value    = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 2) | Select-Object -First 1
-                $msiInfo  = $msiInfo | Add-Member -MemberType NoteProperty -Name $propName -Value $value -PassThru
-            } while ($true)
-            $null = $msiDb.GetType().InvokeMember('Commit', 'InvokeMethod', $null, $msiDb, $null)
-            $null = $view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null)
-            $msiInfo
+
+    $winInstaller = New-Object -ComObject WindowsInstaller.Installer
+    try {
+        Write-Verbose "${CmdletName}: Opening MSIFile: $Path"
+        $msiDb = $winInstaller.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $winInstaller, @($Path.FullName, 0))
+        if ($Property) {
+            Write-Verbose "${CmdletName}: Property: $Property specified"
+            $propQuery = 'WHERE ' + (($Property | ForEach-Object { "Property = '$($_)'" }) -join ' OR ')
         }
-        catch {
-            Write-Error $_
-            Write-Error $_.ScriptStackTrace
-        }
+        $query = ("SELECT Property,Value FROM Property {0}" -f ($propQuery))
+        $view = $msiDb.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $msiDb, ($query))
+        $null = $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null)
+        $msiInfo = [PSCustomObject]@{ 'File' = $Path }
+        do {
+            $null = $view.GetType().InvokeMember('ColumnInfo', 'GetProperty', $null, $view, 0)
+            $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+            if (-not $record) { break }
+            $propName = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 1) | Select-Object -First 1
+            $value    = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 2) | Select-Object -First 1
+            $msiInfo  = $msiInfo | Add-Member -MemberType NoteProperty -Name $propName -Value $value -PassThru
+        } while ($true)
+        $null = $msiDb.GetType().InvokeMember('Commit', 'InvokeMethod', $null, $msiDb, $null)
+        $null = $view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null)
+        $msiInfo
     }
-    End {
+    catch {
+        Write-Error $_
+        Write-Error $_.ScriptStackTrace
+    }
+    finally {
         try {
-            if ($runningOnWindows) {
-                $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($winInstaller)
-                [GC]::Collect()
-            }
+            $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($winInstaller)
+            [GC]::Collect()
         }
         catch {
             Write-Error 'Failed to release Windows Installer COM reference'

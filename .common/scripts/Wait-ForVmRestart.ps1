@@ -57,9 +57,9 @@ Try {
             Start-Sleep -Seconds 10
             $PowerState = Get-VmPowerState
         }
-        # Allow the guest agent time to fully initialize before the next Run Command is issued
-        Write-Output "Image VM is running. Waiting 30 seconds for guest agent to initialize..."
-        Start-Sleep -Seconds 30
+        # Allow the guest agent time to fully initialize before the next Run Command is issued.
+        Write-Output "Image VM is running. Waiting 90 seconds for guest agent and IMDS to initialize..."
+        Start-Sleep -Seconds 90
         Write-Output "Image VM is ready. Proceeding."
     } else {
         Write-Output "Image VM did not restart within the detection window. No CBS reboot was required. Proceeding."
