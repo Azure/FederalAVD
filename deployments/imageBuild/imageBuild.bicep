@@ -505,7 +505,15 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' existing = {
 
 // * Resource Group * //
 
+// imageBuildRg is intentionally ephemeral — a new uniquely-named resource group is
+// created for every build run (the name includes deploymentSuffix, which is derived
+// from utcNow). This emulates the Azure Image Builder pattern: the build infrastructure
+// (image VM, orchestration VM, storage) is isolated per run, and the orchestration VM
+// deletes the entire resource group at the end of the build, leaving no residual
+// resources. The non-deterministic name is by design and the linter warning
+// (use-stable-resource-identifiers) can be safely suppressed for this resource.
 resource imageBuildRg 'Microsoft.Resources/resourceGroups@2023-07-01' = if (empty(imageBuildResourceGroupId)) {
+  #disable-next-line use-stable-resource-identifiers
   name: imageBuildResourceGroupName
   location: location
   tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
@@ -707,7 +715,6 @@ module customizeImage 'modules/customizeImage.bicep' = {
     installFsLogix: installFsLogix
     installOneDrive: installOneDrive
     installTeams: installTeams
-    applyWindowsDesktopOptimizations: false // DEPRECATED - no effect; retained for schema compatibility during transition
     vdiOptimizationProfile: vdiOptimizationProfile
     vdiOptimizationRestrictInternet: vdiOptimizationRestrictInternet
     userAssignedIdentityClientId: empty(imageBuildResourceGroupId)

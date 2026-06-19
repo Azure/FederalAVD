@@ -31,11 +31,11 @@ Try {
     }
 
     # Give the image VM a window to start restarting. The CBS check script issues 'shutdown /r /t 30',
-    # so the restart fires ~30 seconds after that Run Command exits. Poll for 90 seconds to detect a
+    # so the restart fires ~30 seconds after that Run Command exits. Poll for 60 seconds to detect a
     # power state change. If the VM never goes down, no restart was triggered.
     Write-Output "Waiting to detect if image VM is restarting due to pending CBS operations..."
     $WentDown = $false
-    $DownCheckEnd = (Get-Date).AddSeconds(90)
+    $DownCheckEnd = (Get-Date).AddSeconds(60)
 
     while ((Get-Date) -lt $DownCheckEnd) {
         $PowerState = Get-VmPowerState

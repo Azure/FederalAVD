@@ -787,9 +787,6 @@
                                             "value": "Microsoft.People"
                                         },
                                         {
-                                            "value": "Microsoft.PowerAutomateDesktop"
-                                        },
-                                        {
                                             "value": "Microsoft.SkypeApp"
                                         },
                                         {
@@ -1341,7 +1338,13 @@
                                         "required": true
                                     },
                                     "visible": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), true, false)]"
-                                },
+                                }
+                            ]
+                        },{
+                            "name": "vdiOptimizations",
+                            "type": "Microsoft.Common.Section",
+                            "label": "VDI Optimizations",
+                            "elements": [
                                 {
                                     "name": "vdiOptimizationInfo",
                                     "type": "Microsoft.Common.InfoBox",
@@ -2213,9 +2216,8 @@
                 "installTeams": "[if(contains(steps('imageSource').sku, 'm365'), false, steps('imageCustomizations').office.installTeams)]",
                 "teamsCloudType": "[if(steps('imageCustomizations').office.installTeams, steps('imageCustomizations').office.teamsCloudType, 'Commercial')]",
                 "appsToRemove": "[steps('imageCustomizations').customizations.appsToRemove]",
-                "applyWindowsDesktopOptimizations": false,
-                "vdiOptimizationProfile": "[steps('imageCustomizations').updates.vdiOptimizationProfile]",
-                "vdiOptimizationRestrictInternet": "[steps('imageCustomizations').updates.vdiOptimizationRestrictInternet]",
+                "vdiOptimizationProfile": "[steps('imageCustomizations').vdiOptimizations.vdiOptimizationProfile]",
+                "vdiOptimizationRestrictInternet": "[steps('imageCustomizations').vdiOptimizations.vdiOptimizationRestrictInternet]",
                 "cleanupDesktop": "[steps('imageCustomizations').customizations.cleanupDesktop]",
                 "installUpdates": "[steps('imageCustomizations').updates.installUpdates]",
                 "updateUwpApps": "[steps('imageCustomizations').updates.updateUwpApps]",

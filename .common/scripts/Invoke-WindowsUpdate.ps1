@@ -49,6 +49,15 @@ try {
         'WSUS' { $ServerSelection = 1 }
     }        
     If ($Service -eq 'MU') {
+        # Ensure wuauserv is running before attempting to register the MU service or
+        # search for updates. After a VM restart the service may still be starting up,
+        # and the COM API will return WU_E_SERVICE_NOT_REGISTERED if it isn't ready.
+        $wuSvc = Get-Service -Name 'wuauserv' -ErrorAction SilentlyContinue
+        if ($wuSvc -and $wuSvc.Status -ne 'Running') {
+            Write-Log "wuauserv is not running (status: $($wuSvc.Status)). Attempting to start..."
+            Start-Service -Name 'wuauserv' -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 10
+        }
         $UpdateServiceManager = New-Object -ComObject Microsoft.Update.ServiceManager
         $UpdateServiceManager.ClientApplicationID = $AppName
         $null = $UpdateServiceManager.AddService2($ServiceId, 7, "")
@@ -76,7 +85,9 @@ try {
         try {
             $SearchResult = $UpdateSearcher.Search($Criteria)
         } catch {
-            if ($SearchAttempts -lt $SearchMaxAttempts -and $_.Exception.HResult -eq [int]'0x8024001E') {
+            # 0x8024001E (WU_E_SERVICE_NOT_REGISTERED) as a signed Int32 = -2145124322.
+            # '[int]0x8024001E' overflows Int32 in PowerShell, so use the signed literal.
+            if ($SearchAttempts -lt $SearchMaxAttempts -and $_.Exception.HResult -eq -2145124322) {
                 Write-Log "Search attempt $SearchAttempts/$SearchMaxAttempts failed (WU_E_SERVICE_NOT_REGISTERED). Retrying in 30s..."
                 Start-Sleep -Seconds 30
             } else {
@@ -133,30 +144,11 @@ try {
             }
         }        
         $UpdatesToInstall = New-Object -ComObject Microsoft.Update.UpdateColl
-        Write-Log "Downloading updates..."
         $Downloader = $UpdateSession.CreateUpdateDownloader()
         $Downloader.Updates = $UpdatesToDownload
 
-        # Use BeginDownload (async) so we can enforce a timeout on slow or restricted networks.
-        # $Downloader.Download() is fully synchronous with no built-in timeout -- on slow
-        # connectivity (e.g. AzureUSGovernment image builds) it will block indefinitely.
-        $DownloadTimeoutSeconds = 1800  # 30 minutes
-        $DownloadPollInterval   = 30
-        $DownloadElapsed        = 0
-        $DownloadJob = $Downloader.BeginDownload($null, $null, $null)
-        Write-Log "Download started. Waiting up to $DownloadTimeoutSeconds seconds..."
-        while (-not $DownloadJob.IsCompleted -and $DownloadElapsed -lt $DownloadTimeoutSeconds) {
-            Start-Sleep -Seconds $DownloadPollInterval
-            $DownloadElapsed += $DownloadPollInterval
-            Write-Log "Downloading... ($DownloadElapsed / $DownloadTimeoutSeconds s elapsed)"
-        }
-        if (-not $DownloadJob.IsCompleted) {
-            $DownloadJob.RequestAbort()
-            $DownloadJob.CleanUp()
-            Write-Log "WARNING: Update download timed out after $DownloadTimeoutSeconds seconds. This likely indicates slow or restricted network connectivity. Skipping update installation."
-            Exit 0
-        }
-        $null = $Downloader.EndDownload($DownloadJob)
+        Write-Log "Downloading updates..."
+        $null = $Downloader.Download()
         Write-Log "Successfully downloaded updates:"        
         For ($i = 0; $i -lt $UpdatesToDownload.Count; $i++) {
             $Update = $UpdatesToDownload[$i]

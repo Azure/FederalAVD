@@ -1,7 +1,5 @@
 targetScope = 'resourceGroup'
 
-param applyWindowsDesktopOptimizations bool = false // DEPRECATED - kept to avoid breaking existing callers; has no effect
-
 @description('The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (RestrictInternet still applies).')
 @allowed(['None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent'])
 param vdiOptimizationProfile string
@@ -159,6 +157,25 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
   name: orchestrationVmName
 }
 
+// CBS check before any customization work begins.
+// Marketplace images are sometimes published with pending CBS state (a WU cycle ran
+// during image preparation but the VM was not rebooted before capture). Running with
+// a dirty component store can cause Windows Update failures, FSLogix/Office install
+// issues, and unpredictable customization behaviour. This step costs ~60s in the
+// clean case and a full reboot only when the marketplace image actually needs it.
+module conditionalRestartPreBuild 'conditionalRestart.bicep' = {
+  name: 'conditional-restart-pre-build'
+  params: {
+    imageVmName: imageVmName
+    location: location
+    logBlobContainerUri: logBlobContainerUri
+    orchestrationVmName: orchestrationVmName
+    userAssignedIdentityClientId: userAssignedIdentityClientId
+    deploymentSuffix: deploymentSuffix
+    context: 'PreBuild'
+  }
+}
+
 resource createBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (useBuildDir) {
   name: 'create-BuildDir'
   location: location
@@ -180,6 +197,9 @@ resource createBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
     }
     treatFailureAsDeploymentFailure: true
   }
+  dependsOn: [
+    conditionalRestartPreBuild
+  ]
 }
 
 resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-03-01' = if (!empty(appsToRemove)) {
@@ -206,6 +226,9 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
     }
     treatFailureAsDeploymentFailure: true
   }
+  dependsOn: [
+    conditionalRestartPreBuild
+  ]
 }
 
 resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if (installFsLogix) {
@@ -242,6 +265,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    conditionalRestartPreBuild
   ]
 }
 
@@ -419,7 +443,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   ]
 }
 
-resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
+resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
   name: 'restart-post-microsoft-software'
   location: location
   parent: orchestrationVm
@@ -527,7 +551,8 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
     source: {
       script: loadTextContent('../../../.common/scripts/Invoke-WindowsUpdate.ps1')
     }
-    treatFailureAsDeploymentFailure: true
+    timeoutInSeconds: 3600
+    treatFailureAsDeploymentFailure: false
   }
   dependsOn: [
     restartMicrosoftSoftware
@@ -691,7 +716,7 @@ resource avdImageOptimize 'Microsoft.Compute/virtualMachines/runCommands@2023-03
     source: {
       script: loadTextContent('../../../.common/scripts/Optimize-AVDImage.ps1')
     }
-    timeoutInSeconds: 600
+    timeoutInSeconds: 1800
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
@@ -740,7 +765,11 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
   ]
 }
 
-// Check for a restart required and perform it only if no VDI customizations were applied
+// CBS check and conditional restart before sysprep.
+// Skipped when vdiCustomizers are present — restarts after vdiCustomizations
+// are not permitted, and vdiCustomizations should not install OS components
+// that dirty CBS. When vdiCustomizers are absent, cleanupImage is the last
+// write step and CBS is checked to ensure sysprep runs on a settled system.
 
 module conditionalRestartPostCleanup 'conditionalRestart.bicep' = if (empty(vdiCustomizers)) {
   name: 'conditional-restart-post-cleanup'

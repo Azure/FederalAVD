@@ -131,12 +131,15 @@ param(
     [ValidateSet('None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent')]
     [string]$OptimizationProfile,
 
+    # Accepts bool or string ('true'/'false'/'1'/'0') — Azure RunCommand passes all
+    # parameters as strings, so [bool] would reject 'false' with a type error.
     [Parameter(Mandatory = $false)]
-    [bool]$RestrictInternet = $false
+    [string]$RestrictInternet = 'false'
 )
 
 $ErrorActionPreference = 'Stop'
 $LogFile = "$env:SystemRoot\Logs\Optimize-AVDImage.log"
+$RestrictInternetBool = $RestrictInternet -in @('true', '1', 'yes')
 $RunFullOptimization = $OptimizationProfile -in @('NonPersistent-Full', 'Persistent')
 $RunNonPersistentSections = $OptimizationProfile -in @('NonPersistent-UpdatesOnly', 'NonPersistent-Full')
 
@@ -352,7 +355,7 @@ try {
     Write-Log "  Optimize-AVDImage"
     Write-Log "============================================================"
     Write-Log "  Profile         : $OptimizationProfile"
-    Write-Log "  RestrictInternet: $RestrictInternet"
+    Write-Log "  RestrictInternet: $RestrictInternetBool"
     Write-Log "  OS              : $([System.Environment]::OSVersion.VersionString)"
     Write-Log "  Timestamp       : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     Write-Log "============================================================"
@@ -1249,7 +1252,7 @@ try {
     # including None.
     # Ref: [3] Windows Restricted Traffic Baseline
     # -----------------------------------------------------------------------
-    if ($RestrictInternet) {
+    if ($RestrictInternetBool) {
         Write-Log "--- Section 7: Restricted Internet Traffic ---"
 
         # NCSI passive polling
@@ -1564,7 +1567,7 @@ try {
 
     Write-Log "============================================================"
     Write-Log "  Optimize-AVDImage Complete"
-    Write-Log "  Profile: $OptimizationProfile | RestrictInternet: $RestrictInternet"
+    Write-Log "  Profile: $OptimizationProfile | RestrictInternet: $RestrictInternetBool"
     Write-Log "  Log: $LogFile"
     Write-Log "============================================================"
 }
