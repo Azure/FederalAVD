@@ -1,0 +1,19 @@
+{
+    "DoDSTIGGPOPackage": {
+        "Description": "DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/zip/U_STIG_GPO_Package_April_2026.zip",
+        "DestinationFileName": "STIGs.zip",
+        "DestinationFolders": [
+            "DoD-STIGs"
+        ]
+    },
+    "LGPO": {
+        "Description": "Local Group Policy Object (LGPO) Tool. Used for configuring local group policies.",
+        "DownloadUrl": "https://download.microsoft.com/download/8/5/c/85c25433-a1b0-4ffa-9429-7e023e7da8d8/LGPO.zip",
+        "DestinationFileName": "lgpo.zip",
+        "DestinationFolders": [
+            "LGPO",
+            "DoD-STIGs"
+        ]
+    }
+}

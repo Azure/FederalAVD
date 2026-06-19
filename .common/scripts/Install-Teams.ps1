@@ -44,6 +44,8 @@ try {
     ForEach ($DestFileName in $DestFileNames) {
         Write-Log " $DestFileName"
     }
+    # Force TLS 1.2 — fresh marketplace images default to TLS 1.0/1.1 which Azure Storage rejects.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     For ($i = 0; $i -lt $Uris.Length; $i++) {
         $WebClient = New-Object System.Net.WebClient
         $Uri = $Uris[$i]

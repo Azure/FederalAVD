@@ -42,6 +42,8 @@ If ($AllUsersInstall -eq '1') {
 Else {
     Write-Log "Starting '$SoftwareName' install script with following Parameters:"
     Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)
+    # Force TLS 1.2 — fresh marketplace images default to TLS 1.0/1.1 which Azure Storage rejects.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $WebClient = New-Object System.Net.WebClient
     If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {
         $StorageEndpoint = ($Uri -split "://")[0] + "://" + ($Uri -split "/")[2] + "/"

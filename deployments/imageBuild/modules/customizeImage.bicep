@@ -1,7 +1,11 @@
 targetScope = 'resourceGroup'
 
-param applyWindowsDesktopOptimizations bool
-param disableSoftwareUpdates array
+@description('The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (RestrictInternet still applies).')
+@allowed(['None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent'])
+param vdiOptimizationProfile string
+
+@description('When true, restricts outbound internet traffic: NCSI passive polling, online font providers, Teredo IPv6, and WiFi autologgers are disabled. Applies independently of vdiOptimizationProfile, including when profile is None.')
+param vdiOptimizationRestrictInternet bool = false
 param appsToRemove array
 param cloud string
 param downloads object
@@ -56,7 +60,7 @@ var vdiCustomizers = [
   }
 ]
 
-var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || applyWindowsDesktopOptimizations || !empty(vdiCustomizations)
+var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || !empty(vdiCustomizations)
 
 var customizationBatchSize = 20
 var customizersCount = length(customizers)
@@ -153,6 +157,25 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
   name: orchestrationVmName
 }
 
+// CBS check before any customization work begins.
+// Marketplace images are sometimes published with pending CBS state (a WU cycle ran
+// during image preparation but the VM was not rebooted before capture). Running with
+// a dirty component store can cause Windows Update failures, FSLogix/Office install
+// issues, and unpredictable customization behaviour. This step costs ~60s in the
+// clean case and a full reboot only when the marketplace image actually needs it.
+module conditionalRestartPreBuild 'conditionalRestart.bicep' = {
+  name: 'cbs-status-conditional-restart-pre-build-${deploymentSuffix}'
+  params: {
+    imageVmName: imageVmName
+    location: location
+    logBlobContainerUri: logBlobContainerUri
+    orchestrationVmName: orchestrationVmName
+    userAssignedIdentityClientId: userAssignedIdentityClientId
+    deploymentSuffix: deploymentSuffix
+    context: 'PreBuild'
+  }
+}
+
 resource createBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (useBuildDir) {
   name: 'create-BuildDir'
   location: location
@@ -174,6 +197,9 @@ resource createBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
     }
     treatFailureAsDeploymentFailure: true
   }
+  dependsOn: [
+    conditionalRestartPreBuild
+  ]
 }
 
 resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-03-01' = if (!empty(appsToRemove)) {
@@ -200,6 +226,9 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
     }
     treatFailureAsDeploymentFailure: true
   }
+  dependsOn: [
+    conditionalRestartPreBuild
+  ]
 }
 
 resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if (installFsLogix) {
@@ -236,6 +265,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
   dependsOn: [
     createBuildDir
     removeAppxPackages
+    conditionalRestartPreBuild
   ]
 }
 
@@ -413,7 +443,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   ]
 }
 
-resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(appsToRemove) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
+resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams) {
   name: 'restart-post-microsoft-software'
   location: location
   parent: orchestrationVm
@@ -521,7 +551,8 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
     source: {
       script: loadTextContent('../../../.common/scripts/Invoke-WindowsUpdate.ps1')
     }
-    treatFailureAsDeploymentFailure: true
+    timeoutInSeconds: 3600
+    treatFailureAsDeploymentFailure: false
   }
   dependsOn: [
     restartMicrosoftSoftware
@@ -547,7 +578,7 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
 }
 
 module conditionalRestartPostUpdates 'conditionalRestart.bicep' = if (installUpdates) {
-  name: 'conditional-restart-post-updates'
+  name: 'conditional-restart-post-updates-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location
@@ -587,64 +618,6 @@ resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-0
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-  ]
-}
-
-resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
-  name: 'wdot'
-  location: location
-  parent: imageVm
-  properties: {
-    asyncExecution: false
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-wdot-${deploymentSuffix}.log'
-    parameters: union(commonScriptParams, [
-      {
-        name: 'Name'
-        value: 'WDOT'
-      }
-      {
-        name: 'Uri'
-        value: !startsWith(cloud, 'us') && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
-          ? downloads.WindowsDesktopOptimizationTool.DownloadUrl
-          : '${artifactsContainerUri}/${downloads.WindowsDesktopOptimizationTool.DestinationFileName}'
-      }
-    ])
-    source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-WDOT.ps1')
-    }
-    timeoutInSeconds: 600
-    treatFailureAsDeploymentFailure: true
-  }
-  dependsOn: [
-    createBuildDir
-    restartMicrosoftSoftware
-    restartCustomizations
-    conditionalRestartPostUpdates
-    updateBuiltInApps
-  ]
-}
-
-resource restartWDOT 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
-  name: 'restart-post-wdot'
-  location: location
-  parent: orchestrationVm
-  properties: {
-    asyncExecution: false
-    parameters: restartVMParameters
-    source: {
-      script: restartVmScript
-    }
-    treatFailureAsDeploymentFailure: true
-  }
-  dependsOn: [
-    wdot
   ]
 }
 
@@ -688,7 +661,6 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
       restartMicrosoftSoftware
       restartCustomizations
       conditionalRestartPostUpdates
-      restartWDOT
       updateBuiltInApps
     ]
   }
@@ -712,24 +684,13 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    restartWDOT
     vdiApplications
     updateBuiltInApps
   ]
 }
 
-var disableSoftwareUpdatesKeys = [
-  'disableWindowsUpdate'
-  'disableM365Update'
-  'disableTeamsUpdate'
-  'disableOneDriveUpdate'
-  'disableEdgeUpdate'
-  'disableWebView2Update'
-  'disableStoreAutoUpdate'
-]
-
-resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(disableSoftwareUpdates)) {
-  name: 'disable-SoftwareUpdates'
+resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (vdiOptimizationProfile != 'None' || vdiOptimizationRestrictInternet) {
+  name: 'optimize-image'
   location: location
   parent: imageVm
   properties: {
@@ -741,27 +702,30 @@ resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/run
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Disable-SoftwareUpdates-${deploymentSuffix}.log'
-
+      : '${logBlobContainerUri}${imageVmName}-Optimize-AVDImage-${deploymentSuffix}.log'
     parameters: [
-      for key in disableSoftwareUpdatesKeys: {
-        name: '${toUpper(substring(key, 0, 1))}${substring(key, 1)}'
-        value: contains(disableSoftwareUpdates, key) ? 'true' : 'false'
+      {
+        name: 'OptimizationProfile'
+        value: vdiOptimizationProfile
+      }
+      {
+        name: 'RestrictInternet'
+        value: string(vdiOptimizationRestrictInternet)
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Disable-SoftwareUpdates.ps1')
+      script: loadTextContent('../../../.common/scripts/Optimize-AVDImage.ps1')
     }
+    timeoutInSeconds: 1800
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
     createBuildDir
     restartMicrosoftSoftware
     restartCustomizations
-    restartUpdates
-    restartWDOT
-    vdiApplications
+    conditionalRestartPostUpdates
     updateBuiltInApps
+    vdiApplications
   ]
 }
 
@@ -795,17 +759,20 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    restartWDOT
     vdiApplications
-    disableSoftwareUpdatesRunCommand
+    optimizeImage
     updateBuiltInApps
   ]
 }
 
-// Check for a restart required and perform it only if no VDI customizations were applied
+// CBS check and conditional restart before sysprep.
+// Skipped when vdiCustomizers are present — restarts after vdiCustomizations
+// are not permitted, and vdiCustomizations should not install OS components
+// that dirty CBS. When vdiCustomizers are absent, cleanupImage is the last
+// write step and CBS is checked to ensure sysprep runs on a settled system.
 
 module conditionalRestartPostCleanup 'conditionalRestart.bicep' = if (empty(vdiCustomizers)) {
-  name: 'conditional-restart-post-cleanup'
+  name: 'conditional-restart-post-cleanup-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location

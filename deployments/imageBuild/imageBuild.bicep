@@ -95,23 +95,32 @@ param installTeams bool = false
 @description('Optional. The Teams Governmant Cloud type.')
 param teamsCloudType string = 'Commercial'
 
-@description('Optional. Apply the Windows Desktop Optimization Tool customizations.')
-param applyWindowsDesktopOptimizations bool = false
+@description('''Specifies the VDI optimization profile for VMs provisioned from this image.
+  NonPersistent-UpdatesOnly - Locks down software update channels only (OS, M365, Teams,
+    OneDrive, Edge, WebView2, Store). Use when managing other VDI hardening separately.
+  NonPersistent-Full - Full optimization for pooled host pools (VMs replaced on a regular
+    cadence). All sections applied including update-channel lockdown.
+  Persistent - Full optimization minus update-channel lockdown. Use for personal host pools
+    managed by SCCM, Intune, or similar tooling.
+  None - Skip optimization. Only vdiOptimizationRestrictInternet takes effect when None.
 
-@description('''Optional. Disable automatic software updates baked into the image.
-Provide an array containing one or more of the following values to disable those update channels.
-Omit a value to leave that channel enabled.
-Valid values:
-  disableWindowsUpdate
-  disableM365Update
-  disableTeamsUpdate
-  disableOneDriveUpdate
-  disableEdgeUpdate
-  disableWebView2Update
-  disableStoreAutoUpdate
-Example: ["disableWindowsUpdate", "disableEdgeUpdate"]
+This replaces the former applyWindowsDesktopOptimizations + disableSoftwareUpdates parameters.
+Ref: https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration
 ''')
-param disableSoftwareUpdates array = []
+@allowed([
+  'None'
+  'NonPersistent-UpdatesOnly'
+  'NonPersistent-Full'
+  'Persistent'
+])
+param vdiOptimizationProfile string = 'NonPersistent-Full'
+
+@description('''When true, restricts outbound internet traffic: NCSI passive polling, online font
+providers, Teredo IPv6 transition, and WiFi autologgers are disabled (Section 7 of
+Optimize-AVDImage.ps1). Applies independently of vdiOptimizationProfile, including
+when profile is None. Recommended for air-gapped or proxy-only government deployments.
+''')
+param vdiOptimizationRestrictInternet bool = false
 
 @description('''An array of image customization objects that are executed first before any restarts or updates.
 Each object contains the following properties:
@@ -496,7 +505,15 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' existing = {
 
 // * Resource Group * //
 
+// imageBuildRg is intentionally ephemeral — a new uniquely-named resource group is
+// created for every build run (the name includes deploymentSuffix, which is derived
+// from utcNow). This emulates the Azure Image Builder pattern: the build infrastructure
+// (image VM, orchestration VM, storage) is isolated per run, and the orchestration VM
+// deletes the entire resource group at the end of the build, leaving no residual
+// resources. The non-deterministic name is by design and the linter warning
+// (use-stable-resource-identifiers) can be safely suppressed for this resource.
 resource imageBuildRg 'Microsoft.Resources/resourceGroups@2023-07-01' = if (empty(imageBuildResourceGroupId)) {
+  #disable-next-line use-stable-resource-identifiers
   name: imageBuildResourceGroupName
   location: location
   tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
@@ -698,8 +715,8 @@ module customizeImage 'modules/customizeImage.bicep' = {
     installFsLogix: installFsLogix
     installOneDrive: installOneDrive
     installTeams: installTeams
-    applyWindowsDesktopOptimizations: applyWindowsDesktopOptimizations
-    disableSoftwareUpdates: disableSoftwareUpdates
+    vdiOptimizationProfile: vdiOptimizationProfile
+    vdiOptimizationRestrictInternet: vdiOptimizationRestrictInternet
     userAssignedIdentityClientId: empty(imageBuildResourceGroupId)
       ? ''
       : existingUserAssignedIdentity!.properties.clientId

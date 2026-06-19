@@ -48,10 +48,5 @@
         "Description": "Required: Visual Studio C++ Redistributables",
         "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
         "DestinationFileName": "vc_redist.x64.exe"
-    },
-    "WindowsDesktopOptimizationTool": {
-        "Description": "Optional: Windows Desktop Optimization Tool (WDOT) used by the image build solution when selected.",
-        "DownloadUrl": "https://codeload.github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool/zip/refs/heads/main",
-        "DestinationFileName": "WDOT.zip"
     }
 }
