@@ -1,7 +1,13 @@
 targetScope = 'resourceGroup'
 
-param applyWindowsDesktopOptimizations bool
-param disableSoftwareUpdates array
+param applyWindowsDesktopOptimizations bool = false // DEPRECATED - kept to avoid breaking existing callers; has no effect
+
+@description('The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (RestrictInternet still applies).')
+@allowed(['None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent'])
+param vdiOptimizationProfile string
+
+@description('When true, restricts outbound internet traffic: NCSI passive polling, online font providers, Teredo IPv6, and WiFi autologgers are disabled. Applies independently of vdiOptimizationProfile, including when profile is None.')
+param vdiOptimizationRestrictInternet bool = false
 param appsToRemove array
 param cloud string
 param downloads object
@@ -56,7 +62,7 @@ var vdiCustomizers = [
   }
 ]
 
-var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || applyWindowsDesktopOptimizations || !empty(vdiCustomizations)
+var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || !empty(vdiCustomizations)
 
 var customizationBatchSize = 20
 var customizersCount = length(customizers)
@@ -590,64 +596,6 @@ resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-0
   ]
 }
 
-resource wdot 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
-  name: 'wdot'
-  location: location
-  parent: imageVm
-  properties: {
-    asyncExecution: false
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-wdot-${deploymentSuffix}.log'
-    parameters: union(commonScriptParams, [
-      {
-        name: 'Name'
-        value: 'WDOT'
-      }
-      {
-        name: 'Uri'
-        value: !startsWith(cloud, 'us') && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
-          ? downloads.WindowsDesktopOptimizationTool.DownloadUrl
-          : '${artifactsContainerUri}/${downloads.WindowsDesktopOptimizationTool.DestinationFileName}'
-      }
-    ])
-    source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-WDOT.ps1')
-    }
-    timeoutInSeconds: 600
-    treatFailureAsDeploymentFailure: true
-  }
-  dependsOn: [
-    createBuildDir
-    restartMicrosoftSoftware
-    restartCustomizations
-    conditionalRestartPostUpdates
-    updateBuiltInApps
-  ]
-}
-
-resource restartWDOT 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (applyWindowsDesktopOptimizations) {
-  name: 'restart-post-wdot'
-  location: location
-  parent: orchestrationVm
-  properties: {
-    asyncExecution: false
-    parameters: restartVMParameters
-    source: {
-      script: restartVmScript
-    }
-    treatFailureAsDeploymentFailure: true
-  }
-  dependsOn: [
-    wdot
-  ]
-}
-
 @batchSize(1)
 resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = [
   for customizer in vdiCustomizers: {
@@ -688,7 +636,6 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
       restartMicrosoftSoftware
       restartCustomizations
       conditionalRestartPostUpdates
-      restartWDOT
       updateBuiltInApps
     ]
   }
@@ -712,24 +659,13 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    restartWDOT
     vdiApplications
     updateBuiltInApps
   ]
 }
 
-var disableSoftwareUpdatesKeys = [
-  'disableWindowsUpdate'
-  'disableM365Update'
-  'disableTeamsUpdate'
-  'disableOneDriveUpdate'
-  'disableEdgeUpdate'
-  'disableWebView2Update'
-  'disableStoreAutoUpdate'
-]
-
-resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (!empty(disableSoftwareUpdates)) {
-  name: 'disable-SoftwareUpdates'
+resource avdImageOptimize 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (vdiOptimizationProfile != 'None' || vdiOptimizationRestrictInternet) {
+  name: 'avd-image-optimize'
   location: location
   parent: imageVm
   properties: {
@@ -741,27 +677,30 @@ resource disableSoftwareUpdatesRunCommand 'Microsoft.Compute/virtualMachines/run
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Disable-SoftwareUpdates-${deploymentSuffix}.log'
-
+      : '${logBlobContainerUri}${imageVmName}-Optimize-AVDImage-${deploymentSuffix}.log'
     parameters: [
-      for key in disableSoftwareUpdatesKeys: {
-        name: '${toUpper(substring(key, 0, 1))}${substring(key, 1)}'
-        value: contains(disableSoftwareUpdates, key) ? 'true' : 'false'
+      {
+        name: 'OptimizationProfile'
+        value: vdiOptimizationProfile
+      }
+      {
+        name: 'RestrictInternet'
+        value: string(vdiOptimizationRestrictInternet)
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Disable-SoftwareUpdates.ps1')
+      script: loadTextContent('../../../.common/scripts/Optimize-AVDImage.ps1')
     }
+    timeoutInSeconds: 600
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
     createBuildDir
     restartMicrosoftSoftware
     restartCustomizations
-    restartUpdates
-    restartWDOT
-    vdiApplications
+    conditionalRestartPostUpdates
     updateBuiltInApps
+    vdiApplications
   ]
 }
 
@@ -795,9 +734,8 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    restartWDOT
     vdiApplications
-    disableSoftwareUpdatesRunCommand
+    avdImageOptimize
     updateBuiltInApps
   ]
 }

@@ -1085,13 +1085,6 @@
                                     "visible": true
                                 },
                                 {
-                                    "name": "applyWindowsDesktopOptimizations",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Apply Windows Desktop Optimizations",
-                                    "toolTip": "Select to apply the customizations prescribed in the Windows Desktop Optimization Tool",
-                                    "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud'))))]"
-                                },
-                                {
                                     "name": "cleanupDesktop",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Cleanup the Common Desktop",
@@ -1350,66 +1343,64 @@
                                     "visible": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), true, false)]"
                                 },
                                 {
-                                    "name": "disableSoftwareUpdatesInfo",
+                                    "name": "vdiOptimizationInfo",
                                     "type": "Microsoft.Common.InfoBox",
                                     "visible": true,
                                     "options": {
                                         "style": "Info",
-                                        "text": "Disable Update Channels: Select which software update channels to permanently disable in the image. Each selected channel will have its update service, scheduled tasks, and policy keys configured to prevent automatic updates after deployment. Recommended for pooled host pools where VMs are replaced on a regular cadence rather than patched in place."
+                                        "text": "VDI Image Optimization applies the settings from the Microsoft VDI optimization guide to this image build. Select the profile that matches how your session hosts are managed and updated.",
+                                        "uri": "https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration"
                                     }
                                 },
                                 {
-                                    "name": "disableSoftwareUpdates",
+                                    "name": "vdiOptimizationProfile",
                                     "type": "Microsoft.Common.DropDown",
-                                    "label": "Disable Update Channels",
-                                    "placeholder": "Select channels to disable...",
-                                    "toolTip": "Select one or more update channels to disable in the image. Leave empty to keep all channels enabled.",
-                                    "multiselect": true,
-                                    "selectAll": true,
-                                    "filter": true,
-                                    "filterPlaceholder": "Filter channels...",
+                                    "label": "VDI Update Delivery Model",
+                                    "defaultValue": "Image-Managed - Full Optimization",
                                     "multiLine": true,
-                                    "defaultValue": [],
-                                    "visible": true,
+                                    "toolTip": "Image-Managed: updates come from the next image build (cattle - VMs are replaced, not patched). Host-Managed: updates come from SCCM, Intune, or similar tooling running on each VM (pets - VMs are maintained individually).",
                                     "constraints": {
                                         "allowedValues": [
                                             {
-                                                "label": "Windows Update",
-                                                "description": "Disables the Windows Update and Update Orchestrator services and sets AU policy to never check.",
-                                                "value": "disableWindowsUpdate"
+                                                "label": "Image-Managed - Full Optimization",
+                                                "description": "All software update channels are locked down in the image (Windows Update, M365, Teams, OneDrive, Edge, WebView2, Store) and full VDI hardening is applied: services, scheduled tasks, registry policies, default user hive, SMB tuning, autologgers, and optional feature removal. Recommended for most AVD pooled host pools where VMs are replaced on a regular cadence.",
+                                                "value": "NonPersistent-Full"
                                             },
                                             {
-                                                "label": "Microsoft 365 / Office",
-                                                "description": "Disables Click-to-Run auto-updates and hides the update controls in Office apps.",
-                                                "value": "disableM365Update"
+                                                "label": "Image-Managed - Updates Only",
+                                                "description": "All software update channels are locked down in the image only. No other services, tasks, or registry changes are made. Use this when you are bringing your own VDI hardening tooling and only need to ensure VMs do not self-update between image replacements.",
+                                                "value": "NonPersistent-UpdatesOnly"
                                             },
                                             {
-                                                "label": "Microsoft Teams",
-                                                "description": "Disables auto-update for both new Teams and the classic machine-wide installer.",
-                                                "value": "disableTeamsUpdate"
+                                                "label": "Host-Managed (SCCM / Intune)",
+                                                "description": "Full VDI hardening is applied (services, tasks, registry, user hive, tuning) but all software update channels are left intact. Use for any AVD host pool - pooled or personal - where each VM is patched and managed in-place by SCCM, Intune, or similar tooling.",
+                                                "value": "Persistent"
                                             },
                                             {
-                                                "label": "OneDrive",
-                                                "description": "Prevents the OneDrive per-machine updater from running.",
-                                                "value": "disableOneDriveUpdate"
-                                            },
-                                            {
-                                                "label": "Microsoft Edge",
-                                                "description": "Disables the Edge update service, edgeupdatem service, and scheduled update tasks.",
-                                                "value": "disableEdgeUpdate"
-                                            },
-                                            {
-                                                "label": "WebView2 Runtime",
-                                                "description": "Prevents the WebView2 runtime from self-updating via the Edge update channel.",
-                                                "value": "disableWebView2Update"
-                                            },
-                                            {
-                                                "label": "Microsoft Store / UWP Auto-Update",
-                                                "description": "Disables the Store update scan pipeline (AutoDownload policy and InstallService scheduled tasks) and prevents pre-installed UWP apps from silently updating via cloud content delivery.",
-                                                "value": "disableStoreAutoUpdate"
+                                                "label": "None (Skip optimization)",
+                                                "description": "No optimization is applied. Only the Restrict Outbound Internet Traffic setting below takes effect if selected. Use this when you are applying your own optimization tooling in a separate customizer step.",
+                                                "value": "None"
                                             }
-                                        ]
+                                        ],
+                                        "required": true
+                                    },
+                                    "visible": true
+                                },
+                                {
+                                    "name": "vdiOptimizationRestrictInternetInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": true,
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Restrict Outbound Internet Traffic applies independently of the profile above, including when profile is None. Recommended for air-gapped or proxy-only government environments."
                                     }
+                                },
+                                {
+                                    "name": "vdiOptimizationRestrictInternet",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Restrict outbound internet traffic",
+                                    "toolTip": "Disables NCSI passive polling, online font providers, Teredo IPv6 transition, and WiFi autologgers. Applies independently of the optimization profile, including when profile is None.",
+                                    "visible": true
                                 }
                             ]
                         }
@@ -2222,13 +2213,14 @@
                 "installTeams": "[if(contains(steps('imageSource').sku, 'm365'), false, steps('imageCustomizations').office.installTeams)]",
                 "teamsCloudType": "[if(steps('imageCustomizations').office.installTeams, steps('imageCustomizations').office.teamsCloudType, 'Commercial')]",
                 "appsToRemove": "[steps('imageCustomizations').customizations.appsToRemove]",
-                "applyWindowsDesktopOptimizations": "[if(or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud')))), steps('imageCustomizations').customizations.applyWindowsDesktopOptimizations, false)]",
+                "applyWindowsDesktopOptimizations": false,
+                "vdiOptimizationProfile": "[steps('imageCustomizations').updates.vdiOptimizationProfile]",
+                "vdiOptimizationRestrictInternet": "[steps('imageCustomizations').updates.vdiOptimizationRestrictInternet]",
                 "cleanupDesktop": "[steps('imageCustomizations').customizations.cleanupDesktop]",
                 "installUpdates": "[steps('imageCustomizations').updates.installUpdates]",
                 "updateUwpApps": "[steps('imageCustomizations').updates.updateUwpApps]",
                 "updateService": "[steps('imageCustomizations').updates.updateService]",
                 "wsusServer": "[if(equals(steps('imageCustomizations').updates.updateService, 'WSUS'), steps('imageCustomizations').updates.wsusServer, '')]",
-                "disableSoftwareUpdates": "[steps('imageCustomizations').updates.disableSoftwareUpdates]",
                 "collectCustomizationLogs": "[steps('prereqs').storage.collectLogs]",
                 "logStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
                 "logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",
