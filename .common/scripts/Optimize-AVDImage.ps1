@@ -147,6 +147,8 @@ $RunNonPersistentSections = $OptimizationProfile -in @('NonPersistent-UpdatesOnl
 $script:LgpoExe = Join-Path $env:SystemRoot 'System32\LGPO.exe'
 $script:LgpoAvailable = $false
 $script:LgpoLines = [System.Collections.Generic.List[string]]@()
+# Parallel list of raw registry data used to fall back to direct writes if LGPO fails
+$script:LgpoFallbackEntries = [System.Collections.Generic.List[hashtable]]@()
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -228,12 +230,12 @@ function Disable-VdiTask {
     }
 }
 
-function Set-RegValue {
+function Set-PolicyValue {
     <#
     .SYNOPSIS
         Creates or updates a registry value, creating the key path if needed.
         When LGPO.exe is available and the path is a policy subtree, queues
-        the entry for batch application via Invoke-LgpoFlush:
+        the entry for batch application via Invoke-ApplyPolicyQueue:
           Computer: HKLM:\SOFTWARE\Policies\... and legacy
                     HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\...
           User:     HKLM:\TempDefaultUser\Software\Policies\... and legacy
@@ -282,6 +284,7 @@ function Set-RegValue {
             $null = $script:LgpoLines.Add($Name)
             $null = $script:LgpoLines.Add($lgpoData)
             $null = $script:LgpoLines.Add('')
+            $null = $script:LgpoFallbackEntries.Add(@{ Path = $Path; Name = $Name; Value = $Value; Type = $Type })
             Write-Log "  [LGPO/$lgpoSection] Queued: $Path\$Name = $Value"
             return
         }
@@ -309,7 +312,7 @@ function Disable-VdiAutologger {
     )
     $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$Name"
     if (Test-Path $regPath) {
-        Set-RegValue -Path $regPath -Name 'Start' -Value 0
+        Set-PolicyValue -Path $regPath -Name 'Start' -Value 0
         Write-Log "  [OK]   Disabled autologger: $Name"
     }
     else {
@@ -317,7 +320,7 @@ function Disable-VdiAutologger {
     }
 }
 
-function Invoke-LgpoFlush {
+function Invoke-ApplyPolicyQueue {
     <#
     .SYNOPSIS
         Applies all LGPO-queued policy entries in a single lgpo.exe invocation,
@@ -325,24 +328,55 @@ function Invoke-LgpoFlush {
     #>
     if (-not $script:LgpoAvailable -or $script:LgpoLines.Count -eq 0) { return }
     $entryCount = [int]($script:LgpoLines.Count / 5)
-    $tempFile = Join-Path $env:TEMP "Optimize-AVDImage-LGPO-$(Get-Date -Format 'HHmmssff').txt"
+    $tempFile = Join-Path $env:SystemRoot "Temp\LGPO-$(Get-Date -Format 'HHmmssff').txt"
+    $lgpoSucceeded = $false
     try {
-        $script:LgpoLines | Out-File -FilePath $tempFile -Encoding unicode -Force
-        $lgpoOut = & $script:LgpoExe /t $tempFile 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "  [OK]   LGPO applied $entryCount policy values"
+        # Write the registry text file using Add-Content, one line at a time.
+        # Format per entry (matching Update-LocalGPOTextFile in the artifact scripts):
+        #   Computer           <- scope
+        #   SOFTWARE\Policies\ <- key path, stripped of HKLM:\ prefix
+        #   ValueName          <- value name
+        #   DWORD:1            <- type:data
+        #                      <- blank line
+        foreach ($line in $script:LgpoLines) {
+            Add-Content -Path $tempFile -Value $line
         }
-        else {
-            Write-Log "  [WARN] LGPO exited $LASTEXITCODE for $entryCount values - $lgpoOut"
+        $proc = Start-Process -FilePath $script:LgpoExe -ArgumentList "/t `"$tempFile`"" -Wait -PassThru
+        Write-Log "  LGPO exitcode: '$($proc.ExitCode)'"
+        if ($proc.ExitCode -eq 0) {
+            Write-Log "  [OK]   LGPO applied $entryCount policy values"
+            $lgpoSucceeded = $true
+        } else {
+            Write-Log "  [WARN] LGPO exited $($proc.ExitCode) for $entryCount values"
         }
     }
     catch {
-        Write-Log "  [WARN] Invoke-LgpoFlush failed - $_"
+        Write-Log "  [WARN] LGPO flush failed: $($_.Exception.Message)"
     }
     finally {
-        $script:LgpoLines.Clear()
         Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
     }
+
+    if (-not $lgpoSucceeded) {
+        # LGPO failed or threw - apply queued entries directly to the registry so
+        # policy values are not silently lost.
+        Write-Log "  Applying $($script:LgpoFallbackEntries.Count) policy values via registry fallback..."
+        $fbOk = 0; $fbFail = 0
+        foreach ($entry in $script:LgpoFallbackEntries) {
+            try {
+                if (-not (Test-Path $entry.Path)) { New-Item -Path $entry.Path -Force -ErrorAction Stop | Out-Null }
+                Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $entry.Value -Type $entry.Type -Force -ErrorAction Stop
+                $fbOk++
+            } catch {
+                Write-Log "  [WARN] Fallback registry write failed for $($entry.Path)\$($entry.Name): $_"
+                $fbFail++
+            }
+        }
+        Write-Log "  [OK]   Registry fallback: $fbOk applied, $fbFail failed"
+    }
+
+    $script:LgpoLines.Clear()
+    $script:LgpoFallbackEntries.Clear()
 }
 
 # ---------------------------------------------------------------------------
@@ -365,7 +399,7 @@ try {
     # LGPO Detection
     # Attempt to locate or download LGPO.exe for applying policy settings via
     # Local Group Policy Objects. If unavailable, all policy settings fall back
-    # to direct registry writes inside Set-RegValue.
+    # to direct registry writes inside Set-PolicyValue.
     # -----------------------------------------------------------------------
     Write-Log "--- LGPO Detection ---"
     if (-not (Test-Path -Path $script:LgpoExe -PathType Leaf)) {
@@ -374,6 +408,7 @@ try {
         try {
             if (-not (Test-Path $lgpoTemp)) { New-Item -Path $lgpoTemp -ItemType Directory -Force | Out-Null }
             $lgpoZip = Join-Path $lgpoTemp 'LGPO.zip'
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             (New-Object System.Net.WebClient).DownloadFile(
                 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip',
                 $lgpoZip)
@@ -738,49 +773,49 @@ try {
         #     failure information from being sent, which breaks update diagnostics.
         # NonPersistent VMs override this to 0 in Section 6 since transient VMs have
         # no per-VM diagnostic reporting value.
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'AllowTelemetry' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'DoNotShowFeedbackNotifications' -Value 1
 
         # -- Windows Error Reporting (AT: Computer Configuration > Windows Components > Windows Error Reporting) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
             -Name 'Disabled' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
             -Name 'DontSendAdditionalData' -Value 1
 
         # -- Privacy / Consumer Experiences --
         # AT: Computer Configuration > Windows Components > Cloud Content
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableWindowsConsumerFeatures' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableSoftLanding' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableWindowsTips' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableThirdPartySuggestions' -Value 1
         # Disable all Windows Spotlight features (lock screen, tips, consumer features)
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableWindowsSpotlightFeatures' -Value 1
         # AT: Computer Configuration > System > OS Policies
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'EnableCdp' -Value 0
 
         # -- Advertising ID (AT: Computer Configuration > System > User Profiles) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo' `
             -Name 'DisabledByGroupPolicy' -Value 1
 
         # -- App Privacy (AT: Computer Configuration > Windows Components > App Privacy) --
         # Values: 0 = User in control, 1 = Force allow, 2 = Force deny
         $appPrivacyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsAccessDiagnosticInfo'    -Value 2
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation'          -Value 2
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion'            -Value 2
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications'     -Value 2
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoice'       -Value 2
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoiceAboveLock' -Value 2
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios'            -Value 2
-        Set-RegValue -Path $appPrivacyPath -Name 'LetAppsAccessCellularData'      -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessDiagnosticInfo'    -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation'          -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion'            -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications'     -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoice'       -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoiceAboveLock' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios'            -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessCellularData'      -Value 2
 
         # -- Input Personalization and Inking / Typing data collection --
         # AllowInputPersonalization=0 disables speech recognition services machine-wide
@@ -789,162 +824,162 @@ try {
         # RestrictImplicitInkCollection, RestrictImplicitTextCollection,
         # AcceptedPrivacyPolicy, and HarvestContacts.
         # AT: Computer Configuration > Control Panel > Regional and Language Options
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization' `
             -Name 'AllowInputPersonalization' -Value 0
         # AllowLinguisticDataCollection=0 stops sending inking/typing data to Microsoft
         # to improve language recognition (telemetry, separate from the personalization
         # feature above).
         # AT: Computer Configuration > Windows Components > Text Input
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\TextInput' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\TextInput' `
             -Name 'AllowLinguisticDataCollection' -Value 0
 
         # -- Location and Sensors (AT: Computer Configuration > Windows Components > Location and Sensors) --
         $locationPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'
-        Set-RegValue -Path $locationPath -Name 'DisableLocation'               -Value 1
-        Set-RegValue -Path $locationPath -Name 'DisableSensors'                -Value 1
-        Set-RegValue -Path $locationPath -Name 'DisableWindowsLocationProvider' -Value 1
+        Set-PolicyValue -Path $locationPath -Name 'DisableLocation'               -Value 1
+        Set-PolicyValue -Path $locationPath -Name 'DisableSensors'                -Value 1
+        Set-PolicyValue -Path $locationPath -Name 'DisableWindowsLocationProvider' -Value 1
 
         # -- Search and Cortana (AT: Computer Configuration > Windows Components > Search) --
         $searchPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search'
-        Set-RegValue -Path $searchPath -Name 'AllowCortana'                    -Value 0
-        Set-RegValue -Path $searchPath -Name 'AllowCortanaAboveLock'           -Value 0
-        Set-RegValue -Path $searchPath -Name 'AllowSearchToUseLocation'        -Value 0
-        Set-RegValue -Path $searchPath -Name 'DisableWebSearch'                -Value 1
-        Set-RegValue -Path $searchPath -Name 'ConnectedSearchUseWeb'           -Value 0
-        Set-RegValue -Path $searchPath -Name 'PreventIndexingEmailAttachments' -Value 1
-        Set-RegValue -Path $searchPath -Name 'PreventIndexingOfflineFiles'     -Value 1
+        Set-PolicyValue -Path $searchPath -Name 'AllowCortana'                    -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'AllowCortanaAboveLock'           -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'AllowSearchToUseLocation'        -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'DisableWebSearch'                -Value 1
+        Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchUseWeb'           -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'PreventIndexingEmailAttachments' -Value 1
+        Set-PolicyValue -Path $searchPath -Name 'PreventIndexingOfflineFiles'     -Value 1
 
         # -- BITS peer caching (AT: Computer Configuration > Network > Background Intelligent Transfer Service (BITS)) --
         $bitsPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\BITS'
-        Set-RegValue -Path $bitsPath -Name 'EnablePeercaching'          -Value 0
-        Set-RegValue -Path $bitsPath -Name 'DisableBranchCache'         -Value 1
-        Set-RegValue -Path $bitsPath -Name 'DisablePeerCachingClient'   -Value 1
-        Set-RegValue -Path $bitsPath -Name 'DisablePeerCachingServer'   -Value 1
+        Set-PolicyValue -Path $bitsPath -Name 'EnablePeercaching'          -Value 0
+        Set-PolicyValue -Path $bitsPath -Name 'DisableBranchCache'         -Value 1
+        Set-PolicyValue -Path $bitsPath -Name 'DisablePeerCachingClient'   -Value 1
+        Set-PolicyValue -Path $bitsPath -Name 'DisablePeerCachingServer'   -Value 1
 
         # -- BranchCache service-level disable (AT: Computer Configuration > Network > BranchCache) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\PeerDist\Service' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\PeerDist\Service' `
             -Name 'Enable' -Value 0
 
         # -- Delivery Optimization (AT: Computer Configuration > Windows Components > Delivery Optimization) --
         # 99 = Simple download mode; no contact with Delivery Optimization cloud services
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' `
             -Name 'DODownloadMode' -Value 99
 
         # -- Maps (AT: Computer Configuration > Windows Components > Maps) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' `
             -Name 'AutoDownloadAndUpdateMapData' -Value 0
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' `
             -Name 'AllowUnsolicitedNetworkTrafficOnSettingsPage' -Value 0
 
         # -- Messaging (AT: Computer Configuration > Windows Components > Messaging) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Messaging' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Messaging' `
             -Name 'AllowMessageSync' -Value 0
 
         # -- Offline Files (AT: Computer Configuration > Network > Offline Files) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetCache' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetCache' `
             -Name 'Enabled' -Value 0
 
         # -- WLAN hot spot auto-connect --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' `
             -Name 'WiFiSenseCredShared' -Value 0
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' `
             -Name 'WiFiSenseOpen' -Value 0
 
         # -- Desktop Window Manager animations (AT: Computer Configuration > Windows Components > Desktop Window Manager) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
             -Name 'DisallowAnimations' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
             -Name 'UseSolidColorForStart' -Value 1
 
         # -- Microsoft Edge: disable preloading and background activity (AT: Computer Configuration > Microsoft Edge) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled'  -Value 0
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'BackgroundModeEnabled' -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled'  -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'BackgroundModeEnabled' -Value 0
 
         # -- OneDrive: suppress network traffic until user signs in --
         # DISABLED: PreventNetworkTrafficPreUserSignIn blocks OneDrive Known Folder Move (KFM)
         # and silent automatic sign-in from completing at logon. With KFM deployed, OneDrive
         # must be able to communicate before user sign-in to redirect Desktop/Documents/Pictures.
         # Leaving this unset (or explicitly 0) is required for KFM and silent sign-in to work.
-        # Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' `
+        # Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' `
         #              -Name 'PreventNetworkTrafficPreUserSignIn' -Value 1
 
         # -- Windows Ink Workspace (AT: Computer Configuration > Windows Components > Windows Ink Workspace) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace' `
             -Name 'AllowWindowsInkWorkspace' -Value 0
 
         # -- Windows Game DVR / Recording (AT: Computer Configuration > Windows Components > Windows Game Recording and Broadcasting) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' `
             -Name 'AllowGameDVR' -Value 0
 
         # -- Speech model auto-update (AT: Computer Configuration > Windows Components > Speech) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Speech' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Speech' `
             -Name 'AllowSpeechModelUpdate' -Value 0
 
         # -- Microsoft Store: suppress OS upgrade offers (AT: Computer Configuration > Windows Components > Store) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' `
             -Name 'DisableOSUpgrade' -Value 1
 
         # -- OOBE: skip privacy settings experience at first logon (AT: Computer Configuration > Windows Components > OOBE) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE' `
             -Name 'DisablePrivacyExperience' -Value 1
 
         # -- Logon screen (AT: Computer Configuration > System > Logon) --
         # "Show first sign-in animation" = Disabled: suppresses the welcome animation
         # and the Microsoft account opt-in prompt on first logon.
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' `
             -Name 'EnableFirstLogonAnimation' -Value 0
         # "Show clear logon background" = Enabled: removes the acrylic blur overlay on the
         # logon background image so it renders clearly. Reduces compositing work and
         # bandwidth when the image is delivered over a remoting protocol.
         # (Different from DisableLogonBackgroundImage, which hides the image entirely.)
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'DisableAcrylicBackgroundOnLogon' -Value 1
 
         # -- Search index (AT: Computer Configuration > Windows Components > Search) --
         # StopIndexingOnLimitedHardDriveSpace prevents the index from consuming
         # remaining disk capacity when space is low (threshold: ~5 GB).
         # Disabling encrypted item indexing reduces indexing overhead.
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' `
             -Name 'StopIndexingOnLimitedHardDriveSpace' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' `
             -Name 'AllowIndexingEncryptedStoresOrItems' -Value 0
 
         # -- NTFS: disable short (8.3) file name creation on all volumes --
-        Set-RegValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' `
+        Set-PolicyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' `
             -Name 'NtfsDisable8dot3NameCreation' -Value 1
 
         # -- AutoPlay (AT: Computer Configuration > Windows Components > AutoPlay Policies) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' `
             -Name 'NoDriveTypeAutoRun' -Value 255
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
             -Name 'NoAutorun' -Value 1
 
         # -- Application Compatibility: Inventory Collector (AT: Computer Configuration > Windows Components > Application Compatibility) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat' `
             -Name 'DisableInventory' -Value 1
 
         # -- File Explorer: thumbnail caching (AT: Computer Configuration > Windows Components > File Explorer) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
             -Name 'DisableThumbsDBOnNetworkFolders' -Value 1
 
         # -- File History (AT: Computer Configuration > Windows Components > File History) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\FileHistory' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\FileHistory' `
             -Name 'Disabled' -Value 1
 
         # -- Find My Device (AT: Computer Configuration > Windows Components > Find My Device) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\FindMyDevice' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\FindMyDevice' `
             -Name 'AllowFindMyDevice' -Value 0
 
         # -- HomeGroup (AT: Computer Configuration > Windows Components > HomeGroup) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\HomeGroup' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\HomeGroup' `
             -Name 'DisableHomeGroup' -Value 1
 
         # -- RSS Feeds: disable background sync (AT: Computer Configuration > Windows Components > RSS Feeds) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Feeds' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Feeds' `
             -Name 'BackgroundSyncStatus' -Value 0
 
         # -- Storage Health (AT: Computer Configuration > System > Storage Health) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageHealth' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageHealth' `
             -Name 'AllowDiskHealthModelUpdates' -Value 0
 
         # -- Storage Sense --
@@ -976,66 +1011,66 @@ try {
         # Note: ConfigStorageSenseCloudContentDehydrationThreshold > 0 implicitly enables
         # cloud content dehydration; there is no separate "include OneDrive" policy value.
         $ssPolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageSense'
-        Set-RegValue -Path $ssPolicyPath -Name 'AllowStorageSenseGlobal'                          -Value 1  # force Storage Sense on
-        Set-RegValue -Path $ssPolicyPath -Name 'ConfigStorageSenseGlobalCadence'                  -Value 30 # run monthly
-        Set-RegValue -Path $ssPolicyPath -Name 'AllowStorageSenseTemporaryFilesCleanup'           -Value 1  # delete unused temp files
-        Set-RegValue -Path $ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold'     -Value 0  # never auto-clean Recycle Bin
-        Set-RegValue -Path $ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold'      -Value 0  # never auto-clean Downloads
-        Set-RegValue -Path $ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30 # dehydrate cloud files not opened in 30 days
+        Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseGlobal'                          -Value 1  # force Storage Sense on
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseGlobalCadence'                  -Value 30 # run monthly
+        Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseTemporaryFilesCleanup'           -Value 1  # delete unused temp files
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold'     -Value 0  # never auto-clean Recycle Bin
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold'      -Value 0  # never auto-clean Downloads
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30 # dehydrate cloud files not opened in 30 days
 
         # -- System Restore (AT: Computer Configuration > System > System Restore) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore' `
             -Name 'DisableSR' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore' `
             -Name 'DisableConfig' -Value 1
 
         # -- Toast / push notifications (AT: Computer Configuration > Windows Components > Push Notifications) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications' `
             -Name 'NoCloudApplicationNotification' -Value 1
 
         # -- Windows Mobility Center (AT: Computer Configuration > Windows Components > Windows Mobility Center) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\MobilityCenter' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\MobilityCenter' `
             -Name 'NoMobilityCenter' -Value 1
 
         # -- Windows Installer (AT: Computer Configuration > Windows Components > Windows Installer) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' `
             -Name 'MaxPatchCacheSize' -Value 5
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' `
             -Name 'LimitSystemRestoreCheckpointing' -Value 1
 
         # -- Windows Reliability Analysis (AT: Computer Configuration > System > Troubleshooting and Diagnostics > Windows Performance) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Reliability Analysis\WMI' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Reliability Analysis\WMI' `
             -Name 'WMIEnable' -Value 0
 
         # -- Windows Security: suppress non-critical notifications (AT: Computer Configuration > Windows Components > Windows Security > Notifications) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Notifications' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Notifications' `
             -Name 'DisableEnhancedNotifications' -Value 1
 
         # -- Windows Update (AT: Computer Configuration > Windows Components > Windows Update) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
             -Name 'EnableFeaturedSoftware' -Value 0
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
             -Name 'ManagePreviewBuilds' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
             -Name 'ManagePreviewBuildsPolicyValue' -Value 0
 
         # -- Event Viewer (AT: Computer Configuration > Windows Components > Event Viewer) --
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EventViewer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EventViewer' `
             -Name 'MicrosoftEventVwrDisableLinks' -Value 1
 
         # -- Handwriting --
         # AT: Computer Configuration > Windows Components > Handwriting Error Reporting
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports' `
             -Name 'PreventHandwritingErrorReports' -Value 1
         # AT: Computer Configuration > Windows Components > Tablet PC > Handwriting Personalization
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\TabletPC' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\TabletPC' `
             -Name 'PreventHandwritingDataSharing' -Value 1
 
         # -- Cloud content: block silently pushed pre-installed UWP app refreshes (AT: Computer Configuration > Windows Components > Cloud Content) --
         # DisableCloudOptimizedContent prevents Microsoft from silently re-pushing removed or
         # refreshed pre-installed apps via cloud content delivery. This applies regardless of
         # persistence model because no VDI deployment should have uncontrolled app installs.
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableCloudOptimizedContent' -Value 1
 
         # -- Software Protection Platform: disable KMS Client Online AVS Validation --
@@ -1043,91 +1078,91 @@ try {
         # Anti-Piracy Validation Service. Enterprise VDI uses on-premises KMS infrastructure.
         # AT: Computer Configuration > Windows Components > Software Protection Platform
         # Ref: Article local policy table - Software Protection Platform
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Software Protection Platform' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Software Protection Platform' `
             -Name 'NoGenTicket' -Value 1
 
         # -- Control Panel: disable online tips (AT: Computer Configuration > Control Panel) --
         # Prevents the Settings app from contacting Microsoft content services to fetch tips.
         # Ref: Article local policy table - Control Panel
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' `
             -Name 'AllowOnlineTips' -Value 0
 
         # -- Device Installation (AT: Computer Configuration > System > Device Installation) --
         # Ref: Article local policy table - Device Installation
         # Don't send a Windows Error Report when a generic driver is installed on a device
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings' `
             -Name 'DisableSendGenericDriverNotFoundToWER' -Value 1
         # Prevent System Restore point creation during device installation activity
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings' `
             -Name 'DisableSystemRestore' -Value 1
         # Turn off "Found New Hardware" balloon notifications during device installation
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Settings' `
             -Name 'DisableBalloonTips' -Value 1
         # Prevent device metadata retrieval from the Internet
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' `
             -Name 'PreventDeviceMetadataFromNetwork' -Value 1
         # Don't search Windows Update for device drivers; drivers must come from the image
         # or enterprise management (SCCM/Intune/WSUS) to ensure consistent, tested versions.
         # AT: Computer Configuration > System > Device Installation > Device Driver Installation
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' `
             -Name 'DontSearchWindowsUpdate' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching' `
             -Name 'SearchOrderConfig' -Value 0
 
         # -- Edge UI (AT: Computer Configuration > Windows Components > Edge UI) --
         # Ref: Article local policy table - Edge UI
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EdgeUI' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EdgeUI' `
             -Name 'AllowEdgeSwipe' -Value 0
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EdgeUI' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EdgeUI' `
             -Name 'DisableHelpSticker' -Value 1
 
         # -- File Explorer: suppress "new application installed" association balloon (AT: Computer Configuration > Windows Components > File Explorer) --
         # Ref: Article local policy table - File Explorer
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
             -Name 'NoNewAppAlert' -Value 1
 
         # -- Internet Communication Management (AT: Computer Configuration > Windows Components > Internet Communication Management > Internet Communication settings) --
         # Disables Windows shell components that make outbound calls to Microsoft web services.
         # Ref: Article local policy table - Internet Communication Management
         # Turn off Internet download for Web publishing and online ordering wizards
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
             -Name 'NoPublishingWizard' -Value 1
         # Turn off Internet file association service (opening unknown file types via Microsoft lookup)
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
             -Name 'NoInternetOpenWith' -Value 1
         # Turn off "Order Prints Online" picture task
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
             -Name 'NoOnlinePrintsWizard' -Value 1
         # Turn off Windows Customer Experience Improvement Program (AT: Computer Configuration > Windows Components > Windows Customer Experience Improvement Program)
         # (belt-and-suspenders: AllowTelemetry in Section 5 and the Consolidator/UsbCeip
         #  tasks in Section 3 already suppress CEIP data collection)
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\SQMClient\Windows' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\SQMClient\Windows' `
             -Name 'CEIPEnable' -Value 0
 
         # -- Logon (AT: Computer Configuration > System > Logon) --
         # Ref: Article local policy table - Logon
         # Don't enumerate connected users on domain-joined computers at the logon screen
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'DontEnumerateConnectedUsers' -Value 1
         # Don't enumerate local users on domain-joined computers at the logon screen
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'EnumerateLocalUsers' -Value 0
         # Turn off app notifications on the lock screen
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'DisableLockScreenAppNotifications' -Value 1
 
         # -- Peer-to-Peer networking (AT: Computer Configuration > Network > Microsoft Peer-to-Peer Networking Services) --
         # P2P networking provides no value in a managed VDI environment.
         # Ref: Article local policy table - Microsoft Peer-to-Peer Networking Services
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Peernet' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Peernet' `
             -Name 'Disabled' -Value 1
 
         # -- Online Assistance (AT: Computer Configuration > System > Internet Communication Management > Internet Communication settings) --
         # Prevents the help system from fetching online content or transmitting implicit feedback.
         # Ref: Article local policy table - Online Assistance
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' `
             -Name 'NoOnlineAssist' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' `
             -Name 'NoImplicitFeedback' -Value 1
 
         # -- Troubleshooting and Diagnostics (AT: Computer Configuration > System > Troubleshooting and Diagnostics) --
@@ -1137,13 +1172,13 @@ try {
         # and to ensure the behavior is also enforced if DPS is ever re-enabled.
         # Ref: Article local policy table - Troubleshooting and Diagnostics
         # Disable Scheduled Maintenance automatic troubleshooting behavior
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScheduledDiagnostics' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScheduledDiagnostics' `
             -Name 'EnabledExecution' -Value 0
         # Prevent users from launching troubleshooting wizards from Control Panel
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnostics' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnostics' `
             -Name 'EnableDiagnostics' -Value 0
         # Prevent users from accessing online troubleshooting content (Windows Online Troubleshooting Service)
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnosticsProvider\Policy' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnosticsProvider\Policy' `
             -Name 'DisableQueryRemoteServer' -Value 1
         # NOTE: The article also lists per-scenario "Configure Scenario Execution Level = Disabled"
         # for Windows Boot, Shutdown, Memory, Standby/Resume, Resource Exhaustion, Responsiveness,
@@ -1153,7 +1188,7 @@ try {
         # Per-scenario policies are intentionally omitted here to avoid maintaining GUID-to-scenario
         # mappings across Windows versions. If DPS is re-enabled, add the relevant GUIDs manually.
 
-        Invoke-LgpoFlush
+        Invoke-ApplyPolicyQueue
         Write-Log ""
     } # end if RunFullOptimization - Section 5
 
@@ -1166,17 +1201,17 @@ try {
         # Override telemetry to Security/Off for NonPersistent VMs. These are transient;
         # Endpoint Analytics, Update Compliance, and per-VM diagnostic reports have no
         # value when the VM will be replaced with a new image on a regular basis.
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'AllowTelemetry' -Value 0
 
         # Disable Windows Update scan/install. OS updates are applied during image
         # servicing and delivered via image replacement, not per-VM Windows Update.
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
             -Name 'NoAutoUpdate' -Value 1
         # AUOptions = 1 (Never check for updates) - belt-and-suspenders with NoAutoUpdate
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
             -Name 'AUOptions' -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
             -Name 'DisableWindowsUpdateAccess' -Value 1
 
         # -- Update channel lockdown: application-level (NonPersistent Only) --
@@ -1185,47 +1220,47 @@ try {
         # On NonPersistent VMs, every update is delivered via the next image replacement.
 
         # Microsoft 365 / Office Click-to-Run
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
             -Name 'enableautomaticupdates'   -Value 0
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
             -Name 'hideupdatenotifications'  -Value 1
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
             -Name 'hideenabledisableupdates' -Value 1
 
         # Microsoft Teams for VDI - disable auto-update
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\Teams' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Teams' `
             -Name 'DisableAutoUpdate' -Value 1
 
         # OneDrive: block automatic updates entirely (image provides the pinned version)
         # Ref: https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' `
             -Name 'GPOSetUpdateRing' -Value 0
 
         # Microsoft Edge (Chromium): block automatic updates via EdgeUpdate service policy
         # UpdateDefault = 0 blocks all app updates globally via the EdgeUpdate service
         # GUID {56EB18F8...} = Edge Stable Channel app-specific override
         # Ref: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' `
             -Name 'UpdateDefault' -Value 0
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' `
             -Name 'Update{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}' -Value 0
 
         # WebView2 Runtime: block automatic updates via EdgeUpdate policy
         # GUID {F3017226...} = WebView2 Runtime app-specific entry
         # Ref: https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/enterprise
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' `
             -Name 'Update{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -Value 0
 
         # Microsoft Store: disable automatic app download and update
         # 2 = AutoDownload disabled; app installs are managed through the image
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' `
             -Name 'AutoDownload' -Value 2
 
         # Disable file layout auto-optimization. The OptimalLayout service rearranges
         # files on disk to improve sequential read performance. On Azure SSD-backed
         # managed disks, random I/O is nearly as fast as sequential I/O, making
         # this optimization marginal at best.
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OptimalLayout' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OptimalLayout' `
             -Name 'EnableAutoLayout' -Value 0
 
         # Disable Prefetcher and Superfetch via Session Manager parameters.
@@ -1238,10 +1273,10 @@ try {
         #      and benefits no individual user's session.
         # This complements disabling the SysMain service in Section 2.
         $prefetchPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters'
-        Set-RegValue -Path $prefetchPath -Name 'EnablePrefetcher'  -Value 0
-        Set-RegValue -Path $prefetchPath -Name 'EnableSuperfetch'  -Value 0
+        Set-PolicyValue -Path $prefetchPath -Name 'EnablePrefetcher'  -Value 0
+        Set-PolicyValue -Path $prefetchPath -Name 'EnableSuperfetch'  -Value 0
 
-        Invoke-LgpoFlush
+        Invoke-ApplyPolicyQueue
         Write-Log ""
     }
 
@@ -1263,19 +1298,19 @@ try {
         # authentication flows, Exchange connectivity, and WPAD discovery. The CPU overhead
         # from passive polling in a static VDI network is negligible compared to the breakage.
         # Ref: Article local policy table - Network Connectivity Status Indicator (Restricted Traffic baseline)
-        # Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' `
+        # Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' `
         #              -Name 'DisablePassivePolling' -Value 1
 
         # Online font providers - Windows contacts Microsoft's online font service when
         # rendering text with fonts not installed locally. Disable to prevent outbound calls.
         # Ref: Article local policy table - Fonts (Restricted Traffic baseline)
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'EnableFontProviders' -Value 0
 
         # Teredo IPv6 transition technology - tunnels IPv6 traffic over IPv4 UDP for
         # NAT traversal. Has no purpose in a VDI environment with no internet-facing IPv6 need.
         # Ref: Article local policy table - TCPIP Settings / IPv6 Transition Technologies (Restricted Traffic baseline)
-        Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\TCPIP\v6Transition' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\TCPIP\v6Transition' `
             -Name 'Teredo_State' -Value 'Disabled' `
             -Type ([Microsoft.Win32.RegistryValueKind]::String)
 
@@ -1285,7 +1320,7 @@ try {
         Disable-VdiAutologger -Name 'WiFiSession'
         Disable-VdiAutologger -Name 'WinPhoneCritical'
 
-        Invoke-LgpoFlush
+        Invoke-ApplyPolicyQueue
         Write-Log ""
     } # end if RestrictInternet - Section 7
 
@@ -1314,7 +1349,7 @@ try {
 
                 # -- Visual effects: Custom (performance-oriented) --
                 # VisualFXSetting 3 = Custom; specific items controlled via Advanced keys
-                Set-RegValue -Path "$du\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" `
+                Set-PolicyValue -Path "$du\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" `
                     -Name 'VisualFXSetting' -Value 3
 
                 # ShellState binary - suppress animations in Explorer shell
@@ -1332,51 +1367,51 @@ try {
 
                 # Explorer Advanced display options
                 $explorerAdv = "$du\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-                Set-RegValue -Path $explorerAdv -Name 'IconsOnly'          -Value 1
-                Set-RegValue -Path $explorerAdv -Name 'ListviewAlphaSelect' -Value 0
-                Set-RegValue -Path $explorerAdv -Name 'ListviewShadow'      -Value 0
-                Set-RegValue -Path $explorerAdv -Name 'ShowCompColor'       -Value 1
-                Set-RegValue -Path $explorerAdv -Name 'ShowInfoTip'         -Value 1
-                Set-RegValue -Path $explorerAdv -Name 'TaskbarAnimations'   -Value 0
+                Set-PolicyValue -Path $explorerAdv -Name 'IconsOnly'          -Value 1
+                Set-PolicyValue -Path $explorerAdv -Name 'ListviewAlphaSelect' -Value 0
+                Set-PolicyValue -Path $explorerAdv -Name 'ListviewShadow'      -Value 0
+                Set-PolicyValue -Path $explorerAdv -Name 'ShowCompColor'       -Value 1
+                Set-PolicyValue -Path $explorerAdv -Name 'ShowInfoTip'         -Value 1
+                Set-PolicyValue -Path $explorerAdv -Name 'TaskbarAnimations'   -Value 0
 
                 # Desktop - window drag, font smoothing, animation
-                Set-RegValue -Path "$du\Control Panel\Desktop" `
+                Set-PolicyValue -Path "$du\Control Panel\Desktop" `
                     -Name 'DragFullWindows' -Value '0' `
                     -Type ([Microsoft.Win32.RegistryValueKind]::String)
-                Set-RegValue -Path "$du\Control Panel\Desktop" `
+                Set-PolicyValue -Path "$du\Control Panel\Desktop" `
                     -Name 'FontSmoothing' -Value '2' `
                     -Type ([Microsoft.Win32.RegistryValueKind]::String)
-                Set-RegValue -Path "$du\Control Panel\Desktop\WindowMetrics" `
+                Set-PolicyValue -Path "$du\Control Panel\Desktop\WindowMetrics" `
                     -Name 'MinAnimate' -Value '0' `
                     -Type ([Microsoft.Win32.RegistryValueKind]::String)
 
                 # DWM - disable Aero Peek and thumbnail caching
-                Set-RegValue -Path "$du\Software\Microsoft\Windows\DWM" `
+                Set-PolicyValue -Path "$du\Software\Microsoft\Windows\DWM" `
                     -Name 'EnableAeroPeek' -Value 0
-                Set-RegValue -Path "$du\Software\Microsoft\Windows\DWM" `
+                Set-PolicyValue -Path "$du\Software\Microsoft\Windows\DWM" `
                     -Name 'AlwaysHiberNateThumbnails' -Value 0
 
                 # Content Delivery Manager - disable suggested / pre-installed apps and tips
                 $cdmPath = "$du\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-                Set-RegValue -Path $cdmPath -Name 'ContentDeliveryAllowed'              -Value 0
-                Set-RegValue -Path $cdmPath -Name 'OemPreInstalledAppsEnabled'          -Value 0
-                Set-RegValue -Path $cdmPath -Name 'PreInstalledAppsEnabled'             -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SilentInstalledAppsEnabled'          -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SubscribedContentEnabled'            -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SoftLandingEnabled'                  -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SystemPaneSuggestionsEnabled'        -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SubscribedContent-338393Enabled'     -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SubscribedContent-353694Enabled'     -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SubscribedContent-353696Enabled'     -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SubscribedContent-338388Enabled'     -Value 0
-                Set-RegValue -Path $cdmPath -Name 'SubscribedContent-338389Enabled'     -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'ContentDeliveryAllowed'              -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'OemPreInstalledAppsEnabled'          -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'PreInstalledAppsEnabled'             -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SilentInstalledAppsEnabled'          -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContentEnabled'            -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SoftLandingEnabled'                  -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SystemPaneSuggestionsEnabled'        -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338393Enabled'     -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-353694Enabled'     -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-353696Enabled'     -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338388Enabled'     -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338389Enabled'     -Value 0
 
                 # Privacy - opt out of language-based content and settings suggestions
-                Set-RegValue -Path "$du\Control Panel\International\User Profile" `
+                Set-PolicyValue -Path "$du\Control Panel\International\User Profile" `
                     -Name 'HttpAcceptLanguageOptOut' -Value 1
 
                 # User Profile Engagement - suppress SCOOBE (Settings welcome experience)
-                Set-RegValue -Path "$du\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement" `
+                Set-PolicyValue -Path "$du\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement" `
                     -Name 'ScoobeSystemSettingEnabled' -Value 0
 
                 # ==================================================================
@@ -1395,40 +1430,40 @@ try {
                 # Ref: Article local policy table - User Configuration > Windows Components > Cloud Content
                 $duCloudContent = "$du\Software\Policies\Microsoft\Windows\CloudContent"
                 # Turn off all Windows Spotlight features (lock screen, tips, consumer features)
-                Set-RegValue -Path $duCloudContent -Name 'DisableWindowsSpotlightFeatures'              -Value 1
+                Set-PolicyValue -Path $duCloudContent -Name 'DisableWindowsSpotlightFeatures'              -Value 1
                 # Don't suggest third-party content in Windows Spotlight
-                Set-RegValue -Path $duCloudContent -Name 'DisableThirdPartySuggestions'                 -Value 1
+                Set-PolicyValue -Path $duCloudContent -Name 'DisableThirdPartySuggestions'                 -Value 1
                 # Don't use diagnostic data for tailored experiences (USER CONFIG ONLY - no machine equivalent)
-                Set-RegValue -Path $duCloudContent -Name 'DisableTailoredExperiencesWithDiagnosticData' -Value 1
+                Set-PolicyValue -Path $duCloudContent -Name 'DisableTailoredExperiencesWithDiagnosticData' -Value 1
                 # Configure Windows spotlight on lock screen: 2 = Disabled (USER CONFIG ONLY - no machine equivalent)
                 # 1 = enabled, 2 = disabled (user cannot select spotlight as lock screen)
-                Set-RegValue -Path $duCloudContent -Name 'ConfigureWindowsSpotlight'                    -Value 2
+                Set-PolicyValue -Path $duCloudContent -Name 'ConfigureWindowsSpotlight'                    -Value 2
 
                 # -- Start Menu and Taskbar (User Configuration) --
                 # Ref: Article local policy table - User Configuration > Start Menu and Taskbar
                 $duLegacyExplorer = "$du\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
                 # Turn off user tracking (suppresses frequently-used programs list and MRU data)
-                Set-RegValue -Path $duLegacyExplorer -Name 'NoInstrumentation'   -Value 1
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoInstrumentation'   -Value 1
                 # Don't add shares of recently opened documents to Network Locations
-                Set-RegValue -Path $duLegacyExplorer -Name 'NoRecentDocsNetHood' -Value 1
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoRecentDocsNetHood' -Value 1
                 # Don't use search-based method when resolving shell shortcuts
-                Set-RegValue -Path $duLegacyExplorer -Name 'NoResolveSearch'     -Value 1
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoResolveSearch'     -Value 1
 
                 $duExplorer = "$du\Software\Policies\Microsoft\Windows\Explorer"
                 # Don't display or track items in Jump Lists from remote locations
-                Set-RegValue -Path $duExplorer -Name 'NoRemoteDestinations'          -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'NoRemoteDestinations'          -Value 1
                 # Turn off Aero Shake window minimizing mouse gesture
-                Set-RegValue -Path $duExplorer -Name 'NoWindowMinimizingShortcuts'   -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'NoWindowMinimizingShortcuts'   -Value 1
                 # Turn off all balloon notifications in the taskbar notification area
-                Set-RegValue -Path $duExplorer -Name 'TaskbarNoNotification'         -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'TaskbarNoNotification'         -Value 1
                 # Turn off feature advertisement balloon notifications
-                Set-RegValue -Path $duExplorer -Name 'NoBalloonFeatureAdvertisements' -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'NoBalloonFeatureAdvertisements' -Value 1
 
                 $duPushNotify = "$du\Software\Policies\Microsoft\Windows\CurrentVersion\PushNotifications"
                 # Turn off toast (in-app popup) notifications
-                Set-RegValue -Path $duPushNotify -Name 'NoToastApplicationNotification'           -Value 1
+                Set-PolicyValue -Path $duPushNotify -Name 'NoToastApplicationNotification'           -Value 1
                 # Turn off toast notifications on the lock screen
-                Set-RegValue -Path $duPushNotify -Name 'NoToastApplicationNotificationOnLockScreen' -Value 1
+                Set-PolicyValue -Path $duPushNotify -Name 'NoToastApplicationNotificationOnLockScreen' -Value 1
 
                 # -- Desktop (User Configuration) --
                 # Ref: Article local policy table - User Configuration > Desktop
@@ -1438,20 +1473,20 @@ try {
                 # -- Edge UI (User Configuration) --
                 # Turn off app-usage tracking in the Start search / Charm bar MRU list
                 # Ref: Article local policy table - User Configuration > Edge UI
-                Set-RegValue -Path "$du\Software\Policies\Microsoft\Windows\EdgeUI" `
+                Set-PolicyValue -Path "$du\Software\Policies\Microsoft\Windows\EdgeUI" `
                     -Name 'DisableMFUTracking' -Value 1
 
                 # -- File Explorer (User Configuration) --
                 # Ref: Article local policy table - User Configuration > File Explorer
                 # Turn off caching of thumbnail pictures
-                Set-RegValue -Path $duExplorer -Name 'DisableThumbnails'             -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'DisableThumbnails'             -Value 1
                 # Turn off display of recent search entries in the File Explorer search box
-                Set-RegValue -Path $duExplorer -Name 'DisableSearchBoxSuggestions'   -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'DisableSearchBoxSuggestions'   -Value 1
                 # Turn off caching of thumbnails in hidden thumbs.db files
                 # (machine-level DisableThumbsDBOnNetworkFolders is also set in Section 5)
-                Set-RegValue -Path $duExplorer -Name 'DisableThumbsDBOnNetworkFolders' -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'DisableThumbsDBOnNetworkFolders' -Value 1
 
-                Invoke-LgpoFlush
+                Invoke-ApplyPolicyQueue
                 Write-Log "  Default user profile settings applied"
             }
             catch {
@@ -1491,16 +1526,16 @@ try {
 
         $lanman = 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
         # Disable bandwidth throttling on high-latency network connections
-        Set-RegValue -Path $lanman -Name 'DisableBandwidthThrottling'  -Value 1
+        Set-PolicyValue -Path $lanman -Name 'DisableBandwidthThrottling'  -Value 1
         # Increase file metadata cache entries (default 64 -> 1024)
-        Set-RegValue -Path $lanman -Name 'FileInfoCacheEntriesMax'     -Value 1024
+        Set-PolicyValue -Path $lanman -Name 'FileInfoCacheEntriesMax'     -Value 1024
         # Increase directory information cache entries (default 16 -> 1024)
-        Set-RegValue -Path $lanman -Name 'DirectoryCacheEntriesMax'    -Value 1024
+        Set-PolicyValue -Path $lanman -Name 'DirectoryCacheEntriesMax'    -Value 1024
         # Increase file-not-found cache entries (default 128 -> 2048)
-        Set-RegValue -Path $lanman -Name 'FileNotFoundCacheEntriesMax' -Value 2048
+        Set-PolicyValue -Path $lanman -Name 'FileNotFoundCacheEntriesMax' -Value 2048
         # Reduce max dormant open files per share connection (default 1023 -> 256)
         # Helps when many clients connect to the same SMB server (e.g., profile share)
-        Set-RegValue -Path $lanman -Name 'DormantFileLimit'            -Value 256
+        Set-PolicyValue -Path $lanman -Name 'DormantFileLimit'            -Value 256
 
         Write-Log ""
     } # end if RunFullOptimization - Section 9

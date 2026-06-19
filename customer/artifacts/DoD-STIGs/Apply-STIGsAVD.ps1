@@ -195,6 +195,7 @@ Function Get-InternetFile {
         }
 
         If ($OutputFileName) { 
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             $wc = New-Object System.Net.WebClient
             $OutputFile = Join-Path $OutputDirectory $OutputFileName
             Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."

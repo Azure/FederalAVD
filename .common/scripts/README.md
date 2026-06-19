@@ -231,6 +231,44 @@ Runs Windows Update during image build process.
   - Installation result reporting
 - **Output:** Update installation logs and reboot management
 
+#### [Optimize-AVDImage.ps1](Optimize-AVDImage.ps1)
+
+Consolidated VDI image optimization script. Disables unnecessary services, scheduled tasks, autologgers, and optional Windows features; applies registry and Group Policy settings via LGPO.exe (with direct registry fallback); and configures default user profile settings.
+
+- **Used by:** Image Management
+- **Parameters:** OptimizationProfile (`NonPersistent-Full`, `NonPersistent-UpdatesOnly`, `Persistent`), RestrictInternet
+- **Features:**
+  - Tiered optimization profile system (all-VDI vs NonPersistent-only sections)
+  - LGPO.exe integration for policy application with automatic download fallback
+  - Registry fallback when LGPO fails so no policy values are silently lost
+  - Default user hive mounting for per-user policy defaults
+  - Optional internet restriction settings
+- **Output:** `C:\Windows\Logs\Optimize-AVDImage.log`
+
+#### [Check-CbsState.ps1](Check-CbsState.ps1)
+
+Checks Component Based Servicing (CBS) registry state on the image VM to determine if a restart is required before proceeding with customization or sysprep.
+
+- **Used by:** Image Management (via `conditionalRestart.bicep` module)
+- **Features:**
+  - Waits up to 10 minutes for TiWorker.exe and TrustedInstaller.exe to exit before reading registry
+  - Checks `RebootPending`, `RebootInProgress`, `RebootRequired`, and `SessionsPending\Exclusive` keys
+  - Emits `RESTART_REQUIRED=true` or `RESTART_REQUIRED=false` as the first stdout line (instanceView-safe signal)
+  - Full timestamped log follows the signal in stdout and is written to `C:\Windows\Logs\Check-CbsState-*.log`
+- **Output:** Signal line first in stdout, full log at `C:\Windows\Logs\Check-CbsState-*.log`
+
+#### [Invoke-ConditionalRestart.ps1](Invoke-ConditionalRestart.ps1)
+
+Runs on the orchestration VM. Reads the `instanceView.output` of the `Check-CbsState` run command via ARM REST API and, if `RESTART_REQUIRED=true`, calls the ARM restart API (synchronous LRO) then waits 60 seconds for the guest agent to initialize.
+
+- **Used by:** Image Management (via `conditionalRestart.bicep` module)
+- **Parameters:** ResourceManagerUri, UserAssignedIdentityClientId, ImageVmResourceId, RunCommandName
+- **Features:**
+  - Reads run command instanceView without needing a separate deploymentScript resource
+  - Uses ARM restart LRO (definitive completion signal) instead of polling power state
+  - No timing races — restart only occurs when the CBS check script has already confirmed the need
+- **Output:** Restart decision and polling progress written to stdout (captured in blob log)
+
 #### [Invoke-WDOT.ps1](Invoke-WDOT.ps1)
 
 Runs Windows Desktop Optimization Tool (WDOT) for AVD image optimization.
@@ -407,7 +445,8 @@ Retrieves Azure RBAC role assignments for auditing.
 ### Image Management Only
 
 - Application installers (FSLogix, M365, OneDrive, Teams)
-- Image optimization tools (WDOT, AppX removal)
+- Image optimization (`Optimize-AVDImage.ps1`)
+- CBS state check and conditional restart (`Check-CbsState.ps1`, `Invoke-ConditionalRestart.ps1`)
 - Image finalization (Sysprep, Generalize)
 
 ### Host Pool Deployment Only

@@ -143,6 +143,7 @@ Write-Output ( $PSBoundParameters | Format-Table -AutoSize )
 If ($Arguments -eq '') { $Arguments = $null }
 $TempDir = Join-Path $Env:TEMP -ChildPath $Name
 New-Item -Path $TempDir -ItemType Directory -Force | Out-Null
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $WebClient = New-Object System.Net.WebClient
 If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {
   Write-OutputWithTimeStamp "Getting access token for '$Uri' using User Assigned Identity."

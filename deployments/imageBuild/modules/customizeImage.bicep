@@ -164,7 +164,7 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
 // issues, and unpredictable customization behaviour. This step costs ~60s in the
 // clean case and a full reboot only when the marketplace image actually needs it.
 module conditionalRestartPreBuild 'conditionalRestart.bicep' = {
-  name: 'conditional-restart-pre-build'
+  name: 'cbs-status-conditional-restart-pre-build-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location
@@ -578,7 +578,7 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
 }
 
 module conditionalRestartPostUpdates 'conditionalRestart.bicep' = if (installUpdates) {
-  name: 'conditional-restart-post-updates'
+  name: 'conditional-restart-post-updates-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location
@@ -689,8 +689,8 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
   ]
 }
 
-resource avdImageOptimize 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (vdiOptimizationProfile != 'None' || vdiOptimizationRestrictInternet) {
-  name: 'avd-image-optimize'
+resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (vdiOptimizationProfile != 'None' || vdiOptimizationRestrictInternet) {
+  name: 'optimize-image'
   location: location
   parent: imageVm
   properties: {
@@ -760,7 +760,7 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
     restartCustomizations
     conditionalRestartPostUpdates
     vdiApplications
-    avdImageOptimize
+    optimizeImage
     updateBuiltInApps
   ]
 }
@@ -772,7 +772,7 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
 // write step and CBS is checked to ensure sysprep runs on a settled system.
 
 module conditionalRestartPostCleanup 'conditionalRestart.bicep' = if (empty(vdiCustomizers)) {
-  name: 'conditional-restart-post-cleanup'
+  name: 'conditional-restart-post-cleanup-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location
