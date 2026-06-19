@@ -269,16 +269,6 @@ Runs on the orchestration VM. Reads the `instanceView.output` of the `Check-CbsS
   - No timing races — restart only occurs when the CBS check script has already confirmed the need
 - **Output:** Restart decision and polling progress written to stdout (captured in blob log)
 
-#### [Invoke-WDOT.ps1](Invoke-WDOT.ps1)
-
-Runs Windows Desktop Optimization Tool (WDOT) for AVD image optimization.
-
-- **Used by:** Image Management
-- **Parameters:** APIVersion, BlobStorageSuffix, BuildDir, Uri, UserAssignedIdentityClientId
-- **Features:** Downloads and executes WDOT to optimize Windows for virtual desktop workloads
-- **Default Source:** [Virtual Desktop Team GitHub](https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool)
-- **Output:** Optimized OS configuration for AVD
-
 #### [Invoke-Sysprep.ps1](Invoke-Sysprep.ps1)
 
 Executes sysprep to generalize Windows images, then captures the Panther logs into the Run Command output blob.

@@ -12,7 +12,6 @@ Create customized Windows images with:
 
 - Automated software installation (FSLogix, Microsoft 365 Apps, OneDrive, Teams)
 - Windows AppX package removal
-- Windows Desktop Optimization Tool (WDOT) customizations
 - Windows Update installation from multiple sources
 - Custom scripts and applications
 - STIG compliance support
@@ -37,7 +36,7 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
 
 ### Comprehensive Customization
 
-- **Built-in Installers:** FSLogix, M365 Apps, OneDrive, Teams, WDOT
+- **Built-in Installers:** FSLogix, M365 Apps, OneDrive, Teams
 - **AppX Removal:** Remove unwanted built-in Windows applications
 - **Custom Software:** Deploy your own installers and scripts
 - **VDI Customizations:** Install software that generates unique identifiers after restart
@@ -70,7 +69,6 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
    - Execute pre-restart customizations
    - Install Microsoft content (FSLogix, Office, OneDrive, Teams)
    - Remove AppX packages
-   - Apply WDOT optimizations
    - Run custom scripts and installers
    - Install Windows Updates
    - Execute VDI customizations (no restart)
