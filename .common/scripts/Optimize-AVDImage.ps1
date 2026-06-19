@@ -11,19 +11,17 @@
     References:
       [1] MS VDI optimization guide (primary source for all services, tasks, and policies):
           https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration
-      [2] Windows Desktop Optimization Tool (WDOT) - additional tasks and registry entries:
-          https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool
-      [3] Windows Restricted Traffic Limited Functionality Baseline (items marked * in [1]):
+      [2] Windows Restricted Traffic Limited Functionality Baseline (items marked * in [1]):
           https://learn.microsoft.com/en-us/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services
-      [4] SMB client performance tuning (Section 9 - LanManWorkstation parameters):
+      [3] SMB client performance tuning (Section 9 - LanManWorkstation parameters):
           https://learn.microsoft.com/en-us/windows-server/administration/performance-tuning/
-      [5] FSLogix profile container + OneDrive Files On-Demand (Storage Sense rationale):
+      [4] FSLogix profile container + OneDrive Files On-Demand (Storage Sense rationale):
           https://learn.microsoft.com/en-us/fslogix/tutorial-container-onedrive
-      [6] Microsoft Edge Update policies (Section 6 - EdgeUpdate registry):
+      [5] Microsoft Edge Update policies (Section 6 - EdgeUpdate registry):
           https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies
-      [7] OneDrive GPO / update ring policy (Section 6 - GPOSetUpdateRing):
+      [6] OneDrive GPO / update ring policy (Section 6 - GPOSetUpdateRing):
           https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
-      [8] Update channel lockdown logic originally from Disable-SoftwareUpdates.ps1
+      [7] Update channel lockdown logic originally from Disable-SoftwareUpdates.ps1
           (that script is now fully superseded by NonPersistent sections of this script).
 
     This script does NOT handle the following (each has a dedicated script):
@@ -70,7 +68,7 @@
         monthly, and clean temp files. Recycle Bin and Downloads cleanup are left
         off to avoid surprising users. Machine policy overrides any per-user
         Settings UI configuration.
-        Ref: [5], https://learn.microsoft.com/en-us/azure/virtual-desktop/set-up-customize-master-image
+        Ref: [4], https://learn.microsoft.com/en-us/azure/virtual-desktop/set-up-customize-master-image
 
       Windows Search / WSearch service [Section 1]:
         The article recommends evaluating WSearch for disabling. This script
@@ -1000,7 +998,7 @@ try {
         # this by making OneDrive files that haven't been opened in 30+ days online-only
         # again, keeping the container lean. This benefit applies equally to NonPersistent
         # and Persistent VMs because the container (not the OS disk) accumulates.
-        # Ref: [5] https://learn.microsoft.com/en-us/fslogix/tutorial-container-onedrive
+        # Ref: [4] https://learn.microsoft.com/en-us/fslogix/tutorial-container-onedrive
         # Ref: https://learn.microsoft.com/en-us/azure/virtual-desktop/set-up-customize-master-image
         # Ref: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-storage
         #
@@ -1285,7 +1283,7 @@ try {
     # Applied when -RestrictInternet is true. Reduces outbound network traffic
     # for air-gapped or proxy-only environments. Applies to all profiles,
     # including None.
-    # Ref: [3] Windows Restricted Traffic Baseline
+    # Ref: [2] Windows Restricted Traffic Baseline
     # -----------------------------------------------------------------------
     if ($RestrictInternetBool) {
         Write-Log "--- Section 7: Restricted Internet Traffic ---"

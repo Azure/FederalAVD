@@ -101,7 +101,7 @@ try {
     # Clear any existing Sysprep Panther logs so the captured output only reflects
     # this run. Sysprep appends to setupact.log rather than replacing it, so without
     # this the captured log would contain output from prior sysprep invocations
-    # (e.g. from FSLogix, Office, or WDOT customizations) mixed with the current run.
+    # (e.g. from FSLogix or Office customizations) mixed with the current run.
     $PantherDir = "$env:SystemRoot\System32\Sysprep\Panther"
     if (Test-Path $PantherDir) {
         Write-Log "Clearing previous Sysprep Panther logs from '$PantherDir'."
