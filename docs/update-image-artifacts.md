@@ -287,6 +287,47 @@ Use `winget show <id>` to confirm the package details before adding to your conf
 
 > **Air-gapped environments:** `WingetId` entries require outbound internet access to winget's CDN or the Microsoft Store. They are not usable in air-gapped clouds. See [Air-Gapped Cloud Guide](air-gapped-clouds.md) for alternatives.
 
+#### 6. Winget - Preserve Layout (UWP / MSIX packages)
+
+Use `WingetPreserveLayout: true` when downloading Store-distributed MSIX or MSIXBUNDLE packages
+that must keep their original filenames and folder structure. This mode is used for built-in UWP
+apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
+
+```json
+"WindowsCalculator": {
+    "Description": "Windows Calculator - built-in UWP app provisioned for all users",
+    "WingetId": "9WZDNCRFHVN5",
+    "WingetPreserveLayout": true,
+    "DestinationFolders": [ "BuiltIn-UWP-Apps\\Calculator" ]
+},
+"MicrosoftClipchamp": {
+    "Description": "Clipchamp - built-in UWP video editor provisioned for all users",
+    "WingetId": "9P1J8S7CCWWT",
+    "WingetPreserveLayout": true,
+    "Architecture": "neutral",
+    "DestinationFolders": [ "BuiltIn-UWP-Apps\\Clipchamp" ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `WingetId` | Microsoft Store product code (alphanumeric) |
+| `WingetPreserveLayout` | `true` -- preserves the `winget download` folder layout; no `DestinationFileName` used |
+| `Architecture` | Optional. Omit for most apps (`x64` is the default). Set to `"neutral"` for multi-arch bundles that do not publish a separate x64 installer (e.g., Clipchamp). |
+| `DestinationFolders` | Single entry naming the app subfolder inside the parent artifact folder (e.g., `BuiltIn-UWP-Apps\\Calculator`) |
+
+**How it works:**
+
+1. `winget download --id <WingetId> --download-directory <temp>` is called (with `--architecture x64` unless `Architecture` is `"neutral"`).
+2. The destination folder is cleaned before copying to prevent stale package accumulation.
+3. Only `x64` and `neutral` architecture files are copied from any `Dependencies\` subfolder; other arch variants are pruned.
+4. After all preserve-layout downloads complete, shared framework packages (VCLibs, WinAppSDK, UI.Xaml, etc.) are deduplicated across all app subfolders into a single `SharedDependencies\` folder at the parent artifact root, reducing the zip size.
+
+> **Note:** `WingetPreserveLayout` entries do not use `DestinationFileName`. The original filenames produced by `winget download` are kept so that `Add-AppxProvisionedPackage` can read the package metadata correctly.
+
+See [BuiltIn-UWP-Apps](../customer/examples/artifacts/BuiltIn-UWP-Apps/README.md) for the
+full list of supported apps and setup instructions.
+
 ### Placing a File Into Multiple Artifact Folders
 
 Set `DestinationFolders` to an array with multiple names to copy the same downloaded file into several artifact folders. This is common for tools like LGPO that are needed by multiple artifact packages:

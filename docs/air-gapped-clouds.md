@@ -62,6 +62,62 @@ To add software not in the base file, place `downloads.json` in `customer/parame
 > - Replace `WingetId` with `DownloadUrl` pointing to an internally hosted copy (e.g., an internal web server, SharePoint site, or Azure Blob storage accessible from your management system).
 > - Pre-stage the installer directly in `customer/artifacts/<FolderName>/` and omit the entry from `downloads.json` — the script will package and upload it without attempting a download.
 
+#### Built-in UWP apps and codec extensions (air-gapped)
+
+The `BuiltIn-UWP-Apps` artifact (Calculator, Paint, Snipping Tool, Notepad, Clipchamp, Photos,
+Sticky Notes, Windows Terminal, and codec extensions) uses `WingetId` entries with
+`WingetPreserveLayout: true` and therefore **cannot be downloaded automatically in air-gapped
+environments**.
+
+To use these apps in an air-gapped image build:
+
+1. On an internet-connected system, run `Update-ImageArtifacts.ps1` once to download and stage
+   the packages:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 -StorageAccountName "<any>" -ResourceGroupName "<any>"
+   ```
+
+   The staged output is written to a local temp folder before upload. Alternatively, run with
+   `-SkipDownloadingNewSources` after manually placing the winget-downloaded packages, or use
+   winget directly:
+
+   ```powershell
+   winget download --id 9WZDNCRFHVN5 --download-directory "C:\stage\Calculator" --source msstore --skip-license
+   # repeat for each app Store ID
+   ```
+
+2. Copy the entire staged `BuiltIn-UWP-Apps\` folder (including `SharedDependencies\`) to the
+   air-gapped network and place it under `customer/artifacts/`:
+
+   ```text
+   customer\artifacts\
+       BuiltIn-UWP-Apps\
+           Install-BuiltinUwpApps.ps1
+           Calculator\
+               Microsoft.WindowsCalculator_<ver>_neutral_~_8wekyb3d8bbwe.msixbundle
+           ...
+           SharedDependencies\
+               Microsoft.VCLibs.140.00.UWPDesktop_<ver>_x64__8wekyb3d8bbwe.appx
+               ...
+   ```
+
+3. Upload to the air-gapped artifacts storage account using `-SkipDownloadingNewSources`:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -SkipDownloadingNewSources
+   ```
+
+   The script packages the pre-staged `BuiltIn-UWP-Apps\` folder as-is and uploads it without
+   attempting any winget downloads. The `Optimize-SharedDependencies` deduplication step is
+   skipped when `-SkipDownloadingNewSources` is set, so ensure your staged folder already has
+   the `SharedDependencies\` layout (step 1 produces this automatically).
+
+> **Refresh cadence:** MSIX packages include the app version in the filename. Re-stage from an
+> internet-connected system periodically to pick up new app versions, then repeat steps 2-3.
+
 ---
 
 ### Items That Must Be Placed Manually

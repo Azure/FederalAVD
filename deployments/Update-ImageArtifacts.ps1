@@ -548,6 +548,96 @@ function Add-ContentToBlobContainer {
     }
 }
 
+function Optimize-SharedDependencies {
+    # Deduplicates dependency packages across preserve-layout app subfolders.
+    # Each app winget downloads brings its own copy of shared framework packages
+    # (VCLibs, WinAppSDK, etc.). This function collects them all, keeps one copy
+    # of each (highest version wins), moves them to a SharedDependencies\ folder
+    # at the parent level, then removes the per-app Dependencies\ folders.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $ParentDir
+    )
+
+    Write-Output "Deduplicating shared dependencies under '$ParentDir'..."
+
+    $PkgExts = @('.msixbundle', '.appxbundle', '.msix', '.appx')
+
+    # Collect all x64/neutral dep files from every app subfolder.
+    $AllDeps = Get-ChildItem -Path $ParentDir -Directory |
+        Where-Object { $_.Name -ne 'SharedDependencies' } |
+        ForEach-Object {
+            Get-ChildItem -Path $_.FullName -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Extension -in $PkgExts -and
+                    $_.FullName  -match '(?i)\\dependencies\\' -and
+                    $_.Name      -match '(?i)_(x64|neutral)[._]'
+                }
+        }
+
+    If (-not $AllDeps) {
+        Write-Output "No dependency packages found under '$ParentDir'. Nothing to deduplicate."
+        return
+    }
+
+    # Dedup key: strip the version segment so all versions of the same package
+    # family + arch map to the same key.
+    # e.g. Microsoft.VCLibs.140.00_14.0.33519.0_x64__8wekyb3d8bbwe.appx
+    #   -> Microsoft.VCLibs.140.00_x64__8wekyb3d8bbwe.appx
+    $SharedDir = Join-Path -Path $ParentDir -ChildPath 'SharedDependencies'
+    If (Test-Path -Path $SharedDir) {
+        Remove-Item -Path "$SharedDir\*" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -Path $SharedDir -ItemType Directory -Force | Out-Null
+
+    $Grouped = $AllDeps | Group-Object {
+        $_.Name -replace '_[0-9]+(?:\.[0-9]+){1,3}(?=_)', ''
+    }
+
+    $KeptCount = 0
+    foreach ($Group in $Grouped) {
+        $Best = $Group.Group |
+            Sort-Object {
+                $v = [Version]'0.0.0.0'
+                If ($_.Name -match '_([0-9]+(?:\.[0-9]+){1,3})[_.]') {
+                    try { $v = [Version]$Matches[1] } catch {}
+                }
+                $v
+            } -Descending |
+            Select-Object -First 1
+        Copy-Item -Path $Best.FullName -Destination (Join-Path -Path $SharedDir -ChildPath $Best.Name) -Force
+        If ($Group.Count -gt 1) {
+            $eliminated = ($Group.Group | Where-Object { $_.Name -ne $Best.Name }) -join ', '
+            Write-Output "  [merged]  Kept : $($Best.Name)"
+            Write-Output "            Dropped ($($Group.Count - 1)) : $eliminated"
+        }
+        Else {
+            Write-Output "  [unique]  $($Best.Name)"
+        }
+        $KeptCount++
+    }
+    Write-Output ""
+    Write-Output "  Unique packages in SharedDependencies : $KeptCount"
+    Write-Output "  Total packages before dedup           : $($AllDeps.Count)"
+    Write-Output "  Packages eliminated                   : $($AllDeps.Count - $KeptCount)"
+    Write-Output "  NOTE: packages with different major.minor in their name (e.g. WindowsAppRuntime.1.7"
+    Write-Output "        vs 1.8, UI.Xaml.2.4 vs 2.8) are separate package families and cannot be merged."
+
+    # Remove per-app Dependencies folders - they are now redundant.
+    $RemovedCount = 0
+    Get-ChildItem -Path $ParentDir -Directory |
+        Where-Object { $_.Name -ne 'SharedDependencies' } |
+        ForEach-Object {
+            $DepDir = Join-Path -Path $_.FullName -ChildPath 'Dependencies'
+            If (Test-Path -Path $DepDir) {
+                Remove-Item -Path $DepDir -Recurse -Force
+                $RemovedCount++
+            }
+        }
+    Write-Output "  Per-app Dependencies folders removed  : $RemovedCount"
+}
+
 #endregion Functions
 
 #region Prepare Artifacts
@@ -579,6 +669,9 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     Write-Output "=== Phase 1: Download ==="
     $DownloadDir = Join-Path -Path $TempArtifactsDir -ChildPath 'downloads'
     New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null
+    # Track parent dirs of preserve-layout destinations for post-loop deduplication.
+    $PreserveLayoutParentFolders         = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $CustomerPreserveLayoutParentFolders = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $FileVersionInfoFile = Join-Path -Path $ArtifactsDir -ChildPath 'uploadedFileVersionInfo.txt'
     New-Item -Path $FileVersionInfoFile -ItemType File -Force | Out-Null
     $downloadJson = Get-Content -Path $downloadFilePath -Raw -ErrorAction 'Stop'
@@ -646,6 +739,14 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     $packageCount = ($Downloads.PSObject.Properties.Name).Count
     Write-Output "Processing $packageCount package(s) from '$downloadFilePath'."
 
+    # Clean winget's own working directory so stale files from previous runs do not
+    # accumulate. winget creates %TEMP%\WinGet independently of --download-directory.
+    $WingetTempDir = Join-Path -Path $Env:TEMP -ChildPath 'WinGet'
+    If (Test-Path -Path $WingetTempDir) {
+        Write-Output "Cleaning winget temp directory '$WingetTempDir'..."
+        Remove-Item -Path $WingetTempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     foreach ($key in $Downloads.PSObject.Properties.Name) {
         $Download = $Downloads.$key
         $SoftwareName = $key
@@ -702,36 +803,131 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             }
             Else {
                 Write-Output "[$SoftwareName] Downloading via winget (Id: $($Download.WingetId))..."
+                # WingetPreserveLayout: skip rename and preserve the downloaded folder structure as-is.
+                # Use this for MSIX/UWP apps where winget creates a versioned bundle + Dependencies subfolder.
+                $PreserveLayout = ($null -ne $Download.WingetPreserveLayout -and [bool]$Download.WingetPreserveLayout)
                 Try {
                     $TempSoftwareDownloadDir = Join-Path -Path $DownloadDir -ChildPath ($SoftwareName.Replace(' ', '_'))
+                    If (Test-Path -Path $TempSoftwareDownloadDir) {
+                        Remove-Item -Path $TempSoftwareDownloadDir -Recurse -Force
+                    }
                     New-Item -Path $TempSoftwareDownloadDir -ItemType Directory -Force | Out-Null
                     $DestFileName = $Download.DestinationFileName
                     $DestFileFullName = Join-Path $TempSoftwareDownloadDir -ChildPath $DestFileName
                     $VersionText = @()
                     $VersionText += "SoftwareName = $SoftwareName"
                     $VersionText += "WingetId = $($Download.WingetId)"
-                    & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --accept-source-agreements --accept-package-agreements |
-                        Where-Object { $_ -match 'Found |Successfully |Installer downloaded:|[Ee]rror|[Ww]arning|[Ff]ailed' } |
-                        ForEach-Object { Write-Output "[$SoftwareName]  $_" }
-                    $DestFileExtension = [System.IO.Path]::GetExtension($DestFileName)
-                    $DownloadedFileItem = Get-ChildItem -Path $TempSoftwareDownloadDir -File | Where-Object { $_.Extension -eq $DestFileExtension } | Select-Object -First 1
-                    If ($null -eq $DownloadedFileItem) {
-                        $DownloadedFileItem = Get-ChildItem -Path $TempSoftwareDownloadDir -File | Select-Object -First 1
+                    # Resolve architecture: honour a per-entry override, otherwise default to x64.
+                    # Set Architecture to 'neutral' to omit --architecture entirely (needed for
+                    # multi-arch Store bundles that winget cannot match to a specific arch).
+                    # Valid winget values: x86, x64, arm, arm64.
+                    $WingetArch = if ($null -ne $Download.Architecture -and $Download.Architecture -ne '') {
+                        $Download.Architecture
+                    } else {
+                        'x64'
                     }
-                    If ($null -eq $DownloadedFileItem) {
-                        Throw "Winget did not download any files for '$SoftwareName'."
+                    if ($WingetArch -eq 'neutral') {
+                        Write-Output "[$SoftwareName] Architecture : (omitted - neutral/multi-arch)"
+                        & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
+                            Where-Object { $_ -match 'Found |Installer downloaded:|[Ee]rror|[Ff]ailed' } |
+                            ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                    } else {
+                        Write-Output "[$SoftwareName] Architecture : $WingetArch"
+                        & winget download --id $Download.WingetId --architecture $WingetArch --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
+                            Where-Object { $_ -match 'Found |Installer downloaded:|[Ee]rror|[Ff]ailed' } |
+                            ForEach-Object { Write-Output "[$SoftwareName]  $_" }
                     }
-                    $VersionText += "Downloaded File = $($DownloadedFileItem.Name)"
-                    If ($DownloadedFileItem.FullName -ne $DestFileFullName) {
-                        Rename-Item -Path $DownloadedFileItem.FullName -NewName $DestFileName -Force
+                    If ($PreserveLayout) {
+                        # Preserve the full downloaded layout (bundle + Dependencies subfolder).
+                        # Do not rename any files; the install script will discover them by extension.
+
+                        $PruneExts = @('.msixbundle', '.appxbundle', '.msix', '.appx')
+
+                        # --- Prune main bundle variants ---
+                        # When winget downloads without --architecture it fetches every available
+                        # installer variant (X86, Neutral, X64.Arm64, etc.). Keep only the best
+                        # one so we don't bloat the zip with variants that will never be installed.
+                        $MainCandidates = Get-ChildItem -Path $TempSoftwareDownloadDir -File |
+                            Where-Object { $_.Extension -in $PruneExts }
+                        If ($MainCandidates.Count -gt 1) {
+                            $BestMain = $MainCandidates |
+                                Sort-Object @{Expression = {
+                                    # 1. Highest version wins.
+                                    $v = [Version]'0.0.0.0'
+                                    If ($_.Name -match '_([0-9]+(?:\.[0-9]+){1,3})[_.]') {
+                                        try { $v = [Version]$Matches[1] } catch {}
+                                    }
+                                    $v
+                                }; Descending = $true },
+                                @{Expression = {
+                                    # 2. Architecture preference for x64 AVD hosts:
+                                    #    x64-specific (0) > multi-arch/neutral (1) > anything else (2).
+                                    #    A name containing X64 but NOT also Arm/Arm64 alone is x64-specific.
+                                    #    Names like X64.Arm64 are multi-arch bundles (score 1).
+                                    If ($_.Name -match '(?i)[_.]X64[_.]' -and $_.Name -notmatch '(?i)[_.]Arm') { 0 }
+                                    ElseIf ($_.Name -match '(?i)[_.](Neutral|Universal)[_.]' -or $_.Name -match '(?i)[_.]X64\.Arm') { 1 }
+                                    Else { 2 }
+                                }},
+                                @{Expression = {
+                                    # 3. Bundle format preference.
+                                    switch ($_.Extension) {
+                                        '.msixbundle' { 0 }
+                                        '.appxbundle' { 1 }
+                                        '.msix'       { 2 }
+                                        '.appx'       { 3 }
+                                        default       { 4 }
+                                    }
+                                }},
+                                @{Expression = { $_.Length }; Descending = $true } |
+                                Select-Object -First 1
+                            $MainCandidates | Where-Object { $_.FullName -ne $BestMain.FullName } | ForEach-Object {
+                                Write-Output "[$SoftwareName] Pruning bundle variant : $($_.Name)"
+                                Remove-Item -Path $_.FullName -Force
+                            }
+                            Write-Output "[$SoftwareName] Best bundle kept         : $($BestMain.Name)"
+                        }
+
+                        # --- Prune non-x64/neutral dependency packages ---
+                        # winget may download deps for all architectures; drop everything
+                        # that is not x64 or neutral to avoid provisioning errors.
+                        Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File |
+                            Where-Object {
+                                $_.Extension -in $PruneExts -and
+                                $_.FullName  -match '(?i)\\dependencies\\' -and
+                                $_.Name      -notmatch '(?i)_(x64|neutral)[._]'
+                            } | ForEach-Object {
+                                Write-Output "[$SoftwareName] Pruning non-x64 dep    : $($_.Name)"
+                                Remove-Item -Path $_.FullName -Force
+                            }
+
+                        $DownloadedFiles = Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File
+                        If ($DownloadedFiles.Count -eq 0) {
+                            Throw "Winget did not download any files for '$SoftwareName'."
+                        }
+                        $DownloadedFiles | ForEach-Object { $VersionText += "Downloaded File = $($_.Name)" }
+                        Write-Output "[$SoftwareName] Download complete ($($DownloadedFiles.Count) file(s), layout preserved)."
                     }
-                    Write-Output "[$SoftwareName] Download complete."
-                    If ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.msi') {
-                        $VersionText += Get-MSIInfo -Path $DestFileFullName
-                    }
-                    ElseIf ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.exe') {
-                        $Version = (Get-ItemProperty -Path $DestFileFullName).VersionInfo | Select-Object ProductVersion, FileVersion
-                        $VersionText += "$Version"
+                    Else {
+                        $DestFileExtension = [System.IO.Path]::GetExtension($DestFileName)
+                        $DownloadedFileItem = Get-ChildItem -Path $TempSoftwareDownloadDir -File | Where-Object { $_.Extension -eq $DestFileExtension } | Select-Object -First 1
+                        If ($null -eq $DownloadedFileItem) {
+                            $DownloadedFileItem = Get-ChildItem -Path $TempSoftwareDownloadDir -File | Select-Object -First 1
+                        }
+                        If ($null -eq $DownloadedFileItem) {
+                            Throw "Winget did not download any files for '$SoftwareName'."
+                        }
+                        $VersionText += "Downloaded File = $($DownloadedFileItem.Name)"
+                        If ($DownloadedFileItem.FullName -ne $DestFileFullName) {
+                            Rename-Item -Path $DownloadedFileItem.FullName -NewName $DestFileName -Force
+                        }
+                        Write-Output "[$SoftwareName] Download complete."
+                        If ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.msi') {
+                            $VersionText += Get-MSIInfo -Path $DestFileFullName
+                        }
+                        ElseIf ([System.IO.Path]::GetExtension($DestFileFullName) -eq '.exe') {
+                            $Version = (Get-ItemProperty -Path $DestFileFullName).VersionInfo | Select-Object ProductVersion, FileVersion
+                            $VersionText += "$Version"
+                        }
                     }
                     $VersionText += "Downloaded on = $(Get-Date)"
                     $VersionText += "--------------------------------------------------"
@@ -743,19 +939,41 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                 $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
                 foreach ($DestFolder in $DestFolders) {
                     $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
+                    # For preserve-layout downloads, wipe the destination first so stale versioned
+                    # files from a previous run (overlaid via customer artifacts) do not accumulate.
+                    If ($PreserveLayout -and (Test-Path -Path $DestinationDir)) {
+                        Write-Output "[$SoftwareName] Cleaning existing content from staging destination before copying..."
+                        Remove-Item -Path "$DestinationDir\*" -Recurse -Force -ErrorAction SilentlyContinue
+                    }
                     If (-not (Test-Path -Path $DestinationDir)) {
                         New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
                     }
                     $copySize = [math]::Round(((Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1MB, 1)
                     Write-Output "[$SoftwareName] Copying to artifacts directory ($copySize MB)..."
                     Copy-Item -Path "$TempSoftwareDownloadDir\*" -Destination $DestinationDir -Recurse -Force
+                    If ($PreserveLayout) {
+                        $parentRelative = Split-Path -Path $DestFolder -Parent
+                        If (-not [string]::IsNullOrEmpty($parentRelative)) {
+                            $null = $PreserveLayoutParentFolders.Add((Join-Path -Path $ArtifactsDir -ChildPath $parentRelative))
+                        }
+                    }
                     if ($CopyDownloadsToCustomerArtifacts) {
                         $CustomerDestinationDir = Join-Path -Path $CustomerArtifactsDir -ChildPath $DestFolder
+                        If ($PreserveLayout -and (Test-Path -Path $CustomerDestinationDir)) {
+                            Write-Output "[$SoftwareName] Cleaning existing content from customer artifacts folder before copying..."
+                            Remove-Item -Path "$CustomerDestinationDir\*" -Recurse -Force -ErrorAction SilentlyContinue
+                        }
                         If (-not (Test-Path -Path $CustomerDestinationDir)) {
                             New-Item -Path $CustomerDestinationDir -ItemType Directory -Force | Out-Null
                         }
                         Write-Output "[$SoftwareName] Copying to customer artifacts directory ($copySize MB)..."
                         Copy-Item -Path "$TempSoftwareDownloadDir\*" -Destination $CustomerDestinationDir -Recurse -Force
+                        If ($PreserveLayout) {
+                            $parentRelative = Split-Path -Path $DestFolder -Parent
+                            If (-not [string]::IsNullOrEmpty($parentRelative)) {
+                                $null = $CustomerPreserveLayoutParentFolders.Add((Join-Path -Path $CustomerArtifactsDir -ChildPath $parentRelative))
+                            }
+                        }
                     }
                 }
             }
@@ -764,6 +982,9 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             Write-Output "[$SoftwareName] Downloading from '$DownloadUrl'..."
             Try {
                 $TempSoftwareDownloadDir = Join-Path -Path $DownloadDir -ChildPath ($SoftwareName.Replace(' ', '_'))
+                If (Test-Path -Path $TempSoftwareDownloadDir) {
+                    Remove-Item -Path $TempSoftwareDownloadDir -Recurse -Force
+                }
                 New-Item -Path $TempSoftwareDownloadDir -ItemType Directory -Force | Out-Null
                 $DestFileName = $Download.DestinationFileName
                 $DestFileFullName = Join-Path $TempSoftwareDownloadDir -ChildPath $DestFileName
@@ -830,6 +1051,23 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             }
         }
     }
+    # Deduplicate shared framework dependencies across preserve-layout app groups.
+    If ($PreserveLayoutParentFolders.Count -gt 0) {
+        Write-Output ""
+        Write-Output "=== Optimizing Shared Dependencies ==="
+        foreach ($parentDir in $PreserveLayoutParentFolders) {
+            Optimize-SharedDependencies -ParentDir $parentDir
+        }
+    }
+    If ($CustomerPreserveLayoutParentFolders.Count -gt 0 -and $CopyDownloadsToCustomerArtifacts) {
+        Write-Output "Deduplicating shared dependencies in customer artifacts..."
+        foreach ($parentDir in $CustomerPreserveLayoutParentFolders) {
+            If (Test-Path -Path $parentDir) {
+                Optimize-SharedDependencies -ParentDir $parentDir
+            }
+        }
+    }
+
     Write-Output ""
     Write-Output "Cleaning up download temp directory in background..."
     Start-Job -ScriptBlock {

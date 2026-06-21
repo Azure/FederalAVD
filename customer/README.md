@@ -51,6 +51,7 @@ customer/examples/
   artifacts/                                ← copy folders into customer/artifacts/
     Adobe-Acrobat-Reader-DC/
     Amazon-Workspaces-Client/
+    BuiltIn-UWP-Apps/
     Configure-DesktopBackground/
     Configure-EdgePolicy/
     Configure-Office365Policy/
