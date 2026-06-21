@@ -1,3 +1,27 @@
+#Requires -RunAsAdministrator
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Updates built-in UWP/AppX apps in the provisioned (machine) layer during an AVD image build.
+
+.DESCRIPTION
+    Uses winget with --scope machine to update the provisioned package layer in
+    C:\Program Files\WindowsApps. Because this targets the provisioned layer rather than any
+    per-user layer, every new user profile created from the captured image inherits the updated
+    app versions immediately — no per-user Store update delay.
+
+    The InstallService\ScanForUpdates scheduled task approach was intentionally replaced because
+    that task runs as SYSTEM and updates only SYSTEM's per-user package registration, not the
+    provisioned layer. It has no effect on new user profiles created from the image.
+
+    winget --scope machine calls Add-AppxProvisionedPackage internally, which is the correct
+    primitive for updating the machine-wide provisioned layer from SYSTEM context.
+
+    Air-gapped environments: if winget cannot reach its update sources, it exits with a
+    "no applicable update" code and this script exits cleanly with a warning. The build is
+    not failed (treatFailureAsDeploymentFailure is false for this run command).
+#>
+
 $ErrorActionPreference = 'Stop'
 $LogFile = "$env:SystemRoot\Logs\Update-UwpApps.log"
 
@@ -20,18 +44,33 @@ function Get-ProvisionedPackageVersionMap {
     return $map
 }
 
+function Find-WingetExe {
+    # Search the machine-level WindowsApps path first. This path is accessible from SYSTEM
+    # context; the per-user path (%LOCALAPPDATA%\Microsoft\WindowsApps) is not.
+    $candidate = Get-ChildItem `
+        -Path "$env:ProgramFiles\WindowsApps\Microsoft.DesktopAppInstaller_*" `
+        -Filter 'winget.exe' -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending |
+        Select-Object -First 1
+    if ($candidate) { return $candidate.FullName }
+
+    # Fall back to PATH (covers cases where winget is already on the system PATH).
+    $inPath = Get-Command -Name 'winget' -ErrorAction SilentlyContinue
+    if ($inPath) { return $inPath.Source }
+
+    return $null
+}
+
 try {
-    Write-Log "Updating Built-In UWP Apps via InstallService"
+    Write-Log "Updating Built-In UWP Apps via winget (machine scope)"
 
-    # --- Pre-flight: DISM readiness checks ---
-
-    # Check whether Windows Modules Installer (TrustedInstaller / TiWorker) is actively running.
-    # An active CBS/servicing pass holds the DISM session lock -- any concurrent DISM call will hang
-    # until it releases. Wait up to 3 minutes for it to finish; warn and continue if it does not.
+    # --- Pre-flight: DISM readiness check ---
+    # winget --scope machine calls DISM/AppX APIs internally. An active CBS/servicing pass
+    # holds the DISM session lock and will cause winget to hang or fail. Wait up to 3 minutes.
     Write-Log "Pre-flight: checking for active CBS/DISM operations (TiWorker / TrustedInstaller)..."
-    $dismWaitSeconds = 180
+    $dismWaitSeconds  = 180
     $dismPollInterval = 10
-    $dismElapsed = 0
+    $dismElapsed      = 0
     while ($dismElapsed -lt $dismWaitSeconds) {
         $cbsActive = Get-Process -Name 'TiWorker', 'TrustedInstaller' -ErrorAction SilentlyContinue |
                      Where-Object { -not $_.HasExited }
@@ -47,9 +86,7 @@ try {
         Write-Log "Pre-flight: no active CBS/DISM operations detected."
     }
 
-    # Check for a pending reboot from Component Based Servicing (informational -- does not abort).
-    # A pending CBS reboot means component state is not fully committed; AppX operations that touch
-    # those components can queue behind the pending pass and appear to hang.
+    # Check for a pending reboot (informational — does not abort).
     $pendingReboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
                      (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or
                      ($null -ne (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'PendingFileRenameOperations' -ErrorAction SilentlyContinue))
@@ -60,120 +97,81 @@ try {
         Write-Log "Pre-flight: no pending reboot detected."
     }
 
-    $TaskPath = '\Microsoft\Windows\InstallService\'
-    $TaskName = 'ScanForUpdates'
+    # --- Step 1: Ensure winget is available at the machine-level path ---
+    Write-Log "Step 1: Locating winget..."
+    $WingetExe = Find-WingetExe
 
-    $Task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
-    If (-not $Task) {
-        Write-Log "Scheduled task '$TaskPath$TaskName' not found. Skipping Store app updates."
+    if (-not $WingetExe) {
+        Write-Log "winget not found at machine-level path. Attempting to install Microsoft.WinGet.Client and repair App Installer..."
+        try {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers -ErrorAction Stop
+            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery -Scope AllUsers -ErrorAction Stop
+            Import-Module -Name Microsoft.WinGet.Client -Force -ErrorAction Stop
+            # -AllUsers provisions winget.exe to C:\Program Files\WindowsApps, making it
+            # accessible from SYSTEM. Without -AllUsers it is only registered per-user.
+            Repair-WinGetPackageManager -AllUsers -Force -ErrorAction Stop
+            Write-Log "App Installer repaired successfully."
+        }
+        catch {
+            Write-Log "WARNING: Could not install or repair winget: $($_.Exception.Message)"
+            Write-Log "This may be an air-gapped environment or PSGallery is unreachable. Skipping UWP app updates."
+            Exit 0
+        }
+        $WingetExe = Find-WingetExe
+    }
+
+    if (-not $WingetExe) {
+        Write-Log "winget executable not found after repair attempt. Skipping UWP app updates."
         Exit 0
     }
 
-    # Snapshot versions before triggering the scan so we can detect and report actual changes.
-    Write-Log "Snapshotting current provisioned package versions..."
+    $WingetVersion = & $WingetExe --version 2>&1
+    Write-Log "winget found at: $WingetExe (version: $WingetVersion)"
+
+    # --- Step 2: Snapshot provisioned package versions before upgrade ---
+    Write-Log "Step 2: Snapshotting provisioned package versions..."
     $VersionsBefore = Get-ProvisionedPackageVersionMap
     Write-Log "Found $($VersionsBefore.Count) provisioned package(s)."
 
-    # Snapshot the task's LastRunTime before triggering so we can confirm this invocation
-    # actually executed (vs. reading a stale result from a previous run).
-    $TaskInfoBefore = Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName
-    $LastRunTimeBefore = $TaskInfoBefore.LastRunTime
-    Write-Log "Task LastRunTime before trigger: $LastRunTimeBefore"
+    # --- Step 3: Run winget upgrade ---
+    # --scope machine   → updates the provisioned layer (C:\Program Files\WindowsApps),
+    #                     not a per-user layer. This is the key difference vs InstallService.
+    # --silent          → suppresses all UI; required for unattended image builds.
+    # --accept-*        → suppresses license/agreement prompts.
+    # --disable-interactivity → prevents winget from waiting for user input (winget 1.2+).
+    #
+    # Apps that do not support machine scope are skipped by winget with a note in the output;
+    # they do not cause a non-zero exit code. Apps requiring Microsoft account authentication
+    # (paid msstore apps) are also silently skipped.
+    $WingetArgs = @(
+        'upgrade', '--all',
+        '--scope', 'machine',
+        '--silent',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+        '--disable-interactivity'
+    )
+    Write-Log "Step 3: Running: $WingetExe $($WingetArgs -join ' ')"
 
-    # Trigger the scan, then wait until the task enters Running state (or give up after
-    # a startup window). This is more reliable than a blind sleep on a loaded build VM.
-    Write-Log "Starting scheduled task '$TaskName'..."
-    Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
+    $WingetOutput = & $WingetExe @WingetArgs 2>&1
+    $WingetExitCode = $LASTEXITCODE
 
-    $StartupTimeoutSeconds = 60
-    $StartupElapsed        = 0
-    $StartupPollInterval   = 2
-    do {
-        Start-Sleep -Seconds $StartupPollInterval
-        $StartupElapsed += $StartupPollInterval
-        $StartupState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State
-    } while ($StartupState -ne 'Running' -and $StartupElapsed -lt $StartupTimeoutSeconds)
-
-    if ($StartupState -eq 'Running') {
-        Write-Log "Task entered Running state after $($StartupElapsed) seconds."
-    } else {
-        Write-Log "Task did not enter Running state within $($StartupTimeoutSeconds) seconds. (current state: $($StartupState)). It may have started and completed very quickly."
+    foreach ($line in $WingetOutput) {
+        Write-Log "  [winget] $line"
     }
 
-    # Wait for the task itself to finish. The task orchestrates the scan and kicks off
-    # downloads/installs in the background - it does not block until they complete.
-    $TaskTimeoutSeconds = 300
-    $TaskPollInterval = 10
-    $TaskElapsed = 0
-
-    Write-Log "Waiting for task to complete (timeout: $($TaskTimeoutSeconds) seconds)..."
-    do {
-        Start-Sleep -Seconds $TaskPollInterval
-        $TaskElapsed += $TaskPollInterval
-        $TaskState = (Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State
-        Write-Log "Task state: ($($TaskState) $($TaskElapsed)/$($TaskTimeoutSeconds) seconds elapsed)"
-    } while ($TaskState -eq 'Running' -and $TaskElapsed -lt $TaskTimeoutSeconds)
-
-    $TaskInfoAfter = Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName $TaskName
-    $LastRunTimeAfter = $TaskInfoAfter.LastRunTime
-    $LastTaskResult = $TaskInfoAfter.LastTaskResult
-
-    $TaskActuallyRan = $LastRunTimeAfter -gt $LastRunTimeBefore
-    if ($TaskActuallyRan) {
-        Write-Log "Task completed. LastRunTime: $LastRunTimeAfter | LastTaskResult: $LastTaskResult (0x0 = success)"
+    # 0             = success
+    # -1978335212   = 0x8A15002C = APPINSTALLER_CLI_ERROR_NO_APPLICABLE_UPDATE (nothing to update)
+    # Both are acceptable outcomes.
+    $NoUpdateCode = -1978335212
+    if ($WingetExitCode -eq 0 -or $WingetExitCode -eq $NoUpdateCode) {
+        Write-Log "winget completed (exit code: $WingetExitCode)."
     }
     else {
-        Write-Log "WARNING: Task LastRunTime ($LastRunTimeAfter) did not advance beyond pre-trigger value ($LastRunTimeBefore). The task did not execute this run. Skipping stability polling."
+        Write-Log "WARNING: winget exited with code $WingetExitCode. Some packages may not have updated. Review the output above for details."
     }
 
-    # Poll provisioned package versions until they stop changing across two consecutive
-    # checks. The task orchestrates the scan and kicks off downloads/installs in the
-    # background; polling is the most reliable signal that all async installs have settled.
-    if ($TaskActuallyRan) {
-        $StabilityTimeoutSeconds = 600
-        $StabilityPollInterval = 30
-        $StableChecksRequired = 2
-        $StableCount = 0
-        $StabilityElapsed = 0
-        $LastVersionMap = Get-ProvisionedPackageVersionMap
-
-        Write-Log "Polling for version stability (interval: $StabilityPollInterval, timeout: $StabilityTimeoutSeconds)..."
-
-        while ($StabilityElapsed -lt $StabilityTimeoutSeconds) {
-            Start-Sleep -Seconds $StabilityPollInterval
-            $StabilityElapsed += $StabilityPollInterval
-
-            $CurrentVersionMap = Get-ProvisionedPackageVersionMap
-            $Changed = $CurrentVersionMap.Keys | Where-Object {
-                $LastVersionMap.ContainsKey($_) -and $LastVersionMap[$_] -ne $CurrentVersionMap[$_]
-            }
-
-            if ($Changed) {
-                $StableCount = 0
-                foreach ($pkg in $Changed) {
-                    Write-Log "  [updating] $pkg : $($LastVersionMap[$pkg]) -> $($CurrentVersionMap[$pkg])"
-                }
-                Write-Log "$(@($Changed).Count) package(s) changed this interval. Resetting stability counter. $($StabilityElapsed)/$($StabilityTimeoutSeconds) elapsed"
-            }
-            else {
-                $StableCount++
-                Write-Log "No version changes detected (stable check $($StableCount)/$($StableChecksRequired)). $($StabilityElapsed)/$($StabilityTimeoutSeconds) elapsed"
-            }
-
-            $LastVersionMap = $CurrentVersionMap
-
-            if ($StableCount -ge $StableChecksRequired) {
-                Write-Log "Version map stable for $StableChecksRequired consecutive checks. Updates complete."
-                break
-            }
-        }
-
-        if ($StabilityElapsed -ge $StabilityTimeoutSeconds -and $StableCount -lt $StableChecksRequired) {
-            Write-Log "Timed out after $StabilityTimeoutSeconds seconds before versions fully stabilized. Some packages may still be updating."
-        }
-    } # end if ($TaskActuallyRan)
-
-    # Final summary — report everything that changed relative to the pre-scan snapshot.
+    # --- Step 4: Summary ---
     Write-Log "*********************************"
     Write-Log "Update Summary"
     Write-Log "*********************************"
@@ -190,7 +188,7 @@ try {
         }
     }
     else {
-        Write-Log "No provisioned package versions changed. The image may already be up to date."
+        Write-Log "No provisioned package versions changed. The image may already be up to date, or installed apps may not support machine-scope upgrades via winget."
     }
     if ($NewPackages) {
         Write-Log "New packages added ($(@($NewPackages).Count)):"
