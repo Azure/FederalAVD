@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "4584152519940801144"
+      "templateHash": "17707041890299446549"
     }
   },
   "parameters": {
@@ -2620,7 +2620,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "114685999822364812"
+              "templateHash": "13522331586836791850"
             }
           },
           "parameters": {
@@ -2856,7 +2856,8 @@
               "dependsOn": [
                 "[resourceId('Microsoft.Resources/deployments', format('cbs-status-conditional-restart-pre-build-{0}', parameters('deploymentSuffix')))]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]"
+                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]",
+                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]"
               ]
             },
             {
@@ -3071,10 +3072,8 @@
                 "treatFailureAsDeploymentFailure": false
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', format('conditional-restart-post-updates-{0}', parameters('deploymentSuffix')))]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]"
+                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
+                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'remove-appxPackages')]"
               ]
             },
             {
@@ -3102,8 +3101,7 @@
                 "[resourceId('Microsoft.Resources/deployments', format('conditional-restart-post-updates-{0}', parameters('deploymentSuffix')))]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]"
+                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]"
               ]
             },
             {
@@ -3124,7 +3122,6 @@
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]",
                 "vdiApplications"
               ]
             },
@@ -3159,7 +3156,6 @@
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'create-BuildDir')]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]",
                 "vdiApplications"
               ]
             },
@@ -3189,7 +3185,6 @@
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'optimize-image')]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-customizations')]",
                 "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('orchestrationVmName'), 'restart-post-microsoft-software')]",
-                "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('imageVmName'), 'update-builtInUwpApps')]",
                 "vdiApplications"
               ]
             },

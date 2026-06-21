@@ -266,6 +266,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
     createBuildDir
     removeAppxPackages
     conditionalRestartPreBuild
+    updateBuiltInApps
   ]
 }
 
@@ -614,10 +615,8 @@ resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-0
     treatFailureAsDeploymentFailure: false
   }
   dependsOn: [
+    createBuildDir
     removeAppxPackages
-    restartMicrosoftSoftware
-    restartCustomizations
-    conditionalRestartPostUpdates
   ]
 }
 
@@ -661,7 +660,6 @@ resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-
       restartMicrosoftSoftware
       restartCustomizations
       conditionalRestartPostUpdates
-      updateBuiltInApps
     ]
   }
 ]
@@ -685,7 +683,6 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
     restartCustomizations
     conditionalRestartPostUpdates
     vdiApplications
-    updateBuiltInApps
   ]
 }
 
@@ -724,7 +721,6 @@ resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    updateBuiltInApps
     vdiApplications
   ]
 }
@@ -761,7 +757,6 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
     conditionalRestartPostUpdates
     vdiApplications
     optimizeImage
-    updateBuiltInApps
   ]
 }
 
