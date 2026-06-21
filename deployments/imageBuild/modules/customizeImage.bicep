@@ -21,7 +21,6 @@ param installFsLogix bool
 param installOneDrive bool
 param installTeams bool
 param installUpdates bool
-param updateUwpApps bool
 param office365AppsToInstall array
 param teamsCloudType string
 param deploymentSuffix string
@@ -266,7 +265,6 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
     createBuildDir
     removeAppxPackages
     conditionalRestartPreBuild
-    updateBuiltInApps
   ]
 }
 
@@ -591,32 +589,6 @@ module conditionalRestartPostUpdates 'conditionalRestart.bicep' = if (installUpd
   }
   dependsOn: [
     restartUpdates
-  ]
-}
-
-resource updateBuiltInApps 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (updateUwpApps) {
-  name: 'update-builtInUwpApps'
-  location: location
-  parent: imageVm
-  properties: {
-    asyncExecution: false
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Update-UwpApps-${deploymentSuffix}.log'
-    parameters: []
-    source: {
-      script: loadTextContent('../../../.common/scripts/Update-UwpApps.ps1')
-    }
-    treatFailureAsDeploymentFailure: false
-  }
-  dependsOn: [
-    createBuildDir
-    removeAppxPackages
   ]
 }
 

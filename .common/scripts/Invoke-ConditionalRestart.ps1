@@ -47,9 +47,10 @@ try {
     $ExitCode  = $InstanceView.exitCode
     $Output    = $InstanceView.output
 
+    $OutputFirstLine = ($Output -split "`n" | Where-Object { $_.Trim() } | Select-Object -First 1)
     Write-Output "  executionState : $ExecState"
     Write-Output "  exitCode       : $ExitCode"
-    Write-Output "  output         : $Output"
+    Write-Output "  output         : $OutputFirstLine"
 
     if ($ExecState -ne 'Succeeded' -or $ExitCode -ne 0) {
         throw "CBS check run command did not succeed (executionState=$ExecState, exitCode=$ExitCode). Cannot determine restart requirement."
