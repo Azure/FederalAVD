@@ -3,6 +3,7 @@
 > **🔧 Technical References:**
 > - [Image Management Template Documentation](../deployments/imageManagement/README.md) - Artifacts storage infrastructure
 > - [Image Build Template Documentation](../deployments/imageBuild/README.md) - Using artifacts in image builds
+> - [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md) - Script parameters, download methods, usage examples, and troubleshooting
 
 # Artifacts and Image Management Guide
 
@@ -151,66 +152,19 @@ graph TD
 
 ## Artifacts Directory Structure
 
-### Repository Location
+Repo-provided artifacts live at `.common/artifacts/` (currently empty, reserved for future use). Customer-provided artifacts and overrides belong at `customer/artifacts/`.
 
-Repo-provided artifacts live at:
+> **Ready-to-use examples:** `customer/examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer/examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
 
-```text
-.common/artifacts/
-```
+**Note:** The orchestration script `Invoke-Customization.ps1` is at `.common/scripts/Invoke-Customization.ps1`, not in the artifacts directory. It is embedded into ARM/Bicep deployments using `loadTextContent()`.
 
-Customer-provided artifacts and overrides belong at:
+### Getting Software Into Artifact Folders
 
-```text
-customer/artifacts/
-```
+`Update-ImageArtifacts.ps1` can automatically download software before packaging. Place a `downloads.json` file at `customer/parameters/imageManagement/downloads.json` (a ready-to-use example is at `customer/examples/parameters/imageManagement/downloads.json`) to define what to download and where to place it. Supported download methods include direct URL, web scraping, GitHub Releases API, winget, and winget preserve-layout for MSIX/UWP packages.
 
-> **Ready-to-use examples:** `customer/examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer/examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
+For a complete reference of all download methods, `downloads.json` fields, pipeline usage with `-CustomerRootPath`, and the full script parameter reference, see the **[Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md)**.
 
-### Directory Layout
-
-```text
-.common/artifacts/
-│                                            # Reserved for future repo-provided artifact packages.
-│                                            # Currently empty — all artifact content comes from
-│                                            # customer/artifacts/ (or customer/examples/artifacts/
-│                                            # copied in as a starting point).
-│
-customer/artifacts/
-├── [Your-Custom-Artifact]/                  # Your custom package
-│   ├── Install-[AppName].ps1                # Main script (required)
-│   ├── [installer-file]                     # Application installer (optional)
-│   └── [config-files]                       # Supporting files (optional)
-│
-└── uploadedFileVersionInfo.txt              # Auto-generated version log (added by the script)
-```
-
-**Note:** The orchestration script `Invoke-Customization.ps1` is located at `.common/scripts/Invoke-Customization.ps1` (not in the artifacts directory). It is embedded into ARM/Bicep deployments using the `loadTextContent()` function.
-
-### Packaging Rules (Update-ImageArtifacts.ps1)
-
-When `Update-ImageArtifacts.ps1` prepares content for upload to blob storage, it stages `.common/artifacts/` first and then overlays `customer/artifacts/` on top:
-
-| Source | Processing | Result |
-|--------|------------|--------|
-| **Customer overlays** | Copied over repo content when names match | Customer files/folders win over `.common/artifacts/` |
-| **Subfolders** | Compressed to ZIP | Each subfolder becomes a separate .zip file (e.g., `Chrome/` → `Chrome.zip`) |
-| **Root files** | Copied as-is | Files in the root are uploaded individually without modification |
-
-**Example:**
-
-```
-customer/artifacts/
-├── Google-Chrome-Enterprise/    → Uploaded as Google-Chrome-Enterprise.zip
-│   ├── Install-Chrome.ps1
-│   └── GoogleChromeEnterprise.msi
-├── LGPO/                        → Uploaded as LGPO.zip
-│   ├── Install-LGPO.ps1
-│   └── LGPO.exe
-└── teamsbootstrapper.exe        → Uploaded as-is (root file)
-```
-
-If the repo ever ships base artifact scripts via `.common/artifacts/`, they are staged first and `customer/artifacts/` overlays on top — customer files always win when names match.
+> **Air-gapped environments:** Winget-based entries require internet access and cannot be used in air-gapped clouds. See [Air-Gapped Cloud Guide](air-gapped-clouds.md) for alternatives including the pre-staging approach for built-in UWP apps.
 
 ### Execution Rules (Invoke-Customization.ps1)
 
@@ -246,6 +200,8 @@ FileVersion = 2.9.8884.27471
 Downloaded on = 12/15/2024 10:31:12 AM
 --------------------------------------------------
 ```
+
+> For the full packaging and staging details (rules, directory layout, `-CustomerRootPath` usage, air-gapped file placement), see [Update-ImageArtifacts.ps1 Script Guide — Artifacts Directory Structure](update-image-artifacts.md#artifacts-directory-structure).
 
 ## Creating Custom Artifact Packages
 

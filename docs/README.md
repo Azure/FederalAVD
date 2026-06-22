@@ -25,7 +25,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 | [Host Pool Deployment Guide](hostpool-deployment.md) | Deploying AVD host pools — prerequisites, deployment methods, parameter walkthrough, post-deployment tasks, scaling, and add-ons. |
 | [Custom Image Build Guide](image-build.md) | Building custom session host images with Azure Image Builder — prerequisites, build process, deployment methods, and monitoring. |
 | [Artifacts and Image Management Guide](artifacts-guide.md) | Artifact packaging and image management infrastructure — how artifacts are uploaded, referenced, and executed in image builds and session host deployments. |
-| [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md) | Reference for the script that downloads, packages, and uploads software artifacts to the artifacts storage account. |
+| [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md) | Reference for the script that downloads, packages, and uploads software artifacts to the artifacts storage account. Covers all download methods including winget, GitHub Releases, and UWP/MSIX preserve-layout. |
 | [End-to-End Automation Guide](automation-guide.md) | CI/CD pipeline patterns for automating the full deployment and image refresh lifecycle. |
 
 ---

@@ -1,8 +1,12 @@
-*.exe
-*.cab
-*.msi
-*.msix
-*.zip
-temp/**
-**/parameters/m365x*
-**/uploadedFileVersionInfo.txt
+# Customer-specific content (parameter files, staged artifacts, installers).
+# Only README.md and .gitkeep placeholder files are tracked so the folder
+# structure is visible in the repo without exposing environment-specific data.
+customer/artifacts/**
+!customer/artifacts/**/
+!customer/artifacts/**/.gitkeep
+!customer/artifacts/**/README.md
+
+customer/parameters/**
+!customer/parameters/**/
+!customer/parameters/**/.gitkeep
+!customer/parameters/**/README.md

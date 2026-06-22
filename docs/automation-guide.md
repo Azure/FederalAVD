@@ -304,6 +304,79 @@ customer/
 
 ---
 
+## Ongoing Image Lifecycle
+
+Steps 1–5 above are a **one-time setup**. Once a host pool is deployed and the Session Host Replacer is running, you do not redeploy the host pool to roll out new images. The repeating lifecycle looks like this:
+
+```mermaid
+flowchart LR
+    subgraph REFRESH["Recurring Image Refresh (triggered by schedule, patch cycle, or software change)"]
+        direction LR
+        A["1. Update artifacts\n(Update-ImageArtifacts.ps1)"] -->
+        B["2. Build new image\n(Invoke-ImageBuilds.ps1)"] -->
+        C["3. New version published\nto Compute Gallery"] -->
+        D["4. Session Host Replacer\ndetects version mismatch"]
+        D --> E["5. Drain active sessions\n(configurable grace period)"]
+        E --> F["6. Replace fleet with\nnew-image hosts"]
+        F -.->|next cycle| A
+    end
+```
+
+**Key point:** The host pool `customImageResourceId` parameter points at the gallery image *definition* (not a specific version). The Replacer compares each running session host's image version against the latest version in the gallery. When a new version exists, it triggers a replacement cycle automatically — no parameter file update and no host pool redeployment required.
+
+### Automated approach: Session Host Replacer
+
+The Session Host Replacer is an Azure Function add-on that monitors the Compute Gallery and manages the entire replacement cycle without human intervention.
+
+**What triggers a new replacement cycle:**
+- A new image version is published to the gallery (i.e., Step 2 above completes)
+- The function detects that running hosts have an image version older than the gallery's latest
+
+**What it handles automatically:**
+- Marks outdated hosts as drain mode (no new sessions)
+- Waits for configurable grace period before removing hosts with active sessions
+- Deploys new hosts using the host pool's current configuration + latest gallery image
+- Validates new hosts register successfully before removing old ones
+- Cleans up Entra ID and Intune device records (DeleteFirst mode)
+- Supports SideBySide (zero-downtime) and DeleteFirst (cost-optimized) replacement strategies
+- Ringed rollout delay — configurable per-host-pool delay after a new image is detected, enabling validation before fleet-wide rollout
+
+**Setup:** Deploy the add-on once per host pool. The `hostPoolResourceId` output from Step 5 is the primary input.
+
+> See [Session Host Replacer Add-On](session-host-replacer.md) and [full add-on documentation](../deployments/add-ons/sessionHostReplacer/README.md) for deployment prerequisites, configuration, and replacement mode comparison.
+
+### Manual approach: TagAndDrainSessionHosts.ps1
+
+For teams that do not use the Session Host Replacer, `deployments/TagAndDrainSessionHosts.ps1` provides a manual drain-and-replace workflow:
+
+1. Run the script to tag existing session hosts into drain mode and optionally force-logoff sessions after a grace period
+2. Deploy replacement session hosts via the `deployments/add-ons/sessionHosts/` add-on or a new host pool deployment
+3. Once new hosts are healthy, delete the drained hosts
+
+This is appropriate for environments with strict change control windows or when the Session Host Replacer is not deployed.
+
+### Pipeline integration
+
+A typical image refresh pipeline stage (after initial setup) runs only Steps 3–4:
+
+```powershell
+# Step 3 — refresh artifacts (skip if no software changes this cycle)
+.\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId $artifactsStorageAccountResourceId
+
+# Step 4 — build new image
+.\Invoke-ImageBuilds.ps1 `
+    -Location $location `
+    -ParameterFilePrefixes @('win11-m365')
+
+# Step 5 is NOT required — Session Host Replacer picks up the new gallery version automatically.
+# Monitor replacement progress via the Azure Monitor Workbook deployed with the add-on.
+```
+
+Key Vaults (Step 1), Image Management infrastructure (Step 2), and Host Pool (Step 5) are deployed once and not part of the recurring pipeline unless infrastructure is changing.
+
+---
+
 ## Related Resources
 
 - [Quick Start Guide](quick-start.md) — Step-by-step walkthrough with portal options

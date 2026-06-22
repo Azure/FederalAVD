@@ -99,9 +99,99 @@ If you keep customer content outside the extracted repo zip, pass `-CustomerRoot
 `Update-ImageArtifacts.ps1`, `Deploy-ImageManagement.ps1`, or `Invoke-ImageBuilds.ps1` so they
 read from your external customer folder instead of the repo-local `customer/` tree.
 
+## Source Control for Customer Content
+
+The `customer/` tree is excluded from git tracking by the root `.gitignore` (only `README.md`
+and `.gitkeep` placeholder files are committed). This prevents customer-specific values —
+subscription IDs, resource group names, storage account names, and installer binaries — from
+being accidentally committed back to the upstream repo.
+
+How you track your own changes depends on your workflow:
+
+---
+
+### Recommended: Separate git repo + `-CustomerRootPath`
+
+Keep FederalAVD as an upstream source you never commit to. Maintain your parameter files and
+artifact packages in a **separate git repository** at a different path (e.g.,
+`C:\repos\FederalAVD-Config`). Point all scripts at it using `-CustomerRootPath`:
+
+```powershell
+.\Update-ImageArtifacts.ps1 `
+    -StorageAccountName "<name>" `
+    -ResourceGroupName "<rg>" `
+    -CustomerRootPath "C:\repos\FederalAVD-Config"
+
+.\Deploy-ImageManagement.ps1 `
+    -CustomerRootPath "C:\repos\FederalAVD-Config"
+
+.\Invoke-ImageBuilds.ps1 `
+    -CustomerRootPath "C:\repos\FederalAVD-Config"
+```
+
+The scripts expect `<CustomerRootPath>\artifacts\` and `<CustomerRootPath>\parameters\` as the
+customer content locations — mirror the structure of this `customer/` folder.
+
+**Why this is the recommended approach:**
+
+- Your customer content has its own clean git history, branching, and pull request workflow
+- FederalAVD framework updates (git pull or robocopy) never touch your content
+- No gitignore rules to manage or override
+- Works naturally with pipelines: check out both repos independently, pass `-CustomerRootPath`
+  as a pipeline variable
+
+---
+
+### Alternative: Fork + track customer content in-repo
+
+If you have forked FederalAVD into your own GitHub organization or Azure DevOps project and
+want to track `customer/` content in the same repository, remove the `customer/` block from
+the root `.gitignore`:
+
+```gitignore
+# Remove or comment out these lines in .gitignore to start tracking customer/ content:
+# customer/artifacts/**
+# !customer/artifacts/**/
+# ...
+```
+
+Your fork can then commit parameter files and artifact scripts normally. When pulling upstream
+changes from Azure/FederalAVD, watch for `.gitignore` conflicts — the upstream file will
+re-add the ignore rules and you will need to resolve the conflict in your favor each time.
+
+---
+
+### No source control (default behavior)
+
+If you manage parameter files out-of-band (a pipeline that injects them, a secrets manager,
+or a shared file server), the default `.gitignore` behavior is fine — just run the scripts
+directly against this folder and ignore git for the customer tree.
+
+---
+
 ## Updating the Repo
 
-Use robocopy to pull the latest code from the source share while preserving this folder:
+### Using git
+
+If you are working directly from the Azure/FederalAVD repository:
+
+```powershell
+git -C C:\repos\FederalAVD pull
+```
+
+The `customer/` folder is gitignored from the perspective of the upstream repo, so a pull will
+never overwrite your files. If you have forked the repo, pull from the upstream remote:
+
+```powershell
+git -C C:\repos\FederalAVD remote add upstream https://github.com/Azure/FederalAVD
+git -C C:\repos\FederalAVD fetch upstream
+git -C C:\repos\FederalAVD merge upstream/main
+```
+
+### Using robocopy (ZIP/share distribution)
+
+If you received FederalAVD as a ZIP or file share copy rather than a git clone, use robocopy
+to pull the latest code while preserving this folder:
 
 ```cmd
 robocopy \\source\FederalAVD C:\FederalAVD /mir /xd customer

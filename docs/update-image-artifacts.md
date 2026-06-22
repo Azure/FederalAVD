@@ -1,5 +1,7 @@
 [**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
+> **📚 Conceptual Guide:** For how the artifact system works, how artifacts are executed during image builds and session host deployments, and how to create custom artifact packages, see the [Artifacts and Image Management Guide](artifacts-guide.md).
+
 # Update-ImageArtifacts.ps1 Script Guide
 
 ## Overview
