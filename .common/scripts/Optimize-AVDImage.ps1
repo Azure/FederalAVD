@@ -788,15 +788,13 @@ try {
         # AT: Computer Configuration > Windows Components > Cloud Content
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableWindowsConsumerFeatures' -Value 1
+        # DisableSoftLanding: suppresses the "Windows Tips" feature (Consumer Experiences > Do not show Windows tips).
+        # This is the correct ADMX-defined value name; DisableWindowsTips has no ADMX definition and is omitted.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
             -Name 'DisableSoftLanding' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
-            -Name 'DisableWindowsTips' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
-            -Name 'DisableThirdPartySuggestions' -Value 1
-        # Disable all Windows Spotlight features (lock screen, tips, consumer features)
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
-            -Name 'DisableWindowsSpotlightFeatures' -Value 1
+        # NOTE: DisableThirdPartySuggestions and DisableWindowsSpotlightFeatures are defined by CloudContent.admx
+        # as User Configuration policies only (HKCU). They are applied correctly in Section 8 via the default
+        # user hive. Writing them at HKLM is not honored as a Computer Configuration GP setting.
         # AT: Computer Configuration > System > OS Policies
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'EnableCdp' -Value 0
@@ -879,17 +877,15 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetCache' `
             -Name 'Enabled' -Value 0
 
-        # -- WLAN hot spot auto-connect --
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' `
-            -Name 'WiFiSenseCredShared' -Value 0
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' `
-            -Name 'WiFiSenseOpen' -Value 0
-
         # -- Desktop Window Manager animations (AT: Computer Configuration > Windows Components > Desktop Window Manager) --
+        # NOTE: WiFiSenseCredShared and WiFiSenseOpen were removed -- they have no ADMX backing and
+        # the WiFiSense feature was deprecated in Windows 10 1803. The correct GP policy for WiFi
+        # auto-connect writes to a different key (wcmsvc\wifinetworkmanager\config\AutoConnectAllowedOEM).
+        # NOTE: UseSolidColorForStart was removed -- it has no definition in DWM.admx or any other
+        # built-in ADMX. DWM.admx defines only: DisallowAnimations, DisallowColorizationColorChanges,
+        # DefaultColorizationColorState.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
             -Name 'DisallowAnimations' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
-            -Name 'UseSolidColorForStart' -Value 1
 
         # -- Microsoft Edge: disable preloading and background activity (AT: Computer Configuration > Microsoft Edge) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled'  -Value 0
@@ -1227,9 +1223,19 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
             -Name 'hideenabledisableupdates' -Value 1
 
-        # Microsoft Teams for VDI - disable auto-update
+        # Microsoft Teams for VDI: disable automatic client updates
+        # Ref: https://learn.microsoft.com/en-us/microsoftteams/teams-client-vdi-requirements-deploy#disable-teams-autoupdate-in-non-persistent-vdi
+        # disableAutoUpdate = 1 prevents the Teams MSIX bootstrapper from self-updating.
+        # Teams is updated via image replacement on the next build cycle.
+        # NOTE: This is a vendor-defined registry key (not ADMX-backed). It writes to
+        # SOFTWARE\Microsoft\Teams (outside the Policies hive) and is read directly by the Teams client.
+        # Requires Teams build 23306.3314.2555.9628 or higher.
+        # IMPORTANT: When this key is present, the Teams bootstrapper will NOT automatically install or
+        # upgrade the Teams Meeting Add-in (TMA). TMA must be deployed separately at image build time
+        # via 'teamsbootstrapper.exe --installTMA' or by running MicrosoftTeamsMeetingAddinInstaller.msi
+        # from the Teams install directory (C:\Program Files\WindowsApps\MSTeams_*).
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Teams' `
-            -Name 'DisableAutoUpdate' -Value 1
+            -Name 'disableAutoUpdate' -Value 1
 
         # OneDrive: block automatic updates entirely (image provides the pinned version)
         # Ref: https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
