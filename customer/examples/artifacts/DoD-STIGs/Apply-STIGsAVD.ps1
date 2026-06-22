@@ -671,34 +671,6 @@ Write-Log -Message "Applying AVD Administrative Template-based Exceptions"
 # (-OutputFile) AND to lgpo.exe /t below - one variable, no convention mismatch.
 $LgpoTxtFile = Join-Path -Path $Script:LGPOTempDir -ChildPath 'AVD-Exceptions.txt'
 
-# -- EccCurves exception (WN11-CC-000195 -> V-253363) ----------------------------
-# The DoD Windows 11 STIG GPO (WN11-CC-000195) sets the EccCurves policy value
-# under HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002
-# to restrict TLS elliptic curves to NistP384 only (NSA Suite B).
-#
-# This BREAKS Azure Virtual Desktop because:
-#   - The AVD gateway, broker, and control plane endpoints negotiate TLS using
-#     ECDHE with P-256 (NistP256).
-#   - When EccCurves is locked to NistP384, the TLS handshake fails because
-#     there is no common curve to negotiate with the Azure service endpoints.
-#   - Symptoms: AVD agent fails to register the session host with the host pool;
-#     active sessions disconnect; the RD Gateway connection itself fails.
-#
-# The fix is to DELETE this policy value so Windows falls back to its default
-# curve list, which includes both NistP256 and NistP384.
-#
-# Note: The ideal long-term fix would be to explicitly set EccCurves to
-# "NistP256 NistP384" (both curves) rather than deleting the key entirely.
-# Deleting restores the full Windows default list which includes some older
-# curves. However, DELETE is the approach used by all current DoD AVD STIG
-# guidance and is the most operationally safe option until Microsoft aligns
-# AVD endpoint TLS requirements with strict Suite B curve restrictions.
-#
-# Reference: STIG rule WN11-CC-000195 / V-253363, TLS cipher suite configuration.
-# AVD TLS requirements: https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint
-Write-Log -Message "[AdminTemplate] Deleting 'EccCurves' (WN11-CC-000195 / V-253363) from HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002 - the STIG locks TLS elliptic curves to NistP384 only; AVD endpoints require NistP256 for TLS negotiation, causing agent registration and session failures. Deleting restores the Windows default curve list."
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002' -RegistryValue 'EccCurves' -Delete -OutputFile $LgpoTxtFile
-
 Write-Log -Message "[AdminTemplate] Deleting 'ProxySettings' from HKLM\SOFTWARE\Policies\Microsoft\Edge - the STIG GPO configures an Edge proxy that blocks AVD gateway and broker connectivity. Deleting allows Edge to use system proxy settings or direct connections."
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -Delete -OutputFile $LgpoTxtFile
 
