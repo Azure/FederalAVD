@@ -231,12 +231,40 @@ foreach ($AppFolder in $AppFolders) {
         SkipLicense = $true
     }
 
+    # When updating an already-provisioned package, explicitly remove the old entry
+    # before adding the new one. Add-AppxProvisionedPackage -Online silently succeeds
+    # for in-place updates but often fails to register the new version in the staging
+    # manifest used by the AppX deployment service at new user logon (event 327), leaving
+    # the old entry removed and the new one absent -- apps missing for every new user.
+    # Removing first forces the new package through the clean "fresh install" path.
+    if ($null -ne $ExistingProvisioned) {
+        Write-Log "Removing old provisioned entry before update (avoid silent staging failure)..."
+        try {
+            Remove-AppxProvisionedPackage -Online -PackageName $ExistingProvisioned.PackageName -ErrorAction Stop | Out-Null
+            Write-Log "Old provisioned entry removed OK."
+        }
+        catch {
+            Write-Log "WARNING: Could not remove old provisioned entry: $_ -- proceeding with add anyway."
+        }
+    }
+
     $Provisioned = $false
     try {
         Write-Log "Provisioning '$($AppFolder.Name)' (without explicit dependencies)..."
         Add-AppxProvisionedPackage @BaseParams | Out-Null
-        Write-Log "Provisioned  : $($AppFolder.Name) - OK"
-        $Provisioned = $true
+        # Verify the new version is actually in the provisioned store -- Add-AppxProvisionedPackage
+        # can return without throwing while still failing to register the package for new users.
+        $VerifyProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+            Where-Object { $_.PackageName -like "*$PackageNamePrefix*" } |
+            Select-Object -First 1
+        if ($null -ne $VerifyProvisioned) {
+            Write-Log "Provisioned  : $($AppFolder.Name) - OK"
+            $Provisioned = $true
+        }
+        else {
+            Write-Log "WARNING: Add-AppxProvisionedPackage did not throw but package not found in provisioned store."
+            throw "Package not found in provisioned store after Add-AppxProvisionedPackage."
+        }
     }
     catch {
         Write-Log "First attempt failed: $_"
@@ -246,8 +274,16 @@ foreach ($AppFolder in $AppFolders) {
                 $ParamsWithDeps = $BaseParams.Clone()
                 $ParamsWithDeps['DependencyPackagePath'] = $DepPackages | Select-Object -ExpandProperty FullName
                 Add-AppxProvisionedPackage @ParamsWithDeps | Out-Null
-                Write-Log "Provisioned  : $($AppFolder.Name) - OK (with explicit dependencies)"
-                $Provisioned = $true
+                $VerifyProvisioned2 = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+                    Where-Object { $_.PackageName -like "*$PackageNamePrefix*" } |
+                    Select-Object -First 1
+                if ($null -ne $VerifyProvisioned2) {
+                    Write-Log "Provisioned  : $($AppFolder.Name) - OK (with explicit dependencies)"
+                    $Provisioned = $true
+                }
+                else {
+                    Write-Log "ERROR provisioning '$($AppFolder.Name)': not in provisioned store after second attempt."
+                }
             }
             catch {
                 Write-Log "ERROR provisioning '$($AppFolder.Name)' (both attempts failed): $_"

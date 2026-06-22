@@ -831,16 +831,25 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     if ($WingetSkipDeps) {
                         Write-Output "[$SoftwareName] SkipDependencies : true (--skip-dependencies)"
                     }
+                    $WingetLogFilter = '^Found |[Dd]ownloaded:|[Dd]ependencies skipped|[Ee]rror|[Ff]ailed|[Cc]ould not'
                     if ($WingetArch -eq 'neutral') {
                         Write-Output "[$SoftwareName] Architecture : (omitted - neutral/multi-arch)"
-                        & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements @WingetSkipDepsFlag |
-                            Where-Object { $_ -match 'Found |Installer downloaded:|[Ee]rror|[Ff]ailed' } |
-                            ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                        if ($WingetSkipDeps) {
+                            & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements --skip-dependencies |
+                                Where-Object { $_ -match $WingetLogFilter } | ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                        } else {
+                            & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
+                                Where-Object { $_ -match $WingetLogFilter } | ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                        }
                     } else {
                         Write-Output "[$SoftwareName] Architecture : $WingetArch"
-                        & winget download --id $Download.WingetId --architecture $WingetArch --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements @WingetSkipDepsFlag |
-                            Where-Object { $_ -match 'Found |Installer downloaded:|[Ee]rror|[Ff]ailed' } |
-                            ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                        if ($WingetSkipDeps) {
+                            & winget download --id $Download.WingetId --architecture $WingetArch --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements --skip-dependencies |
+                                Where-Object { $_ -match $WingetLogFilter } | ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                        } else {
+                            & winget download --id $Download.WingetId --architecture $WingetArch --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
+                                Where-Object { $_ -match $WingetLogFilter } | ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                        }
                     }
                     If ($PreserveLayout) {
                         # Preserve the full downloaded layout (bundle + Dependencies subfolder).
