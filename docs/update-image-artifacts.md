@@ -316,6 +316,7 @@ apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
 | `WingetId` | Microsoft Store product code (alphanumeric) |
 | `WingetPreserveLayout` | `true` -- preserves the `winget download` folder layout; no `DestinationFileName` used |
 | `Architecture` | Optional. Omit for most apps (`x64` is the default). Set to `"neutral"` for multi-arch bundles that do not publish a separate x64 installer (e.g., Clipchamp). |
+| `SkipDependencies` | Optional. `true` to pass `--skip-dependencies` to `winget download`, skipping the `Dependencies\` subfolder entirely. **Recommended for internet-connected clouds** where Windows Update keeps marketplace images current and the required frameworks (VCLibs, WinAppSDK, UI.Xaml) are already in the OS component store. **Omit (or set `false`) for air-gapped clouds** where marketplace image patch levels cannot be guaranteed and the bundled dependencies may be the only reliable source. Reduces download and zip size when enabled; provisioning falls back to OS-provided deps only. |
 | `DestinationFolders` | Single entry naming the app subfolder inside the parent artifact folder (e.g., `BuiltIn-UWP-Apps\\Calculator`) |
 
 **How it works:**

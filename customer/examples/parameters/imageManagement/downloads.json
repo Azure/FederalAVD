@@ -57,7 +57,7 @@
         ]
     },
     "GitForWindows": {
-        "Description":"Optional: Git for Windows Installer",
+        "Description": "Optional: Git for Windows Installer",
         "GitHubRepo": "git-for-windows/git",
         "GitHubFileNamePattern": "*64-bit.exe",
         "DestinationFileName": "Git-64-bit.exe",
@@ -142,6 +142,7 @@
         "Description": "Windows Calculator - built-in UWP app provisioned for all users",
         "WingetId": "9WZDNCRFHVN5",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\Calculator"
         ]
@@ -150,6 +151,7 @@
         "Description": "Microsoft Paint - built-in UWP app provisioned for all users",
         "WingetId": "9PCFS5B6T72H",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\Paint"
         ]
@@ -158,6 +160,7 @@
         "Description": "Snipping Tool - built-in UWP app provisioned for all users",
         "WingetId": "9MZ95KL8MR0L",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\SnippingTool"
         ]
@@ -174,6 +177,7 @@
         "Description": "Clipchamp - built-in UWP video editor provisioned for all users",
         "WingetId": "9P1J8S7CCWWT",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "Architecture": "neutral",
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\Clipchamp"
@@ -191,6 +195,7 @@
         "Description": "Sticky Notes - built-in UWP app provisioned for all users",
         "WingetId": "9NBLGGH4QGHW",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\StickyNotes"
         ]
@@ -199,6 +204,7 @@
         "Description": "Windows Terminal - built-in UWP app provisioned for all users",
         "WingetId": "9N0DX20HK701",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\Terminal"
         ]
@@ -207,6 +213,7 @@
         "Description": "VP9 Video Extensions - codec for VP9 video used in browser-rendered content",
         "WingetId": "9N4D0MSMP0PT",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\VP9VideoExtensions"
         ]
@@ -215,6 +222,7 @@
         "Description": "Web Media Extensions - codec for Ogg, Vorbis, Theora, FLAC formats",
         "WingetId": "9N5TDP8VCMHS",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\WebMediaExtensions"
         ]
@@ -223,6 +231,7 @@
         "Description": "WebP Image Extension - adds WebP image format support",
         "WingetId": "9PG2DK419DRG",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\WebpImageExtension"
         ]
@@ -231,6 +240,7 @@
         "Description": "AV1 Video Extension - codec for AV1 video used in modern streaming",
         "WingetId": "9MVZQVXJBQ9V",
         "WingetPreserveLayout": true,
+        "SkipDependencies": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\AV1VideoExtension"
         ]

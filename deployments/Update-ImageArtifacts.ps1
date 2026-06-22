@@ -826,14 +826,19 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     } else {
                         'x64'
                     }
+                    $WingetSkipDeps = $Download.SkipDependencies -eq $true
+                    $WingetSkipDepsFlag = if ($WingetSkipDeps) { @('--skip-dependencies') } else { @() }
+                    if ($WingetSkipDeps) {
+                        Write-Output "[$SoftwareName] SkipDependencies : true (--skip-dependencies)"
+                    }
                     if ($WingetArch -eq 'neutral') {
                         Write-Output "[$SoftwareName] Architecture : (omitted - neutral/multi-arch)"
-                        & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
+                        & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements @WingetSkipDepsFlag |
                             Where-Object { $_ -match 'Found |Installer downloaded:|[Ee]rror|[Ff]ailed' } |
                             ForEach-Object { Write-Output "[$SoftwareName]  $_" }
                     } else {
                         Write-Output "[$SoftwareName] Architecture : $WingetArch"
-                        & winget download --id $Download.WingetId --architecture $WingetArch --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
+                        & winget download --id $Download.WingetId --architecture $WingetArch --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements @WingetSkipDepsFlag |
                             Where-Object { $_ -match 'Found |Installer downloaded:|[Ee]rror|[Ff]ailed' } |
                             ForEach-Object { Write-Output "[$SoftwareName]  $_" }
                     }
