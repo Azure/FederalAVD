@@ -260,6 +260,30 @@ foreach ($AppFolder in $AppFolders) {
         if ($null -ne $VerifyProvisioned) {
             Write-Log "Provisioned  : $($AppFolder.Name) - OK"
             $Provisioned = $true
+            # Clear the AppxAllUserStore\Deprovisioned registry entry for this package family.
+            # When Remove-AppxProvisionedPackage is called (e.g., by the image build's Remove-AppXPackages
+            # step), Windows writes a deprovisioned record here. Even after re-provisioning, the record
+            # persists and takes precedence at user logon -- causing AppX to queue the package for removal
+            # (event 327) instead of registering it. Deleting the record allows the provisioned package
+            # to register normally for every new user session created from this image.
+            $PkgFamilyName = $VerifyProvisioned.PackageName -replace '_[^_]+$', ''
+            # PackageName format: PublisherName.AppName_Version_arch__PublisherID
+            # PackageFamilyName format: PublisherName.AppName_PublisherID
+            # Extract from the full PackageName by taking everything before the first '_' then appending
+            # the PublisherID (last segment after splitting on '__').
+            if ($VerifyProvisioned.PackageName -match '^(.+?)_[\d\.]+_[^_]+__([^_]+)$') {
+                $PkgFamilyName = "$($Matches[1])_$($Matches[2])"
+            }
+            $DeprovPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned\$PkgFamilyName"
+            if (Test-Path $DeprovPath) {
+                try {
+                    Remove-Item -Path $DeprovPath -Recurse -Force -ErrorAction Stop
+                    Write-Log "Cleared deprovisioned record: $PkgFamilyName"
+                }
+                catch {
+                    Write-Log "WARNING: Could not clear deprovisioned record for '$PkgFamilyName': $_"
+                }
+            }
         }
         else {
             Write-Log "WARNING: Add-AppxProvisionedPackage did not throw but package not found in provisioned store."
@@ -280,6 +304,17 @@ foreach ($AppFolder in $AppFolders) {
                 if ($null -ne $VerifyProvisioned2) {
                     Write-Log "Provisioned  : $($AppFolder.Name) - OK (with explicit dependencies)"
                     $Provisioned = $true
+                    $PkgFamilyName2 = ''
+                    if ($VerifyProvisioned2.PackageName -match '^(.+?)_[\d\.]+_[^_]+__([^_]+)$') {
+                        $PkgFamilyName2 = "$($Matches[1])_$($Matches[2])"
+                    }
+                    if ($PkgFamilyName2 -and (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned\$PkgFamilyName2")) {
+                        try {
+                            Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned\$PkgFamilyName2" -Recurse -Force -ErrorAction Stop
+                            Write-Log "Cleared deprovisioned record: $PkgFamilyName2"
+                        }
+                        catch { Write-Log "WARNING: Could not clear deprovisioned record for '$PkgFamilyName2': $_" }
+                    }
                 }
                 else {
                     Write-Log "ERROR provisioning '$($AppFolder.Name)': not in provisioned store after second attempt."
