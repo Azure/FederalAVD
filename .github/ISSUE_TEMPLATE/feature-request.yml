@@ -1,0 +1,75 @@
+name: Feature Request
+description: Suggest a new capability, parameter, or improvement to FederalAVD.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **Before opening a feature request:** Open GitHub Copilot Chat and ask whether the capability already exists — it may be a parameter or configuration option you haven't found yet.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the solution does this request relate to?
+      options:
+        - Networking
+        - Key Vaults
+        - Image Management
+        - Image Build
+        - Host Pool
+        - Update-ImageArtifacts.ps1 / downloads.json
+        - Session Host Replacer
+        - Storage Quota Manager
+        - Other add-on
+        - Documentation
+        - CI/CD / Automation
+        - Compliance / Security
+        - Multiple areas
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cloud
+    attributes:
+      label: Target Cloud(s)
+      description: Which cloud(s) should this apply to?
+      multiple: true
+      options:
+        - Azure Commercial
+        - Azure Government
+        - Azure Government Secret
+        - Azure Government Top Secret
+        - All clouds
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Gap
+      description: What are you trying to do that you currently cannot do, or what is painful about the current experience?
+      placeholder: "When deploying to an air-gapped cloud, I cannot..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the capability, parameter, or behavior you'd like to see added.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you found any workarounds or alternative approaches?
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Compliance requirement, use case details, links to related documentation or specs.

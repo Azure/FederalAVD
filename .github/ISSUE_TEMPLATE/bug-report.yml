@@ -1,0 +1,106 @@
+name: Bug Report
+description: Report a deployment failure, incorrect behavior, or broken script in FederalAVD.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **Before opening an issue:** Open GitHub Copilot Chat and try the `/troubleshoot` prompt — it can often diagnose common errors immediately.
+        > Check [docs/troubleshooting.md](https://github.com/Azure/FederalAVD/blob/main/docs/troubleshooting.md) for known issues.
+
+  - type: dropdown
+    id: cloud
+    attributes:
+      label: Azure Cloud
+      description: Which Azure cloud are you deploying to?
+      options:
+        - Azure Commercial
+        - Azure Government
+        - Azure Government Secret
+        - Azure Government Top Secret
+    validations:
+      required: true
+
+  - type: dropdown
+    id: step
+    attributes:
+      label: Deployment Step
+      description: Which step failed or is behaving incorrectly?
+      options:
+        - Step 0 — Networking
+        - Step 1 — Key Vaults
+        - Step 2 — Image Management
+        - Step 3 — Image Build
+        - Step 4 — Host Pool
+        - Update-ImageArtifacts.ps1
+        - Invoke-ImageBuilds.ps1
+        - TagAndDrainSessionHosts.ps1
+        - Session Host Replacer add-on
+        - Storage Quota Manager add-on
+        - Other add-on
+        - Other / unsure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: method
+    attributes:
+      label: Deployment Method
+      description: How are you deploying?
+      options:
+        - Blue Button (Azure Portal)
+        - Template Spec
+        - PowerShell
+        - Azure CLI
+    validations:
+      required: true
+
+  - type: dropdown
+    id: first-deploy
+    attributes:
+      label: Is this a first-time deployment?
+      options:
+        - "Yes — first deployment"
+        - "No — re-deployment or update"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error Message or Symptom
+      description: Paste the full error message, error code, or describe the unexpected behavior.
+      placeholder: |
+        Error: ...
+        ActivityId: ...
+        StatusCode: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: What did you do before the error occurred?
+      placeholder: |
+        1. Ran Update-ImageArtifacts.ps1 with parameters ...
+        2. Triggered image build ...
+        3. Error appeared at ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: parameters
+    attributes:
+      label: Relevant Parameter Values
+      description: >
+        Share any parameter values relevant to the issue (remove sensitive values like passwords,
+        subscription IDs, and tenant IDs before posting).
+      render: json
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Anything else that might help — screenshots, related resources, workarounds tried.

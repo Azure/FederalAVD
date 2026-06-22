@@ -1,0 +1,15 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask GitHub Copilot
+    url: https://github.com/Azure/FederalAVD
+    about: >
+      Open GitHub Copilot Chat on this repo and ask your question directly.
+      Copilot is pre-loaded with FederalAVD context and can answer deployment questions,
+      help you choose parameters, and diagnose common errors — often faster than an issue.
+      Try the /getting-started or /troubleshoot prompts in VS Code.
+  - name: Documentation
+    url: https://github.com/Azure/FederalAVD/blob/main/docs/README.md
+    about: Browse the full documentation index — quick start, parameter reference, troubleshooting, compliance, and more.
+  - name: Troubleshooting Guide
+    url: https://github.com/Azure/FederalAVD/blob/main/docs/troubleshooting.md
+    about: Check the troubleshooting guide for known errors and fixes before opening a bug report.

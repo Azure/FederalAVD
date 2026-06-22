@@ -4,6 +4,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Azure](https://img.shields.io/badge/Azure-AVD-0078D4?logo=microsoft-azure)](https://azure.microsoft.com/services/virtual-desktop/)
+[![GitHub Copilot](https://img.shields.io/badge/GitHub%20Copilot-enabled-8957e5?logo=github)](https://github.com/features/copilot)
+
+> **New to this repo?** Open GitHub Copilot Chat and ask *"How do I get started with FederalAVD?"* — Copilot is pre-loaded with repo context and can guide you through deployment decisions, parameter choices, and troubleshooting.
 
 ---
 
