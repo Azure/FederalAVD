@@ -182,9 +182,11 @@ function Disable-VdiService {
         return
     }
     try {
-        if ($svc.Status -eq 'Running') {
-            Stop-Service -Name $Name -Force -ErrorAction SilentlyContinue
-        }
+        # Do not attempt to stop the service during an image build -- the image is
+        # about to be sysprepped and captured. Only the startup type matters: setting
+        # it to Disabled writes Start=4 to the registry so the service does not run
+        # after the image is deployed. Stopping during the build risks blocking
+        # indefinitely on services with stubborn dependents (e.g. DPS).
         Set-Service -Name $Name -StartupType Disabled -ErrorAction Stop
         Write-Log "  [OK]   Disabled service: $DisplayName ($Name)"
     }
