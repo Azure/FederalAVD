@@ -20,7 +20,14 @@
             Paint\
                 ...
 
-    Run this script during AVD image customization with Administrator (or SYSTEM) privileges.
+    IMPORTANT -- PROVISIONING PREREQUISITE:
+    Add-AppxProvisionedPackage must be called with -Regions all. Without this parameter,
+    Windows only provisions the app for Start layout pinning scenarios and removes it
+    during sysprep (event ID 472: package folder moved to Deleted). This script passes
+    -Regions all for every provisioning call.
+
+    Reference: Microsoft internal support article (June 2026) -- "Windows Store apps are not
+    retained after sysprep".
 
 .NOTES
     - Requires Windows PowerShell 5.1 or PowerShell 7+ running on Windows.
@@ -87,6 +94,59 @@ if ($AppFolders.Count -eq 0) {
 }
 
 Write-Log "Found $($AppFolders.Count) app folder(s) to provision."
+
+# ----------------------------------------------------------------
+# Pre-provision shared framework dependencies.
+# Packages in SharedDependencies\ (VCLibs, Windows App Runtime, etc.)
+# must be staged as first-class provisioned packages BEFORE the app
+# loop. When Add-AppxProvisionedPackage succeeds without explicit
+# -DependencyPackagePath, those frameworks are NOT staged -- they are
+# only resolved from the running OS at that moment. At user logon,
+# AppX tries to register the app, cannot find the required framework
+# version in the provisioned store, and fails (e.g. Notepad requires
+# Windows App Runtime 1.7 but only 1.6 is staged).
+# Pre-provisioning them here ensures they are present for every new
+# user profile created from this image, regardless of which apps
+# subsequently depend on them.
+# ----------------------------------------------------------------
+$SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
+if (Test-Path $SharedDepDir) {
+    $PackageExtensions = @('.msixbundle', '.appxbundle', '.msix', '.appx')
+    $SharedDepFiles = Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in $PackageExtensions }
+    if ($SharedDepFiles.Count -gt 0) {
+        Write-Log ""
+        Write-Log "=== Pre-provisioning $($SharedDepFiles.Count) shared framework package(s) ==="
+        foreach ($DepFile in ($SharedDepFiles | Sort-Object Name)) {
+            $DepNamePrefix = [System.IO.Path]::GetFileNameWithoutExtension($DepFile.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+            $DepVersion    = Get-PackageFileVersion $DepFile.Name
+            $AlreadyStaged = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+                Where-Object { $_.PackageName -like "*$DepNamePrefix*" } |
+                Select-Object -First 1
+            if ($null -ne $AlreadyStaged) {
+                $StagedVersion = Get-PackageFileVersion $AlreadyStaged.PackageName
+                if ($StagedVersion -ge $DepVersion) {
+                    Write-Log "SKIP (framework): $($DepFile.Name) -- provisioned version ($StagedVersion) >= staged ($DepVersion)"
+                    continue
+                }
+            }
+            try {
+                Write-Log "Provisioning framework: $($DepFile.Name)"
+                Add-AppxProvisionedPackage -Online -PackagePath $DepFile.FullName -SkipLicense -Regions 'all' | Out-Null
+                Write-Log "OK: $($DepFile.Name)"
+            }
+            catch {
+                Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
+            }
+        }
+    }
+    else {
+        Write-Log "SharedDependencies folder is empty -- skipping framework pre-provisioning."
+    }
+}
+else {
+    Write-Log "No SharedDependencies folder found -- skipping framework pre-provisioning."
+}
 
 $SuccessCount = 0
 $SkipCount    = 0
@@ -229,6 +289,7 @@ foreach ($AppFolder in $AppFolders) {
         Online      = $true
         PackagePath = $MainPackage.FullName
         SkipLicense = $true
+        Regions     = 'all'   # Required: without this, Windows removes the app during sysprep (event 472)
     }
 
     # When updating an already-provisioned package, explicitly remove the old entry

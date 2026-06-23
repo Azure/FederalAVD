@@ -14,6 +14,18 @@ with no active user session, which prevents Store-based auto-reinstallation. Pro
 packages offline bakes the apps into the image component store so they appear in every user
 profile from first login -- no Store connection, no per-user download.
 
+## Critical prerequisite: provisioning must use `-Regions all`
+
+For provisioned apps to survive `sysprep /generalize` and appear for users on deployed session
+hosts, `Add-AppxProvisionedPackage` **must** be called with `-Regions all`. Without this
+parameter, Windows only provisions the app for Start layout pinning scenarios and removes it
+during sysprep — moving the package folder to `WindowsApps\Deleted` and logging event ID 472.
+
+The script passes `-Regions all` automatically. You do not need to pass any special argument.
+
+Reference: Microsoft internal support article (June 2026) — "Windows Store apps are not
+retained after sysprep".
+
 ## Apps included
 
 | Folder | App | Winget Store ID |
@@ -117,7 +129,8 @@ single `BuiltIn-UWP-Apps.zip` artifact.
 
 ### 4. Add the artifact to your image build customizations
 
-In your image build parameter file, add `BuiltIn-UWP-Apps` to the `customizations` array:
+In your image build parameter file, add `BuiltIn-UWP-Apps` to the `customizations` array.
+No special arguments are needed — the script handles prerequisites automatically:
 
 ```json
 {
@@ -126,8 +139,6 @@ In your image build parameter file, add `BuiltIn-UWP-Apps` to the `customization
 }
 ```
 
-No arguments are required.
-
 ## What Install-BuiltinUwpApps.ps1 does
 
 1. **Snapshots** all currently provisioned packages before any changes are made (used for
@@ -135,10 +146,11 @@ No arguments are required.
 2. **Iterates** each app subfolder (skipping `SharedDependencies\`).
 3. **Selects** the best main package: highest version first, then bundle format preferred over
    single-arch package, then largest file as a tiebreaker.
-4. **Skips** the app if the same or a newer version is already provisioned on the image.
+4. **Skips** the app if an equal or newer version is already provisioned.
 5. **Resolves dependencies** from the `SharedDependencies\` folder at the artifact root;
    deduplicates by package family, keeping the highest version.
-6. **Provisions** via `Add-AppxProvisionedPackage -Online -SkipLicense`.
+6. **Provisions** via `Add-AppxProvisionedPackage -Online -SkipLicense -Regions all`.
+   - The `-Regions all` parameter is required for the provisioned package to survive sysprep.
    - First attempt: no explicit dependencies (the OS component store satisfies frameworks on a
      modern Windows 11 image). This avoids error `0xc1570118` that occurs when passing explicit
      dependency packages that conflict with already-registered OS versions.
@@ -154,4 +166,5 @@ No arguments are required.
 | `0xc1570118 APPX_E_PREREQUISITE_NOT_MET` | Explicit dependencies conflict with OS-registered versions | The two-attempt provisioning handles this automatically; if it persists, the staged dependency version may be older than what the OS has -- update your artifacts |
 | App shows "up-to-date" unexpectedly | A newer version was already provisioned from a previous build | This is correct behavior; the script never downgrades |
 | Before-version shows "(not present)" | The app was genuinely new on this image | Correct; on subsequent runs the before-version will reflect the previously provisioned version |
-| App installs but does not appear for users | App was provisioned after user profiles were created | Provisioning must happen before any user has signed in; use the image build (not session host customization) for this artifact |
+| App installs but does not appear for users (image build or live host) | `-Regions all` not passed to `Add-AppxProvisionedPackage`; sysprep removes the package (event ID 472) | Confirmed fixed in this script version. Re-upload the artifact (`Update-ImageArtifacts.ps1`) and rebuild the image |
+| App installs but does not appear for users (live host) | App was provisioned after user profiles were created | `Add-AppxProvisionedPackage` only applies to new user sessions. Existing profiles need `Add-AppxPackage` per user |
