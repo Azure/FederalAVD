@@ -21,8 +21,6 @@
           https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies
       [6] OneDrive GPO / update ring policy (Section 6 - GPOSetUpdateRing):
           https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
-      [7] Update channel lockdown logic originally from Disable-SoftwareUpdates.ps1
-          (that script is now fully superseded by NonPersistent sections of this script).
 
     This script does NOT handle the following (each has a dedicated script):
       - Removal of built-in AppX packages
@@ -56,40 +54,44 @@
 
     Deliberate deviations from the VDI article [1]:
 
-      Storage Sense [Section 5 - machine policy]:
-        The article recommends disabling Storage Sense. This script ENABLES and
-        configures it via ADMX-backed Computer Configuration policy
-        (Software\Policies\Microsoft\Windows\StorageSense, since Win10 1903).
-        In FSLogix profile container deployments, OneDrive Files On-Demand caches
-        locally opened files inside the container VHD on Azure Files or Azure
-        NetApp Files. Without proactive dehydration, containers grow monotonically
-        -- increasing storage cost and FSLogix attach time. Storage Sense is
-        configured to dehydrate OneDrive content not accessed in 30 days, run
-        monthly, and clean temp files. Recycle Bin and Downloads cleanup are left
-        off to avoid surprising users. Machine policy overrides any per-user
-        Settings UI configuration.
+      Storage Sense [Section 5]:
+        The article recommends disabling Storage Sense. This script enables and
+        configures it. In FSLogix deployments, OneDrive Files On-Demand caches files
+        inside the profile container (Azure Files / ANF). Without dehydration the
+        container grows monotonically, increasing storage cost and attach time.
+        Storage Sense is configured to dehydrate cloud content not opened in 30 days,
+        run monthly, and clean temp files. Recycle Bin and Downloads are left alone.
         Ref: [4], https://learn.microsoft.com/en-us/azure/virtual-desktop/set-up-customize-master-image
 
-      Windows Search / WSearch service [Section 1]:
-        The article recommends evaluating WSearch for disabling. This script
-        intentionally leaves it at its default startup type. The OS disk and
-        search index persist for the VM's full monthly lifecycle; the FSLogix
-        Outlook/Exchange search index survives image replacement by living inside
-        the profile container. Disabling WSearch would break Outlook and File
-        Explorer search for every user for the entire month a VM is in service.
-        A commented-out Disable-VdiService call is provided for special-purpose
-        (kiosk / task-worker) images where search is genuinely not required.
+      WSearch service [Section 1]:
+        The article flags WSearch for evaluation. Left at default (Manual) because
+        the OS search index persists for the VM's full lifecycle and the FSLogix
+        Outlook search index lives in the profile container. Disabling breaks Outlook
+        and File Explorer search for all users for the entire VM lifetime.
 
-      RegIdleBackup scheduled task [Section 3]:
-        The article lists RegIdleBackup for disabling. This script retains it.
-        Registry hives persist across reboots for the VM's monthly lifecycle;
-        backups enable in-place recovery from hive corruption without a VM redeploy.
+      InstallService [Section 2]:
+        The article suggests disabling on NonPersistent. Left at default (Manual)
+        because it is the per-user AppX package registration processor. Disabling it
+        causes WinAppSDK-based apps (Sticky Notes, Snipping Tool, etc.) to show a
+        "needs an update" error at first launch, on any network including air-gapped.
 
-      SilentCleanup scheduled task [Section 3]:
-        The article lists SilentCleanup for disabling. This script retains it.
-        It only triggers on low disk space and provides ongoing hygiene over the
-        monthly operational life of the VM -- complementary to, not redundant with,
-        the image-build-time disk cleanup script.
+      OneSyncSvc [Section 1]:
+        Not in the article's disable list, but a natural candidate. Left at default
+        because it re-syncs Exchange mail, contacts, and calendar at each session
+        start. Since UWP app data is excluded from FSLogix containers, there is no
+        cached state to fall back on -- disabling it leaves Mail and Calendar empty.
+
+      DPS / DiagSvc / WdiSystemHost [Section 2]:
+        The article lists all three for disabling. Scoped to NonPersistent only
+        because on Persistent VMs these back the end-user Troubleshoot/Diagnose UX
+        in Settings. Disabling them on long-lived desktops breaks self-service
+        diagnostics and drives unnecessary helpdesk calls.
+
+      RegIdleBackup / SilentCleanup [Section 3]:
+        The article lists both for disabling. Retained because registry hive backups
+        enable mid-lifecycle corruption recovery, and SilentCleanup only triggers on
+        low disk space as ongoing operational hygiene -- both have value across the
+        VM's monthly lifetime.
 
 .PARAMETER OptimizationProfile
     The optimization profile to apply. See the .DESCRIPTION for full details.
@@ -460,67 +462,50 @@ try {
         Write-Log "--- Section 1: System Services (All VDI) ---"
 
         # Cellular Time - no cellular adapter in VMs
-        Disable-VdiService -Name 'autotimesvc'      -DisplayName 'Cellular Time'
+        Disable-VdiService -Name 'autotimesvc' -DisplayName 'Cellular Time'
         # GameDVR and Broadcast user service (per-user template) - no game workloads
         Disable-VdiService -Name 'BcastDVRUserService' -DisplayName 'GameDVR and Broadcast User Service'
         # CaptureService (per-user template) - screen capture API, not needed in VDI
-        Disable-VdiService -Name 'CaptureService'   -DisplayName 'Capture Service'
+        Disable-VdiService -Name 'CaptureService' -DisplayName 'Capture Service'
         # Connected Devices Platform - cross-device scenarios (phone, tablets) irrelevant
-        Disable-VdiService -Name 'CDPSvc'           -DisplayName 'Connected Devices Platform Service'
+        Disable-VdiService -Name 'CDPSvc' -DisplayName 'Connected Devices Platform Service'
         # CDP User Service (per-user template)
-        Disable-VdiService -Name 'CDPUserSvc'       -DisplayName 'CDP User Service'
-        # Diagnostic Execution Service
-        Disable-VdiService -Name 'DiagSvc'          -DisplayName 'Diagnostic Execution Service'
-        # Diagnostic Policy Service
-        Disable-VdiService -Name 'DPS'              -DisplayName 'Diagnostic Policy Service'
+        Disable-VdiService -Name 'CDPUserSvc' -DisplayName 'CDP User Service'
+        # DPS / DiagSvc / WdiSystemHost -- not disabled here; see .DESCRIPTION deviations.
         # Device Setup Manager - VDI environments control device software centrally
-        Disable-VdiService -Name 'DsmSvc'           -DisplayName 'Device Setup Manager'
+        Disable-VdiService -Name 'DsmSvc' -DisplayName 'Device Setup Manager'
         # Data Usage Service - no metered network management needed
-        Disable-VdiService -Name 'DusmSvc'          -DisplayName 'Data Usage Service'
+        Disable-VdiService -Name 'DusmSvc' -DisplayName 'Data Usage Service'
         # Windows Mobile Hotspot Service - no mobile adapter in VMs
-        Disable-VdiService -Name 'icssvc'           -DisplayName 'Windows Mobile Hotspot Service'
+        Disable-VdiService -Name 'icssvc' -DisplayName 'Windows Mobile Hotspot Service'
         # Geolocation Service
-        Disable-VdiService -Name 'lfsvc'            -DisplayName 'Geolocation Service'
+        Disable-VdiService -Name 'lfsvc' -DisplayName 'Geolocation Service'
         # Downloaded Maps Manager
-        Disable-VdiService -Name 'MapsBroker'       -DisplayName 'Downloaded Maps Manager'
+        Disable-VdiService -Name 'MapsBroker' -DisplayName 'Downloaded Maps Manager'
         # MessagingService (per-user template) - SMS/MMS not used in enterprise VDI
         Disable-VdiService -Name 'MessagingService' -DisplayName 'Messaging Service'
-        # Sync Host (per-user template) - UWP mail/calendar sync
-        Disable-VdiService -Name 'OneSyncSvc'       -DisplayName 'Sync Host'
+        # OneSyncSvc -- not disabled here; see .DESCRIPTION deviations.
         # Contact Data (per-user template)
         Disable-VdiService -Name 'PimIndexMaintenanceSvc' -DisplayName 'Contact Data'
         # Power - VMs have no physical power management hardware
-        Disable-VdiService -Name 'Power'            -DisplayName 'Power'
+        Disable-VdiService -Name 'Power' -DisplayName 'Power'
         # Payments and NFC/SE Manager - no NFC hardware in VMs
-        Disable-VdiService -Name 'SEMgrSvc'         -DisplayName 'Payments and NFC/SE Manager'
+        Disable-VdiService -Name 'SEMgrSvc' -DisplayName 'Payments and NFC/SE Manager'
         # SMS Router Service - no SMS infrastructure in enterprise VDI
-        Disable-VdiService -Name 'SmsRouter'        -DisplayName 'Microsoft Windows SMS Router Service'
-        # Diagnostic System Host - depends on DPS; disable both together
-        Disable-VdiService -Name 'WdiSystemHost'    -DisplayName 'Diagnostic System Host'
+        Disable-VdiService -Name 'SmsRouter' -DisplayName 'Microsoft Windows SMS Router Service'
         # Windows Error Reporting - reduce overhead; diagnostics done offline
-        Disable-VdiService -Name 'WerSvc'           -DisplayName 'Windows Error Reporting'
+        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
         # Xbox Live Auth Manager
-        Disable-VdiService -Name 'XblAuthManager'   -DisplayName 'Xbox Live Auth Manager'
+        Disable-VdiService -Name 'XblAuthManager' -DisplayName 'Xbox Live Auth Manager'
         # Xbox Live Game Save
-        Disable-VdiService -Name 'XblGameSave'      -DisplayName 'Xbox Live Game Save'
+        Disable-VdiService -Name 'XblGameSave' -DisplayName 'Xbox Live Game Save'
         # Xbox Accessory Management Service
-        Disable-VdiService -Name 'XboxGipSvc'       -DisplayName 'Xbox Accessory Management Service'
+        Disable-VdiService -Name 'XboxGipSvc' -DisplayName 'Xbox Accessory Management Service'
         # Xbox Live Networking Service
-        Disable-VdiService -Name 'XboxNetApiSvc'    -DisplayName 'Xbox Live Networking Service'
+        Disable-VdiService -Name 'XboxNetApiSvc' -DisplayName 'Xbox Live Networking Service'
 
-        # -- Windows Search (WSearch): intentionally NOT disabled --
-        # The article lists WSearch with an explicit caution: "Disabling this service prevents
-        # indexing of e-mail and other things. Test before disabling this service."
-        # In this AVD deployment:
-        #   - The OS disk and its search index persist for the full monthly VM lifecycle.
-        #   - FSLogix stores the Outlook/Exchange search index inside the profile container
-        #     (on Azure Files or Azure NetApp Files); the index survives VM replacement and
-        #     re-attaches on next logon, preserving per-user mailbox search across sessions.
-        # Disabling WSearch would break Outlook and File Explorer search for every user
-        # for the entire month a VM is in service. WSearch is left at its default startup type.
-        #
-        # To disable for a special-purpose image (e.g., kiosk / task-worker) where users
-        # never require search, uncomment:
+        # WSearch -- not disabled here; see .DESCRIPTION deviations.
+        # To disable for kiosk/task-worker images where search is not required, uncomment:
         # Disable-VdiService -Name 'WSearch' -DisplayName 'Windows Search'
 
         Write-Log ""
@@ -534,57 +519,30 @@ try {
     if ($RunNonPersistentSections) {
         Write-Log "--- Section 2: System Services (NonPersistent Only) ---"
 
-        # Superfetch / SysMain - Azure managed disks are SSD-backed, so the
-        # sequential-read benefit of prefetching is minimal. In pooled deployments
-        # where multiple users may be assigned to the same VM over its lifecycle,
-        # accumulated prefetch data reflects a mix of workloads and is less useful.
-        Disable-VdiService -Name 'SysMain'          -DisplayName 'Superfetch (SysMain)'
-        # Optimize Drives - Azure managed disks are SSD-backed; defragmenting
-        # thin-provisioned virtual disks causes unnecessary IOPS and can expand
-        # the disk footprint without improving performance.
-        Disable-VdiService -Name 'defragsvc'        -DisplayName 'Optimize Drives'
-        # -- Microsoft Store Install Service (InstallService): intentionally NOT disabled --
-        # InstallService is the local AppX deployment queue processor that handles per-user
-        # package registration at first logon. Even though app installs are managed through
-        # the image build process, Windows must still *register* provisioned packages into
-        # each new user profile at their first logon -- a per-user operation that runs through
-        # InstallService regardless of Store or internet connectivity.
-        # Disabling this service prevents that per-user registration from completing, causing
-        # WinAppSDK-based apps (including Sticky Notes, Snipping Tool, and other inbox UWP
-        # apps) to display a "needs an update" or "something went wrong" error on first launch.
-        # This manifests identically in air-gapped clouds because InstallService operates
-        # entirely against locally staged packages -- no internet access is required.
-        # The scheduled tasks (ScanForUpdates, ScanForUpdatesAsUser, SmartRetry) that drive
-        # Store auto-update scans are still disabled in Section 4, so InstallService remaining
-        # at its default Manual startup type does not re-enable Store automatic updates.
-        # Ref: MS VDI optimization guide -- "If disabled, installations don't work properly."
-
-        # Update Orchestrator - OS updates are applied during image servicing and
-        # delivered via image replacement, not via per-VM Windows Update. Note:
-        # Windows Defender signature updates use a separate update path (MpCmdRun)
-        # and are not affected by disabling UsoSvc.
-        Disable-VdiService -Name 'UsoSvc'           -DisplayName 'Update Orchestrator Service'
-        # Volume Shadow Copy - AVD session host VMs are not typically backed up at
-        # the VM level. User data resides in FSLogix profile containers on Azure
-        # Files or Azure NetApp Files, which are backed up at the storage layer.
-        # If VM-level backup (e.g., Azure Backup agent) is required, do not disable VSS.
-        Disable-VdiService -Name 'VSS'              -DisplayName 'Volume Shadow Copy'
-        # Windows Update service - left enabled on Persistent VMs so that SCCM/Intune
-        # software update management remains functional.
-        Disable-VdiService -Name 'wuauserv'         -DisplayName 'Windows Update'
-        # Windows Update Medic - a protected SFC-guarded service that re-enables Windows
-        # Update if it detects the service has been disabled. Set-Service is best-effort;
-        # Disable-VdiService will fall back to the Start registry value automatically.
-        Disable-VdiService -Name 'WaaSMedicSvc'     -DisplayName 'Windows Update Medic Service'
-        # Connected User Experiences and Telemetry (DiagTrack) - on NonPersistent VMs
-        # there is no Endpoint Analytics, Update Compliance, or per-VM diagnostic value.
-        # On Persistent VMs this service must remain running for Intune Endpoint Analytics,
-        # Windows Update for Business reports, and the diagnostic data processor config.
-        Disable-VdiService -Name 'DiagTrack'        -DisplayName 'Connected User Experiences and Telemetry'
-        # Microsoft Edge Update services - on NonPersistent VMs, Edge is updated via the
-        # image. On Persistent VMs, SCCM/Intune manages Edge updates; leave services intact.
-        Disable-VdiService -Name 'edgeupdate'       -DisplayName 'Microsoft Edge Update Service'
-        Disable-VdiService -Name 'edgeupdatem'      -DisplayName 'Microsoft Edge Update Service (Manual Trigger)'
+        # Superfetch / SysMain - SSD-backed managed disks gain little from prefetching; mixed workloads reduce its value further
+        Disable-VdiService -Name 'SysMain' -DisplayName 'Superfetch (SysMain)'
+        # Optimize Drives - defragging thin-provisioned SSD virtual disks wastes IOPS and expands disk footprint
+        Disable-VdiService -Name 'defragsvc' -DisplayName 'Optimize Drives'
+        # InstallService -- not disabled here; see .DESCRIPTION deviations.
+        # Update Orchestrator - OS updates delivered via image replacement, not per-VM Windows Update
+        Disable-VdiService -Name 'UsoSvc' -DisplayName 'Update Orchestrator Service'
+        # Volume Shadow Copy - user data lives in FSLogix containers backed up at the storage layer
+        Disable-VdiService -Name 'VSS' -DisplayName 'Volume Shadow Copy'
+        # Windows Update - disabled on NonPersistent; SCCM/Intune manages updates on Persistent
+        Disable-VdiService -Name 'wuauserv' -DisplayName 'Windows Update'
+        # Windows Update Medic - re-enables wuauserv if disabled; Set-Service falls back to registry for SFC-protected services
+        Disable-VdiService -Name 'WaaSMedicSvc' -DisplayName 'Windows Update Medic Service'
+        # Diagnostic Policy Service - background problem detection discarded at VM recycle; see .DESCRIPTION deviations
+        Disable-VdiService -Name 'DPS' -DisplayName 'Diagnostic Policy Service'
+        # Diagnostic Execution Service - depends on DPS
+        Disable-VdiService -Name 'DiagSvc' -DisplayName 'Diagnostic Execution Service'
+        # Diagnostic System Host - WDI execution host; depends on DPS
+        Disable-VdiService -Name 'WdiSystemHost' -DisplayName 'Diagnostic System Host'
+        # Connected User Experiences and Telemetry - transient VMs have no per-VM Endpoint Analytics value
+        Disable-VdiService -Name 'DiagTrack' -DisplayName 'Connected User Experiences and Telemetry'
+        # Edge Update services - Edge is updated via image on NonPersistent; SCCM/Intune manages on Persistent
+        Disable-VdiService -Name 'edgeupdate' -DisplayName 'Microsoft Edge Update Service'
+        Disable-VdiService -Name 'edgeupdatem' -DisplayName 'Microsoft Edge Update Service (Manual Trigger)'
 
         Write-Log ""
     }
@@ -664,21 +622,9 @@ try {
             Disable-VdiTask -TaskPath $task.Path -TaskName $task.Name
         }
 
-        # -- Tasks from the article intentionally NOT disabled (All VDI) --
-        #
-        # RegIdleBackup (\Microsoft\Windows\Registry\RegIdleBackup):
-        #   The article lists this task. However, registry hives are fully persisted
-        #   on disk across reboots for the VM's monthly lifecycle. Registry backups
-        #   enable in-place recovery from hive corruption without a full VM redeploy.
-        #   Disabling would remove a useful safety net for mid-lifecycle recovery.
-        #   To disable: Disable-VdiTask -TaskPath '\Microsoft\Windows\Registry\' -TaskName 'RegIdleBackup'
-        #
-        # SilentCleanup (\Microsoft\Windows\DiskCleanup\SilentCleanup):
-        #   The article lists this task. SilentCleanup only triggers when disk space
-        #   falls below ~5 GB (via Automatic Maintenance) and provides ongoing hygiene
-        #   over the VM's monthly operational lifecycle. The image-build cleanup script
-        #   handles build-time cleanup; this task handles post-deployment operational cleanup.
-        #   To disable: Disable-VdiTask -TaskPath '\Microsoft\Windows\DiskCleanup\' -TaskName 'SilentCleanup'
+        # RegIdleBackup and SilentCleanup -- not disabled here; see .DESCRIPTION deviations.
+        # To disable: Disable-VdiTask -TaskPath '\Microsoft\Windows\Registry\' -TaskName 'RegIdleBackup'
+        # To disable: Disable-VdiTask -TaskPath '\Microsoft\Windows\DiskCleanup\' -TaskName 'SilentCleanup'
 
         Write-Log ""
     } # end if RunFullOptimization - Section 3
@@ -819,14 +765,14 @@ try {
         # -- App Privacy (AT: Computer Configuration > Windows Components > App Privacy) --
         # Values: 0 = User in control, 1 = Force allow, 2 = Force deny
         $appPrivacyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessDiagnosticInfo'    -Value 2
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation'          -Value 2
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion'            -Value 2
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications'     -Value 2
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoice'       -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessDiagnosticInfo' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoice' -Value 2
         Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoiceAboveLock' -Value 2
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios'            -Value 2
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessCellularData'      -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessCellularData' -Value 2
 
         # -- Input Personalization and Inking / Typing data collection --
         # AllowInputPersonalization=0 disables speech recognition services machine-wide
@@ -846,26 +792,26 @@ try {
 
         # -- Location and Sensors (AT: Computer Configuration > Windows Components > Location and Sensors) --
         $locationPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'
-        Set-PolicyValue -Path $locationPath -Name 'DisableLocation'               -Value 1
-        Set-PolicyValue -Path $locationPath -Name 'DisableSensors'                -Value 1
+        Set-PolicyValue -Path $locationPath -Name 'DisableLocation' -Value 1
+        Set-PolicyValue -Path $locationPath -Name 'DisableSensors' -Value 1
         Set-PolicyValue -Path $locationPath -Name 'DisableWindowsLocationProvider' -Value 1
 
         # -- Search and Cortana (AT: Computer Configuration > Windows Components > Search) --
         $searchPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search'
-        Set-PolicyValue -Path $searchPath -Name 'AllowCortana'                    -Value 0
-        Set-PolicyValue -Path $searchPath -Name 'AllowCortanaAboveLock'           -Value 0
-        Set-PolicyValue -Path $searchPath -Name 'AllowSearchToUseLocation'        -Value 0
-        Set-PolicyValue -Path $searchPath -Name 'DisableWebSearch'                -Value 1
-        Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchUseWeb'           -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'AllowCortana' -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'AllowCortanaAboveLock' -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'AllowSearchToUseLocation' -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'DisableWebSearch' -Value 1
+        Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchUseWeb' -Value 0
         Set-PolicyValue -Path $searchPath -Name 'PreventIndexingEmailAttachments' -Value 1
-        Set-PolicyValue -Path $searchPath -Name 'PreventIndexingOfflineFiles'     -Value 1
+        Set-PolicyValue -Path $searchPath -Name 'PreventIndexingOfflineFiles' -Value 1
 
         # -- BITS peer caching (AT: Computer Configuration > Network > Background Intelligent Transfer Service (BITS)) --
         $bitsPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\BITS'
-        Set-PolicyValue -Path $bitsPath -Name 'EnablePeercaching'          -Value 0
-        Set-PolicyValue -Path $bitsPath -Name 'DisableBranchCache'         -Value 1
-        Set-PolicyValue -Path $bitsPath -Name 'DisablePeerCachingClient'   -Value 1
-        Set-PolicyValue -Path $bitsPath -Name 'DisablePeerCachingServer'   -Value 1
+        Set-PolicyValue -Path $bitsPath -Name 'EnablePeercaching' -Value 0
+        Set-PolicyValue -Path $bitsPath -Name 'DisableBranchCache' -Value 1
+        Set-PolicyValue -Path $bitsPath -Name 'DisablePeerCachingClient' -Value 1
+        Set-PolicyValue -Path $bitsPath -Name 'DisablePeerCachingServer' -Value 1
 
         # -- BranchCache service-level disable (AT: Computer Configuration > Network > BranchCache) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\PeerDist\Service' `
@@ -901,7 +847,7 @@ try {
             -Name 'DisallowAnimations' -Value 1
 
         # -- Microsoft Edge: disable preloading and background activity (AT: Computer Configuration > Microsoft Edge) --
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled'  -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled' -Value 0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'BackgroundModeEnabled' -Value 0
 
         # -- OneDrive: suppress network traffic until user signs in --
@@ -991,40 +937,15 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageHealth' `
             -Name 'AllowDiskHealthModelUpdates' -Value 0
 
-        # -- Storage Sense --
-        # DELIBERATE DEVIATION FROM VDI ARTICLE: The article recommends disabling
-        # Storage Sense. This script ENABLES and configures it via ADMX-backed
-        # Computer Configuration policy (Software\Policies\Microsoft\Windows\StorageSense),
-        # available since Windows 10 1903.
-        #
-        # Rationale: In FSLogix profile container deployments, OneDrive Files On-Demand
-        # caches locally accessed files inside the FSLogix VHD/VHDX container stored on
-        # Azure Files or Azure NetApp Files. Without proactive dehydration the container
-        # grows monotonically -- every file opened stays cached and is never returned to
-        # online-only status. Over weeks or months this:
-        #   1. Increases container size (Azure Files / ANF storage costs)
-        #   2. Increases FSLogix attach time at each logon (larger VHD to mount/diff)
-        #   3. Can hit per-container size caps if configured
-        # Storage Sense "dehydrate cloud content not accessed in X days" directly solves
-        # this by making OneDrive files that haven't been opened in 30+ days online-only
-        # again, keeping the container lean. This benefit applies equally to NonPersistent
-        # and Persistent VMs because the container (not the OS disk) accumulates.
-        # Ref: [4] https://learn.microsoft.com/en-us/fslogix/tutorial-container-onedrive
-        # Ref: https://learn.microsoft.com/en-us/azure/virtual-desktop/set-up-customize-master-image
-        # Ref: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-storage
-        #
-        # Policy key: Software\Policies\Microsoft\Windows\StorageSense
-        # AT: Computer Configuration > Windows Components > Storage Sense
-        # When AllowStorageSenseGlobal = 1 (Enabled), Storage Sense is forced on and
-        # users cannot disable it. The remaining policies configure its behavior.
-        # Note: ConfigStorageSenseCloudContentDehydrationThreshold > 0 implicitly enables
-        # cloud content dehydration; there is no separate "include OneDrive" policy value.
+        # -- Storage Sense (AT: Computer Configuration > Windows Components > Storage Sense) --
+        # Enabled intentionally; see .DESCRIPTION deviations for rationale.
+        # AllowStorageSenseGlobal = 1 forces it on machine-wide; remaining values configure behavior.
         $ssPolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageSense'
-        Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseGlobal'                          -Value 1  # force Storage Sense on
-        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseGlobalCadence'                  -Value 30 # run monthly
-        Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseTemporaryFilesCleanup'           -Value 1  # delete unused temp files
-        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold'     -Value 0  # never auto-clean Recycle Bin
-        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold'      -Value 0  # never auto-clean Downloads
+        Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseGlobal' -Value 1  # force Storage Sense on
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseGlobalCadence' -Value 30 # run monthly
+        Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseTemporaryFilesCleanup' -Value 1  # delete unused temp files
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold' -Value 0  # never auto-clean Recycle Bin
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold' -Value 0  # never auto-clean Downloads
         Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30 # dehydrate cloud files not opened in 30 days
 
         # -- System Restore (AT: Computer Configuration > System > System Restore) --
@@ -1193,9 +1114,12 @@ try {
         # for Windows Boot, Shutdown, Memory, Standby/Resume, Resource Exhaustion, Responsiveness,
         # and PerfTrack performance diagnostics. Each scenario uses a GUID-keyed registry subkey:
         #   HKLM:\SOFTWARE\Policies\Microsoft\Windows\WDI\{<scenario-guid>}\ScenarioExecutionEnabled = 0
-        # Since DPS is disabled in Section 1, all diagnostic scenarios are non-functional regardless.
-        # Per-scenario policies are intentionally omitted here to avoid maintaining GUID-to-scenario
-        # mappings across Windows versions. If DPS is re-enabled, add the relevant GUIDs manually.
+        # NOTE: DPS is disabled in Section 2 for NonPersistent VMs, making these scenario policies
+        # redundant there. For Persistent VMs DPS remains running, so these policies do apply --
+        # however the per-scenario GUIDs change across Windows versions, making them brittle to
+        # maintain. The higher-level ScheduledDiagnostics and ScriptedDiagnostics policies above
+        # cover the user-visible troubleshooter surface. If per-scenario enforcement is required
+        # for a specific compliance baseline, add the relevant GUIDs manually.
 
         Invoke-ApplyPolicyQueue
         Write-Log ""
@@ -1230,9 +1154,9 @@ try {
 
         # Microsoft 365 / Office Click-to-Run
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
-            -Name 'enableautomaticupdates'   -Value 0
+            -Name 'enableautomaticupdates' -Value 0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
-            -Name 'hideupdatenotifications'  -Value 1
+            -Name 'hideupdatenotifications' -Value 1
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\officeupdate' `
             -Name 'hideenabledisableupdates' -Value 1
 
@@ -1292,8 +1216,8 @@ try {
         #      and benefits no individual user's session.
         # This complements disabling the SysMain service in Section 2.
         $prefetchPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters'
-        Set-PolicyValue -Path $prefetchPath -Name 'EnablePrefetcher'  -Value 0
-        Set-PolicyValue -Path $prefetchPath -Name 'EnableSuperfetch'  -Value 0
+        Set-PolicyValue -Path $prefetchPath -Name 'EnablePrefetcher' -Value 0
+        Set-PolicyValue -Path $prefetchPath -Name 'EnableSuperfetch' -Value 0
 
         Invoke-ApplyPolicyQueue
         Write-Log ""
@@ -1386,12 +1310,12 @@ try {
 
                 # Explorer Advanced display options
                 $explorerAdv = "$du\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-                Set-PolicyValue -Path $explorerAdv -Name 'IconsOnly'          -Value 1
+                Set-PolicyValue -Path $explorerAdv -Name 'IconsOnly' -Value 1
                 Set-PolicyValue -Path $explorerAdv -Name 'ListviewAlphaSelect' -Value 0
-                Set-PolicyValue -Path $explorerAdv -Name 'ListviewShadow'      -Value 0
-                Set-PolicyValue -Path $explorerAdv -Name 'ShowCompColor'       -Value 1
-                Set-PolicyValue -Path $explorerAdv -Name 'ShowInfoTip'         -Value 1
-                Set-PolicyValue -Path $explorerAdv -Name 'TaskbarAnimations'   -Value 0
+                Set-PolicyValue -Path $explorerAdv -Name 'ListviewShadow' -Value 0
+                Set-PolicyValue -Path $explorerAdv -Name 'ShowCompColor' -Value 1
+                Set-PolicyValue -Path $explorerAdv -Name 'ShowInfoTip' -Value 1
+                Set-PolicyValue -Path $explorerAdv -Name 'TaskbarAnimations' -Value 0
 
                 # Desktop - window drag, font smoothing, animation
                 Set-PolicyValue -Path "$du\Control Panel\Desktop" `
@@ -1412,18 +1336,18 @@ try {
 
                 # Content Delivery Manager - disable suggested / pre-installed apps and tips
                 $cdmPath = "$du\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-                Set-PolicyValue -Path $cdmPath -Name 'ContentDeliveryAllowed'              -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'OemPreInstalledAppsEnabled'          -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'PreInstalledAppsEnabled'             -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SilentInstalledAppsEnabled'          -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContentEnabled'            -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SoftLandingEnabled'                  -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SystemPaneSuggestionsEnabled'        -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338393Enabled'     -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-353694Enabled'     -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-353696Enabled'     -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338388Enabled'     -Value 0
-                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338389Enabled'     -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'ContentDeliveryAllowed' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'OemPreInstalledAppsEnabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'PreInstalledAppsEnabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SilentInstalledAppsEnabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContentEnabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SoftLandingEnabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SystemPaneSuggestionsEnabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338393Enabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-353694Enabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-353696Enabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338388Enabled' -Value 0
+                Set-PolicyValue -Path $cdmPath -Name 'SubscribedContent-338389Enabled' -Value 0
 
                 # Privacy - opt out of language-based content and settings suggestions
                 Set-PolicyValue -Path "$du\Control Panel\International\User Profile" `
@@ -1449,38 +1373,38 @@ try {
                 # Ref: Article local policy table - User Configuration > Windows Components > Cloud Content
                 $duCloudContent = "$du\Software\Policies\Microsoft\Windows\CloudContent"
                 # Turn off all Windows Spotlight features (lock screen, tips, consumer features)
-                Set-PolicyValue -Path $duCloudContent -Name 'DisableWindowsSpotlightFeatures'              -Value 1
+                Set-PolicyValue -Path $duCloudContent -Name 'DisableWindowsSpotlightFeatures' -Value 1
                 # Don't suggest third-party content in Windows Spotlight
-                Set-PolicyValue -Path $duCloudContent -Name 'DisableThirdPartySuggestions'                 -Value 1
+                Set-PolicyValue -Path $duCloudContent -Name 'DisableThirdPartySuggestions' -Value 1
                 # Don't use diagnostic data for tailored experiences (USER CONFIG ONLY - no machine equivalent)
                 Set-PolicyValue -Path $duCloudContent -Name 'DisableTailoredExperiencesWithDiagnosticData' -Value 1
                 # Configure Windows spotlight on lock screen: 2 = Disabled (USER CONFIG ONLY - no machine equivalent)
                 # 1 = enabled, 2 = disabled (user cannot select spotlight as lock screen)
-                Set-PolicyValue -Path $duCloudContent -Name 'ConfigureWindowsSpotlight'                    -Value 2
+                Set-PolicyValue -Path $duCloudContent -Name 'ConfigureWindowsSpotlight' -Value 2
 
                 # -- Start Menu and Taskbar (User Configuration) --
                 # Ref: Article local policy table - User Configuration > Start Menu and Taskbar
                 $duLegacyExplorer = "$du\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
                 # Turn off user tracking (suppresses frequently-used programs list and MRU data)
-                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoInstrumentation'   -Value 1
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoInstrumentation' -Value 1
                 # Don't add shares of recently opened documents to Network Locations
                 Set-PolicyValue -Path $duLegacyExplorer -Name 'NoRecentDocsNetHood' -Value 1
                 # Don't use search-based method when resolving shell shortcuts
-                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoResolveSearch'     -Value 1
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoResolveSearch' -Value 1
 
                 $duExplorer = "$du\Software\Policies\Microsoft\Windows\Explorer"
                 # Don't display or track items in Jump Lists from remote locations
-                Set-PolicyValue -Path $duExplorer -Name 'NoRemoteDestinations'          -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'NoRemoteDestinations' -Value 1
                 # Turn off Aero Shake window minimizing mouse gesture
-                Set-PolicyValue -Path $duExplorer -Name 'NoWindowMinimizingShortcuts'   -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'NoWindowMinimizingShortcuts' -Value 1
                 # Turn off all balloon notifications in the taskbar notification area
-                Set-PolicyValue -Path $duExplorer -Name 'TaskbarNoNotification'         -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'TaskbarNoNotification' -Value 1
                 # Turn off feature advertisement balloon notifications
                 Set-PolicyValue -Path $duExplorer -Name 'NoBalloonFeatureAdvertisements' -Value 1
 
                 $duPushNotify = "$du\Software\Policies\Microsoft\Windows\CurrentVersion\PushNotifications"
                 # Turn off toast (in-app popup) notifications
-                Set-PolicyValue -Path $duPushNotify -Name 'NoToastApplicationNotification'           -Value 1
+                Set-PolicyValue -Path $duPushNotify -Name 'NoToastApplicationNotification' -Value 1
                 # Turn off toast notifications on the lock screen
                 Set-PolicyValue -Path $duPushNotify -Name 'NoToastApplicationNotificationOnLockScreen' -Value 1
 
@@ -1498,9 +1422,9 @@ try {
                 # -- File Explorer (User Configuration) --
                 # Ref: Article local policy table - User Configuration > File Explorer
                 # Turn off caching of thumbnail pictures
-                Set-PolicyValue -Path $duExplorer -Name 'DisableThumbnails'             -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'DisableThumbnails' -Value 1
                 # Turn off display of recent search entries in the File Explorer search box
-                Set-PolicyValue -Path $duExplorer -Name 'DisableSearchBoxSuggestions'   -Value 1
+                Set-PolicyValue -Path $duExplorer -Name 'DisableSearchBoxSuggestions' -Value 1
                 # Turn off caching of thumbnails in hidden thumbs.db files
                 # (machine-level DisableThumbsDBOnNetworkFolders is also set in Section 5)
                 Set-PolicyValue -Path $duExplorer -Name 'DisableThumbsDBOnNetworkFolders' -Value 1
@@ -1545,16 +1469,16 @@ try {
 
         $lanman = 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
         # Disable bandwidth throttling on high-latency network connections
-        Set-PolicyValue -Path $lanman -Name 'DisableBandwidthThrottling'  -Value 1
+        Set-PolicyValue -Path $lanman -Name 'DisableBandwidthThrottling' -Value 1
         # Increase file metadata cache entries (default 64 -> 1024)
-        Set-PolicyValue -Path $lanman -Name 'FileInfoCacheEntriesMax'     -Value 1024
+        Set-PolicyValue -Path $lanman -Name 'FileInfoCacheEntriesMax' -Value 1024
         # Increase directory information cache entries (default 16 -> 1024)
-        Set-PolicyValue -Path $lanman -Name 'DirectoryCacheEntriesMax'    -Value 1024
+        Set-PolicyValue -Path $lanman -Name 'DirectoryCacheEntriesMax' -Value 1024
         # Increase file-not-found cache entries (default 128 -> 2048)
         Set-PolicyValue -Path $lanman -Name 'FileNotFoundCacheEntriesMax' -Value 2048
         # Reduce max dormant open files per share connection (default 1023 -> 256)
         # Helps when many clients connect to the same SMB server (e.g., profile share)
-        Set-PolicyValue -Path $lanman -Name 'DormantFileLimit'            -Value 256
+        Set-PolicyValue -Path $lanman -Name 'DormantFileLimit' -Value 256
 
         Write-Log ""
     } # end if RunFullOptimization - Section 9
