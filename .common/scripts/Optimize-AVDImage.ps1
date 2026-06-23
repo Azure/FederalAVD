@@ -543,9 +543,22 @@ try {
         # thin-provisioned virtual disks causes unnecessary IOPS and can expand
         # the disk footprint without improving performance.
         Disable-VdiService -Name 'defragsvc'        -DisplayName 'Optimize Drives'
-        # Microsoft Store Install Service - app installs are managed through the
-        # image build process, not via per-VM Store installs.
-        Disable-VdiService -Name 'InstallService'   -DisplayName 'Microsoft Store Install Service'
+        # -- Microsoft Store Install Service (InstallService): intentionally NOT disabled --
+        # InstallService is the local AppX deployment queue processor that handles per-user
+        # package registration at first logon. Even though app installs are managed through
+        # the image build process, Windows must still *register* provisioned packages into
+        # each new user profile at their first logon -- a per-user operation that runs through
+        # InstallService regardless of Store or internet connectivity.
+        # Disabling this service prevents that per-user registration from completing, causing
+        # WinAppSDK-based apps (including Sticky Notes, Snipping Tool, and other inbox UWP
+        # apps) to display a "needs an update" or "something went wrong" error on first launch.
+        # This manifests identically in air-gapped clouds because InstallService operates
+        # entirely against locally staged packages -- no internet access is required.
+        # The scheduled tasks (ScanForUpdates, ScanForUpdatesAsUser, SmartRetry) that drive
+        # Store auto-update scans are still disabled in Section 4, so InstallService remaining
+        # at its default Manual startup type does not re-enable Store automatic updates.
+        # Ref: MS VDI optimization guide -- "If disabled, installations don't work properly."
+
         # Update Orchestrator - OS updates are applied during image servicing and
         # delivered via image replacement, not via per-VM Windows Update. Note:
         # Windows Defender signature updates use a separate update path (MpCmdRun)

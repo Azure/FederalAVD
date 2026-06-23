@@ -187,6 +187,14 @@
             "BuiltIn-UWP-Apps\\Photos"
         ]
     },
+    "StickyNotes": {
+        "Description": "Microsoft Sticky Notes - built-in UWP app provisioned for all users",
+        "WingetId": "9NBLGGH4QGHW",
+        "WingetPreserveLayout": true,
+        "DestinationFolders": [
+            "BuiltIn-UWP-Apps\\StickyNotes"
+        ]
+    },
     "WindowsTerminal": {
         "Description": "Windows Terminal - built-in UWP app provisioned for all users",
         "WingetId": "9N0DX20HK701",
