@@ -279,11 +279,29 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 - **Default:** `Commercial`
 - **Allowed Values:** `Commercial`, `GCC`, `GCCH`, `DoD`, `GovSecret`, `GovTopSecret`, `Gallatin`
 
-#### `applyWindowsDesktopOptimizations`
+#### `vdiOptimizationProfile`
+
+- **Type:** String
+- **Default:** `NonPersistent-Full`
+- **Allowed Values:** `None`, `NonPersistent-UpdatesOnly`, `NonPersistent-Full`, `Persistent`
+- **Description:** VDI optimization profile applied to the image by `Optimize-AVDImage.ps1`. Controls which optimization sections run and whether software update channels are locked down.
+
+| Value | Behavior |
+|---|---|
+| `None` | No optimization. Only `vdiOptimizationRestrictInternet` takes effect. |
+| `NonPersistent-UpdatesOnly` | Locks down software update channels only (OS, M365, Teams, OneDrive, Edge, WebView2, Store). Use when you manage other VDI hardening separately. |
+| `NonPersistent-Full` | Full VDI optimization for pooled host pools (VMs replaced on a regular cadence). All optimization sections applied, including update-channel lockdown. |
+| `Persistent` | Full optimization minus update-channel lockdown. Use for personal host pools managed by SCCM, Intune, or similar tooling. |
+
+> **Replaces:** the former `applyWindowsDesktopOptimizations` (boolean) and `disableSoftwareUpdates` (array) parameters.
+
+Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+
+#### `vdiOptimizationRestrictInternet`
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Apply Windows Desktop Optimization Tool customizations
+- **Description:** When `true`, restricts outbound internet traffic: NCSI passive polling, online font providers, Teredo IPv6 transition, and WiFi autologgers are disabled. Applies independently of `vdiOptimizationProfile`, including when profile is `None`. Recommended for air-gapped or proxy-only government deployments.
 
 ### Image Customizations - AppX Removal
 
@@ -369,42 +387,6 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 - **Type:** String
 - **Description:** WSUS server URL (required if updateService=WSUS)
 - **Example:** `https://wsus.corp.contoso.com:8531`
-
-### Disable Software Update Channels
-
-#### `disableSoftwareUpdates`
-
-- **Type:** Array
-- **Default:** `[]` (all channels left enabled)
-- **Description:** Locks down automatic update channels baked into the image. Use this for pooled host pools where you want to control updates centrally (e.g. via WSUS or Intune) rather than letting the OS self-update at runtime. Each value in the array disables one channel; omit a value to leave that channel enabled.
-
-> **Note:** This is distinct from `installUpdates`, which installs updates *during* the build. `disableSoftwareUpdates` prevents the baked image from self-updating *after* deployment.
-
-| Value | What it disables |
-|---|---|
-| `disableWindowsUpdate` | Windows Update / Windows Update for Business (sets `NoAutoUpdate`, `AUOptions`, `DODownloadMode`; stops `wuauserv` and `UsoSvc`) |
-| `disableM365Update` | Microsoft 365 Apps auto-update notifications and enable/disable controls |
-| `disableTeamsUpdate` | New Teams (MSTeams) auto-update via `DisableAutoUpdate` registry key |
-| `disableOneDriveUpdate` | OneDrive update ring (sets `GPOSetUpdateRing` to Deferred/0) |
-| `disableEdgeUpdate` | Microsoft Edge auto-update via EdgeUpdate policy (`UpdateDefault=0`) |
-| `disableWebView2Update` | WebView2 Runtime auto-update via EdgeUpdate policy |
-| `disableStoreAutoUpdate` | Microsoft Store auto-download (`AutoDownload=2`), InstallService scheduled tasks, and cloud content delivery (`DisableWindowsConsumerFeatures`, `DisableCloudOptimizedContent`) |
-
-**Example — disable all channels:**
-
-```json
-"disableSoftwareUpdates": {
-  "value": [
-    "disableWindowsUpdate",
-    "disableM365Update",
-    "disableTeamsUpdate",
-    "disableOneDriveUpdate",
-    "disableEdgeUpdate",
-    "disableWebView2Update",
-    "disableStoreAutoUpdate"
-  ]
-}
-```
 
 ### Logging
 

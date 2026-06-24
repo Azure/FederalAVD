@@ -187,9 +187,10 @@ The `customizations` parameter array defines which artifacts to run during image
 
 Key parameters in `<prefix>.imageBuild.parameters.json`:
 
+**Image identity & distribution:**
+
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| **customizations** | Array of artifacts to run during build | See customizations array above |
 | **imageDefinitionName** | Name for the image in Compute Gallery | `avd-win11-23h2` |
 | **sourceImagePublisher** | Base image publisher (marketplace) | `MicrosoftWindowsDesktop` |
 | **sourceImageOffer** | Base image offer | `office-365` |
@@ -198,11 +199,60 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **excludeFromLatest** | Exclude this version from 'latest' | `false` |
 | **replicaCount** | Number of replicas per region | `1` |
 | **replicationRegions** | Regions to replicate image to | `["usgovvirginia", "usgovarizona"]` |
+
+**Built-in Microsoft content:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| **installFsLogix** | Install FSLogix Apps agent | `true` |
+| **office365AppsToInstall** | M365 Apps to install | `["Excel", "Outlook", "PowerPoint", "Word"]` |
+| **installOneDrive** | Install OneDrive per-machine (VDI) | `true` |
+| **installTeams** | Install New Teams for VDI | `true` |
+| **teamsCloudType** | Teams government cloud variant | `GCCH` (default: `Commercial`) |
+| **downloadLatestMicrosoftContent** | Download latest FSLogix/M365/Teams from web instead of storage | `false` |
+
+**Built-in image customizations:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| **appsToRemove** | AppX package names to remove | `["Microsoft.BingWeather", "Microsoft.XboxApp"]` |
+| **customizations** | Array of artifacts to run during build (supports restarts) | See [Customizations Array](#customizations-array) above |
+| **vdiCustomizations** | Artifact array run last before sysprep (no restart; for software that generates unique IDs on first boot) | Same structure as `customizations` |
+| **vdiOptimizationProfile** | VDI optimization profile — see subsection below | `NonPersistent-Full` |
+| **vdiOptimizationRestrictInternet** | Restrict outbound internet traffic in the baked image | `true` for air-gapped clouds |
+| **cleanupDesktop** | Remove all shortcuts from common desktop | `false` |
+
+**Windows Updates:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
 | **runWindowsUpdate** | Install Windows Updates during build | `true` |
 | **windowsUpdateCategories** | Categories of updates to install | `Critical, Security, UpdateRollup` |
+
+**Logging:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
 | **collectCustomizationLogs** | Save customization logs to an existing blob storage container | `true` (optional, default: `false`) |
 | **logStorageAccountResourceId** | Resource ID of the storage account to receive build logs (deploy imageManagement with `deployBuildLogsStorageAccount = true`) | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}` |
 | **logContainerName** | Blob container name to write logs into | `image-customization-logs` (default) |
+
+### VDI Optimization
+
+The `vdiOptimizationProfile` parameter controls which optimization sections `Optimize-AVDImage.ps1` applies to the image. The `vdiOptimizationRestrictInternet` parameter operates independently and can be combined with any profile.
+
+| Profile | What it does | When to use |
+|---|---|---|
+| `NonPersistent-Full` **(default)** | Full VDI optimization: disables services, scheduled tasks, registry policies, autologgers, and optional Windows features with no VDI value. Also locks down all software update channels. | Pooled host pools replaced on a monthly cadence |
+| `NonPersistent-UpdatesOnly` | Locks down software update channels only (OS, M365, Teams, OneDrive, Edge, WebView2, Store). Skips all other service/task/registry changes. | When you manage other VDI hardening via a separate tool (e.g., LGPO, CIS tooling) |
+| `Persistent` | Full optimization minus update-channel lockdown. Update channels remain intact for SCCM/Intune. | Personal (persistent) host pools |
+| `None` | No optimization applied. Only `vdiOptimizationRestrictInternet` takes effect. | When optimization is handled entirely outside this template |
+
+**`vdiOptimizationRestrictInternet`:** When `true`, disables NCSI passive polling, online font providers, Teredo IPv6, and WiFi autologgers. Recommended for air-gapped or proxy-only government deployments. Applies regardless of the selected profile.
+
+> For the full list of what each section enables/disables, deliberate deviations from the Microsoft VDI guide, and rationale, see the script header in [`.common/scripts/Optimize-AVDImage.ps1`](../.common/scripts/Optimize-AVDImage.ps1).
+
+Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
 ### CMK Encryption Reference
 
