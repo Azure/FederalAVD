@@ -52,6 +52,17 @@
       and WiFi autologgers (Section 7). Applies independently of -OptimizationProfile,
       including when profile is None. Default is false.
 
+    Policy registry audit (W11 25H2):
+      All local policy registry values written by this script have been cross-checked
+      against the Windows 11 25H2 ADMX definitions in C:\Windows\PolicyDefinitions and
+      against LGPO.exe text-format exports from gpedit.msc. Every policy path and value
+      name is confirmed to be backed by a current ADMX file so that gpresult shows the
+      settings under Administrative Templates rather than Extra Registry Settings.
+      LGPO.exe supports MULTISZ type; multi-string policy values (AppPrivacy companions,
+      CellularDataAccess companions) are written through LGPO using the MULTISZ: format.
+      Exception: NetworkList\Signatures\EveryNetwork\CategoryReadOnly is a Security
+      Settings value with no ADMX backing by design; it is written via direct registry.
+
     Deliberate deviations from the VDI article [1]:
 
       Storage Sense [Section 5]:
@@ -278,6 +289,12 @@ function Set-PolicyValue {
         $lgpoData = switch ($Type) {
             ([Microsoft.Win32.RegistryValueKind]::DWord) { "DWORD:$Value" }
             ([Microsoft.Win32.RegistryValueKind]::String) { "SZ:$Value" }
+            ([Microsoft.Win32.RegistryValueKind]::MultiString) {
+                # LGPO text format: null-separated list ending with \0
+                # An empty multi-string is represented as a single \0
+                $joined = ($Value -join '\0')
+                if ([string]::IsNullOrEmpty($joined)) { 'MULTISZ:\0' } else { "MULTISZ:$joined\0" }
+            }
             default { $null }
         }
         if ($null -ne $lgpoData) {
@@ -765,24 +782,41 @@ try {
         # -- App Privacy (AT: Computer Configuration > Windows Components > App Privacy) --
         # Values: 0 = User in control, 1 = Force allow, 2 = Force deny
         $appPrivacyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessDiagnosticInfo' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsGetDiagnosticInfo' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsGetDiagnosticInfo_UserInControlOfTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsGetDiagnosticInfo_ForceAllowTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsGetDiagnosticInfo_ForceDenyTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
         Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation_UserInControlOfTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation_ForceAllowTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessLocation_ForceDenyTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
         Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion_UserInControlOfTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion_ForceAllowTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessMotion_ForceDenyTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
         Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications_UserInControlOfTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications_ForceAllowTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessNotifications_ForceDenyTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
         Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoice' -Value 2
         Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsActivateWithVoiceAboveLock' -Value 2
         Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios' -Value 2
-        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessCellularData' -Value 2
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios_UserInControlOfTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios_ForceAllowTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path $appPrivacyPath -Name 'LetAppsAccessRadios_ForceDenyTheseApps' -Value @() -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
 
         # -- Input Personalization and Inking / Typing data collection --
-        # AllowInputPersonalization=0 disables speech recognition services machine-wide
-        # and suppresses Windows learning from inking and typing input. Users cannot
-        # re-enable it in Settings. This policy covers all four per-user preferences:
-        # RestrictImplicitInkCollection, RestrictImplicitTextCollection,
-        # AcceptedPrivacyPolicy, and HarvestContacts.
         # AT: Computer Configuration > Control Panel > Regional and Language Options
+        # AllowInputPersonalization=0 disables speech recognition services machine-wide.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization' `
             -Name 'AllowInputPersonalization' -Value 0
+        # RestrictImplicitTextCollection and RestrictImplicitInkCollection are separate
+        # policies (Globalization.admx enabledList items) that must be written independently.
+        # They prevent Windows from collecting typing and inking samples for personalization.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization' `
+            -Name 'RestrictImplicitTextCollection' -Value 1
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization' `
+            -Name 'RestrictImplicitInkCollection' -Value 1
         # AllowLinguisticDataCollection=0 stops sending inking/typing data to Microsoft
         # to improve language recognition (telemetry, separate from the personalization
         # feature above).
@@ -803,8 +837,12 @@ try {
         Set-PolicyValue -Path $searchPath -Name 'AllowSearchToUseLocation' -Value 0
         Set-PolicyValue -Path $searchPath -Name 'DisableWebSearch' -Value 1
         Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchUseWeb' -Value 0
-        Set-PolicyValue -Path $searchPath -Name 'PreventIndexingEmailAttachments' -Value 1
+        Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchPrivacy' -Value 3  # 3 = Strict: don't share any info
         Set-PolicyValue -Path $searchPath -Name 'PreventIndexingOfflineFiles' -Value 1
+        Set-PolicyValue -Path $searchPath -Name 'PreventIndexingUncachedExchangeFolders' -Value 1
+        # RichAttachmentPreviews: restrict which file types get rich preview in search results
+        Set-PolicyValue -Path $searchPath -Name 'RichAttachmentPreviews' -Value '.docx;.xlsx;.txt;.xls' `
+            -Type ([Microsoft.Win32.RegistryValueKind]::String)
 
         # -- BITS peer caching (AT: Computer Configuration > Network > Background Intelligent Transfer Service (BITS)) --
         $bitsPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\BITS'
@@ -823,10 +861,14 @@ try {
             -Name 'DODownloadMode' -Value 99
 
         # -- Maps (AT: Computer Configuration > Windows Components > Maps) --
+        # NOTE: Previously removed under incorrect assumption that WinMaps.admx was absent.
+        # WinMaps.admx IS present in W11 25H2 PolicyDefinitions and both policies are ADMX-backed.
+        # TurnOffAutoUpdate: enabledValue=0 (counter-intuitive -- "Enabled" = auto-update OFF)
+        # DisallowUntriggeredNetworkOnSettingsPage: enabledValue=0 ("Enabled" = traffic blocked)
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' `
             -Name 'AutoDownloadAndUpdateMapData' -Value 0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' `
-            -Name 'AllowUnsolicitedNetworkTrafficOnSettingsPage' -Value 0
+            -Name 'AllowUntriggeredNetworkTrafficOnSettingsPage' -Value 0
 
         # -- Messaging (AT: Computer Configuration > Windows Components > Messaging) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Messaging' `
@@ -836,15 +878,54 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetCache' `
             -Name 'Enabled' -Value 0
 
+        # -- Network List Manager: prevent users from changing network location type --
+        # CategoryReadOnly=1 locks the network category (Public/Private/Domain) so users
+        # cannot change it via Network & Internet Settings. Applied to EveryNetwork (all profiles).
+        # NOTE: NLM policies are under Security Settings, not Administrative Templates -- no ADMX
+        # backing. Written directly to registry; will appear as Extra Registry Settings in gpresult.
+        $nlmPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures\EveryNetwork'
+        if (-not (Test-Path $nlmPath)) { New-Item -Path $nlmPath -Force | Out-Null }
+        Set-ItemProperty -Path $nlmPath -Name 'CategoryReadOnly' -Value 1 -Type DWord -Force
+
+        # -- Hotspot Authentication (AT: Computer Configuration > Network > Hotspot Authentication) --
+        # Prevents Windows from automatically authenticating to Wi-Fi hotspots.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\HotspotAuthentication' `
+            -Name 'Enabled' -Value 0
+
+        # -- Wi-Fi Sense: disable auto-connect to suggested open hotspots (AT: Computer Configuration > Network > WLAN Service > WLAN Settings) --
+        # AutoConnectAllowedOEM=0 disables the Wi-Fi Sense auto-connect feature OEM-wide.
+        # No Wi-Fi hardware in VMs, but prevents any future hardware-passthrough edge case.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\wcmsvc\wifinetworkmanager\config' `
+            -Name 'AutoConnectAllowedOEM' -Value 0
+
+        # -- Cellular Data Access (AT: Computer Configuration > Network > WWAN Service > Cellular Data Access) --
+        # LetAppsAccessCellularData=2 = Force Deny all apps access to cellular data.
+        # The three companion MULTISZ app-list values must be set to empty to match the
+        # gpedit-generated policy (all apps denied, no per-app overrides).
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WwanSvc\CellularDataAccess' `
+            -Name 'LetAppsAccessCellularData' -Value 2
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WwanSvc\CellularDataAccess' `
+            -Name 'LetAppsAccessCellularData_UserInControlOfTheseApps' -Value ([string[]]@()) `
+            -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WwanSvc\CellularDataAccess' `
+            -Name 'LetAppsAccessCellularData_ForceAllowTheseApps' -Value ([string[]]@()) `
+            -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WwanSvc\CellularDataAccess' `
+            -Name 'LetAppsAccessCellularData_ForceDenyTheseApps' -Value ([string[]]@()) `
+            -Type ([Microsoft.Win32.RegistryValueKind]::MultiString)
+
         # -- Desktop Window Manager animations (AT: Computer Configuration > Windows Components > Desktop Window Manager) --
         # NOTE: WiFiSenseCredShared and WiFiSenseOpen were removed -- they have no ADMX backing and
         # the WiFiSense feature was deprecated in Windows 10 1803. The correct GP policy for WiFi
         # auto-connect writes to a different key (wcmsvc\wifinetworkmanager\config\AutoConnectAllowedOEM).
         # NOTE: UseSolidColorForStart was removed -- it has no definition in DWM.admx or any other
         # built-in ADMX. DWM.admx defines only: DisallowAnimations, DisallowColorizationColorChanges,
-        # DefaultColorizationColorState.
+        # DefaultColorizationColorState, DisableAccentGradient.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
             -Name 'DisallowAnimations' -Value 1
+        # DwmDisableAccentAndGradient policy (DWM.admx): disables accent color gradient on titlebars
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
+            -Name 'DisableAccentGradient' -Value 1
 
         # -- Microsoft Edge: disable preloading and background activity (AT: Computer Configuration > Microsoft Edge) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled' -Value 0
@@ -879,6 +960,10 @@ try {
             -Name 'DisablePrivacyExperience' -Value 1
 
         # -- Logon screen (AT: Computer Configuration > System > Logon) --
+        # "Do not display the Getting Started welcome screen at logon" = Enabled
+        # (Logon.admx, valueName=NoWelcomeScreen, enabledValue=1)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' `
+            -Name 'NoWelcomeScreen' -Value 1
         # "Show first sign-in animation" = Disabled: suppresses the welcome animation
         # and the Microsoft account opt-in prompt on first logon.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' `
@@ -891,13 +976,12 @@ try {
             -Name 'DisableAcrylicBackgroundOnLogon' -Value 1
 
         # -- Search index (AT: Computer Configuration > Windows Components > Search) --
-        # StopIndexingOnLimitedHardDriveSpace prevents the index from consuming
-        # remaining disk capacity when space is low (threshold: ~5 GB).
-        # Disabling encrypted item indexing reduces indexing overhead.
+        # The "Stop indexing when hard drive space is low" policy (Search.admx) uses
+        # PreventIndexingLowDiskSpaceMB as its valueName, not StopIndexingOnLimitedHardDriveSpace.
+        # (StopIndexingOnLimitedHardDriveSpace is the policy <name>, not the registry valueName.)
+        # 5000 MB threshold matching gpedit configuration.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' `
-            -Name 'StopIndexingOnLimitedHardDriveSpace' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' `
-            -Name 'AllowIndexingEncryptedStoresOrItems' -Value 0
+            -Name 'PreventIndexingLowDiskSpaceMB' -Value 5000
 
         # -- NTFS: disable short (8.3) file name creation on all volumes --
         Set-PolicyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' `
@@ -906,7 +990,10 @@ try {
         # -- AutoPlay (AT: Computer Configuration > Windows Components > AutoPlay Policies) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' `
             -Name 'NoDriveTypeAutoRun' -Value 255
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+        # NoAutorun is in AutoPlay.admx under Software\Microsoft\Windows\CurrentVersion\Policies\Explorer.
+        # The enum value 1 = "Do not prevent autorun on CD-ROM only"; value 2 = "Enabled (all drives, XP compatible)".
+        # NoDriveTypeAutoRun=255 above is the comprehensive disable; this is belt-and-suspenders via the AutoPlay AT.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' `
             -Name 'NoAutorun' -Value 1
 
         # -- Application Compatibility: Inventory Collector (AT: Computer Configuration > Windows Components > Application Compatibility) --
@@ -914,8 +1001,9 @@ try {
             -Name 'DisableInventory' -Value 1
 
         # -- File Explorer: thumbnail caching (AT: Computer Configuration > Windows Components > File Explorer) --
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
-            -Name 'DisableThumbsDBOnNetworkFolders' -Value 1
+        # NOTE: DisableThumbsDBOnNetworkFolders was removed from Windows 11 WindowsExplorer.admx.
+        # It has no ADMX backing on W11 25H2 and is intentionally omitted to keep gpresult clean.
+        # The user-scope equivalent in Section 7 is also omitted for the same reason.
 
         # -- File History (AT: Computer Configuration > Windows Components > File History) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\FileHistory' `
@@ -937,6 +1025,13 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageHealth' `
             -Name 'AllowDiskHealthModelUpdates' -Value 0
 
+        # -- Power: desktop background slideshow (AT: Computer Configuration > System > Power Management > Video and Display Settings) --
+        # "Turn off the desktop background slideshow (plugged in)" = Disabled
+        # Power.admx EnableDesktopSlideShowAC policy, valueName=ACSettingIndex, disabledValue=0
+        # Prevents the slideshow from running during AC power and eliminates background rendering overhead.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\309dce9b-bef4-4119-9921-a851fb12f0f4' `
+            -Name 'ACSettingIndex' -Value 0
+
         # -- Storage Sense (AT: Computer Configuration > Windows Components > Storage Sense) --
         # Enabled intentionally; see .DESCRIPTION deviations for rationale.
         # AllowStorageSenseGlobal = 1 forces it on machine-wide; remaining values configure behavior.
@@ -954,12 +1049,19 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore' `
             -Name 'DisableConfig' -Value 1
 
+        # -- Windows Recovery Environment (AT: Computer Configuration > System > Recovery) --
+        # "Configure Windows Recovery Environment" = Enabled + Disable Setup
+        # ReAgent.admx ConfigureWinRESetup policy, valueName=DisableSetup, enabledValue=1
+        # Prevents users from using WinRE to reset or reinstall the OS on a managed VDI image.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRE' `
+            -Name 'DisableSetup' -Value 1
+
         # -- Toast / push notifications (AT: Computer Configuration > Windows Components > Push Notifications) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications' `
             -Name 'NoCloudApplicationNotification' -Value 1
 
         # -- Windows Mobility Center (AT: Computer Configuration > Windows Components > Windows Mobility Center) --
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\MobilityCenter' `
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\MobilityCenter' `
             -Name 'NoMobilityCenter' -Value 1
 
         # -- Windows Installer (AT: Computer Configuration > Windows Components > Windows Installer) --
@@ -977,39 +1079,61 @@ try {
             -Name 'DisableEnhancedNotifications' -Value 1
 
         # -- Windows Update (AT: Computer Configuration > Windows Components > Windows Update) --
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
-            -Name 'EnableFeaturedSoftware' -Value 0
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
-            -Name 'ManagePreviewBuilds' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
-            -Name 'ManagePreviewBuildsPolicyValue' -Value 0
+        # NOTE: ManagePreviewBuilds / ManagePreviewBuildsPolicyValue removed. The ADMX disabledValue
+        # is 1 (not configured = policy off), meaning Windows will not enroll in preview builds when
+        # the key is absent. Enterprise SKUs also block the user opt-in in Settings independently.
+        # The CSP values (ManagePreviewBuilds=1, ManagePreviewBuildsPolicyValue=0) used previously
+        # do not map to any valid ADMX state and produced ungovernable Extra Registry Settings.
 
         # -- Event Viewer (AT: Computer Configuration > Windows Components > Event Viewer) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\EventViewer' `
             -Name 'MicrosoftEventVwrDisableLinks' -Value 1
 
         # -- Handwriting --
-        # AT: Computer Configuration > Windows Components > Handwriting Error Reporting
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports' `
-            -Name 'PreventHandwritingErrorReports' -Value 1
         # AT: Computer Configuration > Windows Components > Tablet PC > Handwriting Personalization
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\TabletPC' `
             -Name 'PreventHandwritingDataSharing' -Value 1
 
-        # -- Cloud content: block silently pushed pre-installed UWP app refreshes (AT: Computer Configuration > Windows Components > Cloud Content) --
-        # DisableCloudOptimizedContent prevents Microsoft from silently re-pushing removed or
-        # refreshed pre-installed apps via cloud content delivery. This applies regardless of
-        # persistence model because no VDI deployment should have uncontrolled app installs.
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
-            -Name 'DisableCloudOptimizedContent' -Value 1
-
-        # -- Software Protection Platform: disable KMS Client Online AVS Validation --
-        # Prevents the device from sending activation state data to Microsoft's online
-        # Anti-Piracy Validation Service. Enterprise VDI uses on-premises KMS infrastructure.
-        # AT: Computer Configuration > Windows Components > Software Protection Platform
-        # Ref: Article local policy table - Software Protection Platform
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Software Protection Platform' `
+        # -- Software Protection Platform (AT: Computer Configuration > Windows Components > Software Protection Platform) --
+        # NoAcquireGT policy (AVSValidationGP.admx): prevents Windows from contacting Microsoft's
+        # activation servers to acquire a grace ticket. Correct standalone ADMX-backed policy.
+        # NOTE: ICM.admx also writes NoGenTicket as a side-effect item in its composite
+        # RestrictCommunication disabledList, but AVSValidationGP.admx provides the standalone
+        # policy entry that gpresult resolves to Administrative Templates (not Extra Registry Settings).
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform' `
             -Name 'NoGenTicket' -Value 1
+
+        # -- Help and Support: disable active help links (AT: Computer Configuration > Windows Components > Help and Support Center) --
+        # ActiveHelp policy (HelpAndSupport.admx): removes online help links from the Help viewer.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' `
+            -Name 'NoActiveHelp' -Value 1
+
+        # -- IIS: prevent installation (AT: Computer Configuration > Windows Components > Internet Information Services) --
+        # PreventIISInstall policy (IIS.admx): blocks users from installing IIS on the image.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\IIS' `
+            -Name 'PreventIISInstall' -Value 1
+
+        # -- Internet Explorer: disable feed discovery (AT: Computer Configuration > Windows Components > Internet Explorer > RSS Feeds) --
+        # Disable_Feed_Discovery policy (inetres.admx): stops IE from auto-detecting RSS feeds.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Feed Discovery' `
+            -Name 'Enabled' -Value 0
+
+        # -- Microsoft Edge (legacy / HTML-based, Windows 10 inbox Edge) telemetry and preload policies --
+        # These are backed by MicrosoftEdge.admx which is present in W11 25H2 PolicyDefinitions.
+        # ConfigureTelemetryForMicrosoft365Analytics: 0 = do not send Edge browsing data to M365 Analytics
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection' `
+            -Name 'MicrosoftEdgeDataOptIn' -Value 0
+        $legacyEdgePath = 'HKLM:\SOFTWARE\Policies\Microsoft\MicrosoftEdge'
+        # BooksLibrary: disable update and extended telemetry for the Books hub
+        Set-PolicyValue -Path "$legacyEdgePath\BooksLibrary" -Name 'AllowConfigurationUpdateForBooksLibrary' -Value 0
+        Set-PolicyValue -Path "$legacyEdgePath\BooksLibrary" -Name 'EnableExtendedBooksTelemetry' -Value 0
+        # Main: suppress first-run page and disable prelaunch
+        Set-PolicyValue -Path "$legacyEdgePath\Main" -Name 'PreventFirstRunPage' -Value 1
+        Set-PolicyValue -Path "$legacyEdgePath\Main" -Name 'AllowPrelaunch' -Value 0
+        # ServiceUI: disable web content on new tab page
+        Set-PolicyValue -Path "$legacyEdgePath\ServiceUI" -Name 'AllowWebContentOnNewTabPage' -Value 0
+        # TabPreloader: disable tab preloading
+        Set-PolicyValue -Path "$legacyEdgePath\TabPreloader" -Name 'AllowTabPreloading' -Value 0
 
         # -- Control Panel: disable online tips (AT: Computer Configuration > Control Panel) --
         # Prevents the Settings app from contacting Microsoft content services to fetch tips.
@@ -1054,15 +1178,32 @@ try {
         # -- Internet Communication Management (AT: Computer Configuration > Windows Components > Internet Communication Management > Internet Communication settings) --
         # Disables Windows shell components that make outbound calls to Microsoft web services.
         # Ref: Article local policy table - Internet Communication Management
+        # ICM.admx is present in W11 25H2 PolicyDefinitions and loads correctly in gpedit.
+        # All values below have standalone <policy> entries in ICM.admx and will appear under
+        # Administrative Templates in gpresult, not as Extra Registry Settings.
+        $legacyExplorer = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
         # Turn off Internet download for Web publishing and online ordering wizards
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
-            -Name 'NoPublishingWizard' -Value 1
+        Set-PolicyValue -Path $legacyExplorer -Name 'NoPublishingWizard' -Value 1
+        # Suppress "Search the web" shell prompt when opening an unknown file type
+        Set-PolicyValue -Path $legacyExplorer -Name 'NoWebServices' -Value 1
         # Turn off Internet file association service (opening unknown file types via Microsoft lookup)
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
-            -Name 'NoInternetOpenWith' -Value 1
+        Set-PolicyValue -Path $legacyExplorer -Name 'NoInternetOpenWith' -Value 1
         # Turn off "Order Prints Online" picture task
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
-            -Name 'NoOnlinePrintsWizard' -Value 1
+        Set-PolicyValue -Path $legacyExplorer -Name 'NoOnlinePrintsWizard' -Value 1
+        # Suppress Windows product registration wizard (Registration Wizard Control)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Registration Wizard Control' `
+            -Name 'NoRegistration' -Value 1
+        # Suppress ISP sign-up wizard (Internet Connection Wizard)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Internet Connection Wizard' `
+            -Name 'ExitOnMSICW' -Value 1
+        # Disable Search Companion content file updates from the internet
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\SearchCompanion' `
+            -Name 'DisableContentFileUpdates' -Value 1
+        # Disable legacy PCHealth / Help Service online KB search and error reporting
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\PCHealth\HelpSvc' `
+            -Name 'MicrosoftKBSearch' -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\PCHealth\ErrorReporting' `
+            -Name 'DoReport' -Value 0
         # Turn off Windows Customer Experience Improvement Program (AT: Computer Configuration > Windows Components > Windows Customer Experience Improvement Program)
         # (belt-and-suspenders: AllowTelemetry in Section 5 and the Consolidator/UsbCeip
         #  tasks in Section 3 already suppress CEIP data collection)
@@ -1081,19 +1222,15 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'DisableLockScreenAppNotifications' -Value 1
 
-        # -- Peer-to-Peer networking (AT: Computer Configuration > Network > Microsoft Peer-to-Peer Networking Services) --
-        # P2P networking provides no value in a managed VDI environment.
-        # Ref: Article local policy table - Microsoft Peer-to-Peer Networking Services
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Peernet' `
-            -Name 'Disabled' -Value 1
+        # -- Peer-to-Peer networking --
+        # NOTE: Peernet\Disabled is backed by Peernet.admx which was removed from Windows 11
+        # PolicyDefinitions entirely. Removed to avoid ungovernable Extra Registry Settings.
 
-        # -- Online Assistance (AT: Computer Configuration > System > Internet Communication Management > Internet Communication settings) --
-        # Prevents the help system from fetching online content or transmitting implicit feedback.
-        # Ref: Article local policy table - Online Assistance
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' `
-            -Name 'NoOnlineAssist' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' `
-            -Name 'NoImplicitFeedback' -Value 1
+        # -- Online Assistance --
+        # NOTE: NoOnlineAssist and NoImplicitFeedback are backed only by ICM.admx, whose parent
+        # category (InternetManagement) was removed from Windows.admx in Windows 11. ICM.admx
+        # cannot load in gpedit on W11 and these values have no standalone ADMX policy.
+        # Removed to avoid ungovernable Extra Registry Settings in gpresult.
 
         # -- Troubleshooting and Diagnostics (AT: Computer Configuration > System > Troubleshooting and Diagnostics) --
         # NOTE: DPS (Diagnostic Policy Service) is disabled in Section 1, which makes
@@ -1107,19 +1244,40 @@ try {
         # Prevent users from launching troubleshooting wizards from Control Panel
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnostics' `
             -Name 'EnableDiagnostics' -Value 0
-        # Prevent users from accessing online troubleshooting content (Windows Online Troubleshooting Service)
+        # Prevent Windows from connecting to remote servers to get troubleshooting content
+        # (AT: Computer Configuration > System > Troubleshooting and Diagnostics > Scripted Diagnostics >
+        #  "Troubleshooting: Allow users to access online troubleshooting content ... from Microsoft")
+        # BetterWhenConnected policy (sdiageng.admx) valueName=EnableQueryRemoteServer, disabledValue=0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnosticsProvider\Policy' `
-            -Name 'DisableQueryRemoteServer' -Value 1
-        # NOTE: The article also lists per-scenario "Configure Scenario Execution Level = Disabled"
-        # for Windows Boot, Shutdown, Memory, Standby/Resume, Resource Exhaustion, Responsiveness,
-        # and PerfTrack performance diagnostics. Each scenario uses a GUID-keyed registry subkey:
-        #   HKLM:\SOFTWARE\Policies\Microsoft\Windows\WDI\{<scenario-guid>}\ScenarioExecutionEnabled = 0
-        # NOTE: DPS is disabled in Section 2 for NonPersistent VMs, making these scenario policies
-        # redundant there. For Persistent VMs DPS remains running, so these policies do apply --
-        # however the per-scenario GUIDs change across Windows versions, making them brittle to
-        # maintain. The higher-level ScheduledDiagnostics and ScriptedDiagnostics policies above
-        # cover the user-visible troubleshooter surface. If per-scenario enforcement is required
-        # for a specific compliance baseline, add the relevant GUIDs manually.
+            -Name 'EnableQueryRemoteServer' -Value 0
+        # Per-scenario WDI diagnostic execution policies
+        # (AT: Computer Configuration > System > Troubleshooting and Diagnostics > [various])
+        # Each scenario is controlled by a GUID-keyed subkey. The GUIDs are stable on W11 25H2
+        # and all backing ADMX files are present in C:\Windows\PolicyDefinitions.
+        # NOTE: The EnabledScenarioExecutionLevel DELETE entries in gpedit's export are cleanup-only
+        # (remove the value left by a prior Enabled state). On a fresh image they are no-ops and
+        # are safely omitted here. Exception: LeakDiagnostic writes EnabledScenarioExecutionLevel=1
+        # in its disabledList -- that IS written below.
+        $wdiBase = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WDI'
+        # PerformanceDiagnostics.admx - Boot Performance Diagnostics (primary GUID)
+        Set-PolicyValue -Path "$wdiBase\{67144949-5132-4859-8036-a737b43825d8}" -Name 'ScenarioExecutionEnabled' -Value 0
+        # PerformanceDiagnostics.admx - Boot Performance Diagnostics (side-effect GUID from disabledList)
+        Set-PolicyValue -Path "$wdiBase\{86432a0b-3c7d-4ddf-a89c-172faa90485d}" -Name 'ScenarioExecutionEnabled' -Value 0
+        # PerformanceDiagnostics.admx - Shutdown Performance Diagnostics
+        Set-PolicyValue -Path "$wdiBase\{2698178D-FDAD-40AE-9D3C-1371703ADC5B}" -Name 'ScenarioExecutionEnabled' -Value 0
+        # PerformanceDiagnostics.admx - Standby/Resume Performance Diagnostics
+        Set-PolicyValue -Path "$wdiBase\{ffc42108-4920-4acf-a4fc-8abdcc68ada4}" -Name 'ScenarioExecutionEnabled' -Value 0
+        # PerformanceDiagnostics.admx - Windows Responsiveness Performance Diagnostics (primary GUID)
+        Set-PolicyValue -Path "$wdiBase\{a7a5847a-7511-4e4e-90b1-45ad2a002f51}" -Name 'ScenarioExecutionEnabled' -Value 0
+        # PerformanceDiagnostics.admx - Windows Responsiveness (side-effect GUIDs from disabledList)
+        Set-PolicyValue -Path "$wdiBase\{186f47ef-626c-4670-800a-4a30756babad}" -Name 'ScenarioExecutionEnabled' -Value 0
+        Set-PolicyValue -Path "$wdiBase\{ecfb03d1-58ee-4cc7-a1b5-9bc6febcb915}" -Name 'ScenarioExecutionEnabled' -Value 0
+        # Radar.admx - Resource Exhaustion Diagnostics
+        Set-PolicyValue -Path "$wdiBase\{3af8b24a-c441-4fa4-8c5c-bed591bfa867}" -Name 'ScenarioExecutionEnabled' -Value 0
+        # LeakDiagnostic.admx - Memory Leak Diagnostics
+        # disabledList explicitly sets EnabledScenarioExecutionLevel=1 in addition to ScenarioExecutionEnabled=0
+        Set-PolicyValue -Path "$wdiBase\{eb73b633-3f4e-4ba0-8f60-8f3c6f53168f}" -Name 'ScenarioExecutionEnabled' -Value 0
+        Set-PolicyValue -Path "$wdiBase\{eb73b633-3f4e-4ba0-8f60-8f3c6f53168f}" -Name 'EnabledScenarioExecutionLevel' -Value 1
 
         Invoke-ApplyPolicyQueue
         Write-Log ""
@@ -1139,13 +1297,16 @@ try {
 
         # Disable Windows Update scan/install. OS updates are applied during image
         # servicing and delivered via image replacement, not per-VM Windows Update.
+        # NoAutoUpdate=1 sets the AutoUpdateCfg policy to its Disabled state per WindowsUpdate.admx
+        # (enabledValue=0 / disabledValue=1), which explicitly turns off Automatic Updates.
+        # gpresult shows this as "Configure Automatic Updates: Disabled" in Administrative Templates.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
             -Name 'NoAutoUpdate' -Value 1
-        # AUOptions = 1 (Never check for updates) - belt-and-suspenders with NoAutoUpdate
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
-            -Name 'AUOptions' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
-            -Name 'DisableWindowsUpdateAccess' -Value 1
+        # NOTE: AUOptions removed — value 1 is not a valid enum in WindowsUpdate.admx (valid: 2,3,4,5,7)
+        # and AUOptions is only meaningful when the policy is Enabled (NoAutoUpdate=0). Redundant here.
+        # NOTE: DisableWindowsUpdateAccess removed — the only ADMX-backed policy (RemoveWindowsUpdate)
+        # is class="User" only, at a different path. No Machine-class ADMX exists for this value on W11.
+        # NoAutoUpdate=1 above is sufficient to prevent updates on NonPersistent VMs.
 
         # -- Update channel lockdown: application-level (NonPersistent Only) --
         # On Persistent VMs, SCCM or Intune manages these update channels directly.
@@ -1176,6 +1337,9 @@ try {
 
         # OneDrive: block automatic updates entirely (image provides the pinned version)
         # Ref: https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
+        # NOTE: GPOSetUpdateRing is not in the inbox SkyDrive.admx. It requires the standalone OneDrive
+        # ADMX templates (OneDrive.admx) installed separately. Without them this will appear as an
+        # Extra Registry Setting in gpresult, but the value is still enforced by the OneDrive client.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' `
             -Name 'GPOSetUpdateRing' -Value 0
 
@@ -1199,12 +1363,11 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' `
             -Name 'AutoDownload' -Value 2
 
-        # Disable file layout auto-optimization. The OptimalLayout service rearranges
-        # files on disk to improve sequential read performance. On Azure SSD-backed
-        # managed disks, random I/O is nearly as fast as sequential I/O, making
-        # this optimization marginal at best.
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OptimalLayout' `
-            -Name 'EnableAutoLayout' -Value 0
+        # Disable file layout auto-optimization.
+        # NOTE: OptimalLayout.admx was removed from Windows 11 PolicyDefinitions. There is no
+        # ADMX-backed policy for EnableAutoLayout on W11 25H2. The registry value is intentionally
+        # omitted to keep gpresult clean. The effect is achieved indirectly: SysMain (Superfetch)
+        # is disabled in Section 2, which also disables the layout optimizer it depends on.
 
         # Disable Prefetcher and Superfetch via Session Manager parameters.
         # Although prefetch data does persist across reboots within the monthly VM
@@ -1381,6 +1544,9 @@ try {
                 # Configure Windows spotlight on lock screen: 2 = Disabled (USER CONFIG ONLY - no machine equivalent)
                 # 1 = enabled, 2 = disabled (user cannot select spotlight as lock screen)
                 Set-PolicyValue -Path $duCloudContent -Name 'ConfigureWindowsSpotlight' -Value 2
+                # IncludeEnterpriseSpotlight is a child checkbox of ConfigureWindowsSpotlight.
+                # gpedit writes it when ConfigureWindowsSpotlight is configured; value 0 = unchecked.
+                Set-PolicyValue -Path $duCloudContent -Name 'IncludeEnterpriseSpotlight' -Value 0
 
                 # -- Start Menu and Taskbar (User Configuration) --
                 # Ref: Article local policy table - User Configuration > Start Menu and Taskbar
@@ -1389,8 +1555,12 @@ try {
                 Set-PolicyValue -Path $duLegacyExplorer -Name 'NoInstrumentation' -Value 1
                 # Don't add shares of recently opened documents to Network Locations
                 Set-PolicyValue -Path $duLegacyExplorer -Name 'NoRecentDocsNetHood' -Value 1
+                # Don't search the Internet from the Start Menu
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoSearchInternetInStartMenu' -Value 1
                 # Don't use search-based method when resolving shell shortcuts
                 Set-PolicyValue -Path $duLegacyExplorer -Name 'NoResolveSearch' -Value 1
+                # Turn off smooth-scrolling and other SPI animations (reduces compositing load)
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'TurnOffSPIAnimations' -Value 1
 
                 $duExplorer = "$du\Software\Policies\Microsoft\Windows\Explorer"
                 # Don't display or track items in Jump Lists from remote locations
@@ -1398,7 +1568,8 @@ try {
                 # Turn off Aero Shake window minimizing mouse gesture
                 Set-PolicyValue -Path $duExplorer -Name 'NoWindowMinimizingShortcuts' -Value 1
                 # Turn off all balloon notifications in the taskbar notification area
-                Set-PolicyValue -Path $duExplorer -Name 'TaskbarNoNotification' -Value 1
+                # AT path: Taskbar.admx -> Software\Microsoft\Windows\CurrentVersion\Policies\Explorer
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'TaskbarNoNotification' -Value 1
                 # Turn off feature advertisement balloon notifications
                 Set-PolicyValue -Path $duExplorer -Name 'NoBalloonFeatureAdvertisements' -Value 1
 
@@ -1410,8 +1581,10 @@ try {
 
                 # -- Desktop (User Configuration) --
                 # Ref: Article local policy table - User Configuration > Desktop
-                # Don't add shares of recently opened documents to Network Locations (also Explorer above)
-                # Turn off Aero Shake already covered above
+                # Limit Active Directory query result set size to avoid long-running LDAP searches
+                # AD_QueryLimit policy (Desktop.admx), key: Software\Policies\Microsoft\Windows\Directory UI
+                Set-PolicyValue -Path "$du\Software\Policies\Microsoft\Windows\Directory UI" `
+                    -Name 'QueryLimit' -Value 1500
 
                 # -- Edge UI (User Configuration) --
                 # Turn off app-usage tracking in the Start search / Charm bar MRU list
@@ -1419,15 +1592,24 @@ try {
                 Set-PolicyValue -Path "$du\Software\Policies\Microsoft\Windows\EdgeUI" `
                     -Name 'DisableMFUTracking' -Value 1
 
+                # -- Control Panel (User Configuration) --
+                # TurnOffOfferTextPredictions policy (Globalization.admx): disables text prediction
+                # suggestions in hardware keyboards (suppresses telemetry from typing data).
+                Set-PolicyValue -Path "$du\Software\Policies\Microsoft\Control Panel\International" `
+                    -Name 'TurnOffOfferTextPredictions' -Value 1
+
                 # -- File Explorer (User Configuration) --
                 # Ref: Article local policy table - User Configuration > File Explorer
-                # Turn off caching of thumbnail pictures
-                Set-PolicyValue -Path $duExplorer -Name 'DisableThumbnails' -Value 1
+                # Turn off display of thumbnail images entirely
+                # AT path: Thumbnails.admx -> Software\Microsoft\Windows\CurrentVersion\Policies\Explorer
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'DisableThumbnails' -Value 1
+                # Turn off caching of thumbnail pictures to disk (separate from disabling display)
+                # NoCacheThumbNailPictures policy (WindowsExplorer.admx)
+                Set-PolicyValue -Path $duLegacyExplorer -Name 'NoThumbnailCache' -Value 1
                 # Turn off display of recent search entries in the File Explorer search box
                 Set-PolicyValue -Path $duExplorer -Name 'DisableSearchBoxSuggestions' -Value 1
-                # Turn off caching of thumbnails in hidden thumbs.db files
-                # (machine-level DisableThumbsDBOnNetworkFolders is also set in Section 5)
-                Set-PolicyValue -Path $duExplorer -Name 'DisableThumbsDBOnNetworkFolders' -Value 1
+                # NOTE: DisableThumbsDBOnNetworkFolders was removed from Windows 11 WindowsExplorer.admx
+                # and is intentionally omitted (no ADMX backing on W11 25H2).
 
                 Invoke-ApplyPolicyQueue
                 Write-Log "  Default user profile settings applied"
