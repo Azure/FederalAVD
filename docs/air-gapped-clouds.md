@@ -87,12 +87,6 @@ To use these apps in an air-gapped image build:
    # repeat for each app Store ID
    ```
 
-> **Dependencies in air-gapped images:** Do **not** set `"SkipDependencies": true` for
-> air-gapped downloads. Marketplace images in disconnected clouds may not have the latest
-> framework packages (VCLibs, WinAppSDK, UI.Xaml) applied via Windows Update, so the bundled
-> `Dependencies\` / `SharedDependencies\` files are the only reliable fallback for
-> `Install-BuiltinUwpApps.ps1`.
-
 2. Copy the entire staged `BuiltIn-UWP-Apps\` folder (including `SharedDependencies\`) to the
    air-gapped network and place it under `customer/artifacts/`:
 

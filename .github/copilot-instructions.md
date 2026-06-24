@@ -82,9 +82,6 @@ storage. Supported download methods:
 When `WingetId` is used with `"WingetPreserveLayout": true`, the folder structure produced by
 `winget download` is preserved. This is required for MSIX / UWP provisioning.
 
-Add `"SkipDependencies": true` to skip downloading framework dependencies — safe on internet-connected
-clouds where Windows Update keeps the OS current. Omit this for air-gapped clouds.
-
 ### Image Lifecycle (Ongoing Refresh)
 
 After initial deployment, the repeating update cycle is:
