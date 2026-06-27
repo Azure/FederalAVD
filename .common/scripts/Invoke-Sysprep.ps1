@@ -108,23 +108,51 @@ try {
         Remove-Item -Path "$PantherDir\*.log" -Force -ErrorAction SilentlyContinue
     }
 
-    Write-Log "Registering and starting the Sysprep scheduled task as the local administrator account."
+    # The Task Scheduler CIM provider's internal credential validation rejects the built-in
+    # administrator account (SID-500) under VDI-optimized LGPO policy state with 0x8007052e
+    # ("The user name or password is incorrect") even though the credentials are correct and
+    # direct LogonUser(BATCH) with the same credentials succeeds. This is a false-positive in
+    # the CIM provider's credential check path that only affects SID-500.
+    #
+    # Fix: create a short-lived throwaway local administrator account, register the sysprep
+    # task under that account (CIM provider accepts non-SID-500 credentials without issue),
+    # then remove the account immediately after sysprep completes.
+    $TempUser = 'sysprep_svc'
     $TaskName = 'RunSysprep'
 
-    # Register using the direct -User/-Password/-Action parameters on Register-ScheduledTask.
-    # Using New-ScheduledTaskPrincipal with -LogonType Password + Register-ScheduledTask -InputObject
-    # causes CimException 'The supplied variant structure contains invalid data' on some Windows builds.
-    # The direct parameter form avoids this and is equivalent to the original working approach.
+    # Remove any leftover account from a prior failed run
+    Remove-LocalUser -Name $TempUser -ErrorAction SilentlyContinue
+
+    # Generate a strong random password (in-memory only; discarded after task registration)
+    $chars     = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+    $rng       = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $bytes     = New-Object byte[] 32
+    $rng.GetBytes($bytes)
+    $TempChars = $bytes | ForEach-Object { $chars[$_ % $chars.Length] }
+    $TempPw    = 'Aa1!' + (-join $TempChars[0..19])   # 24 chars, satisfies complexity requirements
+    $rng.Dispose()
+
+    Write-Log "Creating throwaway local admin account '$TempUser' for sysprep task registration."
+    $SecTempPw = ConvertTo-SecureString -String $TempPw -AsPlainText -Force
+    New-LocalUser -Name $TempUser -Password $SecTempPw `
+        -PasswordNeverExpires -UserMayNotChangePassword `
+        -AccountNeverExpires `
+        -Description 'Temporary sysprep task account - removed after sysprep completes' | Out-Null
+    Add-LocalGroupMember -Group 'Administrators' -Member $TempUser
+    Write-Log "Account '$TempUser' created and added to Administrators."
+
     $Action  = New-ScheduledTaskAction -Execute 'C:\Windows\System32\Sysprep\sysprep.exe' `
                    -Argument '/oobe /generalize /quit /mode:vm'
     $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddHours(24)  # Far-future fallback only; we start it explicitly below.
+
     Register-ScheduledTask -TaskName $TaskName `
-        -Description 'Runs Sysprep (OOBE / Generalize / Quit / VM mode) as the built-in administrator.' `
+        -Description 'Runs Sysprep (OOBE / Generalize / Quit / VM mode) as a throwaway admin account.' `
         -Action $Action -Trigger $Trigger `
-        -User $AdminAccount.Name -Password $AdminUserPw `
+        -User "$env:COMPUTERNAME\$TempUser" -Password $TempPw `
         -RunLevel Highest -Force | Out-Null
+
     If (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
-        throw "Scheduled task '$TaskName' was not found immediately after registration."
+        throw "Scheduled task '$TaskName' was not found after registration attempt."
     }
     Write-Log "Scheduled task '$TaskName' registered. Starting now."
 
@@ -191,13 +219,34 @@ try {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
     Write-Log "Scheduled task '$TaskName' deregistered."
 
+    # Remove the throwaway account. Sysprep /generalize removes user profiles from the
+    # image file system but does NOT remove the SAM account entry - do that explicitly.
+    # Attempt a WMI profile delete first (belt-and-suspenders; the profile may already be
+    # gone if sysprep's generalize pass cleaned it up before we reach this point).
+    $TempUserSid = (Get-LocalUser -Name $TempUser -ErrorAction SilentlyContinue).SID.Value
+    if ($TempUserSid) {
+        $wmiProfile = Get-WmiObject -Class Win32_UserProfile -Filter "SID='$TempUserSid'" -ErrorAction SilentlyContinue
+        if ($wmiProfile) {
+            try {
+                $wmiProfile.Delete()
+                Write-Log "User profile for '$TempUser' deleted via WMI."
+            } catch {
+                Write-Log "WMI profile delete for '$TempUser': $($_.Exception.Message) (non-fatal - sysprep /generalize may have already removed it)."
+            }
+        } else {
+            Write-Log "No WMI profile found for '$TempUser' (SID: $TempUserSid) - profile was not loaded or already removed by sysprep."
+        }
+    }
+    Remove-LocalUser -Name $TempUser -ErrorAction SilentlyContinue
+    Write-Log "Throwaway account '$TempUser' removed."
+
     # Fail the deployment with full log context if sysprep returned non-zero
     if ($taskInfo.LastTaskResult -ne 0) {
         throw "Sysprep failed with exit code 0x$('{0:X8}' -f $taskInfo.LastTaskResult). " +
               "Review the Panther log output above for details."
     }
 
-    Write-Log "Sysprep completed successfully. Script exiting  - Generalize-Vm.ps1 will deallocate and generalize the VM."
+    Write-Log "Sysprep completed successfully. Script exiting - Generalize-Vm.ps1 will deallocate and generalize the VM."
 }
 catch {
     Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
