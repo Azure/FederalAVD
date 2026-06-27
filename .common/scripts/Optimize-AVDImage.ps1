@@ -482,8 +482,10 @@ try {
         Disable-VdiService -Name 'autotimesvc' -DisplayName 'Cellular Time'
         # GameDVR and Broadcast user service (per-user template) - no game workloads
         Disable-VdiService -Name 'BcastDVRUserService' -DisplayName 'GameDVR and Broadcast User Service'
-        # CaptureService (per-user template) - screen capture API, not needed in VDI
-        Disable-VdiService -Name 'CaptureService' -DisplayName 'Capture Service'
+        # CaptureService - left enabled intentionally. Modern Windows routes Snipping Tool,
+        # screen clipping, Teams screenshots, and recording APIs through this infrastructure.
+        # Disabling it breaks these capture features and future Teams functionality.
+        # Disable-VdiService -Name 'CaptureService' -DisplayName 'Capture Service'
         # Connected Devices Platform - cross-device scenarios (phone, tablets) irrelevant
         Disable-VdiService -Name 'CDPSvc' -DisplayName 'Connected Devices Platform Service'
         # CDP User Service (per-user template)
@@ -504,14 +506,16 @@ try {
         # OneSyncSvc -- not disabled here; see .DESCRIPTION deviations.
         # Contact Data (per-user template)
         Disable-VdiService -Name 'PimIndexMaintenanceSvc' -DisplayName 'Contact Data'
-        # Power - VMs have no physical power management hardware
-        Disable-VdiService -Name 'Power' -DisplayName 'Power'
+        # Power - left enabled intentionally. Various Windows APIs (battery/power status,
+        # settings pages, vendor software) call into the Power service even on VMs. Disabling
+        # it causes unexpected API failures and settings page breakage; the overhead is negligible.
+        # Disable-VdiService -Name 'Power' -DisplayName 'Power'
         # Payments and NFC/SE Manager - no NFC hardware in VMs
         Disable-VdiService -Name 'SEMgrSvc' -DisplayName 'Payments and NFC/SE Manager'
         # SMS Router Service - no SMS infrastructure in enterprise VDI
         Disable-VdiService -Name 'SmsRouter' -DisplayName 'Microsoft Windows SMS Router Service'
-        # Windows Error Reporting - reduce overhead; diagnostics done offline
-        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
+        # WerSvc (Windows Error Reporting) -- moved to Section 2 (NonPersistent Only).
+        # On Persistent VMs, WER provides actionable crash diagnostics for long-lived sessions.
         # Xbox Live Auth Manager
         Disable-VdiService -Name 'XblAuthManager' -DisplayName 'Xbox Live Auth Manager'
         # Xbox Live Game Save
@@ -560,6 +564,8 @@ try {
         # Edge Update services - Edge is updated via image on NonPersistent; SCCM/Intune manages on Persistent
         Disable-VdiService -Name 'edgeupdate' -DisplayName 'Microsoft Edge Update Service'
         Disable-VdiService -Name 'edgeupdatem' -DisplayName 'Microsoft Edge Update Service (Manual Trigger)'
+        # Windows Error Reporting - transient VMs discard crash state at recycle; WER has no value here
+        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
 
         Write-Log ""
     }
@@ -754,11 +760,8 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'DoNotShowFeedbackNotifications' -Value 1
 
-        # -- Windows Error Reporting (AT: Computer Configuration > Windows Components > Windows Error Reporting) --
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
-            -Name 'Disabled' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
-            -Name 'DontSendAdditionalData' -Value 1
+        # -- Windows Error Reporting policies -- moved to Section 6 (NonPersistent Only).
+        # On Persistent VMs, WER remains enabled to support crash diagnostics.
 
         # -- Privacy / Consumer Experiences --
         # AT: Computer Configuration > Windows Components > Cloud Content
@@ -1294,6 +1297,14 @@ try {
         # value when the VM will be replaced with a new image on a regular basis.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'AllowTelemetry' -Value 0
+
+        # -- Windows Error Reporting (AT: Computer Configuration > Windows Components > Windows Error Reporting) --
+        # Disabled on NonPersistent VMs only -- crash state is discarded at VM recycle and WER
+        # reports would reference a VM instance that no longer exists.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+            -Name 'Disabled' -Value 1
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+            -Name 'DontSendAdditionalData' -Value 1
 
         # Disable Windows Update scan/install. OS updates are applied during image
         # servicing and delivered via image replacement, not per-VM Windows Update.
