@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param (
     [Parameter(Mandatory = $true)]
     [string]$ManagedIdentityName
@@ -10,7 +10,7 @@ try {
     if (-not $context) {
         throw "Not connected"
     }
-    Write-Host "✓ Connected to Azure as: $($context.Account.Id)" -ForegroundColor Green
+    Write-Host "[OK] Connected to Azure as: $($context.Account.Id)" -ForegroundColor Green
     Write-Host "  Tenant: $($context.Tenant.Id)" -ForegroundColor Gray
     Write-Host ""
 }
@@ -29,7 +29,7 @@ if (-not $managedIdentitySP) {
     exit 1
 }
 
-Write-Host "✓ Found Managed Identity" -ForegroundColor Green
+Write-Host "[OK] Found Managed Identity" -ForegroundColor Green
 Write-Host "  Display Name: $($managedIdentitySP.DisplayName)" -ForegroundColor Gray
 Write-Host "  Object ID: $($managedIdentitySP.Id)" -ForegroundColor Gray
 Write-Host "  App ID: $($managedIdentitySP.AppId)" -ForegroundColor Gray
@@ -44,7 +44,7 @@ if (-not $graphSP) {
     exit 1
 }
 
-Write-Host "✓ Found Microsoft Graph SP (ID: $($graphSP.Id))" -ForegroundColor Green
+Write-Host "[OK] Found Microsoft Graph SP (ID: $($graphSP.Id))" -ForegroundColor Green
 Write-Host ""
 
 # Microsoft Graph App Roles (Application Permissions) - Common ones
@@ -67,13 +67,13 @@ $appRoleAssignments = Get-AzADServicePrincipalAppRoleAssignment -ServicePrincipa
 $graphPermissions = $appRoleAssignments | Where-Object { $_.ResourceId -eq $graphSP.Id }
 
 if ($graphPermissions.Count -eq 0) {
-    Write-Host "⚠ No Microsoft Graph permissions assigned to this Managed Identity" -ForegroundColor Yellow
+    Write-Host "[WARN] No Microsoft Graph permissions assigned to this Managed Identity" -ForegroundColor Yellow
     Write-Host ""
 }
 else {
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "MICROSOFT GRAPH PERMISSIONS (Application Permissions)" -ForegroundColor Cyan
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
     
     foreach ($permission in $graphPermissions) {
@@ -90,7 +90,7 @@ else {
             }
         }
         
-        Write-Host "✓ $permissionName" -ForegroundColor Green
+        Write-Host "[OK] $permissionName" -ForegroundColor Green
         Write-Host "  App Role ID: $appRoleId" -ForegroundColor Gray
         Write-Host "  Admin Consent: Required (Application Permission)" -ForegroundColor Gray
         Write-Host "  Status: Granted" -ForegroundColor Gray
@@ -99,9 +99,9 @@ else {
 }
 
 # Check for required permissions
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "VERIFICATION: Required Permissions for Storage Account Script" -ForegroundColor Cyan
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host ""
 
 $requiredPermissions = @{
@@ -116,10 +116,10 @@ foreach ($permName in $requiredPermissions.Keys) {
     $hasPermission = $graphPermissions | Where-Object { $_.AppRoleId -eq $roleId }
     
     if ($hasPermission) {
-        Write-Host "✓ $permName" -ForegroundColor Green
+        Write-Host "[OK] $permName" -ForegroundColor Green
     }
     else {
-        Write-Host "✗ $permName (MISSING)" -ForegroundColor Red
+        Write-Host "[FAIL] $permName (MISSING)" -ForegroundColor Red
         $allRequiredPresent = $false
     }
 }
@@ -127,18 +127,18 @@ foreach ($permName in $requiredPermissions.Keys) {
 Write-Host ""
 
 if ($allRequiredPresent) {
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-    Write-Host "✓ All required permissions are assigned!" -ForegroundColor Green
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Green
+    Write-Host "[OK] All required permissions are assigned!" -ForegroundColor Green
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Green
     Write-Host ""
     Write-Host "If the Storage Account script is still failing with 403 Forbidden:" -ForegroundColor Yellow
     Write-Host "  1. Restart the VM to get a fresh token with the new permissions" -ForegroundColor Yellow
     Write-Host "  2. Wait 5-10 minutes for permission propagation" -ForegroundColor Yellow
 }
 else {
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-    Write-Host "✗ Missing required permissions!" -ForegroundColor Red
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Red
+    Write-Host "[FAIL] Missing required permissions!" -ForegroundColor Red
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Red
     Write-Host ""
     Write-Host "To grant missing permissions, run:" -ForegroundColor Yellow
     Write-Host ""

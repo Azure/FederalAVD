@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 #Requires -Version 5.1
 <#
 .SYNOPSIS
@@ -11,20 +11,11 @@
 
     This variant replaces the LGPO.exe dependency in Optimize-AVDImage.ps1 with a pure
     PowerShell Registry.pol writer. It reads and writes the MS-GPREG (PReg) binary format
-    directly — the same mechanism LGPO.exe uses internally — without requiring:
-      - LGPO.exe (Security Compliance Toolkit)
-      - IGroupPolicyObject COM object (CLSID 2E74AB3A — not registered on W11 25H2)
-      - GPMgmt.GPM (RSAT / GPMC — not installed by default)
+    directly  -  the same mechanism LGPO.exe uses internally.
 
     MS-GPREG spec: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpreg/
-    PReg file layout (all strings UTF-16LE, all integers LE 4 bytes):
-      Header  : 50 52 65 67  ("PReg")  +  01 00 00 00  (version 1)
-      Entries : [  key\0  ;  valueName\0  ;  type  ;  dataSize  ;  data  ]
-                where [=0x5B00  ;=0x3B00  ]=0x5D00  are all UTF-16LE single chars
     Machine pol : %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
     User pol    : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
-
-    All other behavior is identical to Optimize-AVDImage.ps1.
 
     References:
       [1] MS VDI optimization guide (primary source for all services, tasks, and policies):
@@ -641,22 +632,23 @@ try {
     # -----------------------------------------------------------------------
     # Registry.pol availability check
     # Verify the GroupPolicy directory structure is writable. This is a simple
-    # guard — on any standard Windows machine the directory always exists.
+    # guard  -  on any standard Windows machine the directory always exists.
     # -----------------------------------------------------------------------
     Write-Log "--- Registry.pol Direct-Write Check ---"
     $machinePolDir = "$env:SystemRoot\System32\GroupPolicy\Machine"
     if (Test-Path $machinePolDir) {
-        Write-Log "  [OK]   GroupPolicy\Machine directory present — Registry.pol direct-write is available"
+        Write-Log "  [OK]   GroupPolicy\Machine directory present - Registry.pol direct-write is available"
     }
     else {
-        Write-Log "  [INFO] GroupPolicy\Machine directory not found — it will be created on first write"
+        Write-Log "  [INFO] GroupPolicy\Machine directory not found - it will be created on first write"
     }
     Write-Log ""
 
     # -----------------------------------------------------------------------
     # PRE-STEP - Power Plan
-    # Set the active power scheme to High Performance before the Power service
-    # is disabled later in the Services section.
+    # Set the active power scheme to High Performance. The Power service is not
+    # disabled (powercfg.exe requires the Power service to be running, and RDP
+    # session management also depends on it on Persistent desktops).
     # -----------------------------------------------------------------------
     Write-Log "--- Pre-step: Power Plan ---"
     try {
@@ -680,8 +672,8 @@ try {
         Disable-VdiService -Name 'autotimesvc' -DisplayName 'Cellular Time'
         # GameDVR and Broadcast user service (per-user template) - no game workloads
         Disable-VdiService -Name 'BcastDVRUserService' -DisplayName 'GameDVR and Broadcast User Service'
-        # CaptureService (per-user template) - screen capture API, not needed in VDI
-        Disable-VdiService -Name 'CaptureService' -DisplayName 'Capture Service'
+        # CaptureService -- not disabled here; required by the Windows.Graphics.Capture API
+        # which Teams, Snipping Tool, and other inbox apps depend on at session start.
         # Connected Devices Platform - cross-device scenarios (phone, tablets) irrelevant
         Disable-VdiService -Name 'CDPSvc' -DisplayName 'Connected Devices Platform Service'
         # CDP User Service (per-user template)
@@ -702,14 +694,14 @@ try {
         # OneSyncSvc -- not disabled here; see .DESCRIPTION deviations.
         # Contact Data (per-user template)
         Disable-VdiService -Name 'PimIndexMaintenanceSvc' -DisplayName 'Contact Data'
-        # Power - VMs have no physical power management hardware
-        Disable-VdiService -Name 'Power' -DisplayName 'Power'
+        # Power -- not disabled here; required by powercfg.exe (High Performance plan) and
+        # RDP session management on Persistent desktops.
         # Payments and NFC/SE Manager - no NFC hardware in VMs
         Disable-VdiService -Name 'SEMgrSvc' -DisplayName 'Payments and NFC/SE Manager'
         # SMS Router Service - no SMS infrastructure in enterprise VDI
         Disable-VdiService -Name 'SmsRouter' -DisplayName 'Microsoft Windows SMS Router Service'
-        # Windows Error Reporting - reduce overhead; diagnostics done offline
-        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
+        # WerSvc -- not disabled here; moved to Section 2 (NonPersistent only) because
+        # WER diagnostics have carry-over value on Persistent long-lived desktops.
         # Xbox Live Auth Manager
         Disable-VdiService -Name 'XblAuthManager' -DisplayName 'Xbox Live Auth Manager'
         # Xbox Live Game Save
@@ -747,6 +739,8 @@ try {
         Disable-VdiService -Name 'wuauserv' -DisplayName 'Windows Update'
         # Windows Update Medic - re-enables wuauserv if disabled; Set-Service falls back to registry for SFC-protected services
         Disable-VdiService -Name 'WaaSMedicSvc' -DisplayName 'Windows Update Medic Service'
+        # Windows Error Reporting - transient VMs discard crash data at recycle; WER overhead not justified
+        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
         # Diagnostic Policy Service - background problem detection discarded at VM recycle; see .DESCRIPTION deviations
         Disable-VdiService -Name 'DPS' -DisplayName 'Diagnostic Policy Service'
         # Diagnostic Execution Service - depends on DPS
@@ -952,12 +946,6 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'DoNotShowFeedbackNotifications' -Value 1
 
-        # -- Windows Error Reporting (AT: Computer Configuration > Windows Components > Windows Error Reporting) --
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
-            -Name 'Disabled' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
-            -Name 'DontSendAdditionalData' -Value 1
-
         # -- Privacy / Consumer Experiences --
         # AT: Computer Configuration > Windows Components > Cloud Content
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
@@ -1125,9 +1113,13 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
             -Name 'DisableAccentGradient' -Value 1
 
-        # -- Microsoft Edge: disable preloading and background activity (AT: Computer Configuration > Microsoft Edge) --
+        # -- Microsoft Edge (Chromium): suppress preloading / hide first-run (AT: Computer Configuration > Microsoft Edge) --
+        # StartupBoostEnabled=0: no pre-launch. BackgroundModeEnabled=0: no background persistence.
+        # HideFirstRunExperience=1: suppresses first-run wizard on each new session (NonPersistent).
+        # NOTE: msedge.admx must be present - installed by the ADMX pre-step in Section 6.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled' -Value 0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'BackgroundModeEnabled' -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'HideFirstRunExperience' -Value 1
 
         # -- OneDrive: suppress network traffic until user signs in --
         # DISABLED: PreventNetworkTrafficPreUserSignIn blocks OneDrive Known Folder Move (KFM)
@@ -1316,23 +1308,6 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Feed Discovery' `
             -Name 'Enabled' -Value 0
 
-        # -- Microsoft Edge (legacy / HTML-based, Windows 10 inbox Edge) telemetry and preload policies --
-        # These are backed by MicrosoftEdge.admx which is present in W11 25H2 PolicyDefinitions.
-        # ConfigureTelemetryForMicrosoft365Analytics: 0 = do not send Edge browsing data to M365 Analytics
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection' `
-            -Name 'MicrosoftEdgeDataOptIn' -Value 0
-        $legacyEdgePath = 'HKLM:\SOFTWARE\Policies\Microsoft\MicrosoftEdge'
-        # BooksLibrary: disable update and extended telemetry for the Books hub
-        Set-PolicyValue -Path "$legacyEdgePath\BooksLibrary" -Name 'AllowConfigurationUpdateForBooksLibrary' -Value 0
-        Set-PolicyValue -Path "$legacyEdgePath\BooksLibrary" -Name 'EnableExtendedBooksTelemetry' -Value 0
-        # Main: suppress first-run page and disable prelaunch
-        Set-PolicyValue -Path "$legacyEdgePath\Main" -Name 'PreventFirstRunPage' -Value 1
-        Set-PolicyValue -Path "$legacyEdgePath\Main" -Name 'AllowPrelaunch' -Value 0
-        # ServiceUI: disable web content on new tab page
-        Set-PolicyValue -Path "$legacyEdgePath\ServiceUI" -Name 'AllowWebContentOnNewTabPage' -Value 0
-        # TabPreloader: disable tab preloading
-        Set-PolicyValue -Path "$legacyEdgePath\TabPreloader" -Name 'AllowTabPreloading' -Value 0
-
         # -- Control Panel: disable online tips (AT: Computer Configuration > Control Panel) --
         # Prevents the Settings app from contacting Microsoft content services to fetch tips.
         # Ref: Article local policy table - Control Panel
@@ -1452,10 +1427,8 @@ try {
         # (AT: Computer Configuration > System > Troubleshooting and Diagnostics > [various])
         # Each scenario is controlled by a GUID-keyed subkey. The GUIDs are stable on W11 25H2
         # and all backing ADMX files are present in C:\Windows\PolicyDefinitions.
-        # NOTE: The EnabledScenarioExecutionLevel DELETE entries in gpedit's export are cleanup-only
-        # (remove the value left by a prior Enabled state). On a fresh image they are no-ops and
-        # are safely omitted here. Exception: LeakDiagnostic writes EnabledScenarioExecutionLevel=1
-        # in its disabledList -- that IS written below.
+        # NOTE: gpedit DELETE entries for EnabledScenarioExecutionLevel are cleanup-only no-ops on
+        # fresh images. Exception: LeakDiagnostic disabledList sets it to 1 (written below).
         $wdiBase = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WDI'
         # PerformanceDiagnostics.admx - Boot Performance Diagnostics (primary GUID)
         Set-PolicyValue -Path "$wdiBase\{67144949-5132-4859-8036-a737b43825d8}" -Name 'ScenarioExecutionEnabled' -Value 0
@@ -1487,11 +1460,145 @@ try {
     if ($RunNonPersistentSections) {
         Write-Log "--- Section 6: Registry / Policy Settings (NonPersistent Only) ---"
 
+        # -- ADMX Templates: install from internet or version folder (non-fatal) --
+        # Classifies Registry.pol entries as Administrative Templates (not Extra Registry Settings)
+        # in gpresult on deployed VMs. Each sub-step is try/catch-wrapped; failures are non-fatal.
+        Write-Log "  [ADMX] Installing ADMX templates for Edge, Office 365, and OneDrive..."
+
+        # Edge ADMX - download policy CAB from the Edge updates API
+        if (-not (Test-Path "$env:SystemRoot\PolicyDefinitions\msedge.admx")) {
+            try {
+                Write-Log "  [ADMX] msedge.admx not found - attempting download from Edge updates API..."
+                $admxTmp = Join-Path $env:TEMP 'EdgeADMX'
+                New-Item -Path $admxTmp -ItemType Directory -Force | Out-Null
+                $apiContent = (Invoke-WebRequest -Uri 'https://edgeupdates.microsoft.com/api/products?view=enterprise' -UseBasicParsing).Content |
+                    ConvertFrom-Json
+                $stableRel = ($apiContent | Where-Object { $_.Product -eq 'Stable' }).releases |
+                    Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } |
+                    Sort-Object ProductVersion | Select-Object -Last 1
+                $policyRel = ($apiContent | Where-Object { $_.Product -eq 'Policy' }).releases |
+                    Where-Object { $_.ProductVersion -eq $stableRel.ProductVersion }
+                if (-not $policyRel) {
+                    $policyRel = ($apiContent | Where-Object { $_.Product -eq 'Policy' }).releases |
+                        Sort-Object ProductVersion | Select-Object -Last 1
+                }
+                $cabUrl = $policyRel.artifacts.Location
+                $cabPath = Join-Path $admxTmp 'MicrosoftEdgePolicyTemplates.cab'
+                (New-Object System.Net.WebClient).DownloadFile($cabUrl, $cabPath)
+                $templatesDir = Join-Path $admxTmp 'Templates'
+                New-Item -Path $templatesDir -ItemType Directory -Force | Out-Null
+                & cmd /c extrac32 /Y /E "$cabPath" /L "$templatesDir" | Out-Null
+                $edgeZip = Get-ChildItem -Path $templatesDir -Filter '*.zip' -Recurse |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                if ($edgeZip) {
+                    Expand-Archive -Path $edgeZip.FullName -DestinationPath $templatesDir -Force
+                    Get-ChildItem -Path $templatesDir -File -Recurse -Filter '*.admx' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
+                    Get-ChildItem -Path $templatesDir -Directory -Recurse |
+                        Where-Object { $_.Name -eq 'en-us' } |
+                        Get-ChildItem -File -Recurse -Filter '*.adml' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
+                    Write-Log "  [ADMX] [OK] Edge policy templates installed (msedge.admx)."
+                } else {
+                    Write-Log "  [ADMX] [WARN] No ZIP found in expanded Edge policy CAB - templates not installed."
+                }
+                Remove-Item -Path $admxTmp -Recurse -Force -ErrorAction SilentlyContinue
+            } catch {
+                Write-Log "  [ADMX] [WARN] Edge ADMX download/install failed: $_ (non-fatal)"
+            }
+        } else {
+            Write-Log "  [ADMX] msedge.admx already present - skipping Edge download."
+        }
+
+        # Office 365 ADMX - download administrative templates EXE from Microsoft
+        $officeAdmxPaths = @(
+            "$env:SystemRoot\PolicyDefinitions\office16.admx",
+            "$env:SystemRoot\PolicyDefinitions\outlk16.admx"
+        )
+        $officeAdmxMissing = $officeAdmxPaths | Where-Object { -not (Test-Path $_) }
+        if ($officeAdmxMissing) {
+            try {
+                Write-Log "  [ADMX] Office ADMX missing ($($officeAdmxMissing | Split-Path -Leaf)) - attempting download..."
+                $admxTmp = Join-Path $env:TEMP 'OfficeADMX'
+                New-Item -Path $admxTmp -ItemType Directory -Force | Out-Null
+                $dlPage = (Invoke-WebRequest -Uri 'https://www.microsoft.com/en-us/download/details.aspx?id=49030' -UseBasicParsing).Content
+                $exeUrl = ([regex]::Matches($dlPage, 'https://[^"''>\s]+admintemplates_x64[^"''>\s]+\.exe')).Value |
+                    Select-Object -First 1
+                if ($exeUrl) {
+                    $exePath = Join-Path $admxTmp 'admintemplates_x64.exe'
+                    (New-Object System.Net.WebClient).DownloadFile($exeUrl, $exePath)
+                    $templatesDir = Join-Path $admxTmp 'Templates'
+                    New-Item -Path $templatesDir -ItemType Directory -Force | Out-Null
+                    Start-Process -FilePath $exePath -ArgumentList "/extract:$templatesDir /quiet" -Wait
+                    Get-ChildItem -Path $templatesDir -File -Recurse -Filter '*.admx' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
+                    Get-ChildItem -Path $templatesDir -Directory -Recurse |
+                        Where-Object { $_.Name -eq 'en-us' } |
+                        Get-ChildItem -File -Recurse -Filter '*.adml' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
+                    Write-Log "  [ADMX] [OK] Office 365 policy templates installed."
+                } else {
+                    Write-Log "  [ADMX] [WARN] Could not resolve Office 365 ADMX download URL (non-fatal)."
+                }
+                Remove-Item -Path $admxTmp -Recurse -Force -ErrorAction SilentlyContinue
+            } catch {
+                Write-Log "  [ADMX] [WARN] Office ADMX download/install failed: $_ (non-fatal)"
+            }
+        } else {
+            Write-Log "  [ADMX] Office ADMX already present - skipping Office download."
+        }
+
+        # OneDrive ADMX - copy from the installed OneDrive version folder (no download needed)
+        if (-not (Test-Path "$env:SystemRoot\PolicyDefinitions\OneDrive.admx")) {
+            try {
+                $odInstallDir = "${env:ProgramFiles(x86)}\Microsoft OneDrive"
+                $odExe = Join-Path $odInstallDir 'OneDrive.exe'
+                if (Test-Path $odExe) {
+                    $odVersion = (Get-ItemProperty $odExe).VersionInfo.ProductVersion
+                    $odVersionDir = Join-Path $odInstallDir $odVersion
+                    if (Test-Path $odVersionDir) {
+                        Get-ChildItem -Path $odVersionDir -File -Recurse -Filter '*.admx' |
+                            ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
+                        $admlFiles = Get-ChildItem -Path $odVersionDir -File -Recurse -Filter '*.adml' |
+                            Where-Object { $_.Directory -like '*adm' }
+                        if ($admlFiles) {
+                            $admlFiles | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
+                        } else {
+                            Get-ChildItem -Path $odVersionDir -Directory -Recurse |
+                                Where-Object { $_.Name -eq 'en-us' } |
+                                Get-ChildItem -File -Recurse -Filter '*.adml' |
+                                ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
+                        }
+                        Write-Log "  [ADMX] [OK] OneDrive ADMX copied from version folder '$odVersion'."
+                    } else {
+                        Write-Log "  [ADMX] [WARN] OneDrive version folder '$odVersionDir' not found (non-fatal)."
+                    }
+                } else {
+                    Write-Log "  [ADMX] [SKIP] OneDrive not installed at '$odInstallDir'."
+                }
+            } catch {
+                Write-Log "  [ADMX] [WARN] OneDrive ADMX copy failed: $_ (non-fatal)"
+            }
+        } else {
+            Write-Log "  [ADMX] OneDrive.admx already present - skipping OneDrive copy."
+        }
+
+        Write-Log ""
+
         # Override telemetry to Security/Off for NonPersistent VMs. These are transient;
         # Endpoint Analytics, Update Compliance, and per-VM diagnostic reports have no
         # value when the VM will be replaced with a new image on a regular basis.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'AllowTelemetry' -Value 0
+
+        # -- Windows Error Reporting (AT: Computer Configuration > Windows Components > Windows Error Reporting) --
+        # Disabled on NonPersistent only - transient VMs discard crash data at recycle so
+        # WER telemetry and upload overhead are not justified. On Persistent desktops WER
+        # retains diagnostic value across the VM's long lifecycle.
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+            -Name 'Disabled' -Value 1
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+            -Name 'DontSendAdditionalData' -Value 1
 
         # Disable Windows Update scan/install. OS updates are applied during image
         # servicing and delivered via image replacement, not per-VM Windows Update.
@@ -1500,11 +1607,10 @@ try {
         # gpresult shows this as "Configure Automatic Updates: Disabled" in Administrative Templates.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
             -Name 'NoAutoUpdate' -Value 1
-        # NOTE: AUOptions removed — value 1 is not a valid enum in WindowsUpdate.admx (valid: 2,3,4,5,7)
-        # and AUOptions is only meaningful when the policy is Enabled (NoAutoUpdate=0). Redundant here.
-        # NOTE: DisableWindowsUpdateAccess removed — the only ADMX-backed policy (RemoveWindowsUpdate)
-        # is class="User" only, at a different path. No Machine-class ADMX exists for this value on W11.
-        # NoAutoUpdate=1 above is sufficient to prevent updates on NonPersistent VMs.
+        # Remove access to all Windows Update features in the Settings UI
+        # (WindowsUpdate.admx: Software\Policies\Microsoft\Windows\WindowsUpdate, SetDisableUXWUAccess=1).
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
+            -Name 'SetDisableUXWUAccess' -Value 1
 
         # -- Update channel lockdown: application-level (NonPersistent Only) --
         # On Persistent VMs, SCCM or Intune manages these update channels directly.

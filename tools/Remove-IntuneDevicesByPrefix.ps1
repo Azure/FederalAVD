@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param (
     [Parameter(Mandatory = $true)]
     [string]$DeviceNamePrefix,
@@ -47,7 +47,7 @@ try {
     
     # Display devices in a table format
     $allDevices | ForEach-Object {
-        Write-Output "  • $($_.DeviceName)"
+        Write-Output "  * $($_.DeviceName)"
         Write-Output "    ID: $($_.Id)"
         Write-Output "    User: $($_.UserDisplayName)"
         Write-Output "    OS: $($_.OperatingSystem) $($_.OsVersion)"

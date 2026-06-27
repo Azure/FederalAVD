@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 #Requires -Modules Az.Monitor, Az.FunctionApp
 
 <#
@@ -367,20 +367,20 @@ try {
     if (-not $context) {
         throw "Not connected to Azure. Run Connect-AzAccount first."
     }
-    Write-ColorOutput "  ✓ Connected as: $($context.Account.Id)" -ForegroundColor Green
-    Write-ColorOutput "  ✓ Subscription: $($context.Subscription.Name)" -ForegroundColor Green
+    Write-ColorOutput "  [OK] Connected as: $($context.Account.Id)" -ForegroundColor Green
+    Write-ColorOutput "  [OK] Subscription: $($context.Subscription.Name)" -ForegroundColor Green
     
     # Get Function App details
     Write-ColorOutput "`nValidating Function App..." -ForegroundColor Yellow
     $functionApp = Get-AzFunctionApp -Name $FunctionAppName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
-    Write-ColorOutput "  ✓ Function App found: $($functionApp.Name)" -ForegroundColor Green
-    Write-ColorOutput "  ✓ Location: $($functionApp.Location)" -ForegroundColor Green
+    Write-ColorOutput "  [OK] Function App found: $($functionApp.Name)" -ForegroundColor Green
+    Write-ColorOutput "  [OK] Location: $($functionApp.Location)" -ForegroundColor Green
     
     # Get Application Insights
     if (-not $functionApp.ApplicationInsightId) {
         throw "Function App does not have Application Insights configured. Alerts require Application Insights."
     }
-    Write-ColorOutput "  ✓ Application Insights configured" -ForegroundColor Green
+    Write-ColorOutput "  [OK] Application Insights configured" -ForegroundColor Green
     
     # Validate Action Group
     Write-ColorOutput "`nValidating Action Group..." -ForegroundColor Yellow
@@ -388,12 +388,12 @@ try {
     $agResourceGroup = $actionGroupParts[4]
     $agName = $actionGroupParts[-1]
     $actionGroup = Get-AzActionGroup -ResourceGroupName $agResourceGroup -Name $agName -ErrorAction Stop
-    Write-ColorOutput "  ✓ Action Group found: $($actionGroup.Name)" -ForegroundColor Green
+    Write-ColorOutput "  [OK] Action Group found: $($actionGroup.Name)" -ForegroundColor Green
     
     # Get alert configurations
     Write-ColorOutput "`nLoading alert configurations..." -ForegroundColor Yellow
     $alerts = Get-AlertConfigurations -FunctionName $FunctionAppName -Level $AlertLevel -IncludeInformational:$EnableInformationalAlerts
-    Write-ColorOutput "  ✓ Loaded $($alerts.Count) alert configuration(s)" -ForegroundColor Green
+    Write-ColorOutput "  [OK] Loaded $($alerts.Count) alert configuration(s)" -ForegroundColor Green
     
     # Deploy via Bicep or direct API
     if ($UseBicepDeployment) {
@@ -423,7 +423,7 @@ try {
                 -TemplateParameterObject $parameters `
                 -ErrorAction Stop
             
-            Write-ColorOutput "`n  ✓ Bicep deployment successful" -ForegroundColor Green
+            Write-ColorOutput "`n  [OK] Bicep deployment successful" -ForegroundColor Green
             Write-ColorOutput "    Deployment name: $deploymentName" -ForegroundColor Gray
             Write-ColorOutput "    Alerts deployed: $($deployment.Outputs.deployedAlertCount.Value)" -ForegroundColor Gray
         }
@@ -472,11 +472,11 @@ try {
                         } `
                         -ErrorAction Stop
                     
-                    Write-ColorOutput "    ✓ Deployed" -ForegroundColor Green
+                    Write-ColorOutput "    [OK] Deployed" -ForegroundColor Green
                     $successCount++
                 }
                 catch {
-                    Write-ColorOutput "    ✗ Failed: $_" -ForegroundColor Red
+                    Write-ColorOutput "    [FAIL] Failed: $_" -ForegroundColor Red
                     $failureCount++
                 }
             }
@@ -508,7 +508,7 @@ try {
     
 }
 catch {
-    Write-ColorOutput "`n✗ Deployment failed: $_" -ForegroundColor Red
+    Write-ColorOutput "`n[FAIL] Deployment failed: $_" -ForegroundColor Red
     Write-ColorOutput $_.ScriptStackTrace -ForegroundColor Red
     throw
 }

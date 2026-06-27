@@ -181,6 +181,16 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
 
 ## Important Notes for Copilot
 
+- **ASCII-only in ALL `.ps1` files — NO EXCEPTIONS.** Every character must be in the range
+  U+0000–U+007F. This includes string literals, Write-Log messages, comments, .SYNOPSIS blocks,
+  and section headers. ARM embeds scripts as JSON strings; non-ASCII bytes corrupt the payload
+  and cause runtime parse errors. Before writing any `.ps1` content, replace:
+  - Em dash / en dash (`—`, `–`) with ` - `
+  - Right arrow (`→`) with `->`
+  - Any box-drawing, check marks, bullets, smart quotes, or other non-ASCII with plain ASCII equivalents.
+  After every edit to a `.ps1` file, verify with:
+  `(Get-Content file.ps1) | Where-Object { $_ -match '[^\x00-\x7E]' }`
+
 - **Do not modify files under `deployments/`** without understanding the full template — many
   parameters have cross-solution dependencies.
 - **`customer/` content is git-ignored** by design. Don't suggest committing files from

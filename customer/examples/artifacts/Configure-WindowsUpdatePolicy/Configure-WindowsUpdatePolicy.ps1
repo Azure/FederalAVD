@@ -329,7 +329,7 @@ function New-Log {
 #region RegistryPol -- PReg direct writer (no LGPO.exe required)
 <#
 .SYNOPSIS
-    Registry.pol (PReg) direct writer — no LGPO.exe, no COM objects required.
+    Registry.pol (PReg) direct writer  -  no LGPO.exe, no COM objects required.
 
 .DESCRIPTION
     Provides a queue-based interface for writing registry-based group policy values
@@ -365,8 +365,8 @@ function New-Log {
         HKLM / HKCU MUST NOT appear in KeyPath per spec.
 
     Special value names understood by the Windows GP client:
-        **Del.<valuename>  — removes one named value from the live registry key
-        **DelVals.         — removes all values from the live registry key
+        **Del.<valuename>   -  removes one named value from the live registry key
+        **DelVals.          -  removes all values from the live registry key
 
     Registry.pol locations:
         Machine : %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
@@ -421,7 +421,7 @@ function Read-PRegFile {
         # Size (uint32 LE) + ';'
         $size = [BitConverter]::ToUInt32($raw, $pos); $pos += 4; $pos += 2
 
-        # Data bytes — guard: PS a..b with a>b gives a DESCENDING slice, not empty
+        # Data bytes  -  guard: PS a..b with a>b gives a DESCENDING slice, not empty
         $data = if ($size -gt 0) { $raw[$pos..($pos + $size - 1)] } else { [byte[]]@() }
         $pos += [int]$size
         $pos += 2   # skip ']'
@@ -432,7 +432,7 @@ function Read-PRegFile {
 }
 
 function Write-PRegFile {
-    <#  Internal. Writes a Registry.pol using safe tmp → verify → bak → promote.  #>
+    <#  Internal. Writes a Registry.pol using safe tmp -> verify -> bak -> promote.  #>
     param (
         [string]$Path,
         [System.Collections.Generic.List[hashtable]]$Entries
@@ -531,8 +531,8 @@ function Set-PolicyRegistryValue {
         queue to Registry.pol and apply the settings via gpupdate.
 
     .PARAMETER Scope
-        Computer — writes to Machine\Registry.pol (applied at system startup/refresh).
-        User    — writes to User\Registry.pol (applied at user logon/refresh).
+        Computer  -  writes to Machine\Registry.pol (applied at system startup/refresh).
+        User     -  writes to User\Registry.pol (applied at user logon/refresh).
 
     .PARAMETER RegistryKeyPath
         Registry key path relative to the hive root. HKLM:\, HKCU:\,
@@ -689,10 +689,10 @@ function Invoke-PolicyUpdate {
     .DESCRIPTION
         For each scope that has queued entries: reads the existing Registry.pol,
         merges all queued changes (later entries overwrite earlier ones for the same
-        key\valueName), and writes the result using a safe tmp→verify→promote pattern.
+        key\valueName), and writes the result using a safe tmp->verify->promote pattern.
         Updates gpt.ini so the Group Policy client on deployed machines knows to
         invoke the Registry CSE. Both scope extension-name lines are preserved on
-        every call — a call that only updates one scope will not drop the other
+        every call  -  a call that only updates one scope will not drop the other
         scope's line from a prior call.
         gpupdate is intentionally not called: these scripts run during image build
         where policy does not need to be live in the build OS. On deployed machines
@@ -702,7 +702,7 @@ function Invoke-PolicyUpdate {
     param ()
 
     if ($script:_PolQueue.Count -eq 0) {
-        Write-Verbose 'RegistryPol: Queue is empty — nothing to apply.'
+        Write-Verbose 'RegistryPol: Queue is empty  -  nothing to apply.'
         return
     }
 

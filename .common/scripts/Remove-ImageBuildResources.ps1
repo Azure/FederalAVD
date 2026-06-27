@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)]
     [string]$ResourceManagerUri,
 
@@ -25,7 +25,7 @@ Try {
     # Fix the resource manager URI since only AzureCloud contains a trailing slash
     $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}
 
-    # Get an access token — use UAI client_id when provided, otherwise fall back to system-assigned identity
+    # Get an access token  -  use UAI client_id when provided, otherwise fall back to system-assigned identity
     $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed
     if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }
     $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata="true"} -Uri $TokenUri).access_token
@@ -54,15 +54,15 @@ Try {
     }
 
     If (-not [string]::IsNullOrEmpty($ResourceGroupId)) {
-        # New RG path — delete the entire resource group (cleans up all VMs, disks, NICs, images)
+        # New RG path  -  delete the entire resource group (cleans up all VMs, disks, NICs, images)
         Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '?api-version=2021-04-01') | Out-Null
     } Else {
-        # Existing RG path — delete individual VMs only, leave the RG intact
+        # Existing RG path  -  delete individual VMs only, leave the RG intact
 
         # Delete Image VM
         Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')
 
-        # Delete the managed image (if it exists — only present for Trusted Launch compatible security type)
+        # Delete the managed image (if it exists  -  only present for Trusted Launch compatible security type)
         If ($ImageResourceId -ne '') {
             Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')
         }

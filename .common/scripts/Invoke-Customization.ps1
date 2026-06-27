@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$APIVersion,
   [string]$Arguments = '',
   [string]$BlobStorageSuffix,
@@ -104,7 +104,7 @@ try {
   }
   New-Item -Path $TempDir -ItemType Directory -Force | Out-Null
 
-  # Force TLS 1.2 — fresh marketplace images default to TLS 1.0/1.1 which Azure Storage rejects.
+  # Force TLS 1.2  -  fresh marketplace images default to TLS 1.0/1.1 which Azure Storage rejects.
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
   $WebClient = New-Object System.Net.WebClient

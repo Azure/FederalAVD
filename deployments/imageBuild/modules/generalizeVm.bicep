@@ -1,5 +1,3 @@
-@secure()
-param adminPw string
 param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
@@ -29,12 +27,6 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
     outputBlobUri: empty(logBlobContainerUri)
       ? null
       : '${logBlobContainerUri}${imageVmName}-Sysprep-${deploymentSuffix}.log'
-    protectedParameters: [
-      {
-        name: 'AdminUserPw'
-        value: adminPw
-      }
-    ]
     source: {
       script: loadTextContent('../../../.common/scripts/Invoke-Sysprep.ps1')
     }

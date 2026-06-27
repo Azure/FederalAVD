@@ -1,7 +1,3 @@
-param (
-    [string]$AdminUserPw
-)
-
 $ErrorActionPreference = 'Stop'
 $LogFile = "$env:SystemRoot\Logs\Invoke-Sysprep.log"
 
@@ -137,7 +133,7 @@ try {
     New-LocalUser -Name $TempUser -Password $SecTempPw `
         -PasswordNeverExpires -UserMayNotChangePassword `
         -AccountNeverExpires `
-        -Description 'Temporary sysprep task account - removed after sysprep completes' | Out-Null
+        -Description 'Temp sysprep task account; auto-removed' | Out-Null
     Add-LocalGroupMember -Group 'Administrators' -Member $TempUser
     Write-Log "Account '$TempUser' created and added to Administrators."
 
@@ -231,10 +227,22 @@ try {
                 $wmiProfile.Delete()
                 Write-Log "User profile for '$TempUser' deleted via WMI."
             } catch {
-                Write-Log "WMI profile delete for '$TempUser': $($_.Exception.Message) (non-fatal - sysprep /generalize may have already removed it)."
+                # Delete() fails when sysprep /generalize already removed the profile directory,
+                # leaving a stale Win32_UserProfile entry. Fall back to direct registry cleanup.
+                Write-Log "WMI profile Delete() failed for '$TempUser' ($($_.Exception.Message)) - removing ProfileList registry key directly."
+                $profileListKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$TempUserSid"
+                if (Test-Path $profileListKey) {
+                    Remove-Item -Path $profileListKey -Force -ErrorAction SilentlyContinue
+                    Write-Log "ProfileList registry key removed for SID $TempUserSid."
+                }
+                # Remove the profile directory if sysprep left it behind
+                if ($null -ne $wmiProfile.LocalPath -and (Test-Path $wmiProfile.LocalPath)) {
+                    Remove-Item -Path $wmiProfile.LocalPath -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-Log "Profile directory '$($wmiProfile.LocalPath)' removed."
+                }
             }
         } else {
-            Write-Log "No WMI profile found for '$TempUser' (SID: $TempUserSid) - profile was not loaded or already removed by sysprep."
+            Write-Log "No WMI profile found for '$TempUser' (SID: $TempUserSid) - already removed by sysprep."
         }
     }
     Remove-LocalUser -Name $TempUser -ErrorAction SilentlyContinue

@@ -1,4 +1,4 @@
-# Input bindings are passed in via param block.
+﻿# Input bindings are passed in via param block.
 param($Timer)
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
@@ -903,7 +903,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             $deletedSessionHostNames = $deletionResults.SuccessfulDeletions
         
             # Calculate how many net-new hosts we're adding (growing the pool)
-            # Example: Current=8, Target=10, Need to replace=1 → Deploy 3 (1 replacement + 2 net-new), Delete 1
+            # Example: Current=8, Target=10, Need to replace=1 -> Deploy 3 (1 replacement + 2 net-new), Delete 1
             # In progressive scale-up scenarios, originalDeployCount may be less than hostsToReplace (batch sizing)
             # Net-new should never be negative - if we're doing batch replacements, net-new = 0
             $hostsToReplace = $hostPoolReplacementPlan.TotalSessionHostsToReplace
