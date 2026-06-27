@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "Test-Path": true,
+        "Get-Item": true,
+        "Get-Content": true,
+        "Get-ChildItem": true
+    }
+}

@@ -3,28 +3,10 @@
 <#
 .SYNOPSIS
     Applies VDI performance and resource optimizations to a Windows image for AVD deployment.
-    Variant: writes group policy values directly to Registry.pol (no LGPO.exe, no COM required).
 
 .DESCRIPTION
     Optimizes a Windows image for AVD based on the selected optimization profile and whether
     outbound internet traffic should be restricted in the deployed environment.
-
-    This variant replaces the LGPO.exe dependency in Optimize-AVDImage.ps1 with a pure
-    PowerShell Registry.pol writer. It reads and writes the MS-GPREG (PReg) binary format
-    directly — the same mechanism LGPO.exe uses internally — without requiring:
-      - LGPO.exe (Security Compliance Toolkit)
-      - IGroupPolicyObject COM object (CLSID 2E74AB3A — not registered on W11 25H2)
-      - GPMgmt.GPM (RSAT / GPMC — not installed by default)
-
-    MS-GPREG spec: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpreg/
-    PReg file layout (all strings UTF-16LE, all integers LE 4 bytes):
-      Header  : 50 52 65 67  ("PReg")  +  01 00 00 00  (version 1)
-      Entries : [  key\0  ;  valueName\0  ;  type  ;  dataSize  ;  data  ]
-                where [=0x5B00  ;=0x3B00  ]=0x5D00  are all UTF-16LE single chars
-    Machine pol : %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
-    User pol    : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
-
-    All other behavior is identical to Optimize-AVDImage.ps1.
 
     References:
       [1] MS VDI optimization guide (primary source for all services, tasks, and policies):
@@ -160,40 +142,24 @@ param(
     [ValidateSet('None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent')]
     [string]$OptimizationProfile,
 
-    # Accepts bool or string ('true'/'false'/'1'/'0') - Azure RunCommand passes all
+    # Accepts bool or string ('true'/'false'/'1'/'0') — Azure RunCommand passes all
     # parameters as strings, so [bool] would reject 'false' with a type error.
     [Parameter(Mandatory = $false)]
     [string]$RestrictInternet = 'false'
 )
 
 $ErrorActionPreference = 'Stop'
-
 $LogFile = "$env:SystemRoot\Logs\Optimize-AVDImage.log"
 $RestrictInternetBool = $RestrictInternet -in @('true', '1', 'yes')
 $RunFullOptimization = $OptimizationProfile -in @('NonPersistent-Full', 'Persistent')
 $RunNonPersistentSections = $OptimizationProfile -in @('NonPersistent-UpdatesOnly', 'NonPersistent-Full')
 
-# Registry.pol direct-write state - initialized here; populated during operation.
-# This approach writes the MS-GPREG (PReg) binary format directly, exactly as LGPO.exe does
-# internally. It requires no COM registration (IGroupPolicyObject CLSID is not registered on
-# W11 25H2), no RSAT/GPMC components (GPMgmt.GPM), and no external binaries (LGPO.exe).
-# MS-GPREG spec: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpreg/
-#
-# PReg file layout (all strings UTF-16LE, all integers LE 4 bytes):
-#   Header  : 50 52 65 67  ("PReg")  +  01 00 00 00  (version 1)
-#   Entries : [  key\0  ;  valueName\0  ;  type  ;  dataSize  ;  data  ]
-#             where [=0x5B00  ;=0x3B00  ]=0x5D00  are all UTF-16LE single chars
-#
-# Machine pol : %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
-# User pol    : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
-#
-# Queue: each entry is a hashtable:
-#   Section  : 'Computer' | 'User'
-#   RelPath  : registry key path (without HKLM:\ or Software\ for user prefix)
-#   Name     : value name
-#   Value    : value data (int for DWORD, string for SZ, string[] for MULTISZ)
-#   Kind     : [Microsoft.Win32.RegistryValueKind]
-$script:PolQueue = [System.Collections.Generic.List[hashtable]]@()
+# LGPO state - initialized here; populated in the detection block inside the try {} below
+$script:LgpoExe = Join-Path $env:SystemRoot 'System32\LGPO.exe'
+$script:LgpoAvailable = $false
+$script:LgpoLines = [System.Collections.Generic.List[string]]@()
+# Parallel list of raw registry data used to fall back to direct writes if LGPO fails
+$script:LgpoFallbackEntries = [System.Collections.Generic.List[hashtable]]@()
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -281,10 +247,8 @@ function Set-PolicyValue {
     <#
     .SYNOPSIS
         Creates or updates a registry value, creating the key path if needed.
-        Policy subtree paths are queued for commit via Invoke-ApplyPolicyQueue, which
-        writes them directly to Registry.pol in the MS-GPREG (PReg) binary format.
-        This makes them appear under Administrative Templates in gpresult, not under
-        Extra Registry Settings.
+        When LGPO.exe is available and the path is a policy subtree, queues
+        the entry for batch application via Invoke-ApplyPolicyQueue:
           Computer: HKLM:\SOFTWARE\Policies\... and legacy
                     HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\...
           User:     HKLM:\TempDefaultUser\Software\Policies\... and legacy
@@ -301,28 +265,48 @@ function Set-PolicyValue {
         [Parameter(Mandatory = $false)]
         [Microsoft.Win32.RegistryValueKind]$Type = [Microsoft.Win32.RegistryValueKind]::DWord
     )
-    # Route policy paths through the Registry.pol queue.
+    # Route policy paths through LGPO when available (DWORD and SZ types only).
     # Computer section: machine policy subtrees under HKLM:\SOFTWARE\...
     # User section:     user policy subtrees under HKLM:\TempDefaultUser\...
-    #                   (PReg writes these to GroupPolicy\User\Registry.pol,
-    #                    which Group Policy applies at logon - same effective scope
-    #                    as writing directly to the default user hive policies)
-    $polSection = $null
-    $polRelPath = $null
-    if ($Path -like 'HKLM:\SOFTWARE\Policies\*' -or
-        $Path -like 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\*') {
-        $polSection = 'Computer'
-        $polRelPath = $Path -replace '^HKLM:\\', ''
+    #                   (LGPO writes these to GroupPolicy\User\Registry.pol,
+    #                    applying to all users at logon - same effective scope
+    #                    as writing to the default user hive policies directly)
+    $lgpoSection = $null
+    $lgpoRelPath = $null
+    if ($script:LgpoAvailable) {
+        if ($Path -like 'HKLM:\SOFTWARE\Policies\*' -or
+            $Path -like 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\*') {
+            $lgpoSection = 'Computer'
+            $lgpoRelPath = $Path -replace '^HKLM:\\', ''
+        }
+        elseif ($Path -like 'HKLM:\TempDefaultUser\Software\Policies\*' -or
+            $Path -like 'HKLM:\TempDefaultUser\Software\Microsoft\Windows\CurrentVersion\Policies\*') {
+            $lgpoSection = 'User'
+            $lgpoRelPath = $Path -replace '^HKLM:\\TempDefaultUser\\', ''
+        }
     }
-    elseif ($Path -like 'HKLM:\TempDefaultUser\Software\Policies\*' -or
-        $Path -like 'HKLM:\TempDefaultUser\Software\Microsoft\Windows\CurrentVersion\Policies\*') {
-        $polSection = 'User'
-        $polRelPath = $Path -replace '^HKLM:\\TempDefaultUser\\', ''
-    }
-    if ($null -ne $polSection) {
-        $null = $script:PolQueue.Add(@{ Section = $polSection; RelPath = $polRelPath; Name = $Name; Value = $Value; Kind = $Type })
-        Write-Log "  [POL/$polSection] Queued: $Path\$Name = $Value"
-        return
+    if ($null -ne $lgpoSection) {
+        $lgpoData = switch ($Type) {
+            ([Microsoft.Win32.RegistryValueKind]::DWord) { "DWORD:$Value" }
+            ([Microsoft.Win32.RegistryValueKind]::String) { "SZ:$Value" }
+            ([Microsoft.Win32.RegistryValueKind]::MultiString) {
+                # LGPO text format: null-separated list ending with \0
+                # An empty multi-string is represented as a single \0
+                $joined = ($Value -join '\0')
+                if ([string]::IsNullOrEmpty($joined)) { 'MULTISZ:\0' } else { "MULTISZ:$joined\0" }
+            }
+            default { $null }
+        }
+        if ($null -ne $lgpoData) {
+            $null = $script:LgpoLines.Add($lgpoSection)
+            $null = $script:LgpoLines.Add($lgpoRelPath)
+            $null = $script:LgpoLines.Add($Name)
+            $null = $script:LgpoLines.Add($lgpoData)
+            $null = $script:LgpoLines.Add('')
+            $null = $script:LgpoFallbackEntries.Add(@{ Path = $Path; Name = $Name; Value = $Value; Type = $Type })
+            Write-Log "  [LGPO/$lgpoSection] Queued: $Path\$Name = $Value"
+            return
+        }
     }
     try {
         if (-not (Test-Path $Path)) {
@@ -358,270 +342,62 @@ function Disable-VdiAutologger {
 function Invoke-ApplyPolicyQueue {
     <#
     .SYNOPSIS
-        Commits all queued policy entries to the local GPO by writing Registry.pol
-        files directly in the MS-GPREG (PReg) binary format, then clears the queue.
-        No-op if the queue is empty.
-
-        Implementation notes:
-          PReg format (all strings UTF-16LE, integers 4-byte LE):
-            Header  : "PReg" (ASCII 4 bytes) + version 1 (uint32)
-            Entries : [ key\0 ; valueName\0 ; type ; dataSize ; data ]
-                      [ = 0x5B00  ; = 0x3B00  ] = 0x5D00
-
-          Registry type codes (REG_ constants):
-            1 = REG_SZ    4 = REG_DWORD    7 = REG_MULTI_SZ
-
-          Machine pol: %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
-          User pol   : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
-
-          After writing, gpupdate /force triggers Group Policy processing so
-          the values appear in the live registry and in gpresult output.
+        Applies all LGPO-queued policy entries in a single lgpo.exe invocation,
+        then clears the queue. No-op if LGPO is unavailable or the queue is empty.
     #>
-    if ($script:PolQueue.Count -eq 0) { return }
-    $entryCount = $script:PolQueue.Count
-
-    $utf16      = [System.Text.Encoding]::Unicode
-    $pRegSig    = [System.Text.Encoding]::ASCII.GetBytes('PReg')
-    $pRegVer    = [BitConverter]::GetBytes([uint32]1)
-    $bracketOpen  = [byte[]](0x5B, 0x00)
-    $bracketClose = [byte[]](0x5D, 0x00)
-    $semicolon    = [byte[]](0x3B, 0x00)
-    $nullterm     = [byte[]](0x00, 0x00)
-
-    function Read-PRegFile([string]$Path) {
-        $list = [System.Collections.Generic.List[hashtable]]::new()
-        if (-not (Test-Path $Path)) { return ,$list }
-        $raw = [IO.File]::ReadAllBytes($Path)
-        if ($raw.Length -lt 8) { return ,$list }
-        $sig = [System.Text.Encoding]::ASCII.GetString($raw, 0, 4)
-        if ($sig -ne 'PReg') { throw "Invalid Registry.pol header: $Path" }
-        $pos = 8
-        while ($pos -lt $raw.Length) {
-            if ($pos + 1 -ge $raw.Length) { break }
-            if ($raw[$pos] -ne 0x5B -or $raw[$pos+1] -ne 0x00) { $pos++; continue }
-            $pos += 2
-            # Read key string
-            $start = $pos
-            while ($pos + 1 -lt $raw.Length -and -not ($raw[$pos] -eq 0 -and $raw[$pos+1] -eq 0)) { $pos += 2 }
-            $key = $utf16.GetString($raw, $start, $pos - $start); $pos += 2  # skip null
-            $pos += 2  # skip ;
-            # Read value name string
-            $start = $pos
-            while ($pos + 1 -lt $raw.Length -and -not ($raw[$pos] -eq 0 -and $raw[$pos+1] -eq 0)) { $pos += 2 }
-            $vname = $utf16.GetString($raw, $start, $pos - $start); $pos += 2  # skip null
-            $pos += 2  # skip ;
-            # Type, size, data
-            $vtype = [BitConverter]::ToUInt32($raw, $pos); $pos += 4; $pos += 2  # skip ;
-            $vsize = [BitConverter]::ToUInt32($raw, $pos); $pos += 4; $pos += 2  # skip ;
-            # Guard: PowerShell a..b with a>b produces a descending slice, not empty
-            $vdata = if ($vsize -gt 0) { $raw[$pos..($pos + $vsize - 1)] } else { [byte[]]@() }
-            $pos += $vsize
-            $pos += 2  # skip ]
-            $list.Add(@{ Key=$key; Name=$vname; Type=$vtype; Size=$vsize; Data=$vdata })
-        }
-        return ,$list
-    }
-
-    function Merge-PRegEntry($entries, [string]$key, [string]$name, [uint32]$type, [byte[]]$data) {
-        $existing = @($entries | Where-Object { $_.Key -eq $key -and $_.Name -eq $name })
-        foreach ($e in $existing) { $entries.Remove($e) | Out-Null }
-        $entries.Add(@{ Key=$key; Name=$name; Type=$type; Size=[uint32]$data.Length; Data=$data })
-    }
-
-    function Write-PRegFile([string]$Path, $entries) {
-        $stream = [IO.MemoryStream]::new()
-        $w = [IO.BinaryWriter]::new($stream)
-        $w.Write($pRegSig); $w.Write($pRegVer)
-        foreach ($e in $entries) {
-            $w.Write($bracketOpen)
-            $w.Write($utf16.GetBytes($e.Key));   $w.Write($nullterm); $w.Write($semicolon)
-            $w.Write($utf16.GetBytes($e.Name));  $w.Write($nullterm); $w.Write($semicolon)
-            $w.Write([uint32]$e.Type);           $w.Write($semicolon)
-            $w.Write([uint32]$e.Size);           $w.Write($semicolon)
-            if ($null -ne $e.Data -and $e.Data.Length -gt 0) { $w.Write([byte[]]$e.Data) }
-            $w.Write($bracketClose)
-        }
-        $w.Flush()
-        $bytes    = $stream.ToArray()
-        $expected = $bytes.Length
-
-        $dir = Split-Path $Path
-        if (-not (Test-Path $dir)) { New-Item $dir -ItemType Directory -Force | Out-Null }
-
-        # Write to a temp file first so the original is never partially overwritten
-        $tmp = "$Path.tmp"
-        [IO.File]::WriteAllBytes($tmp, $bytes)
-
-        # Verify the temp file is complete before committing
-        $actual = (Get-Item $tmp).Length
-        if ($actual -ne $expected) {
-            Remove-Item $tmp -Force -EA SilentlyContinue
-            throw "Registry.pol temp write verification failed: expected $expected bytes, file has $actual bytes"
-        }
-
-        # Atomic promotion: replace the live file with the verified temp
-        Move-Item $tmp $Path -Force
-    }
-
-    # Build per-file entry lists from the queue
-    $machineEntries = Read-PRegFile "$env:SystemRoot\System32\GroupPolicy\Machine\Registry.pol"
-    $userEntries    = Read-PRegFile "$env:SystemRoot\System32\GroupPolicy\User\Registry.pol"
-    $machineUpdated = $false
-    $userUpdated    = $false
-
-    foreach ($e in $script:PolQueue) {
-        try {
-            switch ($e.Kind) {
-                ([Microsoft.Win32.RegistryValueKind]::DWord) {
-                    $data = [BitConverter]::GetBytes([uint32]$e.Value)
-                    $type = [uint32]4  # REG_DWORD
-                }
-                ([Microsoft.Win32.RegistryValueKind]::String) {
-                    # REG_SZ: UTF-16LE with null terminator
-                    $data = $utf16.GetBytes([string]$e.Value + [char]0)
-                    $type = [uint32]1  # REG_SZ
-                }
-                ([Microsoft.Win32.RegistryValueKind]::MultiString) {
-                    # REG_MULTI_SZ: each string UTF-16LE null-terminated, final extra null
-                    $arr = if ($e.Value -is [array]) { [string[]]$e.Value } else { [string[]]@($e.Value) }
-                    $data = $utf16.GetBytes(($arr -join [char]0) + [char]0 + [char]0)
-                    $type = [uint32]7  # REG_MULTI_SZ
-                }
-                default {
-                    Write-Log "  [WARN] PReg: unsupported type $($e.Kind) for $($e.RelPath)\$($e.Name) - skipping"
-                    continue
-                }
-            }
-            if ($e.Section -eq 'Computer') {
-                Merge-PRegEntry $machineEntries $e.RelPath $e.Name $type $data
-                $machineUpdated = $true
-            }
-            else {
-                Merge-PRegEntry $userEntries $e.RelPath $e.Name $type $data
-                $userUpdated = $true
-            }
-            Write-Log "  [POL] Written to Registry.pol: [$($e.Section)] $($e.RelPath)\$($e.Name) = $($e.Value)"
-        }
-        catch {
-            Write-Log "  [WARN] PReg merge failed for $($e.RelPath)\$($e.Name): $_"
-        }
-    }
-
-    if ($machineUpdated) {
-        try {
-            Write-PRegFile "$env:SystemRoot\System32\GroupPolicy\Machine\Registry.pol" $machineEntries
-            Write-Log "  [OK]   Machine Registry.pol written ($($machineEntries.Count) entries)"
-        }
-        catch {
-            Write-Log "  [WARN] Machine Registry.pol write failed ($_) - applying queued computer entries via direct registry fallback"
-            foreach ($e in @($script:PolQueue | Where-Object { $_.Section -eq 'Computer' })) {
-                $regPath = "HKLM:\$($e.RelPath)"
-                try {
-                    if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force -EA Stop | Out-Null }
-                    Set-ItemProperty -Path $regPath -Name $e.Name -Value $e.Value -Type $e.Kind -Force -EA Stop
-                    Write-Log "  [FB]   Direct registry: $regPath\$($e.Name) = $($e.Value)"
-                }
-                catch { Write-Log "  [WARN] Direct registry fallback failed for $regPath\$($e.Name): $_" }
-            }
-        }
-    }
-    if ($userUpdated) {
-        try {
-            Write-PRegFile "$env:SystemRoot\System32\GroupPolicy\User\Registry.pol" $userEntries
-            Write-Log "  [OK]   User Registry.pol written ($($userEntries.Count) entries)"
-        }
-        catch {
-            Write-Log "  [WARN] User Registry.pol write failed ($_) - applying queued user entries via direct registry fallback"
-            foreach ($e in @($script:PolQueue | Where-Object { $_.Section -eq 'User' })) {
-                # User policy path is relative to Software\...; write to the loaded default user hive
-                $regPath = "HKLM:\TempDefaultUser\$($e.RelPath)"
-                try {
-                    if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force -EA Stop | Out-Null }
-                    Set-ItemProperty -Path $regPath -Name $e.Name -Value $e.Value -Type $e.Kind -Force -EA Stop
-                    Write-Log "  [FB]   Direct registry (default user hive): $regPath\$($e.Name) = $($e.Value)"
-                }
-                catch { Write-Log "  [WARN] Direct registry fallback failed for $regPath\$($e.Name): $_" }
-            }
-        }
-    }
-    Write-Log "  [OK]   Registry.pol direct write applied $entryCount policy values total"
-
-    # Write gpt.ini so the Group Policy Client on deployed VMs knows the local GPO has content.
-    # This file is part of the captured image. When a deployed VM boots, the GP Client reads
-    # gpt.ini to discover that Registry.pol has entries and invokes the Registry CSE to apply them.
-    # gpupdate /force is intentionally NOT called here: this is an image build VM and the policies
-    # do not need to be live in the build OS. Running gpupdate on the build VM is unnecessary and
-    # can trigger unexpected side effects (CSE processing, service interactions) before sysprep.
-    #
-    # gpt.ini format:
-    #   [General]
-    #   gPCMachineExtensionNames=[{Registry-CSE-GUID}{Machine-AT-GUID}]
-    #   gPCUserExtensionNames=[{Registry-CSE-GUID}{User-AT-GUID}]
-    #   Version=<uint32>  low-word=machine version, high-word=user version
-    #
-    # Registry CSE GUID  : {35378EAC-683F-11D2-A89A-00C04FBBCFA2}
-    # Machine AT snap-in : {D02B1F72-3407-48AE-BA88-E8213C6761F1}
-    # User AT snap-in    : {D02B1F73-3407-48AE-BA88-E8213C6761F1}
+    if (-not $script:LgpoAvailable -or $script:LgpoLines.Count -eq 0) { return }
+    $entryCount = [int]($script:LgpoLines.Count / 5)
+    $tempFile = Join-Path $env:SystemRoot "Temp\LGPO-$(Get-Date -Format 'HHmmssff').txt"
+    $lgpoSucceeded = $false
     try {
-        $gptPath  = "$env:SystemRoot\System32\GroupPolicy\gpt.ini"
-        $regCse   = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
-        $machineAT = '{D02B1F72-3407-48AE-BA88-E8213C6761F1}'
-        $userAT    = '{D02B1F73-3407-48AE-BA88-E8213C6761F1}'
-
-        # Read existing version so we increment rather than reset.
-        $machineVer = [uint16]1
-        $userVer    = [uint16]1
-        if (Test-Path $gptPath) {
-            $existing = Get-Content $gptPath -Raw
-            if ($existing -match 'Version\s*=\s*(\d+)') {
-                $cur = [uint32]$matches[1]
-                $machineVer = [uint16]($cur -band 0xFFFF)
-                $userVer    = [uint16](($cur -shr 16) -band 0xFFFF)
-            }
+        # Write the registry text file using Add-Content, one line at a time.
+        # Format per entry (matching Update-LocalGPOTextFile in the artifact scripts):
+        #   Computer           <- scope
+        #   SOFTWARE\Policies\ <- key path, stripped of HKLM:\ prefix
+        #   ValueName          <- value name
+        #   DWORD:1            <- type:data
+        #                      <- blank line
+        foreach ($line in $script:LgpoLines) {
+            Add-Content -Path $tempFile -Value $line
         }
-        if ($machineUpdated) { $machineVer++ }
-        if ($userUpdated)    { $userVer++ }
-        $version = ([uint32]$userVer -shl 16) -bor [uint32]$machineVer
-
-        # Build final extension name strings for each scope.
-        # Always preserve lines from the prior file, even when a scope was not updated
-        # in this call. Without this, a call that only updates one scope (e.g. Section 8
-        # writes only user entries) would silently drop the other scope's extension name
-        # from gpt.ini, causing the GP client on deployed VMs to skip that CSE entirely.
-        $finalMachineExt = if ($machineUpdated) {
-            $newExt = "[$regCse$machineAT]"
-            if ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-                $ev = $matches[1].Trim()
-                if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev }
-            } else { $newExt }
-        } elseif ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-            $matches[1].Trim()
-        } else { '' }
-
-        $finalUserExt = if ($userUpdated) {
-            $newExt = "[$regCse$userAT]"
-            if ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
-                $ev = $matches[1].Trim()
-                if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev }
-            } else { $newExt }
-        } elseif ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
-            $matches[1].Trim()
-        } else { '' }
-
-        $gptContent = "[General]`r`n"
-        if ($finalMachineExt) { $gptContent += "gPCMachineExtensionNames=$finalMachineExt`r`n" }
-        if ($finalUserExt)    { $gptContent += "gPCUserExtensionNames=$finalUserExt`r`n" }
-        $gptContent += "Version=$version`r`n"
-
-        [IO.File]::WriteAllText($gptPath, $gptContent, [System.Text.Encoding]::ASCII)
-        Write-Log "  [OK]   gpt.ini written (Version=$version machine=$machineVer user=$userVer)"
+        $proc = Start-Process -FilePath $script:LgpoExe -ArgumentList "/t `"$tempFile`"" -Wait -PassThru
+        Write-Log "  LGPO exitcode: '$($proc.ExitCode)'"
+        if ($proc.ExitCode -eq 0) {
+            Write-Log "  [OK]   LGPO applied $entryCount policy values"
+            $lgpoSucceeded = $true
+        } else {
+            Write-Log "  [WARN] LGPO exited $($proc.ExitCode) for $entryCount values"
+        }
     }
     catch {
-        Write-Log "  [WARN] gpt.ini write failed: $_"
+        Write-Log "  [WARN] LGPO flush failed: $($_.Exception.Message)"
+    }
+    finally {
+        Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
     }
 
-    $script:PolQueue.Clear()
+    if (-not $lgpoSucceeded) {
+        # LGPO failed or threw - apply queued entries directly to the registry so
+        # policy values are not silently lost.
+        Write-Log "  Applying $($script:LgpoFallbackEntries.Count) policy values via registry fallback..."
+        $fbOk = 0; $fbFail = 0
+        foreach ($entry in $script:LgpoFallbackEntries) {
+            try {
+                if (-not (Test-Path $entry.Path)) { New-Item -Path $entry.Path -Force -ErrorAction Stop | Out-Null }
+                Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $entry.Value -Type $entry.Type -Force -ErrorAction Stop
+                $fbOk++
+            } catch {
+                Write-Log "  [WARN] Fallback registry write failed for $($entry.Path)\$($entry.Name): $_"
+                $fbFail++
+            }
+        }
+        Write-Log "  [OK]   Registry fallback: $fbOk applied, $fbFail failed"
+    }
+
+    $script:LgpoLines.Clear()
+    $script:LgpoFallbackEntries.Clear()
 }
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -639,17 +415,43 @@ try {
     Write-Log ""
 
     # -----------------------------------------------------------------------
-    # Registry.pol availability check
-    # Verify the GroupPolicy directory structure is writable. This is a simple
-    # guard — on any standard Windows machine the directory always exists.
+    # LGPO Detection
+    # Attempt to locate or download LGPO.exe for applying policy settings via
+    # Local Group Policy Objects. If unavailable, all policy settings fall back
+    # to direct registry writes inside Set-PolicyValue.
     # -----------------------------------------------------------------------
-    Write-Log "--- Registry.pol Direct-Write Check ---"
-    $machinePolDir = "$env:SystemRoot\System32\GroupPolicy\Machine"
-    if (Test-Path $machinePolDir) {
-        Write-Log "  [OK]   GroupPolicy\Machine directory present — Registry.pol direct-write is available"
+    Write-Log "--- LGPO Detection ---"
+    if (-not (Test-Path -Path $script:LgpoExe -PathType Leaf)) {
+        Write-Log "  LGPO.exe not found in System32 - attempting download from Microsoft..."
+        $lgpoTemp = Join-Path $env:TEMP 'Optimize-AVDImage-LGPO'
+        try {
+            if (-not (Test-Path $lgpoTemp)) { New-Item -Path $lgpoTemp -ItemType Directory -Force | Out-Null }
+            $lgpoZip = Join-Path $lgpoTemp 'LGPO.zip'
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            (New-Object System.Net.WebClient).DownloadFile(
+                'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip',
+                $lgpoZip)
+            Expand-Archive -Path $lgpoZip -DestinationPath $lgpoTemp -Force
+            $lgpoFile = Get-ChildItem -Path $lgpoTemp -Filter 'LGPO.exe' -Recurse | Select-Object -First 1
+            if ($lgpoFile) {
+                Copy-Item -Path $lgpoFile.FullName -Destination $script:LgpoExe -Force
+                $script:LgpoAvailable = Test-Path -Path $script:LgpoExe -PathType Leaf
+                Write-Log "  [OK]   LGPO.exe downloaded and installed to System32"
+            }
+            else {
+                Write-Log "  [WARN] LGPO.exe not found in downloaded archive - registry fallback in use"
+            }
+        }
+        catch {
+            Write-Log "  [WARN] Could not download LGPO.exe ($_) - registry fallback in use for all policy settings"
+        }
+        finally {
+            Remove-Item -Path $lgpoTemp -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
     else {
-        Write-Log "  [INFO] GroupPolicy\Machine directory not found — it will be created on first write"
+        $script:LgpoAvailable = $true
+        Write-Log "  [OK]   LGPO.exe found in System32 - policy settings will be applied via LGPO"
     }
     Write-Log ""
 
