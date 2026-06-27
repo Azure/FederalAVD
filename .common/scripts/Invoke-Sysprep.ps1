@@ -49,6 +49,7 @@ try {
     }
 
     $AdminAccount = Get-LocalUser | Where-Object { $_.SID -like '*-500' }
+    $TaskUser = "$env:COMPUTERNAME\$($AdminAccount.Name)"
     If (-Not $AdminAccount.Enabled) {
         Write-Log "Enabling local administrator account '$($AdminAccount.Name)'."
         Enable-LocalUser -Name $AdminAccount.Name
@@ -121,7 +122,7 @@ try {
     Register-ScheduledTask -TaskName $TaskName `
         -Description 'Runs Sysprep (OOBE / Generalize / Quit / VM mode) as the built-in administrator.' `
         -Action $Action -Trigger $Trigger `
-        -User $AdminAccount.Name -Password $AdminUserPw `
+        -User $TaskUser -Password $AdminUserPw `
         -RunLevel Highest -Force | Out-Null
     If (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
         throw "Scheduled task '$TaskName' was not found immediately after registration."
