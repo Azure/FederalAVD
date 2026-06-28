@@ -537,22 +537,11 @@ function Invoke-ApplyPolicyQueue {
     }
     Write-Log "  [OK]   Registry.pol direct write applied $entryCount policy values total"
 
-    # Write gpt.ini so the Group Policy Client on deployed VMs knows the local GPO has content.
-    # This file is part of the captured image. When a deployed VM boots, the GP Client reads
-    # gpt.ini to discover that Registry.pol has entries and invokes the Registry CSE to apply them.
-    # gpupdate /force is intentionally NOT called here: this is an image build VM and the policies
-    # do not need to be live in the build OS. Running gpupdate on the build VM is unnecessary and
-    # can trigger unexpected side effects (CSE processing, service interactions) before sysprep.
-    #
-    # gpt.ini format:
-    #   [General]
-    #   gPCMachineExtensionNames=[{Registry-CSE-GUID}{Machine-AT-GUID}]
-    #   gPCUserExtensionNames=[{Registry-CSE-GUID}{User-AT-GUID}]
-    #   Version=<uint32>  low-word=machine version, high-word=user version
-    #
-    # Registry CSE GUID  : {35378EAC-683F-11D2-A89A-00C04FBBCFA2}
-    # Machine AT snap-in : {D02B1F72-3407-48AE-BA88-E8213C6761F1}
-    # User AT snap-in    : {D02B1F73-3407-48AE-BA88-E8213C6761F1}
+    # Write gpt.ini so the GP Client on deployed VMs knows Registry.pol has content.
+    # gpupdate is intentionally NOT called - this is an image build VM; policies do not
+    # need to be live and running gpupdate before sysprep can cause CSE side effects.
+    # Registry CSE: {35378EAC-683F-11D2-A89A-00C04FBBCFA2}
+    # Machine AT:   {D02B1F72-3407-48AE-BA88-E8213C6761F1}  User AT: {D02B1F73...}
     try {
         $gptPath  = "$env:SystemRoot\System32\GroupPolicy\gpt.ini"
         $regCse   = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
@@ -579,43 +568,26 @@ function Invoke-ApplyPolicyQueue {
         # in this call. Without this, a call that only updates one scope (e.g. Section 8
         # writes only user entries) would silently drop the other scope's extension name
         # from gpt.ini, causing the GP client on deployed VMs to skip that CSE entirely.
-        #
-        # Security CSE guard: if LGPO (DoD-STIGs) registered the Security Settings CSE
-        # ({827D319E...}) in gpt.ini but GptTmpl.inf does not exist, strip that CSE pair.
-        # Without this, deployed VMs log Event 8194 / 0x80070003 on every policy refresh.
-        $secCse      = '{827D319E-6EAC-11D2-A4EA-00C04F79F83A}'
-        $gptTmplPath = "$env:SystemRoot\System32\GroupPolicy\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf"
-        $gptTmplOk   = Test-Path $gptTmplPath
-
-        function Remove-OrphanedSecCse([string]$extNames) {
-            $escaped = [regex]::Escape($secCse)
-            $cleaned = $extNames -replace "\[$escaped\{[0-9A-Fa-f\-]+\}\]", ''
-            if ($cleaned -ne $extNames) {
-                Write-Log "  [WARN] gpt.ini: Security CSE stripped - GptTmpl.inf missing at '$gptTmplPath'."
-            }
-            return $cleaned
-        }
-
         $machineExt = "[$regCse$machineAT]"
         $userExt    = "[$regCse$userAT]"
 
         $finalMachineExt = if ($machineUpdated) {
             if ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
                 $ev = $matches[1].Trim()
-                if (-not $gptTmplOk) { $ev = Remove-OrphanedSecCse $ev }
-                # Check for the exact pair - same CSE can appear with multiple snap-in GUIDs
-                if ($ev -notlike "*$machineExt*") { $ev + $machineExt } else { $ev }
+                # Use CSE GUID presence (any snap-in) to detect duplicates. LGPO uses its
+                # own tool GUID {DF3DC19F...} rather than the standard AT snap-in GUID, so
+                # an exact-pair check would add a second Registry CSE entry alongside it.
+                # The GP client processes registry.pol based on the CSE GUID alone.
+                if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
             } else { $machineExt }
         } elseif ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-            $ev = $matches[1].Trim()
-            if (-not $gptTmplOk) { $ev = Remove-OrphanedSecCse $ev }
-            $ev
+            $matches[1].Trim()
         } else { '' }
 
         $finalUserExt = if ($userUpdated) {
             if ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
                 $ev = $matches[1].Trim()
-                if ($ev -notlike "*$userExt*") { $ev + $userExt } else { $ev }
+                if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
             } else { $userExt }
         } elseif ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()
@@ -1565,29 +1537,36 @@ try {
         }
 
         # OneDrive ADMX - copy from the installed OneDrive version folder (no download needed)
-        if (-not (Test-Path "$env:SystemRoot\PolicyDefinitions\OneDrive.admx")) {
+        # Check specifically for GPOSetUpdateRing in the ADMX rather than just file presence:
+        # Windows 11 ships an inbox OneDrive.admx that does NOT contain GPOSetUpdateRing.
+        # The standalone OneDrive ADMX (from the OneDrive install directory) does contain it.
+        $odAdmxPath = "$env:SystemRoot\PolicyDefinitions\OneDrive.admx"
+        $odAdmxHasUpdateRing = (Test-Path $odAdmxPath) -and ((Get-Content $odAdmxPath -Raw) -like '*GPOSetUpdateRing*')
+        if (-not $odAdmxHasUpdateRing) {
             try {
-                $odInstallDir = "${env:ProgramFiles(x86)}\Microsoft OneDrive"
+                # Machine-wide install: C:\Program Files\Microsoft OneDrive\<ver>\adm\
+                # Per-user install:    C:\Program Files (x86)\Microsoft OneDrive\<ver>\
+                $odInstallDir = if (Test-Path "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe") {
+                    "$env:ProgramFiles\Microsoft OneDrive"
+                } else {
+                    "${env:ProgramFiles(x86)}\Microsoft OneDrive"
+                }
                 $odExe = Join-Path $odInstallDir 'OneDrive.exe'
                 if (Test-Path $odExe) {
-                    $odVersion = (Get-ItemProperty $odExe).VersionInfo.ProductVersion
+                    $odVersion    = (Get-ItemProperty $odExe).VersionInfo.ProductVersion
                     $odVersionDir = Join-Path $odInstallDir $odVersion
-                    if (Test-Path $odVersionDir) {
-                        Get-ChildItem -Path $odVersionDir -File -Recurse -Filter '*.admx' |
-                            ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
-                        $admlFiles = Get-ChildItem -Path $odVersionDir -File -Recurse -Filter '*.adml' |
-                            Where-Object { $_.Directory -like '*adm' }
+                    $odSearchDir  = if (Test-Path $odVersionDir) { $odVersionDir } else { $odInstallDir }
+                    $odAdmxFiles  = Get-ChildItem -Path $odSearchDir -File -Recurse -Filter '*.admx' -ErrorAction SilentlyContinue
+                    if ($odAdmxFiles) {
+                        $odAdmxFiles | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
+                        $admlFiles = Get-ChildItem -Path $odSearchDir -File -Recurse -Filter '*.adml' -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Directory.Name -eq 'en-us' -or $_.Directory.Name -eq 'en' -or (Get-ChildItem -Path $_.DirectoryName -Filter '*.admx' -ErrorAction SilentlyContinue) }
                         if ($admlFiles) {
                             $admlFiles | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
-                        } else {
-                            Get-ChildItem -Path $odVersionDir -Directory -Recurse |
-                                Where-Object { $_.Name -eq 'en-us' } |
-                                Get-ChildItem -File -Recurse -Filter '*.adml' |
-                                ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
                         }
-                        Write-Log "  [ADMX] [OK] OneDrive ADMX copied from version folder '$odVersion'."
+                        Write-Log "  [ADMX] [OK] OneDrive ADMX copied from '$odSearchDir' (version $odVersion)."
                     } else {
-                        Write-Log "  [ADMX] [WARN] OneDrive version folder '$odVersionDir' not found (non-fatal)."
+                        Write-Log "  [ADMX] [WARN] No ADMX files found under '$odSearchDir' (non-fatal)."
                     }
                 } else {
                     Write-Log "  [ADMX] [SKIP] OneDrive not installed at '$odInstallDir'."
@@ -1596,7 +1575,7 @@ try {
                 Write-Log "  [ADMX] [WARN] OneDrive ADMX copy failed: $_ (non-fatal)"
             }
         } else {
-            Write-Log "  [ADMX] OneDrive.admx already present - skipping OneDrive copy."
+            Write-Log "  [ADMX] OneDrive.admx already present with GPOSetUpdateRing - skipping OneDrive copy."
         }
 
         Write-Log ""
@@ -1655,11 +1634,16 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Teams' `
             -Name 'disableAutoUpdate' -Value 1
 
-        # OneDrive: block automatic updates entirely (image provides the pinned version)
+        # OneDrive: set update ring to Enterprise (slowest channel, ~60 day lag behind Production).
+        # There is no "disable updates" option in the OneDrive ADMX - GPOSetUpdateRing controls the
+        # channel only, not whether updates occur. The OneDrive client will not downgrade, so the
+        # version baked into the image remains in place until the Enterprise channel reaches or
+        # exceeds it. Ring values (from OneDrive.admx): 0=Enterprise, 4=Insider, 5=Production.
         # Ref: https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
-        # NOTE: GPOSetUpdateRing is not in the inbox SkyDrive.admx. It requires the standalone OneDrive
-        # ADMX templates (OneDrive.admx) installed separately. Without them this will appear as an
-        # Extra Registry Setting in gpresult, but the value is still enforced by the OneDrive client.
+        # NOTE: GPOSetUpdateRing is not in the inbox OneDrive.admx shipped with Windows. It requires
+        # the standalone ADMX from the OneDrive install directory (installed above in Section 6 ADMX
+        # pre-step). Without the ADMX it appears as an Extra Registry Setting in gpresult but is still
+        # enforced by the OneDrive client.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' `
             -Name 'GPOSetUpdateRing' -Value 0
 

@@ -790,7 +790,7 @@ $machineExt = "[$regCse$machineAT]"
           $finalMachineExt = if ($machineUpdated) {
               if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
                   $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$machineExt*") { $ev + $machineExt } else { $ev }
+                  if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
               } else { $machineExt }
           } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
               $matches[1].Trim()
@@ -799,7 +799,7 @@ $machineExt = "[$regCse$machineAT]"
           $finalUserExt = if ($userUpdated) {
               if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
                   $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$userExt*") { $ev + $userExt } else { $ev }
+                  if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
               } else { $userExt }
         } elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()

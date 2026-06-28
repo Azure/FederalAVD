@@ -284,9 +284,9 @@ Function Update-LocalGPOTextFile {
     Add-Content -Path $OutputFile -Value $Scope
     Add-Content -Path $OutputFile -Value $RegistryKeyPath
     Add-Content -Path $OutputFile -Value $RegistryValue
-    If ($Delete)              { Add-Content -Path $OutputFile -Value 'DELETE' }
+    If ($Delete) { Add-Content -Path $OutputFile -Value 'DELETE' }
     ElseIf ($DeleteAllValues) { Add-Content -Path $OutputFile -Value 'DELETEALLVALUES' }
-    Else                      { Add-Content -Path $OutputFile -Value "$($ValueType):$RegistryData" }
+    Else { Add-Content -Path $OutputFile -Value "$($ValueType):$RegistryData" }
     Add-Content -Path $OutputFile -Value ''
 }
 
@@ -430,7 +430,8 @@ Function Disable-OptionalFeatureIfEnabled {
     if ($feature -and $feature.State -eq 'Enabled') {
         Write-Log -Message "${StigId}: Disabling Windows Optional Feature '$FeatureName'."
         Disable-WindowsOptionalFeature -Online -FeatureName $FeatureName -NoRestart -ErrorAction SilentlyContinue | Out-Null
-    } else {
+    }
+    else {
         Write-Log -Message "${StigId}: '$FeatureName' is already disabled or not present. No action required."
     }
 }
@@ -449,8 +450,8 @@ Function Write-Log {
         Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
     Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Info' { Write-Host $Content }
+        'Error' { Write-Error $Content -ErrorAction Continue }
         'Warning' { Write-Warning $Content }
     }
 }
@@ -536,7 +537,7 @@ If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
     Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
 }
 $stigZips = @(Get-ChildItem -Path $PSScriptRoot -Filter '*.zip' | Where-Object { $_.Name -notmatch 'LGPO.zip' } | Sort-Object LastWriteTime -Descending)
-$stigZip  = $stigZips | Select-Object -First 1
+$stigZip = $stigZips | Select-Object -First 1
 If ($stigZip) {
     If ($stigZips.Count -gt 1) {
         Write-Log -Category Warning -Message "Multiple STIG ZIP files found in '$PSScriptRoot'. Using the newest: '$($stigZip.Name)'. Remove older packages to avoid ambiguity."
@@ -606,7 +607,7 @@ ForEach ($gpoFolder in $GPOFolders) {
         # Remove administrator account disable/rename lines
         Write-Log -Message "[GptTmpl] Removing 'NewAdministratorName' and 'EnableAdminAccount' - Azure manages the built-in administrator account (RID-500) independently; allowing the STIG to rename or disable it breaks local admin access and agent operations."
         $Content | Where-Object { ($_ -like 'NewAdministratorName*') -or ($_ -like 'EnableAdminAccount*') } |
-            ForEach-Object { Write-Output "  [GptTmpl] REMOVED : $_" }
+        ForEach-Object { Write-Output "  [GptTmpl] REMOVED : $_" }
         $Content = $Content | Where-Object { (-not ($_ -like 'NewAdministratorName*')) -and (-not ($_ -like 'EnableAdminAccount*')) }
 
         # Replace or remove the 'ADD YOUR ENTERPRISE ADMINS' / 'ADD YOUR DOMAIN ADMINS'
@@ -620,7 +621,8 @@ ForEach ($gpoFolder in $GPOFolders) {
             }
             $Content = $Content -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins'
             $Content = $Content -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
-        } else {
+        }
+        else {
             Write-Log -Message "[GptTmpl] Removing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' placeholders - these domain group tokens are not applicable on non-domain-joined AVD session hosts and must be stripped to prevent policy application errors."
             $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
                 $cleaned = $_ -replace ",\s*ADD YOUR ENTERPRISE ADMINS", '' -replace "ADD YOUR ENTERPRISE ADMINS\s*,", '' -replace 'ADD YOUR ENTERPRISE ADMINS', ''
@@ -661,38 +663,20 @@ ForEach ($gpoFolder in $GPOFolders) {
             $Content = $Content | ForEach-Object {
                 if ($_ -match 'SeDenyRemoteInteractiveLogonRight' -and $_ -match '\*S-1-5-113') {
                     $_ -replace ',\s*\*S-1-5-113', '' -replace '\*S-1-5-113\s*,', '' -replace '\*S-1-5-113', ''
-                } else { $_ }
+                }
+                else { $_ }
             }
         }
-
         Set-Content -Path $SecEditFile -Value $Content -Encoding Unicode
     }
+
     Write-Log -Message "Running 'LGPO.exe /g `"$gpoFolder`"'"
     $lgpo = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/g `"$gpoFolder`"" -Wait -PassThru
     if ($lgpo.ExitCode -ne 0) {
         Write-Log -Category Warning -Message "'lgpo.exe /g' exited with non-zero code [$($lgpo.ExitCode)] for folder '$gpoFolder'. Policy may be partially applied."
-    } else {
-        Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
     }
-    # LGPO /g applies security settings by invoking the Security Settings CSE (scecli.dll)
-    # which commits the settings directly to secedit.sdb. It does NOT copy GptTmpl.inf to
-    # the GroupPolicy directory. Without the file present, every gpupdate on the build VM
-    # and on deployed session hosts will log Event 8194 / 0x80070003 because the Security
-    # Settings CSE is registered in gpt.ini but its backing file is absent.
-    # Fix: explicitly copy the already-modified GptTmpl.inf from the GPO folder to the
-    # GroupPolicy destination so gpupdate can process it cleanly.
-    if ($gpoFolder -match "DoD Windows $osVersion") {
-        $localGptTmplDir  = "$env:windir\System32\GroupPolicy\Machine\Microsoft\Windows NT\SecEdit"
-        $localGptTmplFile = "$localGptTmplDir\GptTmpl.inf"
-        if (-not (Test-Path $localGptTmplDir)) {
-            New-Item -Path $localGptTmplDir -ItemType Directory -Force | Out-Null
-        }
-        if ($SecEditFile -and (Test-Path $SecEditFile)) {
-            Copy-Item -Path $SecEditFile -Destination $localGptTmplFile -Force
-            Write-Log -Message "[GptTmpl] Copied modified GptTmpl.inf to '$localGptTmplFile' - required because LGPO applies security settings to secedit.sdb without writing GptTmpl.inf to the GroupPolicy directory. Without this copy the Security Settings CSE registered in gpt.ini has no backing file and logs Event 8194 / 0x80070003 on every gpupdate."
-        } else {
-            Write-Log -Category Warning -Message "[GptTmpl] Cannot copy GptTmpl.inf - source path is empty or not found ('$SecEditFile'). Event 8194 may occur on deployed session hosts."
-        }
+    else {
+        Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
     }
 }
 
@@ -777,7 +761,8 @@ $snmpCap = Get-WindowsCapability -Online -Name 'SNMP.Client~~~~0.0.1.0' -ErrorAc
 if ($snmpCap -and $snmpCap.State -eq 'Installed') {
     Write-Log -Message 'V-253276: Removing SNMP Client Windows Capability.'
     Remove-WindowsCapability -Online -Name 'SNMP.Client~~~~0.0.1.0' -ErrorAction SilentlyContinue | Out-Null
-} else {
+}
+else {
     Write-Log -Message 'V-253276: SNMP Client capability not installed. No action required.'
 }
 Disable-OptionalFeatureIfEnabled -FeatureName 'SNMP'        -StigId 'V-253276'
@@ -800,17 +785,17 @@ Disable-OptionalFeatureIfEnabled -FeatureName 'SMB1Protocol' -StigId 'V-253286'
 # that already exist on the build VM (e.g., the build administrator account).
 Write-Log -Message 'V-268317: Removing Microsoft Copilot provisioned package (image build).'
 Get-AppxProvisionedPackage -Online |
-    Where-Object { $_.DisplayName -like '*Copilot*' } |
-    ForEach-Object {
-        Write-Log -Message "  Removing provisioned package: $($_.DisplayName)"
-        Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue | Out-Null
-    }
+Where-Object { $_.DisplayName -like '*Copilot*' } |
+ForEach-Object {
+    Write-Log -Message "  Removing provisioned package: $($_.DisplayName)"
+    Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue | Out-Null
+}
 Get-AppxPackage -AllUsers |
-    Where-Object { $_.Name -like '*Copilot*' } |
-    ForEach-Object {
-        Write-Log -Message "  Removing user package: $($_.Name)"
-        Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-    }
+Where-Object { $_.Name -like '*Copilot*' } |
+ForEach-Object {
+    Write-Log -Message "  Removing user package: $($_.Name)"
+    Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+}
 
 # V-253359 MEDIUM: Run as different user must be removed from context menus.
 Write-Log -Message "V-253359: Removing Run As User from context menus."

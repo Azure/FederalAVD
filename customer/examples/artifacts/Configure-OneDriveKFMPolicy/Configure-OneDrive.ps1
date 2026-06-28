@@ -727,7 +727,7 @@ $machineExt = "[$regCse$machineAT]"
           $finalMachineExt = if ($machineUpdated) {
               if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
                   $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$machineExt*") { $ev + $machineExt } else { $ev }
+                  if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
               } else { $machineExt }
           } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
               $matches[1].Trim()
@@ -736,7 +736,7 @@ $machineExt = "[$regCse$machineAT]"
           $finalUserExt = if ($userUpdated) {
               if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
                   $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$userExt*") { $ev + $userExt } else { $ev }
+                  if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
               } else { $userExt }
         } elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()
@@ -787,21 +787,20 @@ Write-Log -category Info -Message "Starting '$PSCommandPath'."
 $ref = "https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders"
 Write-Log -Message "Starting OneDrive configuration in accordance with '$ref'."
 
-$InstallDir = "${env:ProgramFiles(x86)}\Microsoft OneDrive"
-$OnedriveVersion = (Get-ItemProperty -Path "$installDir\onedrive.exe").VersionInfo.ProductVersion
+# Resolve install dir - enterprise per-machine installer uses Program Files (not x86)
+$InstallDir = if (Test-Path "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe") {
+    "$env:ProgramFiles\Microsoft OneDrive"
+} else {
+    "${env:ProgramFiles(x86)}\Microsoft OneDrive"
+}
+$OnedriveVersion = (Get-ItemProperty -Path "$InstallDir\OneDrive.exe").VersionInfo.ProductVersion
 
-If (Test-Path -Path "$installDir\$onedriveversion") {
+If (Test-Path -Path "$InstallDir\$OnedriveVersion") {
     Write-Log -Message "Found OneDrive version folder '$OnedriveVersion' in '$InstallDir'. Copying ADMX templates to PolicyDefinitions."
-    $null = Get-ChildItem -Path "$installDir\$onedriveversion" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
-    $ADML = (get-childitem "$InstallDir\$OneDriveVersion" -file -filter '*.adml' -recurse | Where-object { $_.Directory -like '*adm' })
-    If ($null -ne $ADML) {
-        ForEach ($file in $ADML) {
-            $null = Copy-Item -Path $file.FullName -Destination "$env:Windir\PolicyDefinitions\en-us\" -Force
-        }
-    }
-    Else {
-        $null = Get-ChildItem -Path "$InstallDir\$OneDriveVersion" -Directory -Recurse | Where-Object { $_.Name -eq 'en-us' } | Get-ChildItem -File -recurse -filter '*.adml' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
-    }
+    $null = Get-ChildItem -Path "$InstallDir\$OnedriveVersion" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
+    $null = Get-ChildItem -Path "$InstallDir\$OnedriveVersion" -File -Recurse -Filter '*.adml' |
+        Where-Object { $_.Directory.Name -eq 'en-us' -or $_.Directory.Name -eq 'en' -or (Get-ChildItem -Path $_.DirectoryName -Filter '*.admx' -ErrorAction SilentlyContinue) } |
+        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
 }
 $Script:AdmxImported = Test-Path "$env:WINDIR\PolicyDefinitions\OneDrive.admx"
 
