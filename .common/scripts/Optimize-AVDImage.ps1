@@ -579,22 +579,44 @@ function Invoke-ApplyPolicyQueue {
         # in this call. Without this, a call that only updates one scope (e.g. Section 8
         # writes only user entries) would silently drop the other scope's extension name
         # from gpt.ini, causing the GP client on deployed VMs to skip that CSE entirely.
+        #
+        # Security CSE guard: if LGPO (DoD-STIGs) registered the Security Settings CSE
+        # ({827D319E...}) in gpt.ini but GptTmpl.inf does not exist, strip that CSE pair.
+        # Without this, deployed VMs log Event 8194 / 0x80070003 on every policy refresh.
+        $secCse      = '{827D319E-6EAC-11D2-A4EA-00C04F79F83A}'
+        $gptTmplPath = "$env:SystemRoot\System32\GroupPolicy\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf"
+        $gptTmplOk   = Test-Path $gptTmplPath
+
+        function Remove-OrphanedSecCse([string]$extNames) {
+            $escaped = [regex]::Escape($secCse)
+            $cleaned = $extNames -replace "\[$escaped\{[0-9A-Fa-f\-]+\}\]", ''
+            if ($cleaned -ne $extNames) {
+                Write-Log "  [WARN] gpt.ini: Security CSE stripped - GptTmpl.inf missing at '$gptTmplPath'."
+            }
+            return $cleaned
+        }
+
+        $machineExt = "[$regCse$machineAT]"
+        $userExt    = "[$regCse$userAT]"
+
         $finalMachineExt = if ($machineUpdated) {
-            $newExt = "[$regCse$machineAT]"
             if ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
                 $ev = $matches[1].Trim()
-                if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev }
-            } else { $newExt }
+                if (-not $gptTmplOk) { $ev = Remove-OrphanedSecCse $ev }
+                # Check for the exact pair - same CSE can appear with multiple snap-in GUIDs
+                if ($ev -notlike "*$machineExt*") { $ev + $machineExt } else { $ev }
+            } else { $machineExt }
         } elseif ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-            $matches[1].Trim()
+            $ev = $matches[1].Trim()
+            if (-not $gptTmplOk) { $ev = Remove-OrphanedSecCse $ev }
+            $ev
         } else { '' }
 
         $finalUserExt = if ($userUpdated) {
-            $newExt = "[$regCse$userAT]"
             if ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
                 $ev = $matches[1].Trim()
-                if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev }
-            } else { $newExt }
+                if ($ev -notlike "*$userExt*") { $ev + $userExt } else { $ev }
+            } else { $userExt }
         } elseif ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()
         } else { '' }
@@ -1406,20 +1428,14 @@ try {
         # Removed to avoid ungovernable Extra Registry Settings in gpresult.
 
         # -- Troubleshooting and Diagnostics (AT: Computer Configuration > System > Troubleshooting and Diagnostics) --
-        # NOTE: DPS (Diagnostic Policy Service) is disabled in Section 1, which makes
-        # all Windows diagnostic scenario execution non-functional regardless of these
-        # policy settings. These policies are applied per article guidance for completeness
-        # and to ensure the behavior is also enforced if DPS is ever re-enabled.
-        # Ref: Article local policy table - Troubleshooting and Diagnostics
+        # DPS is disabled in Section 1; these policies add belt-and-suspenders enforcement.
         # Disable Scheduled Maintenance automatic troubleshooting behavior
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScheduledDiagnostics' `
             -Name 'EnabledExecution' -Value 0
         # Prevent users from launching troubleshooting wizards from Control Panel
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnostics' `
             -Name 'EnableDiagnostics' -Value 0
-        # Prevent Windows from connecting to remote servers to get troubleshooting content
-        # (AT: Computer Configuration > System > Troubleshooting and Diagnostics > Scripted Diagnostics >
-        #  "Troubleshooting: Allow users to access online troubleshooting content ... from Microsoft")
+        # Prevent Windows from fetching troubleshooting content from Microsoft servers
         # BetterWhenConnected policy (sdiageng.admx) valueName=EnableQueryRemoteServer, disabledValue=0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnosticsProvider\Policy' `
             -Name 'EnableQueryRemoteServer' -Value 0

@@ -353,8 +353,14 @@ Function Reset-LocalPolicy {
         }
 
         if (-not $SkipGpUpdate) {
-            Write-Log -message "${CmdletName}: Forcing policy refresh (gpupdate /force)..."
-            $gp = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c gpupdate /force' -Wait -PassThru
+            # /target:computer limits processing to Machine-side policy only. During image
+            # build there is no real user session; running a full gpupdate causes the User-side
+            # Registry CSE to attempt to write STIG settings into HKCU paths that do not exist
+            # in the build context, producing Event 8194 / 0x80070003. User-side policies in
+            # GroupPolicy\User\Registry.pol are applied correctly when users log into deployed
+            # session hosts.
+            Write-Log -message "${CmdletName}: Forcing machine policy refresh (gpupdate /force /target:computer)..."
+            $gp = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c gpupdate /force /target:computer' -Wait -PassThru
             if ($gp.ExitCode -ne 0) {
                 Write-Log -Category Warning -Message "${CmdletName}: gpupdate returned non-zero exit code: $($gp.ExitCode)"
             }
@@ -663,8 +669,31 @@ ForEach ($gpoFolder in $GPOFolders) {
     }
     Write-Log -Message "Running 'LGPO.exe /g `"$gpoFolder`"'"
     $lgpo = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/g `"$gpoFolder`"" -Wait -PassThru
-    Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
-}
+    if ($lgpo.ExitCode -ne 0) {
+        Write-Log -Category Warning -Message "'lgpo.exe /g' exited with non-zero code [$($lgpo.ExitCode)] for folder '$gpoFolder'. Policy may be partially applied."
+    } else {
+        Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
+    }
+    # LGPO /g applies security settings by invoking the Security Settings CSE (scecli.dll)
+    # which commits the settings directly to secedit.sdb. It does NOT copy GptTmpl.inf to
+    # the GroupPolicy directory. Without the file present, every gpupdate on the build VM
+    # and on deployed session hosts will log Event 8194 / 0x80070003 because the Security
+    # Settings CSE is registered in gpt.ini but its backing file is absent.
+    # Fix: explicitly copy the already-modified GptTmpl.inf from the GPO folder to the
+    # GroupPolicy destination so gpupdate can process it cleanly.
+    if ($gpoFolder -match "DoD Windows $osVersion") {
+        $localGptTmplDir  = "$env:windir\System32\GroupPolicy\Machine\Microsoft\Windows NT\SecEdit"
+        $localGptTmplFile = "$localGptTmplDir\GptTmpl.inf"
+        if (-not (Test-Path $localGptTmplDir)) {
+            New-Item -Path $localGptTmplDir -ItemType Directory -Force | Out-Null
+        }
+        if ($SecEditFile -and (Test-Path $SecEditFile)) {
+            Copy-Item -Path $SecEditFile -Destination $localGptTmplFile -Force
+            Write-Log -Message "[GptTmpl] Copied modified GptTmpl.inf to '$localGptTmplFile' - required because LGPO applies security settings to secedit.sdb without writing GptTmpl.inf to the GroupPolicy directory. Without this copy the Security Settings CSE registered in gpt.ini has no backing file and logs Event 8194 / 0x80070003 on every gpupdate."
+        } else {
+            Write-Log -Category Warning -Message "[GptTmpl] Cannot copy GptTmpl.inf - source path is empty or not found ('$SecEditFile'). Event 8194 may occur on deployed session hosts."
+        }
+    }
 
 Write-Log -Message "Applying AVD Administrative Template-based Exceptions"
 # $LgpoTxtFile is defined here and passed to every Update-LocalGPOTextFile call
@@ -689,9 +718,7 @@ Write-Log -Message "[AdminTemplate] Deleting 'UseTPMKeyPIN' (V-253260) from HKLM
 Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseTPMKeyPIN' -Delete -OutputFile $LgpoTxtFile
 
 If (-not $IsDomainJoined) {
-    # Remove firewall and CAD settings that break non-domain-joined Remote Desktop.
-    Write-Log -Message "[AdminTemplate] Setting 'DisableCAD' to 0 in HKLM\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows - the STIG enables Ctrl+Alt+Del requirement; disabling it (0) is required for non-domain-joined AVD to allow Remote Desktop connections without a secure attention sequence prompt."
-    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Windows' -RegistryValue 'DisableCAD' -RegistryData '0' -RegistryType 'DWORD' -OutputFile $LgpoTxtFile
+    # Remove firewall settings that break non-domain-joined Remote Desktop.
     Write-Log -Message "[AdminTemplate] Deleting 'AllowLocalPolicyMerge' from DomainProfile, PrivateProfile, and PublicProfile firewall policies - the STIG blocks local firewall rule merging; on non-domain-joined AVD session hosts this prevents local firewall rules (including AVD agent rules) from being applied alongside GPO rules."
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PrivateProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
@@ -702,7 +729,8 @@ If (-not $IsDomainJoined) {
 Write-Log -Message "Applying AVD Exceptions registry overrides via lgpo.exe /t"
 $r = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/t `"$LgpoTxtFile`"" -Wait -PassThru
 Write-Log -Message "lgpo.exe /t exited with code [$($r.ExitCode)]"
-$GPUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/force' -Wait -PassThru
+# /target:computer - same reasoning as above: no real user session during image build.
+$GPUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/force /target:computer' -Wait -PassThru
 Write-Log -Message "'gpupdate.exe' exited with code [$($GPUpdate.ExitCode)])."
 
 # V-253289 MEDIUM: The Secondary Logon service must be disabled on Windows 11.
