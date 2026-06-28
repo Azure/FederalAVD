@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PowerShell script configures Microsoft Edge browser policies for Azure Virtual Desktop (AVD) environments using the Local Group Policy Object (LGPO) tool. It applies enterprise-grade security and usability settings tailored for government and highly regulated environments.
+This PowerShell script configures Microsoft Edge browser policies for Azure Virtual Desktop (AVD) environments using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe required. It applies enterprise-grade security and usability settings tailored for government and highly regulated environments.
 
 ## Purpose
 
@@ -16,10 +16,9 @@ This PowerShell script configures Microsoft Edge browser policies for Azure Virt
 
 ### `AllowDeveloperTools`
 
-- **Type:** String (Boolean)
-- **Default:** `'True'`
+- **Type:** Bool
+- **Default:** `$true`
 - **Description:** Enables or disables the Developer Tools (F12) in Microsoft Edge
-- **Values:** `'True'` or `'False'`
 
 ### `SmartScreenAllowListDomains`
 
@@ -46,7 +45,7 @@ This PowerShell script configures Microsoft Edge browser policies for Azure Virt
 ### Disable Developer Tools
 
 ```powershell
-.\Configure-EdgePolicy.ps1 -AllowDeveloperTools 'False'
+.\Configure-EdgePolicy.ps1 -AllowDeveloperTools $false
 ```
 
 ### Custom SmartScreen Allowlist
@@ -67,19 +66,14 @@ $popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
 
 ```powershell
 .\Configure-EdgePolicy.ps1 `
-    -AllowDeveloperTools 'False' `
+    -AllowDeveloperTools $false `
     -SmartScreenAllowListDomains '["portal.azure.us", "contoso.gov"]' `
     -PopupsAllowedForUrls '["[*.]mil", "[*.]gov"]'
 ```
 
 ## What the Script Does
 
-### 1. LGPO Tool Setup
-
-- Downloads LGPO.exe if not present in `C:\Windows\System32`
-- Extracts and copies to system directory
-
-### 2. Policy Configuration
+### 1. Policy Configuration
 
 #### Developer Tools
 
@@ -98,11 +92,11 @@ $popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
 - Critical for Azure portals and government websites
 - Uses wildcard patterns for domain matching
 
-### 3. Policy Application
+### 2. Policy Application
 
-- Creates LGPO text files with registry settings
-- Applies policies using LGPO.exe
-- Runs `gpupdate /force` to apply changes immediately
+- Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required
+- Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
+- `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
 
 ## Policy Settings Applied
 
@@ -182,9 +176,14 @@ Log entries include:
 | Function | Description |
 |----------|-------------|
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
-| `Invoke-LGPO` | Applies Group Policy settings using LGPO.exe |
 | `New-Log` | Initializes logging infrastructure |
-| `Update-LocalGPOTextFile` | Creates LGPO text files for policy settings |
+| `Remove-RegistryKey` | Removes a registry key |
+| `Remove-RegistryValue` | Removes a registry value |
+| `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
+| `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
+| `Clear-PolicyRegistryKeyValues` | Queues removal of all values under a registry key in Registry.pol |
+| `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
+| `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
 | `Write-Log` | Writes formatted log entries |
 
 ## Requirements
@@ -193,7 +192,7 @@ Log entries include:
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
 - **Microsoft Edge:** Chromium-based Edge (pre-installed on Windows 10/11)
-- **Network Access:** Required for downloading LGPO (unless using offline mode)
+- **Network Access:** Not required — policies are written directly to Registry.pol
 
 ## Offline Usage
 

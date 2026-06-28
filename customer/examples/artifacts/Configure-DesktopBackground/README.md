@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PowerShell script configures a custom desktop background image for Azure Virtual Desktop (AVD) session hosts. It uses the Local Group Policy Object (LGPO) tool to apply desktop wallpaper settings via Group Policy, with fallback support for WMI Bridge for CSP if LGPO.exe is unavailable.
+This PowerShell script configures a custom desktop background image for Azure Virtual Desktop (AVD) session hosts using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe and no internet access required.
 
 ## Purpose
 
@@ -25,17 +25,6 @@ This PowerShell script configures a custom desktop background image for Azure Vi
 
 **IMPORTANT:** You must replace the default `sunrise.jpg` file with your organization's custom desktop background image before deployment.
 
-### LGPO Tool
-
-**Online Mode:**
-
-- Script automatically downloads LGPO.zip from Microsoft
-
-**Offline/Air-Gapped Mode:**
-
-- Download: https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip
-- Place `LGPO.zip` in the same directory as this script
-
 ## Usage
 
 ### Basic Usage
@@ -57,24 +46,20 @@ Run directly on session hosts with Administrator privileges
 
 ## How It Works
 
-### 1. LGPO Tool Setup
+### 1. Background Image Configuration
 
-- Checks if `lgpo.exe` exists in `C:\Windows\System32`
-- If not found, downloads LGPO.zip from Microsoft
-- Extracts and copies LGPO.exe to system directory
+- Locates the first `.jpg` file in the script directory
+- Creates `C:\Windows\Web\Wallpaper\Custom\` if it does not exist
+- Copies the image to `C:\Windows\Web\Wallpaper\Custom\<filename>.jpg`
 
-### 2. Background Image Configuration
+### 2. Policy Application
 
-- Locates `.jpg` file in script directory
-- Copies image to `C:\Windows\Web\Wallpaper\Windows`
-- Creates LGPO text file with wallpaper policy settings
-
-### 3. Policy Application
-
-- Applies wallpaper settings using LGPO.exe
-- Sets wallpaper style (Fill, Fit, Stretch, Tile, Center, or Span)
-- Prevents users from changing wallpaper
-- Runs `gpupdate /force` to apply changes immediately
+- Writes three **User-scope** policy values directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required:
+  - `Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop` → `NoChangingWallPaper = 1` (prevents users from changing the wallpaper)
+  - `Software\Microsoft\Windows\CurrentVersion\Policies\System` → `Wallpaper = <path>` (path to the image)
+  - `Software\Microsoft\Windows\CurrentVersion\Policies\System` → `WallpaperStyle = 4` (Stretch)
+- Updates `gpt.ini` so the Group Policy client on deployed session hosts applies the entries at logon
+- `gpupdate` is not called; on deployed machines the GP client processes `Registry.pol` automatically at logon
 
 ## Desktop Background Requirements
 
@@ -112,15 +97,16 @@ The script sets the wallpaper style via Group Policy. The default style is appli
 ### Policy Settings Applied
 
 ```
-Computer Configuration
+User Configuration
 └── Administrative Templates
     └── Desktop
-        └── Desktop
-            ├── Desktop Wallpaper: [Enabled]
-            │   └── Wallpaper Name: C:\Windows\Web\Wallpaper\Windows\<image>.jpg
-            │   └── Wallpaper Style: Fill
-            └── Prevent changing desktop background: [Enabled]
+        ├── Prevent changing desktop background: [Enabled]
+        └── Desktop Wallpaper: [Enabled]
+            ├── Wallpaper Name: C:\Windows\Web\Wallpaper\Custom\<image>.jpg
+            └── Wallpaper Style: 4 (Stretch)
 ```
+
+WallpaperStyle values: 0=Center, 1=Tile, 2=Stretch, 4=Stretch (fill), 6=Fit, 10=Fill, 22=Span
 
 ## Logging
 
@@ -140,11 +126,9 @@ Log format includes:
 
 | Function | Description |
 |----------|-------------|
-| `Get-InternetFile` | Downloads files from URLs with progress tracking |
-| `Invoke-LGPO` | Applies Group Policy settings using LGPO.exe |
 | `New-Log` | Initializes logging infrastructure |
-| `Set-RegistryValue` | Creates or updates registry values |
-| `Update-LocalGPOTextFile` | Creates LGPO text files for policy settings |
+| `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
+| `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
 | `Write-Log` | Writes formatted log entries |
 
 ## Requirements
@@ -152,7 +136,7 @@ Log format includes:
 - **OS:** Windows 10 or Windows 11
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
-- **Network Access:** Required for downloading LGPO (unless using offline mode)
+- **Network Access:** Not required — no LGPO download; policies written directly to Registry.pol
 
 ## Files and Directories
 
@@ -161,15 +145,13 @@ Log format includes:
 ```
 Configure-DesktopBackground/
 ├── Set-DesktopBackground.ps1
-├── sunrise.jpg (Replace with your image)
-└── LGPO.zip (Optional, for offline deployment)
+└── sunrise.jpg (Replace with your image)
 ```
 
 ### System Locations
 
 ```
-C:\Windows\System32\lgpo.exe
-C:\Windows\Web\Wallpaper\Windows\<your-image>.jpg
+C:\Windows\Web\Wallpaper\Custom\<your-image>.jpg
 C:\Windows\System32\GroupPolicy\
 C:\Windows\Logs\Configuration\
 ```
@@ -180,11 +162,11 @@ C:\Windows\Logs\Configuration\
 
 **Issue:** Desktop background not applied
 
-- **Solution:** Run `gpupdate /force` manually; verify image path and permissions
+- **Solution:** Verify image file exists in script directory; check log for errors
 
-**Issue:** LGPO.exe not found
+**Issue:** No `.jpg` file found
 
-- **Solution:** Ensure internet connectivity or place LGPO.zip in script directory
+- **Solution:** Place your `.jpg` background image in the same directory as the script
 
 **Issue:** Image not displaying correctly
 
@@ -199,8 +181,8 @@ C:\Windows\Logs\Configuration\
 Check if policy was applied:
 
 ```powershell
-# Check registry value
-Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name Wallpaper
+# Check User registry.pol was written
+Test-Path "$env:SystemRoot\System32\GroupPolicy\User\Registry.pol"
 
 # Generate Group Policy report
 gpresult /h C:\Temp\gpresult.html
@@ -210,14 +192,12 @@ gpresult /h C:\Temp\gpresult.html
 
 1. **Test First:** Test desktop background on multiple monitor configurations
 2. **Image Optimization:** Compress images to reduce deployment size
-3. **Offline Readiness:** Include LGPO.zip in script directory for air-gapped environments
-4. **Naming Convention:** Use descriptive image names (e.g., `contoso-wallpaper-2025.jpg`)
-5. **Version Control:** Track wallpaper changes with versioned filenames
+3. **Naming Convention:** Use descriptive image names (e.g., `contoso-wallpaper-2025.jpg`)
+4. **Version Control:** Track wallpaper changes with versioned filenames
 
 ## References
 
 - [Microsoft Learn: Desktop Wallpaper Configuration](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11)
-- [LGPO Tool Documentation](https://techcommunity.microsoft.com/t5/microsoft-security-baselines/lgpo-exe-local-group-policy-object-utility-v1-0/ba-p/701045)
 - [AVD Customization Best Practices](https://learn.microsoft.com/en-us/azure/virtual-desktop/customize-session-host-configuration)
 
 ## Support

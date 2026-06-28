@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PowerShell script configures Windows Update policies for Azure Virtual Desktop environments using the Local Group Policy Object (LGPO) tool. It manages update behavior, defer periods, and installation schedules to optimize patching in AVD host pools.
+This PowerShell script configures Windows Update policies for Azure Virtual Desktop environments using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe required. It manages update behavior, defer periods, and installation schedules to optimize patching in AVD host pools.
 
 ## Purpose
 
@@ -16,11 +16,9 @@ This PowerShell script configures Windows Update policies for Azure Virtual Desk
 
 ### `DisableUpdates`
 
-- **Type:** String (Boolean)
-- **Default:** `"False"`
-- **Values:** `"True"` or `"False"`
-- **Description:** Disables automatic Windows Updates completely
-- **Recommendation:** `"True"` for image-based AVD deployments; `"False"` for persistent desktops
+- **Type:** Switch
+- **Description:** When specified, removes the Windows Update AU scheduled install configuration and defers, effectively disabling automatic update downloads and installations
+- **Recommendation:** Use for image-based AVD deployments where updates are applied to the master image instead
 
 ### `DeferQualityUpdatesPeriodInDays`
 
@@ -59,7 +57,7 @@ This PowerShell script configures Windows Update policies for Azure Virtual Desk
 ### Disable Updates Completely
 
 ```powershell
-.\Configure-WindowsUpdatePolicy.ps1 -DisableUpdates "True"
+.\Configure-WindowsUpdatePolicy.ps1 -DisableUpdates
 ```
 
 ### Defer Updates 7 Days, Install on Sunday at 3 AM
@@ -75,7 +73,6 @@ This PowerShell script configures Windows Update policies for Azure Virtual Desk
 
 ```powershell
 .\Configure-WindowsUpdatePolicy.ps1 `
-    -DisableUpdates "False" `
     -DeferQualityUpdatesPeriodInDays "14" `
     -ScheduledInstallDay "Saturday" `
     -ScheduledInstallTime "2"
@@ -84,17 +81,12 @@ This PowerShell script configures Windows Update policies for Azure Virtual Desk
 ### Image-Based Deployment
 
 ```powershell
-.\Configure-WindowsUpdatePolicy.ps1 -DisableUpdates "True"
+.\Configure-WindowsUpdatePolicy.ps1 -DisableUpdates
 ```
 
 ## What the Script Does
 
-### 1. LGPO Tool Setup
-
-- Downloads LGPO.exe if not present
-- Copies to `C:\Windows\System32`
-
-### 2. Windows Update Configuration
+### 1. Windows Update Configuration
 
 #### Disable Updates (if DisableUpdates = "True")
 
@@ -114,11 +106,11 @@ This PowerShell script configures Windows Update policies for Azure Virtual Desk
 - Sets installation time
 - Schedules system restarts if required
 
-### 3. Policy Application
+### 2. Policy Application
 
-- Creates LGPO text files with Windows Update registry settings
-- Applies policies using LGPO.exe
-- Runs `gpupdate /force` to apply changes immediately
+- Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required
+- Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
+- `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
 
 ## Policy Settings Applied
 
@@ -173,7 +165,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate
 **Settings:**
 
 ```powershell
--DisableUpdates "True"
+-DisableUpdates
 ```
 
 **Reason:** Updates applied to master image, not individual session hosts
@@ -267,22 +259,21 @@ C:\Windows\Logs\Configuration\Configure-WindowsUpdatePolicy-<timestamp>.log
 
 Log entries include:
 
-- LGPO tool download status
 - Policy application details
 - Registry value creation
 - Windows Update service status changes
-- gpupdate execution results
 
 ## Functions
 
 | Function | Description |
 |----------|-------------|
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
-| `Invoke-LGPO` | Applies Group Policy settings using LGPO.exe |
 | `New-Log` | Initializes logging infrastructure |
 | `Remove-RegistryValue` | Deletes registry values |
-| `Set-RegistryValue` | Creates or updates registry values |
-| `Update-LocalGPOTextFile` | Creates LGPO text files for policy settings |
+| `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
+| `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
+| `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
+| `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
 | `Write-Log` | Writes formatted log entries |
 
 ## Requirements
@@ -290,7 +281,7 @@ Log entries include:
 - **OS:** Windows 10 or Windows 11
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
-- **Network Access:** Required for downloading LGPO (unless using offline mode)
+- **Network Access:** Not required — policies are written directly to Registry.pol
 
 ## Troubleshooting
 
@@ -339,7 +330,6 @@ Get-WindowsUpdateLog
 - [Windows Update for Business](https://learn.microsoft.com/en-us/windows/deployment/update/waas-manage-updates-wufb)
 - [Configure Windows Update Policies](https://learn.microsoft.com/en-us/windows/deployment/update/waas-wu-settings)
 - [AVD Update Management](https://learn.microsoft.com/en-us/azure/virtual-desktop/configure-automatic-updates)
-- [LGPO Tool Documentation](https://techcommunity.microsoft.com/t5/microsoft-security-baselines/lgpo-exe-local-group-policy-object-utility-v1-0/ba-p/701045)
 
 ## Support
 
