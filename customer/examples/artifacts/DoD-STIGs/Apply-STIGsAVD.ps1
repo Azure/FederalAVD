@@ -694,6 +694,7 @@ ForEach ($gpoFolder in $GPOFolders) {
             Write-Log -Category Warning -Message "[GptTmpl] Cannot copy GptTmpl.inf - source path is empty or not found ('$SecEditFile'). Event 8194 may occur on deployed session hosts."
         }
     }
+}
 
 Write-Log -Message "Applying AVD Administrative Template-based Exceptions"
 # $LgpoTxtFile is defined here and passed to every Update-LocalGPOTextFile call

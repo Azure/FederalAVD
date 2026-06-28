@@ -720,22 +720,23 @@ function Invoke-PolicyUpdate {
         if ($userUpdated)    { $userVer++ }
         $version = ([uint32]$userVer -shl 16) -bor [uint32]$machineVer
 
-        $finalMachineExt = if ($machineUpdated) {
-            $newExt = "[$regCse$machineAT]"
-            if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-                $ev = $matches[1].Trim()
-                if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev }
-            } else { $newExt }
-        } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-            $matches[1].Trim()
-        } else { '' }
+$machineExt = "[$regCse$machineAT]"
+          $userExt   = "[$regCse$userAT]"
 
-        $finalUserExt = if ($userUpdated) {
-            $newExt = "[$regCse$userAT]"
-            if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
-                $ev = $matches[1].Trim()
-                if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev }
-            } else { $newExt }
+          $finalMachineExt = if ($machineUpdated) {
+              if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+                  $ev = $matches[1].Trim()
+                  if ($ev -notlike "*$machineExt*") { $ev + $machineExt } else { $ev }
+              } else { $machineExt }
+          } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+              $matches[1].Trim()
+          } else { '' }
+  
+          $finalUserExt = if ($userUpdated) {
+              if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+                  $ev = $matches[1].Trim()
+                  if ($ev -notlike "*$userExt*") { $ev + $userExt } else { $ev }
+              } else { $userExt }
         } elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()
         } else { '' }
