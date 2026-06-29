@@ -255,14 +255,19 @@ scheduled tasks, autologgers, and optional Windows features.
 
 When `true`, applies additional settings for environments with no outbound internet access (Section 7):
 
-- **SmartScreen** disabled (Explorer + Edge) — cloud lookups time out in air-gapped networks causing
-  10–30 second delays on every exe launch and URL navigation
-- **Online font providers** disabled — prevents outbound calls to Microsoft font CDN
-- **Teredo IPv6** disabled — no internet-facing IPv6 tunnel needed in VDI
-- **Windows Error Reporting** policy disabled — WER upload attempts time out against unreachable Watson endpoints
-- **DiagTrack** (Connected User Experiences and Telemetry) service disabled — continuous telemetry upload
-  attempts fail and consume threads in restricted networks (service already disabled for NonPersistent;
-  this covers Persistent+AirGapped)
+| Setting | ADMX source | Rationale |
+|---|---|---|
+| **SmartScreen** disabled (Explorer + Edge) | `SmartScreen.admx` | Cloud lookups time out, causing 10–30 s delays on every exe launch and URL navigation |
+| **Online font providers** disabled | `ICM.admx` | Prevents outbound calls to Microsoft font CDN |
+| **Teredo IPv6** disabled | `TCPIP.admx` | No internet-facing IPv6 tunnel needed in VDI |
+| **Defender cloud protection** (MAPS/BAFS) disabled | `WindowsDefender.admx` | Cloud lookups time out; SpynetReporting=0, SubmitSamplesConsent=2, DisableBlockAtFirstSeen=1 |
+| **Windows Error Reporting** policy disabled | `WindowsErrorReporting.admx` | Watson upload attempts time out in restricted networks (WerSvc also disabled for NonPersistent in Section 2) |
+| **DiagTrack** service disabled | — | Continuous telemetry upload attempts fail (already disabled for NonPersistent in Section 2; this covers Persistent+AirGapped) |
+| **OneSettings downloads** disabled | `DataCollection.admx` | Prevents DiagTrack from pulling dynamic telemetry config from Microsoft |
+| **Cross-device clipboard** disabled | `OSPolicy.admx` | Stops clipboard sync to Microsoft cloud |
+| **News and Interests / Widgets** disabled | `NewsAndInterests.admx` | Stops widget panel polling Microsoft news endpoints |
+| **Settings sync** disabled | `SettingSync.admx` | Stops cloud sync of Windows settings; competes with FSLogix as a second source of truth for profile state |
+| **Activity history upload** disabled | `OSPolicy.admx` | Stops upload to `activity.windows.com`; local feed (recent files, Jump Lists via FSLogix) is preserved |
 
 Applies independently of `-OptimizationProfile`, including when profile is `None`.
 

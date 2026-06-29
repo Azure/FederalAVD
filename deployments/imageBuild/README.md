@@ -301,7 +301,7 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** When `true`, applies settings for air-gapped or internet-restricted environments: disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and DiagTrack telemetry. Applies independently of `vdiOptimizationProfile`, including when profile is `None`. Recommended for air-gapped or proxy-only government deployments. See [Optimize-AVDImage.ps1 — Air-Gapped Mode](../../.common/scripts/README.md#air-gapped-mode--airgapped) for full details.
+- **Description:** When `true`, applies settings for air-gapped or internet-restricted environments: disables SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, and activity history uploads. Applies independently of `vdiOptimizationProfile`, including when profile is `None`. Recommended for air-gapped or proxy-only government deployments. See [Optimize-AVDImage.ps1 — Air-Gapped Mode](../../.common/scripts/README.md#air-gapped-mode--airgapped) for full details.
 
 ### Image Customizations - AppX Removal
 

@@ -239,18 +239,18 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 
 ### VDI Optimization
 
-The `vdiOptimizationProfile` parameter controls which optimization sections `Optimize-AVDImage.ps1` applies to the image. The `vdiOptimizationRestrictInternet` parameter operates independently and can be combined with any profile.
+The `vdiOptimizationProfile` parameter controls which optimization sections `Optimize-AVDImage.ps1` applies to the image. The `vdiOptimizationAirGapped` parameter operates independently and can be combined with any profile.
 
 | Profile | What it does | When to use |
 |---|---|---|
 | `NonPersistent-Full` **(default)** | Full VDI optimization: disables services, scheduled tasks, registry policies, autologgers, and optional Windows features with no VDI value. Also locks down all software update channels. | Pooled host pools replaced on a monthly cadence |
 | `NonPersistent-UpdatesOnly` | Locks down software update channels only (OS, M365, Teams, OneDrive, Edge, WebView2, Store). Skips all other service/task/registry changes. | When you manage other VDI hardening via a separate tool (e.g., LGPO, CIS tooling) |
 | `Persistent` | Full optimization minus update-channel lockdown. Update channels remain intact for SCCM/Intune. | Personal (persistent) host pools |
-| `None` | No optimization applied. Only `vdiOptimizationRestrictInternet` takes effect. | When optimization is handled entirely outside this template |
+| `None` | No optimization applied. Only `vdiOptimizationAirGapped` takes effect. | When optimization is handled entirely outside this template |
 
-**`vdiOptimizationRestrictInternet`:** When `true`, disables NCSI passive polling, online font providers, Teredo IPv6, and WiFi autologgers. Recommended for air-gapped or proxy-only government deployments. Applies regardless of the selected profile.
+**`vdiOptimizationAirGapped`:** When `true`, disables Windows components that make outbound calls to Microsoft cloud services: SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, and activity history uploads. Recommended for air-gapped or proxy-only government deployments. Applies regardless of the selected profile.
 
-> For the full list of what each section enables/disables, deliberate deviations from the Microsoft VDI guide, and rationale, see the script header in [`.common/scripts/Optimize-AVDImage.ps1`](../.common/scripts/Optimize-AVDImage.ps1).
+> For the full list of settings, deliberate deviations from the Microsoft VDI guide, and rationale, see [`.common/scripts/README.md — Optimize-AVDImage.ps1`](../.common/scripts/README.md#optimize-avdimageps1).
 
 Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
