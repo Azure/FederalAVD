@@ -233,17 +233,59 @@ Runs Windows Update during image build process.
 
 #### [Optimize-AVDImage.ps1](Optimize-AVDImage.ps1)
 
-Consolidated VDI image optimization script. Disables unnecessary services, scheduled tasks, autologgers, and optional Windows features; applies registry and Group Policy settings via LGPO.exe (with direct registry fallback); and configures default user profile settings.
+Applies VDI performance and resource optimizations to a Windows image for AVD deployment. Writes
+Group Policy settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe
+or internet access required. Configures default user profile settings, disables unnecessary services,
+scheduled tasks, autologgers, and optional Windows features.
 
 - **Used by:** Image Management
-- **Parameters:** OptimizationProfile (`NonPersistent-Full`, `NonPersistent-UpdatesOnly`, `Persistent`), RestrictInternet
-- **Features:**
-  - Tiered optimization profile system (all-VDI vs NonPersistent-only sections)
-  - LGPO.exe integration for policy application with automatic download fallback
-  - Registry fallback when LGPO fails so no policy values are silently lost
-  - Default user hive mounting for per-user policy defaults
-  - Optional internet restriction settings
+- **Parameters:** `OptimizationProfile`, `AirGapped`
 - **Output:** `C:\Windows\Logs\Optimize-AVDImage.log`
+
+##### Optimization Profiles (`-OptimizationProfile`)
+
+| Value | Behavior |
+|---|---|
+| `None` | No optimization. Only `-AirGapped` takes effect when `None`. |
+| `NonPersistent-UpdatesOnly` | Locks down all software update channels only (Sections 2, 4, 6): OS, M365, Teams, OneDrive, Edge, WebView2, Store. |
+| `NonPersistent-Full` | Full optimization for pooled AVD host pools replaced on a regular cadence. |
+| `Persistent` | Full optimization minus update-channel lockdown. Update channels remain intact for SCCM/Intune. |
+
+##### Air-Gapped Mode (`-AirGapped`)
+
+When `true`, applies additional settings for environments with no outbound internet access (Section 7):
+
+- **SmartScreen** disabled (Explorer + Edge) — cloud lookups time out in air-gapped networks causing
+  10–30 second delays on every exe launch and URL navigation
+- **Online font providers** disabled — prevents outbound calls to Microsoft font CDN
+- **Teredo IPv6** disabled — no internet-facing IPv6 tunnel needed in VDI
+- **Windows Error Reporting** policy disabled — WER upload attempts time out against unreachable Watson endpoints
+- **DiagTrack** (Connected User Experiences and Telemetry) service disabled — continuous telemetry upload
+  attempts fail and consume threads in restricted networks (service already disabled for NonPersistent;
+  this covers Persistent+AirGapped)
+
+Applies independently of `-OptimizationProfile`, including when profile is `None`.
+
+##### Policy Registry Audit (W11 25H2)
+
+All policy paths and value names are ADMX-backed, verified against `C:\Windows\PolicyDefinitions`
+on Windows 11 25H2. Settings appear under **Administrative Templates** in `gpresult` output rather
+than Extra Registry Settings. `gpupdate` is intentionally **not** called during image build — the
+build VM is about to be sysprepped. Policies take effect on deployed session hosts at first boot.
+
+**Exception:** `NetworkList\Signatures\EveryNetwork\CategoryReadOnly` has no ADMX backing by
+design (it is a Security Settings value) and is written via direct registry.
+
+##### Deliberate Deviations from the Microsoft VDI Optimization Article
+
+| Item | Article Recommendation | What This Script Does | Reason |
+|---|---|---|---|
+| **Storage Sense** | Disable | Enable and configure | FSLogix + OneDrive Files On-Demand caches files in the profile container. Without dehydration the container grows monotonically. Storage Sense is configured to dehydrate cloud content not opened in 30 days and clean temp files. |
+| **WSearch** | Evaluate / disable | Leave at default (Manual) | Disabling breaks Outlook and File Explorer search for all users for the entire VM lifetime. The OS search index persists across the VM's full lifecycle and the FSLogix Outlook search index lives in the profile container. |
+| **InstallService** | Disable on NonPersistent | Leave at default (Manual) | Disabling causes WinAppSDK-based apps (Sticky Notes, Snipping Tool) to show a "needs an update" error at first launch, including on air-gapped networks. |
+| **OneSyncSvc** | Not listed / candidate | Leave at default | Re-syncs Exchange mail, contacts, and calendar at session start. UWP app data is excluded from FSLogix containers so there is no cached state to fall back on — disabling leaves Mail and Calendar empty. |
+| **DPS / DiagSvc / WdiSystemHost** | Disable | NonPersistent only | On Persistent VMs these back the end-user Troubleshoot/Diagnose UX in Settings. Disabling on long-lived desktops breaks self-service diagnostics. |
+| **RegIdleBackup / SilentCleanup** | Disable | Retain | Registry hive backups enable mid-lifecycle corruption recovery. SilentCleanup only triggers on low disk space — both have operational value across the VM's monthly lifetime. |
 
 #### [Check-CbsState.ps1](Check-CbsState.ps1)
 

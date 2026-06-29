@@ -102,7 +102,7 @@ param teamsCloudType string = 'Commercial'
     cadence). All sections applied including update-channel lockdown.
   Persistent - Full optimization minus update-channel lockdown. Use for personal host pools
     managed by SCCM, Intune, or similar tooling.
-  None - Skip optimization. Only vdiOptimizationRestrictInternet takes effect when None.
+  None - Skip optimization. Only vdiOptimizationAirGapped takes effect when None.
 
 This replaces the former applyWindowsDesktopOptimizations + disableSoftwareUpdates parameters.
 Ref: https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration
@@ -115,12 +115,13 @@ Ref: https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-serv
 ])
 param vdiOptimizationProfile string = 'NonPersistent-Full'
 
-@description('''When true, restricts outbound internet traffic: NCSI passive polling, online font
-providers, Teredo IPv6 transition, and WiFi autologgers are disabled (Section 7 of
-Optimize-AVDImage.ps1). Applies independently of vdiOptimizationProfile, including
-when profile is None. Recommended for air-gapped or proxy-only government deployments.
+@description('''When true, applies settings for air-gapped or internet-restricted environments:
+disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and
+DiagTrack telemetry (Section 7 of Optimize-AVDImage.ps1). Applies independently of
+vdiOptimizationProfile, including when profile is None. Recommended for air-gapped or
+proxy-only government deployments.
 ''')
-param vdiOptimizationRestrictInternet bool = false
+param vdiOptimizationAirGapped bool = false
 
 @description('''An array of image customization objects that are executed first before any restarts or updates.
 Each object contains the following properties:
@@ -713,7 +714,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     installOneDrive: installOneDrive
     installTeams: installTeams
     vdiOptimizationProfile: vdiOptimizationProfile
-    vdiOptimizationRestrictInternet: vdiOptimizationRestrictInternet
+    vdiOptimizationAirGapped: vdiOptimizationAirGapped
     userAssignedIdentityClientId: empty(imageBuildResourceGroupId)
       ? ''
       : existingUserAssignedIdentity!.properties.clientId

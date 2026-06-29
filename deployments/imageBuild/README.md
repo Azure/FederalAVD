@@ -288,7 +288,7 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 
 | Value | Behavior |
 |---|---|
-| `None` | No optimization. Only `vdiOptimizationRestrictInternet` takes effect. |
+| `None` | No optimization. Only `vdiOptimizationAirGapped` takes effect. |
 | `NonPersistent-UpdatesOnly` | Locks down software update channels only (OS, M365, Teams, OneDrive, Edge, WebView2, Store). Use when you manage other VDI hardening separately. |
 | `NonPersistent-Full` | Full VDI optimization for pooled host pools (VMs replaced on a regular cadence). All optimization sections applied, including update-channel lockdown. |
 | `Persistent` | Full optimization minus update-channel lockdown. Use for personal host pools managed by SCCM, Intune, or similar tooling. |
@@ -297,11 +297,11 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 
 Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
-#### `vdiOptimizationRestrictInternet`
+#### `vdiOptimizationAirGapped`
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** When `true`, restricts outbound internet traffic: NCSI passive polling, online font providers, Teredo IPv6 transition, and WiFi autologgers are disabled. Applies independently of `vdiOptimizationProfile`, including when profile is `None`. Recommended for air-gapped or proxy-only government deployments.
+- **Description:** When `true`, applies settings for air-gapped or internet-restricted environments: disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and DiagTrack telemetry. Applies independently of `vdiOptimizationProfile`, including when profile is `None`. Recommended for air-gapped or proxy-only government deployments. See [Optimize-AVDImage.ps1 — Air-Gapped Mode](../../.common/scripts/README.md#air-gapped-mode--airgapped) for full details.
 
 ### Image Customizations - AppX Removal
 

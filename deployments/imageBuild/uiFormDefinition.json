@@ -393,7 +393,7 @@
                                     "visible": true,
                                     "options": {
                                         "style": "Info",
-                                        "text": "Select a User Assigned Identity to attach to the build VMs. A UAI is required when using an existing resource group or when storage features (zero-trust artifacts or log collection) are enabled. This deployment grants no storage or resource group roles — all required permissions must be pre-granted: 'Virtual Machine Contributor' on the image build resource group (existing RG only), 'Storage Blob Data Reader' on the artifacts storage account (if zero-trust storage is enabled), and 'Storage Blob Data Contributor' on the logs storage account (if log collection is enabled). When creating a new resource group without storage features, the UAI is optional — one will be auto-created and granted VM Contributor. The managed identity output from the imageManagement deployment satisfies all requirements when configured correctly."
+                                        "text": "Required when using an existing resource group or when storage features (zero-trust artifacts or log collection) are enabled. All required roles must be pre-granted before deployment — this deployment grants none. The managed identity from the imageManagement deployment satisfies all requirements when configured correctly."
                                     }
                                 },
                                 {
@@ -1375,19 +1375,19 @@
                                     "visible": true
                                 },
                                 {
-                                    "name": "vdiOptimizationRestrictInternetInfo",
+                                    "name": "vdiOptimizationAirGappedInfo",
                                     "type": "Microsoft.Common.InfoBox",
                                     "visible": true,
                                     "options": {
                                         "style": "Info",
-                                        "text": "Restrict Outbound Internet Traffic applies independently of the profile above, including when profile is None. Recommended for air-gapped or proxy-only government environments."
+                                        "text": "Air-Gapped Mode applies independently of the profile above, including when profile is None. Recommended for air-gapped or proxy-only government environments with no outbound internet access."
                                     }
                                 },
                                 {
-                                    "name": "vdiOptimizationRestrictInternet",
+                                    "name": "vdiOptimizationAirGapped",
                                     "type": "Microsoft.Common.CheckBox",
-                                    "label": "Restrict outbound internet traffic",
-                                    "toolTip": "Disables NCSI passive polling, online font providers, Teredo IPv6 transition, and WiFi autologgers. Applies independently of the optimization profile, including when profile is None.",
+                                    "label": "Air-gapped / restricted network",
+                                    "toolTip": "Disables Windows components that make outbound calls to Microsoft cloud services: online font providers, Teredo IPv6, SmartScreen (Explorer + Edge), Defender cloud lookups (MAPS/BAFS), WER Watson uploads, DiagTrack telemetry, OneSettings dynamic config, cross-device clipboard, News and Interests widgets, settings sync, and activity history uploads.",
                                     "visible": true
                                 }
                             ]
@@ -2202,7 +2202,7 @@
                 "teamsCloudType": "[if(steps('imageCustomizations').office.installTeams, steps('imageCustomizations').office.teamsCloudType, 'Commercial')]",
                 "appsToRemove": "[steps('imageCustomizations').customizations.appsToRemove]",
                 "vdiOptimizationProfile": "[steps('imageCustomizations').vdiOptimizations.vdiOptimizationProfile]",
-                "vdiOptimizationRestrictInternet": "[steps('imageCustomizations').vdiOptimizations.vdiOptimizationRestrictInternet]",
+                "vdiOptimizationAirGapped": "[steps('imageCustomizations').vdiOptimizations.vdiOptimizationAirGapped]",
                 "cleanupDesktop": "[steps('imageCustomizations').customizations.cleanupDesktop]",
                 "installUpdates": "[steps('imageCustomizations').updates.installUpdates]",
                 "updateService": "[steps('imageCustomizations').updates.updateService]",

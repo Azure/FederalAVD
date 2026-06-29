@@ -45,9 +45,9 @@
       - Optional features      : remove Windows components not needed in VDI
 
     Optimization profiles (-OptimizationProfile):
-      None                     - No optimization. When -RestrictInternet is also false
+      None                     - No optimization. When -AirGapped is also false
                                  the script logs and exits cleanly. When true, only
-                                 the restricted traffic settings (Section 7) are applied.
+                                 the air-gapped settings (Section 7) are applied.
       NonPersistent-UpdatesOnly - Locks down all software update channels only (Sections
                                  2, 4, 6): OS, M365, Teams, OneDrive, Edge, WebView2,
                                  Store. Use when you manage other VDI hardening separately.
@@ -56,21 +56,18 @@
       Persistent               - Full optimization minus update-channel lockdown. Update
                                  channels remain intact for SCCM, Intune, or similar.
 
-    Restricted internet traffic (-RestrictInternet):
-      When true, disables NCSI passive polling, online font providers, Teredo IPv6,
-      and WiFi autologgers (Section 7). Applies independently of -OptimizationProfile,
-      including when profile is None. Default is false.
+    Air-gapped / restricted network (-AirGapped):
+      When true, applies settings for environments with no outbound internet access:
+      disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER
+      uploads, and DiagTrack telemetry (Section 7). Applies independently of
+      -OptimizationProfile, including when profile is None. Default is false.
 
     Policy registry audit (W11 25H2):
-      All local policy registry values written by this script have been cross-checked
-      against the Windows 11 25H2 ADMX definitions in C:\Windows\PolicyDefinitions and
-      against LGPO.exe text-format exports from gpedit.msc. Every policy path and value
-      name is confirmed to be backed by a current ADMX file so that gpresult shows the
-      settings under Administrative Templates rather than Extra Registry Settings.
-      LGPO.exe supports MULTISZ type; multi-string policy values (AppPrivacy companions,
-      CellularDataAccess companions) are written through LGPO using the MULTISZ: format.
-      Exception: NetworkList\Signatures\EveryNetwork\CategoryReadOnly is a Security
-      Settings value with no ADMX backing by design; it is written via direct registry.
+      All policy paths and value names are ADMX-backed (verified against W11 25H2
+      C:\Windows\PolicyDefinitions) so gpresult shows them under Administrative Templates.
+      MULTISZ values use [Microsoft.Win32.RegistryValueKind]::MultiString.
+      Exception: NetworkList\Signatures\EveryNetwork\CategoryReadOnly has no ADMX backing
+      by design and is written via direct registry.
 
     Deliberate deviations from the VDI article [1]:
 
@@ -116,22 +113,24 @@
 .PARAMETER OptimizationProfile
     The optimization profile to apply. See the .DESCRIPTION for full details.
 
-      None                     - No optimization; only -RestrictInternet takes effect.
+      None                     - No optimization; only -AirGapped takes effect.
       NonPersistent-UpdatesOnly - Lock down update channels only (OS, M365, Teams,
                                  OneDrive, Edge, WebView2, Store).
       NonPersistent-Full       - Full optimization for pooled AVD host pools.
       Persistent               - Full optimization minus update-channel lockdown.
 
-.PARAMETER RestrictInternet
-    When true, restricts outbound network traffic (NCSI, font providers, Teredo, WiFi
-    autologgers). Applies to all profiles, including None. Default is false.
+.PARAMETER AirGapped
+    When true, applies settings for air-gapped or internet-restricted environments:
+    disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER
+    uploads, and DiagTrack telemetry (Section 7). Applies to all profiles, including
+    None. Default is false.
 
 .EXAMPLE
     .\Optimize-AVDImage.ps1 -OptimizationProfile NonPersistent-Full
     Full optimization for a pooled AVD image. Internet traffic not restricted.
 
 .EXAMPLE
-    .\Optimize-AVDImage.ps1 -OptimizationProfile NonPersistent-Full -RestrictInternet $true
+    .\Optimize-AVDImage.ps1 -OptimizationProfile NonPersistent-Full -AirGapped $true
     Full optimization for a pooled image in an air-gapped or restricted environment.
 
 .EXAMPLE
@@ -139,12 +138,12 @@
     Lock down update channels only. Combine with your own optimization tooling.
 
 .EXAMPLE
-    .\Optimize-AVDImage.ps1 -OptimizationProfile Persistent -RestrictInternet $true
+    .\Optimize-AVDImage.ps1 -OptimizationProfile Persistent -AirGapped $true
     Personal host pool in a restricted network environment.
 
 .EXAMPLE
-    .\Optimize-AVDImage.ps1 -OptimizationProfile None -RestrictInternet $true
-    Restrict internet traffic only; skip all other optimization.
+    .\Optimize-AVDImage.ps1 -OptimizationProfile None -AirGapped $true
+    Apply air-gapped settings only; skip all other optimization.
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -154,13 +153,13 @@ param(
     # Accepts bool or string ('true'/'false'/'1'/'0') - Azure RunCommand passes all
     # parameters as strings, so [bool] would reject 'false' with a type error.
     [Parameter(Mandatory = $false)]
-    [string]$RestrictInternet = 'false'
+    [string]$AirGapped = 'false'
 )
 
 $ErrorActionPreference = 'Stop'
 
 $LogFile = "$env:SystemRoot\Logs\Optimize-AVDImage.log"
-$RestrictInternetBool = $RestrictInternet -in @('true', '1', 'yes')
+$AirGappedBool = $AirGapped -in @('true', '1', 'yes')
 $RunFullOptimization = $OptimizationProfile -in @('NonPersistent-Full', 'Persistent')
 $RunNonPersistentSections = $OptimizationProfile -in @('NonPersistent-UpdatesOnly', 'NonPersistent-Full')
 
@@ -538,10 +537,6 @@ function Invoke-ApplyPolicyQueue {
     Write-Log "  [OK]   Registry.pol direct write applied $entryCount policy values total"
 
     # Write gpt.ini so the GP Client on deployed VMs knows Registry.pol has content.
-    # gpupdate is intentionally NOT called - this is an image build VM; policies do not
-    # need to be live and running gpupdate before sysprep can cause CSE side effects.
-    # Registry CSE: {35378EAC-683F-11D2-A89A-00C04FBBCFA2}
-    # Machine AT:   {D02B1F72-3407-48AE-BA88-E8213C6761F1}  User AT: {D02B1F73...}
     try {
         $gptPath  = "$env:SystemRoot\System32\GroupPolicy\gpt.ini"
         $regCse   = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
@@ -617,7 +612,7 @@ try {
     Write-Log "  Optimize-AVDImage"
     Write-Log "============================================================"
     Write-Log "  Profile         : $OptimizationProfile"
-    Write-Log "  RestrictInternet: $RestrictInternetBool"
+    Write-Log "  AirGapped       : $AirGappedBool"
     Write-Log "  OS              : $([System.Environment]::OSVersion.VersionString)"
     Write-Log "  Timestamp       : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     Write-Log "============================================================"
@@ -694,8 +689,6 @@ try {
         Disable-VdiService -Name 'SEMgrSvc' -DisplayName 'Payments and NFC/SE Manager'
         # SMS Router Service - no SMS infrastructure in enterprise VDI
         Disable-VdiService -Name 'SmsRouter' -DisplayName 'Microsoft Windows SMS Router Service'
-        # WerSvc -- not disabled here; moved to Section 2 (NonPersistent only) because
-        # WER diagnostics have carry-over value on Persistent long-lived desktops.
         # Xbox Live Auth Manager
         Disable-VdiService -Name 'XblAuthManager' -DisplayName 'Xbox Live Auth Manager'
         # Xbox Live Game Save
@@ -746,8 +739,6 @@ try {
         # Edge Update services - Edge is updated via image on NonPersistent; SCCM/Intune manages on Persistent
         Disable-VdiService -Name 'edgeupdate' -DisplayName 'Microsoft Edge Update Service'
         Disable-VdiService -Name 'edgeupdatem' -DisplayName 'Microsoft Edge Update Service (Manual Trigger)'
-        # Windows Error Reporting - transient VMs discard crash state at recycle; WER has no value here
-        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
 
         Write-Log ""
     }
@@ -1019,7 +1010,7 @@ try {
         Set-PolicyValue -Path $searchPath -Name 'AllowSearchToUseLocation' -Value 0
         Set-PolicyValue -Path $searchPath -Name 'DisableWebSearch' -Value 1
         Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchUseWeb' -Value 0
-        Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchPrivacy' -Value 3  # 3 = Strict: don't share any info
+        Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchPrivacy' -Value 3  # 1=UserInfoAndLocation, 2=UserInfoOnly, 3=AnonymousInfoOnly (most restrictive)
         Set-PolicyValue -Path $searchPath -Name 'PreventIndexingOfflineFiles' -Value 1
         Set-PolicyValue -Path $searchPath -Name 'PreventIndexingUncachedExchangeFolders' -Value 1
         # RichAttachmentPreviews: restrict which file types get rich preview in search results
@@ -1281,11 +1272,8 @@ try {
             -Name 'PreventHandwritingDataSharing' -Value 1
 
         # -- Software Protection Platform (AT: Computer Configuration > Windows Components > Software Protection Platform) --
-        # NoAcquireGT policy (AVSValidationGP.admx): prevents Windows from contacting Microsoft's
-        # activation servers to acquire a grace ticket. Correct standalone ADMX-backed policy.
-        # NOTE: ICM.admx also writes NoGenTicket as a side-effect item in its composite
-        # RestrictCommunication disabledList, but AVSValidationGP.admx provides the standalone
-        # policy entry that gpresult resolves to Administrative Templates (not Extra Registry Settings).
+        # NoAcquireGT policy (AVSValidationGP.admx): prevents contacting Microsoft activation
+        # servers to acquire a grace ticket. ADMX-backed standalone policy.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform' `
             -Name 'NoGenTicket' -Value 1
 
@@ -1347,9 +1335,8 @@ try {
         # -- Internet Communication Management (AT: Computer Configuration > Windows Components > Internet Communication Management > Internet Communication settings) --
         # Disables Windows shell components that make outbound calls to Microsoft web services.
         # Ref: Article local policy table - Internet Communication Management
-        # ICM.admx is present in W11 25H2 PolicyDefinitions and loads correctly in gpedit.
-        # All values below have standalone <policy> entries in ICM.admx and will appear under
-        # Administrative Templates in gpresult, not as Extra Registry Settings.
+        # All values below are ADMX-backed via ICM.admx (W11 25H2) and appear under
+        # Administrative Templates in gpresult.
         $legacyExplorer = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
         # Turn off Internet download for Web publishing and online ordering wizards
         Set-PolicyValue -Path $legacyExplorer -Name 'NoPublishingWizard' -Value 1
@@ -1373,9 +1360,8 @@ try {
             -Name 'MicrosoftKBSearch' -Value 0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\PCHealth\ErrorReporting' `
             -Name 'DoReport' -Value 0
-        # Turn off Windows Customer Experience Improvement Program (AT: Computer Configuration > Windows Components > Windows Customer Experience Improvement Program)
-        # (belt-and-suspenders: AllowTelemetry in Section 5 and the Consolidator/UsbCeip
-        #  tasks in Section 3 already suppress CEIP data collection)
+        # Turn off Windows CEIP (AT: Computer Configuration > Windows Components > Windows Customer Experience Improvement Program)
+        # Belt-and-suspenders: AllowTelemetry (Section 5) and Consolidator/UsbCeip tasks (Section 3) already suppress this.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\SQMClient\Windows' `
             -Name 'CEIPEnable' -Value 0
 
@@ -1392,14 +1378,10 @@ try {
             -Name 'DisableLockScreenAppNotifications' -Value 1
 
         # -- Peer-to-Peer networking --
-        # NOTE: Peernet\Disabled is backed by Peernet.admx which was removed from Windows 11
-        # PolicyDefinitions entirely. Removed to avoid ungovernable Extra Registry Settings.
+        # NOTE: Peernet\Disabled has no ADMX backing on W11; omitted.
 
         # -- Online Assistance --
-        # NOTE: NoOnlineAssist and NoImplicitFeedback are backed only by ICM.admx, whose parent
-        # category (InternetManagement) was removed from Windows.admx in Windows 11. ICM.admx
-        # cannot load in gpedit on W11 and these values have no standalone ADMX policy.
-        # Removed to avoid ungovernable Extra Registry Settings in gpresult.
+        # NOTE: NoOnlineAssist / NoImplicitFeedback have no ADMX backing on W11; omitted.
 
         # -- Troubleshooting and Diagnostics (AT: Computer Configuration > System > Troubleshooting and Diagnostics) --
         # DPS is disabled in Section 1; these policies add belt-and-suspenders enforcement.
@@ -1693,48 +1675,77 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    # SECTION 7 - Restricted Internet Traffic Settings
-    # Applied when -RestrictInternet is true. Reduces outbound network traffic
-    # for air-gapped or proxy-only environments. Applies to all profiles,
+    # SECTION 7 - Air-Gapped / Restricted Network Settings
+    # Applied when -AirGapped is true. Disables Windows components that make
+    # outbound calls to Microsoft cloud services, causing timeouts and latency
+    # in environments with no internet access. Applies to all profiles,
     # including None.
     # Ref: [2] Windows Restricted Traffic Baseline
     # -----------------------------------------------------------------------
-    if ($RestrictInternetBool) {
-        Write-Log "--- Section 7: Restricted Internet Traffic ---"
+    if ($AirGappedBool) {
+        Write-Log "--- Section 7: Air-Gapped / Restricted Network Settings ---"
 
-        # NCSI passive polling
-        # DISABLED: DisablePassivePolling causes Windows to stop probing network state, which
-        # makes the OS report "Unidentified Network / No Internet Access" even when the network
-        # is fully functional. Applications using Windows Network Awareness APIs (WinHTTP,
-        # WinINet, Outlook, proxy auto-detection) may behave as if offline, blocking
-        # authentication flows, Exchange connectivity, and WPAD discovery. The CPU overhead
-        # from passive polling in a static VDI network is negligible compared to the breakage.
-        # Ref: Article local policy table - Network Connectivity Status Indicator (Restricted Traffic baseline)
-        # Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' `
-        #              -Name 'DisablePassivePolling' -Value 1
+        # NCSI passive polling disabled - SKIP (breaks network awareness APIs; see README)
+        # Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'DisablePassivePolling' -Value 1
 
-        # Online font providers - Windows contacts Microsoft's online font service when
-        # rendering text with fonts not installed locally. Disable to prevent outbound calls.
-        # Ref: Article local policy table - Fonts (Restricted Traffic baseline)
+        # Font providers (ICM.admx - System key)
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'EnableFontProviders' -Value 0
 
-        # Teredo IPv6 transition technology - tunnels IPv6 traffic over IPv4 UDP for
-        # NAT traversal. Has no purpose in a VDI environment with no internet-facing IPv6 need.
-        # Ref: Article local policy table - TCPIP Settings / IPv6 Transition Technologies (Restricted Traffic baseline)
+        # Teredo (TCPIP.admx)
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\TCPIP\v6Transition' `
             -Name 'Teredo_State' -Value 'Disabled' `
             -Type ([Microsoft.Win32.RegistryValueKind]::String)
 
-        # WiFi autologgers - no Wi-Fi hardware in VMs; these traces serve no purpose
-        # in restricted environments. Included here so they apply even when
-        # -OptimizationProfile is None.
-        Disable-VdiAutologger -Name 'WiFiSession'
-        Disable-VdiAutologger -Name 'WinPhoneCritical'
+        # SmartScreen - Explorer (SmartScreen.admx) and Edge (Edge.admx)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+            -Name 'EnableSmartScreen' -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' `
+            -Name 'SmartScreenEnabled' -Value 0
+
+        # Defender MAPS / cloud lookups (WindowsDefender.admx - Spynet)
+        # SpynetReporting: 0=Disabled; SubmitSamplesConsent: 2=Never Send; BAFS: 1=Disable
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet' `
+            -Name 'SpynetReporting' -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet' `
+            -Name 'SubmitSamplesConsent' -Value 2
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet' `
+            -Name 'DisableBlockAtFirstSeen' -Value 1
+
+        # WER Watson uploads (WindowsErrorReporting.admx); NonPersistent: WerSvc off (S2)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+            -Name 'Disabled' -Value 1
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
+            -Name 'DontSendAdditionalData' -Value 1
+
+        # DiagTrack service - NonPersistent: disabled in Section 2
+        Disable-VdiService -Name 'DiagTrack' -DisplayName 'Connected User Experiences and Telemetry'
+
+        # OneSettings - prevents DiagTrack pulling dynamic config (DataCollection.admx)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
+            -Name 'DisableOneSettingsDownloads' -Value 1
+
+        # Cross-device clipboard sync (OSPolicy.admx)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+            -Name 'AllowCrossDeviceClipboard' -Value 0
+
+        # Widgets / News and Interests (NewsAndInterests.admx)
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' `
+            -Name 'AllowNewsAndInterests' -Value 0
+
+        # Settings sync across devices (SettingSync.admx); enabledValue=2 disables sync
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync' `
+            -Name 'DisableSettingSync' -Value 2
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync' `
+            -Name 'DisableSettingSyncUserOverride' -Value 1
+
+        # Activity Feed upload (OSPolicy.admx) - stops cloud send; local feed kept intact
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+            -Name 'UploadUserActivities' -Value 0
 
         Invoke-ApplyPolicyQueue
         Write-Log ""
-    } # end if RestrictInternet - Section 7
+    } # end if AirGapped - Section 7
 
     # -----------------------------------------------------------------------
     # SECTION 8 - Default User Profile Settings
@@ -1985,7 +1996,9 @@ try {
             'RadioMgr',                 # NFC/radio manager trace
             'ReadyBoot',                # Boot prefetch analysis
             'WDIContextLog',            # WDI miniport driver trace
-            'WiFiDriverIHVSession'      # WLAN IHV diagnostic session
+            'WiFiDriverIHVSession',     # WLAN IHV diagnostic session
+            'WiFiSession',              # WLAN diagnostic log - no Wi-Fi hardware in VMs
+            'WinPhoneCritical'          # Phone diagnostic log - no phone hardware in VMs
         )
 
         foreach ($logger in $autologgers) {
@@ -2033,7 +2046,7 @@ try {
 
     Write-Log "============================================================"
     Write-Log "  Optimize-AVDImage Complete"
-    Write-Log "  Profile: $OptimizationProfile | RestrictInternet: $RestrictInternetBool"
+    Write-Log "  Profile: $OptimizationProfile | AirGapped: $AirGappedBool"
     Write-Log "  Log: $LogFile"
     Write-Log "============================================================"
 }

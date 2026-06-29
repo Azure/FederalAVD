@@ -1,11 +1,11 @@
 targetScope = 'resourceGroup'
 
-@description('The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (RestrictInternet still applies).')
+@description('The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (AirGapped still applies).')
 @allowed(['None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent'])
 param vdiOptimizationProfile string
 
-@description('When true, restricts outbound internet traffic: NCSI passive polling, online font providers, Teredo IPv6, and WiFi autologgers are disabled. Applies independently of vdiOptimizationProfile, including when profile is None.')
-param vdiOptimizationRestrictInternet bool = false
+@description('When true, applies settings for air-gapped or internet-restricted environments: disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and DiagTrack telemetry. Applies independently of vdiOptimizationProfile, including when profile is None.')
+param vdiOptimizationAirGapped bool = false
 param appsToRemove array
 param cloud string
 param downloads object
@@ -658,7 +658,7 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
   ]
 }
 
-resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (vdiOptimizationProfile != 'None' || vdiOptimizationRestrictInternet) {
+resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (vdiOptimizationProfile != 'None' || vdiOptimizationAirGapped) {
   name: 'optimize-image'
   location: location
   parent: imageVm
@@ -678,8 +678,8 @@ resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01
         value: vdiOptimizationProfile
       }
       {
-        name: 'RestrictInternet'
-        value: string(vdiOptimizationRestrictInternet)
+        name: 'AirGapped'
+        value: string(vdiOptimizationAirGapped)
       }
     ]
     source: {
