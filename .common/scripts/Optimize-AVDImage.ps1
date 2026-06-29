@@ -1,12 +1,21 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 #Requires -Version 5.1
 <#
 .SYNOPSIS
     Applies VDI performance and resource optimizations to a Windows image for AVD deployment.
+    Variant: writes group policy values directly to Registry.pol (no LGPO.exe, no COM required).
 
 .DESCRIPTION
     Optimizes a Windows image for AVD based on the selected optimization profile and whether
     outbound internet traffic should be restricted in the deployed environment.
+
+    This variant replaces the LGPO.exe dependency in Optimize-AVDImage.ps1 with a pure
+    PowerShell Registry.pol writer. It reads and writes the MS-GPREG (PReg) binary format
+    directly  -  the same mechanism LGPO.exe uses internally.
+
+    MS-GPREG spec: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpreg/
+    Machine pol : %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
+    User pol    : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
 
     References:
       [1] MS VDI optimization guide (primary source for all services, tasks, and policies):
@@ -142,24 +151,40 @@ param(
     [ValidateSet('None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent')]
     [string]$OptimizationProfile,
 
-    # Accepts bool or string ('true'/'false'/'1'/'0') — Azure RunCommand passes all
+    # Accepts bool or string ('true'/'false'/'1'/'0') - Azure RunCommand passes all
     # parameters as strings, so [bool] would reject 'false' with a type error.
     [Parameter(Mandatory = $false)]
     [string]$RestrictInternet = 'false'
 )
 
 $ErrorActionPreference = 'Stop'
+
 $LogFile = "$env:SystemRoot\Logs\Optimize-AVDImage.log"
 $RestrictInternetBool = $RestrictInternet -in @('true', '1', 'yes')
 $RunFullOptimization = $OptimizationProfile -in @('NonPersistent-Full', 'Persistent')
 $RunNonPersistentSections = $OptimizationProfile -in @('NonPersistent-UpdatesOnly', 'NonPersistent-Full')
 
-# LGPO state - initialized here; populated in the detection block inside the try {} below
-$script:LgpoExe = Join-Path $env:SystemRoot 'System32\LGPO.exe'
-$script:LgpoAvailable = $false
-$script:LgpoLines = [System.Collections.Generic.List[string]]@()
-# Parallel list of raw registry data used to fall back to direct writes if LGPO fails
-$script:LgpoFallbackEntries = [System.Collections.Generic.List[hashtable]]@()
+# Registry.pol direct-write state - initialized here; populated during operation.
+# This approach writes the MS-GPREG (PReg) binary format directly, exactly as LGPO.exe does
+# internally. It requires no COM registration (IGroupPolicyObject CLSID is not registered on
+# W11 25H2), no RSAT/GPMC components (GPMgmt.GPM), and no external binaries (LGPO.exe).
+# MS-GPREG spec: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpreg/
+#
+# PReg file layout (all strings UTF-16LE, all integers LE 4 bytes):
+#   Header  : 50 52 65 67  ("PReg")  +  01 00 00 00  (version 1)
+#   Entries : [  key\0  ;  valueName\0  ;  type  ;  dataSize  ;  data  ]
+#             where [=0x5B00  ;=0x3B00  ]=0x5D00  are all UTF-16LE single chars
+#
+# Machine pol : %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
+# User pol    : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
+#
+# Queue: each entry is a hashtable:
+#   Section  : 'Computer' | 'User'
+#   RelPath  : registry key path (without HKLM:\ or Software\ for user prefix)
+#   Name     : value name
+#   Value    : value data (int for DWORD, string for SZ, string[] for MULTISZ)
+#   Kind     : [Microsoft.Win32.RegistryValueKind]
+$script:PolQueue = [System.Collections.Generic.List[hashtable]]@()
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -247,8 +272,10 @@ function Set-PolicyValue {
     <#
     .SYNOPSIS
         Creates or updates a registry value, creating the key path if needed.
-        When LGPO.exe is available and the path is a policy subtree, queues
-        the entry for batch application via Invoke-ApplyPolicyQueue:
+        Policy subtree paths are queued for commit via Invoke-ApplyPolicyQueue, which
+        writes them directly to Registry.pol in the MS-GPREG (PReg) binary format.
+        This makes them appear under Administrative Templates in gpresult, not under
+        Extra Registry Settings.
           Computer: HKLM:\SOFTWARE\Policies\... and legacy
                     HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\...
           User:     HKLM:\TempDefaultUser\Software\Policies\... and legacy
@@ -265,48 +292,28 @@ function Set-PolicyValue {
         [Parameter(Mandatory = $false)]
         [Microsoft.Win32.RegistryValueKind]$Type = [Microsoft.Win32.RegistryValueKind]::DWord
     )
-    # Route policy paths through LGPO when available (DWORD and SZ types only).
+    # Route policy paths through the Registry.pol queue.
     # Computer section: machine policy subtrees under HKLM:\SOFTWARE\...
     # User section:     user policy subtrees under HKLM:\TempDefaultUser\...
-    #                   (LGPO writes these to GroupPolicy\User\Registry.pol,
-    #                    applying to all users at logon - same effective scope
-    #                    as writing to the default user hive policies directly)
-    $lgpoSection = $null
-    $lgpoRelPath = $null
-    if ($script:LgpoAvailable) {
-        if ($Path -like 'HKLM:\SOFTWARE\Policies\*' -or
-            $Path -like 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\*') {
-            $lgpoSection = 'Computer'
-            $lgpoRelPath = $Path -replace '^HKLM:\\', ''
-        }
-        elseif ($Path -like 'HKLM:\TempDefaultUser\Software\Policies\*' -or
-            $Path -like 'HKLM:\TempDefaultUser\Software\Microsoft\Windows\CurrentVersion\Policies\*') {
-            $lgpoSection = 'User'
-            $lgpoRelPath = $Path -replace '^HKLM:\\TempDefaultUser\\', ''
-        }
+    #                   (PReg writes these to GroupPolicy\User\Registry.pol,
+    #                    which Group Policy applies at logon - same effective scope
+    #                    as writing directly to the default user hive policies)
+    $polSection = $null
+    $polRelPath = $null
+    if ($Path -like 'HKLM:\SOFTWARE\Policies\*' -or
+        $Path -like 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\*') {
+        $polSection = 'Computer'
+        $polRelPath = $Path -replace '^HKLM:\\', ''
     }
-    if ($null -ne $lgpoSection) {
-        $lgpoData = switch ($Type) {
-            ([Microsoft.Win32.RegistryValueKind]::DWord) { "DWORD:$Value" }
-            ([Microsoft.Win32.RegistryValueKind]::String) { "SZ:$Value" }
-            ([Microsoft.Win32.RegistryValueKind]::MultiString) {
-                # LGPO text format: null-separated list ending with \0
-                # An empty multi-string is represented as a single \0
-                $joined = ($Value -join '\0')
-                if ([string]::IsNullOrEmpty($joined)) { 'MULTISZ:\0' } else { "MULTISZ:$joined\0" }
-            }
-            default { $null }
-        }
-        if ($null -ne $lgpoData) {
-            $null = $script:LgpoLines.Add($lgpoSection)
-            $null = $script:LgpoLines.Add($lgpoRelPath)
-            $null = $script:LgpoLines.Add($Name)
-            $null = $script:LgpoLines.Add($lgpoData)
-            $null = $script:LgpoLines.Add('')
-            $null = $script:LgpoFallbackEntries.Add(@{ Path = $Path; Name = $Name; Value = $Value; Type = $Type })
-            Write-Log "  [LGPO/$lgpoSection] Queued: $Path\$Name = $Value"
-            return
-        }
+    elseif ($Path -like 'HKLM:\TempDefaultUser\Software\Policies\*' -or
+        $Path -like 'HKLM:\TempDefaultUser\Software\Microsoft\Windows\CurrentVersion\Policies\*') {
+        $polSection = 'User'
+        $polRelPath = $Path -replace '^HKLM:\\TempDefaultUser\\', ''
+    }
+    if ($null -ne $polSection) {
+        $null = $script:PolQueue.Add(@{ Section = $polSection; RelPath = $polRelPath; Name = $Name; Value = $Value; Kind = $Type })
+        Write-Log "  [POL/$polSection] Queued: $Path\$Name = $Value"
+        return
     }
     try {
         if (-not (Test-Path $Path)) {
@@ -342,62 +349,264 @@ function Disable-VdiAutologger {
 function Invoke-ApplyPolicyQueue {
     <#
     .SYNOPSIS
-        Applies all LGPO-queued policy entries in a single lgpo.exe invocation,
-        then clears the queue. No-op if LGPO is unavailable or the queue is empty.
+        Commits all queued policy entries to the local GPO by writing Registry.pol
+        files directly in the MS-GPREG (PReg) binary format, then clears the queue.
+        No-op if the queue is empty.
+
+        Implementation notes:
+          PReg format (all strings UTF-16LE, integers 4-byte LE):
+            Header  : "PReg" (ASCII 4 bytes) + version 1 (uint32)
+            Entries : [ key\0 ; valueName\0 ; type ; dataSize ; data ]
+                      [ = 0x5B00  ; = 0x3B00  ] = 0x5D00
+
+          Registry type codes (REG_ constants):
+            1 = REG_SZ    4 = REG_DWORD    7 = REG_MULTI_SZ
+
+          Machine pol: %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
+          User pol   : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
+
+          After writing, gpupdate /force triggers Group Policy processing so
+          the values appear in the live registry and in gpresult output.
     #>
-    if (-not $script:LgpoAvailable -or $script:LgpoLines.Count -eq 0) { return }
-    $entryCount = [int]($script:LgpoLines.Count / 5)
-    $tempFile = Join-Path $env:SystemRoot "Temp\LGPO-$(Get-Date -Format 'HHmmssff').txt"
-    $lgpoSucceeded = $false
-    try {
-        # Write the registry text file using Add-Content, one line at a time.
-        # Format per entry (matching Update-LocalGPOTextFile in the artifact scripts):
-        #   Computer           <- scope
-        #   SOFTWARE\Policies\ <- key path, stripped of HKLM:\ prefix
-        #   ValueName          <- value name
-        #   DWORD:1            <- type:data
-        #                      <- blank line
-        foreach ($line in $script:LgpoLines) {
-            Add-Content -Path $tempFile -Value $line
+    if ($script:PolQueue.Count -eq 0) { return }
+    $entryCount = $script:PolQueue.Count
+
+    $utf16      = [System.Text.Encoding]::Unicode
+    $pRegSig    = [System.Text.Encoding]::ASCII.GetBytes('PReg')
+    $pRegVer    = [BitConverter]::GetBytes([uint32]1)
+    $bracketOpen  = [byte[]](0x5B, 0x00)
+    $bracketClose = [byte[]](0x5D, 0x00)
+    $semicolon    = [byte[]](0x3B, 0x00)
+    $nullterm     = [byte[]](0x00, 0x00)
+
+    function Read-PRegFile([string]$Path) {
+        $list = [System.Collections.Generic.List[hashtable]]::new()
+        if (-not (Test-Path $Path)) { return ,$list }
+        $raw = [IO.File]::ReadAllBytes($Path)
+        if ($raw.Length -lt 8) { return ,$list }
+        $sig = [System.Text.Encoding]::ASCII.GetString($raw, 0, 4)
+        if ($sig -ne 'PReg') { throw "Invalid Registry.pol header: $Path" }
+        $pos = 8
+        while ($pos -lt $raw.Length) {
+            if ($pos + 1 -ge $raw.Length) { break }
+            if ($raw[$pos] -ne 0x5B -or $raw[$pos+1] -ne 0x00) { $pos++; continue }
+            $pos += 2
+            # Read key string
+            $start = $pos
+            while ($pos + 1 -lt $raw.Length -and -not ($raw[$pos] -eq 0 -and $raw[$pos+1] -eq 0)) { $pos += 2 }
+            $key = $utf16.GetString($raw, $start, $pos - $start); $pos += 2  # skip null
+            $pos += 2  # skip ;
+            # Read value name string
+            $start = $pos
+            while ($pos + 1 -lt $raw.Length -and -not ($raw[$pos] -eq 0 -and $raw[$pos+1] -eq 0)) { $pos += 2 }
+            $vname = $utf16.GetString($raw, $start, $pos - $start); $pos += 2  # skip null
+            $pos += 2  # skip ;
+            # Type, size, data
+            $vtype = [BitConverter]::ToUInt32($raw, $pos); $pos += 4; $pos += 2  # skip ;
+            $vsize = [BitConverter]::ToUInt32($raw, $pos); $pos += 4; $pos += 2  # skip ;
+            # Guard: PowerShell a..b with a>b produces a descending slice, not empty
+            $vdata = if ($vsize -gt 0) { $raw[$pos..($pos + $vsize - 1)] } else { [byte[]]@() }
+            $pos += $vsize
+            $pos += 2  # skip ]
+            $list.Add(@{ Key=$key; Name=$vname; Type=$vtype; Size=$vsize; Data=$vdata })
         }
-        $proc = Start-Process -FilePath $script:LgpoExe -ArgumentList "/t `"$tempFile`"" -Wait -PassThru
-        Write-Log "  LGPO exitcode: '$($proc.ExitCode)'"
-        if ($proc.ExitCode -eq 0) {
-            Write-Log "  [OK]   LGPO applied $entryCount policy values"
-            $lgpoSucceeded = $true
-        } else {
-            Write-Log "  [WARN] LGPO exited $($proc.ExitCode) for $entryCount values"
-        }
-    }
-    catch {
-        Write-Log "  [WARN] LGPO flush failed: $($_.Exception.Message)"
-    }
-    finally {
-        Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+        return ,$list
     }
 
-    if (-not $lgpoSucceeded) {
-        # LGPO failed or threw - apply queued entries directly to the registry so
-        # policy values are not silently lost.
-        Write-Log "  Applying $($script:LgpoFallbackEntries.Count) policy values via registry fallback..."
-        $fbOk = 0; $fbFail = 0
-        foreach ($entry in $script:LgpoFallbackEntries) {
-            try {
-                if (-not (Test-Path $entry.Path)) { New-Item -Path $entry.Path -Force -ErrorAction Stop | Out-Null }
-                Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $entry.Value -Type $entry.Type -Force -ErrorAction Stop
-                $fbOk++
-            } catch {
-                Write-Log "  [WARN] Fallback registry write failed for $($entry.Path)\$($entry.Name): $_"
-                $fbFail++
+    function Merge-PRegEntry($entries, [string]$key, [string]$name, [uint32]$type, [byte[]]$data) {
+        $existing = @($entries | Where-Object { $_.Key -eq $key -and $_.Name -eq $name })
+        foreach ($e in $existing) { $entries.Remove($e) | Out-Null }
+        $entries.Add(@{ Key=$key; Name=$name; Type=$type; Size=[uint32]$data.Length; Data=$data })
+    }
+
+    function Write-PRegFile([string]$Path, $entries) {
+        $stream = [IO.MemoryStream]::new()
+        $w = [IO.BinaryWriter]::new($stream)
+        $w.Write($pRegSig); $w.Write($pRegVer)
+        foreach ($e in $entries) {
+            $w.Write($bracketOpen)
+            $w.Write($utf16.GetBytes($e.Key));   $w.Write($nullterm); $w.Write($semicolon)
+            $w.Write($utf16.GetBytes($e.Name));  $w.Write($nullterm); $w.Write($semicolon)
+            $w.Write([uint32]$e.Type);           $w.Write($semicolon)
+            $w.Write([uint32]$e.Size);           $w.Write($semicolon)
+            if ($null -ne $e.Data -and $e.Data.Length -gt 0) { $w.Write([byte[]]$e.Data) }
+            $w.Write($bracketClose)
+        }
+        $w.Flush()
+        $bytes    = $stream.ToArray()
+        $expected = $bytes.Length
+
+        $dir = Split-Path $Path
+        if (-not (Test-Path $dir)) { New-Item $dir -ItemType Directory -Force | Out-Null }
+
+        # Write to a temp file first so the original is never partially overwritten
+        $tmp = "$Path.tmp"
+        [IO.File]::WriteAllBytes($tmp, $bytes)
+
+        # Verify the temp file is complete before committing
+        $actual = (Get-Item $tmp).Length
+        if ($actual -ne $expected) {
+            Remove-Item $tmp -Force -EA SilentlyContinue
+            throw "Registry.pol temp write verification failed: expected $expected bytes, file has $actual bytes"
+        }
+
+        # Atomic promotion: replace the live file with the verified temp
+        Move-Item $tmp $Path -Force
+    }
+
+    # Build per-file entry lists from the queue
+    $machineEntries = Read-PRegFile "$env:SystemRoot\System32\GroupPolicy\Machine\Registry.pol"
+    $userEntries    = Read-PRegFile "$env:SystemRoot\System32\GroupPolicy\User\Registry.pol"
+    $machineUpdated = $false
+    $userUpdated    = $false
+
+    foreach ($e in $script:PolQueue) {
+        try {
+            switch ($e.Kind) {
+                ([Microsoft.Win32.RegistryValueKind]::DWord) {
+                    $data = [BitConverter]::GetBytes([uint32]$e.Value)
+                    $type = [uint32]4  # REG_DWORD
+                }
+                ([Microsoft.Win32.RegistryValueKind]::String) {
+                    # REG_SZ: UTF-16LE with null terminator
+                    $data = $utf16.GetBytes([string]$e.Value + [char]0)
+                    $type = [uint32]1  # REG_SZ
+                }
+                ([Microsoft.Win32.RegistryValueKind]::MultiString) {
+                    # REG_MULTI_SZ: each string UTF-16LE null-terminated, final extra null
+                    $arr = if ($e.Value -is [array]) { [string[]]$e.Value } else { [string[]]@($e.Value) }
+                    $data = $utf16.GetBytes(($arr -join [char]0) + [char]0 + [char]0)
+                    $type = [uint32]7  # REG_MULTI_SZ
+                }
+                default {
+                    Write-Log "  [WARN] PReg: unsupported type $($e.Kind) for $($e.RelPath)\$($e.Name) - skipping"
+                    continue
+                }
+            }
+            if ($e.Section -eq 'Computer') {
+                Merge-PRegEntry $machineEntries $e.RelPath $e.Name $type $data
+                $machineUpdated = $true
+            }
+            else {
+                Merge-PRegEntry $userEntries $e.RelPath $e.Name $type $data
+                $userUpdated = $true
+            }
+            Write-Log "  [POL] Written to Registry.pol: [$($e.Section)] $($e.RelPath)\$($e.Name) = $($e.Value)"
+        }
+        catch {
+            Write-Log "  [WARN] PReg merge failed for $($e.RelPath)\$($e.Name): $_"
+        }
+    }
+
+    if ($machineUpdated) {
+        try {
+            Write-PRegFile "$env:SystemRoot\System32\GroupPolicy\Machine\Registry.pol" $machineEntries
+            Write-Log "  [OK]   Machine Registry.pol written ($($machineEntries.Count) entries)"
+        }
+        catch {
+            Write-Log "  [WARN] Machine Registry.pol write failed ($_) - applying queued computer entries via direct registry fallback"
+            foreach ($e in @($script:PolQueue | Where-Object { $_.Section -eq 'Computer' })) {
+                $regPath = "HKLM:\$($e.RelPath)"
+                try {
+                    if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force -EA Stop | Out-Null }
+                    Set-ItemProperty -Path $regPath -Name $e.Name -Value $e.Value -Type $e.Kind -Force -EA Stop
+                    Write-Log "  [FB]   Direct registry: $regPath\$($e.Name) = $($e.Value)"
+                }
+                catch { Write-Log "  [WARN] Direct registry fallback failed for $regPath\$($e.Name): $_" }
             }
         }
-        Write-Log "  [OK]   Registry fallback: $fbOk applied, $fbFail failed"
+    }
+    if ($userUpdated) {
+        try {
+            Write-PRegFile "$env:SystemRoot\System32\GroupPolicy\User\Registry.pol" $userEntries
+            Write-Log "  [OK]   User Registry.pol written ($($userEntries.Count) entries)"
+        }
+        catch {
+            Write-Log "  [WARN] User Registry.pol write failed ($_) - applying queued user entries via direct registry fallback"
+            foreach ($e in @($script:PolQueue | Where-Object { $_.Section -eq 'User' })) {
+                # User policy path is relative to Software\...; write to the loaded default user hive
+                $regPath = "HKLM:\TempDefaultUser\$($e.RelPath)"
+                try {
+                    if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force -EA Stop | Out-Null }
+                    Set-ItemProperty -Path $regPath -Name $e.Name -Value $e.Value -Type $e.Kind -Force -EA Stop
+                    Write-Log "  [FB]   Direct registry (default user hive): $regPath\$($e.Name) = $($e.Value)"
+                }
+                catch { Write-Log "  [WARN] Direct registry fallback failed for $regPath\$($e.Name): $_" }
+            }
+        }
+    }
+    Write-Log "  [OK]   Registry.pol direct write applied $entryCount policy values total"
+
+    # Write gpt.ini so the GP Client on deployed VMs knows Registry.pol has content.
+    # gpupdate is intentionally NOT called - this is an image build VM; policies do not
+    # need to be live and running gpupdate before sysprep can cause CSE side effects.
+    # Registry CSE: {35378EAC-683F-11D2-A89A-00C04FBBCFA2}
+    # Machine AT:   {D02B1F72-3407-48AE-BA88-E8213C6761F1}  User AT: {D02B1F73...}
+    try {
+        $gptPath  = "$env:SystemRoot\System32\GroupPolicy\gpt.ini"
+        $regCse   = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
+        $machineAT = '{D02B1F72-3407-48AE-BA88-E8213C6761F1}'
+        $userAT    = '{D02B1F73-3407-48AE-BA88-E8213C6761F1}'
+
+        # Read existing version so we increment rather than reset.
+        $machineVer = [uint16]1
+        $userVer    = [uint16]1
+        if (Test-Path $gptPath) {
+            $existing = Get-Content $gptPath -Raw
+            if ($existing -match 'Version\s*=\s*(\d+)') {
+                $cur = [uint32]$matches[1]
+                $machineVer = [uint16]($cur -band 0xFFFF)
+                $userVer    = [uint16](($cur -shr 16) -band 0xFFFF)
+            }
+        }
+        if ($machineUpdated) { $machineVer++ }
+        if ($userUpdated)    { $userVer++ }
+        $version = ([uint32]$userVer -shl 16) -bor [uint32]$machineVer
+
+        # Build final extension name strings for each scope.
+        # Always preserve lines from the prior file, even when a scope was not updated
+        # in this call. Without this, a call that only updates one scope (e.g. Section 8
+        # writes only user entries) would silently drop the other scope's extension name
+        # from gpt.ini, causing the GP client on deployed VMs to skip that CSE entirely.
+        $machineExt = "[$regCse$machineAT]"
+        $userExt    = "[$regCse$userAT]"
+
+        $finalMachineExt = if ($machineUpdated) {
+            if ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                # Use CSE GUID presence (any snap-in) to detect duplicates. LGPO uses its
+                # own tool GUID {DF3DC19F...} rather than the standard AT snap-in GUID, so
+                # an exact-pair check would add a second Registry CSE entry alongside it.
+                # The GP client processes registry.pol based on the CSE GUID alone.
+                if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
+            } else { $machineExt }
+        } elseif ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+            $matches[1].Trim()
+        } else { '' }
+
+        $finalUserExt = if ($userUpdated) {
+            if ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
+            } else { $userExt }
+        } elseif ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+            $matches[1].Trim()
+        } else { '' }
+
+        $gptContent = "[General]`r`n"
+        if ($finalMachineExt) { $gptContent += "gPCMachineExtensionNames=$finalMachineExt`r`n" }
+        if ($finalUserExt)    { $gptContent += "gPCUserExtensionNames=$finalUserExt`r`n" }
+        $gptContent += "Version=$version`r`n"
+
+        [IO.File]::WriteAllText($gptPath, $gptContent, [System.Text.Encoding]::ASCII)
+        Write-Log "  [OK]   gpt.ini written (Version=$version machine=$machineVer user=$userVer)"
+    }
+    catch {
+        Write-Log "  [WARN] gpt.ini write failed: $_"
     }
 
-    $script:LgpoLines.Clear()
-    $script:LgpoFallbackEntries.Clear()
+    $script:PolQueue.Clear()
 }
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -415,50 +624,25 @@ try {
     Write-Log ""
 
     # -----------------------------------------------------------------------
-    # LGPO Detection
-    # Attempt to locate or download LGPO.exe for applying policy settings via
-    # Local Group Policy Objects. If unavailable, all policy settings fall back
-    # to direct registry writes inside Set-PolicyValue.
+    # Registry.pol availability check
+    # Verify the GroupPolicy directory structure is writable. This is a simple
+    # guard  -  on any standard Windows machine the directory always exists.
     # -----------------------------------------------------------------------
-    Write-Log "--- LGPO Detection ---"
-    if (-not (Test-Path -Path $script:LgpoExe -PathType Leaf)) {
-        Write-Log "  LGPO.exe not found in System32 - attempting download from Microsoft..."
-        $lgpoTemp = Join-Path $env:TEMP 'Optimize-AVDImage-LGPO'
-        try {
-            if (-not (Test-Path $lgpoTemp)) { New-Item -Path $lgpoTemp -ItemType Directory -Force | Out-Null }
-            $lgpoZip = Join-Path $lgpoTemp 'LGPO.zip'
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            (New-Object System.Net.WebClient).DownloadFile(
-                'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip',
-                $lgpoZip)
-            Expand-Archive -Path $lgpoZip -DestinationPath $lgpoTemp -Force
-            $lgpoFile = Get-ChildItem -Path $lgpoTemp -Filter 'LGPO.exe' -Recurse | Select-Object -First 1
-            if ($lgpoFile) {
-                Copy-Item -Path $lgpoFile.FullName -Destination $script:LgpoExe -Force
-                $script:LgpoAvailable = Test-Path -Path $script:LgpoExe -PathType Leaf
-                Write-Log "  [OK]   LGPO.exe downloaded and installed to System32"
-            }
-            else {
-                Write-Log "  [WARN] LGPO.exe not found in downloaded archive - registry fallback in use"
-            }
-        }
-        catch {
-            Write-Log "  [WARN] Could not download LGPO.exe ($_) - registry fallback in use for all policy settings"
-        }
-        finally {
-            Remove-Item -Path $lgpoTemp -Recurse -Force -ErrorAction SilentlyContinue
-        }
+    Write-Log "--- Registry.pol Direct-Write Check ---"
+    $machinePolDir = "$env:SystemRoot\System32\GroupPolicy\Machine"
+    if (Test-Path $machinePolDir) {
+        Write-Log "  [OK]   GroupPolicy\Machine directory present - Registry.pol direct-write is available"
     }
     else {
-        $script:LgpoAvailable = $true
-        Write-Log "  [OK]   LGPO.exe found in System32 - policy settings will be applied via LGPO"
+        Write-Log "  [INFO] GroupPolicy\Machine directory not found - it will be created on first write"
     }
     Write-Log ""
 
     # -----------------------------------------------------------------------
     # PRE-STEP - Power Plan
-    # Set the active power scheme to High Performance before the Power service
-    # is disabled later in the Services section.
+    # Set the active power scheme to High Performance. The Power service is not
+    # disabled (powercfg.exe requires the Power service to be running, and RDP
+    # session management also depends on it on Persistent desktops).
     # -----------------------------------------------------------------------
     Write-Log "--- Pre-step: Power Plan ---"
     try {
@@ -482,10 +666,8 @@ try {
         Disable-VdiService -Name 'autotimesvc' -DisplayName 'Cellular Time'
         # GameDVR and Broadcast user service (per-user template) - no game workloads
         Disable-VdiService -Name 'BcastDVRUserService' -DisplayName 'GameDVR and Broadcast User Service'
-        # CaptureService - left enabled intentionally. Modern Windows routes Snipping Tool,
-        # screen clipping, Teams screenshots, and recording APIs through this infrastructure.
-        # Disabling it breaks these capture features and future Teams functionality.
-        # Disable-VdiService -Name 'CaptureService' -DisplayName 'Capture Service'
+        # CaptureService -- not disabled here; required by the Windows.Graphics.Capture API
+        # which Teams, Snipping Tool, and other inbox apps depend on at session start.
         # Connected Devices Platform - cross-device scenarios (phone, tablets) irrelevant
         Disable-VdiService -Name 'CDPSvc' -DisplayName 'Connected Devices Platform Service'
         # CDP User Service (per-user template)
@@ -506,16 +688,14 @@ try {
         # OneSyncSvc -- not disabled here; see .DESCRIPTION deviations.
         # Contact Data (per-user template)
         Disable-VdiService -Name 'PimIndexMaintenanceSvc' -DisplayName 'Contact Data'
-        # Power - left enabled intentionally. Various Windows APIs (battery/power status,
-        # settings pages, vendor software) call into the Power service even on VMs. Disabling
-        # it causes unexpected API failures and settings page breakage; the overhead is negligible.
-        # Disable-VdiService -Name 'Power' -DisplayName 'Power'
+        # Power -- not disabled here; required by powercfg.exe (High Performance plan) and
+        # RDP session management on Persistent desktops.
         # Payments and NFC/SE Manager - no NFC hardware in VMs
         Disable-VdiService -Name 'SEMgrSvc' -DisplayName 'Payments and NFC/SE Manager'
         # SMS Router Service - no SMS infrastructure in enterprise VDI
         Disable-VdiService -Name 'SmsRouter' -DisplayName 'Microsoft Windows SMS Router Service'
-        # WerSvc (Windows Error Reporting) -- moved to Section 2 (NonPersistent Only).
-        # On Persistent VMs, WER provides actionable crash diagnostics for long-lived sessions.
+        # WerSvc -- not disabled here; moved to Section 2 (NonPersistent only) because
+        # WER diagnostics have carry-over value on Persistent long-lived desktops.
         # Xbox Live Auth Manager
         Disable-VdiService -Name 'XblAuthManager' -DisplayName 'Xbox Live Auth Manager'
         # Xbox Live Game Save
@@ -553,6 +733,8 @@ try {
         Disable-VdiService -Name 'wuauserv' -DisplayName 'Windows Update'
         # Windows Update Medic - re-enables wuauserv if disabled; Set-Service falls back to registry for SFC-protected services
         Disable-VdiService -Name 'WaaSMedicSvc' -DisplayName 'Windows Update Medic Service'
+        # Windows Error Reporting - transient VMs discard crash data at recycle; WER overhead not justified
+        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
         # Diagnostic Policy Service - background problem detection discarded at VM recycle; see .DESCRIPTION deviations
         Disable-VdiService -Name 'DPS' -DisplayName 'Diagnostic Policy Service'
         # Diagnostic Execution Service - depends on DPS
@@ -760,9 +942,6 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
             -Name 'DoNotShowFeedbackNotifications' -Value 1
 
-        # -- Windows Error Reporting policies -- moved to Section 6 (NonPersistent Only).
-        # On Persistent VMs, WER remains enabled to support crash diagnostics.
-
         # -- Privacy / Consumer Experiences --
         # AT: Computer Configuration > Windows Components > Cloud Content
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
@@ -930,9 +1109,13 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DWM' `
             -Name 'DisableAccentGradient' -Value 1
 
-        # -- Microsoft Edge: disable preloading and background activity (AT: Computer Configuration > Microsoft Edge) --
+        # -- Microsoft Edge (Chromium): suppress preloading / hide first-run (AT: Computer Configuration > Microsoft Edge) --
+        # StartupBoostEnabled=0: no pre-launch. BackgroundModeEnabled=0: no background persistence.
+        # HideFirstRunExperience=1: suppresses first-run wizard on each new session (NonPersistent).
+        # NOTE: msedge.admx must be present - installed by the ADMX pre-step in Section 6.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'StartupBoostEnabled' -Value 0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'BackgroundModeEnabled' -Value 0
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'HideFirstRunExperience' -Value 1
 
         # -- OneDrive: suppress network traffic until user signs in --
         # DISABLED: PreventNetworkTrafficPreUserSignIn blocks OneDrive Known Folder Move (KFM)
@@ -1121,23 +1304,6 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Feed Discovery' `
             -Name 'Enabled' -Value 0
 
-        # -- Microsoft Edge (legacy / HTML-based, Windows 10 inbox Edge) telemetry and preload policies --
-        # These are backed by MicrosoftEdge.admx which is present in W11 25H2 PolicyDefinitions.
-        # ConfigureTelemetryForMicrosoft365Analytics: 0 = do not send Edge browsing data to M365 Analytics
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection' `
-            -Name 'MicrosoftEdgeDataOptIn' -Value 0
-        $legacyEdgePath = 'HKLM:\SOFTWARE\Policies\Microsoft\MicrosoftEdge'
-        # BooksLibrary: disable update and extended telemetry for the Books hub
-        Set-PolicyValue -Path "$legacyEdgePath\BooksLibrary" -Name 'AllowConfigurationUpdateForBooksLibrary' -Value 0
-        Set-PolicyValue -Path "$legacyEdgePath\BooksLibrary" -Name 'EnableExtendedBooksTelemetry' -Value 0
-        # Main: suppress first-run page and disable prelaunch
-        Set-PolicyValue -Path "$legacyEdgePath\Main" -Name 'PreventFirstRunPage' -Value 1
-        Set-PolicyValue -Path "$legacyEdgePath\Main" -Name 'AllowPrelaunch' -Value 0
-        # ServiceUI: disable web content on new tab page
-        Set-PolicyValue -Path "$legacyEdgePath\ServiceUI" -Name 'AllowWebContentOnNewTabPage' -Value 0
-        # TabPreloader: disable tab preloading
-        Set-PolicyValue -Path "$legacyEdgePath\TabPreloader" -Name 'AllowTabPreloading' -Value 0
-
         # -- Control Panel: disable online tips (AT: Computer Configuration > Control Panel) --
         # Prevents the Settings app from contacting Microsoft content services to fetch tips.
         # Ref: Article local policy table - Control Panel
@@ -1236,20 +1402,14 @@ try {
         # Removed to avoid ungovernable Extra Registry Settings in gpresult.
 
         # -- Troubleshooting and Diagnostics (AT: Computer Configuration > System > Troubleshooting and Diagnostics) --
-        # NOTE: DPS (Diagnostic Policy Service) is disabled in Section 1, which makes
-        # all Windows diagnostic scenario execution non-functional regardless of these
-        # policy settings. These policies are applied per article guidance for completeness
-        # and to ensure the behavior is also enforced if DPS is ever re-enabled.
-        # Ref: Article local policy table - Troubleshooting and Diagnostics
+        # DPS is disabled in Section 1; these policies add belt-and-suspenders enforcement.
         # Disable Scheduled Maintenance automatic troubleshooting behavior
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScheduledDiagnostics' `
             -Name 'EnabledExecution' -Value 0
         # Prevent users from launching troubleshooting wizards from Control Panel
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnostics' `
             -Name 'EnableDiagnostics' -Value 0
-        # Prevent Windows from connecting to remote servers to get troubleshooting content
-        # (AT: Computer Configuration > System > Troubleshooting and Diagnostics > Scripted Diagnostics >
-        #  "Troubleshooting: Allow users to access online troubleshooting content ... from Microsoft")
+        # Prevent Windows from fetching troubleshooting content from Microsoft servers
         # BetterWhenConnected policy (sdiageng.admx) valueName=EnableQueryRemoteServer, disabledValue=0
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnosticsProvider\Policy' `
             -Name 'EnableQueryRemoteServer' -Value 0
@@ -1257,10 +1417,8 @@ try {
         # (AT: Computer Configuration > System > Troubleshooting and Diagnostics > [various])
         # Each scenario is controlled by a GUID-keyed subkey. The GUIDs are stable on W11 25H2
         # and all backing ADMX files are present in C:\Windows\PolicyDefinitions.
-        # NOTE: The EnabledScenarioExecutionLevel DELETE entries in gpedit's export are cleanup-only
-        # (remove the value left by a prior Enabled state). On a fresh image they are no-ops and
-        # are safely omitted here. Exception: LeakDiagnostic writes EnabledScenarioExecutionLevel=1
-        # in its disabledList -- that IS written below.
+        # NOTE: gpedit DELETE entries for EnabledScenarioExecutionLevel are cleanup-only no-ops on
+        # fresh images. Exception: LeakDiagnostic disabledList sets it to 1 (written below).
         $wdiBase = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WDI'
         # PerformanceDiagnostics.admx - Boot Performance Diagnostics (primary GUID)
         Set-PolicyValue -Path "$wdiBase\{67144949-5132-4859-8036-a737b43825d8}" -Name 'ScenarioExecutionEnabled' -Value 0
@@ -1292,6 +1450,138 @@ try {
     if ($RunNonPersistentSections) {
         Write-Log "--- Section 6: Registry / Policy Settings (NonPersistent Only) ---"
 
+        # -- ADMX Templates: install from internet or version folder (non-fatal) --
+        # Classifies Registry.pol entries as Administrative Templates (not Extra Registry Settings)
+        # in gpresult on deployed VMs. Each sub-step is try/catch-wrapped; failures are non-fatal.
+        Write-Log "  [ADMX] Installing ADMX templates for Edge, Office 365, and OneDrive..."
+
+        # Edge ADMX - download policy CAB from the Edge updates API
+        if (-not (Test-Path "$env:SystemRoot\PolicyDefinitions\msedge.admx")) {
+            try {
+                Write-Log "  [ADMX] msedge.admx not found - attempting download from Edge updates API..."
+                $admxTmp = Join-Path $env:TEMP 'EdgeADMX'
+                New-Item -Path $admxTmp -ItemType Directory -Force | Out-Null
+                $apiContent = (Invoke-WebRequest -Uri 'https://edgeupdates.microsoft.com/api/products?view=enterprise' -UseBasicParsing).Content |
+                    ConvertFrom-Json
+                $stableRel = ($apiContent | Where-Object { $_.Product -eq 'Stable' }).releases |
+                    Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } |
+                    Sort-Object ProductVersion | Select-Object -Last 1
+                $policyRel = ($apiContent | Where-Object { $_.Product -eq 'Policy' }).releases |
+                    Where-Object { $_.ProductVersion -eq $stableRel.ProductVersion }
+                if (-not $policyRel) {
+                    $policyRel = ($apiContent | Where-Object { $_.Product -eq 'Policy' }).releases |
+                        Sort-Object ProductVersion | Select-Object -Last 1
+                }
+                $cabUrl = $policyRel.artifacts.Location
+                $cabPath = Join-Path $admxTmp 'MicrosoftEdgePolicyTemplates.cab'
+                (New-Object System.Net.WebClient).DownloadFile($cabUrl, $cabPath)
+                $templatesDir = Join-Path $admxTmp 'Templates'
+                New-Item -Path $templatesDir -ItemType Directory -Force | Out-Null
+                & cmd /c extrac32 /Y /E "$cabPath" /L "$templatesDir" | Out-Null
+                $edgeZip = Get-ChildItem -Path $templatesDir -Filter '*.zip' -Recurse |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                if ($edgeZip) {
+                    Expand-Archive -Path $edgeZip.FullName -DestinationPath $templatesDir -Force
+                    Get-ChildItem -Path $templatesDir -File -Recurse -Filter '*.admx' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
+                    Get-ChildItem -Path $templatesDir -Directory -Recurse |
+                        Where-Object { $_.Name -eq 'en-us' } |
+                        Get-ChildItem -File -Recurse -Filter '*.adml' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
+                    Write-Log "  [ADMX] [OK] Edge policy templates installed (msedge.admx)."
+                } else {
+                    Write-Log "  [ADMX] [WARN] No ZIP found in expanded Edge policy CAB - templates not installed."
+                }
+                Remove-Item -Path $admxTmp -Recurse -Force -ErrorAction SilentlyContinue
+            } catch {
+                Write-Log "  [ADMX] [WARN] Edge ADMX download/install failed: $_ (non-fatal)"
+            }
+        } else {
+            Write-Log "  [ADMX] msedge.admx already present - skipping Edge download."
+        }
+
+        # Office 365 ADMX - download administrative templates EXE from Microsoft
+        $officeAdmxPaths = @(
+            "$env:SystemRoot\PolicyDefinitions\office16.admx",
+            "$env:SystemRoot\PolicyDefinitions\outlk16.admx"
+        )
+        $officeAdmxMissing = $officeAdmxPaths | Where-Object { -not (Test-Path $_) }
+        if ($officeAdmxMissing) {
+            try {
+                Write-Log "  [ADMX] Office ADMX missing ($($officeAdmxMissing | Split-Path -Leaf)) - attempting download..."
+                $admxTmp = Join-Path $env:TEMP 'OfficeADMX'
+                New-Item -Path $admxTmp -ItemType Directory -Force | Out-Null
+                $dlPage = (Invoke-WebRequest -Uri 'https://www.microsoft.com/en-us/download/details.aspx?id=49030' -UseBasicParsing).Content
+                $exeUrl = ([regex]::Matches($dlPage, 'https://[^"''>\s]+admintemplates_x64[^"''>\s]+\.exe')).Value |
+                    Select-Object -First 1
+                if ($exeUrl) {
+                    $exePath = Join-Path $admxTmp 'admintemplates_x64.exe'
+                    (New-Object System.Net.WebClient).DownloadFile($exeUrl, $exePath)
+                    $templatesDir = Join-Path $admxTmp 'Templates'
+                    New-Item -Path $templatesDir -ItemType Directory -Force | Out-Null
+                    Start-Process -FilePath $exePath -ArgumentList "/extract:$templatesDir /quiet" -Wait
+                    Get-ChildItem -Path $templatesDir -File -Recurse -Filter '*.admx' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
+                    Get-ChildItem -Path $templatesDir -Directory -Recurse |
+                        Where-Object { $_.Name -eq 'en-us' } |
+                        Get-ChildItem -File -Recurse -Filter '*.adml' |
+                        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
+                    Write-Log "  [ADMX] [OK] Office 365 policy templates installed."
+                } else {
+                    Write-Log "  [ADMX] [WARN] Could not resolve Office 365 ADMX download URL (non-fatal)."
+                }
+                Remove-Item -Path $admxTmp -Recurse -Force -ErrorAction SilentlyContinue
+            } catch {
+                Write-Log "  [ADMX] [WARN] Office ADMX download/install failed: $_ (non-fatal)"
+            }
+        } else {
+            Write-Log "  [ADMX] Office ADMX already present - skipping Office download."
+        }
+
+        # OneDrive ADMX - copy from the installed OneDrive version folder (no download needed)
+        # Check specifically for GPOSetUpdateRing in the ADMX rather than just file presence:
+        # Windows 11 ships an inbox OneDrive.admx that does NOT contain GPOSetUpdateRing.
+        # The standalone OneDrive ADMX (from the OneDrive install directory) does contain it.
+        $odAdmxPath = "$env:SystemRoot\PolicyDefinitions\OneDrive.admx"
+        $odAdmxHasUpdateRing = (Test-Path $odAdmxPath) -and ((Get-Content $odAdmxPath -Raw) -like '*GPOSetUpdateRing*')
+        if (-not $odAdmxHasUpdateRing) {
+            try {
+                # Machine-wide install: C:\Program Files\Microsoft OneDrive\<ver>\adm\
+                # Per-user install:    C:\Program Files (x86)\Microsoft OneDrive\<ver>\
+                $odInstallDir = if (Test-Path "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe") {
+                    "$env:ProgramFiles\Microsoft OneDrive"
+                } else {
+                    "${env:ProgramFiles(x86)}\Microsoft OneDrive"
+                }
+                $odExe = Join-Path $odInstallDir 'OneDrive.exe'
+                if (Test-Path $odExe) {
+                    $odVersion    = (Get-ItemProperty $odExe).VersionInfo.ProductVersion
+                    $odVersionDir = Join-Path $odInstallDir $odVersion
+                    $odSearchDir  = if (Test-Path $odVersionDir) { $odVersionDir } else { $odInstallDir }
+                    $odAdmxFiles  = Get-ChildItem -Path $odSearchDir -File -Recurse -Filter '*.admx' -ErrorAction SilentlyContinue
+                    if ($odAdmxFiles) {
+                        $odAdmxFiles | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\" -Force }
+                        $admlFiles = Get-ChildItem -Path $odSearchDir -File -Recurse -Filter '*.adml' -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Directory.Name -eq 'en-us' -or $_.Directory.Name -eq 'en' -or (Get-ChildItem -Path $_.DirectoryName -Filter '*.admx' -ErrorAction SilentlyContinue) }
+                        if ($admlFiles) {
+                            $admlFiles | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:SystemRoot\PolicyDefinitions\en-us\" -Force }
+                        }
+                        Write-Log "  [ADMX] [OK] OneDrive ADMX copied from '$odSearchDir' (version $odVersion)."
+                    } else {
+                        Write-Log "  [ADMX] [WARN] No ADMX files found under '$odSearchDir' (non-fatal)."
+                    }
+                } else {
+                    Write-Log "  [ADMX] [SKIP] OneDrive not installed at '$odInstallDir'."
+                }
+            } catch {
+                Write-Log "  [ADMX] [WARN] OneDrive ADMX copy failed: $_ (non-fatal)"
+            }
+        } else {
+            Write-Log "  [ADMX] OneDrive.admx already present with GPOSetUpdateRing - skipping OneDrive copy."
+        }
+
+        Write-Log ""
+
         # Override telemetry to Security/Off for NonPersistent VMs. These are transient;
         # Endpoint Analytics, Update Compliance, and per-VM diagnostic reports have no
         # value when the VM will be replaced with a new image on a regular basis.
@@ -1299,8 +1589,9 @@ try {
             -Name 'AllowTelemetry' -Value 0
 
         # -- Windows Error Reporting (AT: Computer Configuration > Windows Components > Windows Error Reporting) --
-        # Disabled on NonPersistent VMs only -- crash state is discarded at VM recycle and WER
-        # reports would reference a VM instance that no longer exists.
+        # Disabled on NonPersistent only - transient VMs discard crash data at recycle so
+        # WER telemetry and upload overhead are not justified. On Persistent desktops WER
+        # retains diagnostic value across the VM's long lifecycle.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
             -Name 'Disabled' -Value 1
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' `
@@ -1313,11 +1604,10 @@ try {
         # gpresult shows this as "Configure Automatic Updates: Disabled" in Administrative Templates.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' `
             -Name 'NoAutoUpdate' -Value 1
-        # NOTE: AUOptions removed — value 1 is not a valid enum in WindowsUpdate.admx (valid: 2,3,4,5,7)
-        # and AUOptions is only meaningful when the policy is Enabled (NoAutoUpdate=0). Redundant here.
-        # NOTE: DisableWindowsUpdateAccess removed — the only ADMX-backed policy (RemoveWindowsUpdate)
-        # is class="User" only, at a different path. No Machine-class ADMX exists for this value on W11.
-        # NoAutoUpdate=1 above is sufficient to prevent updates on NonPersistent VMs.
+        # Remove access to all Windows Update features in the Settings UI
+        # (WindowsUpdate.admx: Software\Policies\Microsoft\Windows\WindowsUpdate, SetDisableUXWUAccess=1).
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' `
+            -Name 'SetDisableUXWUAccess' -Value 1
 
         # -- Update channel lockdown: application-level (NonPersistent Only) --
         # On Persistent VMs, SCCM or Intune manages these update channels directly.
@@ -1346,11 +1636,16 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Teams' `
             -Name 'disableAutoUpdate' -Value 1
 
-        # OneDrive: block automatic updates entirely (image provides the pinned version)
+        # OneDrive: set update ring to Enterprise (slowest channel, ~60 day lag behind Production).
+        # There is no "disable updates" option in the OneDrive ADMX - GPOSetUpdateRing controls the
+        # channel only, not whether updates occur. The OneDrive client will not downgrade, so the
+        # version baked into the image remains in place until the Enterprise channel reaches or
+        # exceeds it. Ring values (from OneDrive.admx): 0=Enterprise, 4=Insider, 5=Production.
         # Ref: https://learn.microsoft.com/en-us/sharepoint/use-group-policy#set-the-sync-app-update-ring
-        # NOTE: GPOSetUpdateRing is not in the inbox SkyDrive.admx. It requires the standalone OneDrive
-        # ADMX templates (OneDrive.admx) installed separately. Without them this will appear as an
-        # Extra Registry Setting in gpresult, but the value is still enforced by the OneDrive client.
+        # NOTE: GPOSetUpdateRing is not in the inbox OneDrive.admx shipped with Windows. It requires
+        # the standalone ADMX from the OneDrive install directory (installed above in Section 6 ADMX
+        # pre-step). Without the ADMX it appears as an Extra Registry Setting in gpresult but is still
+        # enforced by the OneDrive client.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' `
             -Name 'GPOSetUpdateRing' -Value 0
 

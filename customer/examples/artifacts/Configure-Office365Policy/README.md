@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies for Azure Virtual Desktop environments using the Local Group Policy Object (LGPO) tool. It optimizes Outlook performance and behavior for AVD session hosts.
+This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies for Azure Virtual Desktop environments using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe required. It optimizes Outlook performance and behavior for AVD session hosts.
 
 ## Purpose
 
@@ -99,12 +99,7 @@ This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies 
 
 ## What the Script Does
 
-### 1. LGPO Tool Setup
-
-- Downloads LGPO.exe if not present
-- Copies to `C:\Windows\System32`
-
-### 2. Office Administrative Templates
+### 1. Office Administrative Templates
 
 - Downloads latest Office Administrative Template files (ADMX/ADML)
 - Extracts and copies to `C:\Windows\PolicyDefinitions`
@@ -134,10 +129,11 @@ This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies 
 - Sets Outlook registry values directly for policies without ADMX support
 - Configures Exchange account settings
 
-### 5. Policy Application
+### 4. Policy Application
 
-- Applies settings using LGPO.exe
-- Runs `gpupdate /force` to apply changes immediately
+- Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required for the policy write step
+- Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
+- `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
 
 ## Policy Settings Applied
 
@@ -233,11 +229,9 @@ C:\Windows\Logs\Configuration\Configure-Office365-<timestamp>.log
 
 Log entries include:
 
-- LGPO tool download and setup
 - ADMX/ADML file deployment
 - Policy application details
 - Registry value creation
-- gpupdate execution results
 
 ## Functions
 
@@ -245,10 +239,12 @@ Log entries include:
 |----------|-------------|
 | `Get-InternetFile` | Downloads files from URLs |
 | `Get-InternetUrl` | Extracts download URLs from web pages |
-| `Invoke-LGPO` | Applies Group Policy settings using LGPO.exe |
 | `New-Log` | Initializes logging infrastructure |
-| `Set-RegistryValue` | Creates or updates registry values |
-| `Update-LocalGPOTextFile` | Creates LGPO text files for policy settings |
+| `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
+| `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
+| `Clear-PolicyRegistryKeyValues` | Queues removal of all values under a registry key in Registry.pol |
+| `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
+| `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
 | `Write-Log` | Writes formatted log entries |
 
 ## Requirements
@@ -257,23 +253,15 @@ Log entries include:
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
 - **Microsoft 365:** Office 2016, 2019, 2021, or Microsoft 365 Apps
-- **Network Access:** Required for downloading LGPO and Office ADMX files
+- **Network Access:** Required for downloading Office ADMX files (or pre-stage them offline)
 
 ## Offline Usage
 
-To use this script in air-gapped environments:
+To use this script in air-gapped environments, pre-download the Office Administrative Templates and place them in the script directory or in `C:\Windows\PolicyDefinitions` before running:
 
-1. **Pre-download Required Files:**
-   - LGPO.zip: https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip
-   - Office Administrative Templates: https://www.microsoft.com/en-us/download/details.aspx?id=49030
+- Office Administrative Templates: https://www.microsoft.com/en-us/download/details.aspx?id=49030
 
-2. **Place Files in Script Directory**
-
-3. **Run Script:**
-
-   ```powershell
-   .\Configure-Office365.ps1
-   ```
+The Registry.pol write step requires no internet access.
 
 ## Troubleshooting
 
@@ -323,7 +311,6 @@ gpresult /h C:\Temp\gpresult.html
 - [Microsoft Outlook Performance Best Practices](https://support.microsoft.com/en-us/help/2768656)
 - [Office Administrative Template Files](https://www.microsoft.com/en-us/download/details.aspx?id=49030)
 - [Configure Outlook Cached Exchange Mode](https://learn.microsoft.com/en-us/outlook/troubleshoot/performance/performance-issues-if-too-many-items-or-folders)
-- [LGPO Tool Documentation](https://techcommunity.microsoft.com/t5/microsoft-security-baselines/lgpo-exe-local-group-policy-object-utility-v1-0/ba-p/701045)
 
 ## Support
 

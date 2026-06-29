@@ -22,32 +22,29 @@ This PowerShell script automates the application of Defense Information Systems 
 
 ### `SearchForApplications`
 
-- **Type:** String (Boolean)
-- **Default:** `'False'`
-- **Description:** When `'True'`, verifies applications in `ApplicationsToSTIG` are installed before applying settings
+- **Type:** Switch
+- **Description:** When specified, verifies applications in `ApplicationsToSTIG` are installed before applying settings
 
-### `AllowCredentialManager`
+### `AllowLocalUserLogon`
 
-- **Type:** String (Boolean)
-- **Default:** `'False'`
-- **Description:** Enables cmdkey storage of storage account keys for FSLogix
+- **Type:** Switch
+- **Description:** When specified, removes the local accounts SID (`*S-1-5-113`) from `SeDenyRemoteInteractiveLogonRight`, allowing local user accounts to connect via Remote Desktop and AVD. Guests and all other deny principals remain.
 
 ### `STIGsUrl`
 
 - **Type:** String (URL)
-- **Default:** `'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip'`
+- **Default:** `'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2026.zip'`
 - **Description:** URL of the STIG GPO package to download and apply
 
 ### `Upgrade`
 
-- **Type:** String (Boolean)
-- **Default:** `'False'`
-- **Description:** When `'True'`, checks STIG version and resets local group policy if the version has changed
+- **Type:** Switch
+- **Description:** When specified, checks STIG version and resets local group policy if the version has changed before re-applying
 
 ### `Version`
 
 - **Type:** String
-- **Default:** `'2025.10'`
+- **Default:** `'2026.04'`
 - **Format:** `YYYY.MM`
 - **Description:** STIG version to stamp to the registry for tracking and upgrade detection
 
@@ -62,13 +59,13 @@ This PowerShell script automates the application of Defense Information Systems 
 ### With Application Search
 
 ```powershell
-.\Apply-STIGsAVD.ps1 -SearchForApplications 'True'
+.\Apply-STIGsAVD.ps1 -SearchForApplications
 ```
 
 ### Upgrade Mode with New Version
 
 ```powershell
-.\Apply-STIGsAVD.ps1 -Upgrade 'True' -Version '2025.12'
+.\Apply-STIGsAVD.ps1 -Upgrade -Version '2026.07'
 ```
 
 ### Custom Application List
@@ -77,10 +74,10 @@ This PowerShell script automates the application of Defense Information Systems 
 .\Apply-STIGsAVD.ps1 -ApplicationsToSTIG '["Google Chrome", "Mozilla Firefox"]'
 ```
 
-### Domain-Joined Environment
+### Allow Local User Logon
 
 ```powershell
-.\Apply-STIGsAVD.ps1
+.\Apply-STIGsAVD.ps1 -AllowLocalUserLogon
 ```
 
 ## What the Script Does
@@ -117,18 +114,28 @@ This PowerShell script automates the application of Defense Information Systems 
 ### 5. AVD-Specific Exceptions
 
 - Configures Remote Desktop Users remote interactive logon rights
-- Adjusts deny logon rights for domain/workgroup environments
+- Adjusts deny logon rights for domain/workgroup environments and `AllowLocalUserLogon`
 - Removes ECC curves SSL configuration that breaks AVD
 - Configures firewall settings for non-domain joined systems
-- Removes Edge proxy configuration
+- Removes Edge proxy configuration (V-235798)
+- Removes BitLocker startup PIN requirement (V-253260 - NA for stateless AVD session hosts)
 
 ### 6. Additional Security Mitigations
 
-- **WN10-00-000175:** Disables Secondary Logon service
-- **SRG-OS-000480-GPOS-00227:** Disables PortProxy
-- **WN11-00-000125:** Removes Microsoft Copilot
-- **SRG-OS-000095-GPOS-00049:** Removes "Run as different user" from context menus
-- **CVE-2013-3900:** Enables certificate padding check
+| STIG ID | Severity | Action |
+|---------|----------|--------|
+| V-253289 | MEDIUM | Disables Secondary Logon service |
+| V-257592 | MEDIUM | Disables PortProxy |
+| V-253396 | MEDIUM | Enables Explorer Data Execution Prevention |
+| V-253275 | HIGH | Removes IIS-WebServer and IIS-HostableWebCore optional features |
+| V-253276 | MEDIUM | Removes SNMP Client Windows Capability |
+| V-253277 | MEDIUM | Disables Simple TCP/IP Services optional feature |
+| V-253278 | MEDIUM | Disables Telnet Client optional feature |
+| V-253279 | MEDIUM | Disables TFTP Client optional feature |
+| V-253286 | MEDIUM | Disables SMB v1 protocol |
+| V-268317 | — | Removes Microsoft Copilot (provisioned and user AppX packages) |
+| V-253359 | MEDIUM | Removes "Run as different user" from context menus |
+| V-253340/41/42 | MEDIUM | Restricts Application, Security, and System event log access |
 
 ### 7. Version Tracking
 
@@ -164,18 +171,12 @@ Logs are created in:
 C:\Windows\Logs\Configuration\Apply-STIGs-<timestamp>.log
 ```
 
-Log format includes:
-
-- Timestamp
-- Category (Info, Warning, Error)
-- Detailed message
-
 ## Version Management
 
 The script implements version tracking to support upgrades:
 
 - **Initial Run:** Stamps version to `HKLM:\Software\DoD\STIG\Version`
-- **Upgrade Mode:** Compares existing version with new version
+- **Upgrade Mode (`-Upgrade`):** Compares existing version with new version
 - **Version Mismatch:** Resets Local Group Policy before applying new STIGs
 - **Version Match:** Skips policy reset, applies STIGs incrementally
 
@@ -183,9 +184,9 @@ The script implements version tracking to support upgrades:
 
 | Function | Description |
 |----------|-------------|
+| `Disable-OptionalFeatureIfEnabled` | Disables a Windows optional feature if currently enabled |
 | `Get-InstalledApplication` | Queries registry for installed applications |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
-| `Invoke-LGPO` | Applies registry text files, security templates, and audit CSVs using LGPO.exe |
 | `New-Log` | Initializes logging infrastructure |
 | `Reset-LocalPolicy` | Resets Local Group Policy and optionally Local Security Policy |
 | `Set-RegistryValue` | Creates or updates registry values |

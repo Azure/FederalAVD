@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PowerShell script configures OneDrive Known Folder Move (KFM) policies for Azure Virtual Desktop environments using the Local Group Policy Object (LGPO) tool. It enables automatic redirection of Windows known folders (Desktop, Documents, and Pictures) to OneDrive for Business.
+This PowerShell script configures OneDrive Known Folder Move (KFM) policies for Azure Virtual Desktop environments using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe required. It enables automatic redirection of Windows known folders (Desktop, Documents, and Pictures) to OneDrive for Business.
 
 ## Purpose
 
@@ -54,10 +54,11 @@ Connect-AzAccount
 
 ## What the Script Does
 
-### 1. LGPO Tool Setup
+### 1. OneDrive ADMX Templates
 
-- Downloads LGPO.exe if not present in `C:\Windows\System32`
-- Extracts and copies to system directory
+- Locates the OneDrive version folder under the install directory (supports both per-machine `%ProgramFiles%\Microsoft OneDrive` and per-user `%ProgramFiles(x86)%\Microsoft OneDrive`)
+- Copies `OneDrive.admx` to `C:\Windows\PolicyDefinitions\`
+- Copies matching `.adml` files to `C:\Windows\PolicyDefinitions\en-us\`
 
 ### 2. OneDrive KFM Configuration
 
@@ -79,9 +80,9 @@ The script configures the following Known Folder Move policies:
 
 ### 3. Policy Application
 
-- Creates LGPO text file with OneDrive registry settings
-- Applies policies using LGPO.exe
-- Runs `gpupdate /force` to apply changes immediately
+- Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe required
+- Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
+- `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
 
 ### 4. Registry Configuration
 
@@ -181,20 +182,20 @@ C:\Windows\Logs\Configuration\Configure-OneDrive-<timestamp>.log
 
 Log entries include:
 
-- LGPO tool download status
+- ADMX/ADML copy status
 - Policy application details
 - Registry value creation
-- gpupdate execution results
 
 ## Functions
 
 | Function | Description |
 |----------|-------------|
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
-| `Invoke-LGPO` | Applies Group Policy settings using LGPO.exe |
 | `New-Log` | Initializes logging infrastructure |
-| `Set-RegistryValue` | Creates or updates registry values |
-| `Update-LocalGPOTextFile` | Creates LGPO text files for policy settings |
+| `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
+| `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
+| `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
+| `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
 | `Write-Log` | Writes formatted log entries |
 
 ## Offline Usage

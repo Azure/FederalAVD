@@ -1,4 +1,4 @@
-# Verify and grant Graph API permissions to SessionHostReplacer managed identity
+﻿# Verify and grant Graph API permissions to SessionHostReplacer managed identity
 # Run this script with Global Administrator or Privileged Role Administrator rights
 
 param(
@@ -81,10 +81,10 @@ try {
             Write-Host "  Removing: $roleName" -ForegroundColor Gray
             try {
                 Remove-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentitySp.Id -AppRoleAssignmentId $assignment.Id -ErrorAction Stop
-                Write-Host "  ✓ Removed $roleName" -ForegroundColor Green
+                Write-Host "  [OK] Removed $roleName" -ForegroundColor Green
             }
             catch {
-                Write-Warning "  ✗ Failed to remove $roleName : $_"
+                Write-Warning "  [FAIL] Failed to remove $roleName : $_"
             }
         }
         Write-Host "`nWaiting 5 seconds for permissions to clear..." -ForegroundColor Gray
@@ -116,10 +116,10 @@ try {
             }
             
             New-MgServicePrincipalAppRoleAssignment @params -ErrorAction Stop | Out-Null
-            Write-Host "  ✓ Granted $($perm.Name)" -ForegroundColor Green
+            Write-Host "  [OK] Granted $($perm.Name)" -ForegroundColor Green
         }
         catch {
-            Write-Error "  ✗ Failed to grant $($perm.Name): $_"
+            Write-Error "  [FAIL] Failed to grant $($perm.Name): $_"
         }
     }
    
@@ -130,8 +130,8 @@ try {
     Write-Host "`n=== Configuration Summary ===" -ForegroundColor Cyan
     Write-Host "Managed Identity: $($managedIdentitySp.DisplayName)" -ForegroundColor White
     Write-Host "`nGranted Graph API Permissions:" -ForegroundColor Yellow
-    Write-Host "  ✓ Device.ReadWrite.All - Required for Entra ID device deletion" -ForegroundColor White
-    Write-Host "  ✓ DeviceManagementManagedDevices.ReadWrite.All - Required for Intune device deletion" -ForegroundColor White
+    Write-Host "  [OK] Device.ReadWrite.All - Required for Entra ID device deletion" -ForegroundColor White
+    Write-Host "  [OK] DeviceManagementManagedDevices.ReadWrite.All - Required for Intune device deletion" -ForegroundColor White
     Write-Host "`nNote: No directory role assignments are required (Cloud Device Administrator is NOT needed)" -ForegroundColor Gray
     
     Write-Host "`nNext steps:" -ForegroundColor Cyan

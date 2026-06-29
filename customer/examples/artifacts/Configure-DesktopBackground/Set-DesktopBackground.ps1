@@ -3,20 +3,35 @@
     Configures a custom desktop background for Azure Virtual Desktop session hosts.
 
 .DESCRIPTION
-    This script sets a custom desktop background image using Group Policy settings via LGPO.exe
-    but can fall back to using the WMI Bridge for CSP if LGPO.exe is not available.
+    Copies the background image included in this artifact package to
+    C:\Windows\Web\Wallpaper\Custom\ and writes three User-scope Group Policy
+    registry values directly to the local GPO Registry.pol file (no LGPO.exe,
+    no COM objects, no internet access required):
+
+      Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop
+        NoChangingWallPaper = 1  (prevents users from changing the wallpaper)
+
+      Software\Microsoft\Windows\CurrentVersion\Policies\System
+        Wallpaper      = <path>  (path to the background image)
+        WallpaperStyle = 4       (stretch / fill style; 4 = Stretch)
+
+    The Registry.pol writer conforms to MS-GPREG (Group Policy: Registry Extension
+    Encoding). gpt.ini is updated so the Group Policy client on deployed session hosts
+    applies the entries at logon.
+
+    WallpaperStyle values:
+      0 = Center   1 = Tile    2 = Stretch   3 = No change
+      4 = Stretch  6 = Fit     10 = Fill     22 = Span
 
     The script is designed to be used during Azure Virtual Desktop image customization or
     session host deployment.
 
 .NOTES
     IMPORTANT: Custom Desktop Background Configuration
-    
-    Before using this script, you must replace the default 'sunrise.jpg' file in this directory 
-    with your custom desktop background image. In an offline environment, you should download LGPO.zip
-    from https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip
-    and place it in the same directory as this script.
-    
+
+    Before using this artifact, replace the default 'sunrise.jpg' file in this directory
+    with your custom desktop background image.
+
     Desktop Background Requirements:
     - File format: JPG (JPEG)
     - Resolution: High resolution (4K recommended - 3840x2560 pixels)
@@ -43,282 +58,35 @@
     https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11
 #>
 
-[uri]$LGPOUrl = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
 #region Functions
 
-Function Get-InternetFile {
-    [CmdletBinding()]
-    Param (
+function New-Log {
+    param (
         [Parameter(Mandatory = $true, Position = 0)]
-        [uri]$Url,
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$OutputDirectory,
-        [Parameter(Mandatory = $false, Position = 2)]
-        [string]$OutputFileName
+        [string]$Path
     )
-
-    Begin {
-        $ProgressPreference = 'SilentlyContinue'
-        ## Get the name of this function and write header
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Log -Message "Starting ${CmdletName} with the following parameters: $PSBoundParameters"
-    }
-    Process {
-        $start_time = Get-Date
-        If (!$OutputFileName) {
-            Write-Log -Message "${CmdletName}: No OutputFileName specified. Trying to get file name from URL."
-            If ((split-path -path $Url -leaf).Contains('.')) {
-                $OutputFileName = split-path -path $url -leaf
-                Write-Log -Message "${CmdletName}: Url contains file name - '$OutputFileName'."
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
-                $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect = $false
-                $response = $request.GetResponse()
-                $Location = $response.GetResponseHeader("Location")
-                If ($Location) {
-                    $OutputFileName = [System.IO.Path]::GetFileName($Location)
-                    Write-Log -Message "${CmdletName}: File Name from 'Location' Response Header is '$OutputFileName'."
-                }
-                Else {
-                    Write-Log -Message "${CmdletName}: No 'Location' Response Header returned. Trying 'Content-Disposition' Response Header."
-                    $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
-                    $contentDisposition = $result.Headers.'Content-Disposition'
-                    If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
-                        Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
-                    }
-                }
-            }
-        }
-        If ($OutputFileName) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
-            $wc = New-Object System.Net.WebClient
-            $OutputFile = Join-Path $OutputDirectory -ChildPath $OutputFileName
-            Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."
-            Try {
-                $wc.DownloadFile($url, $OutputFile)
-                $time = (Get-Date).Subtract($start_time).Seconds
-                
-                Write-Log -Message "${CmdletName}: Time taken: '$time' seconds."
-                if (Test-Path -Path $outputfile) {
-                    $totalSize = (Get-Item $outputfile).Length / 1MB
-                    Write-Log -Message "${CmdletName}: Download was successful. Final file size: '$totalsize' mb"
-                    Return $OutputFile
-                }
-            }
-            Catch {
-                Write-Log -Category Error -Message "${CmdletName}: Error downloading file. Please check url."
-                Return $Null
-            }
-        }
-        Else {
-            Write-Log -Category Error -Message "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Return $Null
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
-Function Invoke-LGPO {
-    [CmdletBinding()]
-    Param (
-        [string]$InputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Gathering Registry text files for LGPO from '$InputDir'"
-        $RegFiles = Get-ChildItem -Path $InputDir -Filter '*.txt'
-        ForEach ($RegistryFile in $RegFiles) {
-            $TxtFilePath = $RegistryFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying settings from '$txtFilePath' to Local Group Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$TxtFilePath`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Gathering Security Templates files for LGPO from '$InputDir'"
-        $ConfigFile = Get-ChildItem -Path $InputDir -Filter '*.inf'
-        If ($ConfigFile) {
-            $ConfigFile = $ConfigFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying security settings from '$ConfigFile' to Local Security Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/s `"$ConfigFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Finding Audit CSV file for LGPO from '$InputDir'"
-        $AuditFile = Get-ChildItem -Path $InputDir -Filter '*.csv'
-        If ($AuditFile) {
-            $AuditFile = $AuditFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying advanced audit settings from '$AuditFile' to Local policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/ac `"$AuditFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-    }
-    End {
-    }
-}
-
-Function New-Log {
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string] $Path
-    )
-
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
+    $date = Get-Date -UFormat '%Y-%m-%d %H-%M-%S'
     Set-Variable logFile -Scope Script
     $script:logFile = "$Script:Name-$date.log"
-
-    if ((Test-Path $path ) -eq $false) {
-        $null = New-Item -Path $path -type directory
-    }
-
-    $script:Log = Join-Path $path $logfile
-
+    if (-not (Test-Path $Path)) { $null = New-Item -Path $Path -ItemType Directory }
+    $script:Log = Join-Path $Path $script:logFile
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
 }
 
-Function Set-RegistryValue {
-    [CmdletBinding()]
+function Write-Log {
     param (
-        [Parameter()]
-        [string]
-        $Name,
-        [Parameter()]
-        [string]
-        $Path,
-        [Parameter()]
-        [string]$PropertyType,
-        [Parameter()]
-        $Value
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Setting Registry Value $Path\$Name"
-        # Create the registry Key(s) if necessary.
-        If (!(Test-Path -Path $Path)) {
-            Write-Log -Message "${CmdletName}: Creating Registry Key: $Path"
-            New-Item -Path $Path -Force | Out-Null
-        }
-        # Check for existing registry setting
-        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-        If ($RemoteValue) {
-            # Get current Value
-            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
-            Write-Log -Message "${CmdletName}: Current Value of $($Path)\$($Name) : $CurrentValue"
-            If ($Value -ne $CurrentValue) {
-                Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Value of $($Path)\$($Name) is already set to $Value"
-            }           
-        }
-        Else {
-            Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
-Function Update-LocalGPOTextFile {
-    [CmdletBinding(DefaultParameterSetName = 'Set')]
-    Param (
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [ValidateSet('Computer', 'User')]
-        [string]$Scope,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryKeyPath,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryValue,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [AllowEmptyString()]
-        [string]$RegistryData,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [ValidateSet('DWORD', 'String')]
-        [string]$RegistryType,
-        [Parameter(Mandatory = $false, ParameterSetName = 'Delete')]
-        [switch]$Delete,
-        [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
-        [switch]$DeleteAllValues,
-        [string]$outputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        # Convert $RegistryType to UpperCase to prevent LGPO errors.
-        $ValueType = $RegistryType.ToUpper()
-        # Change String type to SZ for text file
-        If ($ValueType -eq 'STRING') { $ValueType = 'SZ' }
-        # Replace any incorrect registry entries for the format needed by text file.
-        $modified = $false
-        $SearchStrings = 'HKLM:\', 'HKCU:\', 'HKEY_CURRENT_USER:\', 'HKEY_LOCAL_MACHINE:\'
-        ForEach ($String in $SearchStrings) {
-            If ($RegistryKeyPath.StartsWith("$String") -and $modified -ne $true) {
-                $index = $String.Length
-                $RegistryKeyPath = $RegistryKeyPath.Substring($index, $RegistryKeyPath.Length - $index)
-                $modified = $true
-            }
-        }        
-        #Create the output file if needed.
-        $OutFile = Join-Path -Path $OutputDir -ChildPath "$Scope.txt"
-        If (-not (Test-Path -LiteralPath $Outfile)) {
-            If (-not (Test-Path -LiteralPath $OutputDir -PathType 'Container')) {
-                $null = New-Item -Path $OutputDir -Type 'Directory' -Force -ErrorAction 'Stop'
-            }
-            $null = New-Item -Path $OutFile -ItemType File -ErrorAction Stop
-        }
-
-        Write-Log -Message "${CmdletName}: Adding registry information to '$outfile' for LGPO.exe"
-        # Update file with information
-        Add-Content -Path $Outfile -Value $Scope
-        Add-Content -Path $Outfile -Value $RegistryKeyPath
-        Add-Content -Path $Outfile -Value $RegistryValue
-        If ($Delete) {
-            Add-Content -Path $Outfile -Value 'DELETE'
-        }
-        ElseIf ($DeleteAllValues) {
-            Add-Content -Path $Outfile -Value 'DELETEALLVALUES'
-        }
-        Else {
-            Add-Content -Path $Outfile -Value "$($ValueType):$RegistryData"
-        }
-        Add-Content -Path $Outfile -Value ""
-    }
-    End {        
-    }
-}
-
-Function Write-Log {
-    Param (
         [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet("Info", "Warning", "Error")]
+        [ValidateSet('Info', 'Warning', 'Error')]
         $Category = 'Info',
         [Parameter(Mandatory = $true, Position = 1)]
         $Message
     )
-
     $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
     if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
+        Add-Content $script:Log $Content -ErrorAction SilentlyContinue
     }
-    Switch ($Category) {
+    switch ($Category) {
         'Info'    { Write-Host $Content }
         'Error'   { Write-Error $Content -ErrorAction Continue }
         'Warning' { Write-Warning $Content }
@@ -327,74 +95,249 @@ Function Write-Log {
 
 #endregion Functions
 
-[string]$Script:Name = "Configure-DesktopWallpaper"
-[string]$Script:TempDir = Join-Path -Path "$env:SystemRoot\Temp" -ChildPath $Script:Name
-[string]$Script:LGPOTempDir = Join-Path -Path $Script:TempDir -ChildPath 'LGPO'
-If (-not(Test-Path -Path $Script:LGPOTempDir)) { New-Item -Path $Script:LGPOTempDir -ItemType Directory -Force | Out-Null }
+#region RegistryPol -- PReg direct writer (no LGPO.exe required)
+<#
+    Registry.pol (PReg) direct writer  -  no LGPO.exe, no COM objects required.
+    Conforms to MS-GPREG v30.0.
+    MS-GPREG spec: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpreg/
+
+    PReg binary format:
+        Header : "PReg" (4 ASCII bytes) + version 1 (uint32 LE) = 8 bytes
+        Entry  : [<KeyPath>\0;<ValueName>\0;<Type4B>;<Size4B>;<Data>]
+                 '[', ']', ';' are UTF-16LE single characters.
+        Types  : 1=REG_SZ  4=REG_DWORD
+        HKLM / HKCU MUST NOT appear in KeyPath per spec.
+
+    Registry.pol locations:
+        Machine : %SystemRoot%\System32\GroupPolicy\Machine\Registry.pol
+        User    : %SystemRoot%\System32\GroupPolicy\User\Registry.pol
+#>
+
+$script:_PRegEnc = [System.Text.Encoding]::Unicode  # UTF-16LE
+
+function Read-PRegFile {
+    param ([string]$Path)
+    $list = [System.Collections.Generic.List[hashtable]]::new()
+    if (-not (Test-Path -LiteralPath $Path)) { return ,$list }
+    $raw = [IO.File]::ReadAllBytes($Path)
+    if ($raw.Length -lt 8) { return ,$list }
+    $sig = [System.Text.Encoding]::ASCII.GetString($raw, 0, 4)
+    $ver = [BitConverter]::ToUInt32($raw, 4)
+    if ($sig -ne 'PReg' -or $ver -ne 1) {
+        Write-Warning "RegistryPol: '$Path' has unexpected header (sig='$sig' ver=$ver). Existing entries discarded."
+        return ,$list
+    }
+    $pos = 8
+    while ($pos -lt $raw.Length) {
+        if ($pos + 1 -ge $raw.Length) { break }
+        if ($raw[$pos] -ne 0x5B -or $raw[$pos + 1] -ne 0x00) { $pos++; continue }
+        $pos += 2
+        $start = $pos
+        while ($pos + 1 -lt $raw.Length -and -not ($raw[$pos] -eq 0 -and $raw[$pos + 1] -eq 0)) { $pos += 2 }
+        $key = $script:_PRegEnc.GetString($raw, $start, $pos - $start); $pos += 2; $pos += 2
+        $start = $pos
+        while ($pos + 1 -lt $raw.Length -and -not ($raw[$pos] -eq 0 -and $raw[$pos + 1] -eq 0)) { $pos += 2 }
+        $name = $script:_PRegEnc.GetString($raw, $start, $pos - $start); $pos += 2; $pos += 2
+        $type = [BitConverter]::ToUInt32($raw, $pos); $pos += 4; $pos += 2
+        $size = [BitConverter]::ToUInt32($raw, $pos); $pos += 4; $pos += 2
+        $data = if ($size -gt 0) { $raw[$pos..($pos + $size - 1)] } else { [byte[]]@() }
+        $pos += [int]$size; $pos += 2
+        $list.Add(@{ Key = $key; Name = $name; Type = $type; Size = $size; Data = $data })
+    }
+    return ,$list
+}
+
+function Write-PRegFile {
+    param (
+        [string]$Path,
+        [System.Collections.Generic.List[hashtable]]$Entries
+    )
+    $dir = Split-Path -Path $Path -Parent
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
+    $ms = [IO.MemoryStream]::new()
+    $w  = [IO.BinaryWriter]::new($ms)
+    $w.Write([System.Text.Encoding]::ASCII.GetBytes('PReg'))
+    $w.Write([uint32]1)
+    $bo = [byte[]](0x5B, 0x00); $bc = [byte[]](0x5D, 0x00)
+    $sc = [byte[]](0x3B, 0x00); $nt = [byte[]](0x00, 0x00)
+    foreach ($e in $Entries) {
+        $w.Write($bo)
+        $w.Write($script:_PRegEnc.GetBytes($e.Key));   $w.Write($nt); $w.Write($sc)
+        $w.Write($script:_PRegEnc.GetBytes($e.Name));  $w.Write($nt); $w.Write($sc)
+        $w.Write([uint32]$e.Type); $w.Write($sc)
+        $w.Write([uint32]$e.Size); $w.Write($sc)
+        if ($null -ne $e.Data -and $e.Data.Length -gt 0) { $w.Write([byte[]]$e.Data) }
+        $w.Write($bc)
+    }
+    $w.Flush()
+    $bytes = $ms.ToArray()
+    $w.Dispose(); $ms.Dispose()
+    $tmp = "$Path.tmp"
+    [IO.File]::WriteAllBytes($tmp, $bytes)
+    $written = (Get-Item -LiteralPath $tmp).Length
+    if ($written -ne $bytes.Length) {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        throw "RegistryPol: write verification failed for '$Path' (expected $($bytes.Length) bytes, got $written)."
+    }
+    Move-Item -LiteralPath $tmp -Destination $Path -Force
+}
+
+function Set-PRegEntry {
+    param (
+        [System.Collections.Generic.List[hashtable]]$Entries,
+        [string]$Key, [string]$Name, [uint32]$Type, [byte[]]$Data
+    )
+    $old = @($Entries | Where-Object { $_.Key -ieq $Key -and $_.Name -ieq $Name })
+    foreach ($e in $old) { $Entries.Remove($e) | Out-Null }
+    $Entries.Add(@{ Key = $Key; Name = $Name; Type = $Type; Size = [uint32]$Data.Length; Data = $Data })
+}
+
+function ConvertTo-PRegDWord { param ([uint32]$Value); [BitConverter]::GetBytes($Value) }
+function ConvertTo-PRegSZ    { param ([string]$Value);  $script:_PRegEnc.GetBytes($Value + [char]0) }
+
+function Get-RelativePolicyKeyPath {
+    param ([string]$Path)
+    foreach ($prefix in @(
+        'HKEY_LOCAL_MACHINE:\','HKEY_CURRENT_USER:\',
+        'HKEY_LOCAL_MACHINE:','HKEY_CURRENT_USER:',
+        'HKLM:\','HKCU:\','HKLM:','HKCU:'
+    )) {
+        if ($Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+            return $Path.Substring($prefix.Length).TrimStart('\')
+        }
+    }
+    return $Path
+}
+
+$script:_PolQueue = [System.Collections.Generic.List[hashtable]]::new()
+
+function Set-PolicyRegistryValue {
+    param (
+        [Parameter(Mandatory)][ValidateSet('Computer','User')][string]$Scope,
+        [Parameter(Mandatory)][string]$RegistryKeyPath,
+        [Parameter(Mandatory)][string]$RegistryValue,
+        [Parameter(Mandatory)][ValidateSet('DWORD','String','SZ')][string]$RegistryType,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$RegistryData
+    )
+    $relPath   = Get-RelativePolicyKeyPath $RegistryKeyPath
+    $typeCode  = if ($RegistryType -eq 'DWORD') { [uint32]4 } else { [uint32]1 }
+    $dataBytes = if ($typeCode -eq 4) { ConvertTo-PRegDWord ([uint32]$RegistryData) } else { ConvertTo-PRegSZ $RegistryData }
+    $script:_PolQueue.Add(@{ Scope=$Scope; Key=$relPath; Name=$RegistryValue; Type=$typeCode; Size=[uint32]$dataBytes.Length; Data=$dataBytes })
+    Write-Log -Category Info -Message "RegistryPol: Queued [$Scope] $relPath\$RegistryValue ($RegistryType = $RegistryData)"
+}
+
+function Invoke-PolicyUpdate {
+    if ($script:_PolQueue.Count -eq 0) { Write-Log -Category Info -Message 'RegistryPol: Queue is empty.'; return }
+
+    $gpBase         = "$env:SystemRoot\System32\GroupPolicy"
+    $machineQ       = @($script:_PolQueue | Where-Object { $_.Scope -eq 'Computer' })
+    $userQ          = @($script:_PolQueue | Where-Object { $_.Scope -eq 'User' })
+    $machineUpdated = $false
+    $userUpdated    = $false
+
+    foreach ($scope in @(
+        @{ Queue=$machineQ; PolPath="$gpBase\Machine\Registry.pol"; IsUser=$false },
+        @{ Queue=$userQ;    PolPath="$gpBase\User\Registry.pol";    IsUser=$true  }
+    )) {
+        if ($scope.Queue.Count -eq 0) { continue }
+        $entries = Read-PRegFile -Path $scope.PolPath
+        foreach ($q in $scope.Queue) {
+            Set-PRegEntry -Entries $entries -Key $q.Key -Name $q.Name -Type $q.Type -Data $q.Data
+        }
+        Write-PRegFile -Path $scope.PolPath -Entries $entries
+        Write-Log -Category Info -Message "RegistryPol: Wrote $($entries.Count) entries to '$($scope.PolPath)'."
+        if ($scope.IsUser) { $userUpdated = $true } else { $machineUpdated = $true }
+    }
+
+    $script:_PolQueue.Clear()
+
+    try {
+        $gptPath   = "$gpBase\gpt.ini"
+        $regCse    = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
+        $machineAT = '{D02B1F72-3407-48AE-BA88-E8213C6761F1}'
+        $userAT    = '{D02B1F73-3407-48AE-BA88-E8213C6761F1}'
+        $existing  = if (Test-Path -LiteralPath $gptPath) { Get-Content $gptPath -Raw } else { '' }
+
+        $machineVer = [uint16]1; $userVer = [uint16]1
+        if ($existing -match 'Version\s*=\s*(\d+)') {
+            $cur        = [uint32]$matches[1]
+            $machineVer = [uint16]($cur -band 0xFFFF)
+            $userVer    = [uint16](($cur -shr 16) -band 0xFFFF)
+        }
+        if ($machineUpdated) { $machineVer++ }
+        if ($userUpdated)    { $userVer++ }
+        $version = ([uint32]$userVer -shl 16) -bor [uint32]$machineVer
+
+        $finalMachineExt = if ($machineUpdated) {
+            $newExt = "[$regCse$machineAT]"
+            if ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') { $ev = $matches[1].Trim(); if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev } } else { $newExt }
+        } elseif ($existing -match 'gPCMachineExtensionNames\s*=\s*(.+)') { $matches[1].Trim() } else { '' }
+
+        $finalUserExt = if ($userUpdated) {
+            $newExt = "[$regCse$userAT]"
+            if ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') { $ev = $matches[1].Trim(); if ($ev -notlike "*$regCse*") { $ev + $newExt } else { $ev } } else { $newExt }
+        } elseif ($existing -match 'gPCUserExtensionNames\s*=\s*(.+)') { $matches[1].Trim() } else { '' }
+
+        $gptContent = "[General]`r`n"
+        if ($finalMachineExt) { $gptContent += "gPCMachineExtensionNames=$finalMachineExt`r`n" }
+        if ($finalUserExt)    { $gptContent += "gPCUserExtensionNames=$finalUserExt`r`n" }
+        $gptContent += "Version=$version`r`n"
+        [IO.File]::WriteAllText($gptPath, $gptContent, [System.Text.Encoding]::ASCII)
+        Write-Log -Category Info -Message "RegistryPol: gpt.ini written (Version=$version machine=$machineVer user=$userVer)."
+    }
+    catch {
+        Write-Warning "RegistryPol: gpt.ini write failed: $_"
+    }
+}
+
+#endregion RegistryPol
+
+#region Main
+
+[string]$Script:Name = 'Configure-DesktopWallpaper'
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
+$ErrorActionPreference = 'Stop'
+
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 
-$BackgroundSourceImage = Get-ChildItem -Path $PSScriptRoot -Filter '*.jpg'
-If ($BackgroundSourceImage) {
-    Write-Log -Category Info -Message "Found Background Image: '$($BackgroundSourceImage.Name)'."
-    $CustomWallpaperDirectory = "$env:SystemRoot\Web\Wallpaper\Custom"
-    If (-not(Test-Path -Path $CustomWallpaperDirectory)) {
-        Write-Log -Category Info -Message "Creating Wallpaper Custom directory at '$CustomWallpaperDirectory'."
-        New-Item -Path "$CustomWallpaperDirectory" -ItemType Directory -Force | Out-Null
-    }
-    $BackgroundImagePath = Join-Path -Path $CustomWallpaperDirectory -ChildPath $($BackgroundSourceImage.Name)
-    Write-Log -Category Info -Message "Copying Background from '$PSScriptRoot' to '$CustomWallpaperDirectory'."
-    Copy-Item -Path $($BackgroundSourceImage.FullName) -Destination $CustomWallpaperDirectory -Force
-    Write-Log -Category Info -Message "Preparing to configure Background Image Path as '$BackgroundImagePath'."
-}
-Else {
-    Write-Log -Category Error -Message "No Background Image found in '$PSScriptRoot'. Exiting Script."
+# Locate the background image bundled with this artifact
+$BackgroundSourceImage = Get-ChildItem -Path $PSScriptRoot -Filter '*.jpg' | Select-Object -First 1
+if (-not $BackgroundSourceImage) {
+    Write-Log -Category Error -Message "No .jpg background image found in '$PSScriptRoot'. Add your image file and re-run."
     Exit 1
 }
+Write-Log -Category Info -Message "Found background image: '$($BackgroundSourceImage.Name)'."
 
-If (-not(Test-Path -Path "$env:SystemRoot\System32\lgpo.exe")) {
-    Write-Log -Category Info -Message "'lgpo.exe' not found in '$env:SystemRoot\system32'."
-    $LGPOZip = Get-ChildItem -Path $PSScriptRoot -Filter 'LGPO.zip' -Recurse | Select-Object -First 1
-    If (-not($LGPOZip)) {
-        Write-Log -Category Info -Message "Downloading LGPO tool."
-        $LGPOZip = Get-InternetFile -Url $LGPOUrl -OutputDirectory $Script:TempDir -Verbose
-    }    
-    If ($LGPOZip) {
-        Write-Log -Category Info -Message "Expanding '$LGPOZip' to '$Script:TempDir'."
-        Expand-Archive -Path $LGPOZip -DestinationPath $Script:TempDir -Force
-        $fileLGPO = (Get-ChildItem -Path $Script:TempDir -Filter 'lgpo.exe' -Recurse | Select-Object -First 1).FullName
-        Write-Log -Message "Copying '$fileLGPO' to '$env:SystemRoot\system32'."
-        Copy-Item -Path $fileLGPO -Destination "$env:SystemRoot\System32" -Force
-    }
+# Copy to the permanent destination inside the Windows directory
+$CustomWallpaperDirectory = "$env:SystemRoot\Web\Wallpaper\Custom"
+if (-not (Test-Path -Path $CustomWallpaperDirectory)) {
+    Write-Log -Category Info -Message "Creating wallpaper directory at '$CustomWallpaperDirectory'."
+    New-Item -Path $CustomWallpaperDirectory -ItemType Directory -Force | Out-Null
 }
+$BackgroundImagePath = Join-Path -Path $CustomWallpaperDirectory -ChildPath $BackgroundSourceImage.Name
+Write-Log -Category Info -Message "Copying image to '$BackgroundImagePath'."
+Copy-Item -Path $BackgroundSourceImage.FullName -Destination $CustomWallpaperDirectory -Force
 
-If (Test-Path -Path "$env:SystemRoot\System32\Lgpo.exe") {
-    Write-Log -Category Info -Message "Preparing LGPO text file to set Desktop Background and prevent changes."
-    # Create LGPO text file to set Desktop Background and prevent changes.
-    Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop' -RegistryValue 'NoChangingWallPaper' -RegistryType 'DWORD' -RegistryData 1
-    Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' -RegistryValue 'Wallpaper' -RegistryType 'String' -RegistryData ($BackgroundImagePath.Replace('\', '\\'))
-    Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' -RegistryValue 'WallpaperStyle' -RegistryType 'String' -RegistryData 4
-    Write-Log -Category Info -Message "Applying LGPO settings to Local Group Policy."
-    Invoke-LGPO
-    Write-Log -Category Info -Message "Desktop Background Policy Complete"
-}
-Else {
-    Write-Log -Category Warning -Message "Unable to configure local policy with lgpo tool because it was not found. Reverting to WMI Bridge for CSP."
+# Queue the three User-scope policy values and flush to Registry.pol
+Write-Log -Category Info -Message 'Queuing desktop background Group Policy values.'
 
-    # Convert to file URI
-    $imageURL = 'file:///' + $BackgroundImagePath.Replace('\', '/')
-    # Set the desktop background using WMI Bridge for CSP
-    $namespace = "root\cimv2\mdm\dmmap"
-    $className = "MDM_Personalization"
-    $desktopBackgroundCsp = Get-CimInstance -Namespace $namespace -Class $className -ErrorAction Stop
-    $desktopBackgroundCsp.DesktopImageUrl = $imageURL
-    $result = Set-CimInstance -CimInstance $desktopBackgroundCsp
-    If ($result.ReturnValue -eq 0) {
-        Write-Log -Category Info -Message "Successfully set desktop background using WMI Bridge for CSP."
-    }
-    Else {
-        Write-Log -Category Error -Message "Failed to set desktop background using WMI Bridge for CSP. ReturnValue: $($result.ReturnValue)"
-    }
-}
+# Prevents users from changing the wallpaper via Settings / Personalization
+Set-PolicyRegistryValue -Scope User `
+    -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop' `
+    -RegistryValue 'NoChangingWallPaper' -RegistryType DWORD -RegistryData 1
 
-Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue
+# Path to the background image
+Set-PolicyRegistryValue -Scope User `
+    -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' `
+    -RegistryValue 'Wallpaper' -RegistryType String -RegistryData $BackgroundImagePath
+
+# WallpaperStyle: 4 = Stretch
+Set-PolicyRegistryValue -Scope User `
+    -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' `
+    -RegistryValue 'WallpaperStyle' -RegistryType String -RegistryData '4'
+
+Invoke-PolicyUpdate
+
+Write-Log -Category Info -Message 'Desktop background policy configuration complete.'
+
+#endregion Main

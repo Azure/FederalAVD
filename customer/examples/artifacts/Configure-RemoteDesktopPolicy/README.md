@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PowerShell script configures Remote Desktop Services session timeout policies for Azure Virtual Desktop environments using the Local Group Policy Object (LGPO) tool. It manages idle and disconnected session timeouts to optimize resource utilization and user experience.
+This PowerShell script configures Remote Desktop Services session timeout policies for Azure Virtual Desktop environments using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe required. It manages idle and disconnected session timeouts to optimize resource utilization and user experience.
 
 ## Purpose
 
@@ -79,12 +79,7 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 
 ## What the Script Does
 
-### 1. LGPO Tool Setup
-
-- Downloads LGPO.exe if not present in `C:\Windows\System32`
-- Extracts and copies to system directory
-
-### 2. Session Timeout Configuration
+### 1. Session Timeout Configuration
 
 #### Max Idle Time
 
@@ -100,11 +95,11 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 - **User Experience:** Session is completely ended; all applications closed
 - **Reconnection:** User must start a new session
 
-### 3. Policy Application
+### 2. Policy Application
 
-- Creates LGPO text file with RDS timeout registry settings
-- Applies policies using LGPO.exe
-- Runs `gpupdate /force` to apply changes immediately
+- Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required
+- Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
+- `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
 
 ## Policy Settings Applied
 
@@ -243,19 +238,19 @@ C:\Windows\Logs\Configuration\Configure-RemoteDesktopServicesPolicy-<timestamp>.
 
 Log entries include:
 
-- LGPO tool download status
 - Policy application details
 - Registry value creation
-- gpupdate execution results
 
 ## Functions
 
 | Function | Description |
 |----------|-------------|
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
-| `Invoke-LGPO` | Applies Group Policy settings using LGPO.exe |
 | `New-Log` | Initializes logging infrastructure |
-| `Update-LocalGPOTextFile` | Creates LGPO text files for policy settings |
+| `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
+| `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
+| `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
+| `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
 | `Write-Log` | Writes formatted log entries |
 
 ## Requirements
@@ -263,7 +258,7 @@ Log entries include:
 - **OS:** Windows 10 or Windows 11 (with RDS role)
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
-- **Network Access:** Required for downloading LGPO (unless using offline mode)
+- **Network Access:** Not required — policies are written directly to Registry.pol
 
 ## Troubleshooting
 
@@ -307,7 +302,6 @@ query session
 
 - [RDS Session Time Limits](https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/remote-desktop-disconnected-user-logs-back)
 - [AVD Session Management](https://learn.microsoft.com/en-us/azure/virtual-desktop/set-up-customize-master-image)
-- [LGPO Tool Documentation](https://techcommunity.microsoft.com/t5/microsoft-security-baselines/lgpo-exe-local-group-policy-object-utility-v1-0/ba-p/701045)
 
 ## Support
 
