@@ -1358,6 +1358,11 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
             -Name 'UploadUserActivities' -Value 0
 
+        # Connected Devices Platform / Continue Experiences (GroupPolicy.admx)
+        # Disables CDP cross-device handoff, Near Share, and Phone Link cloud coordination
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' `
+            -Name 'EnableCdp' -Value 0
+
         Invoke-ApplyPolicyQueue
         Write-Log ""
     } # end if AirGapped - Section 7

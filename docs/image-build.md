@@ -248,7 +248,7 @@ The `vdiOptimizationProfile` parameter controls which optimization sections `Opt
 | `Persistent` | Full optimization minus update-channel lockdown. Update channels remain intact for SCCM/Intune. | Personal (persistent) host pools |
 | `None` | No optimization applied. Only `vdiOptimizationAirGapped` takes effect. | When optimization is handled entirely outside this template |
 
-**`vdiOptimizationAirGapped`:** When `true`, disables Windows components that make outbound calls to Microsoft cloud services: SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, and activity history uploads. Recommended for air-gapped or proxy-only government deployments. Applies regardless of the selected profile.
+**`vdiOptimizationAirGapped`:** When `true`, disables Windows components that make outbound calls to Microsoft cloud services: SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, activity history uploads, and the Connected Devices Platform (CDP). Recommended for air-gapped or proxy-only government deployments. Applies regardless of the selected profile.
 
 > For the full list of settings, deliberate deviations from the Microsoft VDI guide, and rationale, see [`.common/scripts/README.md — Optimize-AVDImage.ps1`](../.common/scripts/README.md#optimize-avdimageps1).
 

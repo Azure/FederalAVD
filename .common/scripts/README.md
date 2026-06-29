@@ -268,6 +268,7 @@ When `true`, applies additional settings for environments with no outbound inter
 | **News and Interests / Widgets** disabled | `NewsAndInterests.admx` | Stops widget panel polling Microsoft news endpoints |
 | **Settings sync** disabled | `SettingSync.admx` | Stops cloud sync of Windows settings; competes with FSLogix as a second source of truth for profile state |
 | **Activity history upload** disabled | `OSPolicy.admx` | Stops upload to `activity.windows.com`; local feed (recent files, Jump Lists via FSLogix) is preserved |
+| **Connected Devices Platform (CDP)** disabled | `GroupPolicy.admx` | Disables cross-device handoff, Near Share, and Phone Link cloud coordination (`EnableCdp=0`) |
 
 Applies independently of `-OptimizationProfile`, including when profile is `None`.
 

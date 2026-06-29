@@ -1387,7 +1387,7 @@
                                     "name": "vdiOptimizationAirGapped",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Air-gapped / restricted network",
-                                    "toolTip": "Disables Windows components that make outbound calls to Microsoft cloud services: online font providers, Teredo IPv6, SmartScreen (Explorer + Edge), Defender cloud lookups (MAPS/BAFS), WER Watson uploads, DiagTrack telemetry, OneSettings dynamic config, cross-device clipboard, News and Interests widgets, settings sync, and activity history uploads.",
+                                    "toolTip": "Disables Windows components that make outbound calls to Microsoft cloud services: online font providers, Teredo IPv6, SmartScreen (Explorer + Edge), Defender cloud lookups (MAPS/BAFS), WER Watson uploads, DiagTrack telemetry, OneSettings dynamic config, cross-device clipboard, News and Interests widgets, settings sync, activity history uploads, and the Connected Devices Platform (CDP).",
                                     "visible": true
                                 }
                             ]
