@@ -746,6 +746,8 @@ try {
         # Edge Update services - Edge is updated via image on NonPersistent; SCCM/Intune manages on Persistent
         Disable-VdiService -Name 'edgeupdate' -DisplayName 'Microsoft Edge Update Service'
         Disable-VdiService -Name 'edgeupdatem' -DisplayName 'Microsoft Edge Update Service (Manual Trigger)'
+        # Windows Error Reporting - transient VMs discard crash state at recycle; WER has no value here
+        Disable-VdiService -Name 'WerSvc' -DisplayName 'Windows Error Reporting'
 
         Write-Log ""
     }

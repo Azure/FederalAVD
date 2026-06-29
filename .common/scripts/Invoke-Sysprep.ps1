@@ -45,6 +45,7 @@ try {
     }
 
     $AdminAccount = Get-LocalUser | Where-Object { $_.SID -like '*-500' }
+    $TaskUser = "$env:COMPUTERNAME\$($AdminAccount.Name)"
     If (-Not $AdminAccount.Enabled) {
         Write-Log "Enabling local administrator account '$($AdminAccount.Name)'."
         Enable-LocalUser -Name $AdminAccount.Name
