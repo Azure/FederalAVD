@@ -236,10 +236,28 @@ try {
                     Remove-Item -Path $profileListKey -Force -ErrorAction SilentlyContinue
                     Write-Log "ProfileList registry key removed for SID $TempUserSid."
                 }
-                # Remove the profile directory if sysprep left it behind
+                # Remove the profile directory if sysprep left it behind.
+                # Stop services that commonly hold handles in a profile directory (Defender,
+                # Windows Search) before attempting removal. Continue on error -
+                # these may already be stopped on NonPersistent builds.
                 if ($null -ne $wmiProfile.LocalPath -and (Test-Path $wmiProfile.LocalPath)) {
-                    Remove-Item -Path $wmiProfile.LocalPath -Recurse -Force -ErrorAction SilentlyContinue
-                    Write-Log "Profile directory '$($wmiProfile.LocalPath)' removed."
+                    $profilePath = $wmiProfile.LocalPath
+                    foreach ($svc in @('WinDefend', 'WSearch')) {
+                        Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+                    }
+                    Remove-Item -Path $profilePath -Recurse -Force -ErrorAction SilentlyContinue
+                    if (Test-Path $profilePath) {
+                        Write-Log "Profile directory '$profilePath' still present after first attempt - retrying in 10 seconds."
+                        Start-Sleep -Seconds 10
+                        Remove-Item -Path $profilePath -Recurse -Force -ErrorAction SilentlyContinue
+                        if (Test-Path $profilePath) {
+                            Write-Log "WARNING: Profile directory '$profilePath' could not be removed after retry."
+                        } else {
+                            Write-Log "Profile directory '$profilePath' removed on retry."
+                        }
+                    } else {
+                        Write-Log "Profile directory '$profilePath' removed."
+                    }
                 }
             }
         } else {

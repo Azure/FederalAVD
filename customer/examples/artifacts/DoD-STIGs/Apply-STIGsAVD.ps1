@@ -841,4 +841,28 @@ Else {
     Write-Log -Category Warning -Message "Unable to determine STIG version. Version not stamped to registry."
 }
 
+
+# Strip obsolete/missing CSE GUIDs from gPCUserExtensionNames in gpt.ini.
+# LGPO adds these GUIDs when processing IE Administrative Templates, but the
+# handler DLLs (ieaksie.dll for {B087BE9D}, no handler for {00000000}) do not
+# exist on Windows 10/11. Their presence causes a "file not found" error in
+# gpresult when the GP client re-evaluates the incremented version after deployment.
+# The IE registry values themselves are already captured in User\Registry.pol by
+# the {35378EAC} Registry CSE entry, so removing these entries is safe.
+$gptPath = "$env:SystemRoot\System32\GroupPolicy\gpt.ini"
+if (Test-Path $gptPath) {
+    $gptContent = Get-Content $gptPath -Raw
+    $original = $gptContent
+    # Remove the IEM CSE ({B087BE9D}) and null-GUID ({00000000}) user extension pairs
+    $gptContent = $gptContent -replace '\[\{B087BE9D-ED37-454F-AF9C-04291E351182\}\{[^}]+\}\]', ''
+    $gptContent = $gptContent -replace '\[\{00000000-0000-0000-0000-000000000000\}\{[^}]+\}\]', ''
+    if ($gptContent -ne $original) {
+        [IO.File]::WriteAllText($gptPath, $gptContent, [System.Text.Encoding]::ASCII)
+        Write-Log -Message "gpt.ini: stripped obsolete IEM and null-GUID CSE entries from gPCUserExtensionNames."
+    }
+    else {
+        Write-Log -Message "gpt.ini: no obsolete CSE GUIDs found - no changes made."
+    }
+}
+
 Write-Log -Message "Ending '$PSCommandPath'."
