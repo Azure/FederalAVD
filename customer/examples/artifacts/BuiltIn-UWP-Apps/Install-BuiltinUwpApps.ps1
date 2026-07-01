@@ -43,6 +43,7 @@
 [CmdletBinding()]
 param()
 
+$Script:Name = 'Install-BuiltinUwpApps'
 $ErrorActionPreference = 'Stop'
 
 #region Helpers
@@ -50,7 +51,19 @@ $ErrorActionPreference = 'Stop'
 function Write-Log {
     param([string]$Message)
     $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    Write-Output "[$ts] $Message"
+    $Content = "[$ts] $Message"
+    if (-not $env:SUPPRESS_FILELOG) {
+        Add-Content -Path $Script:Log -Value $Content -ErrorAction SilentlyContinue
+    }
+    Write-Output $Content
+}
+
+function New-Log {
+    param([string]$Path)
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
+    $date = Get-Date -UFormat '%Y-%m-%d %H-%M-%S'
+    if (-not (Test-Path $Path)) { New-Item -Path $Path -ItemType Directory -Force | Out-Null }
+    $Script:Log = Join-Path $Path "$Script:Name-$date.log"
 }
 
 function Get-PackageFileVersion {
@@ -67,6 +80,7 @@ function Get-PackageFileVersion {
 
 #endregion Helpers
 
+New-Log (Join-Path $Env:SystemRoot 'Logs')
 Write-Log "Install-BuiltinUwpApps: Starting"
 Write-Log "Script location : $PSScriptRoot"
 

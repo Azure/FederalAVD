@@ -178,11 +178,11 @@ try {
         If ($Arguments) {
           Write-Log "Calling '$DestFile' with arguments '$Arguments'"
           $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
-          & $DestFile @parameterSplat
+          & $DestFile @parameterSplat *>&1 | Tee-Object -FilePath $LogFile -Append
         }
         Else {
           Write-Log "Calling '$DestFile'"
-          & $DestFile
+          & $DestFile *>&1 | Tee-Object -FilePath $LogFile -Append
         }
       }
       'zip' {
@@ -195,11 +195,11 @@ try {
         If ($Arguments) {
           Write-Log "Calling '$PSScript' with arguments '$Arguments'"
           $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
-          & $PSScript @parameterSplat
+          & $PSScript @parameterSplat *>&1 | Tee-Object -FilePath $LogFile -Append
         }
         Else {
           Write-Log "Calling '$PSScript'"
-          & $PSScript
+          & $PSScript *>&1 | Tee-Object -FilePath $LogFile -Append
         }
       }
     }
