@@ -1,3 +1,7 @@
+param (
+    [string]$AdminPassword
+)
+
 $ErrorActionPreference = 'Stop'
 $LogFile = "$env:SystemRoot\Logs\Invoke-Sysprep.log"
 
@@ -45,7 +49,6 @@ try {
     }
 
     $AdminAccount = Get-LocalUser | Where-Object { $_.SID -like '*-500' }
-    $TaskUser = "$env:COMPUTERNAME\$($AdminAccount.Name)"
     If (-Not $AdminAccount.Enabled) {
         Write-Log "Enabling local administrator account '$($AdminAccount.Name)'."
         Enable-LocalUser -Name $AdminAccount.Name
@@ -98,103 +101,192 @@ try {
     # Clear any existing Sysprep Panther logs so the captured output only reflects
     # this run. Sysprep appends to setupact.log rather than replacing it, so without
     # this the captured log would contain output from prior sysprep invocations
-    # (e.g. from FSLogix or Office customizations) mixed with the current run.
+    # (e.g. from FSLogix, Office, or WDOT customizations) mixed with the current run.
     $PantherDir = "$env:SystemRoot\System32\Sysprep\Panther"
     if (Test-Path $PantherDir) {
         Write-Log "Clearing previous Sysprep Panther logs from '$PantherDir'."
         Remove-Item -Path "$PantherDir\*.log" -Force -ErrorAction SilentlyContinue
     }
 
-    # The Task Scheduler CIM provider's internal credential validation rejects the built-in
-    # administrator account (SID-500) under VDI-optimized LGPO policy state with 0x8007052e
-    # ("The user name or password is incorrect") even though the credentials are correct and
-    # direct LogonUser(BATCH) with the same credentials succeeds. This is a false-positive in
-    # the CIM provider's credential check path that only affects SID-500.
-    #
-    # Fix: create a short-lived throwaway local administrator account, register the sysprep
-    # task under that account (CIM provider accepts non-SID-500 credentials without issue),
-    # then remove the account immediately after sysprep completes.
-    $TempUser = 'sysprep_svc'
-    $TaskName = 'RunSysprep'
+    Write-Log "Launching sysprep as the local administrator account."
 
-    # Remove any leftover account from a prior failed run
-    Remove-LocalUser -Name $TempUser -ErrorAction SilentlyContinue
+    # Launch sysprep as the named admin account via CreateProcessAsUser.
+    # Register-ScheduledTask (CIM) and Schedule.Service (COM) both fail to validate
+    # credentials in this environment with 'The user name or password is incorrect'
+    # even when LogonUser(BATCH) succeeds directly. CreateProcessAsUser bypasses Task
+    # Scheduler entirely: we obtain a user token via LogonUser and launch sysprep directly
+    # under that token. Sysprep runs as the named admin user - not SYSTEM - which is the
+    # Microsoft-supported path (running as SYSTEM skips AppX/XAML package registration,
+    # causing black screen / explorer.exe failures after deployment).
+    if (-not ([System.Management.Automation.PSTypeName]'SysprepLauncher').Type) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class SysprepLauncher {
+    [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    public static extern bool LogonUser(string username, string domain, string password,
+        int logonType, int logonProvider, out IntPtr token);
 
-    # Generate a strong random password (in-memory only; discarded after task registration)
-    $chars     = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
-    $rng       = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-    $bytes     = New-Object byte[] 32
-    $rng.GetBytes($bytes)
-    $TempChars = $bytes | ForEach-Object { $chars[$_ % $chars.Length] }
-    $TempPw    = 'Aa1!' + (-join $TempChars[0..19])   # 24 chars, satisfies complexity requirements
-    $rng.Dispose()
+    [DllImport("userenv.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    public static extern bool LoadUserProfile(IntPtr hToken, ref PROFILEINFO lpProfileInfo);
 
-    Write-Log "Creating throwaway local admin account '$TempUser' for sysprep task registration."
-    $SecTempPw = ConvertTo-SecureString -String $TempPw -AsPlainText -Force
-    New-LocalUser -Name $TempUser -Password $SecTempPw `
-        -PasswordNeverExpires -UserMayNotChangePassword `
-        -AccountNeverExpires `
-        -Description 'Temp sysprep task account; auto-removed' | Out-Null
-    Add-LocalGroupMember -Group 'Administrators' -Member $TempUser
-    Write-Log "Account '$TempUser' created and added to Administrators."
+    [DllImport("userenv.dll", SetLastError=true)]
+    public static extern bool UnloadUserProfile(IntPtr hToken, IntPtr hProfile);
 
-    $Action  = New-ScheduledTaskAction -Execute 'C:\Windows\System32\Sysprep\sysprep.exe' `
-                   -Argument '/oobe /generalize /quit /mode:vm'
-    $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddHours(24)  # Far-future fallback only; we start it explicitly below.
+    [DllImport("userenv.dll", SetLastError=true)]
+    public static extern bool CreateEnvironmentBlock(out IntPtr lpEnvironment, IntPtr hToken, bool bInherit);
 
-    Register-ScheduledTask -TaskName $TaskName `
-        -Description 'Runs Sysprep (OOBE / Generalize / Quit / VM mode) as a throwaway admin account.' `
-        -Action $Action -Trigger $Trigger `
-        -User "$env:COMPUTERNAME\$TempUser" -Password $TempPw `
-        -RunLevel Highest -Force | Out-Null
+    [DllImport("userenv.dll", SetLastError=true)]
+    public static extern bool DestroyEnvironmentBlock(IntPtr lpEnvironment);
 
-    If (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
-        throw "Scheduled task '$TaskName' was not found after registration attempt."
+    // lpCommandLine must be a mutable LPWSTR buffer - CreateProcessAsUserW writes into it.
+    // Using StringBuilder instead of string ensures the marshaler allocates a writable buffer.
+    // lpCurrentDirectory is IntPtr so we can pass an explicit NULL (IntPtr.Zero) without
+    // PowerShell's $null->empty-string coercion.
+    [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    public static extern bool CreateProcessAsUser(IntPtr hToken,
+        string lpApplicationName, System.Text.StringBuilder lpCommandLine,
+        IntPtr lpProcessAttributes, IntPtr lpThreadAttributes,
+        bool bInheritHandles, uint dwCreationFlags,
+        IntPtr lpEnvironment, IntPtr lpCurrentDirectory,
+        ref STARTUPINFO lpStartupInfo,
+        out PROCESS_INFORMATION lpProcessInformation);
+
+    [DllImport("kernel32.dll", SetLastError=true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
+    [DllImport("kernel32.dll", SetLastError=true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
+
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    public struct PROFILEINFO {
+        public int dwSize;
+        public int dwFlags;
+        public string lpUserName;
+        public string lpProfilePath, lpDefaultPath, lpServerName, lpPolicyPath;
+        public IntPtr hProfile;
     }
-    Write-Log "Scheduled task '$TaskName' registered. Starting now."
 
-    # Start the task immediately (do not wait for the far-future trigger)
-    Start-ScheduledTask -TaskName $TaskName
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    public struct STARTUPINFO {
+        public int cb;
+        public string lpReserved, lpDesktop, lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars,
+                   dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2;
+        public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
 
-    # -- Confirm the task actually started (transitions to Running) -------------
-    # This is the critical check  - if sysprep.exe never launches (e.g. bad
-    # credentials, locked account, binary missing) we catch it here rather than
-    # timing out 30 minutes later.
-    Write-Log "Waiting for sysprep task to enter Running state (timeout: 2 minutes)."
-    $StartTimeout = (Get-Date).AddMinutes(2)
-    do {
-        Start-Sleep -Seconds 5
-        $taskState = (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State
-        if ($taskState -eq 'Running') {
-            Write-Log "Sysprep task is Running. Sysprep has started."
-            break
-        }
-        if ((Get-Date) -ge $StartTimeout) {
-            $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
-            throw "Sysprep task failed to enter Running state within 2 minutes. " +
-                  "Task state: '$taskState'. Last result: 0x$('{0:X8}' -f $info.LastTaskResult)."
-        }
-        Write-Log "Task state: '$taskState'  - waiting for Running..."
-    } while ($true)
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PROCESS_INFORMATION {
+        public IntPtr hProcess, hThread;
+        public int dwProcessId, dwThreadId;
+    }
+}
+'@
+    }
 
-    # -- Wait for sysprep to complete (task returns to Ready) -------------------
-    Write-Log "Sysprep is running. Waiting for completion (timeout: 30 minutes)."
-    $SysprepTimeout = (Get-Date).AddMinutes(30)
-    do {
-        Start-Sleep -Seconds 15
-        $taskState = (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State
-        if ($taskState -eq 'Ready') {
-            Write-Log "Sysprep task has completed."
-            break
-        }
-        if ((Get-Date) -ge $SysprepTimeout) {
-            throw "Timed out after 30 minutes waiting for sysprep to complete. Task state: '$taskState'."
-        }
-        Write-Log "Task state: '$taskState'  - sysprep still running..."
-    } while ($true)
+    # If FilterAdministratorToken=1 is set (e.g. by DoD STIG V-253357), LogonUser returns
+    # a filtered (standard user) token even for the built-in Administrator (SID-500).
+    # CreateProcessAsUser with a filtered token would launch sysprep without admin rights.
+    # Clear the value before LogonUser so we get the full elevated token. The VM is about
+    # to be sysprepped so this setting does not need to be restored.
+    $uacPolicyPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    $filterVal = (Get-ItemProperty -Path $uacPolicyPath -Name 'FilterAdministratorToken' -ErrorAction SilentlyContinue).FilterAdministratorToken
+    if ($filterVal -eq 1) {
+        Write-Log "FilterAdministratorToken=1 detected (STIG V-253357). Clearing temporarily so LogonUser returns the full elevated token."
+        Set-ItemProperty -Path $uacPolicyPath -Name 'FilterAdministratorToken' -Value 0 -Type DWord -Force
+    }
 
-    $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName
-    Write-Log "Sysprep exit code: 0x$('{0:X8}' -f $taskInfo.LastTaskResult) ($($taskInfo.LastTaskResult))"
+    Write-Log "Obtaining user token for '$($AdminAccount.Name)' via LogonUser."
+    $UserToken = [IntPtr]::Zero
+    # LOGON32_LOGON_BATCH=4, LOGON32_PROVIDER_DEFAULT=0
+    $LogonOk = [SysprepLauncher]::LogonUser($AdminAccount.Name, '.', $AdminPassword, 4, 0, [ref]$UserToken)
+    if (-not $LogonOk) {
+        $le = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw "LogonUser failed with Win32 error $le. Cannot obtain user token to launch sysprep."
+    }
+
+    # Load the user profile so sysprep can perform AppX/XAML package registration.
+    # Without a loaded profile hive, sysprep skips AppX registration for XAML packages
+    # (MicrosoftWindows.Client.CBS, Microsoft.UI.Xaml.CBS, MicrosoftWindows.Client.Core)
+    # resulting in black screen / explorer.exe crashes on first sign-in after deployment.
+    # See: https://learn.microsoft.com/troubleshoot/windows-client/setup-upgrade-and-drivers/sysprep-as-system-windows-11
+    Write-Log "Loading user profile for '$($AdminAccount.Name)' via LoadUserProfile."
+    $ProfInfo = New-Object SysprepLauncher+PROFILEINFO
+    $ProfInfo.dwSize = [Runtime.InteropServices.Marshal]::SizeOf($ProfInfo)
+    $ProfInfo.dwFlags = 1  # PI_NOUI: suppress error dialogs in non-interactive session 0
+    $ProfInfo.lpUserName = $AdminAccount.Name
+    $ProfileLoaded = [SysprepLauncher]::LoadUserProfile($UserToken, [ref]$ProfInfo)
+    if (-not $ProfileLoaded) {
+        [SysprepLauncher]::CloseHandle($UserToken) | Out-Null
+        $le = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw "LoadUserProfile failed with Win32 error $le."
+    }
+
+    Write-Log "Launching sysprep as '$($AdminAccount.Name)' via CreateProcessAsUser."
+    $SysprepExe = "$env:SystemRoot\System32\Sysprep\sysprep.exe"
+    $Si = New-Object SysprepLauncher+STARTUPINFO
+    $Si.cb = [Runtime.InteropServices.Marshal]::SizeOf($Si)
+    $Pi = New-Object SysprepLauncher+PROCESS_INFORMATION
+
+    # Build a user environment block from the token. Passing IntPtr.Zero for the environment
+    # inherits the SYSTEM environment which lacks user-specific variables, causing Win32
+    # error 203 (ERROR_ENVVAR_NOT_FOUND). CREATE_UNICODE_ENVIRONMENT=0x400 is required
+    # when using an environment block from CreateEnvironmentBlock.
+    $EnvBlock = [IntPtr]::Zero
+    $EnvOk = [SysprepLauncher]::CreateEnvironmentBlock([ref]$EnvBlock, $UserToken, $false)
+    if (-not $EnvOk) {
+        [SysprepLauncher]::UnloadUserProfile($UserToken, $ProfInfo.hProfile) | Out-Null
+        [SysprepLauncher]::CloseHandle($UserToken) | Out-Null
+        $le = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw "CreateEnvironmentBlock failed with Win32 error $le."
+    }
+
+    Write-Log "Environment block pointer: 0x$($EnvBlock.ToString('X'))"
+    Write-Log "Sysprep path: $SysprepExe"
+    # StringBuilder ensures a writable native buffer as required by CreateProcessAsUserW.
+    $CmdLine = New-Object System.Text.StringBuilder("$SysprepExe /oobe /generalize /quit /mode:vm")
+    $CreateOk = [SysprepLauncher]::CreateProcessAsUser(
+        $UserToken, $SysprepExe, $CmdLine,
+        [IntPtr]::Zero, [IntPtr]::Zero, $false, 0x400,
+        $EnvBlock, [IntPtr]::Zero, [ref]$Si, [ref]$Pi)
+
+    # Capture error IMMEDIATELY before any other P/Invoke call overwrites GetLastError.
+    # DestroyEnvironmentBlock is a P/Invoke call with SetLastError=true and will replace
+    # the saved error if called before we read it.
+    $CreateErr = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    [SysprepLauncher]::DestroyEnvironmentBlock($EnvBlock) | Out-Null
+
+    if (-not $CreateOk) {
+        [SysprepLauncher]::UnloadUserProfile($UserToken, $ProfInfo.hProfile) | Out-Null
+        [SysprepLauncher]::CloseHandle($UserToken) | Out-Null
+        throw "CreateProcessAsUser failed with Win32 error $CreateErr."
+    }
+
+    Write-Log "Sysprep process started (PID $($Pi.dwProcessId)). Waiting up to 30 minutes."
+    $WaitResult = [SysprepLauncher]::WaitForSingleObject($Pi.hProcess, 1800000)
+
+    $SysprepExitCode = [uint32]0
+    [SysprepLauncher]::GetExitCodeProcess($Pi.hProcess, [ref]$SysprepExitCode) | Out-Null
+    [SysprepLauncher]::CloseHandle($Pi.hProcess) | Out-Null
+    [SysprepLauncher]::CloseHandle($Pi.hThread) | Out-Null
+    Write-Log "Sysprep process handle closed. Exit code captured: 0x$('{0:X8}' -f $SysprepExitCode) ($SysprepExitCode)"
+
+    # Unload the profile hive via the same API that loaded it. This is the clean path -
+    # no reg unload, no ProfSvc reference count issues.
+    [SysprepLauncher]::UnloadUserProfile($UserToken, $ProfInfo.hProfile) | Out-Null
+    [SysprepLauncher]::CloseHandle($UserToken) | Out-Null
+    Write-Log "User profile unloaded."
+
+    if ($WaitResult -eq 0x102) {  # WAIT_TIMEOUT
+        throw "Timed out after 30 minutes waiting for sysprep to complete."
+    }
 
     # -- Capture Panther logs into Run Command output (goes to outputBlobUri) ---
     # Writing to stdout here means the content lands in the same blob that ARM
@@ -213,67 +305,13 @@ try {
         }
     }
 
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-    Write-Log "Scheduled task '$TaskName' deregistered."
-
-    # Remove the throwaway account. Sysprep /generalize removes user profiles from the
-    # image file system but does NOT remove the SAM account entry - do that explicitly.
-    # Attempt a WMI profile delete first (belt-and-suspenders; the profile may already be
-    # gone if sysprep's generalize pass cleaned it up before we reach this point).
-    $TempUserSid = (Get-LocalUser -Name $TempUser -ErrorAction SilentlyContinue).SID.Value
-    if ($TempUserSid) {
-        $wmiProfile = Get-WmiObject -Class Win32_UserProfile -Filter "SID='$TempUserSid'" -ErrorAction SilentlyContinue
-        if ($wmiProfile) {
-            try {
-                $wmiProfile.Delete()
-                Write-Log "User profile for '$TempUser' deleted via WMI."
-            } catch {
-                # Delete() fails when sysprep /generalize already removed the profile directory,
-                # leaving a stale Win32_UserProfile entry. Fall back to direct registry cleanup.
-                Write-Log "WMI profile Delete() failed for '$TempUser' ($($_.Exception.Message)) - removing ProfileList registry key directly."
-                $profileListKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$TempUserSid"
-                if (Test-Path $profileListKey) {
-                    Remove-Item -Path $profileListKey -Force -ErrorAction SilentlyContinue
-                    Write-Log "ProfileList registry key removed for SID $TempUserSid."
-                }
-                # Remove the profile directory if sysprep left it behind.
-                # Stop services that commonly hold handles in a profile directory (Defender,
-                # Windows Search) before attempting removal. Continue on error -
-                # these may already be stopped on NonPersistent builds.
-                if ($null -ne $wmiProfile.LocalPath -and (Test-Path $wmiProfile.LocalPath)) {
-                    $profilePath = $wmiProfile.LocalPath
-                    foreach ($svc in @('WinDefend', 'WSearch')) {
-                        Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
-                    }
-                    Remove-Item -Path $profilePath -Recurse -Force -ErrorAction SilentlyContinue
-                    if (Test-Path $profilePath) {
-                        Write-Log "Profile directory '$profilePath' still present after first attempt - retrying in 10 seconds."
-                        Start-Sleep -Seconds 10
-                        Remove-Item -Path $profilePath -Recurse -Force -ErrorAction SilentlyContinue
-                        if (Test-Path $profilePath) {
-                            Write-Log "WARNING: Profile directory '$profilePath' could not be removed after retry."
-                        } else {
-                            Write-Log "Profile directory '$profilePath' removed on retry."
-                        }
-                    } else {
-                        Write-Log "Profile directory '$profilePath' removed."
-                    }
-                }
-            }
-        } else {
-            Write-Log "No WMI profile found for '$TempUser' (SID: $TempUserSid) - already removed by sysprep."
-        }
-    }
-    Remove-LocalUser -Name $TempUser -ErrorAction SilentlyContinue
-    Write-Log "Throwaway account '$TempUser' removed."
-
     # Fail the deployment with full log context if sysprep returned non-zero
-    if ($taskInfo.LastTaskResult -ne 0) {
-        throw "Sysprep failed with exit code 0x$('{0:X8}' -f $taskInfo.LastTaskResult). " +
+    if ($SysprepExitCode -ne 0) {
+        throw "Sysprep failed with exit code 0x$('{0:X8}' -f $SysprepExitCode). " +
               "Review the Panther log output above for details."
     }
 
-    Write-Log "Sysprep completed successfully. Script exiting - Generalize-Vm.ps1 will deallocate and generalize the VM."
+    Write-Log "Sysprep completed successfully. Script exiting  - Generalize-Vm.ps1 will deallocate and generalize the VM."
 }
 catch {
     Write-Log "FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
