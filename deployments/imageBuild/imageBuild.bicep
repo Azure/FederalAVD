@@ -743,6 +743,7 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
   name: '${depPrefix}Generalize-ImageVM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
+    adminPw: adminPw
     deploymentSuffix: deploymentSuffix
     imageVmName: imageVm.outputs.name
     location: location

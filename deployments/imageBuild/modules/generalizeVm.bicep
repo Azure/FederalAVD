@@ -1,3 +1,5 @@
+@secure()
+param adminPw string
 param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
@@ -27,6 +29,12 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
     outputBlobUri: empty(logBlobContainerUri)
       ? null
       : '${logBlobContainerUri}${imageVmName}-Sysprep-${deploymentSuffix}.log'
+    protectedParameters: [
+      {
+        name: 'AdminPassword'
+        value: adminPw
+      }
+    ]
     source: {
       script: loadTextContent('../../../.common/scripts/Invoke-Sysprep.ps1')
     }
@@ -41,19 +49,19 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
   properties: {
     asyncExecution: false
     parameters: [
-          {
-            name: 'ResourceManagerUri'
-            value: environment().resourceManager
-          }
-          {
-            name: 'UserAssignedIdentityClientId'
-            value: userAssignedIdentityClientId
-          }
-          {
-            name: 'VmResourceId'
-            value: imageVm.id
-          }
-        ]
+      {
+        name: 'ResourceManagerUri'
+        value: environment().resourceManager
+      }
+      {
+        name: 'UserAssignedIdentityClientId'
+        value: userAssignedIdentityClientId
+      }
+      {
+        name: 'VmResourceId'
+        value: imageVm.id
+      }
+    ]
     source: {
       script: loadTextContent('../../../.common/scripts/Generalize-Vm.ps1')
     }
