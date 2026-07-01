@@ -300,11 +300,16 @@ foreach ($AppFolder in $AppFolders) {
             Sort-Object FullName
     )
 
-    if ($DepPackages.Count -gt 0) {
-        Write-Log "Dependencies : $($DepPackages.Count) package(s) (x64 + neutral, deduplicated)"
-        $DepPackages | ForEach-Object { Write-Log "  $($_.Name)" }
+    $AppSpecificDeps = @($DepPackages | Where-Object { $_.DirectoryName -notlike '*SharedDependencies' })
+    $SharedDeps       = @($DepPackages | Where-Object { $_.DirectoryName -like  '*SharedDependencies' })
+    if ($AppSpecificDeps.Count -gt 0) {
+        Write-Log "App-specific deps: $($AppSpecificDeps.Count) package(s)"
+        $AppSpecificDeps | ForEach-Object { Write-Log "  $($_.Name)" }
     }
-    else {
+    if ($SharedDeps.Count -gt 0) {
+        Write-Log "Shared framework deps: $($SharedDeps.Count) package(s) (pre-provisioned above)"
+    }
+    if ($DepPackages.Count -eq 0) {
         Write-Log "Dependencies : none"
     }
 
