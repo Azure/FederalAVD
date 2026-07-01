@@ -297,6 +297,28 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 
 > **Replaces:** the former `applyWindowsDesktopOptimizations` (boolean) and `disableSoftwareUpdates` (array) parameters.
 
+**What gets optimized**
+
+The script applies up to 11 sections depending on the selected profile. No LGPO.exe required — group policy values are written directly to `Registry.pol` (MS-GPREG format).
+
+| Section | Applies to | What it does |
+|---------|-----------|--------------|
+| **1 — System Services (All VDI)** | Full profiles | Disables ~15 services with no VDI value: Xbox services, cellular/hotspot, geolocation, maps, messaging, payments/NFC, Connected Devices Platform (CDP), Device Setup Manager, etc. |
+| **2 — System Services (NonPersistent)** | NonPersistent profiles | Disables Superfetch/SysMain, Optimize Drives, Windows Update, Windows Update Medic, VSS, WER, diagnostic services (DPS/DiagSvc/WdiSystemHost), DiagTrack telemetry, and Edge auto-update services. |
+| **3 — Scheduled Tasks (All VDI)** | Full profiles | Disables ~20 tasks: CEIP, Application Experience, power efficiency diagnostics, MUI, Retail Demo, disk activity logging, Windows Error Reporting queue processing, disk footprint optimizer, and more. |
+| **4 — Scheduled Tasks (NonPersistent)** | NonPersistent profiles | Disables defrag, WinSAT, memory diagnostics, StartComponentCleanup, Windows Update scan tasks, and update-channel tasks for M365, OneDrive, Edge/WebView2, and Microsoft Store. |
+| **5 — Registry / Policy Settings (All VDI)** | Full profiles | Applies ~80 policy values covering: telemetry (Basic minimum), feedback notifications, AutoPlay, Windows Ink, advertising ID, location, Cortana, cloud content/Spotlight, search, privacy, Start/taskbar, Windows Error Reporting (queued only), System Restore, hibernation, power plan (High Performance), and more. |
+| **6 — Registry / Policy Settings (NonPersistent)** | NonPersistent profiles | Applies ~60 additional values: telemetry set to 0, Windows Update disabled via policy, M365/Teams/OneDrive/Edge/WebView2/Store update channels locked down, Windows Insider disabled, Delivery Optimization peer-to-peer disabled, and duplicate/stale ADMX template markers added for GP display in RSOP. |
+| **7 — Air-Gapped / Restricted Network** | `vdiOptimizationAirGapped = true` | See `vdiOptimizationAirGapped` below. |
+| **8 — Default User Profile** | Full profiles | Loads `C:\Users\Default\NTUSER.DAT` and applies performance-oriented visual effects, disables animations (DWM Aero Peek, thumbnail caching, taskbar/window animations, icon shadows), suppresses Content Delivery Manager (suggested/pre-installed apps, Spotlight tips, subscribed content), and applies User Configuration policy equivalents (cloud content, Start/taskbar, notifications, search, Explorer thumbnails). Every new user session inherits these settings. |
+| **9 — SMB / Network Tuning** | Full profiles | Tunes `LanmanWorkstation` parameters for VDI network share performance: disables bandwidth throttling, increases file/directory/not-found cache entry limits, sets dormant file limit. |
+| **10 — Autologgers** | Full profiles | Disables Windows startup Event Trace Sessions (ETW autologgers) that generate continuous I/O with no VDI diagnostic value: WiFiSession, WifiDriverIHVSession, AppModel, ReadyBoot, and several others. |
+| **11 — Optional Windows Features** | Full profiles | Removes Windows features unused in VDI: Work Folders, Internet Explorer (legacy), SMB 1.0/CIFS client, Windows Fax and Scan, and XPS Viewer/Services. |
+
+All changes are logged to `C:\Windows\Logs\Optimize-AVDImage.log` with per-item `[OK]`, `[SKIP]`, or `[WARN]` entries. The log is captured in the image build output blob when `deployBuildLogsStorageAccount` is enabled.
+
+> **Replaces:** the former `applyWindowsDesktopOptimizations` (boolean) and `disableSoftwareUpdates` (array) parameters.
+
 Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
 #### `vdiOptimizationAirGapped`
