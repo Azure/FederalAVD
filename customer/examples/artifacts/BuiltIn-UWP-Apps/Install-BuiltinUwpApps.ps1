@@ -150,7 +150,26 @@ if (Test-Path $SharedDepDir) {
                 Write-Log "OK: $($DepFile.Name)"
             }
             catch {
-                Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
+                # Single-arch framework packages (.appx, not .msixbundle) can fail with
+                # 'Element not found' (0x80070490) when DISM cannot auto-resolve their own
+                # dependencies from the running OS store. Retry with all peer shared-dep
+                # packages passed explicitly as -DependencyPackagePath.
+                Write-Log "First attempt failed for '$($DepFile.Name)': $_ -- retrying with peer shared dependencies."
+                $PeerDeps = @($SharedDepFiles | Where-Object { $_.FullName -ne $DepFile.FullName })
+                if ($PeerDeps.Count -gt 0) {
+                    try {
+                        Add-AppxProvisionedPackage -Online -PackagePath $DepFile.FullName `
+                            -DependencyPackagePath ($PeerDeps | Select-Object -ExpandProperty FullName) `
+                            -SkipLicense -Regions 'all' | Out-Null
+                        Write-Log "OK: $($DepFile.Name) (with explicit peer dependencies)"
+                    }
+                    catch {
+                        Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
+                    }
+                }
+                else {
+                    Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
+                }
             }
         }
     }
