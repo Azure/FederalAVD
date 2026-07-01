@@ -348,6 +348,10 @@ az deployment sub create \
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-builds-use2`
 - **Used by:** Pass directly to imageBuild as `imageBuildResourceGroupId`.
 
+## Next Steps
+
+After deploying imageManagement, complete the following before running an image build:
+
 ### 1. Upload Artifacts to Storage
 
 After deployment, use the `Update-ImageArtifacts.ps1` script to download, package, and upload artifacts:

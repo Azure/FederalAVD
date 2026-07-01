@@ -41,6 +41,7 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
 - **Custom Software:** Deploy your own installers and scripts
 - **VDI Customizations:** Install software that generates unique identifiers after restart
 - **Windows Updates:** Install updates from Microsoft Update, Windows Update, WSUS, or other sources
+- **Built-in VDI Optimization:** `Optimize-AVDImage.ps1` runs automatically to disable unnecessary services, scheduled tasks, registry policies, and software update channels — with profiles for pooled (`NonPersistent-Full`), update-only (`NonPersistent-UpdatesOnly`), and persistent (`Persistent`) host pools, plus an air-gapped mode for internet-restricted environments
 
 ### Advanced Image Features
 
@@ -72,6 +73,7 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
    - Run custom scripts and installers
    - Install Windows Updates
    - Execute VDI customizations (no restart)
+   - Apply VDI optimization via `Optimize-AVDImage.ps1` (profile: `vdiOptimizationProfile`; air-gapped mode: `vdiOptimizationAirGapped`)
    - Clean up desktop shortcuts
 
 3. **Image Capture**
