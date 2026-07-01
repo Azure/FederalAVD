@@ -178,11 +178,11 @@ try {
         If ($Arguments) {
           Write-Log "Calling '$DestFile' with arguments '$Arguments'"
           $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
-          & $DestFile @parameterSplat *>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $LogFile -Append
+          & $DestFile @parameterSplat *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
         Else {
           Write-Log "Calling '$DestFile'"
-          & $DestFile *>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $LogFile -Append
+          & $DestFile *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
       }
       'zip' {
@@ -195,11 +195,11 @@ try {
         If ($Arguments) {
           Write-Log "Calling '$PSScript' with arguments '$Arguments'"
           $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
-          & $PSScript @parameterSplat *>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $LogFile -Append
+          & $PSScript @parameterSplat *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
         Else {
           Write-Log "Calling '$PSScript'"
-          & $PSScript *>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $LogFile -Append
+          & $PSScript *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
       }
     }
