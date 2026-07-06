@@ -6,6 +6,12 @@ param (
     [Parameter(Mandatory)]
     [string]$VmNamePrefix,
 
+    # Optional. The prefix used in the Windows computer name registered in AVD.
+    # Set this when your Azure VM resource name includes a resource-type abbreviation
+    # (e.g., 'vm-') that is NOT part of the computer name (e.g., 'avd-001.contoso.com').
+    # When omitted, VmNamePrefix is used for both VM tagging and session host matching.
+    [string]$SessionHostNamePrefix,
+
     [Parameter(Mandatory)]
     [int]$Start,
 
@@ -38,6 +44,12 @@ Import-Module Az.DesktopVirtualization -ErrorAction Stop
 
 # Translate DrainMode -> AllowNewSession
 $allowNewSession = -not $DrainMode
+
+# When SessionHostNamePrefix is not supplied, fall back to VmNamePrefix.
+# This covers the common case where the Azure VM name and computer name share
+# the same prefix. Supply SessionHostNamePrefix explicitly when a resource-type
+# abbreviation (e.g., 'vm-') is part of the Azure name but not the computer name.
+$effectiveSessionHostPrefix = if ($PSBoundParameters.ContainsKey('SessionHostNamePrefix')) { $SessionHostNamePrefix } else { $VmNamePrefix }
 
 # Fetch all session hosts once to avoid a per-VM API call.
 # Name format returned by the API: <hostpoolname>/<computername>.<domain>
@@ -79,8 +91,10 @@ for ($i = $Start; $i -le $End; $i++) {
     }
 
     # -------- AVD DRAIN MODE --------
-    # Match on <computername>.* to handle any domain without hardcoding.
-    $matchedHost = $allSessionHosts | Where-Object { ($_.Name -split '/')[1] -like "$vmName.*" }
+    # Build the session host computer name using the effective prefix, then
+    # match on <computername>.* to handle any domain without hardcoding.
+    $sessionHostComputerName = $effectiveSessionHostPrefix + ('{0:D' + $PadWidth + '}' -f $i)
+    $matchedHost = $allSessionHosts | Where-Object { ($_.Name -split '/')[1] -like "$sessionHostComputerName.*" }
 
     if ($matchedHost) {
         $sessionHostName = ($matchedHost.Name -split '/')[1]
