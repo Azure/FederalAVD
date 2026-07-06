@@ -39,6 +39,13 @@ Import-Module Az.DesktopVirtualization -ErrorAction Stop
 # Translate DrainMode -> AllowNewSession
 $allowNewSession = -not $DrainMode
 
+# Fetch all session hosts once to avoid a per-VM API call.
+# Name format returned by the API: <hostpoolname>/<computername>.<domain>
+$allSessionHosts = Get-AzWvdSessionHost `
+    -ResourceGroupName $HostPoolResourceGroup `
+    -HostPoolName $HostPoolName `
+    -ErrorAction SilentlyContinue
+
 for ($i = $Start; $i -le $End; $i++) {
 
     $vmName = $VmNamePrefix + ('{0:D' + $PadWidth + '}' -f $i)
@@ -72,23 +79,30 @@ for ($i = $Start; $i -le $End; $i++) {
     }
 
     # -------- AVD DRAIN MODE --------
-    $sessionHostName = "$vmName.$HostPoolName"
+    # Match on <computername>.* to handle any domain without hardcoding.
+    $matchedHost = $allSessionHosts | Where-Object { ($_.Name -split '/')[1] -like "$vmName.*" }
 
-    try {
-        Update-AzWvdSessionHost `
-            -ResourceGroupName $HostPoolResourceGroup `
-            -HostPoolName $HostPoolName `
-            -Name $sessionHostName `
-            -AllowNewSession $allowNewSession
+    if ($matchedHost) {
+        $sessionHostName = ($matchedHost.Name -split '/')[1]
+        try {
+            Update-AzWvdSessionHost `
+                -ResourceGroupName $HostPoolResourceGroup `
+                -HostPoolName $HostPoolName `
+                -Name $sessionHostName `
+                -AllowNewSession $allowNewSession
 
-        if ($DrainMode) {
-            Write-Host "Drain mode ENABLED for session host $vmName" -ForegroundColor Magenta
+            if ($DrainMode) {
+                Write-Host "Drain mode ENABLED for session host $sessionHostName" -ForegroundColor Magenta
+            }
+            else {
+                Write-Host "Drain mode DISABLED for session host $sessionHostName" -ForegroundColor Green
+            }
         }
-        else {
-            Write-Host "Drain mode DISABLED for session host $vmName" -ForegroundColor Green
+        catch {
+            Write-Host "Session host update failed for $sessionHostName : $_" -ForegroundColor Red
         }
     }
-    catch {
-        Write-Host "Session host not found or update failed: $vmName" -ForegroundColor Yellow
+    else {
+        Write-Host "No session host found in host pool matching VM name: $vmName" -ForegroundColor Yellow
     }
 }
