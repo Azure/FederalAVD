@@ -113,7 +113,7 @@ Ref: https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-serv
   'NonPersistent-Full'
   'Persistent'
 ])
-param vdiOptimizationProfile string = 'NonPersistent-Full'
+param vdiOptimizationProfile string = 'None'
 
 @description('''When true, applies settings for air-gapped or internet-restricted environments:
 disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and

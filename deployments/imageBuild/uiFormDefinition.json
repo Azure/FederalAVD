@@ -100,39 +100,6 @@
                                     "defaultVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'ConfidentialComputingType'].value | [0] == null && capabilities[?name == 'AcceleratedNetworkingEnabled'].value | [0] == 'True'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].name"
                                 }
                             }
-                        },
-                        {
-                            "name": "naming",
-                            "type": "Microsoft.Common.Section",
-                            "visible": true,
-                            "label": "Naming",
-                            "elements": [
-                                {
-                                    "name": "deploymentPrefix",
-                                    "type": "Microsoft.Common.TextBox",
-                                    "label": "Deployment Prefix",
-                                    "subLabel": "",
-                                    "placeholder": "imgbld",
-                                    "toolTip": "Optionally, provide a prefix (from 2 to 6 characters) for the deployments created by this template.",
-                                    "constraints": {
-                                        "required": false,
-                                        "regex": "^[a-z0-9A-Z-]{2,6}$",
-                                        "validationMessage": "The prefix must be between 2 and 6 characters"
-                                    }
-                                },
-                                {
-                                    "name": "cafTextBlock",
-                                    "type": "Microsoft.Common.TextBlock",
-                                    "visible": true,
-                                    "options": {
-                                        "text": "The Cloud Adoption Framework (CAF) provides a recommended resource naming convention which specifies that the abbreviation for the resource type is listed first in the name. This solution automatically names resources using the CAF naming convention and suggested resource type abbreviations. Some customers have chosen to move the resource type to the end of the resource names. Select 'Yes' below to ensure that resources are named with this reverse convention or leave it set to 'No' to follow the CAF.",
-                                        "link": {
-                                            "label": "Resource Naming | Microsoft Learn",
-                                            "uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming"
-                                        }
-                                    }
-                                }
-                            ]
                         }
                     ]
                 },
@@ -388,19 +355,10 @@
                             "visible": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
                             "elements": [
                                 {
-                                    "name": "userAssignedIdentityInfo",
-                                    "type": "Microsoft.Common.InfoBox",
-                                    "visible": true,
-                                    "options": {
-                                        "style": "Info",
-                                        "text": "Required when using an existing resource group or when storage features (zero-trust artifacts or log collection) are enabled. All required roles must be pre-granted before deployment — this deployment grants none. The managed identity from the imageManagement deployment satisfies all requirements when configured correctly."
-                                    }
-                                },
-                                {
                                     "name": "userAssignedIdentity",
                                     "type": "Microsoft.Solutions.ResourceSelector",
                                     "label": "User Assigned Identity",
-                                    "toolTip": "Select an existing User Assigned Identity to attach to the build VMs. All required roles (VM Contributor on the build resource group, storage roles if applicable) must be pre-granted before running this deployment.",
+                                    "toolTip": "Attach a User Assigned Identity to the build VM. Required when using an existing resource group or when zero-trust artifact storage or log collection is enabled. All required roles (VM Contributor on the build resource group; storage roles if applicable) must be pre-granted before deployment - this deployment grants none. The identity from the imageManagement deployment satisfies all requirements when configured correctly.",
                                     "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
                                     "constraints": {
                                         "required": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
@@ -1336,32 +1294,32 @@
                                     "visible": true,
                                     "options": {
                                         "style": "Info",
-                                        "text": "VDI Image Optimization applies the settings from the Microsoft VDI optimization guide to this image build. Select the profile that matches how your session hosts are managed and updated.",
+                                        "text": "VDI Image Optimization applies settings from the Microsoft VDI optimization guide to this image build. Those settings have been sorted and categorized into profiles based on how session hosts are managed and updated - specifically, whether updates are delivered through image replacement or applied directly to running VMs. Read each profile description in the dropdown carefully before selecting.",
                                         "uri": "https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration"
                                     }
                                 },
                                 {
                                     "name": "vdiOptimizationProfile",
                                     "type": "Microsoft.Common.DropDown",
-                                    "label": "VDI Update Delivery Model",
-                                    "defaultValue": "Image-Managed - Full Optimization",
+                                    "label": "VDI Optimization Profile",
+                                    "defaultValue": "None (Skip optimization)",
                                     "multiLine": true,
-                                    "toolTip": "Image-Managed: updates come from the next image build (cattle - VMs are replaced, not patched). Host-Managed: updates come from SCCM, Intune, or similar tooling running on each VM (pets - VMs are maintained individually).",
+                                    "toolTip": "Select an optimization profile to apply Microsoft's VDI optimization settings to this image build. Choose None to skip optimization entirely (e.g., you are applying your own tooling). Image-Managed profiles lock down update channels; Host-Managed applies tuning while leaving update channels intact.",
                                     "constraints": {
                                         "allowedValues": [
                                             {
                                                 "label": "Image-Managed - Full Optimization",
-                                                "description": "All software update channels are locked down in the image (Windows Update, M365, Teams, OneDrive, Edge, WebView2, Store) and full VDI hardening is applied: services, scheduled tasks, registry policies, default user hive, SMB tuning, autologgers, and optional feature removal. Recommended for most AVD pooled host pools where VMs are replaced on a regular cadence.",
+                                                "description": "All software update channels are locked down in the image (Windows Update, M365, Teams, OneDrive, Edge, WebView2, Store) and full VDI tuning is applied: services, scheduled tasks, registry policies, default user hive, SMB tuning, autologgers, and optional feature removal. Recommended for most AVD pooled host pools where VMs are replaced on a regular cadence.",
                                                 "value": "NonPersistent-Full"
                                             },
                                             {
                                                 "label": "Image-Managed - Updates Only",
-                                                "description": "All software update channels are locked down in the image only. No other services, tasks, or registry changes are made. Use this when you are bringing your own VDI hardening tooling and only need to ensure VMs do not self-update between image replacements.",
+                                                "description": "All software update channels are locked down in the image only. No other services, tasks, or registry changes are made. Use this when you are bringing your own VDI tuning tooling and only need to ensure VMs do not self-update between image replacements.",
                                                 "value": "NonPersistent-UpdatesOnly"
                                             },
                                             {
                                                 "label": "Host-Managed (SCCM / Intune)",
-                                                "description": "Full VDI hardening is applied (services, tasks, registry, user hive, tuning) but all software update channels are left intact. Use for any AVD host pool - pooled or personal - where each VM is patched and managed in-place by SCCM, Intune, or similar tooling.",
+                                                "description": "Full VDI tuning is applied (services, tasks, registry, user hive, SMB tuning) but all software update channels are left intact. Use for any AVD host pool - pooled or personal - where each VM is patched and managed in-place by SCCM, Intune, or similar tooling.",
                                                 "value": "Persistent"
                                             },
                                             {
@@ -2178,7 +2136,6 @@
             "subscriptionId": "[steps('basics').scope.subscription.id]",
             "parameters": {
                 "location": "[steps('basics').scope.location.name]",
-                "deploymentPrefix": "[steps('basics').naming.deploymentPrefix]",
                 "imageBuildResourceGroupId": "[if(equals(steps('prereqs').resGroup.useExResGroup, true), concat(steps('basics').scope.subscription.id, '/resourceGroups/',steps('prereqs').resGroup.resourceGroup), '')]",
                 "customBuildResourceGroupName": "[if(equals(steps('prereqs').resGroup.useExResGroup, false), steps('prereqs').resGroup.customBuildResourceGroupName, '')]",
                 "computeGalleryResourceId": "[steps('prereqs').gallery.gallery.id]",
