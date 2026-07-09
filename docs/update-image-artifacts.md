@@ -47,12 +47,12 @@ Base downloads parameter files are in `.common/data/` and are selected automatic
   - `.common/data/topsecret.downloads.parameters.json` (Azure Top Secret)
 
 To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), place a customer-owned downloads file at `customer/parameters/imageManagement/downloads.json`. A ready-to-use example that covers a broad set of common packages is provided at:
-  - `customer/examples/parameters/imageManagement/downloads.json`
+  - `customer-examples/parameters/imageManagement/downloads.json`
 
 Copy it to the auto-discovered location:
 
 ```powershell
-Copy-Item -Path "customer\examples\parameters\imageManagement\downloads.json" `
+Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
           -Destination "customer\parameters\imageManagement\" -Force
 ```
 
@@ -327,7 +327,7 @@ apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
 
 > **Note:** `WingetPreserveLayout` entries do not use `DestinationFileName`. The original filenames produced by `winget download` are kept so that `Add-AppxProvisionedPackage` can read the package metadata correctly.
 
-See [BuiltIn-UWP-Apps](../customer/examples/artifacts/BuiltIn-UWP-Apps/README.md) for the
+See [BuiltIn-UWP-Apps](../customer-examples/artifacts/BuiltIn-UWP-Apps/README.md) for the
 full list of supported apps and setup instructions.
 
 ### Placing a File Into Multiple Artifact Folders
@@ -352,7 +352,7 @@ Use `""` (empty string) as one of the folder names to also place the file direct
 
 ## Artifacts Directory Structure
 
-> **Getting started quickly:** `customer/examples/artifacts/` contains ready-to-use packages for common software (Chrome, FSLogix, LGPO, VS Code, STIGs, and more). Copy any folder directly into `customer/artifacts/` and run the script. See [`customer/README.md`](../customer/README.md) for the full list and copy commands.
+> **Getting started quickly:** `customer-examples/artifacts/` contains ready-to-use packages for common software (Chrome, FSLogix, LGPO, VS Code, STIGs, and more). Copy any folder directly into `customer/artifacts/` and run the script. See [`customer/README.md`](../customer/README.md) for the full list and copy commands.
 
 The script stages a merged view — `.common/artifacts/` first, then `customer/artifacts/` on top — then packages the result. Currently `.common/artifacts/` is empty, so all content comes from `customer/artifacts/`.
 

@@ -79,7 +79,7 @@ folder at the `BuiltIn-UWP-Apps\` root and removes the per-app `Dependencies\` f
 ### 1. Copy this artifact folder
 
 ```powershell
-Copy-Item -Recurse -Path "customer\examples\artifacts\BuiltIn-UWP-Apps" `
+Copy-Item -Recurse -Path "customer-examples\artifacts\BuiltIn-UWP-Apps" `
           -Destination "customer\artifacts\"
 ```
 
@@ -91,7 +91,7 @@ The downloads entries for each app use the `WingetPreserveLayout` flag, which te
 that must keep their original filenames for `Add-AppxProvisionedPackage` to work correctly.
 
 If you have already copied
-`customer/examples/parameters/imageManagement/downloads.json` to
+`customer-examples/parameters/imageManagement/downloads.json` to
 `customer/parameters/imageManagement/downloads.json`, the UWP entries are already included.
 Otherwise, add the entries from the examples file manually. The relevant entries are the ones
 with `"WingetPreserveLayout": true` and `DestinationFolders` beginning with `BuiltIn-UWP-Apps\`.
@@ -111,7 +111,7 @@ with `"WingetPreserveLayout": true` and `DestinationFolders` beginning with `Bui
 }
 ```
 
-See `customer/examples/parameters/imageManagement/downloads.json` for the full set.
+See `customer-examples/parameters/imageManagement/downloads.json` for the full set.
 
 ### 3. Download and upload the artifacts
 

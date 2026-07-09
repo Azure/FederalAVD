@@ -13,7 +13,7 @@ The docs are extensive and accurate. The problem is **not** missing content — 
    - **Storage data-plane RBAC** — `Owner`/`Contributor` assumed sufficient; shared-key access is disabled, so **Storage Blob Data Contributor** is required.
    - **Key Vault data-plane RBAC** — CMK needs **Key Vault Crypto Officer** (control plane ≠ data plane).
    - **`timeStamp`** left in saved parameter files, breaking auto-versioning.
-   - **`customer/` workflow** — editing `customer/examples/` in place, or expecting git to track the git-ignored `customer/`.
+   - **`customer/` workflow** — editing `customer-examples/` in place, or expecting git to track the git-ignored `customer/`.
    - **Out-of-order sequencing** — Image Management before Key Vaults when using CMK.
 
 ## Goal

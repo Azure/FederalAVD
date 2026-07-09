@@ -45,10 +45,10 @@ Copy-Item -Path "deployments\networking\parameters\sample.networking.parameters.
 `imageManagement/downloads.json` merges additional software downloads on top of the
 auto-detected base downloads file when you run `Update-ImageArtifacts.ps1`. A ready-to-use
 example covering common packages (Chrome, FSLogix, LGPO, built-in UWP apps, codec extensions,
-and more) is at `customer/examples/parameters/imageManagement/downloads.json`:
+and more) is at `customer-examples/parameters/imageManagement/downloads.json`:
 
 ```powershell
-Copy-Item -Path "customer\examples\parameters\imageManagement\downloads.json" `
+Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
           -Destination "customer\parameters\imageManagement\" -Force
 ```
 

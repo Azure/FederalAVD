@@ -1,12 +1,12 @@
-# Customer-specific content (parameter files, staged artifacts, installers).
-# Only README.md and .gitkeep placeholder files are tracked so the folder
-# structure is visible in the repo without exposing environment-specific data.
+# customer/ is entirely local to each deployment -- nothing in it is tracked
+# except the top-level README.md and .gitkeep placeholder files that preserve
+# the directory skeleton when the repo is cloned. Example/starter content
+# lives in customer-examples/ at the repo root (fully tracked).
 customer/artifacts/**
-!customer/artifacts/**/
-!customer/artifacts/**/.gitkeep
-!customer/artifacts/**/README.md
+!customer/artifacts/.gitkeep
+!customer/artifacts/README.md
 
 customer/parameters/**
+!customer/parameters/README.md
 !customer/parameters/**/
 !customer/parameters/**/.gitkeep
-!customer/parameters/**/README.md

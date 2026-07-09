@@ -52,7 +52,7 @@ customer/
   artifacts/          ← your custom software packages (scripts, installers, configs)
 ```
 
-Start from the example files in `customer/examples/` — copy them into `customer/parameters/` or
+Start from the example files in `customer-examples/` — copy them into `customer/parameters/` or
 `customer/artifacts/` and customize. Do not edit examples directly.
 
 ### Artifact Packages
@@ -64,7 +64,7 @@ Each artifact folder typically contains:
 - An `Install-*.ps1` (or similar) script that performs the installation
 - The installer binary or configuration file(s)
 
-See `docs/artifacts-guide.md` for packaging rules and `customer/examples/artifacts/` for 20+
+See `docs/artifacts-guide.md` for packaging rules and `customer-examples/artifacts/` for 20+
 ready-to-use example packages.
 
 ### downloads.json
@@ -109,9 +109,11 @@ deployments/
   Invoke-ImageBuilds.ps1      ← triggers image build runs
   TagAndDrainSessionHosts.ps1 ← manually drains session hosts before replacement
 customer/
-  examples/           ← reference implementations; copy to customer/ before use
   parameters/         ← your parameter files (git-ignored)
   artifacts/          ← your artifact packages (git-ignored)
+customer-examples/
+  artifacts/          ← reference artifact packages; copy to customer/artifacts/ before use
+  parameters/         ← reference parameter files; copy to customer/parameters/ before use
 docs/                 ← all documentation
 policy/               ← Azure Policy definitions and assignments
 tools/                ← utility scripts
@@ -195,7 +197,7 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
   parameters have cross-solution dependencies.
 - **`customer/` content is git-ignored** by design. Don't suggest committing files from
   `customer/parameters/` or `customer/artifacts/` to this repo.
-- **Example files in `customer/examples/`** are reference implementations — suggest copying them
+- **Example files in `customer-examples/`** are reference implementations — suggest copying them
   to `customer/` rather than editing them in place.
 - **Bicep templates** are in `deployments/*/` alongside `.json` (ARM) equivalents. Both are kept
   in sync. Prefer editing `.bicep` source; the `.json` is generated.

@@ -200,7 +200,7 @@ customer/parameters/hostpools/
 └── test.hostpool.parameters.json
 ```
 
-> **⚠️ Common mistake — editing `customer/examples/` or `deployments/hostpools/parameters/` directly:** Sample files under `deployments/` are shared and will be overwritten when you pull repo updates. Always copy a sample to `customer/parameters/hostpools/` before editing. The `customer/` folder is git-ignored by design — your environment-specific files stay local and safe. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+> **⚠️ Common mistake — editing `customer-examples/` or `deployments/hostpools/parameters/` directly:** Sample files under `deployments/` are shared and will be overwritten when you pull repo updates. Always copy a sample to `customer/parameters/hostpools/` before editing. The `customer/` folder is git-ignored by design — your environment-specific files stay local and safe. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
 > **⚠️ Common mistake — `timeStamp` in a saved parameter file:** If you export a parameter file from the Template Spec UI or from ARM deployment history, delete the `timeStamp` entry before saving the file for reuse. Leaving it causes all subsequent deployments to reuse the same timestamp, resulting in stale image version names and potential resource naming conflicts. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
 

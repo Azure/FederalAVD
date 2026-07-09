@@ -41,19 +41,19 @@ Root-level files (not in a subfolder) are uploaded as-is, without compression.
 
 ## Ready-to-use examples
 
-`customer/examples/artifacts/` contains example packages for common software. Copy any folder
+`customer-examples/artifacts/` contains example packages for common software. Copy any folder
 directly into this directory:
 
 ```powershell
 # Copy a specific example
-Copy-Item -Recurse -Path "customer\examples\artifacts\Google-Chrome-Enterprise" `
+Copy-Item -Recurse -Path "customer-examples\artifacts\Google-Chrome-Enterprise" `
           -Destination "customer\artifacts\"
 
 # Copy all examples at once
-Copy-Item -Recurse -Path "customer\examples\artifacts\*" -Destination "customer\artifacts\"
+Copy-Item -Recurse -Path "customer-examples\artifacts\*" -Destination "customer\artifacts\"
 ```
 
-Each example pairs with a matching entry in `customer/examples/parameters/imageManagement/downloads.json`.
+Each example pairs with a matching entry in `customer-examples/parameters/imageManagement/downloads.json`.
 
 ## Further reading
 

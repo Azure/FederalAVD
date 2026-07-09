@@ -11,7 +11,7 @@ The most common errors on a first FederalAVD deployment. Each links to a full sy
 1. [Storage data-plane RBAC — 403 when uploading artifacts](#storage-blob-data-access-fails-with-403)
 2. [Key Vault Crypto Officer missing — CMK deployment fails with Forbidden](#key-vault-crypto-officer-missing)
 3. [timeStamp in parameter file causes stale versions or naming conflicts](#timestamp-in-parameter-file-causes-stale-image-versions)
-4. [Editing `customer/examples/` instead of `customer/parameters/` — changes disappear on git pull](#editing-customerexamples-or-missing-customer-changes)
+4. [Editing `customer-examples/` instead of `customer/parameters/` — changes disappear on git pull](#editing-customerexamples-or-missing-customer-changes)
 5. [Image Management deployed before Key Vaults — CMK encryption fails](#cmk-deployment-fails-image-management-deployed-before-key-vaults)
 
 ---
@@ -425,7 +425,7 @@ After generating or exporting a parameter file, **remove the `timeStamp` entry**
 
 ---
 
-## Editing customer/examples/ or Missing customer/ Changes {#editing-customerexamples-or-missing-customer-changes}
+## Editing customer-examples/ Instead of customer/ — Changes Missing or Overwritten {#editing-customerexamples-or-missing-customer-changes}
 
 ### Symptom
 
@@ -435,7 +435,7 @@ After generating or exporting a parameter file, **remove the `timeStamp` entry**
 
 ### Problem
 
-The `customer/` folder is **git-ignored by design** (via `.gitignore`). It is intended to hold your environment-specific, potentially sensitive configuration that should never be committed to the shared repo. However, `customer/examples/` *is* tracked — it contains the reference examples shipped with the solution. If you edit files inside `customer/examples/` directly, those changes **will** be overwritten the next time the repo is updated.
+The `customer/` folder is **git-ignored by design** (via `.gitignore`). It is intended to hold your environment-specific, potentially sensitive configuration that should never be committed to the shared repo. However, `customer-examples/` *is* tracked — it contains the reference examples shipped with the solution. If you edit files inside `customer-examples/` directly, those changes **will** be overwritten the next time the repo is updated.
 
 ### Solution
 
@@ -443,12 +443,12 @@ Always copy example files into the appropriate `customer/` subfolder before edit
 
 ```powershell
 # Copy a host pool parameter example to your working location
-Copy-Item customer/examples/parameters/hostpools/hostpool.parameters.example.json `
+Copy-Item customer-examples/parameters/hostpools/hostpool.parameters.example.json `
           customer/parameters/hostpools/myenv.parameters.json
 ```
 
 - Edit only files under `customer/parameters/`, `customer/artifacts/`, etc.
-- Do not edit files under `customer/examples/` unless you are intentionally updating the reference example for others (rare).
+- Do not edit files under `customer-examples/` unless you are intentionally updating the reference example for others (rare).
 - If you need to version-control your customer files, manage that in a separate private repo and reference it alongside this repo.
 
 ---

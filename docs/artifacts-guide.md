@@ -154,13 +154,13 @@ graph TD
 
 Repo-provided artifacts live at `.common/artifacts/` (currently empty, reserved for future use). Customer-provided artifacts and overrides belong at `customer/artifacts/`.
 
-> **Ready-to-use examples:** `customer/examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer/examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
+> **Ready-to-use examples:** `customer-examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer-examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
 
 **Note:** The orchestration script `Invoke-Customization.ps1` is at `.common/scripts/Invoke-Customization.ps1`, not in the artifacts directory. It is embedded into ARM/Bicep deployments using `loadTextContent()`.
 
 ### Getting Software Into Artifact Folders
 
-`Update-ImageArtifacts.ps1` can automatically download software before packaging. Place a `downloads.json` file at `customer/parameters/imageManagement/downloads.json` (a ready-to-use example is at `customer/examples/parameters/imageManagement/downloads.json`) to define what to download and where to place it. Supported download methods include direct URL, web scraping, GitHub Releases API, winget, and winget preserve-layout for MSIX/UWP packages.
+`Update-ImageArtifacts.ps1` can automatically download software before packaging. Place a `downloads.json` file at `customer/parameters/imageManagement/downloads.json` (a ready-to-use example is at `customer-examples/parameters/imageManagement/downloads.json`) to define what to download and where to place it. Supported download methods include direct URL, web scraping, GitHub Releases API, winget, and winget preserve-layout for MSIX/UWP packages.
 
 For a complete reference of all download methods, `downloads.json` fields, pipeline usage with `-CustomerRootPath`, and the full script parameter reference, see the **[Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md)**.
 
@@ -1212,9 +1212,9 @@ If you encounter issues not covered here:
    - [Quick Start Guide](quick-start.md)
 
 2. **Review example artifacts:**
-   - `customer/examples/artifacts/Microsoft-VSCode/` - Simple installer example
-   - `customer/examples/artifacts/Configure-Office365Policy/` - Configuration example
-   - `customer/examples/artifacts/Microsoft-FSLogix/` - Download and install example
+   - `customer-examples/artifacts/Microsoft-VSCode/` - Simple installer example
+   - `customer-examples/artifacts/Configure-Office365Policy/` - Configuration example
+   - `customer-examples/artifacts/Microsoft-FSLogix/` - Download and install example
 
 3. **Search GitHub issues:**
    - [FederalAVD Issues](https://github.com/Azure/FederalAVD/issues)

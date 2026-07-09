@@ -21,7 +21,7 @@
     // ------------
     // 1. Copy this file:
     //      New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
-    //      Copy-Item customer\examples\parameters\hostpools\poc.hostpool.parameters.json `
+    //      Copy-Item customer-examples\parameters\hostpools\poc.hostpool.parameters.json `
     //                customer\parameters\hostpools\myfirstpool.parameters.json
     //
     // 2. Change every value marked  TODO  below.

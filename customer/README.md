@@ -43,11 +43,11 @@ then overlays `customer/artifacts/` on top — your files always win when names 
 ## Examples
 
 Ready-to-use example artifact packages and an optional downloads file are provided under
-`customer/examples/`. These are not used automatically — copy what you need into the matching
+`customer-examples/`. These are not used automatically — copy what you need into the matching
 `customer/` subfolders and remove or modify entries you don't want.
 
 ```text
-customer/examples/
+customer-examples/
   artifacts/                                ← copy folders into customer/artifacts/
     Adobe-Acrobat-Reader-DC/
     Amazon-Workspaces-Client/
@@ -79,19 +79,19 @@ customer/examples/
 
 ```powershell
 # Copy a specific artifact package
-Copy-Item -Recurse -Path "customer\examples\artifacts\Google-Chrome-Enterprise" `
+Copy-Item -Recurse -Path "customer-examples\artifacts\Google-Chrome-Enterprise" `
           -Destination "customer\artifacts\"
 
 # Copy all example artifact packages at once
-Copy-Item -Recurse -Path "customer\examples\artifacts\*" -Destination "customer\artifacts\"
+Copy-Item -Recurse -Path "customer-examples\artifacts\*" -Destination "customer\artifacts\"
 
 # Copy the optional downloads file
-Copy-Item -Path "customer\examples\parameters\imageManagement\downloads.json" `
+Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
           -Destination "customer\parameters\imageManagement\" -Force
 ```
 
-Each artifact folder in `customer/examples/artifacts/` pairs with an entry in
-`customer/examples/parameters/imageManagement/downloads.json` — the `DestinationFolders` field
+Each artifact folder in `customer-examples/artifacts/` pairs with an entry in
+`customer-examples/parameters/imageManagement/downloads.json` — the `DestinationFolders` field
 in each download entry names the artifact folder the downloaded installer is placed into before
 the script zips and uploads it.
 

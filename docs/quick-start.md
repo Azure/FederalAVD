@@ -502,7 +502,7 @@ cd deployments
 
 > **⚠️ Common mistake — Storage 403 when uploading artifacts:** If `Update-ImageArtifacts.ps1` fails with `403 AuthorizationFailure`, the storage account has shared key access disabled (the default in this solution). `Owner` and `Contributor` grant control-plane access only — they do not cover blob read/write. Add **Storage Blob Data Contributor** on the artifacts storage account to the identity running the script. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
 
-> **⚠️ Common mistake — edits to `customer/examples/` disappear on git pull:** The `customer/examples/` folder is tracked by git and gets overwritten when you pull updates. Always copy example files to `customer/parameters/` (or `customer/artifacts/`) before editing — `customer/` is git-ignored by design and your changes there are preserved. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+> **⚠️ Common mistake — edits to `customer-examples/` disappear on git pull:** The `customer-examples/` folder is tracked by git and gets overwritten when you pull updates. Always copy example files to `customer/parameters/` (or `customer/artifacts/`) before editing — `customer/` is git-ignored by design and your changes there are preserved. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
 **✈️ Air-gapped environments:** Use `-SkipDownloadingNewSources` and manually place installers in `customer/artifacts/` before running.
 
@@ -590,11 +590,11 @@ Set-Location FederalAVD
 
 ```powershell
 New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
-Copy-Item customer\examples\parameters\hostpools\poc.hostpool.parameters.json `
+Copy-Item customer-examples\parameters\hostpools\poc.hostpool.parameters.json `
           customer\parameters\hostpools\myfirstpool.parameters.json
 ```
 
-> `customer\parameters\` is git-ignored — your files stay local and won't be overwritten on `git pull`. Never edit `customer\examples\` directly.
+> `customer\parameters\` is git-ignored — your files stay local and won't be overwritten on `git pull`. Never edit `customer-examples\` directly.
 
 **3 — Set the four required values** in `customer\parameters\hostpools\myfirstpool.parameters.json`
 
@@ -651,7 +651,7 @@ All session hosts should show `Status: Available`. Then sign in at [https://clie
 > 1. **Storage 403 when uploading artifacts** — `Owner`/`Contributor` alone is not enough when shared key access is disabled; add [Storage Blob Data Contributor](troubleshooting.md#storage-blob-data-access-fails-with-403).
 > 2. **CMK Forbidden on key operations** — add [Key Vault Crypto Officer](troubleshooting.md#key-vault-crypto-officer-missing) on the encryption KV.
 > 3. **`timeStamp` left in a saved parameter file** — [remove it](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions) before reusing.
-> 4. **Edited `customer/examples/` and changes disappeared** — always [copy to `customer/parameters/` first](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+> 4. **Edited `customer-examples/` and changes disappeared** — always [copy to `customer/parameters/` first](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 > 5. **imageManagement CMK fails — deployed before Key Vaults** — [Step 1 must run first](troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults) when using CMK.
 
 </details>

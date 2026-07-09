@@ -496,7 +496,7 @@ Session host OS hardening (CM-6, CM-7, SI-3, SI-7) is not applied by the infrast
 
 #### Option 1 — Apply-STIGsAVD.ps1 (Recommended for DoD)
 
-A ready-to-use script is included in this repository at [`customer/examples/artifacts/DoD-STIGs/Apply-STIGsAVD.ps1`](../customer/examples/artifacts/DoD-STIGs/Apply-STIGsAVD.ps1).
+A ready-to-use script is included in this repository at [`customer-examples/artifacts/DoD-STIGs/Apply-STIGsAVD.ps1`](../customer-examples/artifacts/DoD-STIGs/Apply-STIGsAVD.ps1).
 
 The script uses Microsoft's [LGPO.exe](https://www.microsoft.com/en-us/download/details.aspx?id=55319) to apply DISA STIG GPO packages from [public.cyber.mil](https://public.cyber.mil/stigs/gpo) to the local machine. It handles:
 
@@ -512,7 +512,7 @@ The script uses Microsoft's [LGPO.exe](https://www.microsoft.com/en-us/download/
 **Step 1 — Copy the example artifact to your customer artifacts folder:**
 
 ```powershell
-Copy-Item -Path "customer\examples\artifacts\DoD-STIGs" `
+Copy-Item -Path "customer-examples\artifacts\DoD-STIGs" `
           -Destination "customer\artifacts\" -Recurse -Force
 ```
 
@@ -553,7 +553,7 @@ Pass arguments to override defaults — for example, to target only specific app
 }
 ```
 
-Use `-CloudOnly 'False'` for hybrid (domain-joined) session hosts. See [`customer/examples/artifacts/DoD-STIGs/README.md`](../customer/examples/artifacts/DoD-STIGs/README.md) for all parameters.
+Use `-CloudOnly 'False'` for hybrid (domain-joined) session hosts. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for all parameters.
 
 **Deploy at VM runtime:** To apply STIGs to an existing fleet without rebuilding the image — for example, after a quarterly STIG package update — add the same artifact reference to the `sessionHostCustomizations` parameter in the host pool deployment instead of `customizations` in the image build. The mechanism is identical; only the parameter name differs.
 
@@ -568,7 +568,7 @@ Use `-CloudOnly 'False'` for hybrid (domain-joined) session hosts. See [`custome
 }
 ```
 
-**Offline / air-gapped environments:** Pre-download the LGPO tool and STIG GPO package and place them in the `customer/artifacts/DoD-STIGs/` folder before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. See [`customer/examples/artifacts/DoD-STIGs/README.md`](../customer/examples/artifacts/DoD-STIGs/README.md) for the exact file names expected.
+**Offline / air-gapped environments:** Pre-download the LGPO tool and STIG GPO package and place them in the `customer/artifacts/DoD-STIGs/` folder before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for the exact file names expected.
 
 #### Option 2 — DISA STIG GPOs and Intune Policies (Group Policy / MDM)
 
