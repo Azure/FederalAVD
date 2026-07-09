@@ -124,6 +124,15 @@
             "PuTTY"
         ]
     },
+    "7Zip": {
+        "Description": "7-Zip Archiver",
+        "GitHubRepo": "ip7z/7zip",
+        "GitHubFileNamePattern": "*-x64.msi",
+        "DestinationFileName": "7zip-x64.msi",
+        "DestinationFolders": [
+            "7-Zip"
+        ]
+    },
     "VSCode": {
         "Description": "Visual Studio Code",
         "DownloadUrl": "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64",
