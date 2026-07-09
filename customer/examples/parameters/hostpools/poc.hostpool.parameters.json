@@ -1,13 +1,13 @@
 {
     // =========================================================================
-    // FederalAVD - Golden Path Host Pool Parameter File
+    // FederalAVD - PoC / Starter Host Pool Parameter File
     // =========================================================================
     //
     // Scenario: existing VNet, marketplace image (Win11 M365), Entra ID join,
     //           pooled DepthFirst, AzureFiles Standard FSLogix, no CMK,
     //           monitoring enabled, PowerShell deployment.
     //
-    // Key defaults used (not specified here — change only if needed):
+    // Key defaults used (not specified here -- change only if needed):
     //   hostPoolType           : Pooled DepthFirst
     //   virtualMachineSize     : Standard_D4ads_v5  (4 vCPUs, 16 GB)
     //   availability           : AvailabilityZones
@@ -21,7 +21,7 @@
     // ------------
     // 1. Copy this file:
     //      New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
-    //      Copy-Item customer\examples\parameters\hostpools\golden-path.hostpool.parameters.json `
+    //      Copy-Item customer\examples\parameters\hostpools\poc.hostpool.parameters.json `
     //                customer\parameters\hostpools\myfirstpool.parameters.json
     //
     // 2. Change every value marked  TODO  below.
@@ -46,7 +46,7 @@
     //       or Template Spec UI, remove "timeStamp" before saving.
     //
     // For the full step-by-step guide see:
-    //   docs/quick-start.md#your-first-deployment-golden-path
+    //   docs/quick-start.md#step-4-deploy-host-pool
     // =========================================================================
 
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",

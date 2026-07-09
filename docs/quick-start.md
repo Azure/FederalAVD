@@ -6,173 +6,11 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 
 ---
 
-## Your First Deployment (Golden Path)
-
-> **New to FederalAVD?** Follow these 12 steps to get a working host pool in ~20 minutes. This path uses an existing VNet, marketplace images, and PowerShell — no CMK, no custom images, no extra infrastructure required. In the deployment sequence described later in this guide, this is **Tier 1 (PoC / Marketplace)** — you only need the host pool template (Step 4). Ignore the tier table, Steps 0–3, Template Spec setup, and CMK options for now; you can add them later.
->
-> **Before you start:** Run through the [60-second preflight](#preflight-checklist) in the Essential Prerequisites section below — nine yes/no checks that catch the most common blockers.
-
----
-
-**Steps 1–3: One-time environment setup**
-
-**Step 1 — Install or update the Az PowerShell module** (skip if already on Az 12+)
-
-```powershell
-Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force
-```
-
-**Step 2 — Connect to Azure and set your subscription**
-
-```powershell
-Connect-AzAccount                                      # Add -Environment AzureUSGovernment for Gov clouds
-Set-AzContext -Subscription '<your-subscription-id>'
-```
-
-**Step 3 — Register required providers and features** (one-time per subscription; safe to re-run)
-
-```powershell
-Register-AzResourceProvider -ProviderNamespace 'Microsoft.DesktopVirtualization'
-Register-AzProviderFeature   -FeatureName 'EncryptionAtHost' -ProviderNamespace 'Microsoft.Compute'
-
-# Wait until EncryptionAtHost shows 'Registered' (~1-5 minutes)
-do {
-    $state = (Get-AzProviderFeature -FeatureName EncryptionAtHost -ProviderNamespace Microsoft.Compute).RegistrationState
-    Write-Host "EncryptionAtHost: $state"
-    if ($state -ne 'Registered') { Start-Sleep -Seconds 15 }
-} while ($state -ne 'Registered')
-```
-
-> `EncryptionAtHost` is enabled on all session host VMs by default in this solution. If your subscription cannot register it, add `"encryptionAtHost": { "value": false }` to your parameter file and skip the wait loop.
-
----
-
-**Steps 4–6: Repo and parameter setup**
-
-**Step 4 — Clone the repo** (or download the ZIP from GitHub if you don't have git)
-
-```powershell
-git clone https://github.com/Azure/FederalAVD.git
-Set-Location FederalAVD
-```
-
-**Step 5 — Copy the golden-path example parameter file to your working folder**
-
-```powershell
-New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
-Copy-Item customer\examples\parameters\hostpools\golden-path.hostpool.parameters.json `
-          customer\parameters\hostpools\myfirstpool.parameters.json
-```
-
-> `customer\parameters\` is git-ignored by design — your environment-specific files stay local and will not be overwritten on `git pull`. Never edit `customer\examples\` files directly; copy them first.
-
-**Step 6 — Edit the required values in your parameter file**
-
-Open `customer\parameters\hostpools\myfirstpool.parameters.json` and replace every value marked `TODO`:
-
-| Parameter | What to set |
-|---|---|
-| `identifier` | A short prefix for this deployment (e.g., `"test"` or `"dev"`) |
-| `virtualMachineNamePrefix` | VM name prefix for session hosts (e.g., `"avddev"`, max 14 chars) |
-| `virtualMachineSubnetResourceId` | Full resource ID of the session host subnet |
-| `appGroupSecurityGroups` | Your Entra security group object ID and display name (replace the `xxxxxxxx` placeholders) |
-
-The file already sets `sessionHostCount: 3`, `deployFSLogixStorage: true`, and `identitySolution: "EntraId"` — leave those as-is unless your scenario differs. Everything else uses Bicep defaults (`virtualMachineSize: Standard_D4ads_v5`, `imageSku: win11-25h2-avd-m365`, `enableMonitoring: true`, etc.) which are correct for a first deployment.
-
-> **Credentials are not in this file.** `virtualMachineAdminUserName` and `virtualMachineAdminPassword` are `@secure()` parameters — putting them in a plain-text JSON file is a security risk. The deploy command (Step 8) collects them interactively via `Read-Host` so they are never written to disk. The deployment automatically creates a Key Vault in the operations resource group and stores both values there as secrets.
->
-> **No `timeStamp` to remove** — the golden-path example file does not include one. If you later export a parameter file from the Template Spec UI or ARM deployment history, delete the `timeStamp` entry before reusing the file. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
-
-**Step 7 — Verify the VM size is available and quota is sufficient**
-
-Before spending 20 minutes waiting on a deployment that will fail at the VM allocation step, run the pre-flight check:
-
-```powershell
-.\tools\Test-AvdVmSize.ps1 -Location '<azure-region>'
-```
-
-Replace `<azure-region>` with your target Azure region. Add `-SessionHostCount <n>` if you changed `sessionHostCount` from the `3` set in the parameter file.
-
-All three checks (`[PASS]`) means you are clear to deploy. If any check fails the script prints exactly what to fix. See [vCPU Quota Exhaustion](troubleshooting.md#vcpu-quota-exhaustion) for the full remediation guide.
-
----
-
-**Steps 8–10: Deploy**
-
-**Step 8 — Deploy**
-
-```powershell
-$paramFile      = 'myfirstpool.parameters.json'
-$deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
-
-# Credentials are @secure() parameters - collect them interactively, never store in the param file
-$adminUser = Read-Host 'Session host local admin username' -AsSecureString
-$adminPass = Read-Host 'Session host local admin password' -AsSecureString
-
-New-AzDeployment `
-    -Location '<azure-region>' `
-    -Name $deploymentName `
-    -TemplateFile '.\deployments\hostpools\hostpool.json' `
-    -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
-    -virtualMachineAdminUserName $adminUser `
-    -virtualMachineAdminPassword $adminPass `
-    -Verbose
-```
-
-Replace `<azure-region>` with your target Azure region. The deployment sets the control plane location to match, creates a Key Vault in the operations resource group, and stores both credentials there as secrets.
-
-**Step 9 — Wait for the deployment (~15–20 minutes)**
-
-Track progress in **Azure Portal → Subscriptions → [your subscription] → Deployments**, or watch the `-Verbose` output. The deployment provisions: host pool, workspace, application group, session hosts, FSLogix profile storage (Azure Files), monitoring, and all required role assignments.
-
-**Step 10 — Confirm session hosts are registered**
-
-```powershell
-# Replace resource group / host pool names from deployment outputs
-Get-AzWvdSessionHost `
-    -ResourceGroupName 'rg-avd-hosts-<identifier>-<region>' `
-    -HostPoolName      'vdpool-avd-<identifier>-<region>'  |
-    Select-Object Name, Status
-```
-
-All session hosts should show `Status: Available`.
-
----
-
-**Steps 11–13: Connect and verify**
-
-**Step 11 — Open the AVD web client**
-
-| Cloud | URL |
-|-------|-----|
-| Azure Commercial | [https://client.wvd.microsoft.com/arm/webclient](https://client.wvd.microsoft.com/arm/webclient) |
-| Azure Government | [https://client.wvd.azure.us/arm/webclient](https://client.wvd.azure.us/arm/webclient) |
-
-**Step 12 — Sign in with a user from your AVD security group**
-
-The `appGroupSecurityGroups` parameter assigned this group to the Desktop Application Group automatically. If the desktop does not appear, confirm the assignment in **Azure Portal → Host Pool → Application Groups → [pool name] → Assignments**.
-
-**Step 13 — Connect and confirm the session is live**
-
-Select the desktop. It connects to a session host within 1–2 minutes. You now have a live AVD host pool.
-
----
-
-> **⚠️ Top 5 first-deployment mistakes** — check these before asking for help:
->
-> 1. **Storage 403 when uploading artifacts** — `Owner`/`Contributor` alone is not enough when shared key access is disabled; add [Storage Blob Data Contributor](troubleshooting.md#storage-blob-data-access-fails-with-403).
-> 2. **CMK Forbidden on key operations** — add [Key Vault Crypto Officer](troubleshooting.md#key-vault-crypto-officer-missing) on the encryption KV; this is separate from `Owner`/`Contributor`.
-> 3. **`timeStamp` left in a saved parameter file** — [remove it](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions) before reusing; it must auto-generate on every run.
-> 4. **Edited `customer/examples/` and changes disappeared** — always [copy to `customer/parameters/` first](troubleshooting.md#editing-customerexamples-or-missing-customer-changes), then edit.
-> 5. **imageManagement CMK fails — deployed before Key Vaults** — [Step 1 must run first](troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults) when using CMK.
-
----
-
 ## Deployment Tiers at a Glance
 
 | Tier | Who | Requirements | First Deployment | Jump To |
 |------|-----|-------------|-----------------|---------|
-| **1 — PoC / Marketplace** | Single admin | Azure subscription + existing VNet | ~20 min | [Golden Path](#your-first-deployment-golden-path) or [Step 4 directly](#step-4-deploy-host-pool) |
+| **1 — PoC / Marketplace** | Single admin | Azure subscription + existing VNet | ~20 min | [Step 4](#step-4-deploy-host-pool) — see PoC callout |
 | **2 — Custom Images** | Single team | Tier 1 + storage account + compute gallery | ~2–3 hrs total | [Step 2 → 3 → 4](#step-2-deploy-image-management-resources) |
 | **3 — Multi-Team Production** | Network, Security, Image, AVD teams | All above + Key Vaults, RBAC delegation, param hand-off | ~4–8 hrs first time | [Tier 3 section](#tier-3-multi-tiered-administration) |
 | **4 — Fully Automated** | DevOps / platform team | Tier 3 + CI/CD tooling | ~1 week setup | [Automation Guide](automation-guide.md) |
@@ -276,7 +114,8 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 
 > Run `tools/Test-AvdVmSize.ps1 -Location <region>` to automate checks 3 and 10 (EncryptionAtHost is **not** checked by this script — register that separately).
 
-### Required Deployer Roles by Deployment
+<details>
+<summary><b>Required Deployer Roles by Deployment</b></summary>
 
 | Deployment | Required role | Why |
 |---|---|---|
@@ -288,6 +127,8 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 > **Tip — least privilege for imageBuild:** Using an existing resource group (pre-staged by imageManagement) eliminates the need for subscription-level resource group creation and role assignment rights. You still need `Microsoft.Resources/deployments/write` at subscription scope because `imageBuild.bicep` uses `targetScope = 'subscription'` — but this is far narrower than full `Contributor` at subscription scope. See the [Custom RBAC Roles Guide](custom-roles.md#3-imagebuild-operator--existing-rg-path) for a role definition that grants exactly this.
 >
 > **Custom roles:** For organizations that need to constrain operators beyond built-in roles — for example, preventing arbitrary resource creation or limiting which role definition IDs can be assigned — see the [Custom RBAC Roles Guide](custom-roles.md) for ready-to-use JSON definitions for each deployment path.
+
+</details>
 
 ### Required for Custom Software (Steps 2 & 3)
 
@@ -333,6 +174,9 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 ---
 
 ## 🔒 Air-Gapped Clouds: Template Specs (Optional but Recommended)
+
+<details>
+<summary><b>Setup and usage instructions</b></summary>
 
 > **ℹ️ FOR AIR-GAPPED ENVIRONMENTS (Azure Secret / Azure Top Secret)**
 > 
@@ -422,6 +266,8 @@ New-AzDeployment `
 
 📖 **[Complete Template Spec Instructions](hostpool-deployment.md#b-template-spec-creation)**
 
+</details>
+
 ---
 
 ## Step 0: Deploy Networking Infrastructure (Greenfield)
@@ -432,7 +278,8 @@ New-AzDeployment `
 
 > **🔧 Technical Reference:** [Networking Template Documentation](../deployments/networking/README.md) - Complete parameter reference and advanced configuration
 
-### What Gets Deployed
+<details>
+<summary><b>What Gets Deployed</b></summary>
 
 The networking deployment provides a complete foundation for AVD, including:
 
@@ -517,6 +364,8 @@ New-AzDeployment `
 - No internet egress
 
 **📖 For detailed networking architecture and requirements:** [Host Pool Deployment Guide - Networking Prerequisites](hostpool-deployment.md#c-networking-setup)
+
+</details>
 
 ---
 
@@ -723,6 +572,90 @@ cd deployments
 
 Deploy your complete AVD environment including host pool, session hosts, storage, monitoring, and security resources.
 
+<details>
+<summary><b>New to FederalAVD? Deploy a PoC host pool in ~20 minutes (start here)</b></summary>
+
+If you want a working AVD host pool to evaluate — existing VNet, marketplace images, no CMK, no custom software — you can skip Steps 0–3 entirely. This is all you need.
+
+> **Before you start:** Run the [60-second preflight](#preflight-checklist) above, and make sure the Az module is installed (`Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`) and you're connected (`Connect-AzAccount`).
+
+**1 — Get the repo**
+
+```powershell
+git clone https://github.com/Azure/FederalAVD.git
+Set-Location FederalAVD
+```
+
+**2 — Copy the PoC parameter file**
+
+```powershell
+New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
+Copy-Item customer\examples\parameters\hostpools\poc.hostpool.parameters.json `
+          customer\parameters\hostpools\myfirstpool.parameters.json
+```
+
+> `customer\parameters\` is git-ignored — your files stay local and won't be overwritten on `git pull`. Never edit `customer\examples\` directly.
+
+**3 — Set the four required values** in `customer\parameters\hostpools\myfirstpool.parameters.json`
+
+| Parameter | What to set |
+|---|---|
+| `identifier` | Short prefix for this deployment (e.g., `"test"`) |
+| `virtualMachineNamePrefix` | VM name prefix (e.g., `"avddev"`, max 14 chars) |
+| `virtualMachineSubnetResourceId` | Full resource ID of the session host subnet |
+| `appGroupSecurityGroups` | Entra security group object ID and display name |
+
+The file already sets `sessionHostCount: 3`, `deployFSLogixStorage: true`, and `identitySolution: "EntraId"`. Credentials are collected interactively at deploy time — never put them in the JSON file.
+
+**4 — Check VM size availability and quota**
+
+```powershell
+.\tools\Test-AvdVmSize.ps1 -Location '<azure-region>'
+```
+
+All three checks `[PASS]` means you're clear. If any fail the script prints exactly what to fix.
+
+**5 — Deploy**
+
+```powershell
+$adminUser = Read-Host 'Session host local admin username' -AsSecureString
+$adminPass = Read-Host 'Session host local admin password' -AsSecureString
+
+New-AzDeployment `
+    -Location '<azure-region>' `
+    -Name 'myfirstpool' `
+    -TemplateFile '.\deployments\hostpools\hostpool.json' `
+    -TemplateParameterFile '.\customer\parameters\hostpools\myfirstpool.parameters.json' `
+    -virtualMachineAdminUserName $adminUser `
+    -virtualMachineAdminPassword $adminPass `
+    -Verbose
+```
+
+Track progress in **Azure Portal → Subscriptions → [your subscription] → Deployments**. Expect ~15–20 minutes.
+
+**6 — Verify session hosts**
+
+```powershell
+Get-AzWvdSessionHost `
+    -ResourceGroupName 'rg-avd-hosts-<identifier>-<region>' `
+    -HostPoolName      'vdpool-avd-<identifier>-<region>' |
+    Select-Object Name, Status
+```
+
+All session hosts should show `Status: Available`. Then sign in at [https://client.wvd.microsoft.com/arm/webclient](https://client.wvd.microsoft.com/arm/webclient) (Commercial) or [https://client.wvd.azure.us/arm/webclient](https://client.wvd.azure.us/arm/webclient) (Government).
+
+---
+
+> **Top 5 first-deployment mistakes:**
+>
+> 1. **Storage 403 when uploading artifacts** — `Owner`/`Contributor` alone is not enough when shared key access is disabled; add [Storage Blob Data Contributor](troubleshooting.md#storage-blob-data-access-fails-with-403).
+> 2. **CMK Forbidden on key operations** — add [Key Vault Crypto Officer](troubleshooting.md#key-vault-crypto-officer-missing) on the encryption KV.
+> 3. **`timeStamp` left in a saved parameter file** — [remove it](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions) before reusing.
+> 4. **Edited `customer/examples/` and changes disappeared** — always [copy to `customer/parameters/` first](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+> 5. **imageManagement CMK fails — deployed before Key Vaults** — [Step 1 must run first](troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults) when using CMK.
+
+</details>
+
 ### Quick Deploy Options
 
 **Option 1: Azure Portal (Blue Button)** - Commercial & Government clouds only
@@ -766,6 +699,9 @@ New-AzDeployment `
 
 In enterprise environments, different teams own different pieces of the infrastructure. The Federal AVD solution is designed so that each deployment step produces **outputs** that the next team consumes as **parameters** — enabling clean organizational boundaries without credential sharing or giving every team subscription Owner rights.
 
+<details>
+<summary><b>Team ownership model, cross-team output passing, and RBAC</b></summary>
+
 ### Recommended Team Ownership Model
 
 | Team | Owns | Deploys |
@@ -801,6 +737,8 @@ Assign these roles so each team can deploy their components without subscription
 | **hostpool — Complete** | `Owner` or `Contributor + User Access Administrator` at subscription scope | Creates RGs and assigns roles at subscription scope |
 
 > **Generating parameter files for each team:** The easiest way to create a parameter file is to deploy once using the Template Spec portal form, then **download the generated parameter file** before submitting. Remove the `timeStamp` parameter before saving for reuse. See the [air-gapped section](#-air-gapped-clouds-template-specs-optional-but-recommended) for details.
+
+</details>
 
 ---
 

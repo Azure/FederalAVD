@@ -35,7 +35,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 
 Ready to deploy? The **[Quick Start Guide](docs/quick-start.md)** walks you through the complete deployment process with decision trees, prerequisites, and step-by-step instructions.
 
-**New to FederalAVD?** → **[15-minute golden path](docs/quick-start.md#your-first-deployment-golden-path)** (existing VNet + marketplace images, no CMK) | **[Top 5 first-deployment mistakes](docs/troubleshooting.md#top-5-first-deployment-mistakes)**
+**New to FederalAVD?** → **[Start with the PoC callout in Step 4](docs/quick-start.md#step-4-deploy-host-pool)** (existing VNet + marketplace images, no CMK) | **[Top 5 first-deployment mistakes](docs/troubleshooting.md#top-5-first-deployment-mistakes)**
 
 ### Deployment Path Overview
 

@@ -13,7 +13,7 @@ I am new to this repo and want to deploy Azure Virtual Desktop using FederalAVD.
 
 Once I answer, give me **exactly one next step** — not a menu. Route me as follows:
 
-- **Existing VNet + marketplace images → golden path:** Send me straight to [Your First Deployment](../docs/quick-start.md#your-first-deployment-golden-path) and walk me through the ~12-step PowerShell sequence. Do not show me the tier table or decision guide.
+- **Existing VNet + marketplace images → PoC:** Walk me through the PowerShell steps in the [Step 4 PoC callout](../docs/quick-start.md#step-4-deploy-host-pool). Do not show me the tier table or decision guide.
 - **Need networking:** Start with Step 0, then continue to the appropriate next step.
 - **Need custom images, no CMK:** Step 2 (imageManagement) → optional Step 3 (imageBuild) → Step 4 (hostPool).
 - **Need custom images + CMK:** Step 1 (keyVaults) first — the Key Vault must exist before imageManagement can encrypt the gallery and storage account — then Step 2 → optional Step 3 → Step 4.

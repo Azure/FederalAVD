@@ -8,12 +8,12 @@
       - Exists in the target region for the current subscription
       - Has no location-level restrictions (subscription policy / quota block)
       - Has no availability zone restrictions (relevant when using availability =
-        AvailabilityZones, which is the default in the golden-path parameter file)
+        AvailabilityZones, which is the default in the poc parameter file)
       - Has sufficient vCPU quota (VM family quota and total regional vCPU quota)
         to deploy the requested number of session hosts
 
-    Designed as a pre-flight check for the FederalAVD golden-path deployment.
-    The default values match the golden-path example parameter file:
+    Designed as a pre-flight check for the FederalAVD PoC / starter deployment.
+    The default values match the poc.hostpool.parameters.json example file:
         virtualMachineSize : Standard_D4ads_v5  (4 vCPUs per VM)
         sessionHostCount   : 2
 
@@ -22,7 +22,7 @@
 
 .PARAMETER VmSize
     Azure VM size to validate.
-    Default: Standard_D4ads_v5 (golden-path default - 4 vCPUs, 16 GB RAM).
+    Default: Standard_D4ads_v5 (PoC starter default - 4 vCPUs, 16 GB RAM).
 
 .PARAMETER Location
     Azure region to check. Required.
@@ -31,7 +31,7 @@
 .PARAMETER SessionHostCount
     Number of session host VMs to be deployed.
     Used to calculate total vCPU demand.
-    Default: 2 (golden-path default).
+    Default: 2 (PoC starter default).
 
 .PARAMETER SubscriptionId
     Azure subscription ID to check quota against.
@@ -40,7 +40,7 @@
 .EXAMPLE
     .\Test-AvdVmSize.ps1 -Location eastus2
 
-    Checks the golden-path defaults (Standard_D4ads_v5 x 2) in East US 2.
+    Checks the PoC defaults (Standard_D4ads_v5 x 2) in East US 2.
 
 .EXAMPLE
     .\Test-AvdVmSize.ps1 -Location usgovvirginia -SessionHostCount 5
@@ -152,7 +152,7 @@ if ($zoneRestrictions) {
 
     Write-Host "[WARN] '$VmSize' has zone restrictions in '$Location'." -ForegroundColor Yellow
     Write-Host "       Restricted availability zones: $restrictedZones"
-    Write-Host "       The golden-path uses availability = AvailabilityZones."
+    Write-Host "       The poc starter parameter file uses availability = AvailabilityZones."
     Write-Host "       If all zones in your region are restricted, change 'availability' to 'None'"
     Write-Host "       in your parameter file, or choose a different VM size."
 } else {
