@@ -6,7 +6,7 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 
 ---
 
-## Your First Deployment (Golden Path) {#your-first-deployment-golden-path}
+## Your First Deployment (Golden Path)
 
 > **New to FederalAVD?** Follow these 12 steps to get a working host pool in ~20 minutes. This path uses an existing VNet, marketplace images, and PowerShell — no CMK, no custom images, no extra infrastructure required. Ignore the tier table, Steps 0–3, Template Spec setup, and CMK options for now; you can add them later.
 >
