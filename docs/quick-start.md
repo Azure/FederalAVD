@@ -106,7 +106,7 @@ $paramFile      = 'myfirstpool.parameters.json'
 $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
 
 # Credentials are @secure() parameters - collect them interactively, never store in the param file
-$adminUser = Read-Host 'Session host local admin username'
+$adminUser = Read-Host 'Session host local admin username' -AsSecureString
 $adminPass = Read-Host 'Session host local admin password' -AsSecureString
 
 New-AzDeployment `
