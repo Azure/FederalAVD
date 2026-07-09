@@ -76,20 +76,39 @@ $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 
 $PathMSI = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: 'msiexec /i `"$PathMSI`" /quiet /noreboot'."
-Wait-MsiexecIdle
+$PathEXE = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+
 $InstallerTimeoutMs = 600000 # 10 minutes
-$Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /quiet /noreboot" -PassThru
-if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
-    $Installer.Kill()
-    Write-Log -Category Warning -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+
+if ($PathMSI) {
+    Write-Log -Category Info -message "Installing '$SoftwareName' via MSI: 'msiexec /i `"$PathMSI`" /quiet /noreboot'."
+    Wait-MsiexecIdle
+    $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /quiet /noreboot" -PassThru
+    if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
+        $Installer.Kill()
+        Write-Log -Category Warning -Message "'$SoftwareName' MSI installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+    }
+    elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
+        if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -message "'$SoftwareName' installed successfully. A reboot is required." }
+        else { Write-Log -Category Info -message "'$SoftwareName' installed successfully." }
+    }
+    else {
+        Write-Log -Category Warning -Message "The MSI installer exit code is $($Installer.ExitCode)"
+    }
 }
-elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
-    if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -message "'$SoftwareName' installed successfully. A reboot is required." }
-    else { Write-Log -Category Info -message "'$SoftwareName' installed successfully." }
+elseif ($PathEXE) {
+    Write-Log -Category Info -message "No MSI found. Installing '$SoftwareName' via EXE: '$PathEXE /S'."
+    $Installer = Start-Process -FilePath $PathEXE -ArgumentList '/S' -Wait -PassThru
+    if ($Installer.ExitCode -eq 0) {
+        Write-Log -Category Info -message "'$SoftwareName' installed successfully."
+    }
+    else {
+        Write-Log -Category Warning -Message "The EXE installer exit code is $($Installer.ExitCode)"
+    }
 }
 else {
-    Write-Log -Category Warning -Message "The Installer exit code is $($Installer.ExitCode)"
+    Write-Log -Category Error -Message "No installer found in '$PSScriptRoot'. Expected a .msi or .exe file."
+    throw "No installer found for '$SoftwareName'."
 }
 
 Write-Log -Category Info -message "Completed '$SoftwareName' Installation."
