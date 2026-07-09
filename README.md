@@ -37,46 +37,7 @@ Ready to deploy? The **[Quick Start Guide](docs/quick-start.md)** walks you thro
 
 **New to FederalAVD?** → **[Start with the PoC callout in Step 4](docs/quick-start.md#step-4-deploy-host-pool)** (existing VNet + marketplace images, no CMK) | **[Top 5 first-deployment mistakes](docs/troubleshooting.md#top-5-first-deployment-mistakes)**
 
-### Deployment Path Overview
-
-```mermaid
-graph TD
-    A[Start] --> B{Have Existing<br/>VNet?}
-    B -->|No - Greenfield| C[🌐 Deploy<br/>Networking]
-    B -->|Yes| CUST
-    C --> CUST
-    CUST{Need Custom<br/>Software?} -->|No - Marketplace / PoC<br/>CMK inline available| HP
-    CUST -->|Yes| CMK{Using Customer<br/>Managed Keys?}
-    CMK -->|Yes| KV[🔒 Deploy<br/>Key Vaults]
-    CMK -->|No| IMG
-    KV --> IMG[📦 Deploy Image<br/>Management]
-    IMG --> BUILD{Build Custom<br/>Image?}
-    BUILD -->|Yes<br/>Pre-install| IB[🎨 Build Custom<br/>Image]
-    BUILD -->|No<br/>Runtime install| HP
-    IB --> HP[🏢 Deploy<br/>Host Pool]
-    HP --> J[✅ Complete]
-```
-
-### Deployment Methods
-
-| Component | Blue Button | Template Spec | PowerShell/CLI |
-| --------- | ----------- | ------------- | -------------- |
-| **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Security Prereqs** (Key Vaults) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-
-**💡 About Template Specs:**
-
-- Provide guided form experience with built-in validation
-- Generate parameter files for automation workflows
-- Useful for teams unfamiliar with ARM/Bicep syntax
-- **Only UI option for air-gapped clouds** (Secret/Top Secret)
-- Not available for image management infrastructure deployment
-
-**👉 [Get Started Now](docs/quick-start.md)** - Complete prerequisites, deployment options, and step-by-step instructions
+**👉 [Get Started Now →](docs/quick-start.md)** — choose your path (PoC · custom images · enterprise CMK), review prerequisites, and follow step-by-step instructions. All clouds and all deployment methods (Blue Button, Template Spec, PowerShell/CLI) are covered there.
 
 ---
 
@@ -192,7 +153,7 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Getting Started
 
-- 📖 [Quick Start Guide](docs/quick-start.md) - Step-by-step deployment instructions with tier guidance (PoC → multi-team → automated)
+- 📖 [Quick Start Guide](docs/quick-start.md) - Step-by-step deployment instructions with path selection (PoC / custom software / enterprise CMK)
 - 🤖 [End-to-End Automation Guide](docs/automation-guide.md) - Chaining steps together and passing outputs
 - 🏗️ [Design](docs/design.md) - Architecture and resource organization
 - ⚙️ [Parameters Reference](docs/parameters.md) - Per-solution parameter documentation index

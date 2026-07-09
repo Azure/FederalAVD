@@ -2,26 +2,27 @@
 
 # Quick Start Guide
 
-Get your Azure Virtual Desktop environment deployed quickly with this step-by-step guide. This guide helps you choose the right deployment path and complete the essential prerequisites. Use the tier table below to find your starting point, then follow the steps that apply.
+Get your Azure Virtual Desktop environment deployed. Pick your path below.
 
 ---
 
-## Deployment Tiers at a Glance
+## Choose Your Path
 
-| Tier | Who | Requirements | First Deployment | Jump To |
-|------|-----|-------------|-----------------|---------|
-| **1 — PoC / Marketplace** | Single admin | Azure subscription + existing VNet | ~20 min | [Step 4](#step-4-deploy-host-pool) — see PoC callout |
-| **2 — Custom Images** | Single team | Tier 1 + storage account + compute gallery | ~2–3 hrs total | [Step 2 → 3 → 4](#step-2-deploy-image-management-resources) |
-| **3 — Multi-Team Production** | Network, Security, Image, AVD teams | All above + Key Vaults, RBAC delegation, param hand-off | ~4–8 hrs first time | [Tier 3 section](#tier-3-multi-tiered-administration) |
-| **4 — Fully Automated** | DevOps / platform team | Tier 3 + CI/CD tooling | ~1 week setup | [Automation Guide](automation-guide.md) |
+| | Path | Steps | Time |
+| --- | --- | --- | --- |
+| 🧪 | **[PoC / Evaluation](#poc-fast-path)** — existing VNet, marketplace images, no compliance requirements | Step 4 only | ~20 min |
+| 🖼️ | **[Custom software, no CMK](#step-2-deploy-image-management-resources)** — pre-install software baked into images | Steps 2 → 3 → 4 | 2–4 hrs |
+| 🏛️ | **[Enterprise / compliance (CMK)](#step-1-deploy-key-vaults-cmk-with-custom-images)** — FedRAMP High, DoD IL4/IL5, CMMC | Steps 1 → 2 → 3 → 4 | 4–8 hrs |
+| 🌐 | **No existing VNet?** — add [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first to any path above | + Step 0 | +30 min |
 
-> **Just need a working AVD environment to test?** Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool). A VNet with one subnet is the only hard prerequisite. CMK, FSLogix, monitoring, and private endpoints are all optional and can be added later.
+> **🏛️ Enterprise / compliance path:** CMK is the only reason Step 1 must precede Step 2. Key Vaults must exist before Image Management can encrypt its storage account and compute gallery at creation time. Get that sequence right and the rest is identical to the custom-software path.
+>
+> **🔒 Compliance is parameter choices, not a separate path:** FedRAMP High, DoD IL4/IL5, CMMC, and similar frameworks are enabled by setting the right parameter values at each step — the deployment structure is the same. See [Compliance Configuration](parameters.md#compliance-configuration-reference). The portal form flags non-compliant defaults in a Zero Trust tab.
+>
+> **✈️ Air-gapped clouds (Azure Secret / Top Secret):** Blue Button is not available. [Template Spec setup ↓](#-air-gapped-clouds-template-specs-optional-but-recommended)
 
-> **🔒 Deploying for NIST SP 800-53 / FedRAMP High or DoD IL5 compliance?** The deployment tiers above describe *operational* complexity — compliance hardening is a separate set of parameter choices that can be applied at any tier. See the [Compliance Configuration Reference](parameters.md#compliance-configuration-reference) for the exact parameters to change from their defaults. The Zero Trust tab in the host pool deployment UI also warns when defaults are not compliance-configured.
-
----
-
-## Choose Your Deployment Path
+<details>
+<summary><b>Full deployment decision diagram</b></summary>
 
 ```mermaid
 graph TD
@@ -41,66 +42,32 @@ graph TD
     HP --> J[✅ Complete]
 ```
 
-**Decision Guide:**
-
-- **Greenfield environment without networking?** → Start with [Step 0: Deploy Networking](#step-0-deploy-networking-infrastructure-greenfield), then continue below
-- **Have existing VNet + subnet?** → Skip Step 0, continue below
-
-**Then choose your deployment approach:**
-
-> **💡 Fastest path:** If you have an existing VNet and want a working AVD environment with marketplace images, you need nothing else. Jump straight to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) — FSLogix storage, monitoring, and optional CMK are all handled inline by the host pool deployment. Add custom images or tighter security controls later.
-
-- **PoC or marketplace images only?** → Jump directly to [Step 4: Deploy Host Pool](#step-4-deploy-host-pool) *(CMK optional — deployed inline, no Key Vault pre-deploy needed)*
-- **Need custom software on session hosts, no CMK?** → [Step 2: Image Management](#step-2-deploy-image-management-resources) first, then:
-  - **Install at runtime only?** → [Step 4: Host Pool](#step-4-deploy-host-pool)
-  - **Want pre-built images?** → [Step 3: Build Custom Image](#step-3-build-custom-image-optional) → [Step 4: Host Pool](#step-4-deploy-host-pool)
-- **Need custom software with CMK?** → [Step 1: Key Vaults](#step-1-deploy-key-vaults-cmk-with-custom-images) first (required before image management can encrypt), then [Step 2: Image Management](#step-2-deploy-image-management-resources) → [Step 3: Build Image](#step-3-build-custom-image-optional) → [Step 4: Host Pool](#step-4-deploy-host-pool)
+</details>
 
 ---
 
-## Deployment Methods
+## Prerequisites
 
-Most components support multiple deployment methods:
+**Required for all paths:**
 
-| Component | Blue Button | Template Spec | PowerShell/CLI |
-|-----------|-------------|---------------|----------------|
-| **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Key Vaults** (Secrets & Encryption) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+- Azure subscription with **Owner** role (or Contributor + User Access Administrator)
+- Virtual Network with at least one subnet — or deploy [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first
+- Entra security group with AVD users (note the object ID)
+- Az PowerShell module: `Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`
 
-> **🔒 Air-Gapped Clouds (Azure Secret/Top Secret):** Blue Button deployments are NOT available. You can use either:
->
-> - **Template Specs with Portal UI** (for custom images, host pools, networking, add-ons)
-> - **PowerShell/CLI with parameter files** (for all components)
->
-> **💡 Pro Tip:** Use Template Spec UI to generate your parameter files! Deploy once with the UI form, save the generated parameters, remove the `timeStamp` parameter, then use PowerShell for future deployments.
->
-> **For details on air-gapped considerations:** [Air-Gapped Guide](air-gapped-clouds.md)
+**Additional for custom images (Steps 2–3):** **Storage Blob Data Contributor** on the artifacts storage account — `Owner`/`Contributor` does not cover blob data-plane access when shared key access is disabled (the default). See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
 
----
+**Additional for CMK (Steps 1 + 4):** **Key Vault Crypto Officer** on the encryption Key Vault — ARM control plane ≠ Key Vault data plane. See [troubleshooting](troubleshooting.md#key-vault-crypto-officer-missing).
 
-## Essential Prerequisites
-
-Before deploying, ensure you have these essentials ready:
-
-### Required for All Deployments
-
-- ✅ **Azure Subscription** with Owner role (or Contributor + User Access Administrator)
-- ✅ **Virtual Network** with at least one subnet for session hosts
-- ✅ **Network Connectivity** - Firewall/NSG rules allowing access to [required AVD endpoints](https://learn.microsoft.com/azure/virtual-desktop/required-fqdn-endpoint?tabs=azure) ([air-gapped clouds](air-gapped-clouds.md))
-- ✅ **Security Group** for AVD users (Entra ID or AD-synced)
-- ✅ **AVD Licenses** - [Verify licensing requirements](https://learn.microsoft.com/azure/virtual-desktop/overview#requirements)
-- ✅ **Resource Provider** - Enable `Microsoft.DesktopVirtualization` in your subscription
+<details>
+<summary><b>60-second preflight checklist, deployer roles, and detailed setup guides</b></summary>
 
 ### 60-Second Preflight Checklist {#preflight-checklist}
 
 Run through these before starting any deployment. All "yes" → proceed. Any "no" → follow the quick fix.
 
 | # | Check | Quick fix if no |
-|---|-------|----------------|
+| --- | ------- | ---------------- |
 | 1 | My identity has **Owner** (or Contributor + User Access Administrator) on the target subscription | [Assign role in Azure Portal](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal) |
 | 2 | `Microsoft.DesktopVirtualization` is registered on the subscription | `Register-AzResourceProvider -ProviderNamespace 'Microsoft.DesktopVirtualization'` |
 | 3 | `EncryptionAtHost` feature is registered (or I've set `encryptionAtHost: false` in my params) | `Register-AzProviderFeature -FeatureName EncryptionAtHost -ProviderNamespace Microsoft.Compute` |
@@ -118,7 +85,7 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 <summary><b>Required Deployer Roles by Deployment</b></summary>
 
 | Deployment | Required role | Why |
-|---|---|---|
+| ---------- | ------------- | --- |
 | **imageManagement** | Owner **or** Contributor + User Access Administrator at subscription scope | Creates resource groups; assigns Contributor to managed identity on image build RG, Storage Blob Data Reader on artifacts storage, Storage Blob Data Contributor on logs storage |
 | **imageBuild — new RG path** (no `imageBuildResourceGroupId`) | Owner **or** Contributor + User Access Administrator at subscription scope | Creates a temporary resource group; assigns Contributor to the orchestration VM's system-assigned identity on that RG |
 | **imageBuild — existing RG path** (`imageBuildResourceGroupId` set) | `Microsoft.Resources/deployments/write` at **subscription scope** (the template is subscription-scoped) + Contributor on the **image build RG** + specific gallery image version write on the **compute gallery RG** (see [Section 3 custom role](custom-roles.md#3-imagebuild-operator--existing-rg-path) for exact actions; full `Contributor` on the gallery RG also works) (+ same on the remote gallery RG if replicating to a second region) | No resource group creation or role assignments; deploys VMs into the pre-existing build RG; creates the image version and (if not pre-existing) image definition in the compute gallery RG. Subscription-level deployment write is unavoidable because `imageBuild.bicep` uses `targetScope = 'subscription'`. |
@@ -130,15 +97,6 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 
 </details>
 
-### Required for Custom Software (Steps 2 & 3)
-
-- ✅ **Storage Blob Data Contributor** role on the image management storage account — required because the storage account disables shared key access by default (Zero Trust). `Contributor` or `Owner` alone is not sufficient; see [why data plane roles are required separately](hostpool-deployment.md#security-prerequisites-optional).
-- ✅ **PowerShell Az Module** for running deployment scripts
-
-### Required for Customer Managed Keys (Step 1 + Step 4 with CMK)
-
-- 🔑 **Key Vault Crypto Officer** on the encryption Key Vault — required for the deploying identity to create encryption keys during the host pool deployment. `Owner` or `Contributor` on the resource group does **not** grant key operation rights; Key Vault enforces a separate data plane RBAC. See [full explanation](hostpool-deployment.md#security-prerequisites-optional).
-
 ### Optional for Zero Trust / Production
 
 - 🔒 **Private DNS Zones** for private endpoints — can be deployed by the [networking template (Step 0)](#step-0-deploy-networking-infrastructure-greenfield) or brought from an existing hub. The resource IDs output by Step 0 are passed directly to imageManagement, imageBuild, and host pool deployments as `azure*PrivateDnsZoneResourceId` parameters. ([full list](hostpool-deployment.md#dns-requirements))
@@ -147,27 +105,27 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 - 🔒 **Entra Kerberos** for Azure Files - [Hybrid Guide](entra-kerberos-hybrid.md) | [Cloud-Only Guide](entra-kerberos-cloud-only.md)
 - 🔒 **Key Vaults** (Secrets & Encryption) — only needed upfront when using CMK with custom images; marketplace-only deployments can use inline KV deployment — see [Step 1](#step-1-deploy-key-vaults-cmk-with-custom-images)
 
+### Detailed Setup Guides
+
+- **[Host Pool Deployment Guide - Appendix](hostpool-deployment.md#appendix-detailed-setup--prerequisites)** — DNS requirements, domain permissions, feature enablement, NetApp Files setup, Entra Kerberos, and more
+- **[Entra Kerberos (Hybrid)](entra-kerberos-hybrid.md)** — Setup for hybrid identity with on-premises AD
+- **[Entra Kerberos (Cloud-Only)](entra-kerberos-cloud-only.md)** — Setup for pure cloud identities
+
+</details>
+
 <details>
-<summary><b>📖 Detailed Prerequisites & Setup Guides</b></summary>
+<summary><b>Deployment methods by component (Blue Button, Template Spec, PowerShell/CLI)</b></summary>
 
-**Complete Prerequisites & Setup Instructions:**
+| Component | Blue Button | Template Spec | PowerShell/CLI |
+| --- | --- | --- | --- |
+| **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Key Vaults** (Secrets & Encryption) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 
-- **[Host Pool Deployment Guide - Appendix](hostpool-deployment.md#appendix-detailed-setup--prerequisites)** - Comprehensive setup guide including:
-  - Installing PowerShell Az Module & Bicep CLI
-  - Creating Template Specs
-  - DNS requirements and private DNS zones
-  - Domain permissions setup (step-by-step)
-  - Azure permissions and RBAC roles
-  - Marketplace image selection
-  - Feature enablement (Encryption at Host, Private Link, etc.)
-  - Azure NetApp Files setup
-  - Entra Kerberos configuration
-  - Networking infrastructure deployment
-
-**Identity & Authentication:**
-
-- **[Entra Kerberos (Hybrid)](entra-kerberos-hybrid.md)** - Setup for hybrid identity with on-premises AD
-- **[Entra Kerberos (Cloud-Only)](entra-kerberos-cloud-only.md)** - Setup for pure cloud identities
+> **Air-gapped clouds (Azure Secret/Top Secret):** Blue Button is not available. Use Template Spec + Portal UI or PowerShell/CLI. See [Template Spec setup ↓](#-air-gapped-clouds-template-specs-optional-but-recommended).
 
 </details>
 
@@ -179,15 +137,17 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 <summary><b>Setup and usage instructions</b></summary>
 
 > **ℹ️ FOR AIR-GAPPED ENVIRONMENTS (Azure Secret / Azure Top Secret)**
-> 
+>
 > Blue Button deployments are not available in air-gapped clouds. You have two options:
-> 
+>
 > **Option A: Template Spec + Portal UI (Recommended for first deployment)**
+>
 > - Provides guided form with built-in validation
 > - Easy parameter selection and configuration
 > - Generate parameter files for future use
-> 
+>
 > **Option B: PowerShell/CLI with parameter files**
+>
 > - Direct deployment without Template Specs
 > - Requires manual parameter file creation
 > - Best for automation and CI/CD
@@ -332,7 +292,7 @@ New-AzDeployment `
 ### Key Configuration Options
 
 | Feature | Description | When to Use |
-|---------|-------------|-------------|
+| --- | --- | --- |
 | **Hub Peering** | Peer spoke VNet to hub VNet | Hybrid connectivity, centralized routing |
 | **NVA Routing** | Route traffic through Network Virtual Appliance (with optional AVD bypass routes) | Centralized firewall/inspection |
 | **Private DNS Zones** | Create DNS zones for all AVD-related services (Blob, Files, Key Vault, Backup, AVD). Outputs feed directly into imageManagement, imageBuild, and host pool `azure*PrivateDnsZoneResourceId` parameters. | Private endpoints, Zero Trust architecture |
@@ -380,7 +340,7 @@ New-AzDeployment `
 The Key Vaults deployment creates a **dedicated operations resource group** (`rg-avd-operations-{loc}`) containing:
 
 | Resource | Name Pattern | Purpose |
-|----------|-------------|-------|
+| --- | --- | --- |
 | **Secrets Key Vault** | `kv-avd-sec-{unique}-{loc}` | Stores VM admin credentials and domain join credentials referenced by the host pool deployment |
 | **Encryption Key Vault** | `kv-avd-enc-{unique}-{loc}` | Stores CMK encryption keys for disk encryption sets and FSLogix storage accounts (Premium SKU, purge-protected) |
 
@@ -435,7 +395,7 @@ Then navigate to **Template Specs** → **AVD Security** → **Deploy**.
 After deployment, note the Key Vault resource IDs from the deployment outputs:
 
 | Security Output | Used In |
-|----------------|--------|
+| :-------------- | :------ |
 | `encryptionKeyVaultResourceId` | Image Management deployment (CMK for storage/gallery) |
 | `secretsKeyVaultResourceId` | Host pool deployment (`existingCredentialsKeyVaultResourceId`) |
 | `encryptionKeyVaultResourceId` | Host pool deployment (`existingEncryptionKeyVaultResourceId`) |
@@ -466,6 +426,8 @@ Deploys everything imageBuild needs when using the **existing resource group pat
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
 
 **Option 2: Deploy-ImageManagement.ps1 Script** — All clouds (recommended for PowerShell)
+
+```powershell
 Set-AzContext -Subscription "<subscription-id>"
 
 cd deployments
@@ -483,7 +445,7 @@ If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountReso
 **Key imageManagement outputs to pass to imageBuild:**
 
 | imageManagement output | imageBuild parameter |
-|---|---|
+| :--- | :--- |
 | `computeGalleryResourceId` | `computeGalleryResourceId` |
 | `artifactsBlobContainerUrl` | `artifactsContainerUri` |
 | `managedIdentityResourceId` | `userAssignedIdentityResourceId` |
@@ -572,6 +534,7 @@ cd deployments
 
 Deploy your complete AVD environment including host pool, session hosts, storage, monitoring, and security resources.
 
+<a id="poc-fast-path"></a>
 <details>
 <summary><b>New to FederalAVD? Deploy a PoC host pool in ~20 minutes (start here)</b></summary>
 
@@ -599,7 +562,7 @@ Copy-Item customer-examples\parameters\hostpools\poc.hostpool.parameters.json `
 **3 — Set the four required values** in `customer\parameters\hostpools\myfirstpool.parameters.json`
 
 | Parameter | What to set |
-|---|---|
+| --- | --- |
 | `identifier` | Short prefix for this deployment (e.g., `"test"`) |
 | `virtualMachineNamePrefix` | VM name prefix (e.g., `"avddev"`, max 14 chars) |
 | `virtualMachineSubnetResourceId` | Full resource ID of the session host subnet |
@@ -705,7 +668,7 @@ In enterprise environments, different teams own different pieces of the infrastr
 ### Recommended Team Ownership Model
 
 | Team | Owns | Deploys |
-|------|------|---------| 
+| --- | --- | --- |
 | **Platform / Network** | VNet, subnets, NSGs, DNS zones, hub peering | [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) |
 | **Security** | Key Vaults, encryption keys, secrets, RBAC | [Step 1: Key Vaults](#step-1-deploy-key-vaults-cmk-with-custom-images) |
 | **Image / Platform Engineering** | Compute gallery, artifacts storage, image builds | [Step 2: Image Management](#step-2-deploy-image-management-resources) + [Step 3: Image Build](#step-3-build-custom-image-optional) |
@@ -716,7 +679,7 @@ In enterprise environments, different teams own different pieces of the infrastr
 Each team saves their deployment outputs into parameter files that the next team consumes. No team needs to touch another team's infrastructure directly.
 
 | Source Team | Output | Destination Team | Parameter |
-|-------------|--------|-----------------|-----------|
+| --- | --- | --- | --- |
 | Platform / Network | Subnet resource ID | All teams | `subnetResourceId` |
 | Platform / Network | Private DNS zone resource IDs (from networking deployment outputs) | Image, AVD | `azure*PrivateDnsZoneResourceId` |
 | Security | Secrets KV resource ID | AVD | `existingCredentialsKeyVaultResourceId` |
@@ -731,7 +694,7 @@ Each team saves their deployment outputs into parameter files that the next team
 Assign these roles so each team can deploy their components without subscription-level Owner rights:
 
 | Component | Deploying team needs | Why |
-|-----------|---------------------|-----|
+| --- | --- | --- |
 | **imageBuild — existing RG** | `Microsoft.Resources/deployments/write` at subscription scope + `Contributor` on build RG + `Contributor` on gallery RG | Subscription-scope write unavoidable (`targetScope = 'subscription'`); no role assignments required |
 | **Session Hosts add-on** | `Contributor` on hosts RG + `Desktop Virtualization Host Pool Contributor` on control plane RG | Resource group scoped — no subscription-level rights needed |
 | **hostpool — Complete** | `Owner` or `Contributor + User Access Administrator` at subscription scope | Creates RGs and assigns roles at subscription scope |
