@@ -1668,7 +1668,7 @@
                                     "defaultValue": "Standard LRS",
                                     "toolTip": "Select the storage account type for this image version for the region where it is being captured.",
                                     "constraints": {
-                                        "allowedValues": "[if(empty(filter(first(map(filter(steps('basics').storageApi.value, (resTypes) => equals(resTypes.resourceType, 'storageAccounts')), (sa) => sa.zoneMappings)), (zm) => equals(zm.location, steps('basics').scope.location.displayName))), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"}]'), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"},{\"label\":\"Standard ZRS\",\"value\":\"Standard_ZRS\"}]'))]",
+                                        "allowedValues": "[if(empty(filter(first(map(filter(steps('basics').storageApi.value, (resTypes) => equals(resTypes.resourceType, 'storageAccounts')), (sa) => sa.zoneMappings)), (zm) => equals(toLower(replace(zm.location, ' ', '')), steps('basics').scope.location.name))), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"}]'), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"},{\"label\":\"Standard ZRS\",\"value\":\"Standard_ZRS\"}]'))]",
                                         "required": false
                                     },
                                     "visible": true

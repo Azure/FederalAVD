@@ -464,6 +464,19 @@ module confidentialVmCmk '../../.common/bicepModules/custom/customerManagedKeys/
   dependsOn: [resourceGroup]
 }
 
+// Network ACLs applied to all storage accounts in this deployment.
+// bypass:'None' is intentional — image management storage does not require Azure service access.
+// defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
+var storageHasNetworkRestrictions = !empty(storagePermittedIPs) || !empty(storageServiceEndpointSubnetResourceIds) || storageNetworkAccess == 'PrivateEndpoint'
+var storageIpRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
+var storageVnetRules = [for id in storageServiceEndpointSubnetResourceIds: { id: id, action: 'Allow' }]
+var storageNetworkAcls = {
+  bypass: 'None'
+  defaultAction: storageHasNetworkRestrictions ? 'Deny' : 'Allow'
+  ipRules: storageIpRules
+  virtualNetworkRules: storageVnetRules
+}
+
 module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (deployArtifactsStorageAccount) {
   name: 'Assets-Storage-Account-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
@@ -475,10 +488,8 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     accessTier: artifactsStorageAccessTier
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
-    permittedIPs: storagePermittedIPs
-    serviceEndpointSubnetIds: storageServiceEndpointSubnetResourceIds
+    networkAcls: storageNetworkAcls
     publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(storagePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
-    networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
@@ -561,10 +572,8 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     accessTier: logsStorageAccessTier
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
-    permittedIPs: storagePermittedIPs
-    serviceEndpointSubnetIds: storageServiceEndpointSubnetResourceIds
+    networkAcls: storageNetworkAcls
     publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(storagePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
-    networkAclsBypass: 'None'
     sasExpirationPeriod: sasExpirationPeriod
     cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'

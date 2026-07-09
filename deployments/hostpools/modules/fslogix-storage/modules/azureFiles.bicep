@@ -66,6 +66,17 @@ var smbSettingsValues = {
 }
 var storageRedundancySuffix = storageRedundancy == 'ZoneRedundant' ? '_ZRS' : '_LRS'
 
+// Network ACLs for FSLogix storage accounts.
+// AzureServices bypass is required for Azure Files backup and monitoring.
+// defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
+var storageIpRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
+var storageNetworkAcls = {
+  bypass: 'AzureServices'
+  defaultAction: (privateEndpoint || !empty(permittedIPs)) ? 'Deny' : 'Allow'
+  ipRules: storageIpRules
+  virtualNetworkRules: []
+}
+
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(environment().name, 'us')
@@ -94,7 +105,7 @@ module storageAccounts '../../../../../.common/bicepModules/storage/storageAccou
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
       largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
       sasExpirationPeriod: '180.00:00:00'
-      permittedIPs: permittedIPs
+      networkAcls: storageNetworkAcls
       publicNetworkAccess: (privateEndpoint && empty(permittedIPs)) ? 'Disabled' : 'Enabled'
       azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId'
         ? {

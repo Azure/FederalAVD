@@ -19,32 +19,17 @@ param enabledForTemplateDeployment bool = false
 @description('Allow disk encryption operations (Azure Disk Encryption / Disk Encryption Sets) to access the vault.')
 param enabledForDiskEncryption bool = false
 
-@description('Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled.')
 @allowed(['Enabled', 'Disabled'])
 param publicNetworkAccess string = 'Enabled'
 
-@description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, a deny-by-default firewall is applied.')
-param permittedIPs array = []
+@description('Network ACLs for the vault. Caller is responsible for setting bypass, defaultAction, and ipRules appropriate to the deployment topology (private endpoint, IP allowlist, Azure services bypass).')
+param networkAcls object = {
+  bypass: 'None'
+  defaultAction: 'Deny'
+  ipRules: []
+}
 
 param diagnosticSettings diagnosticSettingsType?
-
-// AzureServices bypass is required when vault is used for deployment, template deployment, or disk encryption
-var requiresAzureServicesBypass = enabledForDeployment || enabledForTemplateDeployment || enabledForDiskEncryption
-
-var kvIpRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
-// Firewall is applied only when explicit IP allowances are provided. PE topology is the caller's concern.
-var resolvedNetworkAcls = !empty(kvIpRules)
-  ? {
-      bypass: requiresAzureServicesBypass ? 'AzureServices' : 'None'
-      defaultAction: 'Deny'
-      ipRules: kvIpRules
-    }
-  : requiresAzureServicesBypass
-      ? {
-          bypass: 'AzureServices'
-          defaultAction: 'Allow'
-        }
-      : null
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
@@ -64,7 +49,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForTemplateDeployment: enabledForTemplateDeployment
     enabledForDiskEncryption: enabledForDiskEncryption
     publicNetworkAccess: publicNetworkAccess
-    networkAcls: resolvedNetworkAcls
+    networkAcls: networkAcls
   }
 }
 

@@ -372,6 +372,12 @@ function ConvertTo-LongSafePath {
     if (-not [System.IO.Path]::IsPathRooted($trimmed)) {
         throw "ConvertTo-LongSafePath requires an absolute path. Received: '$trimmed'"
     }
+    # The \\?\ prefix is only reliably supported in managed System.IO methods (ZipFile,
+    # FileStream, Directory) on .NET 6+ (PowerShell 7+, PSEdition Core). On Windows PowerShell
+    # 5.1 (.NET Framework), \\?\ works at the Win32 level but causes failures inside
+    # System.IO.Compression because Path.GetFullPath rejects it. On PS 5.1, return the plain
+    # path and rely on the system-level LongPathsEnabled registry key if paths exceed 260 chars.
+    if ($PSVersionTable.PSEdition -eq 'Desktop') { return $trimmed }
     if ($trimmed.StartsWith('\\')) {
         return "\\?\UNC\" + $trimmed.Substring(2)
     }
@@ -416,7 +422,6 @@ function Compress-SubFolderContents {
             try {
                 $destinationFilePath = Join-Path -Path $DestinationFolderPath -ChildPath ($sf.Name + ".zip")
                 $tempFilePath        = $destinationFilePath + ".tmp"
-                $safeTempFilePath    = ConvertTo-LongSafePath $tempFilePath
                 Write-Output "Compressing '$($sf.Name)'..."
                 Write-Verbose "Archive will be created from: $($sf.FullName)"
                 Write-Verbose "Archive will be stored as: $destinationFilePath"
@@ -427,7 +432,7 @@ function Compress-SubFolderContents {
                 if ($PSCmdlet.ShouldProcess($destinationFilePath, "Create archive from $($sf.FullName)")) {
                     if (Test-Path -Path $tempFilePath) { Remove-Item -Path $tempFilePath -Force }
                     $zipArchive = [System.IO.Compression.ZipFile]::Open(
-                        $safeTempFilePath,
+                        $tempFilePath,
                         [System.IO.Compression.ZipArchiveMode]::Create
                     )
                     try {

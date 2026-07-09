@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "4163640929162312741"
+      "templateHash": "16392766604376237383"
     }
   },
   "parameters": {
@@ -3617,7 +3617,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "1075813460047825930"
+              "templateHash": "17999003971337754976"
             }
           },
           "parameters": {
@@ -3722,6 +3722,16 @@
             }
           },
           "variables": {
+            "copy": [
+              {
+                "name": "ipRules",
+                "count": "[length(parameters('permittedIPs'))]",
+                "input": {
+                  "value": "[parameters('permittedIPs')[copyIndex('ipRules')]]",
+                  "action": "Allow"
+                }
+              }
+            ],
             "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
             "privateEndpointVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
             "secretList": "[union(if(not(empty(parameters('domainJoinUserPassword'))), createArray(createObject('name', 'DomainJoinUserPassword', 'value', parameters('domainJoinUserPassword'))), createArray()), if(not(empty(parameters('domainJoinUserPrincipalName'))), createArray(createObject('name', 'DomainJoinUserPrincipalName', 'value', parameters('domainJoinUserPrincipalName'))), createArray()), if(not(empty(parameters('virtualMachineAdminPassword'))), createArray(createObject('name', 'VirtualMachineAdminPassword', 'value', parameters('virtualMachineAdminPassword'))), createArray()), if(not(empty(parameters('virtualMachineAdminUserName'))), createArray(createObject('name', 'VirtualMachineAdminUserName', 'value', parameters('virtualMachineAdminUserName'))), createArray()))]",
@@ -3730,7 +3740,14 @@
             "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
             "kvPublicAccessDisabled": "[and(parameters('privateEndpoint'), empty(parameters('permittedIPs')))]",
             "secretsKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
-            "encryptionKvPublicNetworkAccess": "[if(parameters('encryptionKeyVaultForcePublicAccess'), 'Enabled', if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled'))]"
+            "encryptionKvPublicNetworkAccess": "[if(parameters('encryptionKeyVaultForcePublicAccess'), 'Enabled', if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled'))]",
+            "kvHasNetworkRestrictions": "[or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs'))))]",
+            "secretsKvNetworkAcls": {
+              "bypass": "AzureServices",
+              "defaultAction": "[if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow')]",
+              "ipRules": "[variables('ipRules')]"
+            },
+            "encryptionKvNetworkAcls": "[if(parameters('encryptionKeyVaultForcePublicAccess'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow', 'ipRules', createArray()), createObject('bypass', 'AzureServices', 'defaultAction', if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow'), 'ipRules', variables('ipRules')))]"
           },
           "resources": [
             {
@@ -3767,8 +3784,8 @@
                     "value": true
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                  "permittedIPs": {
-                    "value": "[parameters('permittedIPs')]"
+                  "networkAcls": {
+                    "value": "[variables('secretsKvNetworkAcls')]"
                   },
                   "publicNetworkAccess": {
                     "value": "[variables('secretsKvPublicNetworkAccess')]"
@@ -3782,7 +3799,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.44.1.10279",
-                      "templateHash": "6824456759606900246"
+                      "templateHash": "10927600393493694434"
                     }
                   },
                   "definitions": {
@@ -3944,16 +3961,17 @@
                       "allowedValues": [
                         "Enabled",
                         "Disabled"
-                      ],
-                      "metadata": {
-                        "description": "Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled."
-                      }
+                      ]
                     },
-                    "permittedIPs": {
-                      "type": "array",
-                      "defaultValue": [],
+                    "networkAcls": {
+                      "type": "object",
+                      "defaultValue": {
+                        "bypass": "None",
+                        "defaultAction": "Deny",
+                        "ipRules": []
+                      },
                       "metadata": {
-                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, a deny-by-default firewall is applied."
+                        "description": "Network ACLs for the vault. Caller is responsible for setting bypass, defaultAction, and ipRules appropriate to the deployment topology (private endpoint, IP allowlist, Azure services bypass)."
                       }
                     },
                     "diagnosticSettings": {
@@ -3962,18 +3980,6 @@
                     }
                   },
                   "variables": {
-                    "copy": [
-                      {
-                        "name": "kvIpRules",
-                        "count": "[length(parameters('permittedIPs'))]",
-                        "input": {
-                          "value": "[parameters('permittedIPs')[copyIndex('kvIpRules')]]",
-                          "action": "Allow"
-                        }
-                      }
-                    ],
-                    "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
-                    "resolvedNetworkAcls": "[if(not(empty(variables('kvIpRules'))), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
                     "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
                     "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
                   },
@@ -3998,7 +4004,7 @@
                         "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
                         "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
                         "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
-                        "networkAcls": "[variables('resolvedNetworkAcls')]"
+                        "networkAcls": "[parameters('networkAcls')]"
                       }
                     },
                     "diagnosticSetting": {
@@ -4316,7 +4322,9 @@
                     "value": true
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                  "permittedIPs": "[if(parameters('encryptionKeyVaultForcePublicAccess'), createObject('value', createArray()), createObject('value', parameters('permittedIPs')))]",
+                  "networkAcls": {
+                    "value": "[variables('encryptionKvNetworkAcls')]"
+                  },
                   "publicNetworkAccess": {
                     "value": "[variables('encryptionKvPublicNetworkAccess')]"
                   }
@@ -4329,7 +4337,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.44.1.10279",
-                      "templateHash": "6824456759606900246"
+                      "templateHash": "10927600393493694434"
                     }
                   },
                   "definitions": {
@@ -4491,16 +4499,17 @@
                       "allowedValues": [
                         "Enabled",
                         "Disabled"
-                      ],
-                      "metadata": {
-                        "description": "Optional. Whether this vault is accessed via a private endpoint. When true and no permittedIPs are provided, public network access is disabled."
-                      }
+                      ]
                     },
-                    "permittedIPs": {
-                      "type": "array",
-                      "defaultValue": [],
+                    "networkAcls": {
+                      "type": "object",
+                      "defaultValue": {
+                        "bypass": "None",
+                        "defaultAction": "Deny",
+                        "ipRules": []
+                      },
                       "metadata": {
-                        "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, a deny-by-default firewall is applied."
+                        "description": "Network ACLs for the vault. Caller is responsible for setting bypass, defaultAction, and ipRules appropriate to the deployment topology (private endpoint, IP allowlist, Azure services bypass)."
                       }
                     },
                     "diagnosticSettings": {
@@ -4509,18 +4518,6 @@
                     }
                   },
                   "variables": {
-                    "copy": [
-                      {
-                        "name": "kvIpRules",
-                        "count": "[length(parameters('permittedIPs'))]",
-                        "input": {
-                          "value": "[parameters('permittedIPs')[copyIndex('kvIpRules')]]",
-                          "action": "Allow"
-                        }
-                      }
-                    ],
-                    "requiresAzureServicesBypass": "[or(or(parameters('enabledForDeployment'), parameters('enabledForTemplateDeployment')), parameters('enabledForDiskEncryption'))]",
-                    "resolvedNetworkAcls": "[if(not(empty(variables('kvIpRules'))), createObject('bypass', if(variables('requiresAzureServicesBypass'), 'AzureServices', 'None'), 'defaultAction', 'Deny', 'ipRules', variables('kvIpRules')), if(variables('requiresAzureServicesBypass'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'), null()))]",
                     "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
                     "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
                   },
@@ -4545,7 +4542,7 @@
                         "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
                         "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
                         "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
-                        "networkAcls": "[variables('resolvedNetworkAcls')]"
+                        "networkAcls": "[parameters('networkAcls')]"
                       }
                     },
                     "diagnosticSetting": {
@@ -13053,7 +13050,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "1889604387528775409"
+              "templateHash": "7542341207227257014"
             }
           },
           "parameters": {
@@ -14007,7 +14004,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.44.1.10279",
-                      "templateHash": "12539663073543405248"
+                      "templateHash": "3094798200485319081"
                     }
                   },
                   "parameters": {
@@ -14134,6 +14131,16 @@
                     }
                   },
                   "variables": {
+                    "copy": [
+                      {
+                        "name": "storageIpRules",
+                        "count": "[length(parameters('permittedIPs'))]",
+                        "input": {
+                          "value": "[parameters('permittedIPs')[copyIndex('storageIpRules')]]",
+                          "action": "Allow"
+                        }
+                      }
+                    ],
                     "$fxv#0": "param \r\n(        \r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPwd,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPrincipalName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$HostPoolName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [ValidateSet(\"AES256\", \"RC4\")]\r\n    [String]$KerberosEncryptionType,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$OuPath,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageAccountPrefix,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageAccountResourceGroupName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageCount,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageIndex,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageSuffix,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$SubscriptionId,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n# Configure error handling and output preferences\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\ntry {\r\n    # Configure TLS 1.2 for secure HTTPS connections to Azure APIs\r\n    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n    # Ensure Active Directory PowerShell module is available\r\n    Write-Output \"Checking for Active Directory PowerShell module...\"\r\n    $RsatInstalled = (Get-WindowsFeature -Name 'RSAT-AD-PowerShell').Installed\r\n    if (!$RsatInstalled) {\r\n        Write-Output \"Installing RSAT-AD-PowerShell feature...\"\r\n        Install-WindowsFeature -Name 'RSAT-AD-PowerShell' | Out-Null\r\n    }\r\n    \r\n    # Create credential object for domain operations\r\n    Write-Output \"Creating domain credentials...\"\r\n    $DomainJoinUserName = $DomainJoinUserPrincipalName.Split('@')[0]  # Extract username from UPN\r\n    $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force\r\n    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserName, $DomainPassword)\r\n\r\n    # Retrieve Active Directory domain information\r\n    Write-Output \"Getting Active Directory domain information...\"\r\n    $Domain = Get-ADDomain -Credential $DomainCredential -Current 'LocalComputer'\r\n    Write-Output \"Domain: $($Domain.DNSRoot)\"\r\n    Write-Output \"NetBIOS Name: $($Domain.NetBIOSName)\"\r\n    \r\n    # Parse and clean input parameters\r\n    [int]$StCount = $StorageCount.replace('\\\"', '\"')  # Number of storage accounts to process\r\n    [int]$StIndex = $StorageIndex.replace('\\\"', '\"')  # Starting index for storage account naming\r\n    Write-Output \"Processing $StCount storage accounts starting from index $StIndex\"\r\n    \r\n    # Clean escaped characters from string parameters\r\n    $OuPath = $OuPath.Replace('\\\"', '\"')  # Target OU for computer accounts\r\n    $ResourceManagerUri = $ResourceManagerUri.Replace('\\\"', '\"')  # Azure Resource Manager endpoint\r\n    $StorageAccountPrefix = $StorageAccountPrefix.ToLower().replace('\\\"', '\"')  # Storage account name prefix\r\n    $StorageAccountResourceGroupName = $StorageAccountResourceGroupName.Replace('\\\"', '\"')\r\n    $SubscriptionId = $SubscriptionId.replace('\\\"', '\"')\r\n    $UserAssignedIdentityClientId = $UserAssignedIdentityClientId.replace('\\\"', '\"')\r\n    \r\n    Write-Output \"Configuration parameters:\"\r\n    Write-Output \"  Storage Account Prefix: $StorageAccountPrefix\"\r\n    Write-Output \"  Resource Group: $StorageAccountResourceGroupName\"\r\n    Write-Output \"  Subscription ID: $SubscriptionId\"\r\n    Write-Output \"  Target OU: $OuPath\"\r\n    \r\n    # Build Azure Files endpoint suffix (e.g., \".file.core.windows.net\")\r\n    $FilesSuffix = \".file.$($StorageSuffix.Replace('\\\"', '\"'))\"\r\n    Write-Output \"  Files Suffix: $FilesSuffix\"\r\n    \r\n    # Normalize Resource Manager URI (remove trailing slash for consistency)\r\n    $ResourceManagerUri = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }\r\n    Write-Output \"  Resource Manager URI: $ResourceManagerUri\"\r\n    \r\n    # Authenticate to Azure using managed identity\r\n    Write-Output \"Authenticating to Azure using managed identity...\"\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n            -Headers @{Metadata = \"true\" } `\r\n            -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUri + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n    \r\n    # Prepare headers for Azure Management API calls\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AzureManagementAccessToken\r\n    }\r\n    # Process each storage account for AD DS integration\r\n    Write-Output \"`nStarting storage account processing...\"\r\n    for ($i = 0; $i -lt $StCount; $i++) {\r\n        # Generate storage account name with zero-padded index (e.g., \"stavd01\", \"stavd02\")\r\n        $StorageAccountName = $StorageAccountPrefix + ($i + $StIndex).ToString().PadLeft(2, '0')\r\n        Write-Output \"`n=== Processing Storage Account: $StorageAccountName ===\"\r\n        \r\n        # Retrieve or generate Kerberos key for the storage account\r\n        Write-Output \"Checking for existing Kerberos key...\"\r\n        $KerberosKey = ((Invoke-RestMethod `\r\n                    -Headers $AzureManagementHeader `\r\n                    -Method 'POST' `\r\n                    -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/listKeys?api-version=2023-05-01&$expand=kerb')).keys | Where-Object { $_.Keyname -contains 'kerb1' }).Value\r\n                \r\n        if (!$KerberosKey) {\r\n            # Generate new Kerberos key if none exists\r\n            Write-Output \"Kerberos Key not found, generating new kerb1 key...\"\r\n            $null = Invoke-RestMethod `\r\n                -Body (@{keyName = 'kerb1' } | ConvertTo-Json) `\r\n                -Headers $AzureManagementHeader `\r\n                -Method 'POST' `\r\n                -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/regenerateKey?api-version=2023-05-01')\r\n            \r\n            # Retrieve the newly generated key\r\n            $Key = ((Invoke-RestMethod `\r\n                        -Headers $AzureManagementHeader `\r\n                        -Method 'POST' `\r\n                        -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/listKeys?api-version=2023-05-01&$expand=kerb')).keys | Where-Object { $_.Keyname -contains 'kerb1' }).Value\r\n        } \r\n        else {\r\n            Write-Output \"Existing Kerberos key found and will be used\"\r\n            $Key = $KerberosKey\r\n        }\r\n        \r\n        # Convert Kerberos key to secure password for AD computer account\r\n        Write-Output \"Preparing computer account password from Kerberos key...\"\r\n        $ComputerPassword = ConvertTo-SecureString -String $Key.Replace(\"'\", \"\") -AsPlainText -Force\r\n        \r\n        # Create Service Principal Name (SPN) for SMB/CIFS access\r\n        # Format: cifs/storageaccount.file.core.windows.net\r\n        Write-Output \"Creating Service Principal Name (SPN)...\"\r\n        $SPN = 'cifs/' + $StorageAccountName + $FilesSuffix\r\n        Write-Output \"SPN: $SPN\"\r\n        \r\n        # Create description for the computer account\r\n        $Description = \"FSLogix for $HostPoolName\"\r\n\r\n        # Check for existing computer account and clean up if necessary\r\n        Write-Output \"Checking for existing computer account in Active Directory...\"\r\n        $Computer = Get-ADComputer -Credential $DomainCredential -Filter { Name -eq $StorageAccountName } -ErrorAction SilentlyContinue\r\n        if ($Computer) {\r\n            Write-Output \"Existing computer account found. Removing to ensure clean setup...\"\r\n            Remove-ADComputer -Credential $DomainCredential -Identity $StorageAccountName -Confirm:$false\r\n        }\r\n        else {\r\n            Write-Output \"No existing computer account found.\"\r\n        }\r\n        \r\n        # Create new computer account in Active Directory\r\n        Write-Output \"Creating new computer account in AD...\"\r\n        Write-Output \"  Target OU: $OuPath\"\r\n        Write-Output \"  SPN: $SPN\"\r\n        try {\r\n            $ComputerObject = New-ADComputer -Credential $DomainCredential -Name $StorageAccountName -Path $OuPath -ServicePrincipalNames $SPN -AccountPassword $ComputerPassword -Description $Description -PassThru\r\n            Write-Output \"Computer account created successfully with SID: $($ComputerObject.SID.Value)\"\r\n        }\r\n        catch {\r\n            Write-Error \"Failed to create computer account: $($_.Exception.Message)\"\r\n            throw\r\n        }\r\n        \r\n        # Configure Azure Storage Account for AD DS authentication\r\n        Write-Output \"Configuring Azure Storage Account for AD DS authentication...\"\r\n        \r\n        # Determine SAM account name based on encryption type\r\n        $SamAccountName = switch ($KerberosEncryptionType) {\r\n            'AES256' { $StorageAccountName }  # For AES256, use computer name\r\n            'RC4' { $ComputerObject.SamAccountName }  # For RC4, use full SAM account name\r\n        }\r\n        Write-Output \"Using SAM Account Name: $SamAccountName\"\r\n        \r\n        # Build request body with AD information for Azure Storage Account\r\n        $Body = (@{\r\n                properties = @{\r\n                    azureFilesIdentityBasedAuthentication = @{\r\n                        activeDirectoryProperties = @{\r\n                            accountType       = 'Computer'  # Computer account type\r\n                            azureStorageSid   = $ComputerObject.SID.Value  # Computer account SID\r\n                            domainGuid        = $Domain.ObjectGUID.Guid  # Domain GUID\r\n                            domainName        = $Domain.DNSRoot  # DNS domain name\r\n                            domainSid         = $Domain.DomainSID.Value  # Domain SID\r\n                            forestName        = $Domain.Forest  # Forest name\r\n                            netBiosDomainName = $Domain.NetBIOSName  # NetBIOS domain name\r\n                            samAccountName    = $samAccountName  # SAM account name\r\n                        }\r\n                        directoryServiceOptions   = 'AD'  # Use Active Directory (not Azure AD DS)\r\n                    }\r\n                }\r\n            } | ConvertTo-Json -Depth 6 -Compress)\r\n        \r\n        # Update storage account with AD authentication configuration\r\n        try {\r\n            $null = Invoke-RestMethod `\r\n                -Body $Body `\r\n                -Headers $AzureManagementHeader `\r\n                -Method 'PATCH' `\r\n                -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '?api-version=2023-05-01')\r\n            Write-Output \"Storage account AD authentication configured successfully\"\r\n        }\r\n        catch {\r\n            Write-Error \"Failed to configure storage account AD authentication: $($_.Exception.Message)\"\r\n            throw\r\n        }             \r\n                \r\n        # Configure AES256 encryption if specified (enhanced security)\r\n        if ($KerberosEncryptionType -eq 'AES256') {\r\n            Write-Output \"Configuring AES256 Kerberos encryption (enhanced security)...\"\r\n            \r\n            # Set Kerberos encryption type on the computer account in AD\r\n            $DistinguishedName = 'CN=' + $StorageAccountName + ',' + $OuPath\r\n            try {\r\n                Set-ADComputer -Credential $DomainCredential -Identity $DistinguishedName -KerberosEncryptionType 'AES256' | Out-Null\r\n                Write-Output \"AES256 encryption type set on computer account\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to set AES256 encryption on computer account: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            # Regenerate Kerberos keys after setting encryption type\r\n            # This ensures keys are compatible with AES256 encryption\r\n            Write-Output \"Regenerating Kerberos keys for AES256 compatibility...\"\r\n            \r\n            # Regenerate kerb1 key\r\n            try {\r\n                $null = Invoke-RestMethod `\r\n                    -Body (@{keyName = 'kerb1' } | ConvertTo-Json) `\r\n                    -Headers $AzureManagementHeader `\r\n                    -Method 'POST' `\r\n                    -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/regenerateKey?api-version=2023-05-01')\r\n                Write-Output \"kerb1 key regenerated\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to regenerate kerb1 key: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            # Regenerate kerb2 key\r\n            try {\r\n                $null = Invoke-RestMethod `\r\n                    -Body (@{keyName = 'kerb2' } | ConvertTo-Json) `\r\n                    -Headers $AzureManagementHeader `\r\n                    -Method 'POST' `\r\n                    -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/regenerateKey?api-version=2023-05-01')\r\n                Write-Output \"kerb2 key regenerated\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to regenerate kerb2 key: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n\r\n            # Retrieve the new kerb1 key for password update\r\n            try {\r\n                $Key = ((Invoke-RestMethod `\r\n                            -Headers $AzureManagementHeader `\r\n                            -Method 'POST' `\r\n                            -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/listKeys?api-version=2023-05-01&$expand=kerb')).keys | Where-Object { $_.Keyname -contains 'kerb1' }).Value\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to retrieve new kerb1 key: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            # Update computer account password with new AES256-compatible key\r\n            Write-Output \"Updating computer account password with new AES256-compatible key...\"\r\n            try {\r\n                $NewPassword = ConvertTo-SecureString -String $Key -AsPlainText -Force\r\n                Set-ADAccountPassword -Credential $DomainCredential -Identity $DistinguishedName -Reset -NewPassword $NewPassword | Out-Null\r\n                Write-Output \"Computer account password updated successfully\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to update computer account password: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            Write-Output \"AES256 Kerberos encryption configuration completed successfully\"\r\n        }\r\n        \r\n        Write-Output \"=== Storage Account $StorageAccountName processing completed ===\"                \r\n    }\r\n    \r\n    Write-Output \"`n=== AD DS Integration Process Completed Successfully ===\"\r\n    Write-Output \"Summary:\"\r\n    Write-Output \"  - Processed $StCount storage accounts\"\r\n    Write-Output \"  - Created computer accounts in OU: $OuPath\"\r\n    Write-Output \"  - Configured Azure Files for AD DS authentication\"\r\n    if ($KerberosEncryptionType -eq 'AES256') {\r\n        Write-Output \"  - Applied AES256 Kerberos encryption for enhanced security\"\r\n    }\r\n    Write-Output \"`nStorage accounts are now ready for identity-based authentication!\"\r\n}\r\ncatch {\r\n    Write-Error \"AD DS integration failed: $($_.Exception.Message)\"\r\n    Write-Error \"Full error details: $($_ | Out-String)\"\r\n    throw\r\n}",
                     "$fxv#1": "param \r\n(\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$DefaultSharePermission,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPwd,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPrincipalName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageAccountPrefix,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageAccountResourceGroupName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageCount,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageIndex,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageSuffix,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$SubscriptionId,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n# Configure error handling and output preferences\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\ntry {\r\n    # Configure TLS 1.2 for secure HTTPS connections to Azure APIs\r\n    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n    # Ensure Active Directory PowerShell module is available\r\n    Write-Output \"Checking for Active Directory PowerShell module...\"\r\n    $RsatInstalled = (Get-WindowsFeature -Name 'RSAT-AD-PowerShell').Installed\r\n    if (!$RsatInstalled) {\r\n        Write-Output \"Installing RSAT-AD-PowerShell feature...\"\r\n        Install-WindowsFeature -Name 'RSAT-AD-PowerShell' | Out-Null\r\n    }\r\n    \r\n    # Create credential object for domain operations\r\n    Write-Output \"Creating domain credentials...\"\r\n    $DomainJoinUserName = $DomainJoinUserPrincipalName.Split('@')[0]  # Extract username from UPN\r\n    $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force\r\n    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserName, $DomainPassword)\r\n\r\n    # Retrieve Active Directory domain information\r\n    Write-Output \"Getting Active Directory domain information...\"\r\n    $Domain = Get-ADDomain -Credential $DomainCredential -Current 'LocalComputer'\r\n    Write-Output \"Domain: $($Domain.DNSRoot)\"\r\n    Write-Output \"NetBIOS Name: $($Domain.NetBIOSName)\"\r\n     \r\n    # Parse and clean input parameters\r\n    [int]$StCount = $StorageCount.replace('\\\"', '\"')  # Number of storage accounts to process\r\n    [int]$StIndex = $StorageIndex.replace('\\\"', '\"')  # Starting index for storage account naming\r\n    Write-Output \"Processing $StCount storage accounts starting from index $StIndex\"\r\n    \r\n    # Clean escaped characters from string parameters\r\n    \r\n    $ResourceManagerUri = $ResourceManagerUri.Replace('\\\"', '\"')  # Azure Resource Manager endpoint\r\n    $StorageAccountPrefix = $StorageAccountPrefix.ToLower().replace('\\\"', '\"')  # Storage account name prefix\r\n    $StorageAccountResourceGroupName = $StorageAccountResourceGroupName.Replace('\\\"', '\"')\r\n    $SubscriptionId = $SubscriptionId.replace('\\\"', '\"')\r\n    $UserAssignedIdentityClientId = $UserAssignedIdentityClientId.replace('\\\"', '\"')\r\n    \r\n    Write-Output \"Configuration parameters:\"\r\n    Write-Output \"  Storage Account Prefix: $StorageAccountPrefix\"\r\n    Write-Output \"  Resource Group: $StorageAccountResourceGroupName\"\r\n    Write-Output \"  Subscription ID: $SubscriptionId\"\r\n    Write-Output \"  Target OU: $OuPath\"\r\n    \r\n    # Build Azure Files endpoint suffix (e.g., \".file.core.windows.net\")\r\n    $FilesSuffix = \".file.$($StorageSuffix.Replace('\\\"', '\"'))\"\r\n    Write-Output \"  Files Suffix: $FilesSuffix\"\r\n    \r\n    # Normalize Resource Manager URI (remove trailing slash for consistency)\r\n    $ResourceManagerUri = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }\r\n    Write-Output \"  Resource Manager URI: $ResourceManagerUri\"\r\n    \r\n    # Authenticate to Azure using managed identity\r\n    Write-Output \"Authenticating to Azure using managed identity...\"\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n            -Headers @{Metadata = \"true\" } `\r\n            -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUri + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n    \r\n    # Prepare headers for Azure Management API calls\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AzureManagementAccessToken\r\n    }\r\n    # Process each storage account for AD DS integration\r\n    Write-Output \"`nStarting storage account processing...\"\r\n    for ($i = 0; $i -lt $StCount; $i++) {\r\n        # Generate storage account name with zero-padded index (e.g., \"stavd01\", \"stavd02\")\r\n        $StorageAccountName = $StorageAccountPrefix + ($i + $StIndex).ToString().PadLeft(2, '0')\r\n        Write-Output \"`n=== Processing Storage Account: $StorageAccountName ===\"              \r\n        # Build request body with AD information for Azure Storage Account\r\n        $Body = (@{\r\n                properties = @{\r\n                    azureFilesIdentityBasedAuthentication = @{\r\n                        activeDirectoryProperties = @{\r\n                            domainGuid        = $Domain.ObjectGUID.Guid  # Domain GUID\r\n                            domainName        = $Domain.DNSRoot  # DNS domain name\r\n                        }\r\n                        directoryServiceOptions   = 'AADKERB'  # Use Entra Kerberos\r\n                        defaultSharePermission = $DefaultSharePermission\r\n                    }\r\n                }\r\n            } | ConvertTo-Json -Depth 6 -Compress)\r\n        \r\n        # Update storage account with AD authentication configuration\r\n        try {\r\n            $null = Invoke-RestMethod `\r\n                -Body $Body `\r\n                -Headers $AzureManagementHeader `\r\n                -Method 'PATCH' `\r\n                -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '?api-version=2023-05-01')\r\n            Write-Output \"Storage account AD authentication configured successfully\"\r\n        }\r\n        catch {\r\n            Write-Error \"Failed to configure storage account AD authentication: $($_.Exception.Message)\"\r\n            throw\r\n        }        \r\n        Write-Output \"=== Storage Account $StorageAccountName processing completed ===\"                \r\n    }\r\n    \r\n    Write-Output \"`n=== Entra Kerberos for Hybrid Identities Process Completed Successfully ===\"\r\n    Write-Output \"Summary:\"\r\n    Write-Output \"  - Processed $StCount storage accounts\"\r\n    Write-Output \"  - Created computer accounts in OU: $OuPath\"\r\n    Write-Output \"  - Configured Azure Files for AD DS authentication\"\r\n    Write-Output \"`nStorage accounts are now ready for identity-based authentication!\"\r\n}\r\ncatch {\r\n    Write-Error \"Entra Kerberos for Hybrid Identities integration failed: $($_.Exception.Message)\"\r\n    Write-Error \"Full error details: $($_ | Out-String)\"\r\n    throw\r\n}",
                     "$fxv#2": "[CmdletBinding()]\r\nparam (\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$AppDisplayNamePrefix,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$ClientId,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$GraphEndpoint,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$PrivateEndpoint = \"false\",\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$EnableCloudGroupSids = \"false\"\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n\r\n# Convert strings to boolean\r\n$PrivateLink = [System.Convert]::ToBoolean($PrivateEndpoint)\r\n$UpdateTag = [System.Convert]::ToBoolean($EnableCloudGroupSids)\r\n\r\n# Setup Logging\r\n$logPath = \"C:\\Windows\\Logs\"\r\n$logFile = Join-Path -Path $logPath -ChildPath \"Update-StorageAccountApplicationManifest-$(Get-Date -Format 'yyyyMMdd-HHmm').log\"\r\nStart-Transcript -Path $logFile -Force\r\n\r\n# Helper function to invoke Graph API with retry logic for DoD endpoints\r\nfunction Invoke-GraphApiWithRetry {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string] $GraphEndpoint,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string] $AccessToken,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [ValidateSet('Get', 'Post', 'Patch', 'Delete')]\r\n        [string] $Method,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string] $Uri,\r\n        \r\n        [Parameter()]\r\n        [string] $Body,\r\n        \r\n        [Parameter()]\r\n        [hashtable] $Headers = @{}\r\n    )\r\n    \r\n    # Ensure GraphEndpoint doesn't have trailing slash\r\n    $graphBase = if ($GraphEndpoint[-1] -eq '/') { \r\n        $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) \r\n    } else { \r\n        $GraphEndpoint \r\n    }\r\n    \r\n    # Setup headers\r\n    $requestHeaders = $Headers.Clone()\r\n    $requestHeaders['Authorization'] = \"Bearer $AccessToken\"\r\n    if (-not $requestHeaders.ContainsKey('Content-Type')) {\r\n        $requestHeaders['Content-Type'] = 'application/json'\r\n    }\r\n    \r\n    # List of endpoints to try\r\n    $endpointsToTry = @($graphBase)\r\n    \r\n    # If we're using GCCH endpoint, also try DoD\r\n    if ($graphBase -eq 'https://graph.microsoft.us') {\r\n        $endpointsToTry += 'https://dod-graph.microsoft.us'\r\n    }\r\n    \r\n    $lastError = $null\r\n    foreach ($endpoint in $endpointsToTry) {\r\n        try {\r\n            $attemptUri = \"$endpoint$Uri\"\r\n            \r\n            $params = @{\r\n                Uri     = $attemptUri\r\n                Method  = $Method\r\n                Headers = $requestHeaders\r\n            }\r\n            \r\n            if ($Body -and $Method -in @('Post', 'Patch')) {\r\n                $params['Body'] = $Body\r\n            }\r\n            \r\n            $result = Invoke-RestMethod @params\r\n            \r\n            # If we succeeded with a different endpoint than the one provided, log it\r\n            if ($endpoint -ne $graphBase) {\r\n                Write-Warning \"Graph API call succeeded with alternate endpoint: $endpoint\"\r\n                Write-Warning \"Consider updating GraphEndpoint parameter to: $endpoint\"\r\n            }\r\n            \r\n            return $result\r\n        }\r\n        catch {\r\n            $lastError = $_\r\n            $statusCode = $null\r\n            \r\n            if ($_.Exception.Response) {\r\n                $statusCode = [int]$_.Exception.Response.StatusCode\r\n            }\r\n            \r\n            # Try to extract detailed error from Graph API response\r\n            $errorDetails = \"\"\r\n            try {\r\n                if ($_.Exception.Response) {\r\n                    $responseStream = $_.Exception.Response.GetResponseStream()\r\n                    $reader = New-Object System.IO.StreamReader($responseStream)\r\n                    $responseBody = $reader.ReadToEnd()\r\n                    $reader.Close()\r\n                    $responseStream.Close()\r\n                    \r\n                    $errorObj = $responseBody | ConvertFrom-Json\r\n                    if ($errorObj.error) {\r\n                        $errorDetails = \"`n  Error Code: $($errorObj.error.code)`n  Error Message: $($errorObj.error.message)\"\r\n                        if ($errorObj.error.details) {\r\n                            $errorDetails += \"`n  Details: $($errorObj.error.details | ConvertTo-Json -Compress)\"\r\n                        }\r\n                    }\r\n                }\r\n            }\r\n            catch {\r\n                # If we can't parse error details, just continue\r\n            }\r\n            \r\n            # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)\r\n            if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1]) {\r\n                Write-Warning \"Graph API call to $endpoint failed with status $statusCode$errorDetails. Trying alternate endpoint...\"\r\n                continue\r\n            }\r\n            else {\r\n                # Don't retry - either not an auth error or we've tried all endpoints\r\n                Write-Error \"Graph API call failed with status $statusCode : $($_.Exception.Message)$errorDetails\"\r\n                throw\r\n            }\r\n        }\r\n    }\r\n    \r\n    # If we get here, all endpoints failed\r\n    Write-Error \"All Graph API endpoints failed. Last error: $($lastError.Exception.Message)\"\r\n    throw $lastError\r\n}\r\n\r\ntry {\r\n    Write-Output \"============================================\"\r\n    Write-Output \"PHASE 1: Update Storage Account Application Manifest\"\r\n    Write-Output \"This updates tags and identifier URIs for privatelink FQDN support\"\r\n    Write-Output \"============================================\"\r\n    \r\n    # Get Graph Access Token using Managed Identity\r\n    $GraphUri = if ($GraphEndpoint[-1] -eq '/') { $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) } else { $GraphEndpoint }\r\n    $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$GraphUri&client_id=$ClientId\"\r\n    Write-Output \"Requesting access token from IMDS...\"\r\n    $Response = Invoke-RestMethod -Headers @{ Metadata = \"true\" } -Uri $TokenUri\r\n    If ($Response) {\r\n        Write-Output \"Successfully obtained access token\"\r\n        $AccessToken = $Response.access_token\r\n    }\r\n    else {\r\n        throw \"Failed to obtain access token from IMDS.\"\r\n    }\r\n        \r\n    # Search for the application by DisplayName\r\n    $searchUri = \"/v1.0/applications?\" + '$filter=' + \"startswith(displayName, '$AppDisplayNamePrefix')\"\r\n    Write-Output \"Searching for applications with prefix: $AppDisplayNamePrefix\"\r\n    try {\r\n        $searchHeaders = @{ \"ConsistencyLevel\" = \"eventual\" }\r\n        $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri -Headers $searchHeaders\r\n        \r\n        if ($searchResp.value.Count -eq 0) {\r\n            throw \"No application found starting with '$AppDisplayNamePrefix'.\"\r\n        }\r\n        Write-Output \"Found $($searchResp.value.Count) applications starting with '$AppDisplayNamePrefix'.\"\r\n    }\r\n    catch {\r\n        Write-Error (\"Failed to search for application: \" + $_.Exception.Message)\r\n        throw $_\r\n    }\r\n\r\n    foreach ($app in $searchResp.value) {\r\n        $appObjectId = $app.id\r\n        $appName = $app.displayName\r\n        Write-Output \"Processing Application: $appName (ObjectId: $appObjectId)\"\r\n        \r\n        $uri = \"/v1.0/applications/$appObjectId\"\r\n\r\n        # 1. Update Tags\r\n        If ($UpdateTag) {\r\n            Write-Output \"Updating tags with kdc_enable_cloud_group_sids...\"\r\n            $tags = @(\"kdc_enable_cloud_group_sids\")\r\n            $body = @{ tags = $tags } | ConvertTo-Json -Depth 5\r\n\r\n            try {\r\n                Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $uri -Body $body\r\n                Write-Output \"Tags updated successfully for $appName.\"\r\n            }\r\n            catch {\r\n                Write-Error (\"Failed to update tags for $appName : \" + $_.Exception.Message)\r\n                throw\r\n            }\r\n        }\r\n        \r\n        # 2. Update IdentifierUris for PrivateLink\r\n        if ($PrivateLink) {\r\n            Write-Output \"Updating IdentifierUris for PrivateLink FQDN support...\"\r\n            try {\r\n                # Get current app again to ensure we have latest identifierUris\r\n                $currentApp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $uri\r\n                $currentUris = $currentApp.identifierUris\r\n                $newUris = @($currentUris)\r\n                $urisChanged = $false\r\n\r\n                Write-Output \"Current IdentifierUris:\"\r\n                foreach ($existingUri in $currentUris) {\r\n                    Write-Output \"  - $existingUri\"\r\n                }\r\n\r\n                foreach ($identifierUri in $currentUris) {\r\n                    # Check for standard file endpoint pattern (works across clouds: windows.net, usgovcloudapi.net, etc.)\r\n                    # Only process URIs that have a proper scheme (api://, http://, https://) to comply with Azure AD policy\r\n                    if ($identifierUri -match '\\.file\\.core\\.' -and \r\n                        $identifierUri -notmatch '\\.privatelink\\.file\\.core\\.' -and\r\n                        $identifierUri -match '^(api|http|https)://') {\r\n                        # Insert .privatelink before .file.core.\r\n                        $privateLinkUri = $identifierUri -replace '\\.file\\.core\\.', '.privatelink.file.core.'\r\n                        \r\n                        # Add to list if not already present (preserving existing URIs)\r\n                        if ($newUris -notcontains $privateLinkUri) {\r\n                            Write-Output \"  Adding PrivateLink URI: $privateLinkUri\"\r\n                            $newUris += $privateLinkUri\r\n                            $urisChanged = $true\r\n                        }\r\n                    }\r\n                }\r\n\r\n                if ($urisChanged) {\r\n                    $uriBody = @{ identifierUris = $newUris } | ConvertTo-Json -Depth 5\r\n                    Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $uri -Body $uriBody\r\n                    Write-Output \"IdentifierUris updated successfully for $appName.\"\r\n                    Write-Output \"New IdentifierUris:\"\r\n                    foreach ($newUri in $newUris) {\r\n                        Write-Output \"  - $newUri\"\r\n                    }\r\n                }\r\n                else {\r\n                    Write-Output \"PrivateLink IdentifierUris already present or not applicable for $appName.\"\r\n                }\r\n            }\r\n            catch {\r\n                Write-Error (\"Failed to update IdentifierUris for $appName : \" + $_.Exception.Message)\r\n                throw\r\n            }\r\n        }\r\n    }\r\n    \r\n    Write-Output \"============================================\"\r\n    Write-Output \"PHASE 1 COMPLETE: Manifest updated successfully\"\r\n    Write-Output \"Storage account applications can now authenticate via privatelink endpoints\"\r\n    Write-Output \"============================================\"\r\n}\r\ncatch {\r\n    Write-Error \"PHASE 1 FAILED: $($_.Exception.Message)\"\r\n    throw $_\r\n}\r\nfinally {\r\n    Stop-Transcript\r\n}",
@@ -14151,6 +14158,12 @@
                       "multichannel": "[if(not(equals(parameters('storageSku'), 'Standard')), createObject('enabled', true()), null())]"
                     },
                     "storageRedundancySuffix": "[if(equals(parameters('storageRedundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')]",
+                    "storageNetworkAcls": {
+                      "bypass": "AzureServices",
+                      "defaultAction": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), 'Deny', 'Allow')]",
+                      "ipRules": "[variables('storageIpRules')]",
+                      "virtualNetworkRules": []
+                    },
                     "graphEndpoint": "[if(equals(environment().name, 'AzureUSGovernment'), 'https://graph.microsoft.us', if(startsWith(environment().name, 'us'), format('https://graph.{0}', environment().suffixes.storage), 'https://graph.microsoft.com'))]"
                   },
                   "resources": [
@@ -14187,8 +14200,8 @@
                           "sasExpirationPeriod": {
                             "value": "180.00:00:00"
                           },
-                          "permittedIPs": {
-                            "value": "[parameters('permittedIPs')]"
+                          "networkAcls": {
+                            "value": "[variables('storageNetworkAcls')]"
                           },
                           "publicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(parameters('permittedIPs'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
                           "azureFilesIdentityBasedAuthentication": "[if(not(equals(parameters('identitySolution'), 'EntraId')), createObject('value', createObject('defaultSharePermission', variables('defaultSharePermission'), 'directoryServiceOptions', if(contains(parameters('identitySolution'), 'EntraKerberos'), 'AADKERB', if(equals(parameters('identitySolution'), 'EntraDomainServices'), 'AADDS', 'None')))), createObject('value', createObject()))]",
@@ -14204,7 +14217,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.44.1.10279",
-                              "templateHash": "13704591995247444667"
+                              "templateHash": "9985785534314845948"
                             }
                           },
                           "definitions": {
@@ -14398,31 +14411,16 @@
                                 "description": "Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints."
                               }
                             },
-                            "permittedIPs": {
-                              "type": "array",
-                              "defaultValue": [],
+                            "networkAcls": {
+                              "type": "object",
+                              "defaultValue": {
+                                "bypass": "AzureServices",
+                                "defaultAction": "Deny",
+                                "ipRules": [],
+                                "virtualNetworkRules": []
+                              },
                               "metadata": {
-                                "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall allowing only these addresses."
-                              }
-                            },
-                            "serviceEndpointSubnetIds": {
-                              "type": "array",
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Optional. Subnet resource IDs for virtual network service endpoint rules."
-                              }
-                            },
-                            "networkAclsBypass": {
-                              "type": "string",
-                              "defaultValue": "AzureServices",
-                              "allowedValues": [
-                                "AzureServices",
-                                "Logging",
-                                "Metrics",
-                                "None"
-                              ],
-                              "metadata": {
-                                "description": "Optional. Services allowed to bypass network rules. Set to \"None\" for stricter configurations that do not require trusted Azure service access (e.g., backup, monitoring)."
+                                "description": "Network ACLs for the storage account. Caller is responsible for setting bypass, defaultAction, ipRules, and virtualNetworkRules appropriate to the deployment topology."
                               }
                             },
                             "allowedCopyScope": {
@@ -14466,25 +14464,6 @@
                             }
                           },
                           "variables": {
-                            "copy": [
-                              {
-                                "name": "ipRules",
-                                "count": "[length(parameters('permittedIPs'))]",
-                                "input": {
-                                  "value": "[parameters('permittedIPs')[copyIndex('ipRules')]]",
-                                  "action": "Allow"
-                                }
-                              },
-                              {
-                                "name": "virtualNetworkRules",
-                                "count": "[length(parameters('serviceEndpointSubnetIds'))]",
-                                "input": {
-                                  "id": "[parameters('serviceEndpointSubnetIds')[copyIndex('virtualNetworkRules')]]",
-                                  "action": "Allow"
-                                }
-                              }
-                            ],
-                            "hasFirewallRestrictions": "[or(not(empty(parameters('permittedIPs'))), not(empty(parameters('serviceEndpointSubnetIds'))))]",
                             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
                             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
                             "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
@@ -14517,12 +14496,7 @@
                                 "minimumTlsVersion": "[parameters('minimumTlsVersion')]",
                                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
-                                "networkAcls": {
-                                  "bypass": "[parameters('networkAclsBypass')]",
-                                  "defaultAction": "[if(or(variables('hasFirewallRestrictions'), equals(parameters('publicNetworkAccess'), 'Disabled')), 'Deny', 'Allow')]",
-                                  "virtualNetworkRules": "[variables('virtualNetworkRules')]",
-                                  "ipRules": "[variables('ipRules')]"
-                                },
+                                "networkAcls": "[parameters('networkAcls')]",
                                 "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
                                 "allowedCopyScope": "[if(not(empty(parameters('allowedCopyScope'))), parameters('allowedCopyScope'), null())]",
                                 "sasPolicy": "[if(not(empty(parameters('sasExpirationPeriod'))), createObject('expirationAction', 'Log', 'sasExpirationPeriod', parameters('sasExpirationPeriod')), null())]",

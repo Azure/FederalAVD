@@ -72,6 +72,31 @@ var secretsKvPublicNetworkAccess = kvPublicAccessDisabled ? 'Disabled' : 'Enable
 // In all other PE+no-IP scenarios it is private-only, matching the secrets KV.
 var encryptionKvPublicNetworkAccess = encryptionKeyVaultForcePublicAccess ? 'Enabled' : (kvPublicAccessDisabled ? 'Disabled' : 'Enabled')
 
+var ipRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
+var kvHasNetworkRestrictions = privateEndpoint || !empty(permittedIPs)
+
+// Secrets KV uses AzureServices bypass because enabledForTemplateDeployment is true.
+// defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
+var secretsKvNetworkAcls = {
+  bypass: 'AzureServices'
+  defaultAction: kvHasNetworkRestrictions ? 'Deny' : 'Allow'
+  ipRules: ipRules
+}
+
+// Encryption KV: when forcePublicAccess is set, open defaultAction so RSV backup (which has no AzureServices bypass)
+// can reach the vault. Otherwise apply the same restriction logic as the secrets KV.
+var encryptionKvNetworkAcls = encryptionKeyVaultForcePublicAccess
+  ? {
+      bypass: 'AzureServices'
+      defaultAction: 'Allow'
+      ipRules: []
+    }
+  : {
+      bypass: 'AzureServices'
+      defaultAction: kvHasNetworkRestrictions ? 'Deny' : 'Allow'
+      ipRules: ipRules
+    }
+
 // ─── Secrets Key Vault ─────────────────────────────────────────────────────────
 
 module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
@@ -88,7 +113,7 @@ module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsK
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
-    permittedIPs: permittedIPs
+    networkAcls: secretsKvNetworkAcls
     publicNetworkAccess: secretsKvPublicNetworkAccess
   }
 }
@@ -144,7 +169,7 @@ module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncry
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
       ? { workspaceId: logAnalyticsWorkspaceResourceId }
       : null
-    permittedIPs: encryptionKeyVaultForcePublicAccess ? [] : permittedIPs
+    networkAcls: encryptionKvNetworkAcls
     publicNetworkAccess: encryptionKvPublicNetworkAccess
   }
 }

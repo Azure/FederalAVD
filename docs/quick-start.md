@@ -8,7 +8,7 @@ Get your Azure Virtual Desktop environment deployed quickly with this step-by-st
 
 ## Your First Deployment (Golden Path)
 
-> **New to FederalAVD?** Follow these 12 steps to get a working host pool in ~20 minutes. This path uses an existing VNet, marketplace images, and PowerShell — no CMK, no custom images, no extra infrastructure required. Ignore the tier table, Steps 0–3, Template Spec setup, and CMK options for now; you can add them later.
+> **New to FederalAVD?** Follow these 12 steps to get a working host pool in ~20 minutes. This path uses an existing VNet, marketplace images, and PowerShell — no CMK, no custom images, no extra infrastructure required. In the deployment sequence described later in this guide, this is **Tier 1 (PoC / Marketplace)** — you only need the host pool template (Step 4). Ignore the tier table, Steps 0–3, Template Spec setup, and CMK options for now; you can add them later.
 >
 > **Before you start:** Run through the [60-second preflight](#preflight-checklist) in the Essential Prerequisites section below — nine yes/no checks that catch the most common blockers.
 
@@ -172,7 +172,7 @@ Select the desktop. It connects to a session host within 1–2 minutes. You now 
 
 | Tier | Who | Requirements | First Deployment | Jump To |
 |------|-----|-------------|-----------------|---------|
-| **1 — PoC / Marketplace** | Single admin | Azure subscription + existing VNet | ~20 min | [Step 4 only](#step-4-deploy-host-pool) |
+| **1 — PoC / Marketplace** | Single admin | Azure subscription + existing VNet | ~20 min | [Golden Path](#your-first-deployment-golden-path) or [Step 4 directly](#step-4-deploy-host-pool) |
 | **2 — Custom Images** | Single team | Tier 1 + storage account + compute gallery | ~2–3 hrs total | [Step 2 → 3 → 4](#step-2-deploy-image-management-resources) |
 | **3 — Multi-Team Production** | Network, Security, Image, AVD teams | All above + Key Vaults, RBAC delegation, param hand-off | ~4–8 hrs first time | [Tier 3 section](#tier-3-multi-tiered-administration) |
 | **4 — Fully Automated** | DevOps / platform team | Tier 3 + CI/CD tooling | ~1 week setup | [Automation Guide](automation-guide.md) |

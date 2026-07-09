@@ -32,15 +32,13 @@ param largeFileSharesState string = ''
 @allowed(['Enabled', 'Disabled'])
 param publicNetworkAccess string = 'Enabled'
 
-@description('Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall allowing only these addresses.')
-param permittedIPs array = []
-
-@description('Optional. Subnet resource IDs for virtual network service endpoint rules.')
-param serviceEndpointSubnetIds array = []
-
-@description('Optional. Services allowed to bypass network rules. Set to "None" for stricter configurations that do not require trusted Azure service access (e.g., backup, monitoring).')
-@allowed(['AzureServices', 'Logging', 'Metrics', 'None'])
-param networkAclsBypass string = 'AzureServices'
+@description('Network ACLs for the storage account. Caller is responsible for setting bypass, defaultAction, ipRules, and virtualNetworkRules appropriate to the deployment topology.')
+param networkAcls object = {
+  bypass: 'AzureServices'
+  defaultAction: 'Deny'
+  ipRules: []
+  virtualNetworkRules: []
+}
 
 @description('Optional. Scope restriction for copy operations.')
 param allowedCopyScope string = ''
@@ -58,11 +56,6 @@ param cmkKeyUri string = ''
 param cmkUserAssignedIdentityResourceId string = ''
 
 param diagnosticSettings diagnosticSettingsType?
-
-var ipRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
-var virtualNetworkRules = [for subnetId in serviceEndpointSubnetIds: { id: subnetId, action: 'Allow' }]
-// Firewall is applied when explicit IP allowances or service endpoints are present. PE topology is the caller's concern.
-var hasFirewallRestrictions = !empty(permittedIPs) || !empty(serviceEndpointSubnetIds)
 
 var supportsBlobService = kind == 'BlockBlobStorage' || kind == 'BlobStorage' || kind == 'StorageV2' || kind == 'Storage'
 var supportsFileService = kind == 'FileStorage' || kind == 'StorageV2' || kind == 'Storage'
@@ -102,16 +95,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     minimumTlsVersion: minimumTlsVersion
     dnsEndpointType: !empty(dnsEndpointType) ? dnsEndpointType : null
     largeFileSharesState: !empty(largeFileSharesState) ? largeFileSharesState : null
-    networkAcls: {
-      bypass: networkAclsBypass
-      // Deny by default when explicit firewall rules are present OR when public access is disabled.
-      // Azure Policy "Storage accounts should restrict network access" (and similar deny-effect
-      // policies) audit defaultAction: Allow even when publicNetworkAccess: Disabled, because
-      // the ARM property is evaluated independently of the publicNetworkAccess flag.
-      defaultAction: (hasFirewallRestrictions || publicNetworkAccess == 'Disabled') ? 'Deny' : 'Allow'
-      virtualNetworkRules: virtualNetworkRules
-      ipRules: ipRules
-    }
+    networkAcls: networkAcls
     publicNetworkAccess: publicNetworkAccess
     allowedCopyScope: !empty(allowedCopyScope) ? allowedCopyScope : null
     sasPolicy: !empty(sasExpirationPeriod)

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "7997885348104525707"
+      "templateHash": "7763148938652477259"
     }
   },
   "functions": [
@@ -260,6 +260,24 @@
     }
   },
   "variables": {
+    "copy": [
+      {
+        "name": "storageIpRules",
+        "count": "[length(parameters('storagePermittedIPs'))]",
+        "input": {
+          "value": "[parameters('storagePermittedIPs')[copyIndex('storageIpRules')]]",
+          "action": "Allow"
+        }
+      },
+      {
+        "name": "storageVnetRules",
+        "count": "[length(parameters('storageServiceEndpointSubnetResourceIds'))]",
+        "input": {
+          "id": "[parameters('storageServiceEndpointSubnetResourceIds')[copyIndex('storageVnetRules')]]",
+          "action": "Allow"
+        }
+      }
+    ],
     "$fxv#0": {
       "AzureCloud": {
         "australiacentral": {
@@ -841,7 +859,14 @@
     "logsStorageName": "[if(variables('cnv_rtFirst'), format('{0}imglogs{1}{2}', variables('saRtCode'), variables('cnv_loc'), variables('saUnique')), format('imglogs{0}{1}{2}', variables('cnv_loc'), variables('saUnique'), variables('saRtCode')))]",
     "logsContainerName": "image-customization-logs",
     "logsPrivateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
-    "logsCustomNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('logsPrivateEndpointName')), format('{0}-{1}', variables('logsPrivateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]"
+    "logsCustomNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('logsPrivateEndpointName')), format('{0}-{1}', variables('logsPrivateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
+    "storageHasNetworkRestrictions": "[or(or(not(empty(parameters('storagePermittedIPs'))), not(empty(parameters('storageServiceEndpointSubnetResourceIds')))), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
+    "storageNetworkAcls": {
+      "bypass": "None",
+      "defaultAction": "[if(variables('storageHasNetworkRestrictions'), 'Deny', 'Allow')]",
+      "ipRules": "[variables('storageIpRules')]",
+      "virtualNetworkRules": "[variables('storageVnetRules')]"
+    }
   },
   "resources": {
     "resourceGroup": {
@@ -5054,16 +5079,10 @@
           "requireInfrastructureEncryption": {
             "value": true
           },
-          "permittedIPs": {
-            "value": "[parameters('storagePermittedIPs')]"
-          },
-          "serviceEndpointSubnetIds": {
-            "value": "[parameters('storageServiceEndpointSubnetResourceIds')]"
+          "networkAcls": {
+            "value": "[variables('storageNetworkAcls')]"
           },
           "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(parameters('storagePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
-          "networkAclsBypass": {
-            "value": "None"
-          },
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },
@@ -5081,7 +5100,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "13704591995247444667"
+              "templateHash": "9985785534314845948"
             }
           },
           "definitions": {
@@ -5275,31 +5294,16 @@
                 "description": "Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints."
               }
             },
-            "permittedIPs": {
-              "type": "array",
-              "defaultValue": [],
+            "networkAcls": {
+              "type": "object",
+              "defaultValue": {
+                "bypass": "AzureServices",
+                "defaultAction": "Deny",
+                "ipRules": [],
+                "virtualNetworkRules": []
+              },
               "metadata": {
-                "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall allowing only these addresses."
-              }
-            },
-            "serviceEndpointSubnetIds": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "Optional. Subnet resource IDs for virtual network service endpoint rules."
-              }
-            },
-            "networkAclsBypass": {
-              "type": "string",
-              "defaultValue": "AzureServices",
-              "allowedValues": [
-                "AzureServices",
-                "Logging",
-                "Metrics",
-                "None"
-              ],
-              "metadata": {
-                "description": "Optional. Services allowed to bypass network rules. Set to \"None\" for stricter configurations that do not require trusted Azure service access (e.g., backup, monitoring)."
+                "description": "Network ACLs for the storage account. Caller is responsible for setting bypass, defaultAction, ipRules, and virtualNetworkRules appropriate to the deployment topology."
               }
             },
             "allowedCopyScope": {
@@ -5343,25 +5347,6 @@
             }
           },
           "variables": {
-            "copy": [
-              {
-                "name": "ipRules",
-                "count": "[length(parameters('permittedIPs'))]",
-                "input": {
-                  "value": "[parameters('permittedIPs')[copyIndex('ipRules')]]",
-                  "action": "Allow"
-                }
-              },
-              {
-                "name": "virtualNetworkRules",
-                "count": "[length(parameters('serviceEndpointSubnetIds'))]",
-                "input": {
-                  "id": "[parameters('serviceEndpointSubnetIds')[copyIndex('virtualNetworkRules')]]",
-                  "action": "Allow"
-                }
-              }
-            ],
-            "hasFirewallRestrictions": "[or(not(empty(parameters('permittedIPs'))), not(empty(parameters('serviceEndpointSubnetIds'))))]",
             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
@@ -5394,12 +5379,7 @@
                 "minimumTlsVersion": "[parameters('minimumTlsVersion')]",
                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
-                "networkAcls": {
-                  "bypass": "[parameters('networkAclsBypass')]",
-                  "defaultAction": "[if(or(variables('hasFirewallRestrictions'), equals(parameters('publicNetworkAccess'), 'Disabled')), 'Deny', 'Allow')]",
-                  "virtualNetworkRules": "[variables('virtualNetworkRules')]",
-                  "ipRules": "[variables('ipRules')]"
-                },
+                "networkAcls": "[parameters('networkAcls')]",
                 "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
                 "allowedCopyScope": "[if(not(empty(parameters('allowedCopyScope'))), parameters('allowedCopyScope'), null())]",
                 "sasPolicy": "[if(not(empty(parameters('sasExpirationPeriod'))), createObject('expirationAction', 'Log', 'sasExpirationPeriod', parameters('sasExpirationPeriod')), null())]",
@@ -6118,16 +6098,10 @@
           "requireInfrastructureEncryption": {
             "value": true
           },
-          "permittedIPs": {
-            "value": "[parameters('storagePermittedIPs')]"
-          },
-          "serviceEndpointSubnetIds": {
-            "value": "[parameters('storageServiceEndpointSubnetResourceIds')]"
+          "networkAcls": {
+            "value": "[variables('storageNetworkAcls')]"
           },
           "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(parameters('storagePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
-          "networkAclsBypass": {
-            "value": "None"
-          },
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },
@@ -6145,7 +6119,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "13704591995247444667"
+              "templateHash": "9985785534314845948"
             }
           },
           "definitions": {
@@ -6339,31 +6313,16 @@
                 "description": "Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints."
               }
             },
-            "permittedIPs": {
-              "type": "array",
-              "defaultValue": [],
+            "networkAcls": {
+              "type": "object",
+              "defaultValue": {
+                "bypass": "AzureServices",
+                "defaultAction": "Deny",
+                "ipRules": [],
+                "virtualNetworkRules": []
+              },
               "metadata": {
-                "description": "Optional. Array of permitted IP addresses or CIDR blocks. When provided, public access is enabled with a deny-by-default firewall allowing only these addresses."
-              }
-            },
-            "serviceEndpointSubnetIds": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "Optional. Subnet resource IDs for virtual network service endpoint rules."
-              }
-            },
-            "networkAclsBypass": {
-              "type": "string",
-              "defaultValue": "AzureServices",
-              "allowedValues": [
-                "AzureServices",
-                "Logging",
-                "Metrics",
-                "None"
-              ],
-              "metadata": {
-                "description": "Optional. Services allowed to bypass network rules. Set to \"None\" for stricter configurations that do not require trusted Azure service access (e.g., backup, monitoring)."
+                "description": "Network ACLs for the storage account. Caller is responsible for setting bypass, defaultAction, ipRules, and virtualNetworkRules appropriate to the deployment topology."
               }
             },
             "allowedCopyScope": {
@@ -6407,25 +6366,6 @@
             }
           },
           "variables": {
-            "copy": [
-              {
-                "name": "ipRules",
-                "count": "[length(parameters('permittedIPs'))]",
-                "input": {
-                  "value": "[parameters('permittedIPs')[copyIndex('ipRules')]]",
-                  "action": "Allow"
-                }
-              },
-              {
-                "name": "virtualNetworkRules",
-                "count": "[length(parameters('serviceEndpointSubnetIds'))]",
-                "input": {
-                  "id": "[parameters('serviceEndpointSubnetIds')[copyIndex('virtualNetworkRules')]]",
-                  "action": "Allow"
-                }
-              }
-            ],
-            "hasFirewallRestrictions": "[or(not(empty(parameters('permittedIPs'))), not(empty(parameters('serviceEndpointSubnetIds'))))]",
             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
@@ -6458,12 +6398,7 @@
                 "minimumTlsVersion": "[parameters('minimumTlsVersion')]",
                 "dnsEndpointType": "[if(not(empty(parameters('dnsEndpointType'))), parameters('dnsEndpointType'), null())]",
                 "largeFileSharesState": "[if(not(empty(parameters('largeFileSharesState'))), parameters('largeFileSharesState'), null())]",
-                "networkAcls": {
-                  "bypass": "[parameters('networkAclsBypass')]",
-                  "defaultAction": "[if(or(variables('hasFirewallRestrictions'), equals(parameters('publicNetworkAccess'), 'Disabled')), 'Deny', 'Allow')]",
-                  "virtualNetworkRules": "[variables('virtualNetworkRules')]",
-                  "ipRules": "[variables('ipRules')]"
-                },
+                "networkAcls": "[parameters('networkAcls')]",
                 "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
                 "allowedCopyScope": "[if(not(empty(parameters('allowedCopyScope'))), parameters('allowedCopyScope'), null())]",
                 "sasPolicy": "[if(not(empty(parameters('sasExpirationPeriod'))), createObject('expirationAction', 'Log', 'sasExpirationPeriod', parameters('sasExpirationPeriod')), null())]",
