@@ -2,6 +2,18 @@
 
 # Troubleshooting
 
+## Top 5 First-Deployment Mistakes {#top-5-first-deployment-mistakes}
+
+The most common errors on a first FederalAVD deployment. Each links to a full symptom → problem → fix section below.
+
+1. [Storage data-plane RBAC — 403 when uploading artifacts](#storage-blob-data-access-fails-with-403)
+2. [Key Vault Crypto Officer missing — CMK deployment fails with Forbidden](#key-vault-crypto-officer-missing)
+3. [timeStamp in parameter file causes stale versions or naming conflicts](#timestamp-in-parameter-file-causes-stale-image-versions)
+4. [Editing `customer/examples/` instead of `customer/parameters/` — changes disappear on git pull](#editing-customerexamples-or-missing-customer-changes)
+5. [Image Management deployed before Key Vaults — CMK encryption fails](#cmk-deployment-fails-image-management-deployed-before-key-vaults)
+
+---
+
 ## Role Assignment Failure
 
 ### Symptom
@@ -287,3 +299,166 @@ az vm run-command list --resource-group rg-avd-sessionhosts --vm-name avd-vm-01 
 2. Under **Operations**, select **Run command**.
 3. Select the **Managed** tab to view persistent Run Command resources.
 4. Click the run command to open it, then select **Delete**.
+
+---
+
+## Storage Blob Data Access Fails with 403 {#storage-blob-data-access-fails-with-403}
+
+### Symptom
+
+Running `Update-ImageArtifacts.ps1` or `Deploy-ImageManagement.ps1` (or any script that uploads to the artifacts or build-logs storage account) fails with:
+
+```
+403 AuthorizationFailure
+This request is not authorized to perform this operation using this permission.
+```
+
+or
+
+```
+AuthorizationFailed: The client '…' does not have authorization to perform action
+'Microsoft.Storage/storageAccounts/…'
+```
+
+### Problem
+
+Azure Storage accounts in this solution have **shared key access disabled by default** (`allowSharedKeyAccess: false`). In this mode, data-plane operations (reading and writing blobs) require an explicit data-plane role. The `Owner` and `Contributor` built-in roles are **control-plane only** — they do not grant blob read/write access when shared key is disabled.
+
+### Solution
+
+Assign the appropriate data-plane role to the identity that runs the upload or deployment scripts:
+
+| Operation | Required role | Scope |
+|---|---|---|
+| Upload artifacts (`Update-ImageArtifacts.ps1`) | **Storage Blob Data Contributor** | Artifacts storage account |
+| Image build log collection | **Storage Blob Data Contributor** | Build logs storage account |
+| Image build reads artifacts | **Storage Blob Data Reader** | Artifacts storage account |
+
+```powershell
+# Example: grant Storage Blob Data Contributor on the artifacts storage account to your user
+$storageAccountId = '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<name>'
+$principalId      = (Get-AzADUser -UserPrincipalName (Get-AzContext).Account.Id).Id
+
+New-AzRoleAssignment -ObjectId $principalId `
+    -RoleDefinitionName 'Storage Blob Data Contributor' `
+    -Scope $storageAccountId
+```
+
+After assigning the role, wait a few minutes for RBAC propagation (see [RBAC Propagation Delay](#rbac-propagation-delay)) then retry.
+
+---
+
+## Key Vault Crypto Officer Missing — CMK Deployment Fails with Forbidden {#key-vault-crypto-officer-missing}
+
+### Symptom
+
+A deployment that uses Customer-Managed Keys (CMK) fails with:
+
+```
+Forbidden: The user, group, or application does not have keys get/wrapKey/unwrapKey permission
+on key vault '…'.
+```
+
+or similar 403/Forbidden errors against Key Vault key operations.
+
+### Problem
+
+Key Vault operates a **data-plane permission model separate from Azure RBAC control-plane**. `Owner` and `Contributor` grant management rights over the Key Vault resource itself but do **not** grant permission to perform key operations (Get, WrapKey, UnwrapKey) on keys stored inside the vault when the vault uses Azure RBAC authorization (`enableRbacAuthorization: true`, which is the default in this solution).
+
+### Solution
+
+Add the **`Key Vault Crypto Officer`** role to the deploying identity (or the managed identity performing encryption) scoped to the encryption Key Vault:
+
+```powershell
+$keyVaultId  = '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/<name>'
+$principalId = (Get-AzADUser -UserPrincipalName (Get-AzContext).Account.Id).Id
+
+New-AzRoleAssignment -ObjectId $principalId `
+    -RoleDefinitionName 'Key Vault Crypto Officer' `
+    -Scope $keyVaultId
+```
+
+For service principals or managed identities used in automation pipelines, assign the same role to the identity performing the deployment.
+
+---
+
+## timeStamp in Parameter File Causes Stale Image Versions {#timestamp-in-parameter-file-causes-stale-image-versions}
+
+### Symptom
+
+A new image build or host pool deployment runs but the resulting image gallery version or deployment resource name reuses a value from a previous run. Subsequent deployments may fail with a naming conflict, or image versions are not auto-incremented as expected.
+
+### Problem
+
+The `timeStamp` parameter is intentionally excluded from example parameter files — it is generated fresh on every deployment run by the calling script or at deploy time. If you export a parameter file from a Template Spec UI deployment or from an ARM deployment history, the exported file includes the `timeStamp` value that was used in that specific run. Saving and reusing that file causes every subsequent deployment to supply the same fixed timestamp.
+
+### Solution
+
+After generating or exporting a parameter file, **remove the `timeStamp` entry** before saving it for reuse:
+
+1. Open the parameter file in a text editor.
+2. Delete the line that contains `"timeStamp"` (and its associated `"value"` pair).
+3. Save the file. On the next deployment the value will be auto-generated.
+
+```json
+// Remove this block from your saved parameters file:
+"timeStamp": {
+    "value": "2026.0210.1435"
+}
+```
+
+---
+
+## Editing customer/examples/ or Missing customer/ Changes {#editing-customerexamples-or-missing-customer-changes}
+
+### Symptom
+
+- You edited a parameter file or artifact and the changes are gone after a `git pull`.
+- A parameter file you modified does not appear in `git status`.
+- You committed and pushed, but the file you changed is not in the remote repo.
+
+### Problem
+
+The `customer/` folder is **git-ignored by design** (via `.gitignore`). It is intended to hold your environment-specific, potentially sensitive configuration that should never be committed to the shared repo. However, `customer/examples/` *is* tracked — it contains the reference examples shipped with the solution. If you edit files inside `customer/examples/` directly, those changes **will** be overwritten the next time the repo is updated.
+
+### Solution
+
+Always copy example files into the appropriate `customer/` subfolder before editing:
+
+```powershell
+# Copy a host pool parameter example to your working location
+Copy-Item customer/examples/parameters/hostpools/hostpool.parameters.example.json `
+          customer/parameters/hostpools/myenv.parameters.json
+```
+
+- Edit only files under `customer/parameters/`, `customer/artifacts/`, etc.
+- Do not edit files under `customer/examples/` unless you are intentionally updating the reference example for others (rare).
+- If you need to version-control your customer files, manage that in a separate private repo and reference it alongside this repo.
+
+---
+
+## CMK Deployment Fails — Image Management Deployed Before Key Vaults {#cmk-deployment-fails-image-management-deployed-before-key-vaults}
+
+### Symptom
+
+The Image Management deployment (`Deploy-ImageManagement.ps1` / Step 2) fails with an error such as:
+
+```
+Resource 'kv-avd-enc-…' was not found.
+```
+
+or the compute gallery or storage account is created without CMK encryption even though `customerManagedKeys: true` was set in the parameters.
+
+### Problem
+
+When using Customer-Managed Keys, the Image Management template needs the Key Vault resource ID at deployment time to configure encryption on the compute gallery and storage account. If the Key Vault does not yet exist, the resource reference fails. Deploying Step 2 before Step 1 is the most common cause.
+
+### Solution
+
+Follow the documented deployment sequence when using CMK:
+
+```
+Step 1 (keyVaults)  →  Step 2 (imageManagement)  →  Step 3 (imageBuild, optional)  →  Step 4 (hostpool)
+```
+
+Deploy Key Vaults (Step 1) first, wait for it to succeed, then proceed to Image Management (Step 2). If you have already deployed Image Management without CMK and want to enable it, redeploy Image Management after Step 1 is complete — the template is idempotent and will update the encryption settings.

@@ -60,6 +60,10 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 
 **Inline fallback:** If `existingEncryptionKeyVaultResourceId` is empty and CMK is requested, the host pool deployment creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
 
+> **⚠️ Common mistake — Storage 403 when uploading artifacts:** `Owner` and `Contributor` grant control-plane access only and do not cover blob read/write when shared key access is disabled (the default in this solution). Add **Storage Blob Data Contributor** on the artifacts storage account to the identity running `Update-ImageArtifacts.ps1` or `Deploy-ImageManagement.ps1`. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
+
+> **⚠️ Common mistake — Key Vault Crypto Officer missing for CMK deployments:** `Owner` and `Contributor` do not grant Key Vault key operation rights — Azure enforces a strict control-plane / data-plane separation. Add **Key Vault Crypto Officer** on the encryption Key Vault to the deploying identity. See [troubleshooting](troubleshooting.md#key-vault-crypto-officer-missing).
+
 > **Why data plane roles are required separately from ARM roles**
 >
 > Azure enforces a strict separation between the ARM control plane (resource management) and service data planes (key operations, blob operations). `Owner` or `Contributor` on a subscription or resource group grants full control over ARM resources but **zero access** to data plane operations. This applies consistently across services:
@@ -195,6 +199,10 @@ customer/parameters/hostpools/
 ├── prod.hostpool.parameters.json
 └── test.hostpool.parameters.json
 ```
+
+> **⚠️ Common mistake — editing `customer/examples/` or `deployments/hostpools/parameters/` directly:** Sample files under `deployments/` are shared and will be overwritten when you pull repo updates. Always copy a sample to `customer/parameters/hostpools/` before editing. The `customer/` folder is git-ignored by design — your environment-specific files stay local and safe. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+
+> **⚠️ Common mistake — `timeStamp` in a saved parameter file:** If you export a parameter file from the Template Spec UI or from ARM deployment history, delete the `timeStamp` entry before saving the file for reuse. Leaving it causes all subsequent deployments to reuse the same timestamp, resulting in stale image version names and potential resource naming conflicts. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
 
 ### Key Parameters
 

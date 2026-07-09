@@ -10,7 +10,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 
 | Page | Description |
 |------|-------------|
-| [Quick Start Guide](quick-start.md) | Step-by-step walkthrough of the full deployment sequence — Key Vaults → Image Management → Image Build → Host Pool. Start here for a first deployment. |
+| [Quick Start Guide](quick-start.md) | Step-by-step walkthrough of the full deployment sequence — Key Vaults → Image Management → Image Build → Host Pool. Start here for a first deployment. Includes the [15-minute golden path](quick-start.md#your-first-deployment-golden-path) and [Top 5 first-deployment mistakes](troubleshooting.md#top-5-first-deployment-mistakes). |
 | [Design](design.md) | Architecture overview — resource organization, naming conventions, resource group layout, and CAF alignment. |
 | [Features](features.md) | Capability overview — Zero Trust architecture, multi-subscription support, encryption options, and key solution characteristics. Intro to federal ZT mandates. |
 | [Solution Limitations](limitations.md) | Known constraints and unsupported scenarios — identity solution limitations, feature gaps, and workarounds. Read before designing a deployment. |

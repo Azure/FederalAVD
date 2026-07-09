@@ -47,6 +47,8 @@ The Azure identity running this deployment (user, service principal, or managed 
 
 Custom image building **requires** the Image Management resources to be deployed first. These resources provide the storage and infrastructure needed for artifacts and image distribution.
 
+> **⚠️ Common mistake — deploying imageBuild before imageManagement:** The imageBuild template requires a compute gallery, artifacts storage account, and (for the existing RG path) a managed identity with pre-granted roles — all of which are created by imageManagement. Attempting to run imageBuild without imageManagement will fail or produce an image with no artifacts. See [troubleshooting](troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults) for the CMK sequencing variant (Key Vaults → imageManagement → imageBuild).
+
 **📦 [Deploy Image Management Resources](artifacts-guide.md#deploying-image-management-resources)**
 
 The Image Management deployment creates and pre-configures everything imageBuild needs when using an **existing resource group** (the recommended production path):
@@ -68,7 +70,9 @@ The imageBuild deployment grants **no RBAC roles** when using an existing resour
 - **Storage Blob Data Reader** on the artifacts storage account
 - **Storage Blob Data Contributor** on the build logs storage account
 
-imageManagement grants all three automatically. If you skip imageManagement and supply these resources manually, you are responsible for pre-granting every role before running imageBuild.
+imageManagement grants all three automatically.
+
+> **⚠️ Common mistake — Storage 403 during artifact download or log upload:** `Owner` and `Contributor` grant control-plane access only. If the storage account has shared key access disabled (the default), blob data-plane operations require an explicit data-plane role. If you supply these resources manually instead of via imageManagement, ensure the managed identity has **Storage Blob Data Reader** on artifacts storage and **Storage Blob Data Contributor** on build-logs storage before running imageBuild. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
 
 - Private endpoints (optional, for Zero Trust)
 
@@ -92,6 +96,8 @@ Custom images are built by executing **artifacts** during the image build proces
 ### Required - Parameter Files
 
 Use the sample files in `deployments/imageBuild/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/imageBuild/`:
+
+> **⚠️ Common mistake — editing sample files directly:** Files under `deployments/imageBuild/parameters/` are shared reference samples and will be overwritten on `git pull`. Always copy a sample to `customer/parameters/imageBuild/` before editing. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
 **One parameter file is required per image build:**
 
