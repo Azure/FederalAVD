@@ -4,9 +4,6 @@
     "parameters": {
 
         // ── Deployment ─────────────────────────────────────────────────────────
-        "deploymentType": {
-            "value": "Complete"
-        },
         "identifier": {
             "value": "dev"
         },
@@ -24,10 +21,12 @@
         },
 
         // ── Credentials ────────────────────────────────────────────────────────
-        //    Store secrets in Key Vault and reference them here.
-        "credentialsKeyVaultResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-management-eus2/providers/Microsoft.KeyVault/vaults/kv-avd-eus2"
-        },
+        //    virtualMachineAdminUserName and virtualMachineAdminPassword are @secure().
+        //    Pass them via Read-Host at deploy time — do NOT store them in this file.
+        //    To use an existing Key Vault instead, add:
+        //      "existingCredentialsKeyVaultResourceId": { "value": "<kv-resource-id>" }
+        //    The KV must contain secrets named VirtualMachineAdminUserName and
+        //    VirtualMachineAdminPassword.
 
         // ── Control Plane ──────────────────────────────────────────────────────
         "hostPoolType": {

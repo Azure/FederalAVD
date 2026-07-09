@@ -56,58 +56,76 @@ git clone https://github.com/Azure/FederalAVD.git
 Set-Location FederalAVD
 ```
 
-**Step 5 — Copy the sample parameter file to your working folder**
+**Step 5 — Copy the golden-path example parameter file to your working folder**
 
 ```powershell
 New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
-Copy-Item deployments\hostpools\parameters\sample-minimal-entraid.hostpool.parameters.json `
+Copy-Item customer\examples\parameters\hostpools\golden-path.hostpool.parameters.json `
           customer\parameters\hostpools\myfirstpool.parameters.json
 ```
 
-> `customer\parameters\` is git-ignored by design — your environment-specific files stay local and will not be overwritten on `git pull`. Never edit files under `deployments\hostpools\parameters\` directly; they are shared samples.
+> `customer\parameters\` is git-ignored by design — your environment-specific files stay local and will not be overwritten on `git pull`. Never edit `customer\examples\` files directly; copy them first.
 
-**Step 6 — Edit the four required values in your parameter file**
+**Step 6 — Edit the required values in your parameter file**
 
-Open `customer\parameters\hostpools\myfirstpool.parameters.json` and change:
+Open `customer\parameters\hostpools\myfirstpool.parameters.json` and replace every value marked `TODO`:
 
 | Parameter | What to set |
 |---|---|
 | `identifier` | A short prefix for this deployment (e.g., `"test"` or `"dev"`) |
-| `controlPlaneLocation` | Azure region for control plane resources (e.g., `"eastus2"`, `"usgovvirginia"`) |
+| `virtualMachineNamePrefix` | VM name prefix for session hosts (e.g., `"avddev"`, max 14 chars) |
 | `virtualMachineSubnetResourceId` | Full resource ID of the session host subnet |
 | `appGroupSecurityGroups` | Your Entra security group object ID and display name (replace the `xxxxxxxx` placeholders) |
 
-Leave everything else (`virtualMachineSize`, `imageSku`, `enableMonitoring`, etc.) as-is for a first deployment — the defaults produce a working environment.
+The file already sets `sessionHostCount: 3`, `deployFSLogixStorage: true`, and `identitySolution: "EntraId"` — leave those as-is unless your scenario differs. Everything else uses Bicep defaults (`virtualMachineSize: Standard_D4ads_v5`, `imageSku: win11-25h2-avd-m365`, `enableMonitoring: true`, etc.) which are correct for a first deployment.
 
-> **About `credentialsKeyVaultResourceId`:** Point this to a Key Vault that already holds your VM admin credentials, or leave the placeholder value and the deployment will create a Key Vault inline in the operations resource group on first run.
+> **Credentials are not in this file.** `virtualMachineAdminUserName` and `virtualMachineAdminPassword` are `@secure()` parameters — putting them in a plain-text JSON file is a security risk. The deploy command (Step 8) collects them interactively via `Read-Host` so they are never written to disk. The deployment automatically creates a Key Vault in the operations resource group and stores both values there as secrets.
 >
-> **No `timeStamp` to remove** in this sample file — it does not include one. If you later export a parameter file from the Template Spec UI or ARM deployment history, delete the `timeStamp` entry before reusing the file. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
+> **No `timeStamp` to remove** — the golden-path example file does not include one. If you later export a parameter file from the Template Spec UI or ARM deployment history, delete the `timeStamp` entry before reusing the file. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
+
+**Step 7 — Verify the VM size is available and quota is sufficient**
+
+Before spending 20 minutes waiting on a deployment that will fail at the VM allocation step, run the pre-flight check:
+
+```powershell
+.\tools\Test-AvdVmSize.ps1 -Location '<azure-region>'
+```
+
+Replace `<azure-region>` with your target Azure region. Add `-SessionHostCount <n>` if you changed `sessionHostCount` from the `3` set in the parameter file.
+
+All three checks (`[PASS]`) means you are clear to deploy. If any check fails the script prints exactly what to fix. See [vCPU Quota Exhaustion](troubleshooting.md#vcpu-quota-exhaustion) for the full remediation guide.
 
 ---
 
-**Steps 7–9: Deploy**
+**Steps 8–10: Deploy**
 
-**Step 7 — Deploy**
+**Step 8 — Deploy**
 
 ```powershell
 $paramFile      = 'myfirstpool.parameters.json'
 $deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
+
+# Credentials are @secure() parameters - collect them interactively, never store in the param file
+$adminUser = Read-Host 'Session host local admin username'
+$adminPass = Read-Host 'Session host local admin password' -AsSecureString
 
 New-AzDeployment `
     -Location '<azure-region>' `
     -Name $deploymentName `
     -TemplateFile '.\deployments\hostpools\hostpool.json' `
     -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
+    -virtualMachineAdminUserName $adminUser `
+    -virtualMachineAdminPassword $adminPass `
     -Verbose
 ```
 
-Replace `<azure-region>` with the same region as `controlPlaneLocation`.
+Replace `<azure-region>` with your target Azure region. The deployment sets the control plane location to match, creates a Key Vault in the operations resource group, and stores both credentials there as secrets.
 
-**Step 8 — Wait for the deployment (~15–20 minutes)**
+**Step 9 — Wait for the deployment (~15–20 minutes)**
 
 Track progress in **Azure Portal → Subscriptions → [your subscription] → Deployments**, or watch the `-Verbose` output. The deployment provisions: host pool, workspace, application group, session hosts, FSLogix profile storage (Azure Files), monitoring, and all required role assignments.
 
-**Step 9 — Confirm session hosts are registered**
+**Step 10 — Confirm session hosts are registered**
 
 ```powershell
 # Replace resource group / host pool names from deployment outputs
@@ -121,20 +139,20 @@ All session hosts should show `Status: Available`.
 
 ---
 
-**Steps 10–12: Connect and verify**
+**Steps 11–13: Connect and verify**
 
-**Step 10 — Open the AVD web client**
+**Step 11 — Open the AVD web client**
 
 | Cloud | URL |
 |-------|-----|
 | Azure Commercial | [https://client.wvd.microsoft.com/arm/webclient](https://client.wvd.microsoft.com/arm/webclient) |
 | Azure Government | [https://client.wvd.azure.us/arm/webclient](https://client.wvd.azure.us/arm/webclient) |
 
-**Step 11 — Sign in with a user from your AVD security group**
+**Step 12 — Sign in with a user from your AVD security group**
 
 The `appGroupSecurityGroups` parameter assigned this group to the Desktop Application Group automatically. If the desktop does not appear, confirm the assignment in **Azure Portal → Host Pool → Application Groups → [pool name] → Assignments**.
 
-**Step 12 — Connect and confirm the session is live**
+**Step 13 — Connect and confirm the session is live**
 
 Select the desktop. It connects to a session host within 1–2 minutes. You now have a live AVD host pool.
 
@@ -254,8 +272,9 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 | 7 | I'm using the correct `-Environment` flag for my cloud | `Connect-AzAccount -Environment AzureUSGovernment` for Gov; omit for Commercial |
 | 8 | *(Custom images only)* My identity has **Storage Blob Data Contributor** on the artifacts storage account | `Owner`/`Contributor` does not cover blob data-plane access. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403). |
 | 9 | *(CMK only)* My identity has **Key Vault Crypto Officer** on the encryption Key Vault | `Owner`/`Contributor` does not cover key operations. See [troubleshooting](troubleshooting.md#key-vault-crypto-officer-missing). |
+| 10 | VM size is available in my region with sufficient vCPU quota | Run `tools/Test-AvdVmSize.ps1 -Location <region>`. See [vCPU Quota Exhaustion](troubleshooting.md#vcpu-quota-exhaustion). |
 
-> **TODO(author):** A `tools/Test-AVDPrerequisites.ps1` validation script that automates these checks and outputs remediation commands would reduce first-deployment friction significantly. Not yet available.
+> Run `tools/Test-AvdVmSize.ps1 -Location <region>` to automate checks 3 and 10 (EncryptionAtHost is **not** checked by this script — register that separately).
 
 ### Required Deployer Roles by Deployment
 

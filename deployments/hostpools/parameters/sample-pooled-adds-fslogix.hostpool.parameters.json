@@ -4,9 +4,6 @@
     "parameters": {
 
         // ── Deployment ─────────────────────────────────────────────────────────
-        "deploymentType": {
-            "value": "Complete"
-        },
         "identifier": {
             "value": "prod"
         },
@@ -41,7 +38,7 @@
 
         // ── Credentials ────────────────────────────────────────────────────────
         //    All secrets are stored in Key Vault (no plaintext passwords here).
-        "credentialsKeyVaultResourceId": {
+        "existingCredentialsKeyVaultResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-management-eus2/providers/Microsoft.KeyVault/vaults/kv-avd-eus2"
         },
 

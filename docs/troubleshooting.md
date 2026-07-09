@@ -6,6 +6,8 @@
 
 The most common errors on a first FederalAVD deployment. Each links to a full symptom → problem → fix section below.
 
+> **Pre-flight tip:** Run `tools/Test-AvdVmSize.ps1 -Location <your-region>` before deploying to catch VM size availability and vCPU quota issues before they fail a 20-minute deployment. See [vCPU Quota Exhaustion](#vcpu-quota-exhaustion).
+
 1. [Storage data-plane RBAC — 403 when uploading artifacts](#storage-blob-data-access-fails-with-403)
 2. [Key Vault Crypto Officer missing — CMK deployment fails with Forbidden](#key-vault-crypto-officer-missing)
 3. [timeStamp in parameter file causes stale versions or naming conflicts](#timestamp-in-parameter-file-causes-stale-image-versions)
@@ -193,6 +195,20 @@ Location: usgovvirginia, Current Limit: 10, Current Usage: 8, Additional Require
 
 Azure subscriptions, particularly in government cloud environments, have per-region vCPU quotas that may be lower than commercial defaults. Deploying multiple session hosts, a deployment VM, or a high-vCPU image build VM can exhaust the available quota.
 
+### Quick check before deploying
+
+Run `tools/Test-AvdVmSize.ps1` to check availability, zone restrictions, and vCPU quota in about 30 seconds — before committing to a full deployment run:
+
+```powershell
+# From the repo root, with an active Azure session
+.\tools\Test-AvdVmSize.ps1 -Location '<your-region>'
+
+# Override defaults to match your parameter file
+.\tools\Test-AvdVmSize.ps1 -VmSize Standard_D8ads_v5 -Location usgovvirginia -SessionHostCount 5
+```
+
+The script checks the VM family quota and the total regional vCPU quota and prints `[PASS]` / `[FAIL]` / `[WARN]` for each check. If any check fails it prints the exact remediation options.
+
 ### Solution
 
 Check current usage and submit a quota increase request:
@@ -207,7 +223,7 @@ Get-AzVMUsage -Location 'usgovvirginia' |
 
 To request a quota increase, go to **Azure Portal → Subscriptions → [your subscription] → Usage + quotas**, filter by the region and VM family, and select **Request Increase**. In government cloud, quota increase requests may require coordination with your cloud broker or sponsor.
 
-As a short-term workaround, reduce `sessionHostCount` or switch to a smaller `virtualMachineSize` that uses fewer vCPUs per VM.
+As a short-term workaround, reduce `sessionHostCount` or switch to a smaller `virtualMachineSize` that uses fewer vCPUs per VM. Run `tools/Get-AvailableVMSkus.ps1 -Region <location>` to see all VM sizes available in the region.
 
 ## Host Pool Registration Token Expired
 
