@@ -66,6 +66,9 @@ param runbookContentUri string = 'https://raw.githubusercontent.com/Azure/Federa
 @description('Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time.')
 param deploymentTime string = utcNow()
 
+@description('Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict - the jobSchedules resource type is create-only and cannot be updated by ARM.')
+param skipJobSchedule bool = false
+
 // ========== //
 // Variables  //
 // ========== //
@@ -104,6 +107,7 @@ module automation 'modules/automationAccount.bicep' = {
     routeTableResourceId: routeTableResourceId
     runbookContentUri: runbookContentUri
     scheduleFrequencyHours: scheduleFrequencyHours
+    skipJobSchedule: skipJobSchedule
     tags: tags
   }
 }

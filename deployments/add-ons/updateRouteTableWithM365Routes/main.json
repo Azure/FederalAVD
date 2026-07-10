@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "11237936479166243616"
+      "templateHash": "15324505635252333143"
     }
   },
   "parameters": {
@@ -78,6 +78,13 @@
       "defaultValue": "[utcNow()]",
       "metadata": {
         "description": "Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time."
+      }
+    },
+    "skipJobSchedule": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict - the jobSchedules resource type is create-only and cannot be updated by ARM."
       }
     }
   },
@@ -419,6 +426,9 @@
           "scheduleFrequencyHours": {
             "value": "[parameters('scheduleFrequencyHours')]"
           },
+          "skipJobSchedule": {
+            "value": "[parameters('skipJobSchedule')]"
+          },
           "tags": {
             "value": "[parameters('tags')]"
           }
@@ -430,7 +440,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "6271285383205904848"
+              "templateHash": "4379776562886714703"
             }
           },
           "parameters": {
@@ -495,6 +505,13 @@
               "type": "string",
               "metadata": {
                 "description": "Required. URI of the runbook PS1 file to publish."
+              }
+            },
+            "skipJobSchedule": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict error - the job schedule resource type does not support updates, only creation."
               }
             }
           },
@@ -594,6 +611,7 @@
               ]
             },
             {
+              "condition": "[not(parameters('skipJobSchedule'))]",
               "type": "Microsoft.Automation/automationAccounts/jobSchedules",
               "apiVersion": "2023-11-01",
               "name": "[format('{0}/{1}', parameters('automationAccountName'), guid(resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName')), resourceId('Microsoft.Automation/automationAccounts/runbooks', parameters('automationAccountName'), variables('runbookName')), resourceId('Microsoft.Automation/automationAccounts/schedules', parameters('automationAccountName'), 'M365RouteUpdater-Schedule')))]",

@@ -35,6 +35,9 @@ param logAnalyticsWorkspaceResourceId string = ''
 @description('Required. URI of the runbook PS1 file to publish.')
 param runbookContentUri string
 
+@description('Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict error - the job schedule resource type does not support updates, only creation.')
+param skipJobSchedule bool = false
+
 // ========== //
 // Variables  //
 // ========== //
@@ -128,7 +131,9 @@ resource schedule 'Microsoft.Automation/automationAccounts/schedules@2023-11-01'
 }
 
 // Job Schedule (links runbook to schedule)
-resource jobSchedule 'Microsoft.Automation/automationAccounts/jobSchedules@2023-11-01' = {
+// skipJobSchedule=true on redeployments: jobSchedules is create-only in Automation API;
+// redeploying with the same GUID causes a 409 conflict.
+resource jobSchedule 'Microsoft.Automation/automationAccounts/jobSchedules@2023-11-01' = if (!skipJobSchedule) {
   parent: automationAccount
   #disable-next-line use-stable-resource-identifiers
   name: guid(automationAccount.id, runbook.id, schedule.id)

@@ -161,6 +161,13 @@
                             }
                         },
                         {
+                            "name": "skipJobSchedule",
+                            "type": "Microsoft.Common.CheckBox",
+                            "label": "Skip job schedule creation (redeployment)",
+                            "defaultValue": false,
+                            "toolTip": "Check this on redeployments. The job schedule resource type is create-only in Azure Automation - redeploying without this checked will fail with a conflict error if the schedule link already exists."
+                        },
+                        {
                             "name": "namingSection",
                             "type": "Microsoft.Common.Section",
                             "label": "Resource Name Overrides",
@@ -243,6 +250,7 @@
         "outputs": {
             "parameters": {
                 "automationAccountNameOverride": "[steps('advanced').namingSection.automationAccountNameOverride]",
+                "skipJobSchedule": "[steps('advanced').skipJobSchedule]",
                 "routeTableResourceId": "[steps('routeTable').routeTable.id]",
                 "m365EndpointInstance": "[steps('routeTable').m365EndpointInstance]",
                 "scheduleFrequencyHours": "[steps('routeTable').scheduleFrequencyHours]",
