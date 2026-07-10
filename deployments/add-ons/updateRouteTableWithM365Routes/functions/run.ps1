@@ -77,14 +77,67 @@ Write-Log 'ARM token acquired.'
 
 #endregion ARM Authentication
 
+#region Read Current Route Table
+
+$ApiVersion = '2023-09-01'
+$RtBaseUri  = "$($ResourceManagerUri)subscriptions/$SubId/resourceGroups/$RgName/providers/Microsoft.Network/routeTables/$RouteTableName"
+$RtUri      = "$RtBaseUri`?api-version=$ApiVersion"
+
+try {
+    $RouteTable = Invoke-RestMethod -Method Get -Headers $ArmHeader -Uri $RtUri
+}
+catch {
+    throw "Failed to GET route table '$RouteTableName': $_"
+}
+
+Write-Log "Read route table. Existing routes: $($RouteTable.properties.routes.Count)"
+
+#endregion Read Current Route Table
+
+#region Check M365 Data Version
+
+# The M365 endpoint API exposes a lightweight /version/{instance} endpoint that
+# returns a version string (format YYYYMMDDNN) for the selected instance.
+# We store the last applied version in a tag (M365RouteVersion) on the route
+# table itself so the check is stateless and visible to operators.
+# If the version matches we skip the full download entirely.
+# If the version check fails we log a warning and proceed with the full update
+# as a safe fallback.
+
+$CurrentAppliedVersion = if ($null -ne $RouteTable.tags) { $RouteTable.tags.'M365RouteVersion' } else { $null }
+
+$LatestVersion = $null
+try {
+    $VersionUrl  = "https://endpoints.office.com/version/$M365Instance`?clientrequestid=$([System.Guid]::NewGuid().ToString())"
+    $VersionResp = Invoke-RestMethod -Method Get -Uri $VersionUrl
+    # Response may be a single object {latest: ...} or an array when called without an instance.
+    if ($VersionResp -is [array]) {
+        $LatestVersion = ($VersionResp | Where-Object { $_.instance -ieq $M365Instance }).latest
+    }
+    else {
+        $LatestVersion = $VersionResp.latest
+    }
+    Write-Log "Version check: latest=$LatestVersion | applied=$($CurrentAppliedVersion ?? '(none)')"
+}
+catch {
+    Write-Log "Version check failed (non-fatal) - proceeding with full download: $_" -Warn
+}
+
+if ($LatestVersion -and $CurrentAppliedVersion -and $LatestVersion -eq $CurrentAppliedVersion) {
+    Write-Log "M365 data is current (version $LatestVersion). No update needed."
+    return
+}
+
+#endregion Check M365 Data Version
+
 #region Download M365 IP Ranges
 
 # The Microsoft 365 endpoint API returns a JSON array of endpoint objects.
 # Each object may contain an 'ips' array with IPv4 and/or IPv6 CIDR ranges.
 # Supported instance values:
-#   worldwide   - Microsoft 365 Worldwide (including GCC)
-#   china       - Microsoft 365 operated by 21 Vianet
-#   usgovdod    - Microsoft 365 U.S. Government DoD
+#   worldwide    - Microsoft 365 Worldwide (including GCC)
+#   china        - Microsoft 365 operated by 21 Vianet
+#   usgovdod     - Microsoft 365 U.S. Government DoD
 #   usgovgcchigh - Microsoft 365 U.S. Government GCC High
 
 $RequestId = [System.Guid]::NewGuid().ToString()
@@ -106,9 +159,9 @@ Write-Log "Downloaded $($Endpoints.Count) M365 endpoint entries."
 #region Build Desired Route Set
 
 # Route name format: M365-{id}-{serviceArea}-{NN}
-#   id         - endpoint numeric identifier from the API
+#   id          - endpoint numeric identifier from the API
 #   serviceArea - sanitised service area name (alphanumeric only)
-#   NN         - zero-padded two-digit index of the IP within that endpoint entry
+#   NN          - zero-padded two-digit index of the IP within that endpoint entry
 #
 # Examples:
 #   M365-1-Exchange-00  -> 13.107.6.152/31
@@ -137,23 +190,6 @@ foreach ($ep in $Endpoints) {
 Write-Log "Desired M365 routes: $($Desired.Count)"
 
 #endregion Build Desired Route Set
-
-#region Read Current Route Table
-
-$ApiVersion = '2023-09-01'
-$RtBaseUri  = "$($ResourceManagerUri)subscriptions/$SubId/resourceGroups/$RgName/providers/Microsoft.Network/routeTables/$RouteTableName"
-$RtUri      = "$RtBaseUri`?api-version=$ApiVersion"
-
-try {
-    $RouteTable = Invoke-RestMethod -Method Get -Headers $ArmHeader -Uri $RtUri
-}
-catch {
-    throw "Failed to GET route table '$RouteTableName': $_"
-}
-
-Write-Log "Read route table. Existing routes: $($RouteTable.properties.routes.Count)"
-
-#endregion Read Current Route Table
 
 #region Partition Routes
 
@@ -236,6 +272,17 @@ foreach ($name in $Desired.Keys) {
 }
 
 # Construct PUT body. Only include writable top-level properties.
+# Merge existing tags with the new version tag so other tags are preserved.
+$MergedTags = [ordered]@{}
+if ($null -ne $RouteTable.tags) {
+    foreach ($prop in $RouteTable.tags.PSObject.Properties) {
+        $MergedTags[$prop.Name] = $prop.Value
+    }
+}
+if ($LatestVersion) {
+    $MergedTags['M365RouteVersion'] = $LatestVersion
+}
+
 $PutBody = [ordered]@{
     location   = $RouteTable.location
     properties = [ordered]@{
@@ -243,8 +290,8 @@ $PutBody = [ordered]@{
         routes                     = $NewRoutes
     }
 }
-if ($null -ne $RouteTable.tags -and $RouteTable.tags.PSObject.Properties.Count -gt 0) {
-    $PutBody['tags'] = $RouteTable.tags
+if ($MergedTags.Count -gt 0) {
+    $PutBody['tags'] = $MergedTags
 }
 
 $BodyJson = $PutBody | ConvertTo-Json -Depth 10 -Compress
