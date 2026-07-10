@@ -2,10 +2,13 @@
 # Reads configuration from Automation Variables and authenticates via the
 # system-assigned managed identity on the Automation Account.
 #
-# -LocalTest: bypasses Automation Variable reading and MSI token acquisition,
-#             using $env: variables and Azure CLI instead. This allows the
-#             script to be tested outside of the Automation context.
-param([switch]$LocalTest)
+# Local testing: set $env:RouteTableResourceId, $env:M365EndpointInstance, and
+# $env:ResourceManagerUri, then run directly. The script auto-detects whether
+# it is running inside Azure Automation by checking for Get-AutomationVariable.
+
+# Auto-detect execution context - no param block so Automation does not surface
+# a 'LocalTest' prompt when the runbook is triggered manually from the portal.
+$isAutomation = $null -ne (Get-Command 'Get-AutomationVariable' -ErrorAction SilentlyContinue)
 
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
@@ -29,8 +32,8 @@ function Write-Log {
 
 #region Configuration
 
-if ($LocalTest) {
-    Write-Log 'LocalTest mode - reading config from environment variables.'
+if (-not $isAutomation) {
+    Write-Log 'Local mode - reading config from environment variables.'
     $RouteTableResourceId = $env:RouteTableResourceId
     $M365Instance         = if ($env:M365EndpointInstance) { $env:M365EndpointInstance } else { 'worldwide' }
     $ResourceManagerUri   = if ($env:ResourceManagerUri)   { $env:ResourceManagerUri   } else { 'https://management.azure.com/' }
@@ -97,8 +100,8 @@ Write-Log "Starting | Route table: $RouteTableName | RG: $RgName | Sub: $SubId |
 
 #region ARM Authentication
 
-if ($LocalTest) {
-    Write-Log 'LocalTest mode - acquiring ARM token via Azure CLI.'
+if (-not $isAutomation) {
+    Write-Log 'Local mode - acquiring ARM token via Azure CLI.'
     try {
         $AzTokenJson = & az account get-access-token --resource ($ResourceManagerUri.TrimEnd('/')) 2>&1
         if ($LASTEXITCODE -ne 0) { throw $AzTokenJson }
@@ -110,19 +113,24 @@ if ($LocalTest) {
     }
 }
 else {
-    # Use the Azure Instance Metadata Service (IMDS) to acquire a token for the
-    # system-assigned managed identity on the Automation Account.
+    # Authenticate using the Automation Account system-assigned managed identity.
+    # Connect-AzAccount -Identity is the correct approach for Automation sandboxes;
+    # IMDS (169.254.169.254) is not available in this execution environment.
     try {
-        $encodedResource = [uri]::EscapeDataString($ResourceManagerUri.TrimEnd('/'))
-        $TokenUri  = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$encodedResource"
-        $TokenResp = Invoke-RestMethod -Method Get -Headers @{ Metadata = 'true' } -Uri $TokenUri
-        $ArmToken  = $TokenResp.access_token
+        Connect-AzAccount -Identity | Out-Null
+        $tokenObj = Get-AzAccessToken -ResourceUrl ($ResourceManagerUri.TrimEnd('/'))
+        # Az module versions differ: Token may be a plain string or a SecureString.
+        $ArmToken = if ($tokenObj.Token -is [System.Security.SecureString]) {
+            [System.Net.NetworkCredential]::new('', $tokenObj.Token).Password
+        } else {
+            $tokenObj.Token
+        }
         if ([string]::IsNullOrEmpty($ArmToken)) {
             throw 'Token was null or empty.'
         }
     }
     catch {
-        throw "Failed to acquire ARM access token via IMDS: $_"
+        throw "Failed to acquire ARM access token via managed identity: $_"
     }
 }
 
