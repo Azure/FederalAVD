@@ -226,7 +226,7 @@ Write-Log "Partitioned: $($ExistingM365.Count) existing M365 routes, $($NonM365.
 
 #region Compute Diff
 
-$ToUpsert  = [System.Collections.Generic.List[string]]::new()
+$ToAddOrUpdate  = [System.Collections.Generic.List[string]]::new()
 $ToRemove  = [System.Collections.Generic.List[string]]::new()
 $Unchanged = 0
 
@@ -235,7 +235,7 @@ foreach ($name in $Desired.Keys) {
         $Unchanged++
     }
     else {
-        $ToUpsert.Add($name)
+        $ToAddOrUpdate.Add($name)
     }
 }
 
@@ -245,9 +245,9 @@ foreach ($name in $ExistingM365.Keys) {
     }
 }
 
-Write-Log "Diff: $($ToUpsert.Count) to add/update, $($ToRemove.Count) to remove, $Unchanged unchanged."
+Write-Log "Diff: $($ToAddOrUpdate.Count) to add/update, $($ToRemove.Count) to remove, $Unchanged unchanged."
 
-if ($ToUpsert.Count -eq 0 -and $ToRemove.Count -eq 0) {
+if ($ToAddOrUpdate.Count -eq 0 -and $ToRemove.Count -eq 0) {
     Write-Log 'Route table is already up to date. No changes needed.'
     return
 }
@@ -311,6 +311,6 @@ catch {
 #region Summary
 
 $RemovedList = if ($ToRemove.Count -gt 0) { $ToRemove -join ', ' } else { 'none' }
-Write-Log "DONE | Added/updated: $($ToUpsert.Count) | Removed: $($ToRemove.Count) ($RemovedList) | Unchanged: $Unchanged"
+Write-Log "DONE | Added/updated: $($ToAddOrUpdate.Count) | Removed: $($ToRemove.Count) ($RemovedList) | Unchanged: $Unchanged"
 
 #endregion Summary
