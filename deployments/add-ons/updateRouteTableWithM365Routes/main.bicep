@@ -66,8 +66,15 @@ param runbookContentUri string = 'https://raw.githubusercontent.com/Azure/Federa
 @description('Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time.')
 param deploymentTime string = utcNow()
 
-@description('Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict - the jobSchedules resource type is create-only and cannot be updated by ARM.')
-param skipJobSchedule bool = false
+
+@description('''Optional. Set to true on first deployment, false on all redeployments.
+
+Azure Automation caches the runbook/schedule association by account name. This cache persists
+even after deleting the automation account and recreating it with the same name. ARM cannot
+create a job schedule resource that already exists (Conflict error). Setting this to false on
+redeployment skips creation entirely - the existing link stays active and the runbook keeps
+running on its schedule.''')
+param createJobSchedule bool = true
 
 // ========== //
 // Variables  //
@@ -100,6 +107,7 @@ module automation 'modules/automationAccount.bicep' = {
   params: {
     automationAccountName: automationAccountName
     deploymentTime: deploymentTime
+    createJobSchedule: createJobSchedule
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     m365EndpointInstance: m365EndpointInstance
@@ -107,7 +115,6 @@ module automation 'modules/automationAccount.bicep' = {
     routeTableResourceId: routeTableResourceId
     runbookContentUri: runbookContentUri
     scheduleFrequencyHours: scheduleFrequencyHours
-    skipJobSchedule: skipJobSchedule
     tags: tags
   }
 }

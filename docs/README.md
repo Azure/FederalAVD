@@ -57,6 +57,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 |------|-------------|
 | [BCDR — Business Continuity & Disaster Recovery](bcdr.md) | Availability zones, cross-region replication, FSLogix Cloud Cache, image gallery replication, VM backup, session host replacer rollback, and RTO/RPO reference. |
 | [Session Host Replacer Add-On](session-host-replacer.md) | Automated Azure Function that drains and replaces session hosts when a new image version is available. |
+| [M365 Route Table Updater Add-On](m365-route-table-updater.md) | Automated Azure Automation runbook that keeps an Azure Route Table current with M365 IP ranges. Designed for force-tunneled environments where M365 traffic must stay on the Microsoft backbone rather than traversing an on-premises path. |
 | [Chargeback for Shared Resources](chargeback-shared-resources.md) | Cost attribution strategies for shared infrastructure (RSV, storage, networking) using existing deployment tags — no code changes required. |
 
 ---

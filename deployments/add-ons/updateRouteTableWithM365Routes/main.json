@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "15324505635252333143"
+      "templateHash": "8308967082901147934"
     }
   },
   "parameters": {
@@ -80,11 +80,11 @@
         "description": "Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time."
       }
     },
-    "skipJobSchedule": {
+    "createJobSchedule": {
       "type": "bool",
-      "defaultValue": false,
+      "defaultValue": true,
       "metadata": {
-        "description": "Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict - the jobSchedules resource type is create-only and cannot be updated by ARM."
+        "description": "Optional. Set to true on first deployment, false on all redeployments.\n\nAzure Automation caches the runbook/schedule association by account name. This cache persists\neven after deleting the automation account and recreating it with the same name. ARM cannot\ncreate a job schedule resource that already exists (Conflict error). Setting this to false on\nredeployment skips creation entirely - the existing link stays active and the runbook keeps\nrunning on its schedule."
       }
     }
   },
@@ -405,6 +405,9 @@
           "deploymentTime": {
             "value": "[parameters('deploymentTime')]"
           },
+          "createJobSchedule": {
+            "value": "[parameters('createJobSchedule')]"
+          },
           "location": {
             "value": "[parameters('location')]"
           },
@@ -426,9 +429,6 @@
           "scheduleFrequencyHours": {
             "value": "[parameters('scheduleFrequencyHours')]"
           },
-          "skipJobSchedule": {
-            "value": "[parameters('skipJobSchedule')]"
-          },
           "tags": {
             "value": "[parameters('tags')]"
           }
@@ -440,7 +440,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "4379776562886714703"
+              "templateHash": "10878041138838706317"
             }
           },
           "parameters": {
@@ -491,7 +491,7 @@
             "deploymentTime": {
               "type": "string",
               "metadata": {
-                "description": "Required. UTC timestamp used to compute the first schedule start time."
+                "description": "Required. UTC timestamp used to set the initial schedule start time (10 minutes from deployment)."
               }
             },
             "logAnalyticsWorkspaceResourceId": {
@@ -507,11 +507,11 @@
                 "description": "Required. URI of the runbook PS1 file to publish."
               }
             },
-            "skipJobSchedule": {
+            "createJobSchedule": {
               "type": "bool",
-              "defaultValue": false,
+              "defaultValue": true,
               "metadata": {
-                "description": "Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict error - the job schedule resource type does not support updates, only creation."
+                "description": "Optional. Set to true on first deployment to let ARM create the job schedule link between\nthe runbook and schedule. Set to false on every redeployment.\n\nWHY: Azure Automation caches the runbook/schedule association keyed on the automation account\nNAME. This cache persists even after deleting the job schedule resource, the child resources,\nor the automation account itself - and is restored the moment an account with that name exists\nagain. ARM cannot create a resource that already exists, so including this resource on\nredeployment always produces: Code: Conflict / A jobSchedule with same id already exists.\n\nThe existing link is not affected when this is false - the runbook continues to run on schedule."
               }
             }
           },
@@ -600,7 +600,7 @@
               "apiVersion": "2023-11-01",
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'M365RouteUpdater-Schedule')]",
               "properties": {
-                "description": "Runs the M365 route updater on a recurring hourly interval.",
+                "description": "Runs the M365 route table updater on a recurring interval.",
                 "startTime": "[variables('scheduleStartTime')]",
                 "frequency": "Hour",
                 "interval": "[parameters('scheduleFrequencyHours')]",
@@ -611,7 +611,7 @@
               ]
             },
             {
-              "condition": "[not(parameters('skipJobSchedule'))]",
+              "condition": "[parameters('createJobSchedule')]",
               "type": "Microsoft.Automation/automationAccounts/jobSchedules",
               "apiVersion": "2023-11-01",
               "name": "[format('{0}/{1}', parameters('automationAccountName'), guid(resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName')), resourceId('Microsoft.Automation/automationAccounts/runbooks', parameters('automationAccountName'), variables('runbookName')), resourceId('Microsoft.Automation/automationAccounts/schedules', parameters('automationAccountName'), 'M365RouteUpdater-Schedule')))]",

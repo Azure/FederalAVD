@@ -26,7 +26,7 @@ param resourceManagerUri string
 @description('Optional. How often the runbook runs, in hours.')
 param scheduleFrequencyHours int = 8
 
-@description('Required. UTC timestamp used to compute the first schedule start time.')
+@description('Required. UTC timestamp used to set the initial schedule start time (10 minutes from deployment).')
 param deploymentTime string
 
 @description('Optional. Log Analytics Workspace resource ID for diagnostic settings.')
@@ -35,8 +35,17 @@ param logAnalyticsWorkspaceResourceId string = ''
 @description('Required. URI of the runbook PS1 file to publish.')
 param runbookContentUri string
 
-@description('Optional. Skip creating the job schedule link. Set to true on redeployments to avoid a conflict error - the job schedule resource type does not support updates, only creation.')
-param skipJobSchedule bool = false
+@description('''Optional. Set to true on first deployment to let ARM create the job schedule link between
+the runbook and schedule. Set to false on every redeployment.
+
+WHY: Azure Automation caches the runbook/schedule association keyed on the automation account
+NAME. This cache persists even after deleting the job schedule resource, the child resources,
+or the automation account itself - and is restored the moment an account with that name exists
+again. ARM cannot create a resource that already exists, so including this resource on
+redeployment always produces: Code: Conflict / A jobSchedule with same id already exists.
+
+The existing link is not affected when this is false - the runbook continues to run on schedule.''')
+param createJobSchedule bool = true
 
 // ========== //
 // Variables  //
@@ -122,7 +131,7 @@ resource schedule 'Microsoft.Automation/automationAccounts/schedules@2023-11-01'
   parent: automationAccount
   name: 'M365RouteUpdater-Schedule'
   properties: {
-    description: 'Runs the M365 route updater on a recurring hourly interval.'
+    description: 'Runs the M365 route table updater on a recurring interval.'
     startTime: scheduleStartTime
     frequency: 'Hour'
     interval: scheduleFrequencyHours
@@ -130,10 +139,16 @@ resource schedule 'Microsoft.Automation/automationAccounts/schedules@2023-11-01'
   }
 }
 
-// Job Schedule (links runbook to schedule)
-// skipJobSchedule=true on redeployments: jobSchedules is create-only in Automation API;
-// redeploying with the same GUID causes a 409 conflict.
-resource jobSchedule 'Microsoft.Automation/automationAccounts/jobSchedules@2023-11-01' = if (!skipJobSchedule) {
+// Job Schedule - links runbook to schedule.
+// Controlled by the createJobSchedule parameter. Set true on first deployment, false on all
+// subsequent redeployments. See parameter description for full explanation.
+//
+// To manually inspect or delete the link from Azure Cloud Shell when needed
+// (publicNetworkAccess: false blocks all local tools):
+//   $base = "/subscriptions/<subId>/resourceGroups/<rg>/providers/Microsoft.Automation/automationAccounts/<name>"
+//   $jsId = ((Invoke-AzRestMethod -Method GET -Path ($base + "/jobSchedules?api-version=2023-11-01")).Content | ConvertFrom-Json).value[0].properties.jobScheduleId
+//   Invoke-AzRestMethod -Method DELETE -Path ($base + "/jobSchedules/" + $jsId + "?api-version=2023-11-01")
+resource jobSchedule 'Microsoft.Automation/automationAccounts/jobSchedules@2023-11-01' = if (createJobSchedule) {
   parent: automationAccount
   #disable-next-line use-stable-resource-identifiers
   name: guid(automationAccount.id, runbook.id, schedule.id)
