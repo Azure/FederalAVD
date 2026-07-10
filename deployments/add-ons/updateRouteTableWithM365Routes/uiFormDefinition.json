@@ -1,0 +1,287 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "M365 Route Table Updater",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "Deployment Basics",
+          "elements": [
+            {
+              "name": "infoBox1",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": true,
+              "options": {
+                "text": "Deploys a function app that automatically updates an Azure Route Table with current Microsoft 365 IP ranges. Routes managed by this add-on use the 'M365-' prefix and are reconciled on each run. All other routes in the table are left untouched."
+              }
+            },
+            {
+              "name": "subscriptionsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "GET",
+                "path": "/subscriptions?api-version=2022-12-01"
+              }
+            },
+            {
+              "name": "subscription",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Subscription",
+              "toolTip": "Select the subscription where the function app will be deployed.",
+              "constraints": {
+                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+                "required": true
+              }
+            },
+            {
+              "name": "locationsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').subscription.id, '/locations?api-version=2022-12-01')]",
+                "transforms": {
+                  "list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
+                }
+              }
+            },
+            {
+              "name": "location",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Deployment Region",
+              "toolTip": "Azure region for the function app and its supporting resources.",
+              "constraints": {
+                "allowedValues": "[steps('basics').locationsApi.transformed.list]",
+                "required": true
+              }
+            },
+            {
+              "name": "resourceGroupsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').subscription.id, '/resourceGroups?api-version=2022-12-01')]"
+              }
+            },
+            {
+              "name": "functionAppResourceGroupName",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Function App Resource Group",
+              "toolTip": "Resource group where the function app and its storage account will be deployed.",
+              "constraints": {
+                "allowedValues": "[map(steps('basics').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"value\":\"', rg.name, '\"}')))]",
+                "required": true
+              }
+            },
+            {
+              "name": "tags",
+              "type": "Microsoft.Common.TagsByResource",
+              "resources": [
+                "Microsoft.Web/sites",
+                "Microsoft.Storage/storageAccounts",
+                "Microsoft.Web/serverfarms"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "routeTable",
+          "label": "Route Table",
+          "elements": [
+            {
+              "name": "infoRouteTable",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": true,
+              "options": {
+                "text": "Select the route table to manage. The function app's managed identity will be granted Network Contributor on the route table's resource group."
+              }
+            },
+            {
+              "name": "routeTablesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Network/routeTables?api-version=2023-09-01')]"
+              }
+            },
+            {
+              "name": "routeTable",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Route Table",
+              "toolTip": "Select the Azure Route Table that should receive Microsoft 365 IP routes.",
+              "constraints": {
+                "allowedValues": "[map(steps('routeTable').routeTablesApi.value, (rt) => parse(concat('{\"label\":\"', rt.name, '\",\"description\":\"', first(skip(split(rt.id, '/'), 4)), '\",\"value\":\"', rt.id, '\"}')))]",
+                "required": true
+              }
+            },
+            {
+              "name": "m365EndpointInstance",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Microsoft 365 Environment",
+              "toolTip": "Select the Microsoft 365 cloud environment whose IP ranges should be downloaded.",
+              "defaultValue": "Microsoft 365 Worldwide (+GCC)",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Microsoft 365 Worldwide (+GCC)",
+                    "value": "worldwide"
+                  },
+                  {
+                    "label": "Microsoft 365 U.S. Government GCC High",
+                    "value": "usgovgcchigh"
+                  },
+                  {
+                    "label": "Microsoft 365 U.S. Government DoD",
+                    "value": "usgovdod"
+                  },
+                  {
+                    "label": "Microsoft 365 operated by 21 Vianet",
+                    "value": "china"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "timerSchedule",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Update Schedule (NCrontab)",
+              "defaultValue": "0 0 */8 * * *",
+              "toolTip": "NCrontab expression controlling how often M365 routes are refreshed. Format: {second} {minute} {hour} {day} {month} {day-of-week}. Default (0 0 */8 * * *) runs every 8 hours. Use '0 0 0 * * *' for daily at midnight.",
+              "constraints": {
+                "required": true,
+                "regex": "^\\S+ \\S+ \\S+ \\S+ \\S+ \\S+$",
+                "validationMessage": "Must be a valid 6-field NCrontab expression."
+              }
+            }
+          ]
+        },
+        {
+          "name": "infrastructure",
+          "label": "Infrastructure & Security",
+          "elements": [
+            {
+              "name": "privateEndpoint",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Enable Private Endpoints",
+              "toolTip": "When enabled, the function app and its storage account use private endpoints for Zero Trust inbound access.",
+              "defaultValue": false
+            },
+            {
+              "name": "privateEndpointSubnetResourceId",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Private Endpoint Subnet Resource ID",
+              "visible": "[steps('infrastructure').privateEndpoint]",
+              "toolTip": "Resource ID of the subnet for private endpoints.",
+              "constraints": {
+                "required": "[steps('infrastructure').privateEndpoint]"
+              }
+            },
+            {
+              "name": "functionAppDelegatedSubnetResourceId",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Function App VNet Integration Subnet Resource ID",
+              "visible": "[steps('infrastructure').privateEndpoint]",
+              "toolTip": "Resource ID of the subnet delegated to Microsoft.Web/serverFarms for function app VNet integration.",
+              "constraints": {
+                "required": "[steps('infrastructure').privateEndpoint]"
+              }
+            },
+            {
+              "name": "azureBlobPrivateDnsZoneResourceId",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Blob Private DNS Zone Resource ID",
+              "visible": "[steps('infrastructure').privateEndpoint]",
+              "toolTip": "Resource ID of the private DNS zone for blob endpoints (privatelink.blob.core.windows.net).",
+              "constraints": {
+                "required": "[steps('infrastructure').privateEndpoint]"
+              }
+            },
+            {
+              "name": "azureFunctionAppPrivateDnsZoneResourceId",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Function App Private DNS Zone Resource ID",
+              "visible": "[steps('infrastructure').privateEndpoint]",
+              "toolTip": "Resource ID of the private DNS zone for function apps (privatelink.azurewebsites.net).",
+              "constraints": {
+                "required": "[steps('infrastructure').privateEndpoint]"
+              }
+            },
+            {
+              "name": "keyManagementStorageAccounts",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Storage Account Key Management",
+              "defaultValue": "Platform Managed",
+              "toolTip": "Encryption key management for the function app storage account.",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Platform Managed",
+                    "value": "PlatformManaged"
+                  },
+                  {
+                    "label": "Customer Managed (Key Vault)",
+                    "value": "CustomerManaged"
+                  },
+                  {
+                    "label": "Customer Managed (HSM)",
+                    "value": "CustomerManagedHSM"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "encryptionKeyVaultResourceId",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Encryption Key Vault Resource ID",
+              "visible": "[not(equals(steps('infrastructure').keyManagementStorageAccounts, 'PlatformManaged'))]",
+              "toolTip": "Resource ID of the Key Vault containing the customer-managed encryption key.",
+              "constraints": {
+                "required": "[not(equals(steps('infrastructure').keyManagementStorageAccounts, 'PlatformManaged'))]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspaceResourceId",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Log Analytics Workspace Resource ID",
+              "toolTip": "Optional. When provided, Application Insights is deployed and wired to this workspace for function diagnostics."
+            },
+            {
+              "name": "permittedIPs",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Permitted IP Addresses (comma-separated)",
+              "toolTip": "Optional. IP addresses or CIDR blocks allowed through the storage account firewall. Use when managing from a trusted workstation outside Azure."
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "parameters": {
+        "location": "[steps('basics').location.name]",
+        "functionAppResourceGroupName": "[steps('basics').functionAppResourceGroupName]",
+        "tags": "[steps('basics').tags]",
+        "routeTableResourceId": "[steps('routeTable').routeTable]",
+        "m365EndpointInstance": "[steps('routeTable').m365EndpointInstance]",
+        "timerSchedule": "[steps('routeTable').timerSchedule]",
+        "privateEndpoint": "[steps('infrastructure').privateEndpoint]",
+        "privateEndpointSubnetResourceId": "[if(steps('infrastructure').privateEndpoint, steps('infrastructure').privateEndpointSubnetResourceId, '')]",
+        "functionAppDelegatedSubnetResourceId": "[if(steps('infrastructure').privateEndpoint, steps('infrastructure').functionAppDelegatedSubnetResourceId, '')]",
+        "azureBlobPrivateDnsZoneResourceId": "[if(steps('infrastructure').privateEndpoint, steps('infrastructure').azureBlobPrivateDnsZoneResourceId, '')]",
+        "azureFunctionAppPrivateDnsZoneResourceId": "[if(steps('infrastructure').privateEndpoint, steps('infrastructure').azureFunctionAppPrivateDnsZoneResourceId, '')]",
+        "keyManagementStorageAccounts": "[steps('infrastructure').keyManagementStorageAccounts]",
+        "encryptionKeyVaultResourceId": "[if(not(equals(steps('infrastructure').keyManagementStorageAccounts, 'PlatformManaged')), steps('infrastructure').encryptionKeyVaultResourceId, '')]",
+        "logAnalyticsWorkspaceResourceId": "[steps('infrastructure').logAnalyticsWorkspaceResourceId]",
+        "permittedIPs": "[if(empty(steps('infrastructure').permittedIPs), createArray(), split(steps('infrastructure').permittedIPs, ','))]"
+      },
+      "kind": "Subscription",
+      "location": "[steps('basics').location.name]",
+      "subscriptionId": "[steps('basics').subscription.subscriptionId]"
+    }
+  }
+}
