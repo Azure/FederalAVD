@@ -176,7 +176,7 @@ var userAssignedIdentityNameConv     = cnv(cnv_components, cnv_delimiter, cnv_rt
 
 // ── Compute Resources ─────────────────────────────────────────────────────────
 var resourceGroupHosts    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,   '${identifier}-hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var availabilitySetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.availabilitySets, '${identifier}-##',   cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var availabilitySetNameConv = '${cnv(cnv_components, cnv_delimiter, cnv_rtCodes.availabilitySets, identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)}${cnv_delimiter}##'
 var virtualMachineNameConv  = cnv_rtFirst ? '${cnv_rtCodes.virtualMachines}-SHNAME'  : 'SHNAME-${cnv_rtCodes.virtualMachines}'
 var diskNameConv            = cnv_rtFirst ? '${cnv_rtCodes.osdisks}-SHNAME'          : 'SHNAME-${cnv_rtCodes.osdisks}'
 var networkInterfaceNameConv = cnv_rtFirst ? '${cnv_rtCodes.networkInterfaces}-SHNAME' : 'SHNAME-${cnv_rtCodes.networkInterfaces}'

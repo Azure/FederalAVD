@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "16392766604376237383"
+      "templateHash": "13218961048636107124"
     }
   },
   "parameters": {
@@ -1167,7 +1167,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "6168610018557598225"
+              "templateHash": "7146795629359243253"
             }
           },
           "functions": [
@@ -1714,7 +1714,7 @@
             "recoveryServicesVaultNameFSLogix": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').recoveryServicesVaults, 'files', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "userAssignedIdentityNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-TOKEN', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "resourceGroupHosts": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}-hosts', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "availabilitySetNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').availabilitySets, format('{0}-##', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "availabilitySetNameConv": "[format('{0}{1}##', __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').availabilitySets, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), variables('cnv_delimiter'))]",
             "virtualMachineNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').virtualMachines), format('SHNAME-{0}', variables('cnv_rtCodes').virtualMachines))]",
             "diskNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').osdisks), format('SHNAME-{0}', variables('cnv_rtCodes').osdisks))]",
             "networkInterfaceNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').networkInterfaces), format('SHNAME-{0}', variables('cnv_rtCodes').networkInterfaces))]",

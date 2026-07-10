@@ -601,15 +601,10 @@ var templateSpecNameFinal = !empty(templateSpecName)
       ? 'avd-session-hosts-${functionAppRegionAbbreviation}-${resourceAbbreviations.templateSpecs}'
       : '${resourceAbbreviations.templateSpecs}-avd-session-hosts-${functionAppRegionAbbreviation}'
 
-// ## is placed between TOKEN (purpose/persona) and LOCATION so the AS index
-// sits directly after the purpose segment: as-persona-01-01-eus / persona-01-01-eus-as
+// ## is appended after the full name (CAF instance-last): as-{base}-{loc}-## / {base}-{loc}-as-##
 var availabilitySetNameConv = !empty(availabilitySetNameConvOverride)
   ? availabilitySetNameConvOverride
-  : replace(
-      replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation),
-      'TOKEN',
-      '##'
-    )
+  : '${replace(replace(replace(nameConv_HP_Resources, '-TOKEN', ''), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation)}-##'
 
 var virtualMachineNameConv = !empty(virtualMachineNameConvOverride)
   ? virtualMachineNameConvOverride

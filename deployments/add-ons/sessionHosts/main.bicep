@@ -284,13 +284,8 @@ var effectiveOsDiskNameConv = !empty(osDiskNameConv)
       ? 'SHNAME-${resourceAbbreviations.osdisks}'
       : '${resourceAbbreviations.osdisks}-SHNAME'
 
-// ## is placed between TOKEN (purpose/persona) and LOCATION so the AS index
-// sits directly after the purpose segment: as-persona-01-01-eus / persona-01-01-eus-as
-var generatedAvSetNameConv = replace(
-  replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', regionAbbreviation),
-  'TOKEN',
-  '##'
-)
+// ## is appended after the full name (CAF instance-last): as-{base}-{loc}-## / {base}-{loc}-as-##
+var generatedAvSetNameConv = '${replace(replace(replace(nameConv_HP_Resources, '-TOKEN', ''), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', regionAbbreviation)}-##'
 
 var avSetNameConv = !empty(availabilitySetNameConv) ? availabilitySetNameConv : generatedAvSetNameConv
 

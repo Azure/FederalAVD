@@ -72,7 +72,7 @@ This follows the CAF recommendation of *abbreviation → workload → component 
 | Key Vault (Secrets) | `kv-avd-sec-{unique}-use` |
 | Key Vault (Encryption) | `kv-avd-enc-{unique}-use` |
 | Global Feed Workspace | `ws-avd-global-feed` |
-| Availability Set | `as-avd-desktop-01-##-use` |
+| Availability Set | `as-avd-desktop-01-use-##` |
 | VM naming pattern | `vm-SHNAME` |
 | OS Disk naming pattern | `osdisk-SHNAME` |
 | NIC naming pattern | `nic-SHNAME` |
