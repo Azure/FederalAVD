@@ -1316,6 +1316,14 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
 Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | NewHosts: {10}/{11} ({12}%) Available | LatestImage: {13}" `
     -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.PendingDelete, $metricsLog.ShutdownRetention, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.NewHostsAvailable, $metricsLog.NewHostsTotal, $metricsLog.NewHostsAvailablePct, $metricsLog.LatestImageVersion
 
+# Log the action taken this run - used by the monitoring workbook for run history classification
+$actionTaken = if ($failedDeployments.Count -gt 0) { 'FailedRecovery' }
+               elseif ($deploymentResult -and $deploymentResult.SessionHostCount -gt 0) { "Deployed:$($deploymentResult.SessionHostCount)" }
+               elseif ($deletionResults -and $deletionResults.SuccessfulDeletions.Count -gt 0) { "Deleted:$($deletionResults.SuccessfulDeletions.Count)" }
+               elseif ($metricsLog.InDrain -gt 0) { "Draining:$($metricsLog.InDrain)" }
+               else { 'UpToDate' }
+Write-LogEntry -Message "ACTION | {0}" -StringValues $actionTaken
+
 # Update host pool status tag with current state
 try {
     Update-HostPoolStatus `
