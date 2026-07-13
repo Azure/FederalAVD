@@ -25,7 +25,7 @@ function Write-Log {
     $line = "[$ts] $Message"
     if ($Err)      { Write-Error   $line }
     elseif ($Warn) { Write-Warning $line }
-    else           { Write-Host    $line }
+    else           { Write-Output  $line }
 }
 
 #endregion Helpers

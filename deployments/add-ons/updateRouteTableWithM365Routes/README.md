@@ -52,8 +52,9 @@ Multiple instances can coexist in the same route table — each uses its own pre
 ## Prerequisites
 
 - An Azure Route Table in the same subscription as this deployment.
-- A subnet with `publicNetworkAccess: false` or network connectivity suitable for an Automation Account. No public IP is required on the Automation Account; it calls the M365 web service and ARM endpoints outbound via Azure networking.
 - Permissions to deploy resources and create role assignments (Owner or User Access Administrator + Contributor on the target resource group and on the route table's resource group).
+
+No subnet or private endpoint is required. `publicNetworkAccess: false` only blocks inbound management access to the Automation Account from the public internet — it does not affect outbound connectivity from the runbook sandbox. The runbook runs inside Azure's cloud infrastructure and reaches the Microsoft 365 IP/URL service (`endpoints.office.com`) and the ARM endpoint directly over Azure's internal network.
 
 ---
 
