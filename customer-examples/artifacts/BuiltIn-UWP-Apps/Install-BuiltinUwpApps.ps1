@@ -131,7 +131,18 @@ if (Test-Path $SharedDepDir) {
     if ($SharedDepFiles.Count -gt 0) {
         Write-Log ""
         Write-Log "=== Pre-provisioning $($SharedDepFiles.Count) shared framework package(s) ==="
-        foreach ($DepFile in ($SharedDepFiles | Sort-Object Name)) {
+        # Sort in dependency order: VCLibs must be staged before WinUI/Xaml,
+        # WinUI/Xaml before Windows App Runtime. Alphabetical order (the default)
+        # puts UI.Xaml before VCLibs, causing 'Element not found' on the first pass.
+        $SortedDepFiles = $SharedDepFiles | Sort-Object {
+            switch -Wildcard ($_.Name) {
+                'Microsoft.VCLibs*'             { 0 }
+                'Microsoft.UI.Xaml*'            { 1 }
+                'Microsoft.WindowsAppRuntime*'  { 2 }
+                default                         { 3 }
+            }
+        }, Name
+        foreach ($DepFile in $SortedDepFiles) {
             $DepNamePrefix = [System.IO.Path]::GetFileNameWithoutExtension($DepFile.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
             $DepVersion    = Get-PackageFileVersion $DepFile.Name
             $AlreadyStaged = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
@@ -155,7 +166,13 @@ if (Test-Path $SharedDepDir) {
                 # dependencies from the running OS store. Retry with all peer shared-dep
                 # packages passed explicitly as -DependencyPackagePath.
                 Write-Log "First attempt failed for '$($DepFile.Name)': $_ -- retrying with peer shared dependencies."
-                $PeerDeps = @($SharedDepFiles | Where-Object { $_.FullName -ne $DepFile.FullName })
+                # Bundles (.msixbundle/.appxbundle) cannot be passed as -DependencyPackagePath;
+                # DISM only accepts single-arch .appx/.msix files there. Filtering them out
+                # prevents 'parameter is incorrect' (0x80070057) on the retry.
+                $PeerDeps = @($SharedDepFiles | Where-Object {
+                    $_.FullName -ne $DepFile.FullName -and
+                    $_.Extension -notin @('.msixbundle', '.appxbundle')
+                })
                 if ($PeerDeps.Count -gt 0) {
                     try {
                         Add-AppxProvisionedPackage -Online -PackagePath $DepFile.FullName `
