@@ -316,8 +316,8 @@ function Get-InstallerFromUrl {
 
 function Wait-ForBootLoaderService {
     $ServiceName = 'RDAgentBootLoader'
-    $MaxRetries = 6
-    $RetryDelay = 30
+    $MaxRetries = 18
+    $RetryDelay = 10
     $RetryCount = 0
     
     while (-not (Get-Service $ServiceName -ErrorAction SilentlyContinue)) {
@@ -425,7 +425,6 @@ Function Set-RegistryValue {
         Write-Log -message "Registry create: $Name = $Value"
         New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
     }
-    Start-Sleep -Milliseconds 500
 }
 
 #endregion Helper Functions
