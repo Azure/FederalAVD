@@ -120,33 +120,130 @@ New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration'
 Write-Log -Message "Starting '$PSCommandPath'."
 Write-Log -Message "Domain-joined: $IsDomainJoined"
 
-# -- Step 1: Process GptTmpl.inf ------------------------------------------------
-$SecEditFile = Join-Path -Path $PSScriptRoot -ChildPath 'GptTmpl.inf'
-if (-not (Test-Path -LiteralPath $SecEditFile)) {
-    Write-Log -Category Error -Message "GptTmpl.inf not found at '$SecEditFile'. Aborting."
-    Exit 1
-}
+# -- Step 1: Build security template (GptTmpl.inf) dynamically -----------------
+# Each setting is annotated with its STIG V-ID. To validate coverage against a
+# new STIG version, search this file for the V-ID and compare the required value.
+$SecEditFile = Join-Path -Path $env:TEMP -ChildPath 'delta-secedit.inf'
+$infLines    = [System.Collections.Generic.List[string]]::new()
 
-Write-Log -Message "[GptTmpl] Reading '$SecEditFile'."
-$Content = Get-Content -Path $SecEditFile -Encoding Unicode
+$infLines.Add('[Unicode]')
+$infLines.Add('Unicode=yes')
+$infLines.Add('[Version]')
+$infLines.Add('signature="$CHICAGO$"')
+$infLines.Add('Revision=1')
 
-# GptTmpl.inf already contains real group names ('Enterprise Admins', 'Domain Admins').
-# On domain-joined hosts the template is used as-is.
-# On non-domain-joined hosts, any privilege-right line that references domain groups is
-# removed entirely -- those groups do not exist on Entra-joined / workgroup machines.
+# ---- [System Access] --------------------------------------------------------
+$infLines.Add('[System Access]')
+
+# V-253304: The built-in Microsoft password complexity filter must be enabled.
+Write-Log -Message 'V-253304: PasswordComplexity = 1'
+$infLines.Add('PasswordComplexity = 1')
+
+# V-253300: The password history must be configured to 24 passwords remembered.
+Write-Log -Message 'V-253300: PasswordHistorySize = 24'
+$infLines.Add('PasswordHistorySize = 24')
+
+# V-253303: Passwords must, at a minimum, be 14 characters.
+Write-Log -Message 'V-253303: MinimumPasswordLength = 14'
+$infLines.Add('MinimumPasswordLength = 14')
+
+# V-253298: The number of allowed bad logon attempts must be three or less.
+Write-Log -Message 'V-253298: LockoutBadCount = 3'
+$infLines.Add('LockoutBadCount = 3')
+
+# V-253299: The period before the bad logon counter resets must be 15 minutes.
+Write-Log -Message 'V-253299: ResetLockoutCount = 15'
+$infLines.Add('ResetLockoutCount = 15')
+
+# V-253297: Account lockout duration must be 15 minutes or greater.
+Write-Log -Message 'V-253297: LockoutDuration = 15'
+$infLines.Add('LockoutDuration = 15')
+
+# V-253305: Reversible password encryption must be disabled.
+Write-Log -Message 'V-253305: ClearTextPassword = 0'
+$infLines.Add('ClearTextPassword = 0')
+
+# V-253452: Anonymous SID/Name translation must not be allowed.
+Write-Log -Message 'V-253452: LSAAnonymousNameLookup = 0'
+$infLines.Add('LSAAnonymousNameLookup = 0')
+
+# ---- [Registry Values] ------------------------------------------------------
+$infLines.Add('[Registry Values]')
+
+# V-253447: Caching of logon credentials must be limited.
+Write-Log -Message 'V-253447: CachedLogonsCount = 10'
+$infLines.Add('MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\CachedLogonsCount=1,"10"')
+
+# V-253460: Kerberos encryption must prevent DES and RC4 (AES128/AES256/Future only).
+Write-Log -Message 'V-253460: SupportedEncryptionTypes = 2147483640'
+$infLines.Add('MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters\SupportedEncryptionTypes=4,2147483640')
+
+# V-253455: Anonymous users must not have the same rights as the Everyone group.
+Write-Log -Message 'V-253455: EveryoneIncludesAnonymous = 0'
+$infLines.Add('MACHINE\System\CurrentControlSet\Control\Lsa\EveryoneIncludesAnonymous=4,0')
+
+# V-253458: NTLM must be prevented from falling back to a Null session.
+Write-Log -Message 'V-253458: allownullsessionfallback = 0'
+$infLines.Add('MACHINE\System\CurrentControlSet\Control\Lsa\MSV1_0\allownullsessionfallback=4,0')
+
+# V-253437: Audit policy using subcategories must be enabled.
+Write-Log -Message 'V-253437: SCENoApplyLegacyAuditPolicy = 1'
+$infLines.Add('MACHINE\System\CurrentControlSet\Control\Lsa\SCENoApplyLegacyAuditPolicy=4,1')
+
+# V-253466: FIPS-compliant algorithms must be used for encryption, hashing, and signing.
+Write-Log -Message 'V-253466: FipsAlgorithmPolicy Enabled = 1'
+$infLines.Add('MACHINE\System\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy\Enabled=4,1')
+
+# V-253467: The default permissions of global system objects must be increased.
+Write-Log -Message 'V-253467: ProtectionMode = 1'
+$infLines.Add('MACHINE\System\CurrentControlSet\Control\Session Manager\ProtectionMode=4,1')
+
+# V-253463: LDAP client signing must be required.
+Write-Log -Message 'V-253463: LDAPClientIntegrity = 1'
+$infLines.Add('MACHINE\System\CurrentControlSet\Services\LDAP\LDAPClientIntegrity=4,1')
+
+# V-253441: The computer account password must not be prevented from being reset.
+Write-Log -Message 'V-253441: DisablePasswordChange = 0'
+$infLines.Add('MACHINE\System\CurrentControlSet\Services\Netlogon\Parameters\DisablePasswordChange=4,0')
+
+# V-253442: Machine account password maximum age must be 30 days or less.
+Write-Log -Message 'V-253442: MaximumPasswordAge = 30'
+$infLines.Add('MACHINE\System\CurrentControlSet\Services\Netlogon\Parameters\MaximumPasswordAge=4,30')
+
+# V-253443: A strong session key must be required.
+Write-Log -Message 'V-253443: RequireStrongKey = 1'
+$infLines.Add('MACHINE\System\CurrentControlSet\Services\Netlogon\Parameters\RequireStrongKey=4,1')
+
+# V-253439: Outgoing secure channel traffic must be encrypted.
+Write-Log -Message 'V-253439: SealSecureChannel = 1'
+$infLines.Add('MACHINE\System\CurrentControlSet\Services\Netlogon\Parameters\SealSecureChannel=4,1')
+
+# V-253440: Outgoing secure channel traffic must be signed.
+Write-Log -Message 'V-253440: SignSecureChannel = 1'
+$infLines.Add('MACHINE\System\CurrentControlSet\Services\Netlogon\Parameters\SignSecureChannel=4,1')
+
+# ---- [Privilege Rights] -----------------------------------------------------
+$infLines.Add('[Privilege Rights]')
 if ($IsDomainJoined) {
-    Write-Log -Message "[GptTmpl] Domain-joined host -- template already contains real group names, no changes required."
+    # V-253492: Deny log on as a batch job -- domain-joined hosts only.
+    Write-Log -Message 'V-253492: SeDenyBatchLogonRight = Enterprise Admins, Domain Admins'
+    $infLines.Add('SeDenyBatchLogonRight = Enterprise Admins,Domain Admins')
+    # V-253493: Deny log on as a service -- domain-joined hosts only.
+    Write-Log -Message 'V-253493: SeDenyServiceLogonRight = Enterprise Admins, Domain Admins'
+    $infLines.Add('SeDenyServiceLogonRight = Enterprise Admins,Domain Admins')
 }
 else {
-    Write-Log -Message "[GptTmpl] Non-domain-joined host -- removing SeDenyBatchLogonRight and SeDenyServiceLogonRight lines."
-    $Content | Where-Object { $_ -match 'SeDenyBatchLogonRight\s*=|SeDenyServiceLogonRight\s*=' } | ForEach-Object {
-        Write-Log -Message "[GptTmpl] Removing line: $_"
-    }
-    $Content = $Content | Where-Object { $_ -notmatch 'SeDenyBatchLogonRight\s*=|SeDenyServiceLogonRight\s*=' }
+    Write-Log -Message 'V-253492/V-253493: Non-domain-joined -- skipping SeDenyBatchLogonRight and SeDenyServiceLogonRight.'
 }
 
-Write-Log -Message "[GptTmpl] Writing updated template back to '$SecEditFile'."
-Set-Content -Path $SecEditFile -Value $Content -Encoding Unicode
+# ---- [Service General Setting] ----------------------------------------------
+$infLines.Add('[Service General Setting]')
+# V-253289: The Secondary Logon service must be disabled.
+Write-Log -Message 'V-253289: seclogon startup type = 4 (Disabled)'
+$infLines.Add('"seclogon",4,""')
+
+Write-Log -Message "[GptTmpl] Writing generated security template to '$SecEditFile'."
+[System.IO.File]::WriteAllLines($SecEditFile, $infLines, [System.Text.Encoding]::Unicode)
 
 # -- Step 2: Apply security template via secedit.exe ----------------------------
 $seceditDb  = Join-Path -Path $env:TEMP -ChildPath 'delta-secedit.sdb'
