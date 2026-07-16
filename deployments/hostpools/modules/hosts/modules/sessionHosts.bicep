@@ -116,10 +116,10 @@ var cloud = toLower(environment().name)
 var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')
 var agentBootLoaderUrl = !empty(agentBootLoaderDownloadUrl)
   ? agentBootLoaderDownloadUrl
-  : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgentBootLoader' : 'https://go.microsoft.com/fwlink/?linkid=2311028')
+  : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/RdAgentBootLoader_latest' : 'https://go.microsoft.com/fwlink/?linkid=2311028')
 var agentUrl = !empty(agentDownloadUrl)
   ? agentDownloadUrl
-  : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/avdRDAgent' : 'https://go.microsoft.com/fwlink/?linkid=2310011')
+  : (startsWith(cloud, 'us') ? 'https://aka.${cloudSuffix}/RdAgent_latest' : 'https://go.microsoft.com/fwlink/?linkid=2310011')
 resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
   name: last(split(artifactsUserAssignedIdentityResourceId, '/'))

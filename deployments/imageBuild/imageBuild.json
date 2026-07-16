@@ -799,12 +799,12 @@
     "$fxv#2": {
       "AVDAgent": {
         "Description": "Azure Virtual Desktop Agent Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
       },
       "AVDAgentBootloader": {
         "Description": "Azure Virtual Desktop Agent Bootloader Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
       },
       "Office365DeploymentTool": {
@@ -850,12 +850,12 @@
     "$fxv#3": {
       "AVDAgent": {
         "Description": "Azure Virtual Desktop Agent Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
       },
       "AVDAgentBootloader": {
         "Description": "Azure Virtual Desktop Agent Bootloader Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
       },
       "Office365DeploymentTool": {
