@@ -169,6 +169,36 @@
         },
         "imageVersionEOLinDays": {
             "value": 180
-        }
+        },
+
+        // ── Azure Local Distribution (optional) ───────────────────────────────
+        //    When enabled, the captured image version is exported to a temporary
+        //    managed disk and then imported as a VM image on the target Azure Local
+        //    instance. The orchestration VM identity (auto-RG) or the pre-provided
+        //    UAI (existing-RG) must have Contributor on both the gallery resource
+        //    group and the Azure Local resource group.
+        //
+        //    Prerequisites:
+        //      - Azure Local cluster is deployed and its custom location resource ID
+        //        is known (found via Azure portal > Azure Local > Settings > Configuration).
+        //      - The target Azure Local resource group exists.
+        //      - Connectivity exists between the Azure Local cluster and the Azure
+        //        management endpoint (environment().resourceManager).
+        //
+        //    Note: Azure rejects VM image names that contain the keyword "Windows".
+        //    Use a name such as "win11-avd-<version>" or "avd-img-<date>" instead.
+        //
+        // "replicateToAzureLocal": {
+        //     "value": false
+        // },
+        // "azureLocalCustomLocationResourceId": {
+        //     "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-azurelocal-cluster/providers/Microsoft.ExtendedLocation/customLocations/azl-customlocation-eus2"
+        // },
+        // "azureLocalResourceGroupId": {
+        //     "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-azurelocal-workloads"
+        // },
+        // "azureLocalImageName": {
+        //     "value": "avd-img-m365-win11-24h2"
+        // }
     }
 }

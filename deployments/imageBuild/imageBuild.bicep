@@ -306,6 +306,19 @@ param remoteImageVersionStorageAccountType string = 'Standard_LRS'
 @description('Optional. The tags to apply to all resources deployed by this template.')
 param tags object = {}
 
+// Azure Local Distribution
+@description('Optional. Replicate the captured image version to an Azure Local instance after it is stored in the Compute Gallery.')
+param replicateToAzureLocal bool = false
+
+@description('Conditional. The resource Id of the Azure Local custom location. Required when replicateToAzureLocal is true.')
+param azureLocalCustomLocationResourceId string = ''
+
+@description('Conditional. The resource Id of the resource group in which to create the Azure Local VM image (e.g. /subscriptions/{sub}/resourceGroups/{rg}). Required when replicateToAzureLocal is true.')
+param azureLocalResourceGroupId string = ''
+
+@description('Optional. The name for the Azure Local VM image. Defaults to the image definition name. Note: Azure rejects names containing the keyword "Windows".')
+param azureLocalImageName string = ''
+
 // * VARIABLE DECLARATIONS * //
 
 var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-')
@@ -482,6 +495,18 @@ var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaun
 
 var remoteLocation = !empty(remoteComputeGalleryResourceId) ? remoteComputeGallery!.location : ''
 
+// Azure Local distribution variables
+// Guard expressions prevent index-out-of-range errors when the params are empty.
+var azureLocalRgSubscriptionId = !empty(azureLocalResourceGroupId)
+  ? split(azureLocalResourceGroupId, '/')[2]
+  : subscription().subscriptionId
+var azureLocalRgName = !empty(azureLocalResourceGroupId)
+  ? split(azureLocalResourceGroupId, '/')[4]
+  : 'placeholder'
+var effectiveAzureLocalImageName = !empty(azureLocalImageName)
+  ? azureLocalImageName
+  : galleryImageDefinitionName
+
 var vmAcceleratedNetworking = !empty(filter(
     imageDefinitionFeatures,
     feature => feature.name == 'IsAcceleratedNetworkSupported'
@@ -594,6 +619,30 @@ module remoteImageDefinition '../../.common/bicepModules/compute/galleries/image
 module roleAssignmentContributorBuildRg '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (empty(imageBuildResourceGroupId)) {
   name: '${depPrefix}RA-OrchVM-Contributor-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
+  params: {
+    principalId: orchestrationVm.outputs.principalId
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Azure Local: grant the orchestration VM system-assigned identity Contributor on the gallery RG
+// (to create/delete the temporary managed disk) and on the Azure Local RG (to create the HCI image).
+// Only applies in the auto-RG case; in the existing-RG case the pre-provided UAI must carry these
+// roles (pre-stage them outside this template).
+module roleAssignmentContributorGalleryRgForAzureLocal '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (replicateToAzureLocal && empty(imageBuildResourceGroupId)) {
+  name: '${depPrefix}RA-OrchVM-Contributor-GalleryRG-AzLocal-${deploymentSuffix}'
+  scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
+  params: {
+    principalId: orchestrationVm.outputs.principalId
+    roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module roleAssignmentContributorAzureLocalRgForAzureLocal '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (replicateToAzureLocal && empty(imageBuildResourceGroupId)) {
+  name: '${depPrefix}RA-OrchVM-Contributor-AzLocalRG-${deploymentSuffix}'
+  scope: resourceGroup(azureLocalRgSubscriptionId, azureLocalRgName)
   params: {
     principalId: orchestrationVm.outputs.principalId
     roleDefinitionId: 'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor
@@ -790,6 +839,36 @@ module captureImage 'modules/captureImage.bicep' = {
   ]
 }
 
+// * Azure Local Distribution * //
+
+// Replicates the captured image version to an Azure Local instance by exporting it to a
+// temporary managed disk, obtaining a SAS URL, and calling the Azure Stack HCI REST API
+// to create a galleryImages resource on the target cluster. Runs synchronously on the
+// orchestration VM so the cleanup step cannot begin until replication is complete.
+module azureLocalReplication 'modules/replicateToAzureLocal.bicep' = if (replicateToAzureLocal) {
+  name: '${depPrefix}AzureLocal-Image-Replication-${deploymentSuffix}'
+  scope: resourceGroup(imageBuildResourceGroupName)
+  params: {
+    orchestrationVmName: orchestrationVm.outputs.name
+    location: computeLocation
+    deploymentSuffix: deploymentSuffix
+    depPrefix: depPrefix
+    imageVersionId: captureImage.outputs.imageVersionId
+    diskLocation: computeLocation
+    azureLocalCustomLocationResourceId: azureLocalCustomLocationResourceId
+    azureLocalResourceGroupId: azureLocalResourceGroupId
+    azureLocalImageName: effectiveAzureLocalImageName
+    hyperVGeneration: galleryImageDefinitionHyperVGeneration
+    userAssignedIdentityClientId: empty(imageBuildResourceGroupId)
+      ? ''
+      : existingUserAssignedIdentity!.properties.clientId
+  }
+  dependsOn: [
+    roleAssignmentContributorGalleryRgForAzureLocal
+    roleAssignmentContributorAzureLocalRgForAzureLocal
+  ]
+}
+
 // * Cleanup Temporary Resources * //
 
 module removeImageBuildResources '../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
@@ -826,6 +905,9 @@ module removeImageBuildResources '../../.common/bicepModules/compute/virtualMach
       { name: 'ManagementVmResourceId', value: orchestrationVm.outputs.resourceId }
     ]
   }
+  dependsOn: [
+    azureLocalReplication
+  ]
 }
 
 module remoteImageVersion '../../.common/bicepModules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {

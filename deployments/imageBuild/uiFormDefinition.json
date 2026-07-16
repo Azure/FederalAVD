@@ -1903,6 +1903,71 @@
                             ]
                         },
                         {
+                            "name": "azureLocal",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Azure Local Distribution",
+                            "elements": [
+                                {
+                                    "name": "infoAzureLocal",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Azure Local lets you run Azure Virtual Desktop workloads on-premises by deploying VMs from images stored in your Azure Local cluster. When enabled, the captured image version is exported to a temporary managed disk, a SAS URL is generated, and the image is imported into the target Azure Local instance as a galleryImages resource. The orchestration VM (auto-RG) or user-assigned managed identity (existing-RG) must have Contributor on both the gallery resource group and the Azure Local resource group. Note: Azure rejects VM image names that contain the word 'Windows'.",
+                                        "uri": "https://learn.microsoft.com/en-us/azure/azure-local/manage/virtual-machine-image-azure-compute-gallery"
+                                    }
+                                },
+                                {
+                                    "name": "replicateToAzureLocal",
+                                    "type": "Microsoft.Common.OptionsGroup",
+                                    "label": "Replicate this image to an Azure Local instance.",
+                                    "defaultValue": "No",
+                                    "constraints": {
+                                        "allowedValues": [
+                                            { "label": "Yes", "value": true },
+                                            { "label": "No",  "value": false }
+                                        ],
+                                        "required": false
+                                    }
+                                },
+                                {
+                                    "name": "azureLocalCustomLocationResourceId",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Azure Local Custom Location Resource Id",
+                                    "toolTip": "The full resource ID of the Azure Local custom location (e.g. /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ExtendedLocation/customLocations/{name}). Found in the Azure portal under Azure Local > Settings > Configuration.",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.ExtendedLocation/customLocations/.+$",
+                                        "validationMessage": "Enter a valid custom location resource ID."
+                                    },
+                                    "visible": "[steps('imageDest').azureLocal.replicateToAzureLocal]"
+                                },
+                                {
+                                    "name": "azureLocalResourceGroupId",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Azure Local Target Resource Group Resource Id",
+                                    "toolTip": "The resource ID of the resource group on Azure Local in which to create the VM image (e.g. /subscriptions/{sub}/resourceGroups/{rg}).",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^/subscriptions/[^/]+/resourceGroups/.+$",
+                                        "validationMessage": "Enter a valid resource group resource ID."
+                                    },
+                                    "visible": "[steps('imageDest').azureLocal.replicateToAzureLocal]"
+                                },
+                                {
+                                    "name": "azureLocalImageName",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Azure Local VM Image Name",
+                                    "toolTip": "Name for the VM image resource on Azure Local. Must not contain the word 'Windows'. Example: avd-img-win11-24h2.",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^(?!.*[Ww]indows)[a-zA-Z0-9][a-zA-Z0-9\\-_\\.]{0,78}[a-zA-Z0-9]$",
+                                        "validationMessage": "Enter a valid image name (2-80 characters, alphanumeric/hyphens/underscores/periods, no leading/trailing hyphens, must not contain 'Windows')."
+                                    },
+                                    "visible": "[steps('imageDest').azureLocal.replicateToAzureLocal]"
+                                }
+                            ]
+                        },
+                        {
                             "name": "encryption",
                             "type": "Microsoft.Common.Section",
                             "label": "Disk Encryption",
@@ -2191,6 +2256,10 @@
                 "remoteImageVersionStorageAccountType": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.storageAccountType , 'Standard_LRS')]",
                 "remoteImageVersionDefaultReplicaCount": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.replicaCount, 1)]",
                 "remoteImageVersionExcludeFromLatest": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.excludeFromLatest, false)]",
+                "replicateToAzureLocal": "[steps('imageDest').azureLocal.replicateToAzureLocal]",
+                "azureLocalCustomLocationResourceId": "[if(steps('imageDest').azureLocal.replicateToAzureLocal, steps('imageDest').azureLocal.azureLocalCustomLocationResourceId, '')]",
+                "azureLocalResourceGroupId": "[if(steps('imageDest').azureLocal.replicateToAzureLocal, steps('imageDest').azureLocal.azureLocalResourceGroupId, '')]",
+                "azureLocalImageName": "[if(steps('imageDest').azureLocal.replicateToAzureLocal, steps('imageDest').azureLocal.azureLocalImageName, '')]",
                 "tags": "[steps('tags').tags]"
             }
         }
