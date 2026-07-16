@@ -19816,8 +19816,8 @@
                     "sessionHostBatchCount": "[if(greater(variables('divisionRemainderValue'), 0), add(variables('divisionValue'), 1), variables('divisionValue'))]",
                     "cloud": "[toLower(environment().name)]",
                     "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
-                    "agentBootLoaderUrl": "[if(not(empty(parameters('agentBootLoaderDownloadUrl'))), parameters('agentBootLoaderDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgentBootLoader', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2311028'))]",
-                    "agentUrl": "[if(not(empty(parameters('agentDownloadUrl'))), parameters('agentDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/avdRDAgent', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2310011'))]"
+                    "agentBootLoaderUrl": "[if(not(empty(parameters('agentBootLoaderDownloadUrl'))), parameters('agentBootLoaderDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/RdAgentBootLoader_latest', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2311028'))]",
+                    "agentUrl": "[if(not(empty(parameters('agentDownloadUrl'))), parameters('agentDownloadUrl'), if(startsWith(variables('cloud'), 'us'), format('https://aka.{0}/RdAgent_latest', variables('cloudSuffix')), 'https://go.microsoft.com/fwlink/?linkid=2310011'))]"
                   },
                   "resources": [
                     {

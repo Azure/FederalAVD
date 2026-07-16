@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6914031520325593223"
+      "templateHash": "16050010152647703125"
     }
   },
   "parameters": {
@@ -734,6 +734,7 @@
     "$fxv#1": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
+      "automationAccounts": "aa",
       "availabilitySets": "as",
       "computeGalleries": "gal",
       "dataCollectionEndpoints": "dce",
@@ -770,12 +771,12 @@
     "$fxv#2": {
       "AVDAgent": {
         "Description": "Azure Virtual Desktop Agent Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
       },
       "AVDAgentBootloader": {
         "Description": "Azure Virtual Desktop Agent Bootloader Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
       },
       "Office365DeploymentTool": {
@@ -813,20 +814,20 @@
         "DestinationFileName": "vc_redist.x64.exe"
       },
       "FSLogix": {
-        "Description": "FSLogix Installer. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
+        "Description": "FSLogix Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
         "DestinationFileName": "FSLogix.zip"
       }
     },
     "$fxv#3": {
       "AVDAgent": {
         "Description": "Azure Virtual Desktop Agent Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgent",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
       },
       "AVDAgentBootloader": {
         "Description": "Azure Virtual Desktop Agent Bootloader Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/avdRDAgentBootloader",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
         "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
       },
       "Office365DeploymentTool": {
@@ -865,8 +866,8 @@
         "DestinationFileName": "vc_redist.x64.exe"
       },
       "FSLogix": {
-        "Description": "FSLogix Installer. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
+        "Description": "FSLogix Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
         "DestinationFileName": "FSLogix.zip"
       }
     },
@@ -2610,7 +2611,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "2707031999253365555"
+              "templateHash": "18375927988014198528"
             }
           },
           "parameters": {
@@ -2833,7 +2834,7 @@
                 "asyncExecution": false,
                 "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
                 "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-FSLogix-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
-                "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'FSLogix'), createObject('name', 'Uri', 'value', if(and(not(startsWith(parameters('cloud'), 'us')), or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri')))), parameters('downloads').FSLogix.DownloadUrl, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').FSLogix.DestinationFileName)))))]",
+                "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'FSLogix'), createObject('name', 'Uri', 'value', if(or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri'))), replace(parameters('downloads').FSLogix.DownloadUrl, 'ENVSUFFIX', variables('envSuffix')), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').FSLogix.DestinationFileName)))))]",
                 "source": {
                   "script": "[variables('$fxv#1')]"
                 },

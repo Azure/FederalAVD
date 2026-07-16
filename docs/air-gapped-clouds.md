@@ -24,12 +24,12 @@ During session host deployment (host pool creation and Session Host Replacer ope
 **AVD Agent Boot Loader:**
 
 - If `agentBootLoaderDownloadUrl` parameter is provided → uses the custom URL
-- If `agentBootLoaderDownloadUrl` is empty (default) → uses the `https://aka.<cloudsuffix>/avdRDAgentBootLoader` permalink (see network requirements documentation above)
+- If `agentBootLoaderDownloadUrl` is empty (default) → uses the `https://aka.<cloudsuffix>/RdAgentBootLoader_latest` permalink (see network requirements documentation above)
 
 **AVD Agent:**
 
 1. Always attempts to download the latest agent version from the host pool API endpoint first
-2. If endpoint fails → uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>/avdRDAgent` permalink
+2. If endpoint fails → uses `agentDownloadUrl` (if provided) OR the `https://aka.<cloudsuffix>/RdAgent_latest` permalink
 
 | Component | Storage Account</br>Provided | Instructions |
 | :-- | :--: | :-- |
@@ -141,8 +141,8 @@ The following artifacts have working URLs in the secret and top secret downloads
 
 | Software | Destination Filename | Air-Gapped URL Pattern |
 |---|---|---|
-| **AVD Agent** | `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | `aka.<env-suffix>/avdRDAgent` |
-| **AVD Agent Bootloader** | `Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi` | `aka.<env-suffix>/avdRDAgentBootloader` |
+| **AVD Agent** | `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | `aka.<env-suffix>/RdAgent_latest` |
+| **AVD Agent Bootloader** | `Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi` | `aka.<env-suffix>/RdAgentBootLoader_latest` |
 | **Office 365 Deployment Tool** | `Office365DeploymentTool.exe` | `officexo.azurefd.<env-suffix>/...` |
 | **OneDrive** | `OneDriveSetup.exe` | `update.azure.odsync.<env-suffix>/...` |
 | **Teams Bootstrapper** | `teamsbootstrapper.exe` | `statics.teams.<env-suffix>/...` |
