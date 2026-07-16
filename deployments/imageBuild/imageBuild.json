@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "9754394591790678932"
+      "version": "0.44.1.10279",
+      "templateHash": "16050010152647703125"
     }
   },
   "parameters": {
@@ -477,34 +477,6 @@
       "metadata": {
         "description": "Optional. The tags to apply to all resources deployed by this template."
       }
-    },
-    "replicateToAzureLocal": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Replicate the captured image version to an Azure Local instance after it is stored in the Compute Gallery."
-      }
-    },
-    "azureLocalCustomLocationResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Conditional. The resource Id of the Azure Local custom location. Required when replicateToAzureLocal is true."
-      }
-    },
-    "azureLocalResourceGroupId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Conditional. The resource Id of the resource group in which to create the Azure Local VM image (e.g. /subscriptions/{sub}/resourceGroups/{rg}). Required when replicateToAzureLocal is true."
-      }
-    },
-    "azureLocalImageName": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. The name for the Azure Local VM image. Defaults to the image definition name. Note: Azure rejects names containing the keyword \"Windows\"."
-      }
     }
   },
   "variables": {
@@ -842,8 +814,8 @@
         "DestinationFileName": "vc_redist.x64.exe"
       },
       "FSLogix": {
-        "Description": "FSLogix Installer. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
+        "Description": "FSLogix Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
         "DestinationFileName": "FSLogix.zip"
       }
     },
@@ -894,8 +866,8 @@
         "DestinationFileName": "vc_redist.x64.exe"
       },
       "FSLogix": {
-        "Description": "FSLogix Installer. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
+        "Description": "FSLogix Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
         "DestinationFileName": "FSLogix.zip"
       }
     },
@@ -979,10 +951,7 @@
     "effectiveConfidentialVmDiskEncryptionSetResourceId": "[if(equals(parameters('galleryImageVersionConfidentialVMEncryptionType'), 'EncryptedWithCmk'), parameters('confidentialVMDiskEncryptionSetResourceId'), '')]",
     "imageVersionEndOfLifeDate": "[if(greater(parameters('imageVersionEOLinDays'), 0), dateTimeAdd(variables('deploymentSuffix'), format('P{0}D', parameters('imageVersionEOLinDays'))), '')]",
     "imageVmName": "[take(format('{0}vmimg-{1}', variables('depPrefix'), uniqueString(variables('deploymentSuffix'))), 15)]",
-    "orchestrationVmName": "[take(format('{0}vmorc-{1}', variables('depPrefix'), uniqueString(variables('deploymentSuffix'))), 15)]",
-    "azureLocalRgSubscriptionId": "[if(not(empty(parameters('azureLocalResourceGroupId'))), split(parameters('azureLocalResourceGroupId'), '/')[2], subscription().subscriptionId)]",
-    "azureLocalRgName": "[if(not(empty(parameters('azureLocalResourceGroupId'))), split(parameters('azureLocalResourceGroupId'), '/')[4], 'placeholder')]",
-    "effectiveAzureLocalImageName": "[if(not(empty(parameters('azureLocalImageName'))), parameters('azureLocalImageName'), variables('galleryImageDefinitionName'))]"
+    "orchestrationVmName": "[take(format('{0}vmorc-{1}', variables('depPrefix'), uniqueString(variables('deploymentSuffix'))), 15)]"
   },
   "resources": [
     {
@@ -1044,8 +1013,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "5885927420942671758"
+              "version": "0.44.1.10279",
+              "templateHash": "7779224361932461167"
             }
           },
           "parameters": {
@@ -1214,8 +1183,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "5885927420942671758"
+              "version": "0.44.1.10279",
+              "templateHash": "7779224361932461167"
             }
           },
           "parameters": {
@@ -1373,202 +1342,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "6703123689452334995"
-            }
-          },
-          "parameters": {
-            "roleDefinitionId": {
-              "type": "string",
-              "metadata": {
-                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-              }
-            },
-            "principalId": {
-              "type": "string",
-              "metadata": {
-                "description": "Principal ID of the identity receiving the role."
-              }
-            },
-            "principalType": {
-              "type": "string",
-              "defaultValue": "ServicePrincipal",
-              "allowedValues": [
-                "ServicePrincipal",
-                "Group",
-                "User",
-                "ForeignGroup",
-                "Device",
-                ""
-              ],
-              "metadata": {
-                "description": "Principal type of the assigned principal."
-              }
-            },
-            "assignmentDescription": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional description for the assignment."
-              }
-            }
-          },
-          "variables": {
-            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-              "properties": {
-                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                "principalId": "[parameters('principalId')]",
-                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-              }
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
-      ]
-    },
-    {
-      "condition": "[and(parameters('replicateToAzureLocal'), empty(parameters('imageBuildResourceGroupId')))]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('{0}RA-OrchVM-Contributor-GalleryRG-AzLocal-{1}', variables('depPrefix'), variables('deploymentSuffix'))]",
-      "subscriptionId": "[split(parameters('computeGalleryResourceId'), '/')[2]]",
-      "resourceGroup": "[split(parameters('computeGalleryResourceId'), '/')[4]]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "principalId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
-          },
-          "roleDefinitionId": {
-            "value": "b24988ac-6180-42a0-ab88-20f7382dd24c"
-          },
-          "principalType": {
-            "value": "ServicePrincipal"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "6703123689452334995"
-            }
-          },
-          "parameters": {
-            "roleDefinitionId": {
-              "type": "string",
-              "metadata": {
-                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-              }
-            },
-            "principalId": {
-              "type": "string",
-              "metadata": {
-                "description": "Principal ID of the identity receiving the role."
-              }
-            },
-            "principalType": {
-              "type": "string",
-              "defaultValue": "ServicePrincipal",
-              "allowedValues": [
-                "ServicePrincipal",
-                "Group",
-                "User",
-                "ForeignGroup",
-                "Device",
-                ""
-              ],
-              "metadata": {
-                "description": "Principal type of the assigned principal."
-              }
-            },
-            "assignmentDescription": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional description for the assignment."
-              }
-            }
-          },
-          "variables": {
-            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-              "properties": {
-                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                "principalId": "[parameters('principalId')]",
-                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-              }
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
-      ]
-    },
-    {
-      "condition": "[and(parameters('replicateToAzureLocal'), empty(parameters('imageBuildResourceGroupId')))]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('{0}RA-OrchVM-Contributor-AzLocalRG-{1}', variables('depPrefix'), variables('deploymentSuffix'))]",
-      "subscriptionId": "[variables('azureLocalRgSubscriptionId')]",
-      "resourceGroup": "[variables('azureLocalRgName')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "principalId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
-          },
-          "roleDefinitionId": {
-            "value": "b24988ac-6180-42a0-ab88-20f7382dd24c"
-          },
-          "principalType": {
-            "value": "ServicePrincipal"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "6703123689452334995"
+              "version": "0.44.1.10279",
+              "templateHash": "17199828385253577684"
             }
           },
           "parameters": {
@@ -1714,8 +1489,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "18118982807251207040"
+              "version": "0.44.1.10279",
+              "templateHash": "483983684215471453"
             }
           },
           "definitions": {
@@ -2181,8 +1956,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "18118982807251207040"
+              "version": "0.44.1.10279",
+              "templateHash": "483983684215471453"
             }
           },
           "definitions": {
@@ -2607,8 +2382,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "1189707415401603641"
+              "version": "0.44.1.10279",
+              "templateHash": "6484157504036730489"
             }
           },
           "parameters": {
@@ -2835,8 +2610,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "17020073515854653202"
+              "version": "0.44.1.10279",
+              "templateHash": "18375927988014198528"
             }
           },
           "parameters": {
@@ -3059,7 +2834,7 @@
                 "asyncExecution": false,
                 "outputBlobManagedIdentity": "[if(empty(parameters('logBlobContainerUri')), null(), createObject('clientId', parameters('userAssignedIdentityClientId')))]",
                 "outputBlobUri": "[if(empty(parameters('logBlobContainerUri')), null(), format('{0}{1}-FSLogix-{2}.log', parameters('logBlobContainerUri'), parameters('imageVmName'), parameters('deploymentSuffix')))]",
-                "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'FSLogix'), createObject('name', 'Uri', 'value', if(and(not(startsWith(parameters('cloud'), 'us')), or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri')))), parameters('downloads').FSLogix.DownloadUrl, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').FSLogix.DestinationFileName)))))]",
+                "parameters": "[union(variables('commonScriptParams'), createArray(createObject('name', 'Name', 'value', 'FSLogix'), createObject('name', 'Uri', 'value', if(or(parameters('downloadLatestMicrosoftContent'), empty(parameters('artifactsContainerUri'))), replace(parameters('downloads').FSLogix.DownloadUrl, 'ENVSUFFIX', variables('envSuffix')), format('{0}/{1}', parameters('artifactsContainerUri'), parameters('downloads').FSLogix.DestinationFileName)))))]",
                 "source": {
                   "script": "[variables('$fxv#1')]"
                 },
@@ -3416,8 +3191,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "7203310671505035970"
+                      "version": "0.44.1.10279",
+                      "templateHash": "14872268172386766394"
                     }
                   },
                   "parameters": {
@@ -3568,8 +3343,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "3679152026406265290"
+                      "version": "0.44.1.10279",
+                      "templateHash": "1637701486584993867"
                     }
                   },
                   "parameters": {
@@ -3705,8 +3480,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.39.26.7824",
-                              "templateHash": "17358380738022684369"
+                              "version": "0.44.1.10279",
+                              "templateHash": "5633515894688387455"
                             }
                           },
                           "parameters": {
@@ -3828,8 +3603,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "7203310671505035970"
+                      "version": "0.44.1.10279",
+                      "templateHash": "14872268172386766394"
                     }
                   },
                   "parameters": {
@@ -3960,8 +3735,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "7203310671505035970"
+                      "version": "0.44.1.10279",
+                      "templateHash": "14872268172386766394"
                     }
                   },
                   "parameters": {
@@ -4100,8 +3875,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "9519500588310079859"
+              "version": "0.44.1.10279",
+              "templateHash": "10070950111128656708"
             }
           },
           "parameters": {
@@ -4263,8 +4038,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "18101169434163304726"
+              "version": "0.44.1.10279",
+              "templateHash": "5322939392292044342"
             }
           },
           "parameters": {
@@ -4364,8 +4139,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "9514168313051224957"
+                      "version": "0.44.1.10279",
+                      "templateHash": "6980049894388460498"
                     }
                   },
                   "parameters": {
@@ -4492,8 +4267,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "2253539786105966779"
+                      "version": "0.44.1.10279",
+                      "templateHash": "12958480170457740873"
                     }
                   },
                   "parameters": {
@@ -4754,338 +4529,6 @@
       ]
     },
     {
-      "condition": "[parameters('replicateToAzureLocal')]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('{0}AzureLocal-Image-Replication-{1}', variables('depPrefix'), variables('deploymentSuffix'))]",
-      "resourceGroup": "[variables('imageBuildResourceGroupName')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "orchestrationVmName": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
-          },
-          "location": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('subnetResourceId'), '/')[2], split(parameters('subnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('subnetResourceId'), '/')[8]), '2023-05-01', 'full').location]"
-          },
-          "deploymentSuffix": {
-            "value": "[variables('deploymentSuffix')]"
-          },
-          "depPrefix": {
-            "value": "[variables('depPrefix')]"
-          },
-          "imageVersionId": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('{0}Capture-Image-{1}', variables('depPrefix'), variables('deploymentSuffix'))), '2025-04-01').outputs.imageVersionId.value]"
-          },
-          "diskLocation": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('subnetResourceId'), '/')[2], split(parameters('subnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('subnetResourceId'), '/')[8]), '2023-05-01', 'full').location]"
-          },
-          "azureLocalCustomLocationResourceId": {
-            "value": "[parameters('azureLocalCustomLocationResourceId')]"
-          },
-          "azureLocalResourceGroupId": {
-            "value": "[parameters('azureLocalResourceGroupId')]"
-          },
-          "azureLocalImageName": {
-            "value": "[variables('effectiveAzureLocalImageName')]"
-          },
-          "hyperVGeneration": {
-            "value": "[variables('galleryImageDefinitionHyperVGeneration')]"
-          },
-          "userAssignedIdentityClientId": "[if(empty(parameters('imageBuildResourceGroupId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('userAssignedIdentityResourceId'), '/')[2], split(parameters('userAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('userAssignedIdentityResourceId'), '/'))), '2023-01-31').clientId))]"
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "15738949527743749809"
-            }
-          },
-          "parameters": {
-            "orchestrationVmName": {
-              "type": "string"
-            },
-            "location": {
-              "type": "string"
-            },
-            "deploymentSuffix": {
-              "type": "string"
-            },
-            "depPrefix": {
-              "type": "string"
-            },
-            "imageVersionId": {
-              "type": "string",
-              "metadata": {
-                "description": "Full resource ID of the captured gallery image version to replicate."
-              }
-            },
-            "diskLocation": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure region where the temporary managed disk will be created (must match the image version primary region)."
-              }
-            },
-            "azureLocalCustomLocationResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the Azure Local custom location."
-              }
-            },
-            "azureLocalResourceGroupId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the target resource group on Azure Local in which to create the VM image."
-              }
-            },
-            "azureLocalImageName": {
-              "type": "string",
-              "metadata": {
-                "description": "Name for the Azure Local VM image."
-              }
-            },
-            "hyperVGeneration": {
-              "type": "string",
-              "metadata": {
-                "description": "Hyper-V generation of the source image (V1 or V2)."
-              }
-            },
-            "userAssignedIdentityClientId": {
-              "type": "string",
-              "metadata": {
-                "description": "Client ID of the user-assigned managed identity used by the orchestration VM. Pass an empty string when the orchestration VM uses its system-assigned identity."
-              }
-            }
-          },
-          "variables": {
-            "$fxv#0": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$UserAssignedIdentityClientId = '',\r\n\r\n    # Full resource ID of the captured gallery image version\r\n    # e.g. /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{image}/versions/{version}\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ImageVersionId,\r\n\r\n    # Azure region where the source managed disk will be created (must match the image version's primary region)\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$DiskLocation,\r\n\r\n    # Resource ID of the Azure Local custom location\r\n    # e.g. /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ExtendedLocation/customLocations/{name}\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$AzureLocalCustomLocationResourceId,\r\n\r\n    # Resource ID of the Azure Local resource group in which to create the VM image\r\n    # e.g. /subscriptions/{sub}/resourceGroups/{rg}\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$AzureLocalResourceGroupId,\r\n\r\n    # Name for the resulting Azure Local VM image\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$AzureLocalImageName,\r\n\r\n    # Hyper-V generation of the source image (V1 or V2)\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$HyperVGeneration = 'V2',\r\n\r\n    # Operating system type of the source image\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$OsType = 'Windows'\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nfunction Write-Log {\r\n    param([string]$Message, [string]$Level = 'INFO')\r\n    Write-Output \"$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Level - $Message\"\r\n}\r\n\r\nfunction Wait-ArmLro {\r\n    param(\r\n        [hashtable]$Headers,\r\n        [string]$OperationUri,\r\n        [int]$TimeoutMinutes = 120\r\n    )\r\n    $Deadline = (Get-Date).AddMinutes($TimeoutMinutes)\r\n    while ((Get-Date) -lt $Deadline) {\r\n        Start-Sleep -Seconds 15\r\n        $Op = Invoke-RestMethod -Headers $Headers -Method 'GET' -Uri $OperationUri\r\n        switch ($Op.status) {\r\n            'Succeeded' { return $Op }\r\n            'Failed'    { throw \"Azure operation failed: $($Op.error.message)\" }\r\n            'Canceled'  { throw \"Azure operation was canceled.\" }\r\n        }\r\n    }\r\n    throw \"Azure operation timed out after $TimeoutMinutes minutes.\"\r\n}\r\n\r\nTry {\r\n    Write-Log \"Starting Azure Local image replication.\"\r\n    Write-Log \"Image version : $ImageVersionId\"\r\n    Write-Log \"Target RG     : $AzureLocalResourceGroupId\"\r\n    Write-Log \"Image name    : $AzureLocalImageName\"\r\n\r\n    # Fix trailing slash on resource manager URI (only AzureCloud includes a trailing slash)\r\n    $Rm = if ($ResourceManagerUri[-1] -eq '/') {\r\n        $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1)\r\n    } else {\r\n        $ResourceManagerUri\r\n    }\r\n\r\n    # Acquire an access token from the managed identity endpoint\r\n    $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$Rm\"\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) {\r\n        $TokenUri += \"&client_id=$UserAssignedIdentityClientId\"\r\n    }\r\n    $Token   = (Invoke-RestMethod -Headers @{ Metadata = \"true\" } -Uri $TokenUri).access_token\r\n    $Headers = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = \"Bearer $Token\"\r\n    }\r\n\r\n    # --- Parse resource IDs ---\r\n    # ImageVersionId: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gal}/images/{img}/versions/{ver}\r\n    $VersionParts          = $ImageVersionId.TrimStart('/') -split '/'\r\n    $DiskSubscriptionId    = $VersionParts[1]\r\n    $DiskResourceGroupName = $VersionParts[3]\r\n\r\n    # AzureLocalResourceGroupId: /subscriptions/{sub}/resourceGroups/{rg}\r\n    $AzLocalParts             = $AzureLocalResourceGroupId.TrimStart('/') -split '/'\r\n    $AzLocalSubscriptionId    = $AzLocalParts[1]\r\n    $AzLocalResourceGroupName = $AzLocalParts[3]\r\n\r\n    # Generate a short unique suffix for the temporary disk name (max 80 chars, alphanumeric + hyphens)\r\n    $DiskSuffix     = [System.Guid]::NewGuid().ToString('N').Substring(0, 8)\r\n    $DiskName       = \"tmp-azl-$DiskSuffix\"\r\n    $DiskResourceId = \"/subscriptions/$DiskSubscriptionId/resourceGroups/$DiskResourceGroupName/providers/Microsoft.Compute/disks/$DiskName\"\r\n    $DiskApiVersion = '2024-03-02'\r\n    $DiskPutUri     = \"$Rm$DiskResourceId`?api-version=$DiskApiVersion\"\r\n\r\n    # -----------------------------------------------------------------------\r\n    # Step 1: Create a temporary managed disk from the gallery image version\r\n    # The disk must be created in the same subscription and resource group as\r\n    # the source gallery, and in the same Azure region as the image version.\r\n    # -----------------------------------------------------------------------\r\n    Write-Log \"Creating temporary managed disk '$DiskName' in '$DiskResourceGroupName'.\"\r\n    $DiskBody = [ordered]@{\r\n        location   = $DiskLocation\r\n        sku        = [ordered]@{ name = 'Standard_LRS' }\r\n        properties = [ordered]@{\r\n            creationData = [ordered]@{\r\n                createOption         = 'FromImage'\r\n                galleryImageReference = [ordered]@{ id = $ImageVersionId }\r\n            }\r\n        }\r\n    } | ConvertTo-Json -Depth 10\r\n\r\n    $DiskResponse = Invoke-WebRequest -Headers $Headers -Method 'PUT' -Uri $DiskPutUri `\r\n        -Body $DiskBody -ContentType 'application/json' -UseBasicParsing\r\n\r\n    if ($DiskResponse.StatusCode -eq 202) {\r\n        $AsyncUri = $DiskResponse.Headers['Azure-AsyncOperation']\r\n        if ($AsyncUri) {\r\n            Write-Log \"Waiting for managed disk creation (async)...\"\r\n            Wait-ArmLro -Headers $Headers -OperationUri $AsyncUri -TimeoutMinutes 60 | Out-Null\r\n        }\r\n    }\r\n\r\n    # Confirm disk provisioning state\r\n    $Disk = Invoke-RestMethod -Headers $Headers -Method 'GET' -Uri $DiskPutUri\r\n    if ($Disk.properties.provisioningState -ne 'Succeeded') {\r\n        throw \"Managed disk provisioning failed. State: '$($Disk.properties.provisioningState)'.\"\r\n    }\r\n    Write-Log \"Managed disk created successfully.\"\r\n\r\n    # -----------------------------------------------------------------------\r\n    # Step 2: Grant read SAS access to the managed disk\r\n    # -----------------------------------------------------------------------\r\n    Write-Log \"Granting SAS read access to managed disk.\"\r\n    $SasUri  = \"$Rm$DiskResourceId/beginGetAccess?api-version=$DiskApiVersion\"\r\n    # Request 24-hour SAS; Azure Local downloads the image in the background and needs\r\n    # the URL to remain valid for the full download, which can take several hours for\r\n    # large images over constrained network links.\r\n    $SasBody = [ordered]@{ access = 'Read'; durationInSeconds = 86400 } | ConvertTo-Json\r\n\r\n    $SasResponse = Invoke-WebRequest -Headers $Headers -Method 'POST' -Uri $SasUri `\r\n        -Body $SasBody -ContentType 'application/json' -UseBasicParsing\r\n\r\n    $SasUrl = ''\r\n    if ($SasResponse.StatusCode -in @(200, 201)) {\r\n        $SasUrl = ($SasResponse.Content | ConvertFrom-Json).accessSAS\r\n    } elseif ($SasResponse.StatusCode -eq 202) {\r\n        $AsyncUri = if ($SasResponse.Headers['Azure-AsyncOperation']) {\r\n            $SasResponse.Headers['Azure-AsyncOperation']\r\n        } else {\r\n            $SasResponse.Headers['Location']\r\n        }\r\n        Write-Log \"Waiting for SAS grant (async)...\"\r\n        $SasResult = Wait-ArmLro -Headers $Headers -OperationUri $AsyncUri -TimeoutMinutes 10\r\n        # The access SAS is nested in the LRO result properties\r\n        $SasUrl = if ($SasResult.properties.output.accessSAS) {\r\n            $SasResult.properties.output.accessSAS\r\n        } elseif ($SasResult.accessSAS) {\r\n            $SasResult.accessSAS\r\n        } else {\r\n            ''\r\n        }\r\n    }\r\n\r\n    if ([string]::IsNullOrEmpty($SasUrl)) {\r\n        throw \"Failed to obtain SAS URL for managed disk '$DiskName'.\"\r\n    }\r\n    Write-Log \"SAS URL obtained.\"\r\n\r\n    # -----------------------------------------------------------------------\r\n    # Step 3: Retrieve the Azure Local instance location from the custom location\r\n    # -----------------------------------------------------------------------\r\n    Write-Log \"Querying Azure Local custom location for region information.\"\r\n    $CustomLocationUri = \"$Rm$AzureLocalCustomLocationResourceId`?api-version=2021-08-15\"\r\n    $CustomLocation    = Invoke-RestMethod -Headers $Headers -Method 'GET' -Uri $CustomLocationUri\r\n    $AzLocalLocation   = $CustomLocation.location\r\n    Write-Log \"Azure Local region: $AzLocalLocation\"\r\n\r\n    # -----------------------------------------------------------------------\r\n    # Step 4: Create the Azure Local VM image\r\n    # Resource type: Microsoft.AzureStackHCI/galleryImages\r\n    # -----------------------------------------------------------------------\r\n    Write-Log \"Creating Azure Local VM image '$AzureLocalImageName'.\"\r\n    $HciImageResourceId = \"/subscriptions/$AzLocalSubscriptionId/resourceGroups/$AzLocalResourceGroupName/providers/Microsoft.AzureStackHCI/galleryImages/$AzureLocalImageName\"\r\n    $HciImageUri        = \"$Rm$HciImageResourceId`?api-version=2024-01-01\"\r\n\r\n    $HciBody = [ordered]@{\r\n        location         = $AzLocalLocation\r\n        extendedLocation = [ordered]@{\r\n            name = $AzureLocalCustomLocationResourceId\r\n            type = 'CustomLocation'\r\n        }\r\n        properties = [ordered]@{\r\n            imagePath        = $SasUrl\r\n            osType           = $OsType\r\n            hyperVGeneration = $HyperVGeneration\r\n        }\r\n    } | ConvertTo-Json -Depth 10\r\n\r\n    $HciResponse = Invoke-WebRequest -Headers $Headers -Method 'PUT' -Uri $HciImageUri `\r\n        -Body $HciBody -ContentType 'application/json' -UseBasicParsing\r\n\r\n    if ($HciResponse.StatusCode -eq 202) {\r\n        $AsyncUri = if ($HciResponse.Headers['Azure-AsyncOperation']) {\r\n            $HciResponse.Headers['Azure-AsyncOperation']\r\n        } else {\r\n            $HciResponse.Headers['Location']\r\n        }\r\n        if ($AsyncUri) {\r\n            Write-Log \"Waiting for Azure Local VM image creation (this may take up to 2 hours for large images)...\"\r\n            Wait-ArmLro -Headers $Headers -OperationUri $AsyncUri -TimeoutMinutes 120 | Out-Null\r\n        }\r\n    }\r\n\r\n    # Confirm HCI image provisioning state\r\n    $HciImage = Invoke-RestMethod -Headers $Headers -Method 'GET' -Uri $HciImageUri\r\n    if ($HciImage.properties.provisioningState -ne 'Succeeded') {\r\n        throw \"Azure Local VM image provisioning failed. State: '$($HciImage.properties.provisioningState)'.\"\r\n    }\r\n    Write-Log \"Azure Local VM image created successfully: $HciImageResourceId\"\r\n\r\n    # -----------------------------------------------------------------------\r\n    # Step 5: Revoke SAS access and delete the temporary managed disk\r\n    # Failures here are non-fatal; the disk is not needed after this point.\r\n    # -----------------------------------------------------------------------\r\n    Write-Log \"Revoking SAS access on temporary managed disk.\"\r\n    Try {\r\n        $EndSasUri = \"$Rm$DiskResourceId/endGetAccess?api-version=$DiskApiVersion\"\r\n        Invoke-RestMethod -Headers $Headers -Method 'POST' -Uri $EndSasUri -Body '{}' `\r\n            -ContentType 'application/json' | Out-Null\r\n        Write-Log \"SAS access revoked.\"\r\n    } Catch {\r\n        Write-Log \"WARNING - Could not revoke SAS access: $($_.Exception.Message)\" 'WARN'\r\n    }\r\n\r\n    Write-Log \"Deleting temporary managed disk '$DiskName'.\"\r\n    Try {\r\n        Invoke-RestMethod -Headers $Headers -Method 'DELETE' -Uri $DiskPutUri | Out-Null\r\n        Write-Log \"Managed disk deletion initiated.\"\r\n    } Catch {\r\n        Write-Log \"WARNING - Could not delete managed disk '$DiskName': $($_.Exception.Message)\" 'WARN'\r\n    }\r\n\r\n    Write-Log \"Azure Local image replication completed successfully.\"\r\n}\r\nCatch {\r\n    Write-Error \"Azure Local image replication failed: $($_.Exception.Message)\"\r\n    throw\r\n}\r\n"
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('{0}AzureLocal-Replication-{1}', parameters('depPrefix'), parameters('deploymentSuffix'))]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "location": {
-                    "value": "[parameters('location')]"
-                  },
-                  "name": {
-                    "value": "AzureLocalImageReplication"
-                  },
-                  "virtualMachineName": {
-                    "value": "[parameters('orchestrationVmName')]"
-                  },
-                  "script": {
-                    "value": "[variables('$fxv#0')]"
-                  },
-                  "treatFailureAsDeploymentFailure": {
-                    "value": true
-                  },
-                  "timeoutInSeconds": {
-                    "value": 14400
-                  },
-                  "parameters": {
-                    "value": [
-                      {
-                        "name": "ResourceManagerUri",
-                        "value": "[environment().resourceManager]"
-                      },
-                      {
-                        "name": "UserAssignedIdentityClientId",
-                        "value": "[parameters('userAssignedIdentityClientId')]"
-                      },
-                      {
-                        "name": "ImageVersionId",
-                        "value": "[parameters('imageVersionId')]"
-                      },
-                      {
-                        "name": "DiskLocation",
-                        "value": "[parameters('diskLocation')]"
-                      },
-                      {
-                        "name": "AzureLocalCustomLocationResourceId",
-                        "value": "[parameters('azureLocalCustomLocationResourceId')]"
-                      },
-                      {
-                        "name": "AzureLocalResourceGroupId",
-                        "value": "[parameters('azureLocalResourceGroupId')]"
-                      },
-                      {
-                        "name": "AzureLocalImageName",
-                        "value": "[parameters('azureLocalImageName')]"
-                      },
-                      {
-                        "name": "HyperVGeneration",
-                        "value": "[parameters('hyperVGeneration')]"
-                      }
-                    ]
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "1189707415401603641"
-                    }
-                  },
-                  "parameters": {
-                    "virtualMachineName": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "location": {
-                      "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
-                    },
-                    "script": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "PowerShell script content to execute. Provide either script or scriptUri, not both."
-                      }
-                    },
-                    "scriptUri": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "URI of a script to execute. Provide either script or scriptUri, not both."
-                      }
-                    },
-                    "scriptUriManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the script URI."
-                      }
-                    },
-                    "parameters": {
-                      "type": "array",
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named parameters to pass to the script."
-                      }
-                    },
-                    "protectedParameters": {
-                      "type": "array",
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named protected (secure) parameters to pass to the script."
-                      }
-                    },
-                    "timeoutInSeconds": {
-                      "type": "int",
-                      "defaultValue": 0,
-                      "metadata": {
-                        "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                      }
-                    },
-                    "asyncExecution": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Run the command asynchronously (fire and forget)."
-                      }
-                    },
-                    "treatFailureAsDeploymentFailure": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Treat a non-zero exit code as a deployment failure."
-                      }
-                    },
-                    "outputBlobUri": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                      }
-                    },
-                    "errorBlobUri": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                      }
-                    },
-                    "outputBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                      }
-                    },
-                    "errorBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
-                      }
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Compute/virtualMachines/runCommands",
-                      "apiVersion": "2023-09-01",
-                      "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
-                      "location": "[parameters('location')]",
-                      "properties": {
-                        "source": {
-                          "script": "[if(not(empty(parameters('script'))), parameters('script'), null())]",
-                          "scriptUri": "[if(not(empty(parameters('scriptUri'))), parameters('scriptUri'), null())]",
-                          "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
-                        },
-                        "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                        "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
-                        "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
-                        "asyncExecution": "[parameters('asyncExecution')]",
-                        "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
-                        "outputBlobUri": "[if(not(empty(parameters('outputBlobUri'))), parameters('outputBlobUri'), null())]",
-                        "errorBlobUri": "[if(not(empty(parameters('errorBlobUri'))), parameters('errorBlobUri'), null())]",
-                        "outputBlobManagedIdentity": "[if(not(empty(parameters('outputBlobManagedIdentityClientId'))), createObject('clientId', parameters('outputBlobManagedIdentityClientId')), null())]",
-                        "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('virtualMachineName'), parameters('name'))]"
-                    },
-                    "name": {
-                      "type": "string",
-                      "value": "[parameters('name')]"
-                    }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      },
-      "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/deployments', format('{0}Capture-Image-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('azureLocalRgSubscriptionId'), variables('azureLocalRgName')), 'Microsoft.Resources/deployments', format('{0}RA-OrchVM-Contributor-AzLocalRG-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('computeGalleryResourceId'), '/')[2], split(parameters('computeGalleryResourceId'), '/')[4]), 'Microsoft.Resources/deployments', format('{0}RA-OrchVM-Contributor-GalleryRG-AzLocal-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
-      ]
-    },
-    {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('{0}Remove-Image-Image-Build-Resources-{1}', variables('depPrefix'), variables('deploymentSuffix'))]",
@@ -5149,8 +4592,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "1189707415401603641"
+              "version": "0.44.1.10279",
+              "templateHash": "6484157504036730489"
             }
           },
           "parameters": {
@@ -5286,7 +4729,6 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}AzureLocal-Image-Replication-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[subscriptionResourceId('Microsoft.Resources/deployments', format('{0}Capture-Image-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Image-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('imageBuildResourceGroupName')), 'Microsoft.Resources/deployments', format('{0}Orchestration-VM-{1}', variables('depPrefix'), variables('deploymentSuffix')))]"
@@ -5342,8 +4784,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "2253539786105966779"
+              "version": "0.44.1.10279",
+              "templateHash": "12958480170457740873"
             }
           },
           "parameters": {

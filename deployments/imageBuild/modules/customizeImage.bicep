@@ -251,8 +251,8 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
       }
       {
         name: 'Uri'
-        value: !startsWith(cloud, 'us') && (downloadLatestMicrosoftContent || empty(artifactsContainerUri))
-          ? downloads.FSLogix.DownloadUrl
+        value: downloadLatestMicrosoftContent || empty(artifactsContainerUri)
+          ? replace(downloads.FSLogix.DownloadUrl, 'ENVSUFFIX', envSuffix)
           : '${artifactsContainerUri}/${downloads.FSLogix.DestinationFileName}'
       }
     ])
