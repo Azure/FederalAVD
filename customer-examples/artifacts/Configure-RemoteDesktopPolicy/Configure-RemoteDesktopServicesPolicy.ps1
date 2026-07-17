@@ -1,7 +1,8 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [string]$MaxIdleTime = '21600000',
-    [string]$MaxDisconnectionionTime = '21600000'
+    [string]$MaxDisconnectionionTime = '21600000',
+    [switch]$EnableRemoteApp
 )
 
 #region Functions
@@ -784,7 +785,7 @@ function Get-RelativePolicyKeyPath {
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime', MaxDisconnectionTime='$MaxDisconnectionTime'."
+Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime', MaxDisconnectionTime='$MaxDisconnectionTime', EnableRemoteApp='$EnableRemoteApp'."
 #endregion
 
 Write-Log -Category Info -Message "Now Configuring Remote Desktop Services Timeout Settings."
@@ -792,5 +793,9 @@ $rdKey = 'Software\Policies\Microsoft\Windows NT\Terminal Services'
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxDisconnectionTime' -RegistryType 'DWORD' -RegistryData $MaxDisconnectionTime
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxIdleTime' -RegistryType 'DWORD' -RegistryData $MaxIdleTime
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fEnableTimeZoneRedirection' -RegistryType 'DWORD' -RegistryData 1
+If ($EnableRemoteApp) {
+    Write-Log -Category Info -Message "Enabling enhanced shell experience for RemoteApp."
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'EnableEnhancedShellExperienceForRemoteApp' -RegistryType 'DWORD' -RegistryData 1
+}
 Invoke-PolicyUpdate
 Write-Log -Category Info -Message "Remote Desktop Services Timeout Settings Configured."

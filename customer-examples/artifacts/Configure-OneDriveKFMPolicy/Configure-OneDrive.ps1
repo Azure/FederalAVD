@@ -1,7 +1,8 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [Parameter(Mandatory = $true)]
-    [string]$TenantId
+    [string]$TenantId,
+    [switch]$EnableRemoteApp
 )
 
 
@@ -827,5 +828,10 @@ If ($TenantID -and $TenantID -ne '') {
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMSilentOptIn' -Value $TenantID -Type String -Force
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMBlockOptOut' -Value 1 -Type DWord -Force
     }
+}
+If ($EnableRemoteApp) {
+    Write-Log -Message "Enabling enhanced shell experience for RemoteApp (required for OneDrive to launch alongside RemoteApp sessions)."
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -RegistryValue 'EnableEnhancedShellExperienceForRemoteApp' -RegistryType DWORD -RegistryData 1
+    Invoke-PolicyUpdate
 }
 Write-Log -Message "OneDrive Group Policy Configuration Complete."
