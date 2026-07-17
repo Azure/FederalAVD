@@ -533,7 +533,7 @@
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Install FsLogix Agent",
                                     "toolTip": "Check to install FsLogix Agent",
-                                    "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud'))))]"
+                                    "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('imageCustomizations').downloadLatestMicrosoftContent, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud'))))]"
                                 }
                             ]
                         },

@@ -12,7 +12,7 @@
 
 ## Notes
 
-- In air-gapped clouds (Secret/Top Secret), the script auto-detects the environment and downloads from air-gapped cloud endpoints — no special switch is required. For artifacts with no configured download URL (FSLogix, WebView2, etc.), manually place the files in the `artifacts/` subdirectory of your customer root (default: `customer/artifacts/`; or `<CustomerRootPath>\artifacts\` when `-CustomerRootPath` is specified) before running. See the [Air-Gapped Cloud Guide](air-gapped-clouds.md) for details.
+- In air-gapped clouds (Secret/Top Secret), the script auto-detects the environment and downloads from air-gapped cloud endpoints — no special switch is required. For artifacts with no configured download URL (WebView2, etc.), manually place the files in the `artifacts/` subdirectory of your customer root (default: `customer/artifacts/`; or `<CustomerRootPath>\artifacts\` when `-CustomerRootPath` is specified) before running. See the [Air-Gapped Cloud Guide](air-gapped-clouds.md) for details.
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
 - Use `-CustomerRootPath <path>` to point to a folder outside the repo zip (e.g., a persistent share or pipeline workspace). Pre-staged artifact files go in `<CustomerRootPath>\artifacts\`; the downloads parameter file goes in `<CustomerRootPath>\parameters\imageManagement\`.
 - Use `-CustomerArtifactsMode None` or `-CustomerDownloadsMode None` to skip customer overlays when you only want repo content.
@@ -357,7 +357,7 @@ Use `""` (empty string) as one of the folder names to also place the file direct
 The script stages a merged view — `.common/artifacts/` first, then `customer/artifacts/` on top — then packages the result. Currently `.common/artifacts/` is empty, so all content comes from `customer/artifacts/`.
 
 > **Where to place pre-staged files:**
-> - **Required air-gapped artifacts** (FSLogix, WebView2, VC Redist, WebRTC): place the file directly in `customer/artifacts/` using the exact filename specified in the downloads file (e.g., `FSLogix.zip`, `WebView2.exe`). The script picks them up by filename from the root of the artifacts directory.
+> - **Required air-gapped artifacts** (WebView2, VC Redist, WebRTC): place the file directly in `customer/artifacts/` using the exact filename specified in the downloads file (e.g., `WebView2.exe`). The script picks them up by filename from the root of the artifacts directory.
 > - **Custom application packages**: place the installer and any scripts in a named subdirectory, e.g., `customer/artifacts/Google-Chrome-Enterprise/`. The subdirectory name becomes the zip/package name.
 > - If you use `-CustomerRootPath`, substitute `<CustomerRootPath>\artifacts\` for `customer/artifacts/` in both cases above.
 

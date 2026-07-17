@@ -126,7 +126,6 @@ The following artifacts have empty `DownloadUrl` entries in the secret and top s
 
 | Software | Destination Filename | Place In | Notes |
 |---|---|---|---|
-| **FSLogix** | `FSLogix.zip` | `customer/artifacts/` | Available from Azure Toolbox in air-gapped clouds. Also available at [aka.ms/fslogix_download](https://aka.ms/fslogix_download) on internet-connected systems. |
 | **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
 | **Visual Studio Redistributables** | `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
 | **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
@@ -147,6 +146,7 @@ The following artifacts have working URLs in the secret and top secret downloads
 | **OneDrive** | `OneDriveSetup.exe` | `update.azure.odsync.<env-suffix>/...` |
 | **Teams Bootstrapper** | `teamsbootstrapper.exe` | `statics.teams.<env-suffix>/...` |
 | **Teams 64-bit MSIX** | `MSTeams-x64.msix` | `statics.teams.<env-suffix>/...` |
+| **FSLogix** | `FSLogix.zip` | `aka.<env-suffix>/FSLogix_latest` |
 
 > **Note:** The AVD Agent and Bootloader are not used during custom image builds — they are included in this upload so that `agentDownloadUrl` and `agentBootLoaderDownloadUrl` host pool parameters can reference them from the artifacts storage account instead of relying on the permalink.
 
