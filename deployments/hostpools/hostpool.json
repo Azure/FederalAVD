@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "5780073185130760589"
+      "templateHash": "7385170976697379692"
     }
   },
   "parameters": {
@@ -754,14 +754,7 @@
         "CustomerManagedHSM"
       ],
       "metadata": {
-        "description": "Optional. Key management mode for Recovery Services Vault encryption. When CustomerManaged is combined with deployPrivateEndpoints=true, the encryption Key Vault must have full public network access enabled (Azure Backup does not use the AzureServices trusted service bypass). Set encryptionKeyVaultForcePublicAccess=true to explicitly allow this — otherwise RSV CMK is automatically disabled."
-      }
-    },
-    "encryptionKeyVaultForcePublicAccess": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. When true, the inline encryption Key Vault is deployed with public network access enabled and all IP-based firewall restrictions cleared. Required when keyManagementRecoveryServicesVault is CustomerManaged and deployPrivateEndpoints is true, because Azure Backup does not use the AzureServices trusted service bypass and its regional IPs are not fixed. Default false silently disables RSV CMK in that combination."
+        "description": "Optional. Key management mode for Recovery Services Vault encryption."
       }
     },
     "permittedIPs": {
@@ -3586,9 +3579,6 @@
           "privateEndpoint": {
             "value": "[parameters('deployPrivateEndpoints')]"
           },
-          "encryptionKeyVaultForcePublicAccess": {
-            "value": "[parameters('encryptionKeyVaultForcePublicAccess')]"
-          },
           "permittedIPs": {
             "value": "[parameters('permittedIPs')]"
           },
@@ -3618,7 +3608,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "17999003971337754976"
+              "templateHash": "6600117196488899178"
             }
           },
           "parameters": {
@@ -3713,13 +3703,6 @@
               "metadata": {
                 "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module."
               }
-            },
-            "encryptionKeyVaultForcePublicAccess": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Optional. When true, the encryption key vault is deployed with public network access enabled and all IP-based firewall restrictions cleared, regardless of the privateEndpoint setting. Required when CMK is configured on Recovery Services Vault (RSV does not use the AzureServices trusted service bypass, and its backup IPs are regional/dynamic so IP restrictions are not feasible). Only set this when you explicitly accept the tradeoff of an internet-reachable encryption key vault without IP restrictions."
-              }
             }
           },
           "variables": {
@@ -3741,14 +3724,18 @@
             "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
             "kvPublicAccessDisabled": "[and(parameters('privateEndpoint'), empty(parameters('permittedIPs')))]",
             "secretsKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
-            "encryptionKvPublicNetworkAccess": "[if(parameters('encryptionKeyVaultForcePublicAccess'), 'Enabled', if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled'))]",
+            "encryptionKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
             "kvHasNetworkRestrictions": "[or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs'))))]",
             "secretsKvNetworkAcls": {
               "bypass": "AzureServices",
               "defaultAction": "[if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow')]",
               "ipRules": "[variables('ipRules')]"
             },
-            "encryptionKvNetworkAcls": "[if(parameters('encryptionKeyVaultForcePublicAccess'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow', 'ipRules', createArray()), createObject('bypass', 'AzureServices', 'defaultAction', if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow'), 'ipRules', variables('ipRules')))]"
+            "encryptionKvNetworkAcls": {
+              "bypass": "AzureServices",
+              "defaultAction": "[if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow')]",
+              "ipRules": "[variables('ipRules')]"
+            }
           },
           "resources": [
             {
@@ -12224,7 +12211,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "406943095776244197"
+              "templateHash": "8603596284689962720"
             }
           },
           "parameters": {
@@ -12398,7 +12385,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.44.1.10279",
-                      "templateHash": "10123616617601912190"
+                      "templateHash": "13721267880950072485"
                     }
                   },
                   "definitions": {
@@ -12587,7 +12574,7 @@
                       },
                       "properties": {
                         "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                        "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false()))), null())]"
+                        "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
                       }
                     },
                     "backupStorageConfig": {
@@ -17174,9 +17161,6 @@
           "encryptionKeyName": {
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.encryptionKeyNameRecoveryServices.value]"
           },
-          "keyVaultPrivateOnly": {
-            "value": "[and(parameters('deployPrivateEndpoints'), not(parameters('encryptionKeyVaultForcePublicAccess')))]"
-          },
           "deployPrivateEndpoints": {
             "value": "[parameters('deployPrivateEndpoints')]"
           },
@@ -17207,7 +17191,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "9740459456678273915"
+              "templateHash": "7644530179664582033"
             }
           },
           "parameters": {
@@ -17498,13 +17482,6 @@
                 "description": "Optional. Key expiration period in days for the vault CMK encryption key. Also controls auto-rotation."
               }
             },
-            "keyVaultPrivateOnly": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Optional. Set to true when the CMK Key Vault is private-only; auto-disables CMK in that scenario."
-              }
-            },
             "deployPrivateEndpoints": {
               "type": "bool",
               "defaultValue": false,
@@ -17654,9 +17631,6 @@
                   "encryptionKeyName": {
                     "value": "[parameters('encryptionKeyName')]"
                   },
-                  "keyVaultPrivateOnly": {
-                    "value": "[parameters('keyVaultPrivateOnly')]"
-                  },
                   "keyExpirationInDays": {
                     "value": "[parameters('keyExpirationInDays')]"
                   }
@@ -17668,7 +17642,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.44.1.10279",
-                      "templateHash": "1301010410962496873"
+                      "templateHash": "5430649279739512092"
                     }
                   },
                   "parameters": {
@@ -17826,13 +17800,6 @@
                         "description": "Optional. Name of the customer-managed key used for vault encryption."
                       }
                     },
-                    "keyVaultPrivateOnly": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Optional. Set to true when the Key Vault used for CMK is accessible only via private endpoint (no public access). When true, CMK on the Recovery Services Vault is automatically disabled because Azure does not support this combination — the vault cannot reach a private-only Key Vault while also using a private endpoint itself. Use platform-managed keys (Mode B) in fully private environments."
-                      }
-                    },
                     "keyExpirationInDays": {
                       "type": "int",
                       "defaultValue": 180,
@@ -17848,7 +17815,7 @@
                     "effectiveVaultSub": "[if(parameters('createVault'), subscription().subscriptionId, split(parameters('existingRecoveryServicesVaultResourceId'), '/')[2])]",
                     "effectiveVaultRG": "[if(parameters('createVault'), parameters('resourceGroupHosts'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
                     "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]",
-                    "useVaultCmk": "[and(and(and(and(and(parameters('createVault'), not(equals(parameters('keyManagementType'), 'PlatformManaged'))), not(empty(parameters('encryptionKeyVaultResourceId')))), not(empty(parameters('encryptionKeyVaultUri')))), not(empty(parameters('encryptionKeyName')))), not(parameters('keyVaultPrivateOnly')))]",
+                    "useVaultCmk": "[and(and(and(and(parameters('createVault'), not(equals(parameters('keyManagementType'), 'PlatformManaged'))), not(empty(parameters('encryptionKeyVaultResourceId')))), not(empty(parameters('encryptionKeyVaultUri')))), not(empty(parameters('encryptionKeyName'))))]",
                     "encryptionKeyVaultName": "[if(not(empty(parameters('encryptionKeyVaultResourceId'))), last(split(parameters('encryptionKeyVaultResourceId'), '/')), '')]",
                     "encryptionKeyVaultSubscriptionId": "[if(not(empty(parameters('encryptionKeyVaultResourceId'))), split(parameters('encryptionKeyVaultResourceId'), '/')[2], '')]",
                     "encryptionKeyVaultResourceGroup": "[if(not(empty(parameters('encryptionKeyVaultResourceId'))), split(parameters('encryptionKeyVaultResourceId'), '/')[4], '')]",
@@ -18081,7 +18048,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.44.1.10279",
-                              "templateHash": "10123616617601912190"
+                              "templateHash": "13721267880950072485"
                             }
                           },
                           "definitions": {
@@ -18270,7 +18237,7 @@
                               },
                               "properties": {
                                 "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false()))), null())]"
+                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
                               }
                             },
                             "backupStorageConfig": {
@@ -18539,7 +18506,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.44.1.10279",
-                              "templateHash": "10123616617601912190"
+                              "templateHash": "13721267880950072485"
                             }
                           },
                           "definitions": {
@@ -18728,7 +18695,7 @@
                               },
                               "properties": {
                                 "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false()))), null())]"
+                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
                               }
                             },
                             "backupStorageConfig": {
@@ -18840,7 +18807,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.44.1.10279",
-                              "templateHash": "10123616617601912190"
+                              "templateHash": "13721267880950072485"
                             }
                           },
                           "definitions": {
@@ -19029,7 +18996,7 @@
                               },
                               "properties": {
                                 "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false()))), null())]"
+                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
                               }
                             },
                             "backupStorageConfig": {
@@ -19565,7 +19532,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.44.1.10279",
-                      "templateHash": "595409800945352978"
+                      "templateHash": "16671933795883028319"
                     }
                   },
                   "parameters": {

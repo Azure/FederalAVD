@@ -85,13 +85,6 @@ The following security capabilities are active in every deployment regardless of
 | SC-28 | Protection of Information at Rest — Recovery Services Vault | Personal host pool RSV is encrypted with a host-pool-scoped customer-managed key using the vault's system-assigned identity. | Configurable | `keyManagementRecoveryServicesVault: CustomerManaged` or `CustomerManagedHSM` |
 | SC-28(1) | Cryptographic Protection — supplemental | Encryption at host encrypts temp disk and disk caches at the physical host. Infrastructure double encryption adds a second platform-managed encryption layer on all storage. | Automatic | `encryptionAtHost: true` (default) |
 
-> **SC-28 / SC-7 conflict — RSV CMK with private endpoints (Microsoft Azure platform limitation):** Azure Backup has no `AzureServices` trusted service bypass for Key Vault. When both `deployPrivateEndpoints = true` and `keyManagementRecoveryServicesVault = CustomerManaged` are set, two mandatory controls are in direct conflict:
->
-> - **Option A — preserve SC-28 (CMK on RSV):** Set `encryptionKeyVaultForcePublicAccess = true`. RSV uses customer-managed keys. The encryption Key Vault’s `publicNetworkAccess` changes from Disabled to Enabled and all IP-based firewall rules are cleared — SC-7 network isolation for the Key Vault is weakened; it becomes reachable by any authenticated principal on Azure’s public network.
-> - **Option B — preserve SC-7 (private-only KV):** Leave `encryptionKeyVaultForcePublicAccess = false` (default). The Key Vault remains private-only. The RSV falls back to platform-managed keys — SC-28 is not satisfied for RSV encryption.
->
-> Neither option satisfies both controls simultaneously. The default behavior is Option B (RSV falls back to PMK silently rather than failing the deployment). The choice between SC-28 and SC-7 for RSV encryption is a risk decision for your ISSO and Authorizing Official. Document the selected option and formally accept the resulting control gap in your SSP.
-
 ### System and Information Integrity (SI)
 
 | Control | Title | Implementation | Type | Parameter / Feature |
@@ -195,7 +188,6 @@ For workloads requiring hardware-level memory encryption and attestation (beyond
 | `keyManagementStorage` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
 | `keyManagementRecoveryServicesVault` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
 | `deployPrivateEndpoints` | `true` | `true` | `true` |
-| `encryptionKeyVaultForcePublicAccess` | *risk decision — see ¹* | *risk decision — see ¹* | *risk decision — see ¹* |
 | `fslogixStorageRedundancy` | `ZoneRedundant` | `ZoneRedundant` | `ZoneRedundant` |
 | `recoveryServicesVaultStorageRedundancy` | `GeoRedundant` | `GeoRedundant` | `GeoRedundant` |
 | `recoveryServices` | `true` | `true` | `true` |
@@ -203,13 +195,6 @@ For workloads requiring hardware-level memory encryption and attestation (beyond
 | `securityType` | `TrustedLaunch` ✅ default | `TrustedLaunch` ✅ default | `TrustedLaunch` or `ConfidentialVM` |
 | `encryptionAtHost` | `true` ✅ default | `true` ✅ default | `true` ✅ default |
 | `enableMonitoring` | `true` ✅ default | `true` ✅ default | `true` ✅ default |
-
-> ¹ **`encryptionKeyVaultForcePublicAccess` — SC-28 vs. SC-7 risk decision (Microsoft Azure platform limitation).** Azure Backup has no `AzureServices` trusted service bypass for Key Vault, creating an irreconcilable conflict when both CMK on RSV and private endpoints are required:
->
-> - **`true` (Option A — preserve SC-28):** RSV uses customer-managed keys. The encryption Key Vault’s `publicNetworkAccess` changes from Disabled to Enabled and all IP-based firewall rules are cleared. SC-28 satisfied for RSV; SC-7 network isolation for the Key Vault weakened — Key Vault reachable from Azure public network by any authenticated principal.
-> - **`false` (Option B — preserve SC-7, default):** Key Vault remains private-only. RSV falls back to platform-managed keys silently. SC-7 satisfied; SC-28 not satisfied for RSV.
->
-> Neither option satisfies both controls. The default (`false`) is Option B. This is a compliance risk decision for your ISSO and AO — not a solution default or recommendation. Document the selected option and formally accept the resulting control gap in your SSP. All other CMK consumers (disk encryption, storage encryption) are unaffected by this parameter. When using a pre-created Encryption Key Vault from the standalone Key Vaults deployment, set this at vault creation time via the **Allow public network access on Encryption Key Vault** checkbox in the portal form.
 
 ---
 

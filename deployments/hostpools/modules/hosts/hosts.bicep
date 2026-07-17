@@ -96,8 +96,6 @@ param encryptionKeyName string = ''
 @description('Optional. Key expiration period in days for the vault CMK encryption key. Also controls auto-rotation.')
 @minValue(7)
 param keyExpirationInDays int = 180
-@description('Optional. Set to true when the CMK Key Vault is private-only; auto-disables CMK in that scenario.')
-param keyVaultPrivateOnly bool = false
 @description('Optional. Whether to deploy a private endpoint for the vault.')
 param deployPrivateEndpoints bool = false
 @description('Optional. Resource ID of the subnet for the vault private endpoint.')
@@ -145,7 +143,6 @@ module recoveryServicesModule 'modules/recoveryServices.bicep' = if (deployRecov
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionKeyName: encryptionKeyName
-    keyVaultPrivateOnly: keyVaultPrivateOnly
     keyExpirationInDays: keyExpirationInDays
   }
 }

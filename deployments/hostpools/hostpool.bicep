@@ -510,11 +510,8 @@ param keyManagementStorage string = 'PlatformManaged'
   'CustomerManaged'
   'CustomerManagedHSM'
 ])
-@description('Optional. Key management mode for Recovery Services Vault encryption. When CustomerManaged is combined with deployPrivateEndpoints=true, the encryption Key Vault must have full public network access enabled (Azure Backup does not use the AzureServices trusted service bypass). Set encryptionKeyVaultForcePublicAccess=true to explicitly allow this — otherwise RSV CMK is automatically disabled.')
+@description('Optional. Key management mode for Recovery Services Vault encryption.')
 param keyManagementRecoveryServicesVault string = 'PlatformManaged'
-
-@description('Optional. When true, the inline encryption Key Vault is deployed with public network access enabled and all IP-based firewall restrictions cleared. Required when keyManagementRecoveryServicesVault is CustomerManaged and deployPrivateEndpoints is true, because Azure Backup does not use the AzureServices trusted service bypass and its regional IPs are not fixed. Default false silently disables RSV CMK in that combination.')
-param encryptionKeyVaultForcePublicAccess bool = false
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
@@ -1193,7 +1190,6 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
       : ''
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
     privateEndpoint: deployPrivateEndpoints
-    encryptionKeyVaultForcePublicAccess: encryptionKeyVaultForcePublicAccess
     permittedIPs: permittedIPs
     privateEndpointNameConv: naming.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
@@ -1623,7 +1619,6 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     encryptionKeyVaultUri: effectiveEncryptionKeyVaultUri
     encryptionKeyName: naming.outputs.encryptionKeyNameRecoveryServices
-    keyVaultPrivateOnly: deployPrivateEndpoints && !encryptionKeyVaultForcePublicAccess
     deployPrivateEndpoints: deployPrivateEndpoints
     vaultPrivateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId

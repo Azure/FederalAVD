@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "5744673751437499160"
+      "templateHash": "8034643525991395118"
     }
   },
   "functions": [
@@ -192,13 +192,6 @@
       "maxValue": 90,
       "metadata": {
         "description": "Optional. Soft delete retention days for the Encryption Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production."
-      }
-    },
-    "encryptionKeyVaultForcePublicAccess": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. When true, the Encryption Key Vault is deployed with public network access enabled. Required when using CMK on a Recovery Services Vault with private endpoints, because Azure Backup does not use the AzureServices trusted service bypass."
       }
     },
     "privateEndpoint": {
@@ -773,6 +766,7 @@
     "$fxv#2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
+      "automationAccounts": "aa",
       "availabilitySets": "as",
       "computeGalleries": "gal",
       "dataCollectionEndpoints": "dce",
@@ -942,9 +936,6 @@
           "encryptionKeyVaultRetentionInDays": {
             "value": "[parameters('encryptionKeyVaultRetentionInDays')]"
           },
-          "encryptionKeyVaultForcePublicAccess": {
-            "value": "[parameters('encryptionKeyVaultForcePublicAccess')]"
-          },
           "privateEndpoint": {
             "value": "[parameters('privateEndpoint')]"
           },
@@ -980,7 +971,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "17999003971337754976"
+              "templateHash": "6600117196488899178"
             }
           },
           "parameters": {
@@ -1075,13 +1066,6 @@
               "metadata": {
                 "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module."
               }
-            },
-            "encryptionKeyVaultForcePublicAccess": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Optional. When true, the encryption key vault is deployed with public network access enabled and all IP-based firewall restrictions cleared, regardless of the privateEndpoint setting. Required when CMK is configured on Recovery Services Vault (RSV does not use the AzureServices trusted service bypass, and its backup IPs are regional/dynamic so IP restrictions are not feasible). Only set this when you explicitly accept the tradeoff of an internet-reachable encryption key vault without IP restrictions."
-              }
             }
           },
           "variables": {
@@ -1103,14 +1087,18 @@
             "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
             "kvPublicAccessDisabled": "[and(parameters('privateEndpoint'), empty(parameters('permittedIPs')))]",
             "secretsKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
-            "encryptionKvPublicNetworkAccess": "[if(parameters('encryptionKeyVaultForcePublicAccess'), 'Enabled', if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled'))]",
+            "encryptionKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
             "kvHasNetworkRestrictions": "[or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs'))))]",
             "secretsKvNetworkAcls": {
               "bypass": "AzureServices",
               "defaultAction": "[if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow')]",
               "ipRules": "[variables('ipRules')]"
             },
-            "encryptionKvNetworkAcls": "[if(parameters('encryptionKeyVaultForcePublicAccess'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow', 'ipRules', createArray()), createObject('bypass', 'AzureServices', 'defaultAction', if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow'), 'ipRules', variables('ipRules')))]"
+            "encryptionKvNetworkAcls": {
+              "bypass": "AzureServices",
+              "defaultAction": "[if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow')]",
+              "ipRules": "[variables('ipRules')]"
+            }
           },
           "resources": [
             {
