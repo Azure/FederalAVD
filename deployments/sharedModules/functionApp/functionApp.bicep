@@ -349,7 +349,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (en
   kind: 'web'
 }
 
-module updatePrivateLinkScope '../get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../privateLinkScope/get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
   name: 'PrivateLlinkScope-${deploymentSuffix}'
   scope: subscription()
   params: {

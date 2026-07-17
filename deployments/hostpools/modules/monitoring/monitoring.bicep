@@ -48,7 +48,7 @@ module avdInsightsDataCollectionRule 'modules/avdInsightsDataCollectionRule.bice
 }
 
 // ─── Azure Monitor Private Link Scope ─────────────────────────────────────────
-module updatePrivateLinkScope '../../../sharedModules/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../../../sharedModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
   name: 'PrivateLinkScope-${deploymentSuffix}'
   params: {
     deploymentSuffix: deploymentSuffix
