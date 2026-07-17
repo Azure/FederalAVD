@@ -3740,23 +3740,6 @@
                   "visible": "[and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]"
                 },
                 {
-                  "name": "encryptionKeyVaultForcePublicAccessWarning",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]",
-                  "options": {
-                    "style": "Warning",
-                    "text": "Azure Backup does not use the AzureServices trusted service bypass for Key Vault access and cannot reach a private-only Key Vault. To enable Customer-Managed Key encryption on the Recovery Services Vault while using private endpoints, check the box below to allow public network access on the encryption Key Vault. Note: this also clears any IP-based firewall restrictions on the encryption Key Vault, as Azure Backup's regional IPs are not fixed. If the box is left unchecked, CMK will be automatically disabled for the vault."
-                  }
-                },
-                {
-                  "name": "encryptionKeyVaultForcePublicAccess",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Allow public network access on encryption Key Vault (required for RSV CMK with private endpoints)",
-                  "toolTip": "When checked, the encryption Key Vault is deployed with public network access enabled, allowing Azure Backup to use Customer Managed Keys. Required when 'deploy Private Endpoints' is true and 'Key Management Recovery Services Vault' is not 'Platform-Managed', because Azure Backup does not use the AzureServices trusted service bypass.",
-                  "defaultValue": false,
-                  "visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))]"
-                },
-                {
                   "name": "privateDNSZonesHeader",
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
@@ -5319,7 +5302,6 @@
         "existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.avdInsightsDataCollectionRule, '')]",
         "existingDataCollectionEndpointResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint, '')]",
         "deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
-        "encryptionKeyVaultForcePublicAccess": "[steps('zeroTrust').privateEndpoints.encryptionKeyVaultForcePublicAccess]",
         "operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('identity').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
         "hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
         "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",

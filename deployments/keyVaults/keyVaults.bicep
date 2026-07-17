@@ -68,9 +68,6 @@ param deployEncryptionKeyVault bool = true
 @maxValue(90)
 param encryptionKeyVaultRetentionInDays int = 90
 
-@description('Optional. When true, the Encryption Key Vault is deployed with public network access enabled. Required when using CMK on a Recovery Services Vault with private endpoints, because Azure Backup does not use the AzureServices trusted service bypass.')
-param encryptionKeyVaultForcePublicAccess bool = false
-
 // ── Private Endpoints ──────────────────────────────────────────────────────────
 
 @description('Optional. Deploy private endpoints for the Key Vaults. When true, public network access is disabled on both Key Vaults.')
@@ -261,7 +258,6 @@ module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' =
     deployEncryptionKeyVault: deployEncryptionKeyVault
     encryptionKeyVaultName: encryptionKeyVaultName
     encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
-    encryptionKeyVaultForcePublicAccess: encryptionKeyVaultForcePublicAccess
     privateEndpoint: privateEndpoint
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId

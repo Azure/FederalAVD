@@ -84,8 +84,14 @@ resource recoveryServicesVault 'Microsoft.RecoveryServices/vaults@2023-04-01' = 
                 userAssignedIdentity: cmkUserAssignedIdentityResourceId
                 useSystemAssignedIdentity: false
               }
+          infrastructureEncryption: 'Enabled'
         }
-      : null
+      : {
+          // No CMK — but always enable infrastructure encryption (double encryption
+          // with platform-managed keys at the storage layer, analogous to
+          // requireInfrastructureEncryption on storage accounts). Satisfies SC-28(1).
+          infrastructureEncryption: 'Enabled'
+        }
   }
 }
 
