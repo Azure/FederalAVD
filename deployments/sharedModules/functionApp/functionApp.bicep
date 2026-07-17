@@ -1,4 +1,4 @@
-﻿@description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
+@description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
 
 @description('Required. Resource ID of the private DNS zone for blob endpoints (typically privatelink.blob.core.windows.net).')
@@ -349,7 +349,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (en
   kind: 'web'
 }
 
-module updatePrivateLinkScope '../get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../privateLinkScope/get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
   name: 'PrivateLlinkScope-${deploymentSuffix}'
   scope: subscription()
   params: {
@@ -569,7 +569,7 @@ var storageAccountRoleDefinitions = union(
   storageAccountRoleDefinitionIds
 )
 
-module roleAssignment_storageAccount '../../storage/storageAccounts/roleAssignment.bicep' = {
+module roleAssignment_storageAccount '../../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = {
   name: 'set-role-assignments-storage-${deploymentSuffix}'
   params: {
     storageAccountName: storageAccount.name

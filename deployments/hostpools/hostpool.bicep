@@ -1168,7 +1168,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
 // KeyVaults: Inline Key Vault creation — only runs when Security KVs were not provided.
 // For all-in-one portal deployments: deploys encryption KV when CMK is requested, secrets KV when deploySecretsKeyVault=true.
 // For Security-first deployments: skipped entirely because encryptionKeyVaultResourceId will be non-empty.
-module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
+module keyVaults '../sharedModules/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
   name: 'KeyVaults-${deploymentSuffix}'
   params: {
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId

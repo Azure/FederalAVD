@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "17535835056898770018"
+      "templateHash": "4170375088600377838"
     }
   },
   "parameters": {
@@ -407,6 +407,7 @@
     "$fxv#1": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
+      "automationAccounts": "aa",
       "availabilitySets": "as",
       "computeGalleries": "gal",
       "dataCollectionEndpoints": "dce",

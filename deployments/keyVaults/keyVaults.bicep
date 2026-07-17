@@ -241,7 +241,7 @@ module operationsResourceGroup '../../.common/bicepModules/resources/resourceGro
 
 // ── Key Vaults ─────────────────────────────────────────────────────────────────
 
-module keyVaults '../../.common/bicepModules/custom/keyVaults/keyVaults.bicep' = {
+module keyVaults '../sharedModules/keyVaults/keyVaults.bicep' = {
   name: 'Operations-KeyVaults-${deploymentSuffix}'
   scope: subscription()
   params: {

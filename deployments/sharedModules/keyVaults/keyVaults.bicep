@@ -86,7 +86,7 @@ var encryptionKvNetworkAcls = {
 
 // ─── Secrets Key Vault ─────────────────────────────────────────────────────────
 
-module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
+module secretsKeyVault '../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
   name: 'Secrets-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -105,7 +105,7 @@ module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsK
   }
 }
 
-module secretsKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
+module secretsKeyVault_pe '../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
   name: 'Secrets-KV-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -127,7 +127,7 @@ module secretsKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (de
   }
 }
 
-module secrets '../../keyVault/vaults/secrets/deploy.bicep' = [
+module secrets '../../../.common/bicepModules/keyVault/vaults/secrets/deploy.bicep' = [
   for secret in secretList: if (deploySecretsKv) {
     name: 'Secret-${secret.name}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupName)
@@ -142,7 +142,7 @@ module secrets '../../keyVault/vaults/secrets/deploy.bicep' = [
 
 // ─── Encryption Key Vault ──────────────────────────────────────────────────────
 
-module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncryptionKeyVault) {
+module encryptionKeyVault '../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deployEncryptionKeyVault) {
   name: 'Encryption-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -161,7 +161,7 @@ module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncry
   }
 }
 
-module encryptionKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
+module encryptionKeyVault_pe '../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
   name: 'Encryption-KV-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
