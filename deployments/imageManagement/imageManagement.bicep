@@ -393,7 +393,7 @@ module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedI
 // Single CMK module covering both storage accounts with a shared encryption UAI.
 // CMK must complete before any storage account deployment so the role assignment
 // propagates before the storage PUT includes the CMK reference.
-module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
+module storageCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
   name: 'Storage-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -412,7 +412,7 @@ module storageCmk '../../.common/bicepModules/custom/customerManagedKeys/custome
 // DES for gallery image version encryption — created once here so imageBuild deployments
 // can pass `diskEncryptionSetResourceId` as `existingDiskEncryptionSetResourceId`,
 // suppressing per-build DES creation and KV dependency during image builds.
-module diskCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
+module diskCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
   name: 'Disk-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -443,7 +443,7 @@ module diskCmk '../../.common/bicepModules/custom/customerManagedKeys/customerMa
 // Requires RSA-HSM key with key release policy — created via ARM on first deploy only.
 // WARNING: The key release policy is immutable. Re-deploying with createConfidentialVmGalleryDes=true
 // will fail if the key already exists. Disable this option on subsequent deployments.
-module confidentialVmCmk '../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = if (createConfidentialVmGalleryDes) {
+module confidentialVmCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = if (createConfidentialVmGalleryDes) {
   name: 'ConfidentialVM-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {

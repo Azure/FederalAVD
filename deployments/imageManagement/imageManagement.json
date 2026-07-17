@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "7763148938652477259"
+      "templateHash": "2774256376740105167"
     }
   },
   "functions": [
@@ -783,6 +783,7 @@
     "$fxv#2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
+      "automationAccounts": "aa",
       "availabilitySets": "as",
       "computeGalleries": "gal",
       "dataCollectionEndpoints": "dce",

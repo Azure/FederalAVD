@@ -1,4 +1,4 @@
-﻿// FSLogix Storage Quota Manager Add-On
+// FSLogix Storage Quota Manager Add-On
 // Automated quota management for FSLogix Azure Files Premium file shares
 
 targetScope = 'subscription'
@@ -232,7 +232,7 @@ var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride
 // ========== //
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module hostingPlan '../../sharedModules/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(aspResourceGroupName)
   params: {
@@ -247,7 +247,7 @@ module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionApp
 }
 
 // Storage Quota Manager Function App
-module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
+module functionApp '../../sharedModules/functionApp/functionApp.bicep' = {
   name: 'StorageQuotaFunctionApp-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
@@ -296,7 +296,7 @@ module roleAssignment_StorageAccounts '../../../.common/bicepModules/authorizati
 }
 
 // Storage Quota Manager Function
-module storageQuotaFunction '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
+module storageQuotaFunction '../../sharedModules/functionApp/function.bicep' = {
   name: 'StorageQuotaFunction-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {

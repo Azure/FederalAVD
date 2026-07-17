@@ -1,4 +1,4 @@
-﻿// AVD Session Host Replacer Add-On
+// AVD Session Host Replacer Add-On
 // Deploys automated session host lifecycle management for Azure Virtual Desktop
 
 targetScope = 'subscription'
@@ -761,7 +761,7 @@ module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deplo
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../../.common/bicepModules/custom/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
+module hostingPlan '../../sharedModules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(aspResourceGroupName)
   params: {
@@ -910,7 +910,7 @@ module roleAssignmentUaiArtifacts '../../../.common/bicepModules/managedIdentity
   }
 }
 
-module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp.bicep' = {
+module functionApp '../../sharedModules/functionApp/functionApp.bicep' = {
   name: 'SessionHostReplacerFunctionApp-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
@@ -1127,7 +1127,7 @@ module functionApp '../../../.common/bicepModules/custom/functionApp/functionApp
   }
 }
 
-module functionCode '../../../.common/bicepModules/custom/functionApp/function.bicep' = {
+module functionCode '../../sharedModules/functionApp/function.bicep' = {
   name: 'SessionHostReplacerFunction-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
