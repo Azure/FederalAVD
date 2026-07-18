@@ -8,15 +8,21 @@
 
 This solution supports using **Entra Kerberos** for authentication to Azure Files for cloud-only identities. This allows you to use FSLogix with Azure Files without requiring an on-premises Active Directory or Entra Domain Services.
 
-The session hosts are Entra ID joined, and users are cloud-only identities in Entra ID.
+Session hosts are Microsoft Entra joined, and users are cloud-only identities in Microsoft Entra ID.
+
+> [!NOTE]
+> Microsoft Entra Kerberos for cloud-only identities is generally available in Azure Commercial and Azure US Government. However, share-level Azure RBAC for cloud-only identities — required for least-privilege NTFS permissions and profile sharding — is currently available only in a [subset of Azure Commercial regions](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable#regional-availability-for-microsoft-entra-kerberos). Azure Government is not currently supported for this RBAC capability.
 
 For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Authentication for hybrid and cloud-only identities on Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune).
 
 ## Prerequisites
 
 1. **Identity Solution**: `identitySolution` must be set to `'EntraKerberos-CloudOnly'`.
-2. **Session Hosts**: Must be Entra ID joined.
-3. **Client Devices**: Windows 10/11 Enterprise/Pro multi-session or Windows Server 2022.
+2. **Session Hosts**: Must be Microsoft Entra joined.
+3. **Client Devices**: Windows 11 Enterprise/Pro single or multi-session, or Windows Server 2025.
+
+   > [!IMPORTANT]
+   > Windows 10 and Windows Server 2022 are **not** supported for Microsoft Entra Kerberos with cloud-only identities. Windows 11 and Windows Server 2025 are required.
 
 ### User Assigned Managed Identity (Optional)
 

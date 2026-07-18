@@ -6,9 +6,9 @@
 
 ## Overview
 
-This solution supports **Entra Kerberos** for Azure Files, allowing you to use Azure Active Directory (Entra ID) Kerberos to authenticate hybrid user identities for Azure Files access. This eliminates the need for line-of-sight to on-premises Domain Controllers for the storage account itself.
+This solution supports **Microsoft Entra Kerberos** for Azure Files, allowing you to authenticate hybrid identities for Azure Files access without requiring line-of-sight to on-premises domain controllers for the storage account itself.
 
-The session hosts are joined to Entra ID, and user identities are synchronized from the on-premises domain to Entra ID.
+Session hosts are Microsoft Entra joined or Microsoft Entra hybrid joined, and user identities are synchronized from on-premises Active Directory to Microsoft Entra ID via Entra Connect Sync or Entra Cloud Sync.
 
 For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Authentication for hybrid and cloud-only identities on Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune).
 
@@ -18,8 +18,8 @@ For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Au
 ## Prerequisites
 
 1. **Identity Solution**: `identitySolution` must be set to `'EntraKerberos-Hybrid'`.
-2. **Session Hosts**: Must be Entra ID joined.
-3. **Client Devices**: Windows 10/11 Enterprise/Pro multi-session or Windows Server 2022.
+2. **Session Hosts**: Must be Microsoft Entra joined or Microsoft Entra hybrid joined.
+3. **Client Devices**: Windows 10/11 Enterprise/Pro single or multi-session, Windows Server 2022, or Windows Server 2025.
 
 ### User Assigned Managed Identity (Optional)
 
