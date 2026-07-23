@@ -49,43 +49,17 @@
               "name": "identifier",
               "type": "Microsoft.Common.TextBox",
               "label": "Host Pool Persona",
-              "toolTip": "A short alphanumeric identifier for the user persona this host pool serves (e.g. \"finance\", \"dev\", \"kiosk\"). Define separate personas when user groups differ in pool type, density, performance, GPU needs, or business function.",
+              "toolTip": "A short identifier for the user persona this host pool serves (e.g. \"finance\", \"dev\", \"kiosk\"). Define separate personas when user groups differ in pool type, density, performance, GPU needs, or business function. For multiple pools of the same persona (sharding), append a suffix to the identifier (e.g. \"finance01\", \"finance02\").",
               "constraints": {
                 "required": true,
                 "validations": [
                   {
-                    "regex": "^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)?$",
-                    "message": "Only alphanumeric characters and a single dash '-' are allowed. The dash must be specified between alphanumeric characters."
+                    "regex": "^[a-zA-Z0-9]([a-zA-Z0-9_.-]*[a-zA-Z0-9])?$",
+                    "message": "The identifier must begin and end with an alphanumeric character and can only contain alphanumeric characters, underscores, dashes, and dots."
                   },
                   {
-                    "isValid": "[not(greater(add(length(steps('basics').identifier), if(empty(steps('basics').index), 0, 2)), 9))]",
-                    "message": "The identifier cannot exceed 9 characters, or 7 characters when combined with the 2-digit index (total cannot exceed 9 characters)."
-                  }
-                ]
-              }
-            },
-            {
-              "name": "indexTextBlock",
-              "type": "Microsoft.Common.TextBlock",
-              "options": {
-                "link": {
-                  "label": "Sharding Pattern — Azure Architecture Center",
-                  "uri": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
-                },
-                "text": "If you need more than one host pool for the same persona (horizontal sharding), supply a 2-digit index below."
-              }
-            },
-            {
-              "name": "index",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Host Pool Index",
-              "toolTip": "Input a 2-digit numeric index value (00-99) for the hostpool created by this solution. Leave blank if you only need one host pool for this persona.",
-              "constraints": {
-                "required": false,
-                "validations": [
-                  {
-                    "regex": "^\\d{0,2}$",
-                    "message": "Only a blank value or a 2-digit integer value from 0 to 99 are allowed."
+                    "isValid": "[not(greater(length(steps('basics').identifier), 16))]",
+                    "message": "The identifier cannot exceed 16 characters."
                   }
                 ]
               }
@@ -977,7 +951,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "visible": "[and(not(contains(steps('hosts').machineIdentity, 'DomainServices')), equals(steps('hosts').credentials.source, 'keyVault'))]",
                   "options": {
-                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below: 1. VirtualMachineAdminUserName: The virtual machine administrator username, and 2. VirtualMachineAdminPassword: The virtual machine administrator password.",
+                    "text": "The following secrets must be stored in the key vault you select below:\n1. VirtualMachineAdminUserName: The virtual machine administrator username.\n2. VirtualMachineAdminPassword: The virtual machine administrator password.",
                     "style": "Info"
                   }
                 },
@@ -986,7 +960,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "visible": "[and(contains(steps('hosts').machineIdentity, 'DomainServices'), equals(steps('hosts').credentials.source, 'keyVault'))]",
                   "options": {
-                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below: 1. DomainJoinUserPrincipalName: The domain join account UserPrincipalName (i.e., domjoin@contoso.local), 2. DomainJoinUserPassword: The password associated with the domain join user account., 3. VirtualMachineAdminUserName: The virtual machine administrator username., and 4. VirtualMachineAdminPassword: The virtual machine administrator password.",
+                    "text": "The following secrets must be stored in the key vault you select below:\n1. DomainJoinUserPrincipalName: The domain join account UserPrincipalName (e.g. domjoin@contoso.local).\n2. DomainJoinUserPassword: The password for the domain join user account.\n3. VirtualMachineAdminUserName: The virtual machine administrator username.\n4. VirtualMachineAdminPassword: The virtual machine administrator password.",
                     "style": "Info"
                   }
                 },
@@ -1198,7 +1172,7 @@
                   "name": "virtualMachineNamePrefix",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Virtual Machine Name Prefix",
-                  "defaultValue": "[toLower(concat('avd', steps('basics').identifier, if(empty(steps('basics').index), '', concat('-', if(equals(length(steps('basics').index), 1), concat('0', steps('basics').index), steps('basics').index)))))]",
+                  "defaultValue": "[toLower(concat('avd', steps('basics').identifier))]",
                   "toolTip": "Provide a Virtual Machine name prefix consisting of alphanumeric and dashes up to 12 characters long. A three character numeric suffix will be appended to the name padded with zeros (0).",
                   "constraints": {
                     "required": true,
@@ -4366,11 +4340,11 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Delimiter",
                   "defaultValue": "-",
-                  "toolTip": "Character(s) placed between each component. A hyphen (-) is most common. Storage account names cannot contain hyphens — they are stripped automatically for those resources.",
+                  "toolTip": "Character placed between each component. A hyphen (-) is most common. Storage account names cannot contain hyphens — they are stripped automatically for those resources.",
                   "constraints": {
                     "required": true,
-                    "regex": "^[-_.]{1,3}$",
-                    "validationMessage": "Use 1 to 3 characters: hyphens (-), underscores (_), or dots (.) only."
+                    "regex": "^[-_]$",
+                    "validationMessage": "Must be a single character: hyphen (-) or underscore (_)."
                   }
                 },
                 {
@@ -4774,14 +4748,14 @@
                 {
                   "name": "fslogixStoragePrefixValue",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "FSLogix Storage Account Prefix",
-                  "placeholder": "e.g. fslogix, myfslogix",
+                  "label": "Custom FSLogix Storage Account Prefix",
+                  "placeholder": "e.g. fslogix, myprefix",
                   "defaultValue": "",
-                  "toolTip": "Custom prefix for FSLogix storage account names. Must be lowercase alphanumeric only (hyphens are stripped). The first 13 characters are used, followed by a unique suffix. Leave empty to use the default 'fslogix' prefix.",
+                  "toolTip": "Custom prefix for FSLogix storage account names (max 13 characters). The full name is this prefix plus a 2-digit instance index (e.g. myprefix01, myprefix02), keeping the total at or below 15 characters — required for AD DS computer account compatibility. Must be lowercase alphanumeric; hyphens are stripped. Leave empty to use the default naming convention (fslogix + a unique string), which is suitable for cloud-only FSLogix with no AD DS join.",
                   "constraints": {
                     "required": false,
                     "regex": "^[a-z0-9-]{0,13}$",
-                    "validationMessage": "Use up to 13 lowercase letters, digits, or hyphens (hyphens are stripped from the final name)."
+                    "validationMessage": "Use up to 13 lowercase letters, digits, or hyphens (hyphens are stripped from the final name, so the effective prefix is at most 13 alphanumeric characters)."
                   }
                 },
                 {
@@ -4847,13 +4821,24 @@
                     "text": "No location segment in your naming convention — a location code is automatically included in the Key Vault unique string seed to prevent name collisions across regions."
                   }
                 },
+
+                {
+                  "name": "customizeAbbreviations",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Customize resource type abbreviations",
+                  "toolTip": "Check to override the default abbreviations used in resource names. Leave unchecked to use the standard Cloud Adoption Framework abbreviations (e.g., rg, vm, kv, sa).",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "constraints": {
+                    "required": false
+                  }
+                },
                 {
                   "name": "rtCodeRg",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Resource Groups abbreviation",
                   "defaultValue": "rg",
                   "toolTip": "Abbreviation substituted for the Resource Type component in resource groups names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4866,7 +4851,7 @@
                   "label": "Host Pools abbreviation",
                   "defaultValue": "vdpool",
                   "toolTip": "Abbreviation substituted for the Resource Type component in host pools names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4879,7 +4864,7 @@
                   "label": "Desktop Application Groups abbreviation",
                   "defaultValue": "vddag",
                   "toolTip": "Abbreviation substituted for the Resource Type component in desktop application groups names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4892,7 +4877,7 @@
                   "label": "Workspaces abbreviation",
                   "defaultValue": "vdws",
                   "toolTip": "Abbreviation substituted for the Resource Type component in workspaces names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4905,7 +4890,7 @@
                   "label": "Scaling Plans abbreviation",
                   "defaultValue": "vdscaling",
                   "toolTip": "Abbreviation substituted for the Resource Type component in scaling plans names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4918,7 +4903,7 @@
                   "label": "Virtual Machines abbreviation",
                   "defaultValue": "vm",
                   "toolTip": "Abbreviation substituted for the Resource Type component in virtual machines names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4929,9 +4914,9 @@
                   "name": "rtCodeDisk",
                   "type": "Microsoft.Common.TextBox",
                   "label": "OS Disks abbreviation",
-                  "defaultValue": "osdisk",
+                  "defaultValue": "disk",
                   "toolTip": "Abbreviation substituted for the Resource Type component in os disks names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4944,7 +4929,7 @@
                   "label": "Disk Encryption Sets abbreviation",
                   "defaultValue": "des",
                   "toolTip": "Abbreviation substituted for the Resource Type component in disk encryption sets names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4957,7 +4942,7 @@
                   "label": "Disk Accesses abbreviation",
                   "defaultValue": "da",
                   "toolTip": "Abbreviation substituted for the Resource Type component in disk accesses names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4970,7 +4955,7 @@
                   "label": "Availability Sets abbreviation",
                   "defaultValue": "as",
                   "toolTip": "Abbreviation substituted for the Resource Type component in availability sets names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4983,7 +4968,7 @@
                   "label": "Storage Accounts abbreviation",
                   "defaultValue": "sa",
                   "toolTip": "Abbreviation substituted for the Resource Type component in storage accounts names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -4996,7 +4981,7 @@
                   "label": "NetApp Accounts abbreviation",
                   "defaultValue": "naa",
                   "toolTip": "Abbreviation substituted for the Resource Type component in netapp accounts names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5009,7 +4994,7 @@
                   "label": "NetApp Capacity Pools abbreviation",
                   "defaultValue": "nacp",
                   "toolTip": "Abbreviation substituted for the Resource Type component in netapp capacity pools names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5022,7 +5007,7 @@
                   "label": "Key Vaults abbreviation",
                   "defaultValue": "kv",
                   "toolTip": "Abbreviation substituted for the Resource Type component in key vaults names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5035,7 +5020,7 @@
                   "label": "User Assigned Identities abbreviation",
                   "defaultValue": "uai",
                   "toolTip": "Abbreviation substituted for the Resource Type component in user assigned identities names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5048,7 +5033,7 @@
                   "label": "Private Endpoints abbreviation",
                   "defaultValue": "pe",
                   "toolTip": "Abbreviation substituted for the Resource Type component in private endpoints names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5061,7 +5046,7 @@
                   "label": "Network Interfaces abbreviation",
                   "defaultValue": "nic",
                   "toolTip": "Abbreviation substituted for the Resource Type component in network interfaces names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5074,7 +5059,7 @@
                   "label": "Log Analytics Workspaces abbreviation",
                   "defaultValue": "law",
                   "toolTip": "Abbreviation substituted for the Resource Type component in log analytics workspaces names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5087,7 +5072,7 @@
                   "label": "Data Collection Endpoints abbreviation",
                   "defaultValue": "dce",
                   "toolTip": "Abbreviation substituted for the Resource Type component in data collection endpoints names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -5100,11 +5085,58 @@
                   "label": "Recovery Services Vaults abbreviation",
                   "defaultValue": "rsv",
                   "toolTip": "Abbreviation substituted for the Resource Type component in recovery services vaults names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
                     "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
+                  "name": "sessionHostNamingInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Session host VM, disk, and NIC names follow a simpler pattern than infrastructure resources: just the resource type abbreviation and the session host name token (SHNAME). The defaults below reflect your current convention settings. Override if you need a different pattern."
+                  }
+                },
+                {
+                  "name": "vmNameConvOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Virtual Machine Naming Convention",
+                  "placeholder": "vm-SHNAME",
+                  "defaultValue": "[if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))), 'resourceType'), concat('SHNAME-', if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm)), concat(if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm), '-SHNAME'))]",
+                  "toolTip": "Naming pattern for session host VMs. SHNAME is replaced with the session host name at deployment time (e.g., 'vm-SHNAME' becomes 'vm-avd01'). Defaults based on your resource type abbreviation and component position above.",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^.*SHNAME.*$",
+                    "validationMessage": "Must include the SHNAME token."
+                  }
+                },
+                {
+                  "name": "diskNameConvOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "OS Disk Naming Convention",
+                  "placeholder": "disk-SHNAME",
+                  "defaultValue": "[if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))), 'resourceType'), concat('SHNAME-', if(empty(steps('tagsAndNaming').naming.rtCodeDisk),'disk',steps('tagsAndNaming').naming.rtCodeDisk)), concat(if(empty(steps('tagsAndNaming').naming.rtCodeDisk),'disk',steps('tagsAndNaming').naming.rtCodeDisk), '-SHNAME'))]",
+                  "toolTip": "Naming pattern for session host OS disks. SHNAME is replaced with the VM name (e.g., 'disk-SHNAME' becomes 'disk-avd01').",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^.*SHNAME.*$",
+                    "validationMessage": "Must include the SHNAME token."
+                  }
+                },
+                {
+                  "name": "nicNameConvOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Network Interface Naming Convention",
+                  "placeholder": "nic-SHNAME",
+                  "defaultValue": "[if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))), 'resourceType'), concat('SHNAME-', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic)), concat(if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '-SHNAME'))]",
+                  "toolTip": "Naming pattern for session host network interfaces. SHNAME is replaced with the VM name (e.g., 'nic-SHNAME' becomes 'nic-avd01').",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^.*SHNAME.*$",
+                    "validationMessage": "Must include the SHNAME token."
                   }
                 }
               ]
@@ -5125,7 +5157,7 @@
                   "name": "previewHostPool",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "[concat('Host Pool: ',concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),concat(steps('basics').identifier,if(not(empty(steps('basics').index)),concat('-',if(equals(length(steps('basics').index),1),concat('0',steps('basics').index),steps('basics').index)),'')),if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),concat(steps('basics').identifier,if(not(empty(steps('basics').index)),concat('-',if(equals(length(steps('basics').index),1),concat('0',steps('basics').index),steps('basics').index)),'')),if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),concat(steps('basics').identifier,if(not(empty(steps('basics').index)),concat('-',if(equals(length(steps('basics').index),1),concat('0',steps('basics').index),steps('basics').index)),'')),if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),concat(steps('basics').identifier,if(not(empty(steps('basics').index)),concat('-',if(equals(length(steps('basics').index),1),concat('0',steps('basics').index),steps('basics').index)),'')),if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),concat(steps('basics').identifier,if(not(empty(steps('basics').index)),concat('-',if(equals(length(steps('basics').index),1),concat('0',steps('basics').index),steps('basics').index)),'')),if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),concat(steps('basics').identifier,if(not(empty(steps('basics').index)),concat('-',if(equals(length(steps('basics').index),1),concat('0',steps('basics').index),steps('basics').index)),'')),if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),'')))]"
+                    "text": "[concat('Host Pool: ',concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),'')))]"
                   }
                 },
                 {
@@ -5199,7 +5231,6 @@
     "outputs": {
       "parameters": {
         "identifier": "[steps('basics').identifier]",
-        "index": "[if(empty(steps('basics').index), -1, steps('basics').index)]",
         "identitySolution": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').machineIdentity, if(or(equals(steps('controlPlane').hostPool.type, 'Personal'), not(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)))), 'EntraId', steps('userProfiles').userIdentity))]",
         "domainName": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').virtualMachines.domainName, if(and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.domainName, ''))]",
         "vmOUPath": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').virtualMachines.ouPath, if(and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.vmOUPath, ''))]",
@@ -5324,7 +5355,8 @@
         "globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
         "globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
         "permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
-        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"vmsLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '\",\"cpLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '\",\"fslogixStoragePrefix\":\"', if(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue),'',steps('tagsAndNaming').naming.fslogixStoragePrefixValue), '\",\"resourceTypeCodes\":{', '\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\"', ',', '\"hostPools\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp), '\"', ',', '\"desktopApplicationGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDag),'vddag',steps('tagsAndNaming').naming.rtCodeDag), '\"', ',', '\"workspaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeWs),'vdws',steps('tagsAndNaming').naming.rtCodeWs), '\"', ',', '\"scalingPlans\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSp),'vdscaling',steps('tagsAndNaming').naming.rtCodeSp), '\"', ',', '\"virtualMachines\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm), '\"', ',', '\"osdisks\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDisk),'osdisk',steps('tagsAndNaming').naming.rtCodeDisk), '\"', ',', '\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes), '\"', ',', '\"diskAccesses\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDa),'da',steps('tagsAndNaming').naming.rtCodeDa), '\"', ',', '\"availabilitySets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeAs),'as',steps('tagsAndNaming').naming.rtCodeAs), '\"', ',', '\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa), '\"', ',', '\"netAppAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNaa),'naa',steps('tagsAndNaming').naming.rtCodeNaa), '\"', ',', '\"netAppCapacityPools\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNacp),'nacp',steps('tagsAndNaming').naming.rtCodeNacp), '\"', ',', '\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\"', ',', '\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\"', ',', '\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\"', ',', '\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"', ',', '\"logAnalyticsWorkspaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeLaw),'law',steps('tagsAndNaming').naming.rtCodeLaw), '\"', ',', '\"dataCollectionEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDce),'dce',steps('tagsAndNaming').naming.rtCodeDce), '\"', ',', '\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\"', '}}'))]",
+        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"vmsLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '\",\"cpLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '\",\"fslogixStoragePrefix\":\"', if(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue),'',steps('tagsAndNaming').naming.fslogixStoragePrefixValue), '\",\"virtualMachineNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.vmNameConvOverride),'',steps('tagsAndNaming').naming.vmNameConvOverride), '\",\"virtualMachineDiskNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.diskNameConvOverride),'',steps('tagsAndNaming').naming.diskNameConvOverride), '\",\"virtualMachineNicNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.nicNameConvOverride),'',steps('tagsAndNaming').naming.nicNameConvOverride), '\"}'))]",
+        "namingResourceTypeCodes": "[if(steps('tagsAndNaming').naming.customizeAbbreviations, parse(concat('{\"resourceGroups\":\"', steps('tagsAndNaming').naming.rtCodeRg, '\",\"hostPools\":\"', steps('tagsAndNaming').naming.rtCodeHp, '\",\"desktopApplicationGroups\":\"', steps('tagsAndNaming').naming.rtCodeDag, '\",\"workspaces\":\"', steps('tagsAndNaming').naming.rtCodeWs, '\",\"scalingPlans\":\"', steps('tagsAndNaming').naming.rtCodeSp, '\",\"virtualMachines\":\"', steps('tagsAndNaming').naming.rtCodeVm, '\",\"osdisks\":\"', steps('tagsAndNaming').naming.rtCodeDisk, '\",\"diskEncryptionSets\":\"', steps('tagsAndNaming').naming.rtCodeDes, '\",\"diskAccesses\":\"', steps('tagsAndNaming').naming.rtCodeDa, '\",\"availabilitySets\":\"', steps('tagsAndNaming').naming.rtCodeAs, '\",\"storageAccounts\":\"', steps('tagsAndNaming').naming.rtCodeSa, '\",\"netAppAccounts\":\"', steps('tagsAndNaming').naming.rtCodeNaa, '\",\"netAppCapacityPools\":\"', steps('tagsAndNaming').naming.rtCodeNacp, '\",\"keyVaults\":\"', steps('tagsAndNaming').naming.rtCodeKv, '\",\"userAssignedIdentities\":\"', steps('tagsAndNaming').naming.rtCodeUai, '\",\"privateEndpoints\":\"', steps('tagsAndNaming').naming.rtCodePe, '\",\"networkInterfaces\":\"', steps('tagsAndNaming').naming.rtCodeNic, '\",\"logAnalyticsWorkspaces\":\"', steps('tagsAndNaming').naming.rtCodeLaw, '\",\"dataCollectionEndpoints\":\"', steps('tagsAndNaming').naming.rtCodeDce, '\",\"recoveryServicesVaults\":\"', steps('tagsAndNaming').naming.rtCodeRsv, '\"}')), parse('{}'))]",
         "tags": "[steps('tagsAndNaming').tags.tags]"
       },
       "kind": "Subscription",

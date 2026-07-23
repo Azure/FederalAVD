@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.44.1.10279",
-      "templateHash": "4170375088600377838"
+      "version": "0.45.15.27210",
+      "templateHash": "6033354302583414499"
     }
   },
   "parameters": {
@@ -26,6 +26,36 @@
       "defaultValue": {},
       "metadata": {
         "description": "Optional. Tags for all resources."
+      }
+    },
+    "namingConvention": {
+      "type": "object",
+      "defaultValue": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
+      "metadata": {
+        "description": "Naming convention controlling how Function App infrastructure resources are named.\nShould match the convention used when deploying the host pool. Pre-populated from the\nhpNamingConvention tag on the host pool resource."
+      }
+    },
+    "identifier": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The host pool base name / identifier used for naming (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the host pool resource. When empty, falls back to sqm."
+      }
+    },
+    "namingResourceTypeCodes": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Overrides for resource type abbreviations used when computing infrastructure resource names. Only the keys you provide are overridden; all others use CAF defaults. Supported keys: functionApps, appServicePlans, userAssignedIdentities, privateEndpoints, networkInterfaces."
       }
     },
     "functionAppNameOverride": {
@@ -50,6 +80,14 @@
       "maxLength": 128,
       "metadata": {
         "description": "Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores)."
+      }
+    },
+    "appServicePlanNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 40,
+      "metadata": {
+        "description": "Optional. Explicit name for the App Service Plan. If not provided, name is derived from the naming convention. Use this for brownfield deployments where an existing plan was created with a non-standard name. Must follow Azure naming rules (1-40 chars, alphanumeric and hyphens)."
       }
     },
     "appServicePlanResourceId": {
@@ -404,45 +442,8 @@
         }
       }
     },
-    "$fxv#1": {
-      "applicationInsights": "appi",
-      "appServicePlans": "asp",
-      "automationAccounts": "aa",
-      "availabilitySets": "as",
-      "computeGalleries": "gal",
-      "dataCollectionEndpoints": "dce",
-      "dataCollectionRules": "dcr",
-      "desktopApplicationGroups": "vddag",
-      "diskAccesses": "da",
-      "remoteApplicationGroups": "vdrag",
-      "diskEncryptionSets": "des",
-      "functionApps": "fa",
-      "hostPools": "vdpool",
-      "keyVaults": "kv",
-      "logAnalyticsWorkspaces": "law",
-      "natGateways": "ng",
-      "netAppAccounts": "naa",
-      "netAppCapacityPools": "nacp",
-      "networkInterfaces": "nic",
-      "networkSecurityGroups": "nsg",
-      "osdisks": "osdisk",
-      "privateEndpoints": "pe",
-      "privateLinkScopes": "pls",
-      "publicIPAddresses": "pip",
-      "recoveryServicesVaults": "rsv",
-      "resourceGroups": "rg",
-      "routeTables": "rt",
-      "scalingPlans": "vdscaling",
-      "storageAccounts": "sa",
-      "templateSpecs": "ts",
-      "userAssignedIdentities": "uai",
-      "virtualMachines": "vm",
-      "workbooks": "wb",
-      "workspaces": "vdws",
-      "imageDefinitions": "vmid"
-    },
-    "$fxv#2": "param($Timer)\r\n\r\ntry {\r\n\t[string]$ResourceGroupName = $env:ResourceGroupName\r\n\t[string]$ResourceManagerUri = $env:ResourceManagerUri\r\n\t[string]$StorageSuffix = $env:StorageSuffix\r\n\t[string]$SubscriptionId = $env:SubscriptionId\r\n\r\n\t$ErrorActionPreference = 'Stop'\r\n\t$WarningPreference = 'SilentlyContinue'\r\n\r\n\t#region Functions\r\n\tfunction Write-Log {\r\n\t\t[CmdletBinding()]\r\n\t\tparam (\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Err,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$Message,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$ResourceName,\r\n\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Warn\r\n\t\t)\r\n\r\n\t\t[string]$MessageTimeStamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n\t\t$Message = \"[$($MyInvocation.ScriptLineNumber)] [$($ResourceName)] $Message\"\r\n\t\t[string]$WriteMessage = \"[$($MessageTimeStamp)] $Message\"\r\n\r\n\t\tif ($Err) {\r\n\t\t\tWrite-Error $WriteMessage\r\n\t\t\t$Message = \"ERROR: $Message\"\r\n\t\t}\r\n\t\telseif ($Warn) {\r\n\t\t\tWrite-Warning $WriteMessage\r\n\t\t\t$Message = \"WARN: $Message\"\r\n\t\t}\r\n\t\telse {\r\n\t\t\tWrite-Output $WriteMessage\r\n\t\t}\r\n\t}\r\n\t#endregion Functions\r\n\r\n\t# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2\r\n\t[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\t#fix resourcemanageruri if it ends with a slash\r\n\tif (-not $ResourceManagerUri.EndsWith('/')) {\r\n\t\t$ResourceManagerUri = $ResourceManagerUri + '/'\r\n\t}\r\n\r\n\t#region Azure Authentication\r\n\t$AccessToken = $null\r\n\ttry {\r\n\t\t$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUri + '&api-version=2019-08-01'\r\n\t\t$TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\" = \"$env:IDENTITY_HEADER\" } -Uri $TokenAuthURI\r\n\t\t$AccessToken = $TokenResponse.access_token\r\n\t\t$Header = @{\r\n\t\t\t'Content-Type'  = 'application/json'\r\n\t\t\t'Authorization' = 'Bearer ' + $AccessToken\r\n\t\t}\r\n\t}\r\n\tcatch {\r\n\t\tthrow [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n\t}\r\n\tWrite-Log -ResourceName \"$SubscriptionId\" -Message \"Successfully authenticated with Azure using a managed identity\"\r\n\t#endregion Azure Authentication\r\n\r\n\t# Get storage accounts\r\n\t$Uri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'\r\n\t$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Uri).value.name\r\n\r\n\tforeach ($StorageAccountName in $StorageAccountNames) {\r\n\t\t$Shares = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'\r\n\t\t$ExistingShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Shares).value.name\r\n\t\tForEach ($ShareName in $ExistingShareNames) {\r\n\t\t\t$ShareUpdateUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'\r\n\r\n\t\t\t# Get file share info\r\n\t\t\t$ShareGetUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'\r\n\t\t\t$PFS = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties\r\n\t\r\n\t\t\t# Set variables for provisioned capacity and used capacity\r\n\t\t\t$ProvisionedCapacity = $PFS.shareQuota\r\n\t\t\t$UsedCapacity = $PFS.ShareUsageBytes\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Capacity: $($ProvisionedCapacity)GB\"\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage: $([math]::Round($UsedCapacity/1GB, 0))GB\"\r\n\t\r\n\t\t\t# GB Based Scaling\r\n\t\t\t# No scaling if no usage\r\n\t\t\tif ($UsedCapacity -eq 0) {\r\n\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is 0GB. No Changes.\"\r\n\t\t\t}\r\n\t\t\t# Slow scaling up to 500GB\r\n\t\t\t# Increases share quota by 100GB if less than 50GB remains on the share\r\n\t\t\t# This allows time for an AVD Stamp to be rolled out \r\n\t\t\telseif ($ProvisionedCapacity -lt 500) {\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 50) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 50GB. Increasing the file share quota by 100GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 100\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 50GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t\t# Aggressive scaling\r\n\t\t\t# Increases share quota by 500GB if less than 500GB remains on the share\r\n\t\t\t# This ensures plenty of space is available during mass onboarding\r\n\t\t\telse {\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 500) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 500GB. Increasing the file share quota by 500GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 500\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 500GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n}\r\ncatch {\r\n\t$ErrContainer = $PSItem\r\n\t# $ErrContainer = $_\r\n\r\n\t[string]$ErrMsg = $ErrContainer | Format-List -Force | Out-String\r\n\t$ErrMsg += \"Version: $Version`n\"\r\n\r\n\tif (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue) {\r\n\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Err -Message $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\telse {\r\n\t\tWrite-Error $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\r\n\tthrow [System.Exception]::new($ErrMsg, $ErrContainer.Exception)\r\n}",
-    "$fxv#3": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, uncomment the line below.\r\n    # 'Az' = '17.*'\r\n}\r\n",
+    "$fxv#1": "param($Timer)\r\n\r\ntry {\r\n\t[string]$ResourceGroupName = $env:ResourceGroupName\r\n\t[string]$ResourceManagerUri = $env:ResourceManagerUri\r\n\t[string]$StorageSuffix = $env:StorageSuffix\r\n\t[string]$SubscriptionId = $env:SubscriptionId\r\n\r\n\t$ErrorActionPreference = 'Stop'\r\n\t$WarningPreference = 'SilentlyContinue'\r\n\r\n\t#region Functions\r\n\tfunction Write-Log {\r\n\t\t[CmdletBinding()]\r\n\t\tparam (\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Err,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$Message,\r\n\r\n\t\t\t[Parameter(Mandatory = $true)]\r\n\t\t\t[string]$ResourceName,\r\n\r\n\t\t\t[Parameter(Mandatory = $false)]\r\n\t\t\t[switch]$Warn\r\n\t\t)\r\n\r\n\t\t[string]$MessageTimeStamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n\t\t$Message = \"[$($MyInvocation.ScriptLineNumber)] [$($ResourceName)] $Message\"\r\n\t\t[string]$WriteMessage = \"[$($MessageTimeStamp)] $Message\"\r\n\r\n\t\tif ($Err) {\r\n\t\t\tWrite-Error $WriteMessage\r\n\t\t\t$Message = \"ERROR: $Message\"\r\n\t\t}\r\n\t\telseif ($Warn) {\r\n\t\t\tWrite-Warning $WriteMessage\r\n\t\t\t$Message = \"WARN: $Message\"\r\n\t\t}\r\n\t\telse {\r\n\t\t\tWrite-Output $WriteMessage\r\n\t\t}\r\n\t}\r\n\t#endregion Functions\r\n\r\n\t# Note: https://stackoverflow.com/questions/41674518/powershell-setting-security-protocol-to-tls-1-2\r\n\t[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\t#fix resourcemanageruri if it ends with a slash\r\n\tif (-not $ResourceManagerUri.EndsWith('/')) {\r\n\t\t$ResourceManagerUri = $ResourceManagerUri + '/'\r\n\t}\r\n\r\n\t#region Azure Authentication\r\n\t$AccessToken = $null\r\n\ttry {\r\n\t\t$TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUri + '&api-version=2019-08-01'\r\n\t\t$TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\" = \"$env:IDENTITY_HEADER\" } -Uri $TokenAuthURI\r\n\t\t$AccessToken = $TokenResponse.access_token\r\n\t\t$Header = @{\r\n\t\t\t'Content-Type'  = 'application/json'\r\n\t\t\t'Authorization' = 'Bearer ' + $AccessToken\r\n\t\t}\r\n\t}\r\n\tcatch {\r\n\t\tthrow [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n\t}\r\n\tWrite-Log -ResourceName \"$SubscriptionId\" -Message \"Successfully authenticated with Azure using a managed identity\"\r\n\t#endregion Azure Authentication\r\n\r\n\t# Get storage accounts\r\n\t$Uri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01'\r\n\t$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Uri).value.name\r\n\r\n\tforeach ($StorageAccountName in $StorageAccountNames) {\r\n\t\t$Shares = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares?api-version=2023-05-01'\r\n\t\t$ExistingShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $Shares).value.name\r\n\t\tForEach ($ShareName in $ExistingShareNames) {\r\n\t\t\t$ShareUpdateUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01'\r\n\r\n\t\t\t# Get file share info\r\n\t\t\t$ShareGetUri = $ResourceManagerUri + 'subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/fileServices/default/shares/' + $ShareName + '?api-version=2023-05-01&$expand=stats'\r\n\t\t\t$PFS = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties\r\n\t\r\n\t\t\t# Set variables for provisioned capacity and used capacity\r\n\t\t\t$ProvisionedCapacity = $PFS.shareQuota\r\n\t\t\t$UsedCapacity = $PFS.ShareUsageBytes\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Capacity: $($ProvisionedCapacity)GB\"\r\n\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage: $([math]::Round($UsedCapacity/1GB, 0))GB\"\r\n\t\r\n\t\t\t# GB Based Scaling\r\n\t\t\t# No scaling if no usage\r\n\t\t\tif ($UsedCapacity -eq 0) {\r\n\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is 0GB. No Changes.\"\r\n\t\t\t}\r\n\t\t\t# Slow scaling up to 500GB\r\n\t\t\t# Increases share quota by 100GB if less than 50GB remains on the share\r\n\t\t\t# This allows time for an AVD Stamp to be rolled out \r\n\t\t\telseif ($ProvisionedCapacity -lt 500) {\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 50) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 50GB. Increasing the file share quota by 100GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 100\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 50GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t\t# Aggressive scaling\r\n\t\t\t# Increases share quota by 500GB if less than 500GB remains on the share\r\n\t\t\t# This ensures plenty of space is available during mass onboarding\r\n\t\t\telse {\r\n\t\t\t\tif (($ProvisionedCapacity - ($UsedCapacity / ([Math]::Pow(2, 30)))) -lt 500) {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage has surpassed the Share Quota remaining threshold of 500GB. Increasing the file share quota by 500GB.\" \r\n\t\t\t\t\t$Quota = $ProvisionedCapacity + 500\r\n\t\t\t\t\tInvoke-RestMethod `\r\n\t\t\t\t\t\t-Body (@{properties = @{shareQuota = $Quota } } | ConvertTo-Json) `\r\n\t\t\t\t\t\t-Headers $Header `\r\n\t\t\t\t\t\t-Method 'PATCH' `\r\n\t\t\t\t\t\t-Uri $ShareUpdateUri | Out-Null\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"New Capacity: $($Quota)GB\"\r\n\t\t\t\t}\r\n\t\t\t\telse {\r\n\t\t\t\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Message \"Share Usage is below Share Quota remaining threshold of 500GB. No Changes.\"\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n}\r\ncatch {\r\n\t$ErrContainer = $PSItem\r\n\t# $ErrContainer = $_\r\n\r\n\t[string]$ErrMsg = $ErrContainer | Format-List -Force | Out-String\r\n\t$ErrMsg += \"Version: $Version`n\"\r\n\r\n\tif (Get-Command 'Write-Log' -ErrorAction:SilentlyContinue) {\r\n\t\tWrite-Log -ResourceName \"$StorageAccountName/$ShareName\" -Err -Message $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\telse {\r\n\t\tWrite-Error $ErrMsg -ErrorAction:Continue\r\n\t}\r\n\r\n\tthrow [System.Exception]::new($ErrMsg, $ErrContainer.Exception)\r\n}",
+    "$fxv#2": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, uncomment the line below.\r\n    # 'Az' = '17.*'\r\n}\r\n",
     "deploymentSuffix": "[uniqueString(subscription().subscriptionId, parameters('functionAppResourceGroupName'), deployment().name)]",
     "aspResourceGroupName": "[if(empty(parameters('appServicePlanResourceGroupName')), parameters('functionAppResourceGroupName'), parameters('appServicePlanResourceGroupName'))]",
     "storageSubscriptionId": "[split(parameters('storageResourceGroupId'), '/')[2]]",
@@ -451,27 +452,303 @@
     "locationsObject": "[variables('$fxv#0')]",
     "locationsEnvProperty": "[if(startsWith(variables('cloud'), 'us'), 'other', variables('cloud'))]",
     "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
-    "functionAppRegionAbbreviation": "[variables('locations')[parameters('location')].abbreviation]",
-    "resourceAbbreviations": "[variables('$fxv#1')]",
-    "nameConvSourceName": "[if(empty(parameters('hostPoolResourceId')), variables('storageResourceGroupName'), last(split(parameters('hostPoolResourceId'), '/')))]",
-    "nameConvReversed": "[if(or(startsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').hostPools), startsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').resourceGroups)), false(), if(or(or(endsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').hostPools), endsWith(variables('nameConvSourceName'), variables('resourceAbbreviations').resourceGroups)), endsWith(variables('nameConvSourceName'), '-hp')), true(), false()))]",
-    "arrHostPoolName": "[split(last(split(parameters('hostPoolResourceId'), '/')), '-')]",
-    "hpBaseName": "[if(empty(parameters('hostPoolResourceId')), 'sqm', if(variables('nameConvReversed'), join(take(variables('arrHostPoolName'), sub(length(variables('arrHostPoolName')), 2)), '-'), join(take(skip(variables('arrHostPoolName'), 1), sub(length(variables('arrHostPoolName')), 2)), '-')))]",
-    "hpResPrfx": "[if(variables('nameConvReversed'), variables('hpBaseName'), format('RESOURCETYPE-{0}', variables('hpBaseName')))]",
-    "nameConvSuffix": "[if(variables('nameConvReversed'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
-    "nameConv_HP_Resources": "[format('{0}-TOKEN-{1}', variables('hpResPrfx'), variables('nameConvSuffix'))]",
-    "nameConv_Shared_Resources": "[if(variables('nameConvReversed'), format('avd-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}', variables('nameConvSuffix')))]",
-    "appServicePlanName": "[replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').appServicePlans), 'LOCATION', variables('functionAppRegionAbbreviation'))]",
+    "locationForLookup": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, max(sub(length(parameters('location')), 5), 0)), parameters('location'))]",
+    "functionAppRegionAbbreviation": "[variables('locations')[variables('locationForLookup')].abbreviation]",
     "uniqueStringStorage": "[take(uniqueString(variables('storageSubscriptionId'), variables('storageResourceGroupName')), 6)]",
-    "privateEndpointNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('resourceAbbreviations').privateEndpoints)]",
-    "privateEndpointNICNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('privateEndpointNameConv')), format('RESOURCETYPE-{0}', variables('privateEndpointNameConv')))]",
-    "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('resourceAbbreviations').networkInterfaces)]",
-    "functionAppName": "[if(not(empty(parameters('functionAppNameOverride'))), parameters('functionAppNameOverride'), replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').functionApps), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}-', variables('uniqueStringStorage'))), 'LOCATION', variables('functionAppRegionAbbreviation')))]",
-    "storageAccountName": "[if(not(empty(parameters('storageAccountNameOverride'))), toLower(parameters('storageAccountNameOverride')), toLower(replace(replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', ''), 'LOCATION', variables('functionAppRegionAbbreviation')), 'TOKEN-', format('sqm-{0}', variables('uniqueStringStorage'))), '-', '')))]",
-    "encryptionKeyName": "[if(empty(parameters('hostPoolResourceId')), format('encryption-key-{0}', variables('storageAccountName')), format('{0}-encryption-key-{1}', variables('hpBaseName'), variables('storageAccountName')))]",
-    "storageEncryptionIdentityName": "[if(not(empty(parameters('storageEncryptionIdentityNameOverride'))), parameters('storageEncryptionIdentityNameOverride'), replace(replace(replace(variables('nameConv_HP_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').userAssignedIdentities), 'TOKEN-', format('sqm-{0}-storage-encryption-', variables('uniqueStringStorage'))), 'LOCATION', variables('functionAppRegionAbbreviation')))]"
+    "effectiveIdentifier": "[if(not(empty(parameters('identifier'))), parameters('identifier'), 'sqm')]",
+    "effectiveNamingConvention": "[if(not(empty(parameters('namingResourceTypeCodes'))), union(parameters('namingConvention'), createObject('resourceTypeCodes', parameters('namingResourceTypeCodes'))), parameters('namingConvention'))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('SQM-Naming-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "namingConvention": {
+            "value": "[variables('effectiveNamingConvention')]"
+          },
+          "identifier": {
+            "value": "[variables('effectiveIdentifier')]"
+          },
+          "locationAbbreviation": {
+            "value": "[variables('functionAppRegionAbbreviation')]"
+          },
+          "uniqueString": {
+            "value": "[variables('uniqueStringStorage')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "17016455760234239664"
+            }
+          },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "resolveComponent": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "comp"
+                    },
+                    {
+                      "type": "string",
+                      "name": "rtCode"
+                    },
+                    {
+                      "type": "string",
+                      "name": "component"
+                    },
+                    {
+                      "type": "string",
+                      "name": "loc"
+                    },
+                    {
+                      "type": "string",
+                      "name": "ff1"
+                    },
+                    {
+                      "type": "string",
+                      "name": "env"
+                    },
+                    {
+                      "type": "string",
+                      "name": "ff2"
+                    },
+                    {
+                      "type": "string",
+                      "name": "workload"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+                  }
+                },
+                "buildCustomName": {
+                  "parameters": [
+                    {
+                      "type": "array",
+                      "name": "components"
+                    },
+                    {
+                      "type": "string",
+                      "name": "delimiter"
+                    },
+                    {
+                      "type": "string",
+                      "name": "rtCode"
+                    },
+                    {
+                      "type": "string",
+                      "name": "component"
+                    },
+                    {
+                      "type": "string",
+                      "name": "loc"
+                    },
+                    {
+                      "type": "string",
+                      "name": "ff1"
+                    },
+                    {
+                      "type": "string",
+                      "name": "env"
+                    },
+                    {
+                      "type": "string",
+                      "name": "ff2"
+                    },
+                    {
+                      "type": "string",
+                      "name": "workload"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[join(filter(map(parameters('components'), lambda('comp', __bicep.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
+                  }
+                },
+                "cnv": {
+                  "parameters": [
+                    {
+                      "type": "array",
+                      "name": "components"
+                    },
+                    {
+                      "type": "string",
+                      "name": "delimiter"
+                    },
+                    {
+                      "type": "string",
+                      "name": "rtCode"
+                    },
+                    {
+                      "type": "string",
+                      "name": "component"
+                    },
+                    {
+                      "type": "string",
+                      "name": "loc"
+                    },
+                    {
+                      "type": "string",
+                      "name": "ff1"
+                    },
+                    {
+                      "type": "string",
+                      "name": "env"
+                    },
+                    {
+                      "type": "string",
+                      "name": "ff2"
+                    },
+                    {
+                      "type": "string",
+                      "name": "workload"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[__bicep.buildCustomName(filter(parameters('components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), parameters('delimiter'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload'))]"
+                  }
+                }
+              }
+            }
+          ],
+          "parameters": {
+            "namingConvention": {
+              "type": "object",
+              "defaultValue": {
+                "components": [
+                  "resourceType",
+                  "workload",
+                  "purpose",
+                  "location"
+                ],
+                "delimiter": "-",
+                "workload": "avd"
+              },
+              "metadata": {
+                "description": "Naming convention controlling how infrastructure resources are named.\nShould match the convention used when deploying the host pool. Pre-populated from the\nhpNamingConvention tag on the host pool resource."
+              }
+            },
+            "identifier": {
+              "type": "string",
+              "metadata": {
+                "description": "The host pool base name / identifier (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the host pool resource."
+              }
+            },
+            "locationAbbreviation": {
+              "type": "string",
+              "metadata": {
+                "description": "The pre-computed region abbreviation for the function app deployment location."
+              }
+            },
+            "uniqueString": {
+              "type": "string",
+              "metadata": {
+                "description": "A 6-character unique string scoped to the storage subscription and resource group."
+              }
+            }
+          },
+          "variables": {
+            "$fxv#0": {
+              "applicationInsights": "appi",
+              "appServicePlans": "asp",
+              "automationAccounts": "aa",
+              "availabilitySets": "as",
+              "computeGalleries": "gal",
+              "dataCollectionEndpoints": "dce",
+              "dataCollectionRules": "dcr",
+              "desktopApplicationGroups": "vddag",
+              "diskAccesses": "da",
+              "remoteApplicationGroups": "vdrag",
+              "diskEncryptionSets": "des",
+              "functionApps": "fa",
+              "hostPools": "vdpool",
+              "keyVaults": "kv",
+              "logAnalyticsWorkspaces": "law",
+              "natGateways": "ng",
+              "netAppAccounts": "naa",
+              "netAppCapacityPools": "nacp",
+              "networkInterfaces": "nic",
+              "networkSecurityGroups": "nsg",
+              "osdisks": "disk",
+              "privateEndpoints": "pe",
+              "privateLinkScopes": "pls",
+              "publicIPAddresses": "pip",
+              "recoveryServicesVaults": "rsv",
+              "resourceGroups": "rg",
+              "routeTables": "rt",
+              "scalingPlans": "vdscaling",
+              "storageAccounts": "sa",
+              "templateSpecs": "ts",
+              "userAssignedIdentities": "uai",
+              "virtualMachines": "vm",
+              "workbooks": "wb",
+              "workspaces": "vdws",
+              "imageDefinitions": "vmid"
+            },
+            "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
+            "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
+            "cnv_workload": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')]",
+            "cnv_ff1": "[coalesce(tryGet(parameters('namingConvention'), 'freeform1'), '')]",
+            "cnv_env": "[coalesce(tryGet(parameters('namingConvention'), 'environment'), '')]",
+            "cnv_ff2": "[coalesce(tryGet(parameters('namingConvention'), 'freeform2'), '')]",
+            "abbr": "[variables('$fxv#0')]",
+            "cnv_rtCodes": "[if(contains(parameters('namingConvention'), 'resourceTypeCodes'), union(variables('abbr'), parameters('namingConvention').resourceTypeCodes), variables('abbr'))]",
+            "loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'vmsLocationAbbreviation'), ''))), parameters('namingConvention').vmsLocationAbbreviation, parameters('locationAbbreviation'))]",
+            "nameConvReversed": "[and(not(empty(variables('cnv_components'))), equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType'))]",
+            "hpPurpose": "[format('{0}{1}sqm{2}{3}', parameters('identifier'), variables('cnv_delimiter'), variables('cnv_delimiter'), parameters('uniqueString'))]",
+            "sanitizedStorageId": "[replace(parameters('identifier'), '-', '')]",
+            "storageRawName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), '', format('{0}sqm{1}', variables('sanitizedStorageId'), parameters('uniqueString')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "peNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('cnv_rtCodes').privateEndpoints)]",
+            "peNicNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('peNameConv')), format('RESOURCETYPE-{0}', variables('peNameConv')))]"
+          },
+          "resources": {},
+          "outputs": {
+            "functionAppName": {
+              "type": "string",
+              "value": "[take(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').functionApps, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), 60)]"
+            },
+            "storageAccountName": {
+              "type": "string",
+              "value": "[take(toLower(replace(variables('storageRawName'), variables('cnv_delimiter'), '')), 24)]"
+            },
+            "storageEncryptionIdentityName": {
+              "type": "string",
+              "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}{1}sqm{2}{3}encryption', parameters('identifier'), variables('cnv_delimiter'), parameters('uniqueString'), variables('cnv_delimiter')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+            },
+            "appServicePlanName": {
+              "type": "string",
+              "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').appServicePlans, '', variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+            },
+            "privateEndpointNameConv": {
+              "type": "string",
+              "value": "[variables('peNameConv')]"
+            },
+            "privateEndpointNICNameConv": {
+              "type": "string",
+              "value": "[replace(variables('peNicNameConvTemp'), 'RESOURCETYPE', variables('cnv_rtCodes').networkInterfaces)]"
+            }
+          }
+        }
+      }
+    },
     {
       "condition": "[empty(parameters('appServicePlanResourceId'))]",
       "type": "Microsoft.Resources/deployments",
@@ -493,9 +770,7 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "name": {
-            "value": "[variables('appServicePlanName')]"
-          },
+          "name": "[if(not(empty(parameters('appServicePlanNameOverride'))), createObject('value', parameters('appServicePlanNameOverride')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.appServicePlanName.value))]",
           "planPricing": {
             "value": "PremiumV3_P1v3"
           },
@@ -512,8 +787,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "3020828268516960434"
+              "version": "0.45.15.27210",
+              "templateHash": "15792462937281646271"
             }
           },
           "parameters": {
@@ -568,7 +843,10 @@
             }
           }
         }
-      }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix')))]"
+      ]
     },
     {
       "type": "Microsoft.Resources/deployments",
@@ -597,7 +875,7 @@
             "value": false
           },
           "encryptionKeyName": {
-            "value": "[variables('encryptionKeyName')]"
+            "value": "[format('{0}-encryption-key-{1}', variables('effectiveIdentifier'), if(not(empty(parameters('storageAccountNameOverride'))), toLower(parameters('storageAccountNameOverride')), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountName.value))]"
           },
           "encryptionKeyVaultResourceId": {
             "value": "[parameters('encryptionKeyVaultResourceId')]"
@@ -617,9 +895,7 @@
           "functionAppDelegatedSubnetResourceId": {
             "value": "[parameters('functionAppDelegatedSubnetResourceId')]"
           },
-          "functionAppName": {
-            "value": "[variables('functionAppName')]"
-          },
+          "functionAppName": "[if(not(empty(parameters('functionAppNameOverride'))), createObject('value', parameters('functionAppNameOverride')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.functionAppName.value))]",
           "hostPoolResourceId": {
             "value": "[parameters('hostPoolResourceId')]"
           },
@@ -633,21 +909,17 @@
             "value": "[parameters('privateEndpoint')]"
           },
           "privateEndpointNameConv": {
-            "value": "[variables('privateEndpointNameConv')]"
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNameConv.value]"
           },
           "privateEndpointNICNameConv": {
-            "value": "[variables('privateEndpointNICNameConv')]"
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.privateEndpointNICNameConv.value]"
           },
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('privateEndpointSubnetResourceId')]"
           },
           "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('aspResourceGroupName')), 'Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
-          "storageAccountName": {
-            "value": "[variables('storageAccountName')]"
-          },
-          "storageEncryptionIdentityName": {
-            "value": "[variables('storageEncryptionIdentityName')]"
-          },
+          "storageAccountName": "[if(not(empty(parameters('storageAccountNameOverride'))), createObject('value', toLower(parameters('storageAccountNameOverride'))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageAccountName.value))]",
+          "storageEncryptionIdentityName": "[if(not(empty(parameters('storageEncryptionIdentityNameOverride'))), createObject('value', parameters('storageEncryptionIdentityNameOverride')), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.storageEncryptionIdentityName.value))]",
           "permittedIPs": {
             "value": "[parameters('permittedIPs')]"
           },
@@ -661,8 +933,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "5726387189662719848"
+              "version": "0.45.15.27210",
+              "templateHash": "3094007988136838209"
             }
           },
           "parameters": {
@@ -1172,8 +1444,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "16904075698300234972"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12933534060515147751"
                     }
                   },
                   "definitions": {
@@ -1391,8 +1663,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -1530,8 +1802,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "18121928468382400839"
+                              "version": "0.45.15.27210",
+                              "templateHash": "8883362177636156190"
                             }
                           },
                           "parameters": {
@@ -1616,8 +1888,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -1787,8 +2059,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -1940,8 +2212,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "10550470109364136870"
+                              "version": "0.45.15.27210",
+                              "templateHash": "10613292749142597083"
                             }
                           },
                           "parameters": {
@@ -2086,8 +2358,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -2248,8 +2520,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -2433,8 +2705,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "10742486137898084659"
+                      "version": "0.45.15.27210",
+                      "templateHash": "11143995444245234492"
                     }
                   },
                   "parameters": {
@@ -2483,8 +2755,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "10625631743640613500"
+                              "version": "0.45.15.27210",
+                              "templateHash": "2257598999830276116"
                             }
                           },
                           "parameters": {
@@ -2549,8 +2821,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "15968606400318218391"
+                      "version": "0.45.15.27210",
+                      "templateHash": "11108988540400323268"
                     }
                   },
                   "definitions": {
@@ -2690,7 +2962,8 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('aspResourceGroupName')), 'Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix')))]"
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('aspResourceGroupName')), 'Microsoft.Resources/deployments', format('FunctionAppHostingPlan-{0}', variables('deploymentSuffix')))]",
+        "[subscriptionResourceId('Microsoft.Resources/deployments', format('SQM-Naming-{0}', variables('deploymentSuffix')))]"
       ]
     },
     {
@@ -2721,8 +2994,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "17199828385253577684"
+              "version": "0.45.15.27210",
+              "templateHash": "3585155273898172375"
             }
           },
           "parameters": {
@@ -2802,9 +3075,9 @@
         "parameters": {
           "files": {
             "value": {
-              "run.ps1": "[variables('$fxv#2')]",
+              "run.ps1": "[variables('$fxv#1')]",
               "../profile.ps1": "# Authentication is provided in the script",
-              "../requirements.psd1": "[variables('$fxv#3')]"
+              "../requirements.psd1": "[variables('$fxv#2')]"
             }
           },
           "functionAppName": {
@@ -2823,8 +3096,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "18100916212560891147"
+              "version": "0.45.15.27210",
+              "templateHash": "3654666457746408827"
             }
           },
           "parameters": {

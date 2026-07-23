@@ -22,6 +22,28 @@ param functionAppResourceGroupName string
 param tags object = {}
 
 // ================================================================================================
+// Naming Convention Parameters
+// These parameters control how infrastructure resource names are computed. When associated with
+// a host pool deployed by this solution, the naming convention is automatically populated from
+// the hpNamingConvention tag on the host pool.
+// ================================================================================================
+
+@description('''Naming convention controlling how Function App infrastructure resources are named.
+Should match the convention used when deploying the host pool. Pre-populated from the
+hpNamingConvention tag on the host pool resource.''')
+param namingConvention object = {
+  components: ['resourceType', 'workload', 'purpose', 'location']
+  delimiter: '-'
+  workload: 'avd'
+}
+
+@description('Optional. The host pool base name / identifier used for naming (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the host pool resource. When empty, falls back to sqm.')
+param identifier string = ''
+
+@description('Optional. Overrides for resource type abbreviations used when computing infrastructure resource names. Only the keys you provide are overridden; all others use CAF defaults. Supported keys: functionApps, appServicePlans, userAssignedIdentities, privateEndpoints, networkInterfaces.')
+param namingResourceTypeCodes object = {}
+
+// ================================================================================================
 // Brownfield Naming Override Parameters
 // These parameters allow explicit control over resource naming for brownfield deployments where
 // the existing host pool naming convention does not follow standard patterns. When specified,
@@ -39,6 +61,10 @@ param storageAccountNameOverride string = ''
 @description('Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores).')
 @maxLength(128)
 param storageEncryptionIdentityNameOverride string = ''
+
+@description('Optional. Explicit name for the App Service Plan. If not provided, name is derived from the naming convention. Use this for brownfield deployments where an existing plan was created with a non-standard name. Must follow Azure naming rules (1-40 chars, alphanumeric and hyphens).')
+@maxLength(40)
+param appServicePlanNameOverride string = ''
 
 
 // ================================================================================================
@@ -111,121 +137,32 @@ var cloud = toLower(environment().name)
 var locationsObject = loadJsonContent('../../../.common/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
-var functionAppRegionAbbreviation = locations[location].abbreviation
-var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var locationForLookup = startsWith(cloud, 'us') ? substring(location, 5, max(length(location) - 5, 0)) : location
+var functionAppRegionAbbreviation = locations[locationForLookup].abbreviation
 
-// ============================================================================
-// Naming Convention
-// Compile-time placeholders — resolved here by Bicep string substitution:
-//   RESOURCETYPE  → resource type abbreviation (e.g., 'asp', 'func', 'uai')
-//   LOCATION      → region abbreviation (e.g., 'eus', 'va')
-//   TOKEN         → per-resource differentiator in HP-scoped names (e.g., 'sqm-abc123-')
-// ============================================================================
-// Dynamically determine naming convention.
-// When a host pool is provided, detect from its name. Otherwise detect from the storage RG name.
-var nameConvSourceName = empty(hostPoolResourceId)
-  ? storageResourceGroupName
-  : last(split(hostPoolResourceId, '/'))
-var nameConvReversed = startsWith(nameConvSourceName, resourceAbbreviations.hostPools) || startsWith(nameConvSourceName, resourceAbbreviations.resourceGroups)
-  ? false // Resource type is at the beginning (e.g., "vdpool-avd-01" or "rg-avd-storage-eus")
-  : endsWith(nameConvSourceName, resourceAbbreviations.hostPools) || endsWith(nameConvSourceName, resourceAbbreviations.resourceGroups) || endsWith(nameConvSourceName, '-hp')
-      ? true // Resource type is at the end (e.g., "avd-01-vdpool", "avd-storage-eus-rg", or "avd-01-hp")
-      : false // Default fallback
-
-// When a host pool is provided, extract hpBaseName by stripping the outer RT and location segments.
-// This is more robust than hardcoded index positions — it works for any number of persona segments.
-// RT-last  (reversed): strip last 2 segments ({loc}-{rt})
-// RT-first (not reversed): strip first segment ({rt}) and last segment ({loc})
-// When no host pool, use 'sqm' as the fixed base token.
-var arrHostPoolName = split(last(split(hostPoolResourceId, '/')), '-')
-var hpBaseName = empty(hostPoolResourceId)
-  ? 'sqm'
-  : nameConvReversed
-    ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-')
-    : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-')
-var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
-
-var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
-var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
-
-// Shared (non-HP-scoped) naming convention — no TOKEN since these resources have no per-resource differentiator
-var nameConv_Shared_Resources = nameConvReversed
-  ? 'avd-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-${nameConvSuffix}'
-var appServicePlanName = replace(
-  replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
-
-// Generate unique identifiers for resource naming
+// ── Naming convention ─────────────────────────────────────────────────────────
 var uniqueStringStorage = take(uniqueString(storageSubscriptionId, storageResourceGroupName), 6)
+var effectiveIdentifier = !empty(identifier) ? identifier : 'sqm'
+var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
 
-// Private endpoint naming conventions
-var privateEndpointNameConv = replace(
-  nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
-  'RESOURCETYPE',
-  resourceAbbreviations.privateEndpoints
-)
-var privateEndpointNICNameConvTemp = nameConvReversed
-  ? '${privateEndpointNameConv}-RESOURCETYPE'
-  : 'RESOURCETYPE-${privateEndpointNameConv}'
-var privateEndpointNICNameConv = replace(
-  privateEndpointNICNameConvTemp,
-  'RESOURCETYPE',
-  resourceAbbreviations.networkInterfaces
-)
+module sqmNaming './modules/naming.bicep' = {
+  name: 'SQM-Naming-${deploymentSuffix}'
+  params: {
+    namingConvention: effectiveNamingConvention
+    identifier: effectiveIdentifier
+    locationAbbreviation: functionAppRegionAbbreviation
+    uniqueString: uniqueStringStorage
+  }
+}
 
-// Use explicit override if provided, otherwise derive from host pool naming convention
-var functionAppName = !empty(functionAppNameOverride)
-  ? functionAppNameOverride
-  : replace(
-      replace(
-        replace(
-          replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
-          'LOCATION',
-          functionAppRegionAbbreviation
-        ),
-        'TOKEN-',
-        'sqm-${uniqueStringStorage}-'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
+var appServicePlanName         = !empty(appServicePlanNameOverride) ? appServicePlanNameOverride : sqmNaming.outputs.appServicePlanName
+var privateEndpointNameConv    = sqmNaming.outputs.privateEndpointNameConv
+var privateEndpointNICNameConv = sqmNaming.outputs.privateEndpointNICNameConv
 
-// Storage Account naming - use explicit override if provided, otherwise derive from naming convention
-var storageAccountName = !empty(storageAccountNameOverride)
-  ? toLower(storageAccountNameOverride)
-  : toLower(replace(
-      replace(
-        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
-        'TOKEN-',
-        'sqm-${uniqueStringStorage}'
-      ),
-      '-',
-      ''
-    ))
-
-// Storage account name validation: Azure enforces 3-24 chars, lowercase alphanumeric only
-// If the derived name fails validation, deployment will error at storage account module
-// For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
-
-var encryptionKeyName = empty(hostPoolResourceId)
-  ? 'encryption-key-${storageAccountName}'
-  : '${hpBaseName}-encryption-key-${storageAccountName}'
-
-// Use explicit override if provided, otherwise derive from host pool naming convention
-var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)
-  ? storageEncryptionIdentityNameOverride
-  : replace(
-      replace(
-        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
-        'TOKEN-',
-        'sqm-${uniqueStringStorage}-storage-encryption-'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
+var functionAppName               = !empty(functionAppNameOverride)               ? functionAppNameOverride               : sqmNaming.outputs.functionAppName
+var storageAccountName            = !empty(storageAccountNameOverride)            ? toLower(storageAccountNameOverride)   : sqmNaming.outputs.storageAccountName
+var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride) ? storageEncryptionIdentityNameOverride : sqmNaming.outputs.storageEncryptionIdentityName
+var encryptionKeyName             = '${effectiveIdentifier}-encryption-key-${storageAccountName}'
 
 // ========== //
 // Resources  //

@@ -6,41 +6,52 @@ targetScope = 'subscription'
 
 // Basics
 
-@maxLength(9)
-@description('''Required. Short name identifying the host pool persona (e.g. "finance", "developers"). Max 9 characters.
-Used as the primary component of all resource names in this deployment. Combined with the index parameter
-(when provided) to form the base name for the host pool, desktop application group, session hosts, and all
-associated resources.
-''')
+@maxLength(16)
+@description('Required. Short name identifying the host pool persona (e.g. "finance", "developers"). Max 16 characters. Used as the primary component of all resource names in this deployment.')
 param identifier string
 
-@description('''Optional. An index value used to distinquish each host pool with the same persona identifier.
-This can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.
-Valid values are 0-99. If not provided, the host pool will be created without an index in the name.
-''')
+@description('Deprecated. Include the index directly in the identifier parameter instead (e.g. finance01, finance02).')
+#disable-next-line no-unused-params
 param index int = -1
 
 @description('''Optional. Naming convention controlling how all resources in this deployment are named.
 The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
-Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
+Note: purpose is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
 All properties are optional when using the default convention; override only what needs to change.
 Key properties:
-  components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
-  delimiter           — character inserted between components, e.g. "-"
-  workload            — solution identifier inserted into names, e.g. "avd"
-  environment         — environment token, e.g. "prod"
-  freeform1           — static text slot before the workload
-  freeform2           — static text slot after the environment
-  vmsLocationAbbreviation  — override for the VMs region abbreviation
-  cpLocationAbbreviation   — override for the control plane region abbreviation
-  fslogixStoragePrefix     — custom prefix for FSLogix storage accounts (≤13 lowercase alphanumeric)
-  resourceTypeCodes   — object with per-resource-type abbreviation overrides
-This object is produced automatically when deploying via the Azure Portal UI.''')
+  components               — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
+  delimiter                — character inserted between components, e.g. "-"
+  workload                 — solution identifier inserted into names, e.g. "avd"
+  environment              — optional environment token, e.g. "prod"
+  freeform1                — static text slot before the workload
+  freeform2                — static text slot after the environment
+  vmsLocationAbbreviation  — override for the auto-resolved VMs region abbreviation
+  cpLocationAbbreviation   — override for the auto-resolved control plane region abbreviation
+  fslogixStoragePrefix              — custom prefix for FSLogix storage accounts (max 13 lowercase alphanumeric)
+  virtualMachineNameConvOverride    — optional SHNAME pattern for VMs, e.g. "vm-SHNAME" (empty = derived from convention)
+  virtualMachineDiskNameConvOverride  — optional SHNAME pattern for VM OS disks (empty = derived from convention)
+  virtualMachineNicNameConvOverride   — optional SHNAME pattern for VM NICs (empty = derived from convention)
+Resource type abbreviations are provided separately via namingResourceTypeCodes.
+Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults.''')
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
 }
+
+@description('''Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding
+default from .common/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.
+Produced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.
+CLI deployments: pass only the keys you want to change, e.g. { virtualMachines: "win" }.
+Standard Cloud Adoption Framework defaults:
+  resourceGroups: "rg"          hostPools: "vdpool"         desktopApplicationGroups: "vddag"
+  workspaces: "vdws"            scalingPlans: "vdscaling"   virtualMachines: "vm"
+  osdisks: "disk"               diskEncryptionSets: "des"   diskAccesses: "da"
+  availabilitySets: "as"        storageAccounts: "sa"       netAppAccounts: "naa"
+  netAppCapacityPools: "nacp"   keyVaults: "kv"             userAssignedIdentities: "uai"
+  privateEndpoints: "pe"        networkInterfaces: "nic"    logAnalyticsWorkspaces: "law"
+  dataCollectionEndpoints: "dce"  recoveryServicesVaults: "rsv"''')
+param namingResourceTypeCodes object = {}
 
 // Identity
 
@@ -835,17 +846,22 @@ resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!emp
 
 // Deployments
 
-var hpIndexString = index >= 0 ? format('{0:00}', index) : ''
-var hpBaseName = empty(hpIndexString) ? toLower(identifier) : '${toLower(identifier)}-${hpIndexString}'
+var hpBaseName = toLower(identifier)
 
 // ── Naming module ─────────────────────────────────────────────────────────────
 // All resource names for this host pool are resolved by the naming module.
 // References below use naming.outputs.<name> instead of local vars.
+// Merge namingResourceTypeCodes into namingConvention before passing to the naming module.
+var effectiveNamingConvention = union(
+  namingConvention,
+  !empty(namingResourceTypeCodes) ? { resourceTypeCodes: namingResourceTypeCodes } : {}
+)
+
 module naming './modules/naming.bicep' = {
   name: 'Naming-${deploymentSuffix}'
   scope: subscription()
   params: {
-    namingConvention: namingConvention
+    namingConvention: effectiveNamingConvention
     virtualMachinesRegion: virtualMachinesRegion
     controlPlaneRegion: effectiveControlPlaneRegion
     identifier: hpBaseName
@@ -966,9 +982,6 @@ var vmDomain = contains(identitySolution, 'DomainServices') && !empty(domainName
 var vmOU = contains(identitySolution, 'DomainServices') && !empty(vmOUPath) ? { vmOUPath: vmOUPath } : {}
 var vmCustomImageId = empty(customImageResourceId) ? {} : { vmCustomImageId: customImageResourceId }
 var vmImageOffer = !empty(customImageResourceId) || empty(imageOffer) ? {} : { vmImageOffer: imageOffer }
-var vmImagePublisher = !empty(customImageResourceId) || empty(imagePublisher)
-  ? {}
-  : { vmImagePublisher: imagePublisher }
 var vmImageSku = !empty(customImageResourceId) || empty(imageSku) ? {} : { vmImageSku: imageSku }
 var vmDiskEncryptionSetName = empty(diskEncryptionSetName) ? {} : { vmDiskEncryptionSetName: diskEncryptionSetName }
 
@@ -978,7 +991,6 @@ var vmConfigurationTags = union(
     vmIdentityType: identitySolution
     vmNamePrefix: virtualMachineNamePrefix
     vmIndexPadding: vmNameIndexLength
-    vmImageType: empty(customImageResourceId) ? 'Gallery' : 'CustomImage'
     vmOSDiskType: diskSku
     vmDiskSizeGB: diskSizeGB
     vmSize: virtualMachineSize
@@ -994,12 +1006,15 @@ var vmConfigurationTags = union(
     vmVirtualTPM: vTpmEnabled
     vmIntegrityMonitoring: integrityMonitoring
     vmSubnetId: virtualMachineSubnetResourceId
+    virtualMachineNameConv: naming.outputs.virtualMachineNameConv
+    virtualMachineDiskNameConv: naming.outputs.virtualMachineDiskNameConv
+    virtualMachineNicNameConv: naming.outputs.virtualMachineNicNameConv
+    availabilitySetNameConv: naming.outputs.availabilitySetNameConv
   },
   vmDomain,
   vmOU,
   vmCustomImageId,
   vmImageOffer,
-  vmImagePublisher,
   vmImageSku,
   vmIntuneEnrollment,
   vmDiskEncryptionSetName
@@ -1284,7 +1299,7 @@ module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
     storageKeyNames: [
       for i in range(0, fslogixStorageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
     ]
-    identityName: replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage-encryption')
+    identityName: replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.outputs.delimiter}encryption')
   }
   dependsOn: [
     storageResourceGroup
@@ -1333,7 +1348,15 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
     globalFeedRegion: globalFeedRegion!
     globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
-    hostPoolCustomTags: union(hostsResourceGroupIdTag, storageResourceGroupIdTag)
+    hostPoolCustomTags: union(hostsResourceGroupIdTag, storageResourceGroupIdTag, {
+      hpIdentifier: hpBaseName
+      hpNamingConvention: string({
+        components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
+        delimiter: namingConvention.?delimiter ?? '-'
+        workload: !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+        vmsLocationAbbreviation: naming.outputs.vmLocationAbbreviation
+      })
+    })
     hostPoolMaxSessionLimit: hostPoolMaxSessionLimit
     hostPoolName: naming.outputs.hostPoolName
     hostPoolPrivateEndpointSubnetResourceId: hostpoolPrivateEndpointSubnetResourceId
@@ -1582,9 +1605,9 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
     location: virtualMachinesRegion
-    osDiskNameConv: naming.outputs.diskNameConv
+    virtualMachineDiskNameConv: naming.outputs.virtualMachineDiskNameConv
     ouPath: vmOUPath
-    networkInterfaceNameConv: naming.outputs.networkInterfaceNameConv
+    virtualMachineNicNameConv: naming.outputs.virtualMachineNicNameConv
     securityType: securityType
     secureBootEnabled: secureBootEnabled
     sessionHostCount: sessionHostCount

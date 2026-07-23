@@ -22,10 +22,28 @@ param functionAppResourceGroupName string
 param tags object = {}
 
 // ================================================================================================
+// Naming Convention Parameters
+// ================================================================================================
+
+@description('''Naming convention controlling how Function App infrastructure resources are named.
+Should match the convention used when deploying the host pool. Pre-populated from the
+hpNamingConvention tag on the host pool resource.''')
+param namingConvention object = {
+  components: ['resourceType', 'workload', 'purpose', 'location']
+  delimiter: '-'
+  workload: 'avd'
+}
+
+@description('Optional. The host pool base name / identifier used for naming (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the host pool resource. When empty, falls back to a generic placeholder.')
+param identifier string = ''
+
+@description('Optional. Overrides for resource type abbreviations used when computing infrastructure resource names. Only the keys you provide are overridden; all others use CAF defaults. Supported keys: functionApps, appServicePlans, applicationInsights, templateSpecs, userAssignedIdentities, privateEndpoints, networkInterfaces.')
+param namingResourceTypeCodes object = {}
+
+// ================================================================================================
 // Brownfield Naming Override Parameters
-// These parameters allow explicit control over resource naming for brownfield deployments where
-// the existing host pool naming convention does not follow standard patterns. When specified,
-// these override the automatic naming convention detection.
+// These parameters allow explicit control over resource naming for brownfield deployments.
+// When specified, these override the naming convention for individual resources.
 // ================================================================================================
 
 @description('Optional. Explicit name for the Function App. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique and follow Azure naming rules (2-60 chars, alphanumeric and hyphens).')
@@ -44,17 +62,21 @@ param storageEncryptionIdentityNameOverride string = ''
 @maxLength(260)
 param applicationInsightsNameOverride string = ''
 
-@description('Optional. Naming convention override for session host virtual machines. If not provided, derived from host pool naming convention. Use format with SHNAME token (e.g., "vm-SHNAME" or "SHNAME-vm"). SHNAME will be replaced with session host name prefix + index.')
-param virtualMachineNameConvOverride string = ''
+@description('Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., "vm-SHNAME" becomes "vm-avdhost001"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group.')
+param virtualMachineNameConv string = 'vm-SHNAME'
 
-@description('Optional. Naming convention override for session host OS disks. If not provided, derived from host pool naming convention. Use format with SHNAME token (e.g., "disk-SHNAME" or "SHNAME-disk").')
-param diskNameConvOverride string = ''
+@description('Required. Naming convention for session host OS disks. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineDiskNameConv tag on the hosts resource group.')
+param virtualMachineDiskNameConv string = 'disk-SHNAME'
 
-@description('Optional. Naming convention override for session host network interfaces. If not provided, derived from host pool naming convention. Use format with SHNAME token (e.g., "nic-SHNAME" or "SHNAME-nic").')
-param networkInterfaceNameConvOverride string = ''
+@description('Required. Naming convention for session host network interfaces. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineNicNameConv tag on the hosts resource group.')
+param virtualMachineNicNameConv string = 'nic-SHNAME'
 
-@description('Optional. Naming convention override for availability sets. If not provided, derived from host pool naming convention. Use format with ## token for index (e.g., "avset-##" or "##-avset").')
-param availabilitySetNameConvOverride string = ''
+@description('Required. Naming convention for availability sets. ## is replaced with the set index (e.g., "avset-##" becomes "avset-01"). Pre-populated from the availabilitySetNameConv tag on the hosts resource group.')
+param availabilitySetNameConv string = 'avset-##'
+
+@description('Optional. Explicit name for the App Service Plan. If not provided, name is derived from the naming convention. Use this for brownfield deployments where an existing plan was created with a non-standard name, or when sharing an ASP across add-ons.')
+@maxLength(40)
+param appServicePlanNameOverride string = ''
 
 // ================================================================================================
 // Function App Infrastructure Parameters
@@ -264,17 +286,8 @@ param sessionHostNamePrefix string
 @description('Optional. VM name index length for padding.')
 param sessionHostNameIndexLength int = 2
 
-@description('Optional. Publisher of the marketplace image. Default is MicrosoftWindowsDesktop.')
-param imagePublisher string = 'MicrosoftWindowsDesktop'
-
-@description('Optional. Offer of the marketplace image. Default is windows-11.')
-param imageOffer string = 'windows-11'
-
-@description('Optional. SKU of the marketplace image. Default is win11-25h2-avd.')
-param imageSku string = 'win11-25h2-avd'
-
-@description('Optional. The resource ID of a custom image to use for session hosts. If provided, imagePublisher, imageOffer, and imageSku are ignored.')
-param customImageResourceId string = ''
+@description('Required. Image reference for session host VMs. Use {"publisher":"...","offer":"...","sku":"..."} for marketplace images or {"id":"..."} for Compute Gallery images.')
+param imageReference object
 
 @description('Optional. The VM size for session hosts.')
 param virtualMachineSize string = 'Standard_D4ads_v6'
@@ -477,157 +490,49 @@ var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(cloud, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
 
-var functionAppRegionAbbreviation = locations[location].abbreviation
-#disable-next-line BCP329
-var varLocationVirtualMachines = startsWith(cloud, 'us')
-  ? substring(virtualMachineResourceGroupLocation, 5, length(virtualMachineResourceGroupLocation) - 5)
-  : virtualMachineResourceGroupLocation
-var virtualMachinesRegionAbbreviation = locations[varLocationVirtualMachines].abbreviation
-var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var locationForLookup = startsWith(cloud, 'us') ? substring(location, 5, max(length(location) - 5, 0)) : location
+var functionAppRegionAbbreviation = locations[locationForLookup].abbreviation
 
-// Dynamically determine naming convention from existing host pool name
-// Reversed = resource type at the end (e.g., "avd-prod-eus-vdpool" or "avd-prod-eus-hp")
-var nameConvReversed = endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') || endsWith(hostPoolName, '-hp')
-
-// Extract hpBaseName using known anchors: the location abbreviation and the RT token.
-// Using substring with known-length anchors avoids fragile segment-counting when the persona has many parts.
-// RT-last  (reversed): '{persona}-{loc}-{rt}' → strip '-{loc}-{rt}' suffix
-// RT-first (not reversed): '{rt}-{persona}-{loc}' → strip '{rt}-' prefix and '-{loc}' suffix
-var arrHostPoolName = split(hostPoolName, '-')
-var hpRtToken = nameConvReversed
-  ? (endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') ? resourceAbbreviations.hostPools : 'hp')
-  : arrHostPoolName[0]
-var hpBaseName = nameConvReversed
-  ? substring(hostPoolName, 0, length(hostPoolName) - length('-${virtualMachinesRegionAbbreviation}-${hpRtToken}'))
-  : substring(hostPoolName, length('${hpRtToken}-'), length(hostPoolName) - length('${hpRtToken}-') - length('-${virtualMachinesRegionAbbreviation}'))
-var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
-var nameConvSuffix = nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
-var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvSuffix}'
-
-// Generate unique identifiers for resource naming
+// Generate unique identifier for per-host-pool resource names.
 var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName), 6)
 
-// Shared (non-HP-scoped) naming convention — no TOKEN since these resources have no per-resource differentiator
-var nameConv_Shared_Resources = nameConvReversed
-  ? 'avd-${nameConvSuffix}'
-  : 'RESOURCETYPE-avd-${nameConvSuffix}'
-var appServicePlanName = replace(
-  replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.appServicePlans),
-  'LOCATION',
-  functionAppRegionAbbreviation
-)
+// Resolve effective identifier: use the provided param or fall back to a safe placeholder.
+// Pre-populated from the hpIdentifier tag on the hosts resource group.
+var effectiveIdentifier = !empty(identifier) ? identifier : 'replacer'
+var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
 
-// Private endpoint naming conventions
-var privateEndpointNameConv = replace(
-  nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
-  'RESOURCETYPE',
-  resourceAbbreviations.privateEndpoints
-)
-var privateEndpointNICNameConvTemp = nameConvReversed
-  ? '${privateEndpointNameConv}-RESOURCETYPE'
-  : 'RESOURCETYPE-${privateEndpointNameConv}'
-var privateEndpointNICNameConv = replace(
-  privateEndpointNICNameConvTemp,
-  'RESOURCETYPE',
-  resourceAbbreviations.networkInterfaces
-)
+// ── Naming module - computes all infrastructure resource names ────────────────
+module shrNaming './modules/naming.bicep' = {
+  name: 'SHR-Naming-${deploymentSuffix}'
+  params: {
+    namingConvention: effectiveNamingConvention
+    identifier: effectiveIdentifier
+    locationAbbreviation: functionAppRegionAbbreviation
+    uniqueString: uniqueStringHosts
+  }
+}
 
-// Session host replacer resource names
+var appServicePlanName         = !empty(appServicePlanNameOverride) ? appServicePlanNameOverride : shrNaming.outputs.appServicePlanName
+var privateEndpointNameConv    = shrNaming.outputs.privateEndpointNameConv
+var privateEndpointNICNameConv = shrNaming.outputs.privateEndpointNICNameConv
 
-// Shared Application Insights naming - same name across all Session Host Replacer deployments
-// This enables multi-host-pool monitoring with a single App Insights instance
-// Use explicit override if provided, otherwise derive from shared naming convention
-var appInsightsName = !empty(applicationInsightsNameOverride)
-  ? applicationInsightsNameOverride
-  : nameConvReversed
-      ? 'avd-sessionhostreplacer-${functionAppRegionAbbreviation}-${resourceAbbreviations.applicationInsights}'
-      : '${resourceAbbreviations.applicationInsights}-avd-sessionhostreplacer-${functionAppRegionAbbreviation}'
-
-// Enterprise Workbook naming - single workbook for all host pools across all regions
-// Azure Monitor Workbooks require GUID names for deterministic deployment
-// Removing location enables cross-region monitoring with a single dashboard (like AVD Insights)
+// Enterprise Workbook - single GUID-named workbook across all host pools and regions
 var workbookName = guid(subscription().subscriptionId, 'session-host-replacer-workbook')
 
-// Function App naming - unique per host pool
-// Use explicit override if provided, otherwise derive from host pool naming convention
-var functionAppName = !empty(functionAppNameOverride)
-  ? functionAppNameOverride
-  : replace(
-      replace(
-        replace(
-          replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.functionApps),
-          'LOCATION',
-          functionAppRegionAbbreviation
-        ),
-        'TOKEN-',
-        'shr-${uniqueStringHosts}-'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
-
-// Storage Account naming - use explicit override if provided, otherwise derive from naming convention
-var storageAccountName = !empty(storageAccountNameOverride)
-  ? toLower(storageAccountNameOverride)
-  : toLower(replace(
-      replace(
-        replace(replace(nameConv_HP_Resources, 'RESOURCETYPE', ''), 'LOCATION', functionAppRegionAbbreviation),
-        'TOKEN-',
-        'shr-${uniqueStringHosts}'
-      ),
-      '-',
-      ''
-    ))
-
-// Storage account name validation: Azure enforces 3-24 chars, lowercase alphanumeric only
-// If the derived name fails validation, deployment will error at storage account module
-// For brownfield deployments with non-standard host pool names, use storageAccountNameOverride parameter
-
-var encryptionKeyName = '${hpBaseName}-encryption-key-${storageAccountName}'
-var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)
-  ? storageEncryptionIdentityNameOverride
-  : replace(
-      replace(
-        replace(nameConv_HP_Resources, 'RESOURCETYPE', resourceAbbreviations.userAssignedIdentities),
-        'TOKEN-',
-        'shr${uniqueStringHosts}-encryption-'
-      ),
-      'LOCATION',
-      functionAppRegionAbbreviation
-    )
-var templateSpecNameFinal = !empty(templateSpecName)
-  ? templateSpecName
-  : nameConvReversed
-      ? 'avd-session-hosts-${functionAppRegionAbbreviation}-${resourceAbbreviations.templateSpecs}'
-      : '${resourceAbbreviations.templateSpecs}-avd-session-hosts-${functionAppRegionAbbreviation}'
-
-// ## is appended after the full name (CAF instance-last): as-{base}-{loc}-## / {base}-{loc}-as-##
-var availabilitySetNameConv = !empty(availabilitySetNameConvOverride)
-  ? availabilitySetNameConvOverride
-  : '${replace(replace(replace(nameConv_HP_Resources, '-TOKEN', ''), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', virtualMachinesRegionAbbreviation)}-##'
-
-var virtualMachineNameConv = !empty(virtualMachineNameConvOverride)
-  ? virtualMachineNameConvOverride
-  : nameConvReversed
-      ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
-      : '${resourceAbbreviations.virtualMachines}-SHNAME'
-
-var diskNameConv = !empty(diskNameConvOverride)
-  ? diskNameConvOverride
-  : nameConvReversed ? 'SHNAME-${resourceAbbreviations.osdisks}' : '${resourceAbbreviations.osdisks}-SHNAME'
-
-var networkInterfaceNameConv = !empty(networkInterfaceNameConvOverride)
-  ? networkInterfaceNameConvOverride
-  : nameConvReversed
-      ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
-      : '${resourceAbbreviations.networkInterfaces}-SHNAME'
+// Use explicit overrides when provided (brownfield); otherwise use naming module outputs.
+var appInsightsName               = !empty(applicationInsightsNameOverride)        ? applicationInsightsNameOverride        : shrNaming.outputs.appInsightsName
+var functionAppName               = !empty(functionAppNameOverride)                 ? functionAppNameOverride                 : shrNaming.outputs.functionAppName
+var storageAccountName            = !empty(storageAccountNameOverride)              ? toLower(storageAccountNameOverride)     : shrNaming.outputs.storageAccountName
+var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)   ? storageEncryptionIdentityNameOverride   : shrNaming.outputs.storageEncryptionIdentityName
+var templateSpecNameFinal         = !empty(templateSpecName)                        ? templateSpecName                        : shrNaming.outputs.templateSpecName
+var encryptionKeyName             = '${effectiveIdentifier}-encryption-key-${storageAccountName}'
 
 // Extract compute gallery resource ID from custom image resource ID
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}
 // Image version format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}/versions/{version}
 // Gallery format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}
-var computeGalleryResourceId = !empty(customImageResourceId)
-  ? join(take(split(customImageResourceId, '/'), 9), '/')
+var computeGalleryResourceId = contains(imageReference, 'id')
+  ? join(take(split(imageReference.id, '/'), 9), '/')
   : ''
 
 // Conditional Session Host Parameters
@@ -696,18 +601,10 @@ var sessionHostParameters = union(
     encryptionAtHost: encryptionAtHost
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
-    imageReference: empty(customImageResourceId)
-      ? {
-          publisher: imagePublisher
-          offer: imageOffer
-          sku: imageSku
-        }
-      : {
-          id: customImageResourceId
-        }
+    imageReference: imageReference
     location: virtualMachineResourceGroupLocation
-    networkInterfaceNameConv: networkInterfaceNameConv
-    osDiskNameConv: diskNameConv
+    virtualMachineNicNameConv: virtualMachineNicNameConv
+    virtualMachineDiskNameConv: virtualMachineDiskNameConv
     secureBootEnabled: secureBootEnabled
     securityType: securityType
     sessionHostNameIndexLength: sessionHostNameIndexLength
@@ -875,7 +772,7 @@ module roleAssignmentTemplateSpec '../../../.common/bicepModules/resources/templ
   }
 }
 
-module roleAssignmentComputeGallery '../../../.common/bicepModules/compute/galleries/roleAssignment.bicep' = if (!empty(customImageResourceId)) {
+module roleAssignmentComputeGallery '../../../.common/bicepModules/compute/galleries/roleAssignment.bicep' = if (contains(imageReference, 'id')) {
   name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {

@@ -111,7 +111,7 @@ var nameConvReversed = !empty(cnv_components) && last(filter(cnv_components, s =
 var cnv_rtFirst      = !nameConvReversed
 
 // ── Temporary Deployment Resources ───────────────────────────────────────────
-var resourceGroupDeployment    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, '${identifier}-deployment', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupDeployment    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, '${identifier}${cnv_delimiter}deployment', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var depVirtualMachineNameTemp  = stripSeps(cnv(cnv_components, cnv_delimiter, '', identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload))
 var depVirtualMachineName      = take('${depVirtualMachineNameTemp}${uniqueString(depVirtualMachineNameTemp)}', 15)
 var depVirtualMachineDiskName  = '${depVirtualMachineName}-${cnv_rtCodes.osdisks}'
@@ -132,8 +132,8 @@ var uniqueStringOperations = take(
 // Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
 // kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
 // kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
-var keyVaultNameSecrets    = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
-var keyVaultNameEncryption = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var keyVaultNameSecrets    = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec${cnv_delimiter}${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var keyVaultNameEncryption = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc${cnv_delimiter}${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
 
 // ── Monitoring ────────────────────────────────────────────────────────────────
 var dataCollectionEndpointName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
@@ -142,13 +142,13 @@ var logAnalyticsWorkspaceName  = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.
 // ── Global Feed Resources ─────────────────────────────────────────────────────
 // Global feed is a single shared resource — no location component in its name.
 var globalFeedResourceGroupName = !empty(globalFeedRegion)
-  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'global-feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'global${cnv_delimiter}feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : ''
-var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global-feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global${cnv_delimiter}feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Control Plane Shared Resources ───────────────────────────────────────────
 var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
-  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control-plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : split(existingFeedWorkspaceResourceId, '/')[4]
 var workspaceName = empty(existingFeedWorkspaceResourceId)
   ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
@@ -172,23 +172,23 @@ var privateEndpointNICNameConv = replace(privateEndpointNICNameConvTemp, 'RESOUR
 
 var recoveryServicesVaultNameVMs     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var recoveryServicesVaultNameFSLogix = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  'files',    cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var userAssignedIdentityNameConv     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.userAssignedIdentities, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var userAssignedIdentityNameConv     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.userAssignedIdentities, '${identifier}${cnv_delimiter}TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Compute Resources ─────────────────────────────────────────────────────────
-var resourceGroupHosts    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,   '${identifier}-hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupHosts    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,   '${identifier}${cnv_delimiter}hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var availabilitySetNameConv = '${cnv(cnv_components, cnv_delimiter, cnv_rtCodes.availabilitySets, identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)}${cnv_delimiter}##'
-var virtualMachineNameConv  = cnv_rtFirst ? '${cnv_rtCodes.virtualMachines}-SHNAME'  : 'SHNAME-${cnv_rtCodes.virtualMachines}'
-var diskNameConv            = cnv_rtFirst ? '${cnv_rtCodes.osdisks}-SHNAME'          : 'SHNAME-${cnv_rtCodes.osdisks}'
-var networkInterfaceNameConv = cnv_rtFirst ? '${cnv_rtCodes.networkInterfaces}-SHNAME' : 'SHNAME-${cnv_rtCodes.networkInterfaces}'
+var virtualMachineNameConv   = !empty(namingConvention.?virtualMachineNameConvOverride ?? '')   ? namingConvention.virtualMachineNameConvOverride   : (empty(cnv_rtCodes.virtualMachines)   ? 'SHNAME' : (cnv_rtFirst ? '${cnv_rtCodes.virtualMachines}-SHNAME'   : 'SHNAME-${cnv_rtCodes.virtualMachines}'))
+var virtualMachineDiskNameConv = !empty(namingConvention.?virtualMachineDiskNameConvOverride ?? '') ? namingConvention.virtualMachineDiskNameConvOverride : (empty(cnv_rtCodes.osdisks)           ? 'SHNAME' : (cnv_rtFirst ? '${cnv_rtCodes.osdisks}-SHNAME'           : 'SHNAME-${cnv_rtCodes.osdisks}'))
+var virtualMachineNicNameConv  = !empty(namingConvention.?virtualMachineNicNameConvOverride ?? '')    ? namingConvention.virtualMachineNicNameConvOverride  : (empty(cnv_rtCodes.networkInterfaces) ? 'SHNAME' : (cnv_rtFirst ? '${cnv_rtCodes.networkInterfaces}-SHNAME' : 'SHNAME-${cnv_rtCodes.networkInterfaces}'))
 
 var diskAccessName    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskAccesses,      identifier,            cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var diskEncryptionSetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskEncryptionSets, '${identifier}-TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-var diskEncryptionSetNameConfidentialVMs             = replace(diskEncryptionSetNameConv, 'TOKEN', 'confvm-customer-keys')
-var diskEncryptionSetNameCustomerManaged             = replace(diskEncryptionSetNameConv, 'TOKEN', 'customer-keys')
-var diskEncryptionSetNamePlatformAndCustomerManaged  = replace(diskEncryptionSetNameConv, 'TOKEN', 'platform-and-customer-keys')
+var diskEncryptionSetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskEncryptionSets, '${identifier}${cnv_delimiter}TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var diskEncryptionSetNameConfidentialVMs             = replace(diskEncryptionSetNameConv, 'TOKEN', 'confvm${cnv_delimiter}customer${cnv_delimiter}keys')
+var diskEncryptionSetNameCustomerManaged             = replace(diskEncryptionSetNameConv, 'TOKEN', 'customer${cnv_delimiter}keys')
+var diskEncryptionSetNamePlatformAndCustomerManaged  = replace(diskEncryptionSetNameConv, 'TOKEN', 'platform${cnv_delimiter}and${cnv_delimiter}customer${cnv_delimiter}keys')
 
 // ── Storage Resources ─────────────────────────────────────────────────────────
-var resourceGroupStorage     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,      '${identifier}-storage', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupStorage     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,      '${identifier}${cnv_delimiter}storage', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var netAppAccountName        = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.netAppAccounts,        identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var netAppCapacityPoolName   = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.netAppCapacityPools,   identifier,             cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
@@ -241,12 +241,13 @@ output privateEndpointNICNameConv string = privateEndpointNICNameConv
 output recoveryServicesVaultNameVMs     string = recoveryServicesVaultNameVMs
 output recoveryServicesVaultNameFSLogix string = recoveryServicesVaultNameFSLogix
 output userAssignedIdentityNameConv     string = userAssignedIdentityNameConv
+output delimiter                        string = cnv_delimiter
 
 output resourceGroupHosts        string = resourceGroupHosts
 output availabilitySetNameConv   string = availabilitySetNameConv
 output virtualMachineNameConv    string = virtualMachineNameConv
-output diskNameConv              string = diskNameConv
-output networkInterfaceNameConv  string = networkInterfaceNameConv
+output virtualMachineDiskNameConv string = virtualMachineDiskNameConv
+output virtualMachineNicNameConv  string = virtualMachineNicNameConv
 
 output diskAccessName                               string = diskAccessName
 output diskEncryptionSetNameConv                    string = diskEncryptionSetNameConv
@@ -267,3 +268,6 @@ output encryptionKeyNameRecoveryServices string = encryptionKeyNameRecoveryServi
 
 @description('Location abbreviation for the VM/session host region (used by callers for non-naming-convention purposes).')
 output vmsLocAbbr string = vmsLocAbbr
+
+@description('The effective location abbreviation used in resource names for the VM region. Equals vmsLocationAbbreviation from namingConvention when set; otherwise auto-resolved from locations.json.')
+output vmLocationAbbreviation string = cnv_vmsloc

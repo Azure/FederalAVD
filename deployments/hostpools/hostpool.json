@@ -4,23 +4,23 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.44.1.10279",
-      "templateHash": "7385170976697379692"
+      "version": "0.45.15.27210",
+      "templateHash": "9260696555655975323"
     }
   },
   "parameters": {
     "identifier": {
       "type": "string",
-      "maxLength": 9,
+      "maxLength": 16,
       "metadata": {
-        "description": "Required. Short name identifying the host pool persona (e.g. \"finance\", \"developers\"). Max 9 characters.\nUsed as the primary component of all resource names in this deployment. Combined with the index parameter\n(when provided) to form the base name for the host pool, desktop application group, session hosts, and all\nassociated resources.\n"
+        "description": "Required. Short name identifying the host pool persona (e.g. \"finance\", \"developers\"). Max 16 characters. Used as the primary component of all resource names in this deployment."
       }
     },
     "index": {
       "type": "int",
       "defaultValue": -1,
       "metadata": {
-        "description": "Optional. An index value used to distinquish each host pool with the same persona identifier.\nThis can be provided to shard the host pool across multiple groups for performance reasons or to uniquely define host pools under the same identifier.\nValid values are 0-99. If not provided, the host pool will be created without an index in the name.\n"
+        "description": "Deprecated. Include the index directly in the identifier parameter instead (e.g. finance01, finance02)."
       }
     },
     "namingConvention": {
@@ -36,7 +36,14 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nAll properties are optional when using the default convention; override only what needs to change.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  environment         — environment token, e.g. \"prod\"\n  freeform1           — static text slot before the workload\n  freeform2           — static text slot after the environment\n  vmsLocationAbbreviation  — override for the VMs region abbreviation\n  cpLocationAbbreviation   — override for the control plane region abbreviation\n  fslogixStoragePrefix     — custom prefix for FSLogix storage accounts (≤13 lowercase alphanumeric)\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\nThis object is produced automatically when deploying via the Azure Portal UI."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: purpose is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nAll properties are optional when using the default convention; override only what needs to change.\nKey properties:\n  components               — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter                — character inserted between components, e.g. \"-\"\n  workload                 — solution identifier inserted into names, e.g. \"avd\"\n  environment              — optional environment token, e.g. \"prod\"\n  freeform1                — static text slot before the workload\n  freeform2                — static text slot after the environment\n  vmsLocationAbbreviation  — override for the auto-resolved VMs region abbreviation\n  cpLocationAbbreviation   — override for the auto-resolved control plane region abbreviation\n  fslogixStoragePrefix              — custom prefix for FSLogix storage accounts (max 13 lowercase alphanumeric)\n  virtualMachineNameConvOverride    — optional SHNAME pattern for VMs, e.g. \"vm-SHNAME\" (empty = derived from convention)\n  virtualMachineDiskNameConvOverride  — optional SHNAME pattern for VM OS disks (empty = derived from convention)\n  virtualMachineNicNameConvOverride   — optional SHNAME pattern for VM NICs (empty = derived from convention)\nResource type abbreviations are provided separately via namingResourceTypeCodes.\nProduced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults."
+      }
+    },
+    "namingResourceTypeCodes": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding\ndefault from .common/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.\nProduced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.\nCLI deployments: pass only the keys you want to change, e.g. { virtualMachines: \"win\" }.\nStandard Cloud Adoption Framework defaults:\n  resourceGroups: \"rg\"          hostPools: \"vdpool\"         desktopApplicationGroups: \"vddag\"\n  workspaces: \"vdws\"            scalingPlans: \"vdscaling\"   virtualMachines: \"vm\"\n  osdisks: \"disk\"               diskEncryptionSets: \"des\"   diskAccesses: \"da\"\n  availabilitySets: \"as\"        storageAccounts: \"sa\"       netAppAccounts: \"naa\"\n  netAppCapacityPools: \"nacp\"   keyVaults: \"kv\"             userAssignedIdentities: \"uai\"\n  privateEndpoints: \"pe\"        networkInterfaces: \"nic\"    logAnalyticsWorkspaces: \"law\"\n  dataCollectionEndpoints: \"dce\"  recoveryServicesVaults: \"rsv\""
       }
     },
     "identitySolution": {
@@ -1092,8 +1099,8 @@
     "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
     "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
     "availabilitySetsCount": "[length(range(variables('beginAvSetRange'), add(sub(variables('endAvSetRange'), variables('beginAvSetRange')), 1)))]",
-    "hpIndexString": "[if(greaterOrEquals(parameters('index'), 0), format('{0:00}', parameters('index')), '')]",
-    "hpBaseName": "[if(empty(variables('hpIndexString')), toLower(parameters('identifier')), format('{0}-{1}', toLower(parameters('identifier')), variables('hpIndexString')))]",
+    "hpBaseName": "[toLower(parameters('identifier'))]",
+    "effectiveNamingConvention": "[union(parameters('namingConvention'), if(not(empty(parameters('namingResourceTypeCodes'))), createObject('resourceTypeCodes', parameters('namingResourceTypeCodes')), createObject()))]",
     "fslogixShareNamesLookup": {
       "CloudCacheProfileContainer": [
         "profile-containers"
@@ -1120,7 +1127,6 @@
     "vmOU": "[if(and(contains(parameters('identitySolution'), 'DomainServices'), not(empty(parameters('vmOUPath')))), createObject('vmOUPath', parameters('vmOUPath')), createObject())]",
     "vmCustomImageId": "[if(empty(parameters('customImageResourceId')), createObject(), createObject('vmCustomImageId', parameters('customImageResourceId')))]",
     "vmImageOffer": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageOffer'))), createObject(), createObject('vmImageOffer', parameters('imageOffer')))]",
-    "vmImagePublisher": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imagePublisher'))), createObject(), createObject('vmImagePublisher', parameters('imagePublisher')))]",
     "vmImageSku": "[if(or(not(empty(parameters('customImageResourceId'))), empty(parameters('imageSku'))), createObject(), createObject('vmImageSku', parameters('imageSku')))]",
     "deployRecoveryServices": "[and(parameters('recoveryServices'), contains(parameters('hostPoolType'), 'Personal'))]",
     "recoveryServicesFileSharePolicyName": "filesharepolicy"
@@ -1138,7 +1144,7 @@
         "mode": "Incremental",
         "parameters": {
           "namingConvention": {
-            "value": "[parameters('namingConvention')]"
+            "value": "[variables('effectiveNamingConvention')]"
           },
           "virtualMachinesRegion": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
@@ -1159,8 +1165,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "780668884345711765"
+              "version": "0.45.15.27210",
+              "templateHash": "18240436901878260053"
             }
           },
           "functions": [
@@ -1646,7 +1652,7 @@
               "netAppCapacityPools": "nacp",
               "networkInterfaces": "nic",
               "networkSecurityGroups": "nsg",
-              "osdisks": "osdisk",
+              "osdisks": "disk",
               "privateEndpoints": "pe",
               "privateLinkScopes": "pls",
               "publicIPAddresses": "pip",
@@ -1682,7 +1688,7 @@
             "cnv_workload": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')]",
             "nameConvReversed": "[and(not(empty(variables('cnv_components'))), equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType'))]",
             "cnv_rtFirst": "[not(variables('nameConvReversed'))]",
-            "resourceGroupDeployment": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}-deployment', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupDeployment": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}{1}deployment', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "depVirtualMachineNameTemp": "[__bicep.stripSeps(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), '', parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')))]",
             "depVirtualMachineName": "[take(format('{0}{1}', variables('depVirtualMachineNameTemp'), uniqueString(variables('depVirtualMachineNameTemp'))), 15)]",
             "depVirtualMachineDiskName": "[format('{0}-{1}', variables('depVirtualMachineName'), variables('cnv_rtCodes').osdisks)]",
@@ -1690,13 +1696,13 @@
             "resourceGroupOperations": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'operations', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "resourceGroupMonitoring": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'), parameters('virtualMachinesRegion')), uniqueString(subscription().subscriptionId, variables('resourceGroupOperations'))), 6)]",
-            "keyVaultNameSecrets": "[take(__bicep.kvSanitize(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))), 24)]",
-            "keyVaultNameEncryption": "[take(__bicep.kvSanitize(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))), 24)]",
+            "keyVaultNameSecrets": "[take(__bicep.kvSanitize(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec{0}{1}', variables('cnv_delimiter'), variables('uniqueStringOperations')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))), 24)]",
+            "keyVaultNameEncryption": "[take(__bicep.kvSanitize(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc{0}{1}', variables('cnv_delimiter'), variables('uniqueStringOperations')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))), 24)]",
             "dataCollectionEndpointName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').dataCollectionEndpoints, '', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "logAnalyticsWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').logAnalyticsWorkspaces, '', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedRegion'))), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'global-feed', '', variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), '')]",
-            "globalFeedWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, 'global-feed', '', variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "resourceGroupControlPlane": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'control-plane', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), split(parameters('existingFeedWorkspaceResourceId'), '/')[4])]",
+            "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedRegion'))), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('global{0}feed', variables('cnv_delimiter')), '', variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), '')]",
+            "globalFeedWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, format('global{0}feed', variables('cnv_delimiter')), '', variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupControlPlane": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('control{0}plane', variables('cnv_delimiter')), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), split(parameters('existingFeedWorkspaceResourceId'), '/')[4])]",
             "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, '', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
             "desktopApplicationGroupName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').desktopApplicationGroups, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "hostPoolName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').hostPools, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
@@ -1706,18 +1712,18 @@
             "privateEndpointNICNameConv": "[replace(variables('privateEndpointNICNameConvTemp'), 'RESOURCETYPE', variables('cnv_rtCodes').networkInterfaces)]",
             "recoveryServicesVaultNameVMs": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').recoveryServicesVaults, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "recoveryServicesVaultNameFSLogix": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').recoveryServicesVaults, 'files', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "userAssignedIdentityNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-TOKEN', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "resourceGroupHosts": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}-hosts', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "userAssignedIdentityNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}{1}TOKEN', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupHosts": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}{1}hosts', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "availabilitySetNameConv": "[format('{0}{1}##', __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').availabilitySets, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), variables('cnv_delimiter'))]",
-            "virtualMachineNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').virtualMachines), format('SHNAME-{0}', variables('cnv_rtCodes').virtualMachines))]",
-            "diskNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').osdisks), format('SHNAME-{0}', variables('cnv_rtCodes').osdisks))]",
-            "networkInterfaceNameConv": "[if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').networkInterfaces), format('SHNAME-{0}', variables('cnv_rtCodes').networkInterfaces))]",
+            "virtualMachineNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineNameConvOverride'), ''))), parameters('namingConvention').virtualMachineNameConvOverride, if(empty(variables('cnv_rtCodes').virtualMachines), 'SHNAME', if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').virtualMachines), format('SHNAME-{0}', variables('cnv_rtCodes').virtualMachines))))]",
+            "virtualMachineDiskNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('namingConvention').virtualMachineDiskNameConvOverride, if(empty(variables('cnv_rtCodes').osdisks), 'SHNAME', if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').osdisks), format('SHNAME-{0}', variables('cnv_rtCodes').osdisks))))]",
+            "virtualMachineNicNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('namingConvention').virtualMachineNicNameConvOverride, if(empty(variables('cnv_rtCodes').networkInterfaces), 'SHNAME', if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').networkInterfaces), format('SHNAME-{0}', variables('cnv_rtCodes').networkInterfaces))))]",
             "diskAccessName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').diskAccesses, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "diskEncryptionSetNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, format('{0}-TOKEN', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "diskEncryptionSetNameConfidentialVMs": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', 'confvm-customer-keys')]",
-            "diskEncryptionSetNameCustomerManaged": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', 'customer-keys')]",
-            "diskEncryptionSetNamePlatformAndCustomerManaged": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', 'platform-and-customer-keys')]",
-            "resourceGroupStorage": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}-storage', parameters('identifier')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "diskEncryptionSetNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, format('{0}{1}TOKEN', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "diskEncryptionSetNameConfidentialVMs": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', format('confvm{0}customer{1}keys', variables('cnv_delimiter'), variables('cnv_delimiter')))]",
+            "diskEncryptionSetNameCustomerManaged": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', format('customer{0}keys', variables('cnv_delimiter')))]",
+            "diskEncryptionSetNamePlatformAndCustomerManaged": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', format('platform{0}and{1}customer{2}keys', variables('cnv_delimiter'), variables('cnv_delimiter'), variables('cnv_delimiter')))]",
+            "resourceGroupStorage": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}{1}storage', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "netAppAccountName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').netAppAccounts, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "netAppCapacityPoolName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').netAppCapacityPools, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "uniqueStringStorage": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('resourceGroupStorage'), parameters('virtualMachinesRegion')), uniqueString(subscription().subscriptionId, variables('resourceGroupStorage'))), 6)]",
@@ -1821,6 +1827,10 @@
               "type": "string",
               "value": "[variables('userAssignedIdentityNameConv')]"
             },
+            "delimiter": {
+              "type": "string",
+              "value": "[variables('cnv_delimiter')]"
+            },
             "resourceGroupHosts": {
               "type": "string",
               "value": "[variables('resourceGroupHosts')]"
@@ -1833,13 +1843,13 @@
               "type": "string",
               "value": "[variables('virtualMachineNameConv')]"
             },
-            "diskNameConv": {
+            "virtualMachineDiskNameConv": {
               "type": "string",
-              "value": "[variables('diskNameConv')]"
+              "value": "[variables('virtualMachineDiskNameConv')]"
             },
-            "networkInterfaceNameConv": {
+            "virtualMachineNicNameConv": {
               "type": "string",
-              "value": "[variables('networkInterfaceNameConv')]"
+              "value": "[variables('virtualMachineNicNameConv')]"
             },
             "diskAccessName": {
               "type": "string",
@@ -1903,6 +1913,13 @@
                 "description": "Location abbreviation for the VM/session host region (used by callers for non-naming-convention purposes)."
               },
               "value": "[variables('vmsLocAbbr')]"
+            },
+            "vmLocationAbbreviation": {
+              "type": "string",
+              "metadata": {
+                "description": "The effective location abbreviation used in resource names for the VM region. Equals vmsLocationAbbreviation from namingConvention when set; otherwise auto-resolved from locations.json."
+              },
+              "value": "[variables('cnv_vmsloc')]"
             }
           }
         }
@@ -1936,8 +1953,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.45.15.27210",
+              "templateHash": "11930982213168086832"
             }
           },
           "parameters": {
@@ -2006,8 +2023,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.45.15.27210",
+              "templateHash": "11930982213168086832"
             }
           },
           "parameters": {
@@ -2074,8 +2091,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.45.15.27210",
+              "templateHash": "11930982213168086832"
             }
           },
           "parameters": {
@@ -2142,8 +2159,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.45.15.27210",
+              "templateHash": "11930982213168086832"
             }
           },
           "parameters": {
@@ -2201,7 +2218,7 @@
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value]"
           },
           "tags": {
-            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), union(createObject('vmIdentityType', parameters('identitySolution'), 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', parameters('vmNameIndexLength'), 'vmImageType', if(empty(parameters('customImageResourceId')), 'Gallery', 'CustomImage'), 'vmOSDiskType', parameters('diskSku'), 'vmDiskSizeGB', parameters('diskSizeGB'), 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', if(equals(parameters('availability'), 'AvailabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'AvailabilitySets'), 'Availability Sets', 'No infrastructure redundancy required')), 'vmEncryptionAtHost', parameters('encryptionAtHost'), 'vmAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'vmIPv6', parameters('enableIPv6'), 'vmHibernate', parameters('hibernationEnabled'), 'vmSecurityType', parameters('securityType'), 'vmSecureBoot', parameters('secureBootEnabled'), 'vmVirtualTPM', parameters('vTpmEnabled'), 'vmIntegrityMonitoring', parameters('integrityMonitoring'), 'vmSubnetId', parameters('virtualMachineSubnetResourceId')), variables('vmDomain'), variables('vmOU'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImagePublisher'), variables('vmImageSku'), variables('vmIntuneEnrollment'), if(empty(if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))), createObject(), createObject('vmDiskEncryptionSetName', if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))))), if(variables('hasAssociatedFslStorage'), union(createObject('fslContainerType', parameters('fslogixContainerType')), createObject('fslContainerSizeInMBs', parameters('fslogixSizeInMBs')), createObject('fslStorageService', split(parameters('fslogixStorageService'), ' ')[0]), createObject('fslFileShareNames', string(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')])), createObject('fslSharding', parameters('fslogixShardOptions')), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), createObject('fslLocalStorageAccountNames', string(map(range(0, variables('fslogixStorageCount')), lambda('i', format('{0}{1}', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.fslogixStorageAccountNamePrefix.value, padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))))), if(not(empty(parameters('fslogixExistingLocalStorageAccountResourceIds'))), createObject('fslLocalStorageAccountNames', string(map(parameters('fslogixExistingLocalStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())), variables('fslRemoteStorageAccountNames'), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureNetAppFiles')), createObject('fslLocalNetAppVolumeResourceIds', string(map(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')], lambda('share', format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.NetApp/netAppAccounts/{2}/capacityPools/{3}/volumes/{4}', subscription().subscriptionId, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppAccountName.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppCapacityPoolName.value, lambdaVariables('share')))))), if(not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject('fslLocalNetAppVolumeResourceIds', string(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject())), variables('fslRemoteNetAppVolumeResourceIds')), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupControlPlane.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolName.value)))]"
+            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), union(createObject('vmIdentityType', parameters('identitySolution'), 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', parameters('vmNameIndexLength'), 'vmOSDiskType', parameters('diskSku'), 'vmDiskSizeGB', parameters('diskSizeGB'), 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', if(equals(parameters('availability'), 'AvailabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'AvailabilitySets'), 'Availability Sets', 'No infrastructure redundancy required')), 'vmEncryptionAtHost', parameters('encryptionAtHost'), 'vmAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'vmIPv6', parameters('enableIPv6'), 'vmHibernate', parameters('hibernationEnabled'), 'vmSecurityType', parameters('securityType'), 'vmSecureBoot', parameters('secureBootEnabled'), 'vmVirtualTPM', parameters('vTpmEnabled'), 'vmIntegrityMonitoring', parameters('integrityMonitoring'), 'vmSubnetId', parameters('virtualMachineSubnetResourceId'), 'virtualMachineNameConv', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNameConv.value, 'virtualMachineDiskNameConv', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineDiskNameConv.value, 'virtualMachineNicNameConv', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNicNameConv.value, 'availabilitySetNameConv', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.availabilitySetNameConv.value), variables('vmDomain'), variables('vmOU'), variables('vmCustomImageId'), variables('vmImageOffer'), variables('vmImageSku'), variables('vmIntuneEnrollment'), if(empty(if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))), createObject(), createObject('vmDiskEncryptionSetName', if(parameters('confidentialVMOSDiskEncryption'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))))), if(variables('hasAssociatedFslStorage'), union(createObject('fslContainerType', parameters('fslogixContainerType')), createObject('fslContainerSizeInMBs', parameters('fslogixSizeInMBs')), createObject('fslStorageService', split(parameters('fslogixStorageService'), ' ')[0]), createObject('fslFileShareNames', string(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')])), createObject('fslSharding', parameters('fslogixShardOptions')), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), createObject('fslLocalStorageAccountNames', string(map(range(0, variables('fslogixStorageCount')), lambda('i', format('{0}{1}', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.fslogixStorageAccountNamePrefix.value, padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))))), if(not(empty(parameters('fslogixExistingLocalStorageAccountResourceIds'))), createObject('fslLocalStorageAccountNames', string(map(parameters('fslogixExistingLocalStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())), variables('fslRemoteStorageAccountNames'), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureNetAppFiles')), createObject('fslLocalNetAppVolumeResourceIds', string(map(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')], lambda('share', format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.NetApp/netAppAccounts/{2}/capacityPools/{3}/volumes/{4}', subscription().subscriptionId, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppAccountName.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.netAppCapacityPoolName.value, lambdaVariables('share')))))), if(not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject('fslLocalNetAppVolumeResourceIds', string(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject())), variables('fslRemoteNetAppVolumeResourceIds')), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupControlPlane.value, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.hostPoolName.value)))]"
           }
         },
         "template": {
@@ -2210,8 +2227,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.45.15.27210",
+              "templateHash": "11930982213168086832"
             }
           },
           "parameters": {
@@ -2279,8 +2296,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.45.15.27210",
+              "templateHash": "11930982213168086832"
             }
           },
           "parameters": {
@@ -2348,8 +2365,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "2538346822060615939"
+              "version": "0.45.15.27210",
+              "templateHash": "11930982213168086832"
             }
           },
           "parameters": {
@@ -2422,8 +2439,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "3292075444420741406"
+              "version": "0.45.15.27210",
+              "templateHash": "3858975454521495724"
             }
           },
           "parameters": {
@@ -2490,8 +2507,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "8366134766872536270"
+              "version": "0.45.15.27210",
+              "templateHash": "2608502427019711299"
             }
           },
           "parameters": {
@@ -2537,8 +2554,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "17199828385253577684"
+                      "version": "0.45.15.27210",
+                      "templateHash": "3585155273898172375"
                     }
                   },
                   "parameters": {
@@ -2709,8 +2726,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "9557285016381757501"
+              "version": "0.45.15.27210",
+              "templateHash": "12151805031924869900"
             }
           },
           "parameters": {
@@ -2871,8 +2888,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "18121928468382400839"
+                      "version": "0.45.15.27210",
+                      "templateHash": "8883362177636156190"
                     }
                   },
                   "parameters": {
@@ -2949,8 +2966,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "17199828385253577684"
+                      "version": "0.45.15.27210",
+                      "templateHash": "3585155273898172375"
                     }
                   },
                   "parameters": {
@@ -3103,8 +3120,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "483983684215471453"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12625193340093700361"
                     }
                   },
                   "definitions": {
@@ -3607,8 +3624,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "6600117196488899178"
+              "version": "0.45.15.27210",
+              "templateHash": "16792412256213625710"
             }
           },
           "parameters": {
@@ -3786,8 +3803,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "10927600393493694434"
+                      "version": "0.45.15.27210",
+                      "templateHash": "11020980357829539968"
                     }
                   },
                   "definitions": {
@@ -4074,8 +4091,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.45.15.27210",
+                      "templateHash": "6199329401471377288"
                     }
                   },
                   "parameters": {
@@ -4222,8 +4239,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "13843002736269387529"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12929798671232486010"
                     }
                   },
                   "parameters": {
@@ -4324,8 +4341,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "10927600393493694434"
+                      "version": "0.45.15.27210",
+                      "templateHash": "11020980357829539968"
                     }
                   },
                   "definitions": {
@@ -4612,8 +4629,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.45.15.27210",
+                      "templateHash": "6199329401471377288"
                     }
                   },
                   "parameters": {
@@ -4791,8 +4808,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "7864806538836268365"
+              "version": "0.45.15.27210",
+              "templateHash": "7310332936200764280"
             }
           },
           "parameters": {
@@ -4872,8 +4889,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "16904075698300234972"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12933534060515147751"
                     }
                   },
                   "definitions": {
@@ -5091,8 +5108,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -5230,8 +5247,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "18121928468382400839"
+                              "version": "0.45.15.27210",
+                              "templateHash": "8883362177636156190"
                             }
                           },
                           "parameters": {
@@ -5316,8 +5333,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -5487,8 +5504,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -5640,8 +5657,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "10550470109364136870"
+                              "version": "0.45.15.27210",
+                              "templateHash": "10613292749142597083"
                             }
                           },
                           "parameters": {
@@ -5786,8 +5803,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -5948,8 +5965,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -6174,8 +6191,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "5253725503708658112"
+              "version": "0.45.15.27210",
+              "templateHash": "10344009807304482902"
             }
           },
           "parameters": {
@@ -6277,8 +6294,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6484157504036730489"
+                      "version": "0.45.15.27210",
+                      "templateHash": "9829260378627813363"
                     }
                   },
                   "parameters": {
@@ -6462,8 +6479,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "16904075698300234972"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12933534060515147751"
                     }
                   },
                   "definitions": {
@@ -6681,8 +6698,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -6820,8 +6837,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "18121928468382400839"
+                              "version": "0.45.15.27210",
+                              "templateHash": "8883362177636156190"
                             }
                           },
                           "parameters": {
@@ -6906,8 +6923,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -7077,8 +7094,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -7230,8 +7247,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "10550470109364136870"
+                              "version": "0.45.15.27210",
+                              "templateHash": "10613292749142597083"
                             }
                           },
                           "parameters": {
@@ -7376,8 +7393,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -7538,8 +7555,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -7753,7 +7770,7 @@
             ]
           },
           "identityName": {
-            "value": "[replace(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.userAssignedIdentityNameConv.value, 'TOKEN', 'storage-encryption')]"
+            "value": "[replace(reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.userAssignedIdentityNameConv.value, 'TOKEN', format('storage{0}encryption', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.delimiter.value))]"
           }
         },
         "template": {
@@ -7762,8 +7779,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "1347281229414419957"
+              "version": "0.45.15.27210",
+              "templateHash": "15287644657834215061"
             }
           },
           "parameters": {
@@ -7841,8 +7858,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "16904075698300234972"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12933534060515147751"
                     }
                   },
                   "definitions": {
@@ -8060,8 +8077,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -8199,8 +8216,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "18121928468382400839"
+                              "version": "0.45.15.27210",
+                              "templateHash": "8883362177636156190"
                             }
                           },
                           "parameters": {
@@ -8285,8 +8302,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -8456,8 +8473,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -8609,8 +8626,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "10550470109364136870"
+                              "version": "0.45.15.27210",
+                              "templateHash": "10613292749142597083"
                             }
                           },
                           "parameters": {
@@ -8755,8 +8772,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -8917,8 +8934,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -9130,8 +9147,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "8479536735120148334"
+              "version": "0.45.15.27210",
+              "templateHash": "2921500325836607496"
             }
           },
           "parameters": {
@@ -9200,8 +9217,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "11346056706070090662"
+                      "version": "0.45.15.27210",
+                      "templateHash": "3205723352551928959"
                     }
                   },
                   "definitions": {
@@ -9421,8 +9438,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6439158586701348046"
+                      "version": "0.45.15.27210",
+                      "templateHash": "16237281183093996485"
                     }
                   },
                   "parameters": {
@@ -9503,8 +9520,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "16378024468601913459"
+                      "version": "0.45.15.27210",
+                      "templateHash": "4101869747218994798"
                     }
                   },
                   "parameters": {
@@ -9657,8 +9674,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "10742486137898084659"
+                      "version": "0.45.15.27210",
+                      "templateHash": "11143995444245234492"
                     }
                   },
                   "parameters": {
@@ -9707,8 +9724,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "10625631743640613500"
+                              "version": "0.45.15.27210",
+                              "templateHash": "2257598999830276116"
                             }
                           },
                           "parameters": {
@@ -9822,7 +9839,7 @@
             "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.globalFeedWorkspaceName.value]"
           },
           "hostPoolCustomTags": {
-            "value": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value)), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value)), createObject()))]"
+            "value": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupHosts.value)), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.resourceGroupStorage.value)), createObject()), createObject('hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'), 'vmsLocationAbbreviation', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.vmLocationAbbreviation.value))))]"
           },
           "hostPoolMaxSessionLimit": {
             "value": "[parameters('hostPoolMaxSessionLimit')]"
@@ -9904,8 +9921,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "3783601615594029068"
+              "version": "0.45.15.27210",
+              "templateHash": "1324235204663837826"
             }
           },
           "parameters": {
@@ -10116,8 +10133,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "13066160915749686355"
+                      "version": "0.45.15.27210",
+                      "templateHash": "16012441272943602611"
                     }
                   },
                   "definitions": {
@@ -10406,8 +10423,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.45.15.27210",
+                      "templateHash": "6199329401471377288"
                     }
                   },
                   "parameters": {
@@ -10557,8 +10574,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "7168856712288605258"
+                      "version": "0.45.15.27210",
+                      "templateHash": "15074182575597189578"
                     }
                   },
                   "definitions": {
@@ -10811,8 +10828,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6484157504036730489"
+                      "version": "0.45.15.27210",
+                      "templateHash": "9829260378627813363"
                     }
                   },
                   "parameters": {
@@ -10982,8 +10999,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "2414448829205138379"
+                      "version": "0.45.15.27210",
+                      "templateHash": "11208313006505032248"
                     }
                   },
                   "definitions": {
@@ -11124,8 +11141,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "10323460878811138063"
+                      "version": "0.45.15.27210",
+                      "templateHash": "3937907855321260253"
                     }
                   },
                   "definitions": {
@@ -11364,8 +11381,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.45.15.27210",
+                      "templateHash": "6199329401471377288"
                     }
                   },
                   "parameters": {
@@ -11527,8 +11544,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "2059878900227854191"
+                      "version": "0.45.15.27210",
+                      "templateHash": "9751779259481701692"
                     }
                   },
                   "definitions": {
@@ -11758,8 +11775,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "10323460878811138063"
+                      "version": "0.45.15.27210",
+                      "templateHash": "3937907855321260253"
                     }
                   },
                   "definitions": {
@@ -12002,8 +12019,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.45.15.27210",
+                      "templateHash": "6199329401471377288"
                     }
                   },
                   "parameters": {
@@ -12210,8 +12227,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "8603596284689962720"
+              "version": "0.45.15.27210",
+              "templateHash": "7162440739569596731"
             }
           },
           "parameters": {
@@ -12384,8 +12401,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "13721267880950072485"
+                      "version": "0.45.15.27210",
+                      "templateHash": "3486260919174586622"
                     }
                   },
                   "definitions": {
@@ -12574,7 +12591,7 @@
                       },
                       "properties": {
                         "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                        "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
+                        "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), null())]"
                       }
                     },
                     "backupStorageConfig": {
@@ -12687,8 +12704,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "16521676026004264680"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12232450753726742042"
                     }
                   },
                   "parameters": {
@@ -12772,8 +12789,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.45.15.27210",
+                      "templateHash": "6199329401471377288"
                     }
                   },
                   "parameters": {
@@ -13037,8 +13054,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "7542341207227257014"
+              "version": "0.45.15.27210",
+              "templateHash": "15113425939797655831"
             }
           },
           "parameters": {
@@ -13260,8 +13277,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "1928884097613211761"
+                      "version": "0.45.15.27210",
+                      "templateHash": "10712489688533641001"
                     }
                   },
                   "parameters": {
@@ -13356,8 +13373,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "3352449091455809264"
+                              "version": "0.45.15.27210",
+                              "templateHash": "1157060412924009571"
                             }
                           },
                           "parameters": {
@@ -13437,8 +13454,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "15114428200374175278"
+                              "version": "0.45.15.27210",
+                              "templateHash": "17849718171017917168"
                             }
                           },
                           "parameters": {
@@ -13547,8 +13564,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "15349137529693667586"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15075937246344763717"
                             }
                           },
                           "parameters": {
@@ -13710,8 +13727,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6484157504036730489"
+                              "version": "0.45.15.27210",
+                              "templateHash": "9829260378627813363"
                             }
                           },
                           "parameters": {
@@ -13991,8 +14008,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "3094798200485319081"
+                      "version": "0.45.15.27210",
+                      "templateHash": "13931129286459334505"
                     }
                   },
                   "parameters": {
@@ -14204,8 +14221,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "9985785534314845948"
+                              "version": "0.45.15.27210",
+                              "templateHash": "4151153466186372381"
                             }
                           },
                           "definitions": {
@@ -14578,8 +14595,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "18063057000220200386"
+                              "version": "0.45.15.27210",
+                              "templateHash": "2931508918859353308"
                             }
                           },
                           "definitions": {
@@ -14854,8 +14871,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "5430654093713609310"
+                              "version": "0.45.15.27210",
+                              "templateHash": "13088726029075253247"
                             }
                           },
                           "parameters": {
@@ -14904,8 +14921,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.44.1.10279",
-                                      "templateHash": "16495354737115596331"
+                                      "version": "0.45.15.27210",
+                                      "templateHash": "11800115697473310009"
                                     }
                                   },
                                   "parameters": {
@@ -15019,8 +15036,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "8459238929659221376"
+                              "version": "0.45.15.27210",
+                              "templateHash": "6199329401471377288"
                             }
                           },
                           "parameters": {
@@ -15167,8 +15184,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "17199828385253577684"
+                              "version": "0.45.15.27210",
+                              "templateHash": "3585155273898172375"
                             }
                           },
                           "parameters": {
@@ -15326,8 +15343,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6484157504036730489"
+                              "version": "0.45.15.27210",
+                              "templateHash": "9829260378627813363"
                             }
                           },
                           "parameters": {
@@ -15553,8 +15570,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6484157504036730489"
+                              "version": "0.45.15.27210",
+                              "templateHash": "9829260378627813363"
                             }
                           },
                           "parameters": {
@@ -15752,8 +15769,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6484157504036730489"
+                              "version": "0.45.15.27210",
+                              "templateHash": "9829260378627813363"
                             }
                           },
                           "parameters": {
@@ -15963,8 +15980,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6484157504036730489"
+                              "version": "0.45.15.27210",
+                              "templateHash": "9829260378627813363"
                             }
                           },
                           "parameters": {
@@ -16157,8 +16174,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6484157504036730489"
+                              "version": "0.45.15.27210",
+                              "templateHash": "9829260378627813363"
                             }
                           },
                           "parameters": {
@@ -16351,8 +16368,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "7335958741839707052"
+                      "version": "0.45.15.27210",
+                      "templateHash": "16513259009908671618"
                     }
                   },
                   "parameters": {
@@ -16508,8 +16525,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "7225781987317163556"
+              "version": "0.45.15.27210",
+              "templateHash": "14755155781606772992"
             }
           },
           "parameters": {
@@ -16578,8 +16595,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "18105259125615672874"
+                      "version": "0.45.15.27210",
+                      "templateHash": "17318094361586123194"
                     }
                   },
                   "parameters": {
@@ -16658,8 +16675,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "8459238929659221376"
+                      "version": "0.45.15.27210",
+                      "templateHash": "6199329401471377288"
                     }
                   },
                   "parameters": {
@@ -16814,8 +16831,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "36916503509489576"
+              "version": "0.45.15.27210",
+              "templateHash": "14216086418192382454"
             }
           },
           "parameters": {
@@ -16897,8 +16914,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "7058463313350514515"
+                      "version": "0.45.15.27210",
+                      "templateHash": "9992361692645432179"
                     }
                   },
                   "parameters": {
@@ -17079,14 +17096,14 @@
           "location": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('virtualMachineSubnetResourceId'), '/')[2], split(parameters('virtualMachineSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('virtualMachineSubnetResourceId'), '/')[8]), '2023-04-01', 'full').location]"
           },
-          "osDiskNameConv": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.diskNameConv.value]"
+          "virtualMachineDiskNameConv": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineDiskNameConv.value]"
           },
           "ouPath": {
             "value": "[parameters('vmOUPath')]"
           },
-          "networkInterfaceNameConv": {
-            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.networkInterfaceNameConv.value]"
+          "virtualMachineNicNameConv": {
+            "value": "[reference(subscriptionResourceId('Microsoft.Resources/deployments', format('Naming-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.virtualMachineNicNameConv.value]"
           },
           "securityType": {
             "value": "[parameters('securityType')]"
@@ -17190,8 +17207,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "7644530179664582033"
+              "version": "0.45.15.27210",
+              "templateHash": "13430572247042235829"
             }
           },
           "parameters": {
@@ -17340,10 +17357,10 @@
             "enableMonitoring": {
               "type": "bool"
             },
-            "networkInterfaceNameConv": {
+            "virtualMachineNicNameConv": {
               "type": "string"
             },
-            "osDiskNameConv": {
+            "virtualMachineDiskNameConv": {
               "type": "string"
             },
             "ouPath": {
@@ -17641,8 +17658,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "5430649279739512092"
+                      "version": "0.45.15.27210",
+                      "templateHash": "12523530158061714456"
                     }
                   },
                   "parameters": {
@@ -17889,8 +17906,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "7955233160800436934"
+                              "version": "0.45.15.27210",
+                              "templateHash": "15814763353458744660"
                             }
                           },
                           "parameters": {
@@ -18047,8 +18064,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "13721267880950072485"
+                              "version": "0.45.15.27210",
+                              "templateHash": "3486260919174586622"
                             }
                           },
                           "definitions": {
@@ -18237,7 +18254,7 @@
                               },
                               "properties": {
                                 "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
+                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), null())]"
                               }
                             },
                             "backupStorageConfig": {
@@ -18336,8 +18353,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "118124187100797841"
+                              "version": "0.45.15.27210",
+                              "templateHash": "14733611597515188353"
                             }
                           },
                           "definitions": {
@@ -18505,8 +18522,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "13721267880950072485"
+                              "version": "0.45.15.27210",
+                              "templateHash": "3486260919174586622"
                             }
                           },
                           "definitions": {
@@ -18695,7 +18712,7 @@
                               },
                               "properties": {
                                 "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
+                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), null())]"
                               }
                             },
                             "backupStorageConfig": {
@@ -18806,8 +18823,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "13721267880950072485"
+                              "version": "0.45.15.27210",
+                              "templateHash": "3486260919174586622"
                             }
                           },
                           "definitions": {
@@ -18996,7 +19013,7 @@
                               },
                               "properties": {
                                 "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
-                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), createObject('infrastructureEncryption', 'Enabled'))]"
+                                "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), null())]"
                               }
                             },
                             "backupStorageConfig": {
@@ -19112,8 +19129,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "16521676026004264680"
+                              "version": "0.45.15.27210",
+                              "templateHash": "12232450753726742042"
                             }
                           },
                           "parameters": {
@@ -19196,8 +19213,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "8459238929659221376"
+                              "version": "0.45.15.27210",
+                              "templateHash": "6199329401471377288"
                             }
                           },
                           "parameters": {
@@ -19469,11 +19486,11 @@
                   "location": {
                     "value": "[parameters('location')]"
                   },
-                  "networkInterfaceNameConv": {
-                    "value": "[parameters('networkInterfaceNameConv')]"
+                  "virtualMachineNicNameConv": {
+                    "value": "[parameters('virtualMachineNicNameConv')]"
                   },
-                  "osDiskNameConv": {
-                    "value": "[parameters('osDiskNameConv')]"
+                  "virtualMachineDiskNameConv": {
+                    "value": "[parameters('virtualMachineDiskNameConv')]"
                   },
                   "ouPath": {
                     "value": "[parameters('ouPath')]"
@@ -19531,8 +19548,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "16671933795883028319"
+                      "version": "0.45.15.27210",
+                      "templateHash": "4631353980502298389"
                     }
                   },
                   "parameters": {
@@ -19693,10 +19710,10 @@
                     "location": {
                       "type": "string"
                     },
-                    "networkInterfaceNameConv": {
+                    "virtualMachineNicNameConv": {
                       "type": "string"
                     },
-                    "osDiskNameConv": {
+                    "virtualMachineDiskNameConv": {
                       "type": "string"
                     },
                     "ouPath": {
@@ -19827,8 +19844,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "18278869408818254584"
+                              "version": "0.45.15.27210",
+                              "templateHash": "3591806012304049961"
                             }
                           },
                           "parameters": {
@@ -19925,8 +19942,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "5317019589829826800"
+                              "version": "0.45.15.27210",
+                              "templateHash": "4022744618912193610"
                             }
                           },
                           "parameters": {
@@ -20110,11 +20127,11 @@
                           "location": {
                             "value": "[parameters('location')]"
                           },
-                          "networkInterfaceNameConv": {
-                            "value": "[parameters('networkInterfaceNameConv')]"
+                          "virtualMachineNicNameConv": {
+                            "value": "[parameters('virtualMachineNicNameConv')]"
                           },
-                          "osDiskNameConv": {
-                            "value": "[parameters('osDiskNameConv')]"
+                          "virtualMachineDiskNameConv": {
+                            "value": "[parameters('virtualMachineDiskNameConv')]"
                           },
                           "ouPath": {
                             "value": "[parameters('ouPath')]"
@@ -20186,8 +20203,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6851583903410349935"
+                              "version": "0.45.15.27210",
+                              "templateHash": "16374702282185419507"
                             }
                           },
                           "parameters": {
@@ -20319,10 +20336,10 @@
                             "location": {
                               "type": "string"
                             },
-                            "networkInterfaceNameConv": {
+                            "virtualMachineNicNameConv": {
                               "type": "string"
                             },
-                            "osDiskNameConv": {
+                            "virtualMachineDiskNameConv": {
                               "type": "string"
                             },
                             "ouPath": {
@@ -20400,7 +20417,7 @@
                               {
                                 "name": "networkInterfaceNames",
                                 "count": "[length(range(0, variables('sessionHostCount')))]",
-                                "input": "[if(empty(parameters('networkInterfaceNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('networkInterfaceNames')]], replace(parameters('networkInterfaceNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('networkInterfaceNames')]]))]"
+                                "input": "[if(empty(parameters('virtualMachineNicNameConv')), parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('networkInterfaceNames')]], replace(parameters('virtualMachineNicNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('networkInterfaceNames')]]))]"
                               },
                               {
                                 "name": "virtualMachineNames",
@@ -20410,7 +20427,7 @@
                               {
                                 "name": "osDiskNames",
                                 "count": "[length(range(0, variables('sessionHostCount')))]",
-                                "input": "[if(empty(parameters('osDiskNameConv')), format('{0}-osdisk', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]), replace(parameters('osDiskNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]))]"
+                                "input": "[if(empty(parameters('virtualMachineDiskNameConv')), format('{0}-osdisk', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]), replace(parameters('virtualMachineDiskNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]))]"
                               }
                             ],
                             "$fxv#0": "[CmdletBinding(SupportsShouldProcess = $true)]\r\nparam (\r\n    # Agent Installation Parameters\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ApiVersion,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$StorageSuffix,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [ValidateNotNullOrEmpty()]\r\n    [string]$RegistrationToken,\r\n    \r\n    [Parameter(Mandatory = $true)]\r\n    [ValidateNotNullOrEmpty()]\r\n    [string]$AgentBootLoaderUrl,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AgentUrl,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [ValidateSet('true', 'false', '')]\r\n    [string]$AADJoin,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$MdmId,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    # Session Host Configuration Parameters\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$TimeZone,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AmdVmSize = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$NvidiaVmSize = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ConfigureFSLogix = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$CloudCache = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$IdentitySolution = '',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalNetAppServers = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalStorageAccountNames = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalStorageAccountKeys = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$OSSGroups = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteNetAppServers = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteStorageAccountNames = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteStorageAccountKeys = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$Shares = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$SizeInMBs = '30000',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$StorageService = ''\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\r\n$Script:Name = 'Initialize-SessionHost'\r\n$Script:LogPath = Join-Path -Path $env:SystemRoot -ChildPath \"Logs\\$Script:Name.log\"\r\n\r\n# Convert string parameters to boolean for internal use\r\n$AADJoinBool = if ([string]::IsNullOrEmpty($AADJoin)) { $false } else { [System.Convert]::ToBoolean($AADJoin) }\r\n\r\n#region Helper Functions\r\n\r\nfunction Write-Log {\r\n    Param (\r\n        [Parameter(Mandatory = $false, Position = 0)]\r\n        [ValidateSet(\"Info\", \"Warning\", \"Error\")]\r\n        $Category = 'Info',\r\n        [Parameter(Mandatory = $true, Position = 1)]\r\n        $Message\r\n    )\r\n\r\n    $DateTime = Get-Date -Format 'MM-dd-yyyy HH:mm:ss'\r\n    $Content = \"[$DateTime]`t$Category`t`t$Message`n\" \r\n    Add-Content $Script:LogPath $content -ErrorAction Stop\r\n\r\n    Switch ($Category) {\r\n        'Info' { Write-Host $content }\r\n        'Error' { Write-Error $Content }\r\n        'Warning' { Write-Warning $Content }\r\n    }\r\n}\r\n\r\nfunction Invoke-MsiWithRetry {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DisplayName,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string[]]$ArgumentList,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string]$LogPath    \r\n    )\r\n\r\n    $ArgumentList += \"/liwemo+! `\"$LogPath`\"\"\r\n   \r\n    $MaxRetries = 20\r\n    $RetryDelay = 30\r\n    $RetryCount = 0\r\n    $ExitCode = $null\r\n    \r\n    do {        \r\n        if ($RetryCount -gt 0) {\r\n            Write-Log -Message \"Retrying Install $DisplayName in $RetryDelay seconds (Exit code: $ExitCode) - Retry $RetryCount\"\r\n            Start-Sleep -Seconds $RetryDelay\r\n        }\r\n        Write-Log -Message \"Installing $DisplayName\"\r\n        $Process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow\r\n        $ExitCode = $Process.ExitCode        \r\n        $RetryCount++\r\n    } while ($ExitCode -eq 1618 -and $RetryCount -lt $MaxRetries) # 1618 = ERROR_INSTALL_ALREADY_RUNNING\r\n    \r\n    if ($ExitCode -eq 1618) {\r\n        $ErrorMsg = \"Install $DisplayName failed after $MaxRetries retries with Exit code $ExitCode (ERROR_INSTALL_ALREADY_RUNNING)\"\r\n        Write-Log -Category Error -Message $ErrorMsg\r\n        throw $ErrorMsg\r\n    }\r\n    \r\n    Write-Log -Message \"Install $DisplayName finished with Exit code: $ExitCode\"\r\n    \r\n    # Exit codes: 0 = success, 3010 = success but restart required\r\n    if ($ExitCode -notin @(0, 3010)) {\r\n        Write-Log -Category Warning -Message \"$DisplayName installation completed with Exit code: $ExitCode\"\r\n    }\r\n    \r\n    return $ExitCode\r\n}\r\n\r\nfunction Get-RegistrationTokenClaims {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$Token\r\n    )\r\n    \r\n    try {\r\n        $ClaimsSection = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')\r\n        \r\n        # Pad with '=' to make it valid base64\r\n        while ($ClaimsSection.Length % 4) {\r\n            $ClaimsSection += '='\r\n        }\r\n        \r\n        $ClaimsByteArray = [System.Convert]::FromBase64String($ClaimsSection)\r\n        $ClaimsJson = [System.Text.Encoding]::ASCII.GetString($ClaimsByteArray)\r\n        $Claims = $ClaimsJson | ConvertFrom-Json\r\n        \r\n        return $Claims\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to parse registration token: $($_.Exception.Message)\"\r\n        throw\r\n    }\r\n}\r\n\r\nfunction Get-AgentDownloadUrl {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$BrokerAgentApi\r\n    )\r\n    \r\n    try {\r\n        Write-Log -Message \"Querying broker for agent download URL: $BrokerAgentApi\"\r\n        \r\n        $Response = Invoke-WebRequest -Uri $BrokerAgentApi -UseBasicParsing\r\n        $ResponseJson = $Response.Content | ConvertFrom-Json\r\n        \r\n        Write-Log -Message \"Obtained agent endpoint: $($ResponseJson.agentEndpoint)\"\r\n        \r\n        return $ResponseJson.agentEndpoint\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to get agent download URL: $($_.Exception.Message)\"\r\n        return $null\r\n    }\r\n}\r\n\r\nfunction Get-LatestAgentInstaller {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$RegistrationToken,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DownloadFolder\r\n    )\r\n    \r\n    try {\r\n        # Parse the registration token to get broker endpoint\r\n        $Claims = Get-RegistrationTokenClaims -Token $RegistrationToken\r\n        \r\n        if (-not $Claims.GlobalBrokerResourceIdUri) {\r\n            Write-Log -Message \"Unable to obtain broker endpoint from registration token\"\r\n            return $null\r\n        }\r\n        \r\n        # Build the agent API URL\r\n        $BrokerUri = [System.UriBuilder]$Claims.GlobalBrokerResourceIdUri\r\n        $BrokerUri.Path = 'api/agentMsi/v1/agentVersion'\r\n        $BrokerAgentApi = $BrokerUri.Uri.AbsoluteUri\r\n        \r\n        Write-Log -Message \"Broker agent API: $BrokerAgentApi\"\r\n        \r\n        # Get the agent download URL\r\n        $AgentDownloadUrl = Get-AgentDownloadUrl -BrokerAgentApi $BrokerAgentApi\r\n        \r\n        if (-not $AgentDownloadUrl) {\r\n            Write-Log -Message \"Unable to obtain agent download URL from broker\"\r\n            return $null\r\n        }\r\n        \r\n        # Create download folder\r\n        if (-not (Test-Path $DownloadFolder)) {\r\n            New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null\r\n        }\r\n        \r\n        $AgentPath = Join-Path $DownloadFolder 'RDAgent.msi'\r\n        \r\n        # Try primary endpoint\r\n        try {\r\n            Write-Log -Message \"Downloading agent from: $AgentDownloadUrl\"\r\n            Invoke-WebRequest -Uri $AgentDownloadUrl -OutFile $AgentPath -UseBasicParsing\r\n            Write-Log -Message \"Successfully downloaded agent to: $AgentPath\"\r\n            return $AgentPath\r\n        }\r\n        catch {\r\n            Write-Log -Message \"Failed to download from primary endpoint: $($_.Exception.Message)\"\r\n        }\r\n        \r\n        # Try private link endpoint\r\n        try {\r\n            $PrivateLinkUri = [System.UriBuilder]$AgentDownloadUrl\r\n            $PrivateLinkUri.Host = \"$($Claims.EndpointPoolId).$($PrivateLinkUri.Host)\"\r\n            $PrivateLinkUrl = $PrivateLinkUri.Uri.AbsoluteUri\r\n            \r\n            Write-Log -Message \"Trying private link endpoint: $PrivateLinkUrl\"\r\n            Invoke-WebRequest -Uri $PrivateLinkUrl -OutFile $AgentPath -UseBasicParsing\r\n            Write-Log -Message \"Successfully downloaded agent from private link endpoint\"\r\n            return $AgentPath\r\n        }\r\n        catch {\r\n            Write-Log -Category Error -Message \"Failed to download from private link endpoint: $($_.Exception.Message)\"\r\n        }\r\n        \r\n        return $null\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Error getting latest agent installer: $($_.Exception.Message)\"\r\n        return $null\r\n    }\r\n}\r\n\r\nfunction Get-InstallerFromUrl {\r\n    param (\r\n        [string]$ApiVersion = $script:ApiVersion,\r\n        [string]$StorageSuffix = $script:StorageSuffix,\r\n        [string]$ClientId = $script:UserAssignedIdentityClientId,\r\n        [string]$Url,\r\n        [string]$DestinationPath,\r\n        [string]$DisplayName\r\n    )\r\n    \r\n    try {\r\n        $WebClient = New-Object System.Net.WebClient\r\n        \r\n        # If URL is Azure Storage and we have a managed identity, authenticate\r\n        if (-not [string]::IsNullOrEmpty($StorageSuffix) -and $Url -match $StorageSuffix -and -not [string]::IsNullOrEmpty($ClientId)) {\r\n            Write-Log -Message \"Authenticating to Azure Storage using managed identity\"\r\n            $StorageEndpoint = ($Url -split \"://\")[0] + \"://\" + ($Url -split \"/\")[2] + \"/\"\r\n            $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId\"\r\n            $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n            $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n            $WebClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n        }\r\n\r\n        Write-Log -Message \"Downloading $DisplayName from: $Url\"\r\n        $WebClient.DownloadFile(\"$Url\", \"$DestinationPath\")\r\n        $WebClient = $null\r\n        Write-Log -Message \"Successfully downloaded $DisplayName to: $DestinationPath\"\r\n        return $true\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to download $DisplayName : $($_.Exception.Message)\"\r\n        $WebClient = $null\r\n        return $false\r\n    }\r\n}\r\n\r\nfunction Wait-ForBootLoaderService {\r\n    $ServiceName = 'RDAgentBootLoader'\r\n    $MaxRetries = 18\r\n    $RetryDelay = 10\r\n    $RetryCount = 0\r\n    \r\n    while (-not (Get-Service $ServiceName -ErrorAction SilentlyContinue)) {\r\n        if ($RetryCount -ge $MaxRetries) {\r\n            $ErrorMsg = \"Service $ServiceName not found after $MaxRetries retries\"\r\n            Write-Log -Category Error -Message $ErrorMsg\r\n            throw $ErrorMsg\r\n        }\r\n        \r\n        Write-Log -Message \"Service $ServiceName not found. Retrying in $RetryDelay seconds (Retry $RetryCount of $MaxRetries)\"\r\n        Start-Sleep -Seconds $RetryDelay\r\n        $RetryCount++\r\n    }\r\n    \r\n    Write-Log -Message \"Starting service: $ServiceName\"\r\n    Start-Service $ServiceName\r\n    \r\n    Write-Log -Message \"Service $ServiceName started successfully\"\r\n}\r\n\r\nfunction Get-SessionHostName {\r\n    $Wmi = Get-WmiObject win32_computersystem\r\n    \r\n    if ($Wmi.Domain -eq 'WORKGROUP') {\r\n        return $Wmi.DNSHostName\r\n    }\r\n    \r\n    return \"$($Wmi.DNSHostName).$($Wmi.Domain)\"\r\n}\r\n\r\nFunction ConvertFrom-JsonString {\r\n    [CmdletBinding()]\r\n    param (\r\n        [string]$JsonString,\r\n        [string]$Name,\r\n        [switch]$SensitiveValues      \r\n    )\r\n    If ($JsonString -ne '[]' -and $null -ne $JsonString) {\r\n        [array]$Array = $JsonString.replace('\\', '') | ConvertFrom-Json\r\n        If ($Array.Length -gt 0) {\r\n            If ($SensitiveValues) { Write-Log -message \"Array '$Name' has $($Array.Length) members\" } Else { Write-Log -message \"$($Name): '$($Array -join \"', '\")'\" }\r\n            Return $Array\r\n        }\r\n        Else {\r\n            Return $null\r\n        }            \r\n    }\r\n    Else {\r\n        Return $null\r\n    }    \r\n}\r\n\r\nFunction Convert-GroupToSID {\r\n    [CmdletBinding()]\r\n    Param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DomainName,\r\n\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$GroupName\r\n    )\r\n    Begin {\r\n        [string]$groupSID = ''\r\n    }\r\n    Process {\r\n        Try {\r\n            $groupSID = (New-Object System.Security.Principal.NTAccount(\"$GroupName\")).Translate([System.Security.Principal.SecurityIdentifier]).Value\r\n        }\r\n        Catch {\r\n            Try {\r\n                $groupSID = (New-Object System.Security.Principal.NTAccount($DomainName, \"$GroupName\")).Translate([System.Security.Principal.SecurityIdentifier]).Value\r\n            }\r\n            Catch {\r\n                Write-Error -Message \"Failed to convert group name '$GroupName' to SID.\"\r\n            }\r\n        }\r\n        Write-Output -InputObject $groupSID\r\n    }\r\n}\r\n\r\nFunction Set-RegistryValue {\r\n    [CmdletBinding()]\r\n    param (\r\n        [Parameter()]\r\n        [string]$Name,\r\n        [Parameter()]\r\n        [string]$Path,\r\n        [Parameter()]\r\n        [string]$PropertyType,\r\n        [Parameter()]\r\n        $Value\r\n    )\r\n    If (!(Test-Path -Path $Path)) {\r\n        New-Item -Path $Path -Force | Out-Null\r\n    }\r\n    $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue\r\n    If ($RemoteValue) {\r\n        $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name\r\n        If ($Value -ne $CurrentValue) {\r\n            Write-Log -message \"Registry update: $Name = $Value (was: $CurrentValue)\"\r\n            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null\r\n        }\r\n    }\r\n    Else {\r\n        Write-Log -message \"Registry create: $Name = $Value\"\r\n        New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null\r\n    }\r\n}\r\n\r\n#endregion Helper Functions\r\n\r\n#region FSLogix Redirections XML Templates\r\n\r\n$redirectionsXMLStart = @'\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<FrxProfileFolderRedirection ExcludeCommonFolders=\"0\">\r\n<Excludes>\r\n'@\r\n\r\n$redirectionsXMLExcludesTeams = @'\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\Logs</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\PerfLog</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\EBWebView\\WV2Profile_tfw\\GPUCache</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\TempState</Exclude>\r\n'@\r\n\r\n$redirectionsXMLExcludesAzCLI = @'\r\n<Exclude Copy=\"0\">.Azure</Exclude>\r\n'@\r\n\r\n$redirectionsXMLEnd = @'\r\n</Excludes>\r\n<Includes>\r\n</Includes>\r\n</FrxProfileFolderRedirection>\r\n'@\r\n\r\n#endregion FSLogix Redirections XML Templates\r\n\r\n#region Main Script\r\n\r\ntry {\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'AVD Session Host Initialization Starting'\r\n    Write-Log -Message '========================================='\r\n    \r\n    Write-Log -Message \"TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize\"\r\n    Write-Log -Message \"AADJoin=$AADJoin | AgentBootLoaderUrl=$AgentBootLoaderUrl$(if ($AgentUrl) { \" | AgentUrl=$AgentUrl\" })$(if ($MdmId) { \" | MdmId=$MdmId\" })\"\r\n    \r\n    #region Phase 1: Session Host Configuration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Phase 1: Session Host Configuration'\r\n    Write-Log -Message '========================================='\r\n    \r\n    # Configure Time Zone\r\n    Set-TimeZone -Id \"$TimeZone\"\r\n    Write-Log -Message \"Time Zone set to: $TimeZone\"\r\n    \r\n    # Initialize registry settings array\r\n    $RegSettings = New-Object System.Collections.ArrayList\r\n    \r\n    # Convert boolean parameters\r\n    [bool]$ConfigureFSLogixBool = [System.Convert]::ToBoolean($ConfigureFSLogix)\r\n    \r\n    # Enable Time Zone Redirection\r\n    $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'fEnableTimeZoneRedirection'; PropertyType = 'DWORD'; Value = 1 })\r\n    \r\n    # Add GPU Settings if applicable\r\n    if ($AmdVmSize -eq 'true' -or $NvidiaVmSize -eq 'true') {\r\n        Write-Log -Message \"Adding GPU Settings\"\r\n        $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'bEnumerateHWBeforeSW'; PropertyType = 'DWORD'; Value = 1 })\r\n        $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'AVC444ModePreferred'; PropertyType = 'DWORD'; Value = 1 })\r\n    }\r\n    \r\n    if ($NvidiaVmSize -eq 'true') {\r\n        Write-Log -Message \"Adding Nvidia GPU Settings\"\r\n        $RegSettings.Add(@{Path = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; Name = 'AVChardwareEncodePreferred'; PropertyType = 'DWORD'; Value = 1 })\r\n    }\r\n    \r\n    # Configure FSLogix if specified\r\n    If ($ConfigureFSLogixBool) {\r\n        Write-Log -Message ''\r\n        Write-Log -Message 'Configuring FSLogix'\r\n        Write-Log -Message \"IdentitySolution: $IdentitySolution\"\r\n        \r\n        # Convert parameters\r\n        $CloudCacheBool = [System.Convert]::ToBoolean($CloudCache)\r\n        Write-Log -Message \"CloudCache: $CloudCacheBool\"\r\n        \r\n        [array]$SharesArray = ConvertFrom-JsonString -JsonString $Shares -Name 'Shares'\r\n        $ProfileShareName = $SharesArray[0]\r\n        if ($SharesArray.Count -gt 1) {\r\n            $OfficeShareName = $SharesArray[1]\r\n        }\r\n        Else {\r\n            $OfficeShareName = $null\r\n        }\r\n        \r\n        Write-Log -message \"ProfileShareName: $ProfileShareName\"\r\n        Write-Log -message \"OfficeShareName: $OfficeShareName\"\r\n        Write-Log -message \"StorageService: $StorageService\"\r\n        \r\n        if ($SizeInMBs -ne '' -and $null -ne $SizeInMBs) {\r\n            [int]$SizeInMBsInt = $SizeInMBs\r\n            Write-Log -message \"SizeInMBs: $SizeInMBsInt\"\r\n        }\r\n        Else {\r\n            [int]$SizeInMBsInt = 30000\r\n            Write-Log -message \"SizeInMBs not specified. Defaulting to: $SizeInMBsInt\"\r\n        }\r\n        \r\n        $AzCLIInstalled = Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'Azure CLI' } | Select-Object -First 1\r\n        $TeamsInstalled = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq 'MSTeams' }\r\n        \r\n        # Create Array Lists for storage paths\r\n        [System.Collections.ArrayList]$LocalProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalCloudCacheProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalCloudCacheOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteCloudCacheProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteCloudCacheOfficeContainerPaths = @()\r\n        \r\n        # Process storage accounts based on service type\r\n        switch ($StorageService) {\r\n            'AzureFiles' {\r\n                Write-Log -message \"Gathering Azure Files Storage Account Parameters\"\r\n                [array]$OSSGroupsArray = ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups'\r\n                [array]$LocalStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames'\r\n                [array]$LocalStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues\r\n                [array]$RemoteStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames'\r\n                [array]$RemoteStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues\r\n                \r\n                # Process Local Storage Accounts\r\n                Write-Log -message \"Processing Local Storage Accounts\"\r\n                For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {\r\n                    $SAFQDN = \"$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix\"\r\n                    Write-Log -message \"Local storage [$i]: $SAFQDN\"\r\n                    \r\n                    If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {\r\n                        Write-Log -message \"Adding storage key for '$SAFQDN' to Credential Manager\"\r\n                        Start-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$SAFQDN /user:localhost\\$($LocalStorageAccountNamesArray[$i]) /pass:$($LocalStorageAccountKeysArray[$i])\" -NoNewWindow -Wait\r\n                    }\r\n                    \r\n                    If ($OfficeShareName) {\r\n                        $LocalOfficeContainerPaths.Add(\"\\\\$SAFQDN\\$OfficeShareName\") | Out-Null\r\n                        $LocalCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                    }\r\n                    $LocalProfileContainerPaths.Add(\"\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                    $LocalCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                }\r\n                \r\n                # Process Remote Storage Accounts\r\n                If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                    Write-Log -message \"Processing Remote Storage Accounts\"\r\n                    For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {\r\n                        $SAFQDN = \"$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix\"\r\n                        Write-Log -message \"Remote storage [$i]: $SAFQDN\"\r\n                        \r\n                        If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {\r\n                            Write-Log -message \"Adding storage key for '$SAFQDN' to Credential Manager\"\r\n                            Start-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$($SAFQDN) /user:localhost\\$($RemoteStorageAccountNamesArray[$i]) /pass:$($RemoteStorageAccountKeysArray[$i])\" -NoNewWindow -Wait\r\n                        }\r\n                        \r\n                        If ($OfficeShareName) {\r\n                            $RemoteOfficeContainerPaths.Add(\"\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                            $RemoteCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                        }\r\n                        $RemoteProfileContainerPaths.Add(\"\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                        $RemoteCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                    }\r\n                }\r\n            }\r\n            'AzureNetAppFiles' {\r\n                Write-Log -message \"Gathering Azure NetApp Files Storage Account Parameters\"\r\n                [array]$LocalNetAppServersArray = ConvertFrom-JsonString -JsonString $LocalNetAppServers -Name 'LocalNetAppServers'\r\n                [array]$RemoteNetAppServersArray = ConvertFrom-JsonString -JsonString $RemoteNetAppServers -Name 'RemoteNetAppServers'\r\n                \r\n                Write-Log -message \"Local NetApp: $($LocalNetAppServersArray[0])\"\r\n                $LocalProfileContainerPaths.Add(\"\\\\$($LocalNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                $LocalCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($LocalNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                \r\n                If ($LocalNetAppServersArray.Length -gt 1 -and $OfficeShareName) {            \r\n                    $LocalOfficeContainerPaths.Add(\"\\\\$($LocalNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                    $LocalCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($LocalNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                }\r\n                \r\n                If ($RemoteNetAppServersArray.Count -gt 0) {\r\n                    Write-Log -message \"Remote NetApp: $($RemoteNetAppServersArray[0])\"\r\n                    $RemoteProfileContainerPaths.Add(\"\\\\$($RemoteNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                    $RemoteCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($RemoteNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                    \r\n                    If ($RemoteNetAppServersArray.Length -gt 1 -and $OfficeShareName) {\r\n                        $RemoteOfficeContainerPaths.Add(\"\\\\$($RemoteNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                        $RemoteCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($RemoteNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                    }        \r\n                }\r\n            }\r\n        }\r\n        \r\n        # Add Common FSLogix Registry Settings\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'CleanupInvalidSessions'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Apps'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\\SOFTWARE\\Fslogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'DeleteLocalProfileWhenVHDShouldApply'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'FlipFlopProfileDirectoryName'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithFailure'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithTempProfile'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachIntervalSeconds'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 15 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 3 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = $SizeInMBsInt })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'String'; Value = 'VHDX' })\r\n        \r\n        If ($LocalStorageAccountKeysArray.Count -gt 0) {\r\n            $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n        \r\n        if ($CloudCacheBool -eq $True) {\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n        \r\n        # Office Container Settings\r\n        If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })   \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'FlipFlopProfileDirectoryName'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LockedRetryCount'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 3 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LockedRetryInterval'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 15 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithFailure'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithTempProfile'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })    \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachIntervalSeconds'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 15 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 3 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = $SizeInMBsInt })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'String'; Value = 'VHDX' })\r\n            \r\n            If ($LocalStorageAccountKeysArray.Count -gt 0) {\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            }\r\n            \r\n            If ($CloudCacheBool -eq $True) {\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            }   \r\n        }\r\n        \r\n        # Object Specific Settings or Standard VHDLocations/CCDLocations\r\n        If ($OSSGroupsArray.Count -gt 0) {\r\n            Write-Log -message \"Adding Object Specific Settings\"\r\n            $DomainName = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty Domain\r\n            Write-Log -message \"DomainName: $DomainName\"\r\n            \r\n            For ($i = 0; $i -lt $OSSGroupsArray.Count; $i++) {\r\n                Write-Log -message \"Getting SID for $($OSSGroupsArray[$i])\"        \r\n                $OSSGroupSID = Convert-GroupToSID -DomainName $DomainName -GroupName $OSSGroupsArray[$i]\r\n                [string]$LocalProfileContainerPath = $LocalProfileContainerPaths[$i]\r\n                [string]$LocalCloudCacheProfileContainerPath = $LocalCloudCacheProfileContainerPaths[$i]\r\n\r\n                If ($RemoteStorageAccountNamesArray) {\r\n                    [string]$RemoteProfileContainerPath = $RemoteProfileContainerPaths[$i]\r\n                    [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfileContainerPaths[$i]\r\n                    [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath, $RemoteProfileContainerPath)\r\n                    [array]$CloudCacheProfileContainerPathsForGroup = @($LocalCloudCacheProfileContainerPath, $RemoteCloudCacheProfileContainerPath)\r\n                }\r\n                Else {\r\n                    [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath)\r\n                    [array]$CloudCacheProfileContainerPathsForGroup = @($LocalCloudCacheProfileContainerPath)\r\n                }\r\n\r\n                If ($CloudCacheBool -eq $True) {\r\n                    Write-Log -message \"Adding Cloud Cache Profile Container Settings: $OSSGroupSID : '$($CloudCacheProfileContainerPathsForGroup -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = \"HKLM:\\SOFTWARE\\FSLogix\\Profiles\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $CloudCacheProfileContainerPathsForGroup })\r\n                }\r\n                Else {\r\n                    Write-Log -message \"Adding Profile Container Settings: $OSSGroupSID : '$($ProfileContainerPathsForGroup -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = \"HKLM:\\SOFTWARE\\FSLogix\\Profiles\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $ProfileContainerPathsForGroup })\r\n                }   \r\n\r\n                If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n                    [string]$LocalOfficeContainerPath = $LocalOfficeContainerPaths[$i]\r\n                    [string]$LocalCloudCacheOfficeContainerPath = $LocalCloudCacheOfficeContainerPaths[$i]\r\n                    \r\n                    If ($RemoteStorageAccountNamesArray) {\r\n                        [string]$RemoteOfficeContainerPath = $RemoteOfficeContainerPaths[$i]\r\n                        [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficeContainerPaths[$i]\r\n                        [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath, $RemoteOfficeContainerPath)\r\n                        [array]$CloudCacheOfficeContainerPathsForGroup = @($LocalCloudCacheOfficeContainerPath, $RemoteCloudCacheOfficeContainerPath)\r\n                    }\r\n                    Else {\r\n                        [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath)\r\n                        [array]$CloudCacheOfficeContainerPathsForGroup = @($LocalCloudCacheOfficeContainerPath)\r\n                    }\r\n                    \r\n                    If ($CloudCacheBool -eq $True) {\r\n                        Write-Log -message \"Adding Cloud Cache Office Container Settings: $OSSGroupSID : '$($CloudCacheOfficeContainerPathsForGroup -join \"', '\")'\"\r\n                        $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = \"HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $CloudCacheOfficeContainerPathsForGroup })\r\n                    }\r\n                    Else {\r\n                        Write-Log -message \"Adding Office Container Settings: $OSSGroupSID : '$($OfficeContainerPathsForGroup -join \"', '\")'\"\r\n                        $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = \"HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $OfficeContainerPathsForGroup })\r\n                    }\r\n                }  \r\n            }          \r\n        }\r\n        Else {\r\n            # No OSS Groups, use standard VHDLocations/CCDLocations\r\n            If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                $ProfileContainerPaths = $LocalProfileContainerPaths + $RemoteProfileContainerPaths\r\n                $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths + $RemoteCloudCacheProfileContainerPaths\r\n            }\r\n            Else {\r\n                $ProfileContainerPaths = $LocalProfileContainerPaths\r\n                $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths\r\n            }\r\n            \r\n            If ($CloudCacheBool -eq $True) {\r\n                Write-Log -message \"Adding Cloud Cache Profile Container Settings: '$($CloudCacheProfileContainerPaths -join \"', '\")'\"   \r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'MultiString'; Value = $CloudCacheProfileContainerPaths })             \r\n            }\r\n            Else {\r\n                Write-Log -message \"Adding Profile Container Settings: '$($ProfileContainerPaths -join \"', '\")'\"\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'MultiString'; Value = $ProfileContainerPaths })\r\n            }\r\n            \r\n            If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n                If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                    $OfficeContainerPaths = $LocalOfficeContainerPaths + $RemoteOfficeContainerPaths\r\n                    $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths + $RemoteCloudCacheOfficeContainerPaths\r\n                }\r\n                Else {\r\n                    $OfficeContainerPaths = $LocalOfficeContainerPaths\r\n                    $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths\r\n                }\r\n                \r\n                If ($CloudCacheBool -eq $True) {\r\n                    Write-Log -message \"Adding Cloud Cache Office Container Settings: '$($CloudCacheOfficeContainerPaths -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'MultiString'; Value = $CloudCacheOfficeContainerPaths })\r\n                }\r\n                Else {\r\n                    Write-Log -message \"Adding Office Container Settings: '$($OfficeContainerPaths -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'MultiString'; Value = $OfficeContainerPaths })\r\n                }\r\n            }    \r\n        }\r\n        \r\n        # FSLogix Redirections for Teams and Az CLI\r\n        If ($TeamsInstalled -or $AzCLIInstalled) {\r\n            $customRedirFolder = \"$env:ProgramData\\FSLogix_CustomRedirections\"\r\n            Write-Log -message \"Creating custom redirections.xml file in $customRedirFolder\"\r\n            If (-not (Test-Path $customRedirFolder )) {\r\n                New-Item -Path $customRedirFolder -ItemType Directory -Force | Out-Null\r\n            }\r\n            $customRedirFilePath = \"$customRedirFolder\\redirections.xml\"\r\n            $redirectionsXMLContent = $redirectionsXMLStart\r\n            if ($AzCLIInstalled) {\r\n                $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLExcludesAzCLI\r\n            }\r\n            if ($TeamsInstalled) {\r\n                $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLExcludesTeams\r\n            }\r\n            $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLEnd\r\n            $redirectionsXMLContent | Out-File -FilePath $customRedirFilePath -Encoding unicode\r\n            \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'RedirXMLSourceFolder'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'String'; Value = $customRedirFolder })\r\n        }\r\n        \r\n        # Entra Kerberos Cloud Kerberos Ticket Retrieval\r\n        If ($IdentitySolution -match 'EntraKerberos') {\r\n            Write-Log -message \"Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Setting\"\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\Kerberos\\Parameters'; PropertyType = 'DWord'; Value = 1 })\r\n            Write-Log -message \"Adding Entra Kerberos Load Cred Key From Profile Setting\"\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\\Software\\Policies\\Microsoft\\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n\r\n        # Windows Defender Exclusions for FSLogix\r\n        $LocalPathExclusions = @(\r\n            \"$env:ProgramData\\FSLogix\",\r\n            \"$env:ProgramData\\FSLogix\\Cache\",\r\n            \"$env:ProgramData\\FSLogix\\Proxy\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\",\r\n            \"$env:SystemDrive\\Users\\*\\AppData\\Local\\FSLogix\",\r\n            \"$env:SystemRoot\\Temp\\*\\*.vhdx\",\r\n            \"$env:SystemDrive\\users\\*\\AppData\\Local\\Temp\\*.vhdx\"\r\n        )\r\n        \r\n        # Build UNC Path Exclusions from storage account paths\r\n        $UncPathExclusions = @()\r\n        $UncPathExclusions += $LocalProfileContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions += $LocalOfficeContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions += $RemoteProfileContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions += $RemoteOfficeContainerPaths | ForEach-Object { \"$_\\*\\*.vhdx\" }\r\n        $UncPathExclusions = $UncPathExclusions | Where-Object { $_ }\r\n\r\n        $PathExclusions = $LocalPathExclusions + $UncPathExclusions\r\n\r\n        $ProcessExclusions = @(\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxsvc.exe\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxccds.exe\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxdrv.sys\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxdrvvt.sys\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxccd.sys\"\r\n        )\r\n\r\n        Try {\r\n            ForEach ($Path in $PathExclusions) {\r\n                Add-MpPreference -ExclusionPath $Path -ErrorAction SilentlyContinue\r\n            }\r\n            ForEach ($Process in $ProcessExclusions) {\r\n                Add-MpPreference -ExclusionProcess $Process -ErrorAction SilentlyContinue\r\n            }\r\n            Write-Log -message \"Added $($PathExclusions.Count) Defender path exclusions and $($ProcessExclusions.Count) process exclusions\"\r\n        }\r\n        Catch {\r\n            Write-Log -Category Warning -Message \"Failed to add Windows Defender exclusions: $_\"\r\n        }\r\n\r\n        # Add local administrator to FSLogix exclude lists\r\n        $LocalAdministrator = (Get-LocalUser | Where-Object { $_.SID -like '*-500' }).Name\r\n        $LocalGroups = 'FSLogix Profile Exclude List', 'FSLogix ODFC Exclude List'\r\n        ForEach ($Group in $LocalGroups) {\r\n            If (-not (Get-LocalGroupMember -Group $Group -ErrorAction SilentlyContinue | Where-Object { $_.Name -like \"*$LocalAdministrator\" })) {\r\n                Write-Log -message \"Adding $LocalAdministrator to $Group\"\r\n                Add-LocalGroupMember -Group $Group -Member $LocalAdministrator -ErrorAction SilentlyContinue\r\n            }\r\n        }\r\n    }\r\n    \r\n    # Apply all registry settings\r\n    ForEach ($Setting in $RegSettings) {\r\n        Set-RegistryValue -Name $Setting.Name -Path $Setting.Path -PropertyType $Setting.PropertyType -Value $Setting.Value\r\n    }\r\n    \r\n    # Resize OS Disk\r\n    Write-Log -Message \"Resizing OS Disk\"\r\n    try {\r\n        $driveLetter = $env:SystemDrive.Substring(0, 1)\r\n        $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop\r\n        $currentSizeGB = [math]::Round($currentPartition.Size / 1GB, 2)\r\n        Write-Log -Message \"Current partition size: $currentSizeGB GB (drive: $driveLetter)\"\r\n\r\n        $size = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop\r\n        $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)\r\n        $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)\r\n        Write-Log -Message \"Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB\"\r\n\r\n        if ($null -eq $size -or $size.SizeMax -eq 0) {\r\n            Write-Log -Message \"Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize.\" -Category 'Warning'\r\n        }\r\n        elseif ($currentPartition.Size -ge $size.SizeMax) {\r\n            Write-Log -Message \"OS Disk partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed.\"\r\n        }\r\n        else {\r\n            Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop\r\n            Write-Log -Message \"OS Disk resized successfully from $currentSizeGB GB to $maxSizeGB GB\"\r\n        }\r\n    }\r\n    catch {\r\n        if ($_.Exception.Message -like \"*already the requested size*\") {\r\n            Write-Log -Message \"OS Disk is already at maximum size. No resize needed.\"\r\n        }\r\n        else {\r\n            Write-Log -Message \"Failed to resize OS Disk: $($_.Exception.Message)\" -Category 'Warning'\r\n            Write-Log -Message \"Continuing with deployment...\"\r\n        }\r\n    }\r\n    \r\n    Write-Log -Message \"Phase 1: Session Host Configuration Complete\"\r\n    \r\n    #endregion Phase 1: Session Host Configuration\r\n    \r\n    #region Phase 2: AVD Agent Installation and Registration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Phase 2: AVD Agent Installation'\r\n    Write-Log -Message '========================================='\r\n    \r\n    # Install RDS-RD-Server feature if this is a Server OS\r\n    $IsServer = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion' -ErrorAction SilentlyContinue).InstallationType -eq 'Server'\r\n    Write-Log -Message \"Operating System Type: $(if ($IsServer) { 'Server' } else { 'Client' })\"\r\n    if ($IsServer) {\r\n        $rdFeature = Get-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction SilentlyContinue\r\n        if ($rdFeature -and -not $rdFeature.Installed) {\r\n            Write-Log -Message 'Installing RDS-RD-Server feature'\r\n            Install-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction Stop | Out-Null\r\n            Write-Log -Message 'RDS-RD-Server feature installed successfully'\r\n        }\r\n    }\r\n    \r\n    # Check if already registered\r\n    $RDInfraReg = Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue\r\n    \r\n    if ($RDInfraReg -and $RDInfraReg.IsRegistered -eq 1 -and $RDInfraReg.RegistrationToken -eq '') {\r\n        Write-Log -Message 'VM is already registered with RDInfraAgent. Skipping installation.'\r\n        exit 0\r\n    }\r\n    \r\n    Write-Log -Message 'VM is not registered. Proceeding with agent installation...'\r\n    \r\n    # Create temporary download folder\r\n    $DownloadFolder = Join-Path -Path $env:TEMP -ChildPath \"AVDAgentInstall_$(Get-Date -Format 'yyyyMMddHHmmss')\"\r\n    New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null\r\n    \r\n    # Get Agent Installer with endpoint-first, URL-fallback logic\r\n    $AgentInstallerPath = $null\r\n    $BootLoaderInstallerPath = $null\r\n    \r\n    # Try endpoint first\r\n    Write-Log -Message 'Attempting to download latest agent from Azure endpoint'\r\n    $AgentInstallerPath = Get-LatestAgentInstaller -RegistrationToken $RegistrationToken -DownloadFolder $DownloadFolder\r\n        \r\n    # If endpoint failed and we have a URL, fall back to URL\r\n    if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($AgentUrl)) {\r\n        Write-Log -Message 'Endpoint download failed. Falling back to provided AgentUrl'\r\n        $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'\r\n        $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'            \r\n        if (-not $Success) {\r\n            $AgentInstallerPath = $null\r\n            Write-Log -Category Warning -Message \"Failed to download RD Agent from fallback URL: $AgentUrl\"\r\n        }\r\n    }\r\n    \r\n    # Final check - if we still don't have the agent installer, fail\r\n    if (-not $AgentInstallerPath) {\r\n        throw 'Failed to obtain RD Agent installer from all available sources (Azure endpoint and AgentUrl)'\r\n    }\r\n    \r\n    # Get Agent Boot Loader Installer\r\n    Write-Log -Message 'Downloading agent boot loader from provided URL'\r\n    $BootLoaderInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'\r\n    $Success = Get-InstallerFromUrl -Url $AgentBootLoaderUrl -DestinationPath $BootLoaderInstallerPath -DisplayName 'RD Agent Boot Loader'\r\n\r\n    if (-not $Success) {\r\n        throw 'Failed to download RD Agent Boot Loader'\r\n    }\r\n\r\n    # Final verification that we have both installers\r\n    if (-not $AgentInstallerPath -or -not $BootLoaderInstallerPath) {\r\n        throw 'Failed to obtain required installers. Agent: ' + $(if ($AgentInstallerPath) { 'OK' } else { 'FAILED' }) + ', BootLoader: ' + $(if ($BootLoaderInstallerPath) { 'OK' } else { 'FAILED' })\r\n    }\r\n    \r\n    # Install RD Infra Agent\r\n    Write-Log -Message \"Installing RD Infra Agent from: $AgentInstallerPath\"\r\n    \r\n    Invoke-MsiWithRetry `\r\n        -DisplayName 'RD Infra Agent' `\r\n        -ArgumentList @(\"/i\", $AgentInstallerPath, \"/quiet\", \"/qn\", \"/norestart\", \"/passive\", \"REGISTRATIONTOKEN=$RegistrationToken\") `\r\n        -LogPath \"$env:TEMP\\RDAgentInstall.log\"\r\n    \r\n    # Install RD Agent Boot Loader\r\n    Write-Log -Message \"Installing RD Agent Boot Loader from: $BootLoaderInstallerPath\"\r\n    \r\n    Invoke-MsiWithRetry `\r\n        -DisplayName 'RD Agent Boot Loader' `\r\n        -ArgumentList @(\"/i\", $BootLoaderInstallerPath, \"/quiet\", \"/qn\", \"/norestart\", \"/passive\") `\r\n        -LogPath \"$env:TEMP\\RDAgentBootLoaderInstall.log\"\r\n    \r\n    # Wait for and start the boot loader service\r\n    Wait-ForBootLoaderService\r\n    \r\n    # Clean up download folder\r\n    try {\r\n        Write-Log -Message \"Cleaning up download folder: $DownloadFolder\"\r\n        Remove-Item -Path $DownloadFolder -Force -Recurse -ErrorAction SilentlyContinue\r\n    }\r\n    catch {\r\n        Write-Log -Message \"Warning: Failed to clean up download folder: $($_.Exception.Message)\"\r\n    }\r\n      \r\n    # Get and log the session host name\r\n    $SessionHostName = Get-SessionHostName\r\n    Write-Log -Message \"Successfully registered session host: $SessionHostName\"\r\n    \r\n    Write-Log -Message \"Phase 2: AVD Agent Installation Complete\"\r\n    \r\n    #endregion Phase 2: AVD Agent Installation and Registration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Session Host Initialization Complete'\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message \"Log file location: $Script:LogPath\"    \r\n    exit 0\r\n}\r\ncatch {\r\n    Write-Log -Category Error -Message \"Initialization failed: $($_.Exception.Message)\"\r\n    Write-Log -Category Error -Message \"Stack Trace: $($_.ScriptStackTrace)\"\r\n    Write-Log -Message \"Log file location: $Script:LogPath\"    \r\n    exit 1\r\n}\r\n\r\n#endregion Main Script\r\n",
@@ -20860,8 +20877,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.44.1.10279",
-                                      "templateHash": "14884542757850512504"
+                                      "version": "0.45.15.27210",
+                                      "templateHash": "14901856053035321464"
                                     }
                                   },
                                   "parameters": {
@@ -20990,8 +21007,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.44.1.10279",
-                                      "templateHash": "3383861000800106010"
+                                      "version": "0.45.15.27210",
+                                      "templateHash": "4421185313861014725"
                                     }
                                   },
                                   "parameters": {
@@ -21041,8 +21058,8 @@
                                           "metadata": {
                                             "_generator": {
                                               "name": "bicep",
-                                              "version": "0.44.1.10279",
-                                              "templateHash": "16846810810018550115"
+                                              "version": "0.45.15.27210",
+                                              "templateHash": "13198152914363378685"
                                             }
                                           },
                                           "parameters": {
@@ -21124,8 +21141,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.44.1.10279",
-                                      "templateHash": "319591540537970965"
+                                      "version": "0.45.15.27210",
+                                      "templateHash": "6380852801717604135"
                                     }
                                   },
                                   "parameters": {
@@ -21214,8 +21231,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.44.1.10279",
-                              "templateHash": "6132217084987107741"
+                              "version": "0.45.15.27210",
+                              "templateHash": "8237946334697730753"
                             }
                           },
                           "parameters": {
@@ -21307,8 +21324,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "15415654182964161109"
+              "version": "0.45.15.27210",
+              "templateHash": "8438194751383233418"
             }
           },
           "parameters": {
@@ -21400,8 +21417,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6484157504036730489"
+                      "version": "0.45.15.27210",
+                      "templateHash": "9829260378627813363"
                     }
                   },
                   "parameters": {
@@ -21586,8 +21603,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6484157504036730489"
+                      "version": "0.45.15.27210",
+                      "templateHash": "9829260378627813363"
                     }
                   },
                   "parameters": {
@@ -21775,8 +21792,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.44.1.10279",
-                      "templateHash": "6484157504036730489"
+                      "version": "0.45.15.27210",
+                      "templateHash": "9829260378627813363"
                     }
                   },
                   "parameters": {

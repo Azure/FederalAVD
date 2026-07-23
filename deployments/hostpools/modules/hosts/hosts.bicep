@@ -48,8 +48,8 @@ param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
 param enableMonitoring bool
-param networkInterfaceNameConv string
-param osDiskNameConv string
+param virtualMachineNicNameConv string
+param virtualMachineDiskNameConv string
 param ouPath string
 param secureBootEnabled bool
 param securityType string
@@ -202,8 +202,8 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
     location: location
-    networkInterfaceNameConv: networkInterfaceNameConv
-    osDiskNameConv: osDiskNameConv
+    virtualMachineNicNameConv: virtualMachineNicNameConv
+    virtualMachineDiskNameConv: virtualMachineDiskNameConv
     ouPath: ouPath
     secureBootEnabled: secureBootEnabled
     securityType: securityType

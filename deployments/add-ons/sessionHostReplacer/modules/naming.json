@@ -1,0 +1,272 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "1892772343642113232"
+    }
+  },
+  "functions": [
+    {
+      "namespace": "__bicep",
+      "members": {
+        "resolveComponent": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "comp"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+          }
+        },
+        "buildCustomName": {
+          "parameters": [
+            {
+              "type": "array",
+              "name": "components"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[join(filter(map(parameters('components'), lambda('comp', __bicep.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
+          }
+        },
+        "cnv": {
+          "parameters": [
+            {
+              "type": "array",
+              "name": "components"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[__bicep.buildCustomName(filter(parameters('components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), parameters('delimiter'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload'))]"
+          }
+        }
+      }
+    }
+  ],
+  "parameters": {
+    "namingConvention": {
+      "type": "object",
+      "defaultValue": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
+      "metadata": {
+        "description": "Naming convention controlling how infrastructure resources are named.\nShould match the convention used when deploying the host pool. Pre-populated from the\nhpNamingComponents, hpNamingDelimiter, and hpNamingWorkload tags on the hosts resource group."
+      }
+    },
+    "identifier": {
+      "type": "string",
+      "metadata": {
+        "description": "The host pool base name / identifier (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the hosts resource group."
+      }
+    },
+    "locationAbbreviation": {
+      "type": "string",
+      "metadata": {
+        "description": "The pre-computed region abbreviation for the function app deployment location."
+      }
+    },
+    "uniqueString": {
+      "type": "string",
+      "metadata": {
+        "description": "A 6-character unique string scoped to the virtual machines subscription and resource group."
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": {
+      "applicationInsights": "appi",
+      "appServicePlans": "asp",
+      "automationAccounts": "aa",
+      "availabilitySets": "as",
+      "computeGalleries": "gal",
+      "dataCollectionEndpoints": "dce",
+      "dataCollectionRules": "dcr",
+      "desktopApplicationGroups": "vddag",
+      "diskAccesses": "da",
+      "remoteApplicationGroups": "vdrag",
+      "diskEncryptionSets": "des",
+      "functionApps": "fa",
+      "hostPools": "vdpool",
+      "keyVaults": "kv",
+      "logAnalyticsWorkspaces": "law",
+      "natGateways": "ng",
+      "netAppAccounts": "naa",
+      "netAppCapacityPools": "nacp",
+      "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
+      "osdisks": "disk",
+      "privateEndpoints": "pe",
+      "privateLinkScopes": "pls",
+      "publicIPAddresses": "pip",
+      "recoveryServicesVaults": "rsv",
+      "resourceGroups": "rg",
+      "routeTables": "rt",
+      "scalingPlans": "vdscaling",
+      "storageAccounts": "sa",
+      "templateSpecs": "ts",
+      "userAssignedIdentities": "uai",
+      "virtualMachines": "vm",
+      "workbooks": "wb",
+      "workspaces": "vdws",
+      "imageDefinitions": "vmid"
+    },
+    "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
+    "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
+    "cnv_workload": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd')]",
+    "cnv_ff1": "[coalesce(tryGet(parameters('namingConvention'), 'freeform1'), '')]",
+    "cnv_env": "[coalesce(tryGet(parameters('namingConvention'), 'environment'), '')]",
+    "cnv_ff2": "[coalesce(tryGet(parameters('namingConvention'), 'freeform2'), '')]",
+    "abbr": "[variables('$fxv#0')]",
+    "cnv_rtCodes": "[if(contains(parameters('namingConvention'), 'resourceTypeCodes'), union(variables('abbr'), parameters('namingConvention').resourceTypeCodes), variables('abbr'))]",
+    "loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'vmsLocationAbbreviation'), ''))), parameters('namingConvention').vmsLocationAbbreviation, parameters('locationAbbreviation'))]",
+    "nameConvReversed": "[and(not(empty(variables('cnv_components'))), equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType'))]",
+    "hpPurpose": "[format('{0}-shr-{1}', parameters('identifier'), parameters('uniqueString'))]",
+    "sanitizedStorageId": "[replace(parameters('identifier'), '-', '')]",
+    "storageRawName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), '', format('{0}shr{1}', variables('sanitizedStorageId'), parameters('uniqueString')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+    "peNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('cnv_rtCodes').privateEndpoints)]",
+    "peNicNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('peNameConv')), format('RESOURCETYPE-{0}', variables('peNameConv')))]"
+  },
+  "resources": {},
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[take(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').functionApps, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), 60)]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[take(toLower(replace(variables('storageRawName'), variables('cnv_delimiter'), '')), 24)]"
+    },
+    "storageEncryptionIdentityName": {
+      "type": "string",
+      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-shr{1}-encryption', parameters('identifier'), parameters('uniqueString')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').appServicePlans, '', variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+    },
+    "appInsightsName": {
+      "type": "string",
+      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').applicationInsights, 'sessionhostreplacer', variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+    },
+    "templateSpecName": {
+      "type": "string",
+      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').templateSpecs, 'session-hosts', variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+    },
+    "privateEndpointNameConv": {
+      "type": "string",
+      "value": "[variables('peNameConv')]"
+    },
+    "privateEndpointNICNameConv": {
+      "type": "string",
+      "value": "[replace(variables('peNicNameConvTemp'), 'RESOURCETYPE', variables('cnv_rtCodes').networkInterfaces)]"
+    }
+  }
+}

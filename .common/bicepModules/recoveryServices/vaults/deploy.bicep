@@ -86,12 +86,11 @@ resource recoveryServicesVault 'Microsoft.RecoveryServices/vaults@2023-04-01' = 
               }
           infrastructureEncryption: 'Enabled'
         }
-      : {
-          // No CMK — but always enable infrastructure encryption (double encryption
-          // with platform-managed keys at the storage layer, analogous to
-          // requireInfrastructureEncryption on storage accounts). Satisfies SC-28(1).
-          infrastructureEncryption: 'Enabled'
-        }
+      : null
+      // Note: infrastructureEncryption on Recovery Services Vaults requires CMK to be
+      // configured first (unlike Azure Storage where it can be set independently).
+      // Sending { infrastructureEncryption: 'Enabled' } without a keyVaultUri causes
+      // an InvalidRestApiParameter error from the Azure Backup API.
   }
 }
 

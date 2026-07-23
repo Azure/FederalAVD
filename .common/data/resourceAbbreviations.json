@@ -19,7 +19,7 @@
     "netAppCapacityPools": "nacp",
     "networkInterfaces": "nic",
     "networkSecurityGroups": "nsg",
-    "osdisks": "osdisk",
+    "osdisks": "disk",
     "privateEndpoints": "pe",
     "privateLinkScopes": "pls",
     "publicIPAddresses": "pip",

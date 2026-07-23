@@ -173,7 +173,7 @@
               "name": "scheduleInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "The function will run every 30 minutes during the selected hours on the selected days of the week. For example, selecting 8 AM to 5 PM with Monday-Friday will run the function at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only. Use the Start Minute to offset the schedule (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
+                "text": "The function will run every 30 minutes during the selected hours on the selected days of the week.\n\nFor example, selecting 8 AM to 5 PM with Monday-Friday will run the function at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only.\n\nUse the Start Minute to offset the schedule (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
                 "style": "Info"
               }
             },
@@ -181,7 +181,7 @@
               "name": "bestPracticesInfoBox1",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Best Practices: Schedule replacements during off-peak hours (typically overnight or early morning, e.g., 12 AM - 6 AM) when Azure Virtual Desktop Scaling Plans have already powered off most VMs for cost savings. The Session Host Replacer prioritizes powered-off VMs for replacement, resulting in zero user impact and optimal cost efficiency.",
+                "text": "Best Practices\n\nSchedule replacements during off-peak hours (typically overnight or early morning, e.g., 12 AM - 6 AM) when Azure Virtual Desktop Scaling Plans have already powered off most VMs for cost savings. The Session Host Replacer prioritizes powered-off VMs for replacement, resulting in zero user impact and optimal cost efficiency.",
                 "style": "Success"
               }
             },
@@ -374,7 +374,7 @@
               "name": "bestPracticesInfoBox2",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Best Practices: If managing multiple host pools, stagger the execution time by setting different start minutes for each deployment to prevent simultaneous runs and avoid API throttling. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15).",
+                "text": "Best Practices\n\nIf managing multiple host pools, stagger the execution time by setting different start minutes for each deployment to prevent simultaneous runs and avoid API throttling. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15).",
                 "style": "Success"
               }
             },
@@ -538,7 +538,7 @@
               "type": "Microsoft.Common.InfoBox",
               "visible": "[equals(steps('replacerConfig').replacementMode, 'SideBySide')]",
               "options": {
-                "text": "Automatic Capacity Buffer: Side-by-Side mode automatically allows your pool to grow up to 2× the target count during replacements. Example: 100 target VMs → up to 200 total VMs temporarily (100 old + 100 new). Ensure you have sufficient vCPU quota and subnet IP address space for double your target capacity. The pool returns to target size after old hosts are deleted.",
+                "text": "Automatic Capacity Buffer\n\nSide-by-Side mode automatically allows your pool to grow up to 2x the target count during replacements.\n\nExample: 100 target VMs -> up to 200 total VMs temporarily (100 old + 100 new).\n\nEnsure you have sufficient vCPU quota and subnet IP address space for double your target capacity. The pool returns to target size after old hosts are deleted.",
                 "style": "Info"
               }
             },
@@ -751,7 +751,7 @@
               "name": "deviceCleanupInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Device Cleanup Automation Overview: Device cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined (i.e., not joined to Active Directory Domain Services or Entra Domain Services) to prevent accumulation of orphaned device records. Required Microsoft Graph API Permissions: The function app's managed identity requires the following permissions: 'Device.ReadWrite.All' - Required for Entra ID device deletion and 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion. Air-Gapped Cloud Limitations: Intune is not currently available in Air-Gapped Clouds such as Azure Government Secret and Azure Government Top Secret. In these environments, the Intune Device Cleanup option will be automatically disabled.",
+                "text": "Device Cleanup Automation Overview\n\nDevice cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined to prevent accumulation of orphaned device records.\n\nRequired Microsoft Graph API Permissions\n\nThe function app's managed identity requires the following permissions:\n- 'Device.ReadWrite.All' - Required for Entra ID device deletion\n- 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion\n\nAir-Gapped Cloud Limitations\n\nIntune is not currently available in Air-Gapped Clouds such as Azure Government Secret and Azure Government Top Secret. In these environments, the Intune Device Cleanup option will be automatically disabled.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
               }
@@ -1209,7 +1209,7 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Image Source",
                   "filter": true,
-                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageType), 'Marketplace', if(equals(steps('basics').hostsRGProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace'))]",
+                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmCustomImageId), 'Marketplace', 'Compute Gallery')]",
                   "toolTip": "Select the type of image to deploy on the session hosts.",
                   "constraints": {
                     "required": true,
@@ -2658,7 +2658,7 @@
               "name": "zeroTrustNetworkingInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Zero Trust Networking for Function Apps and Azure Resources: This section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults). Private Endpoints: Enable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network. Virtual Network Integration: The function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
+                "text": "Zero Trust Networking for Function Apps and Azure Resources\n\nThis section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults).\n\nPrivate Endpoints\n\nEnable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network.\n\nVirtual Network Integration\n\nThe function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
               }
@@ -3077,94 +3077,137 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "This step is only needed for brownfield deployments where your host pool uses non-standard naming conventions. Leave 'Use Custom Naming' unchecked to automatically derive names from your host pool naming pattern."
+                "text": "Infrastructure resource names (Function App, Storage Account, App Service Plan, Application Insights, Template Spec) are automatically derived from the host pool naming convention tag and identifier. Resource type abbreviation overrides are available below."
               }
             },
             {
-              "name": "enableCustomNaming",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Use Custom Naming Overrides",
-              "defaultValue": false,
-              "toolTip": "Check this box to explicitly define resource names. Required for brownfield deployments with non-standard host pool naming (e.g., 'prod-avd-hostpool-01' instead of 'hp-avd-prod-eus'). If unchecked, names are automatically derived from the host pool name."
+              "name": "tagAbsentWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
+              "options": {
+                "style": "Warning",
+                "text": "The hpNamingConvention tag was not found on the host pool. This is expected if the host pool was not deployed with this solution. Infrastructure resource names will use default CAF naming values unless you provide overrides below."
+              }
             },
             {
-              "name": "derivedNamesPreview",
+              "name": "infrastructureNamingConvention",
               "type": "Microsoft.Common.Section",
-              "label": "Derived Resource Names (preview)",
-              "visible": "[not(steps('advanced').enableCustomNaming)]",
+              "label": "Infrastructure Naming Convention",
+              "visible": true,
               "elements": [
                 {
-                  "name": "previewInfo",
+                  "name": "infoBox",
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "These names will be automatically derived from your host pool name. To override any of them, enable 'Use Custom Naming Overrides' above."
+                    "text": "With identifier 'desktop-01' and the default CAF convention, names follow the pattern: [rt]-[identifier]-shr-[unique]-[location] (e.g., func-desktop-01-shr-abc123-eus). Verify the identifier matches your host pool."
                   }
                 },
                 {
-                  "name": "previewConventionNote",
-                  "type": "Microsoft.Common.TextBlock",
+                  "name": "identifier",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Identifier",
+                  "defaultValue": "[coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, '')]",
+                  "placeholder": "e.g. finance",
+                  "toolTip": "Host pool base name used to name per-host-pool SHR resources (Function App, storage account). Pre-populated from the hpIdentifier tag on the host pool. Maximum 16 characters.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-zA-Z0-9-]{0,16}$",
+                    "validationMessage": "Identifier must be 0-16 characters, alphanumeric and hyphens only."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "enableCustomAbbreviations",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Customize Resource Type Abbreviations",
+              "defaultValue": false,
+              "toolTip": "Override the default CAF resource type abbreviations used when computing infrastructure resource names (e.g. 'fa' for Function Apps, 'asp' for App Service Plans). Only needed if your organization uses non-standard abbreviations that differ from CAF defaults."
+            },
+            {
+              "name": "namingResourceTypeCodes",
+              "type": "Microsoft.Common.Section",
+              "label": "Resource Type Abbreviation Overrides",
+              "visible": "[steps('advanced').enableCustomAbbreviations]",
+              "elements": [
+                {
+                  "name": "infoBox",
+                  "type": "Microsoft.Common.InfoBox",
                   "options": {
-                    "text": "[concat('Detected convention: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'Resource type LAST (e.g. avd-prod-eus-vdpool)', 'Resource type FIRST (e.g. vdpool-avd-prod-eus)'))]"
+                    "style": "Info",
+                    "text": "Leave any field blank to use the CAF default shown in the placeholder. Changes here only affect infrastructure resource names (Function App, App Service Plan, etc.) — session host naming is configured separately below."
                   }
                 },
                 {
-                  "name": "previewFunctionApp",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('Function App: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-shr-{unique}-', steps('basics').location.name, '-fa'), concat('fa-', steps('basics').hostPool.name, '-shr-{unique}-', steps('basics').location.name)))]"
-                  }
+                  "name": "functionApps",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Function Apps",
+                  "placeholder": "fa",
+                  "defaultValue": "fa",
+                  "toolTip": "Resource type abbreviation for Function Apps. CAF default: fa",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
                 },
                 {
-                  "name": "previewStorageAccount",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('Storage Account: ', toLower(replace(concat(steps('basics').hostPool.name, 'shr{unique}', steps('basics').location.name), '-', '')))]"
-                  }
+                  "name": "appServicePlans",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "App Service Plans",
+                  "placeholder": "asp",
+                  "defaultValue": "asp",
+                  "toolTip": "Resource type abbreviation for App Service Plans. CAF default: asp",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
                 },
                 {
-                  "name": "previewEncryptionIdentity",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]",
-                  "options": {
-                    "text": "[concat('Storage Encryption Identity: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-shr{unique}-encryption-', steps('basics').location.name, '-uai'), concat('uai-', steps('basics').hostPool.name, '-shr{unique}-encryption-', steps('basics').location.name)))]"
-                  }
+                  "name": "applicationInsights",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Application Insights",
+                  "placeholder": "appi",
+                  "defaultValue": "appi",
+                  "toolTip": "Resource type abbreviation for Application Insights. CAF default: appi",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
                 },
                 {
-                  "name": "previewAppInsights",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
-                  "options": {
-                    "text": "[concat('Application Insights: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat('avd-sessionhostreplacer-', steps('basics').location.name, '-appi'), concat('appi-avd-sessionhostreplacer-', steps('basics').location.name)))]"
-                  }
+                  "name": "templateSpecs",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Template Specs",
+                  "placeholder": "ts",
+                  "defaultValue": "ts",
+                  "toolTip": "Resource type abbreviation for Template Specs. CAF default: ts",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
                 },
                 {
-                  "name": "previewVmConv",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('VM Naming Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-vm', 'vm-SHNAME'))]"
-                  }
+                  "name": "userAssignedIdentities",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "User-Assigned Identities",
+                  "placeholder": "uai",
+                  "defaultValue": "uai",
+                  "toolTip": "Resource type abbreviation for User-Assigned Managed Identities. CAF default: uai",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
                 },
                 {
-                  "name": "previewDiskConv",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('OS Disk Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-osdisk', 'osdisk-SHNAME'))]"
-                  }
+                  "name": "privateEndpoints",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private Endpoints",
+                  "placeholder": "pe",
+                  "defaultValue": "pe",
+                  "toolTip": "Resource type abbreviation for Private Endpoints. CAF default: pe",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
                 },
                 {
-                  "name": "previewNicConv",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('NIC Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-nic', 'nic-SHNAME'))]"
-                  }
+                  "name": "networkInterfaces",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Network Interfaces",
+                  "placeholder": "nic",
+                  "defaultValue": "nic",
+                  "toolTip": "Resource type abbreviation for Network Interfaces (used in private endpoint NIC naming). CAF default: nic",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
                 }
               ]
             },
             {
               "name": "functionApp_checkNameAvailability",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
+              "condition": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
               "request": {
                 "method": "POST",
                 "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Web/checkNameAvailability?api-version=2022-03-01')]",
@@ -3177,7 +3220,7 @@
             {
               "name": "functionAppName_rePUT",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
+              "condition": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
@@ -3187,7 +3230,7 @@
             {
               "name": "storageAccount_checkNameAvailability",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride)))]",
+              "condition": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride)))]",
               "request": {
                 "method": "POST",
                 "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-05-01')]",
@@ -3201,14 +3244,14 @@
               "name": "infrastructureNaming",
               "type": "Microsoft.Common.Section",
               "label": "Function App Infrastructure Naming",
-              "visible": "[steps('advanced').enableCustomNaming]",
+              "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
               "elements": [
                 {
                   "name": "infoBox",
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "These names are used for the Azure Function App and its supporting resources. All fields are required when custom naming is enabled."
+                    "text": "The hpNamingConvention tag was not found on this host pool. Provide explicit resource names below, or leave any field blank to use the CAF-derived name."
                   }
                 },
                 {
@@ -3216,9 +3259,9 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Function App Name",
                   "placeholder": "func-avdshr-prod-eus2",
-                  "toolTip": "Required. Explicit name for the Function App. Must be globally unique in the azurewebsites.net namespace, 2-60 characters, alphanumeric and hyphens. Example: func-avdshr-prod-eus2",
+                  "toolTip": "Optional. Explicit name for the Function App. Must be globally unique in the azurewebsites.net namespace, 2-60 characters, alphanumeric and hyphens. Leave blank to use the naming convention above.",
                   "constraints": {
-                    "required": true,
+                    "required": false,
                     "validations": [
                       {
                         "regex": "^[a-zA-Z0-9-]{2,60}$",
@@ -3240,9 +3283,9 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Storage Account Name",
                   "placeholder": "stavdshrprod",
-                  "toolTip": "Required. Explicit name for the Storage Account (used by Function App). Must be globally unique in Azure, 3-24 characters, lowercase alphanumeric only. Example: stavdshrprod",
+                  "toolTip": "Optional. Explicit name for the Storage Account. Must be globally unique in Azure, 3-24 characters, lowercase alphanumeric only. Leave blank to use the naming convention above.",
                   "constraints": {
-                    "required": true,
+                    "required": false,
                     "validations": [
                       {
                         "regex": "^[a-z0-9]{3,24}$",
@@ -3277,14 +3320,31 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Application Insights Name",
                   "placeholder": "appi-avdshr-prod-eus2",
-                  "toolTip": "Required. Explicit name for the Application Insights instance. Must be unique within the resource group, 1-260 characters, alphanumeric, hyphens, underscores, parentheses, and periods. Example: appi-avdshr-prod-eus2",
+                  "toolTip": "Optional. Explicit name for the Application Insights instance. Leave blank to use the naming convention above.",
                   "visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
                   "constraints": {
-                    "required": true,
+                    "required": false,
                     "validations": [
                       {
                         "regex": "^[a-zA-Z0-9-_().]{1,260}$",
                         "message": "Application Insights name must be 1-260 characters, containing alphanumeric characters, hyphens, underscores, parentheses, and periods."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "appServicePlanNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "App Service Plan Name",
+                  "placeholder": "asp-avd-eus",
+                  "visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
+                  "toolTip": "Optional. Explicit name for the App Service Plan. Only applies when creating a new plan (not using an existing one). The ASP is shared across add-ons in the region — leave blank to use the convention-derived name (e.g., asp-avd-eus).",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^$|^[a-zA-Z0-9-_]{1,40}$",
+                        "message": "App Service Plan name must be 1-40 characters, alphanumeric, hyphens, and underscores only."
                       }
                     ]
                   }
@@ -3295,21 +3355,29 @@
               "name": "sessionHostNaming",
               "type": "Microsoft.Common.Section",
               "label": "Session Host Resource Naming",
-              "visible": "[steps('advanced').enableCustomNaming]",
+              "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
               "elements": [
                 {
-                  "name": "infoBox",
+                  "name": "missingTagWarning",
                   "type": "Microsoft.Common.InfoBox",
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "options": {
                     "style": "Warning",
-                    "text": "CRITICAL: Session host naming conventions MUST match your existing VMs in the host pool! New VMs deployed as replacements will use these patterns. Use 'SHNAME' token for session host name and '##' token for availability set index."
+                    "text": "Session host naming tags were not found on the hosts resource group. The fields below are using default values. Verify they match your existing VM naming before proceeding."
                   }
                 },
                 {
-                  "name": "namingExample",
+                  "name": "infoBox",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
                     "text": "Examples:\n• If existing VMs are 'avdvm-001', use 'SHNAME' (no prefix/suffix)\n• If existing VMs are 'vm-avdvm-001', use 'vm-SHNAME'\n• If existing VMs are 'avdvm-001-vm', use 'SHNAME-vm'"
+                  }
+                },
+                {
+                  "name": "namingPreview",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "[concat('Preview (substituting avdhost001 for SHNAME, 01 for ##):\n  VM: ', replace(steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, 'SHNAME', 'avdhost001'), '\n  Disk: ', replace(steps('advanced').sessionHostNaming.diskNameConvOverride, 'SHNAME', 'avdhost001'), '\n  NIC: ', replace(steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, 'SHNAME', 'avdhost001'), '\n  Avail. Set: ', replace(steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '##', '01'))]"
                   }
                 },
                 {
@@ -3317,7 +3385,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Virtual Machine Naming Convention",
                   "placeholder": "vm-SHNAME",
-                  "defaultValue": "vm-SHNAME",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'vm-SHNAME')]",
                   "toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'vm-SHNAME' becomes 'vm-avdvm-001'). This MUST match your existing VM naming.",
                   "constraints": {
                     "required": true,
@@ -3330,7 +3398,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "OS Disk Naming Convention",
                   "placeholder": "disk-SHNAME",
-                  "defaultValue": "disk-SHNAME",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'disk-SHNAME')]",
                   "toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'disk-SHNAME' becomes 'disk-avdvm-001'). Should align with existing disk naming.",
                   "constraints": {
                     "required": true,
@@ -3343,7 +3411,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interface Naming Convention",
                   "placeholder": "nic-SHNAME",
-                  "defaultValue": "nic-SHNAME",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'nic-SHNAME')]",
                   "toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'nic-SHNAME' becomes 'nic-avdvm-001'). Should align with existing NIC naming.",
                   "constraints": {
                     "required": true,
@@ -3356,7 +3424,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
-                  "defaultValue": "avset-##",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
                   "toolTip": "Required. Naming pattern for availability sets. Use ## token for index (e.g., 'avset-##' becomes 'avset-01', 'avset-02'). Only used if availability is set to 'AvailabilitySets'.",
                   "constraints": {
                     "required": true,
@@ -3447,10 +3515,7 @@
         "sessionHostNameIndexLength": "[steps('hosts').naming.indexPadding]",
         "virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
         "enableIPv6": "[steps('hosts').network.enableIPv6]",
-        "imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
-        "imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
-        "imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",
-        "customImageResourceId": "[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.imageDefinition, '')]",
+        "imageReference": "[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"MicrosoftWindowsDesktop\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
         "securityType": "[steps('hosts').security.securityType]",
         "secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
         "vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
@@ -3486,14 +3551,17 @@
         "avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.avdInsightsDataCollectionRule, ''), '')]",
         "dataCollectionEndpointResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpoint, ''), '')]",
         "privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
-        "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
+        "namingConvention": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), parse('{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\",\"vmsLocationAbbreviation\":\"\"}'), parse(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
+        "namingResourceTypeCodes": "[if(steps('advanced').enableCustomAbbreviations, parse(concat('{\"functionApps\":\"', steps('advanced').namingResourceTypeCodes.functionApps, '\",\"appServicePlans\":\"', steps('advanced').namingResourceTypeCodes.appServicePlans, '\",\"applicationInsights\":\"', steps('advanced').namingResourceTypeCodes.applicationInsights, '\",\"templateSpecs\":\"', steps('advanced').namingResourceTypeCodes.templateSpecs, '\",\"userAssignedIdentities\":\"', steps('advanced').namingResourceTypeCodes.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').namingResourceTypeCodes.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').namingResourceTypeCodes.networkInterfaces, '\"}')), parse('{}'))]",
+        "identifier": "[steps('advanced').infrastructureNamingConvention.identifier]",        "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
         "storageAccountNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
         "storageEncryptionIdentityNameOverride": "[if(and(steps('advanced').enableCustomNaming, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
         "applicationInsightsNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
-        "virtualMachineNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, '')]",
-        "diskNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.diskNameConvOverride, '')]",
-        "networkInterfaceNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
-        "availabilitySetNameConvOverride": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '')]",
+        "appServicePlanNameOverride": "[if(and(steps('advanced').enableCustomNaming, not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
+        "virtualMachineNameConv": "[steps('advanced').sessionHostNaming.virtualMachineNameConvOverride]",
+        "virtualMachineDiskNameConv": "[steps('advanced').sessionHostNaming.diskNameConvOverride]",
+        "virtualMachineNicNameConv": "[steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride]",
+        "availabilitySetNameConv": "[steps('advanced').sessionHostNaming.availabilitySetNameConvOverride]",
         "tags": "[steps('advanced').tagsSection.tags]"
       },
       "kind": "Subscription",

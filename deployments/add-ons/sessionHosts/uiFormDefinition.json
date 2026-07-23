@@ -171,7 +171,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "visible": "[not(contains(steps('hosts').machineIdentity, 'DomainServices'))]",
                   "options": {
-                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below: 1. VirtualMachineAdminUserName: The virtual machine administrator username and 2. VirtualMachineAdminPassword: The virtual machine administrator password.",
+                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below:\n1. VirtualMachineAdminUserName: The virtual machine administrator username.\n2. VirtualMachineAdminPassword: The virtual machine administrator password.",
                     "style": "Info"
                   }
                 },
@@ -484,7 +484,7 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Image Source",
                   "filter": true,
-                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageType), 'Marketplace', if(equals(steps('basics').hostsRGProps.tags.vmImageType, 'CustomImage'), 'Compute Gallery', 'Marketplace'))]",
+                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmCustomImageId), 'Marketplace', 'Compute Gallery')]",
                   "toolTip": "Select the type of image to deploy on the session hosts.",
                   "constraints": {
                     "required": true,
@@ -1909,76 +1909,10 @@
           "label": "Advanced",
           "elements": [
             {
-              "name": "infoBox1",
-              "type": "Microsoft.Common.InfoBox",
-              "options": {
-                "style": "Info",
-                "text": "This step is only needed for brownfield deployments where your host pool uses non-standard naming conventions. Leave 'Use Custom Naming' unchecked to automatically derive names from your host pool naming pattern."
-              }
-            },
-            {
-              "name": "enableCustomNaming",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Use Custom Naming Overrides",
-              "defaultValue": false,
-              "toolTip": "Check this box to explicitly define resource names. Required for brownfield deployments with non-standard host pool naming (e.g., 'prod-avd-hostpool-01' instead of 'hp-avd-prod-eus'). If unchecked, names are automatically derived from the host pool name."
-            },
-            {
-              "name": "derivedNamesPreview",
-              "type": "Microsoft.Common.Section",
-              "label": "Derived Resource Names (preview)",
-              "visible": "[not(steps('advanced').enableCustomNaming)]",
-              "elements": [
-                {
-                  "name": "previewInfo",
-                  "type": "Microsoft.Common.InfoBox",
-                  "options": {
-                    "style": "Info",
-                    "text": "These naming patterns will be automatically derived from your host pool name. To override any of them, enable 'Use Custom Naming Overrides' above."
-                  }
-                },
-                {
-                  "name": "previewConventionNote",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('Detected convention: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'Resource type LAST (e.g. avd-prod-eus-vdpool)', 'Resource type FIRST (e.g. vdpool-avd-prod-eus)'))]"
-                  }
-                },
-                {
-                  "name": "previewVmConv",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('VM Naming Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-vm', 'vm-SHNAME'))]"
-                  }
-                },
-                {
-                  "name": "previewDiskConv",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('OS Disk Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-osdisk', 'osdisk-SHNAME'))]"
-                  }
-                },
-                {
-                  "name": "previewNicConv",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('NIC Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'SHNAME-nic', 'nic-SHNAME'))]"
-                  }
-                },
-                {
-                  "name": "previewAsConv",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('Availability Set Pattern: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-##-{location}-as'), concat('as-', steps('basics').hostPool.name, '-##-{location}')))]"
-                  }
-                }
-              ]
-            },
-            {
               "name": "sessionHostNaming",
               "type": "Microsoft.Common.Section",
               "label": "Session Host Resource Naming",
-              "visible": "[steps('advanced').enableCustomNaming]",
+              "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
               "elements": [
                 {
                   "name": "infoBox",
@@ -2000,7 +1934,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Virtual Machine Naming Convention",
                   "placeholder": "vm-SHNAME",
-                  "defaultValue": "vm-SHNAME",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'vm-SHNAME')]",
                   "toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'vm-SHNAME' becomes 'vm-avdvm-001'). This MUST match your existing VM naming.",
                   "constraints": {
                     "required": true,
@@ -2013,7 +1947,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "OS Disk Naming Convention",
                   "placeholder": "disk-SHNAME",
-                  "defaultValue": "disk-SHNAME",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'disk-SHNAME')]",
                   "toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'disk-SHNAME' becomes 'disk-avdvm-001'). Should align with existing disk naming.",
                   "constraints": {
                     "required": true,
@@ -2026,7 +1960,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interface Naming Convention",
                   "placeholder": "nic-SHNAME",
-                  "defaultValue": "nic-SHNAME",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'nic-SHNAME')]",
                   "toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'nic-SHNAME' becomes 'nic-avdvm-001'). Should align with existing NIC naming.",
                   "constraints": {
                     "required": true,
@@ -2039,7 +1973,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
-                  "defaultValue": "avset-##",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
                   "toolTip": "Required. Naming pattern for availability sets. Use ## token for index (e.g., 'avset-##' becomes 'avset-01', 'avset-02'). Only used if availability is set to 'AvailabilitySets'.",
                   "constraints": {
                     "required": true,
@@ -2081,10 +2015,7 @@
         "sessionHostCount": "[steps('hosts').specs.count]",
         "sessionHostNameIndexLength": "[steps('hosts').naming.indexPadding]",
         "enableIPv6": "[steps('hosts').network.enableIPv6]",
-        "imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), 'MicrosoftWindowsDesktop', '')]",
-        "imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
-        "imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",
-        "customImageResourceId": "[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.imageDefinition, '')]",
+        "imageReference": "[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"MicrosoftWindowsDesktop\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
         "securityType": "[steps('hosts').security.securityType]",
         "secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
         "vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
@@ -2116,10 +2047,10 @@
         "enableMonitoring": "[steps('monitoring').enableSessionHostMonitoring]",
         "avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').avdInsightsDataCollectionRule, ''), '')]",
         "dataCollectionEndpointResourceId": "[if(steps('monitoring').enableSessionHostMonitoring, coalesce(steps('monitoring').dataCollectionEndpoint, ''), '')]",
-        "virtualMachineNameConv": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, '')]",
-        "osDiskNameConv": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.diskNameConvOverride, '')]",
-        "networkInterfaceNameConv": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, '')]",
-        "availabilitySetNameConv": "[if(steps('advanced').enableCustomNaming, steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '')]",
+        "virtualMachineNameConv": "[steps('advanced').sessionHostNaming.virtualMachineNameConvOverride]",
+        "virtualMachineDiskNameConv": "[steps('advanced').sessionHostNaming.diskNameConvOverride]",
+        "virtualMachineNicNameConv": "[steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride]",
+        "availabilitySetNameConv": "[steps('advanced').sessionHostNaming.availabilitySetNameConvOverride]",
         "tags": "[steps('advanced').tagsSection.tags]",
         "recoveryServicesVaultResourceId": "[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.recoveryServicesVault, '')]",
         "vmBackupPolicyName": "[if(steps('monitoring').backup.enableVmBackup, steps('monitoring').backup.vmBackupPolicyName, '')]",
