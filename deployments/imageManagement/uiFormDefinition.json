@@ -973,12 +973,22 @@
                   }
                 },
                 {
+                  "name": "customizeAbbreviations",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Customize resource type abbreviations",
+                  "toolTip": "Check to override the default abbreviations used in resource names. Leave unchecked to use the standard Cloud Adoption Framework abbreviations (e.g., rg, gal, uai, sa).",
+                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]"  ,
+                  "constraints": {
+                    "required": false
+                  }
+                },
+                {
                   "name": "rtCodeRg",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Resource Groups abbreviation",
                   "defaultValue": "rg",
                   "toolTip": "Abbreviation substituted for the Resource Type component in resource group names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]" ,
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -991,7 +1001,7 @@
                   "label": "Compute Galleries abbreviation",
                   "defaultValue": "gal",
                   "toolTip": "Abbreviation substituted for the Resource Type component in gallery names. Gallery names replace hyphens with underscores automatically.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]" ,
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -1004,7 +1014,7 @@
                   "label": "User Assigned Identities abbreviation",
                   "defaultValue": "uai",
                   "toolTip": "Abbreviation substituted for the Resource Type component in managed identity names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]" ,
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -1017,7 +1027,7 @@
                   "label": "Storage Accounts abbreviation",
                   "defaultValue": "sa",
                   "toolTip": "Abbreviation substituted for the Resource Type component in storage account names. Storage names strip hyphens and are capped at 24 characters.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]" ,
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -1030,7 +1040,7 @@
                   "label": "Private Endpoints abbreviation",
                   "defaultValue": "pe",
                   "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]" ,
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -1043,7 +1053,7 @@
                   "label": "Network Interfaces abbreviation",
                   "defaultValue": "nic",
                   "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint network interface names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]" ,
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -1056,7 +1066,7 @@
                   "label": "Disk Encryption Sets abbreviation",
                   "defaultValue": "des",
                   "toolTip": "Abbreviation substituted for the Resource Type component in disk encryption set names.",
-                  "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
+                  "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]" ,
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
