@@ -525,7 +525,7 @@ var functionAppName               = !empty(functionAppNameOverride)             
 var storageAccountName            = !empty(storageAccountNameOverride)              ? toLower(storageAccountNameOverride)     : shrNaming.outputs.storageAccountName
 var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)   ? storageEncryptionIdentityNameOverride   : shrNaming.outputs.storageEncryptionIdentityName
 var templateSpecNameFinal         = !empty(templateSpecName)                        ? templateSpecName                        : shrNaming.outputs.templateSpecName
-var encryptionKeyName             = '${effectiveIdentifier}-encryption-key-${storageAccountName}'
+var encryptionKeyName             = '${effectiveIdentifier}-shr-storage-cmk'
 
 // Extract compute gallery resource ID from custom image resource ID
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}

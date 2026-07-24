@@ -206,10 +206,10 @@ var fslogixStorageAccountNamePrefix = !empty(namingConvention.?fslogixStoragePre
   : 'fslogix${uniqueStringStorage}'
 
 // ── Encryption Key Names ──────────────────────────────────────────────────────
-var encryptionKeyNameFSLogix           = '${identifier}-encryption-key-${fslogixStorageAccountNamePrefix}##'
-var encryptionKeyNameVMs               = '${identifier}-encryption-key-vms'
-var encryptionKeyNameConfidentialVMs   = '${identifier}-encryption-key-confidential-vms'
-var encryptionKeyNameRecoveryServices  = '${identifier}-encryption-key-rsv'
+var encryptionKeyNameFSLogix           = '${identifier}-${fslogixStorageAccountNamePrefix}##-cmk'
+var encryptionKeyNameVMs               = '${identifier}-vm-cmk'
+var encryptionKeyNameConfidentialVMs   = '${identifier}-cvm-cmk'
+var encryptionKeyNameRecoveryServices  = '${identifier}-rsv-cmk'
 
 // ── Outputs ───────────────────────────────────────────────────────────────────
 output resourceGroupDeployment   string = resourceGroupDeployment

@@ -421,10 +421,10 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Encryption Key Vault",
                   "multiLine": true,
-                  "toolTip": "Select the Premium SKU Key Vault that holds the customer-managed encryption keys. Only Premium SKU vaults are listed. The same vault is used for storage account and gallery image version encryption.",
+                  "toolTip": "Select the Premium SKU Key Vault that holds the customer-managed encryption keys. Only Premium SKU vaults in the same region as the deployment are listed. The same vault is used for storage account and gallery image version encryption.",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('encryption').keyVaultSection.keyVaultsApi.value, (kv) => equals(toLower(kv.properties.sku.name), 'premium')), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
+                    "allowedValues": "[map(filter(steps('encryption').keyVaultSection.keyVaultsApi.value, (kv) => and(equals(toLower(kv.properties.sku.name), 'premium'), equals(kv.location, steps('basics').scope.location.name))), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
                   }
                 },
                 {

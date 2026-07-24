@@ -1918,15 +1918,27 @@
                   }
                 },
                 {
+                  "name": "uaisApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('hosts').scope.subscription))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
+                  }
+                },
+                {
                   "name": "managedIdentity",
-                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "type": "Microsoft.Common.DropDown",
                   "label": "Storage Access User Assigned Identity",
-                  "toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
-                  "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+                  "filter": true,
+                  "multiLine": true,
+                  "toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account. Only identities in the VM deployment region are listed. Defaults to the imageManagement identity if found.",
+                  "defaultValue": "[if(not(empty(filter(steps('hosts').customizations.uaisApi.value, (uai) => and(equals(uai.location, steps('hosts').scope.location.name), contains(uai.name, 'image-management-blob-access'))))), first(map(filter(steps('hosts').customizations.uaisApi.value, (uai) => and(equals(uai.location, steps('hosts').scope.location.name), contains(uai.name, 'image-management-blob-access'))), (uai) => uai.name)), '')]",
+                  "visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
                   "constraints": {
-                    "required": false
-                  },
-                  "visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
+                    "required": false,
+                    "allowedValues": "[map(filter(steps('hosts').customizations.uaisApi.value, (uai) => equals(uai.location, steps('hosts').scope.location.name)), (uai) => parse(concat('{\"label\":\"', uai.name, '\",\"description\":\"Resource Group: ', first(skip(split(uai.id, '/'), 4)), '\",\"value\":\"', uai.id, '\"}')))]"
+                  }
                 },
                 {
                   "name": "managedIdentityRequiredError",
@@ -2145,15 +2157,26 @@
               "visible": "[and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true))]"
             },
             {
+              "name": "uaisApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('hosts').scope.subscription))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
+              }
+            },
+            {
               "name": "managedIdentity",
-              "type": "Microsoft.Solutions.ResourceSelector",
+              "type": "Microsoft.Common.DropDown",
               "label": "User Assigned Identity",
-              "toolTip": "Select an existing User Assigned Identity that has been granted the following Microsoft Graph permissions: 1. Application.ReadWrite.All and 2. DelegatedPermissionGrant.ReadWrite.All",
-              "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "filter": true,
+              "multiLine": true,
+              "toolTip": "Select an existing User Assigned Identity that has been granted the following Microsoft Graph permissions: 1. Application.ReadWrite.All and 2. DelegatedPermissionGrant.ReadWrite.All. Only identities in the VM deployment region are listed.",
+              "visible": "[and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true))]",
               "constraints": {
-                "required": true
-              },
-              "visible": "[and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true))]"
+                "required": true,
+                "allowedValues": "[map(filter(steps('userProfiles').uaisApi.value, (uai) => equals(uai.location, steps('hosts').scope.location.name)), (uai) => parse(concat('{\"label\":\"', uai.name, '\",\"description\":\"Resource Group: ', first(skip(split(uai.id, '/'), 4)), '\",\"value\":\"', uai.id, '\"}')))]"
+              }
             },
             {
               "name": "fslogixContainerType",
@@ -5291,7 +5314,7 @@
         "hibernationEnabled": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)))), steps('hosts').specs.hibernationEnabled, false)]",
         "intuneEnrollment": "[if(not(contains(steps('hosts').machineIdentity, 'DomainServices')), steps('hosts').management.intune, false)]",
         "artifactsContainerUri": "[if(steps('hosts').customizations.addCustomScripts, if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container), ''), '')]",
-        "artifactsUserAssignedIdentityResourceId": "[if(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), if(not(empty(steps('hosts').customizations.managedIdentity)), steps('hosts').customizations.managedIdentity.id, ''), '')]",
+        "artifactsUserAssignedIdentityResourceId": "[if(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), if(not(empty(steps('hosts').customizations.managedIdentity)), steps('hosts').customizations.managedIdentity, ''), '')]",
         "agentBootLoaderDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
         "agentDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
         "sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
@@ -5314,7 +5337,7 @@
         "keyManagementRecoveryServicesVault": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices), steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'PlatformManaged')]",
         "fslogixExistingLocalStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
         "fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
-        "fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity.id, '')]",
+        "fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity, '')]",
         "fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
         "avdObjectId": "[if(and(steps('operationsAndMonitoring').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
         "deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_B2s')]",

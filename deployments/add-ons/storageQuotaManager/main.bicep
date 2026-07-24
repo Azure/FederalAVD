@@ -162,7 +162,7 @@ var privateEndpointNICNameConv = sqmNaming.outputs.privateEndpointNICNameConv
 var functionAppName               = !empty(functionAppNameOverride)               ? functionAppNameOverride               : sqmNaming.outputs.functionAppName
 var storageAccountName            = !empty(storageAccountNameOverride)            ? toLower(storageAccountNameOverride)   : sqmNaming.outputs.storageAccountName
 var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride) ? storageEncryptionIdentityNameOverride : sqmNaming.outputs.storageEncryptionIdentityName
-var encryptionKeyName             = '${effectiveIdentifier}-encryption-key-${storageAccountName}'
+var encryptionKeyName             = '${effectiveIdentifier}-sqm-storage-cmk'
 
 // ========== //
 // Resources  //

@@ -1299,7 +1299,7 @@ module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
     storageKeyNames: [
       for i in range(0, fslogixStorageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
     ]
-    identityName: replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.outputs.delimiter}encryption')
+    identityName: replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.outputs.delimiter}cmk')
   }
   dependsOn: [
     storageResourceGroup

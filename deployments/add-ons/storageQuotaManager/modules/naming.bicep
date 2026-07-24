@@ -101,7 +101,7 @@ output storageAccountName string = take(
 )
 output storageEncryptionIdentityName string = cnv(
   cnv_components, cnv_delimiter, cnv_rtCodes.userAssignedIdentities,
-  '${identifier}${cnv_delimiter}sqm${uniqueString}${cnv_delimiter}encryption', loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
+  '${identifier}${cnv_delimiter}sqm${cnv_delimiter}storage${cnv_delimiter}cmk', loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
 )
 
 // Shared (region-scoped) — no purpose component so the ASP is reusable for any

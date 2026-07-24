@@ -195,7 +195,7 @@ var customIdentityName = buildCustomName(
   filter(cnv_components, s => s != 'none'),
   cnv_delimiter,
   cnv_rtCodes.userAssignedIdentities,
-  identifier,
+  '${identifier}-blob-access',
   cnv_loc,
   namingConvention.?freeform1 ?? '',
   namingConvention.?environment ?? '',
@@ -207,7 +207,7 @@ var customEncryptionIdentityName = buildCustomName(
   filter(cnv_components, s => s != 'none'),
   cnv_delimiter,
   cnv_rtCodes.userAssignedIdentities,
-  '${identifier}-encryption',
+  '${identifier}-storage-cmk',
   cnv_loc,
   namingConvention.?freeform1 ?? '',
   namingConvention.?environment ?? '',
@@ -281,7 +281,7 @@ var storageSkuName = 'Standard_LRS'
 var artifactsStorageAccessTier = 'Hot'
 var logsStorageAccessTier = 'Hot'
 
-var storageEncryptionKeyName = '${identifier}-encryption-key-imagemgmt-storage'
+var storageEncryptionKeyName = '${identifier}-storage-cmk'
 // Single encryption UAI shared by both storage accounts.
 // Result: uai-avd-image-management-encryption-{loc}
 var storageEncryptionIdentityName = customEncryptionIdentityName
@@ -303,7 +303,7 @@ var galleryDiskEncryptionSetName = buildCustomName(
   namingConvention.?freeform2 ?? '',
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
-var galleryDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt'
+var galleryDiskEncryptionKeyName = '${identifier}-gallery-cmk'
 
 var galleryConfidentialVmDiskEncryptionSetName = buildCustomName(
   filter(cnv_components, s => s != 'none'),
@@ -316,7 +316,7 @@ var galleryConfidentialVmDiskEncryptionSetName = buildCustomName(
   namingConvention.?freeform2 ?? '',
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
-var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-${locations[varLocation].abbreviation}-encryption-key-imagemgmt-cvm'
+var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-gallery-cvm-cmk'
 
 var logsStorageName = cnv_rtFirst
   ? '${saRtCode}imglogs${cnv_loc}${saUnique}'
