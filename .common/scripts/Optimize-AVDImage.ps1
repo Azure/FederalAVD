@@ -519,8 +519,12 @@ try {
 
         # SysMain - SSD-backed managed disks gain little from prefetching
         Disable-VdiService -Name 'SysMain' -DisplayName 'Superfetch (SysMain)'
-        # defragsvc - OS disk rebuilt at image refresh; retrim has no carry-over value on NonPersistent
-        Disable-VdiService -Name 'defragsvc' -DisplayName 'Optimize Drives'
+        # defragsvc - set to Manual (not Disabled) on NonPersistent: FSLogix VHD Disk Compaction
+        # requires defragsvc to be Manual or Automatic to query the minimum supported VHDX size at
+        # sign-out. Disabled breaks compaction. Manual prevents scheduled OS-disk defrag while
+        # still allowing FSLogix to invoke the service on demand.
+        Set-Service -Name 'defragsvc' -StartupType Manual -ErrorAction SilentlyContinue
+        Write-Log '  [OK]   Set defragsvc (Optimize Drives) to Manual (FSLogix compaction requirement)'
         # InstallService - not disabled; see README for rationale
         # UsoSvc - OS updates via image replacement, not per-VM Windows Update
         Disable-VdiService -Name 'UsoSvc' -DisplayName 'Update Orchestrator Service'
@@ -942,12 +946,18 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\309dce9b-bef4-4119-9921-a851fb12f0f4' `
             -Name 'ACSettingIndex' -Value 0
 
-        # -- Storage Sense (StorageSense.admx) - enabled intentionally; see README --
+        # -- Storage Sense (StorageSense.admx) - enabled intentionally to trim FSLogix VHDX content --
+        # Cadence: weekly (7) for pooled hosts so temp files and recycle bin in the profile VHDX are
+        # cleared regularly; monthly (30) for personal hosts. The RecycleBin threshold is aligned to
+        # the cadence so it fires on the first Storage Sense run that sees the file is old enough.
+        # Cloud dehydration (30 days) evicts OneDrive Files-On-Demand local copies not recently
+        # accessed, reducing VHDX size when OneDrive is in the FSLogix container.
         $ssPolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageSense'
+        $ssCadence = if ($OptimizationProfile -eq 'Persistent') { 30 } else { 7 }
         Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseGlobal' -Value 1
-        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseGlobalCadence' -Value 30
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseGlobalCadence' -Value $ssCadence
         Set-PolicyValue -Path $ssPolicyPath -Name 'AllowStorageSenseTemporaryFilesCleanup' -Value 1
-        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold' -Value 0
+        Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold' -Value $ssCadence
         Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold' -Value 0
         Set-PolicyValue -Path $ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30
 
