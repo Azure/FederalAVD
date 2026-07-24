@@ -33,7 +33,7 @@
     },
     "DoDSTIGGPOPackage": {
         "Description": "DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
-        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/zip/U_STIG_GPO_Package_April_2026.zip",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2026.zip",
         "DestinationFileName": "STIGs.zip",
         "DestinationFolders": [
             "DoD-STIGs"

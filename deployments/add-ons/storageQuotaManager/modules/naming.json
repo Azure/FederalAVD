@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "11310639365715093307"
+      "templateHash": "1640857100428352186"
     }
   },
   "functions": [
@@ -228,7 +228,7 @@
     "cnv_rtCodes": "[if(contains(parameters('namingConvention'), 'resourceTypeCodes'), union(variables('abbr'), parameters('namingConvention').resourceTypeCodes), variables('abbr'))]",
     "loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'vmsLocationAbbreviation'), ''))), parameters('namingConvention').vmsLocationAbbreviation, parameters('locationAbbreviation'))]",
     "nameConvReversed": "[and(not(empty(variables('cnv_components'))), equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType'))]",
-    "hpPurpose": "[format('{0}-sqm-{1}', parameters('identifier'), parameters('uniqueString'))]",
+    "hpPurpose": "[format('{0}{1}sqm{2}{3}', parameters('identifier'), variables('cnv_delimiter'), variables('cnv_delimiter'), parameters('uniqueString'))]",
     "sanitizedStorageId": "[replace(parameters('identifier'), '-', '')]",
     "storageRawName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), '', format('{0}sqm{1}', variables('sanitizedStorageId'), parameters('uniqueString')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
     "peNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('cnv_rtCodes').privateEndpoints)]",
@@ -246,7 +246,7 @@
     },
     "storageEncryptionIdentityName": {
       "type": "string",
-      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}-sqm{1}-encryption', parameters('identifier'), parameters('uniqueString')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}{1}sqm{2}storage{3}cmk', parameters('identifier'), variables('cnv_delimiter'), variables('cnv_delimiter'), variables('cnv_delimiter')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
     },
     "appServicePlanName": {
       "type": "string",

@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "15847342191871020795"
+      "version": "0.39.26.7824",
+      "templateHash": "15926963038205184670"
     }
   },
   "parameters": {
@@ -828,6 +828,7 @@
     "$fxv#2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
+      "automationAccounts": "aa",
       "availabilitySets": "as",
       "computeGalleries": "gal",
       "dataCollectionEndpoints": "dce",
@@ -845,7 +846,7 @@
       "netAppCapacityPools": "nacp",
       "networkInterfaces": "nic",
       "networkSecurityGroups": "nsg",
-      "osdisks": "osdisk",
+      "osdisks": "disk",
       "privateEndpoints": "pe",
       "privateLinkScopes": "pls",
       "publicIPAddresses": "pip",
@@ -869,11 +870,11 @@
     "recoveryServicesGeo": "[if(startsWith(variables('cloud'), 'us'), parameters('azureRecoveryServicesGeoCode'), variables('locations')[parameters('location')].recoveryServicesGeo)]",
     "resourceAbbreviations": "[variables('$fxv#2')]",
     "nameConvSuffix": "[if(parameters('nameConvResTypeAtEnd'), 'LOCATION-RESOURCETYPE', 'LOCATION')]",
-    "nameConv_Shared_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-TOKEN-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-TOKEN-{0}', variables('nameConvSuffix')))]",
-    "natGatewayName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').natGateways), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
-    "publicIPName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').publicIPAddresses), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
-    "routeTableName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').routeTables), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
-    "nsgName": "[replace(replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').networkSecurityGroups), 'LOCATION', variables('locationAbbreviation')), 'TOKEN-', '')]",
+    "nameConv_Shared_Resources": "[if(parameters('nameConvResTypeAtEnd'), format('avd-{0}', variables('nameConvSuffix')), format('RESOURCETYPE-avd-{0}', variables('nameConvSuffix')))]",
+    "natGatewayName": "[replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').natGateways), 'LOCATION', variables('locationAbbreviation'))]",
+    "publicIPName": "[replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').publicIPAddresses), 'LOCATION', variables('locationAbbreviation'))]",
+    "routeTableName": "[replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').routeTables), 'LOCATION', variables('locationAbbreviation'))]",
+    "nsgName": "[replace(replace(variables('nameConv_Shared_Resources'), 'RESOURCETYPE', variables('resourceAbbreviations').networkSecurityGroups), 'LOCATION', variables('locationAbbreviation'))]",
     "privateDnsZones_AzureVirtualDesktop": {
       "AzureCloud": "privatelink.wvd.microsoft.com",
       "AzureUSGovernment": "privatelink.wvd.azure.us"
@@ -1008,8 +1009,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "7050661415777903588"
+              "version": "0.39.26.7824",
+              "templateHash": "8567703794933176164"
             }
           },
           "parameters": {
@@ -1179,8 +1180,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "16865748660063405838"
+                      "version": "0.39.26.7824",
+                      "templateHash": "8187700175963938311"
                     }
                   },
                   "parameters": {
@@ -1329,7 +1330,7 @@
                       "condition": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]",
                       "type": "Microsoft.Insights/diagnosticSettings",
                       "apiVersion": "2021-05-01-preview",
-                      "scope": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]",
+                      "scope": "[format('Microsoft.Network/networkSecurityGroups/{0}', parameters('nsgName'))]",
                       "name": "[format('{0}-diagnosticSettings', parameters('nsgName'))]",
                       "properties": {
                         "logs": [
@@ -1451,8 +1452,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "16492410427415835886"
+                              "version": "0.39.26.7824",
+                              "templateHash": "16912846919175043346"
                             }
                           },
                           "parameters": {
@@ -1545,8 +1546,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "16492410427415835886"
+                              "version": "0.39.26.7824",
+                              "templateHash": "16912846919175043346"
                             }
                           },
                           "parameters": {
@@ -1673,8 +1674,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "10766098335062593410"
+              "version": "0.39.26.7824",
+              "templateHash": "9786657321248100610"
             }
           },
           "parameters": {
@@ -1740,8 +1741,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "4103905132982035324"
+                      "version": "0.39.26.7824",
+                      "templateHash": "520324767220429185"
                     }
                   },
                   "parameters": {
@@ -1807,8 +1808,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.43.8.12551",
-                      "templateHash": "7212870871978282690"
+                      "version": "0.39.26.7824",
+                      "templateHash": "1585659650741687107"
                     }
                   },
                   "parameters": {
@@ -1852,8 +1853,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.43.8.12551",
-                              "templateHash": "16800567780792670544"
+                              "version": "0.39.26.7824",
+                              "templateHash": "10423243267782498951"
                             }
                           },
                           "parameters": {
