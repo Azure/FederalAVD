@@ -77,7 +77,7 @@
             {
               "name": "location",
               "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('basics').locationsApi.value, (loc) => equals(loc.name, steps('basics').hostPoolProps.location)), (loc) => loc.displayName))]",
+              "defaultValue": "[first(map(filter(steps('basics').locationsApi.value, (loc) => equals(loc.name, coalesce(steps('basics').hostPoolProps, parse('{\"location\":\"\"}')).location)), (loc) => loc.displayName))]",
               "label": "Deployment Region",
               "toolTip": "Select the region where you want to deploy the function app.",
               "constraints": {
@@ -984,7 +984,7 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Region",
                   "toolTip": "Select the region where you want to deploy the virtual machines.",
-                  "defaultValue": "[first(map(filter(steps('hosts').scope.locationsApi.value, (loc) => equals(loc.name, steps('hosts').scope.resourceGroup.location)), (loc) => loc.displayName))]",
+                  "defaultValue": "[first(map(filter(steps('hosts').scope.locationsApi.value, (loc) => equals(loc.name, coalesce(steps('hosts').scope.resourceGroup, parse('{\"location\":\"\"}')).location)), (loc) => loc.displayName))]",
                   "constraints": {
                     "allowedValues": "[steps('hosts').scope.locationsApi.transformed.list]"
                   }
@@ -3088,36 +3088,29 @@
           "label": "Advanced",
           "elements": [
             {
-              "name": "infoBox1",
-              "type": "Microsoft.Common.InfoBox",
-              "options": {
-                "style": "Info",
-                "text": "Infrastructure resource names (Function App, Storage Account, App Service Plan, Application Insights, Template Spec) are automatically derived from the host pool naming convention tag and identifier. Resource type abbreviation overrides are available below."
-              }
-            },
-            {
-              "name": "tagAbsentWarning",
-              "type": "Microsoft.Common.InfoBox",
-              "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
-              "options": {
-                "style": "Warning",
-                "text": "The hpNamingConvention tag was not found on the host pool. This is expected if the host pool was not deployed with this solution. Infrastructure resource names will use default CAF naming values unless you provide overrides below."
-              }
-            },
-            {
               "name": "infrastructureNamingConvention",
               "type": "Microsoft.Common.Section",
               "label": "Infrastructure Naming Convention",
               "visible": true,
               "elements": [
                 {
-                  "name": "infoBox",
+                  "name": "infoBox1",
                   "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
                   "options": {
                     "style": "Info",
-                    "text": "With identifier 'desktop-01' and the default CAF convention, names follow the pattern: [rt]-[identifier]-shr-[unique]-[location] (e.g., func-desktop-01-shr-abc123-eus). Verify the identifier matches your host pool."
+                    "text": "Infrastructure resource names (Function App, Storage Account, App Service Plan, Application Insights, Template Spec) are automatically derived from the host pool naming convention tag and identifier. Resource type abbreviation overrides are available below."
                   }
                 },
+                {
+                  "name": "tagAbsentWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The hpNamingConvention tag was not found on the host pool. This is expected if the host pool was not deployed with this solution. Infrastructure resource names will use default CAF naming values unless you provide overrides below."
+                  }
+                },                
                 {
                   "name": "identifier",
                   "type": "Microsoft.Common.TextBox",
@@ -3161,7 +3154,11 @@
                   "placeholder": "fa",
                   "defaultValue": "fa",
                   "toolTip": "Resource type abbreviation for Function Apps. CAF default: fa",
-                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9-]{0,10}$",
+                    "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters."
+                  }
                 },
                 {
                   "name": "appServicePlans",
@@ -3170,7 +3167,11 @@
                   "placeholder": "asp",
                   "defaultValue": "asp",
                   "toolTip": "Resource type abbreviation for App Service Plans. CAF default: asp",
-                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9-]{0,10}$",
+                    "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters."
+                  }
                 },
                 {
                   "name": "applicationInsights",
@@ -3179,7 +3180,11 @@
                   "placeholder": "appi",
                   "defaultValue": "appi",
                   "toolTip": "Resource type abbreviation for Application Insights. CAF default: appi",
-                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9-]{0,10}$",
+                    "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters."
+                  }
                 },
                 {
                   "name": "templateSpecs",
@@ -3188,7 +3193,11 @@
                   "placeholder": "ts",
                   "defaultValue": "ts",
                   "toolTip": "Resource type abbreviation for Template Specs. CAF default: ts",
-                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9-]{0,10}$",
+                    "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters."
+                  }
                 },
                 {
                   "name": "userAssignedIdentities",
@@ -3197,7 +3206,11 @@
                   "placeholder": "uai",
                   "defaultValue": "uai",
                   "toolTip": "Resource type abbreviation for User-Assigned Managed Identities. CAF default: uai",
-                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9-]{0,10}$",
+                    "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters."
+                  }
                 },
                 {
                   "name": "privateEndpoints",
@@ -3206,7 +3219,11 @@
                   "placeholder": "pe",
                   "defaultValue": "pe",
                   "toolTip": "Resource type abbreviation for Private Endpoints. CAF default: pe",
-                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9-]{0,10}$",
+                    "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters."
+                  }
                 },
                 {
                   "name": "networkInterfaces",
@@ -3215,7 +3232,11 @@
                   "placeholder": "nic",
                   "defaultValue": "nic",
                   "toolTip": "Resource type abbreviation for Network Interfaces (used in private endpoint NIC naming). CAF default: nic",
-                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9-]{0,10}$",
+                    "validationMessage": "Must be lowercase alphanumeric or hyphens, max 10 characters."
+                  }
                 }
               ]
             },
@@ -3568,11 +3589,12 @@
         "privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
         "namingConvention": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), parse('{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\",\"vmsLocationAbbreviation\":\"\"}'), parse(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
         "namingResourceTypeCodes": "[if(steps('advanced').enableCustomAbbreviations, parse(concat('{\"functionApps\":\"', steps('advanced').namingResourceTypeCodes.functionApps, '\",\"appServicePlans\":\"', steps('advanced').namingResourceTypeCodes.appServicePlans, '\",\"applicationInsights\":\"', steps('advanced').namingResourceTypeCodes.applicationInsights, '\",\"templateSpecs\":\"', steps('advanced').namingResourceTypeCodes.templateSpecs, '\",\"userAssignedIdentities\":\"', steps('advanced').namingResourceTypeCodes.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').namingResourceTypeCodes.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').namingResourceTypeCodes.networkInterfaces, '\"}')), parse('{}'))]",
-        "identifier": "[steps('advanced').infrastructureNamingConvention.identifier]",        "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
-        "storageAccountNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
-        "storageEncryptionIdentityNameOverride": "[if(and(steps('advanced').enableCustomNaming, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
-        "applicationInsightsNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
-        "appServicePlanNameOverride": "[if(and(steps('advanced').enableCustomNaming, not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
+        "identifier": "[steps('advanced').infrastructureNamingConvention.identifier]",
+        "functionAppNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
+        "storageAccountNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
+        "storageEncryptionIdentityNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
+        "applicationInsightsNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
+        "appServicePlanNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
         "virtualMachineNameConv": "[steps('advanced').sessionHostNaming.virtualMachineNameConvOverride]",
         "virtualMachineDiskNameConv": "[steps('advanced').sessionHostNaming.diskNameConvOverride]",
         "virtualMachineNicNameConv": "[steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride]",
