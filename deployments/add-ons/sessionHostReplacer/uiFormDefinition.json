@@ -1786,27 +1786,15 @@
                   }
                 },
                 {
-                  "name": "uaisApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('hosts').scope.subscription))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
-                  }
-                },
-                {
                   "name": "managedIdentity",
-                  "type": "Microsoft.Common.DropDown",
+                  "type": "Microsoft.Solutions.ResourceSelector",
                   "label": "Storage Access User Assigned Identity",
-                  "filter": true,
-                  "multiLine": true,
-                  "toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account. Only identities in the VM deployment region are listed. Defaults to the imageManagement identity if found.",
-                  "defaultValue": "[if(not(empty(filter(steps('hosts').customizations.uaisApi.value, (uai) => and(equals(uai.location, steps('hosts').scope.location.name), contains(uai.name, 'image-management-blob-access'))))), first(map(filter(steps('hosts').customizations.uaisApi.value, (uai) => and(equals(uai.location, steps('hosts').scope.location.name), contains(uai.name, 'image-management-blob-access'))), (uai) => uai.name)), '')]",
-                  "visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]",
+                  "toolTip": "Select a User Assigned Identity with 'Storage Blob Data Reader' role assigned to the storage account selected above.",
+                  "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
                   "constraints": {
-                    "required": false,
-                    "allowedValues": "[map(filter(steps('hosts').customizations.uaisApi.value, (uai) => equals(uai.location, steps('hosts').scope.location.name)), (uai) => parse(concat('{\"label\":\"', uai.name, '\",\"description\":\"Resource Group: ', first(skip(split(uai.id, '/'), 4)), '\",\"value\":\"', uai.id, '\"}')))]"
-                  }
+                    "required": false
+                  },
+                  "visible": "[or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts)]"
                 },
                 {
                   "name": "managedIdentityRequiredError",
@@ -3556,7 +3544,7 @@
         "availabilityZones": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
         "intuneEnrollment": "[if(not(contains(steps('hosts').identity.machineIdentity, 'DomainServices')), steps('hosts').management.intune, false)]",
         "artifactsContainerUri": "[if(steps('hosts').customizations.addCustomScripts, if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container), ''), '')]",
-        "artifactsUserAssignedIdentityResourceId": "[if(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), if(not(empty(steps('hosts').customizations.managedIdentity)), steps('hosts').customizations.managedIdentity, ''), '')]",
+        "artifactsUserAssignedIdentityResourceId": "[if(or(steps('hosts').customizations.customizeAgentDownload, steps('hosts').customizations.addCustomScripts), if(not(empty(steps('hosts').customizations.managedIdentity)), steps('hosts').customizations.managedIdentity.id, ''), '')]",
         "agentBootLoaderDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentBootLoaderUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentBootLoaderUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentBootLoaderUrl), steps('hosts').customizations.agentBootLoaderUrl), '')]",
         "agentDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
         "sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
