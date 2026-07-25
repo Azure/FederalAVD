@@ -812,25 +812,14 @@
               }
             },
             {
-              "name": "uaisApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('hosts').scope.subscription))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
-              }
-            },
-            {
               "name": "sessionHostReplacerUserAssignedIdentity",
-              "type": "Microsoft.Common.DropDown",
+              "type": "Microsoft.Solutions.ResourceSelector",
               "visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
               "label": "User-Assigned Managed Identity",
-              "filter": true,
-              "multiLine": true,
-              "toolTip": "Select the pre-existing User-Assigned Managed Identity granted the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All). Only identities in the VM deployment region are listed.",
+              "toolTip": "Select the pre-existing User-Assigned Managed Identity that has been granted the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All).",
+              "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
               "constraints": {
-                "required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
-                "allowedValues": "[map(filter(steps('replacerConfig').uaisApi.value, (uai) => equals(uai.location, steps('hosts').scope.location.name)), (uai) => parse(concat('{\"label\":\"', uai.name, '\",\"description\":\"Resource Group: ', first(skip(split(uai.id, '/'), 4)), '\",\"value\":\"', uai.id, '\"}')))]"
+                "required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]"
               }
             }
           ]
@@ -3527,7 +3516,7 @@
         "initialDeploymentPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').initialDeploymentPercentage, 10)]",
         "scaleUpIncrementPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').scaleUpIncrementPercentage, 20)]",
         "successfulRunsBeforeScaleUp": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').successfulRunsBeforeScaleUp, 1)]",
-        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
+        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity.id, '')]",
         "existingAppServicePlanResourceId": "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]",
         "appServicePlanResourceGroupName": "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]",
         "appServicePlanSku": "[if(not(steps('infrastructure').useExistingHostingPlan), steps('infrastructure').planSku, 'PremiumV3_P0v3')]",
