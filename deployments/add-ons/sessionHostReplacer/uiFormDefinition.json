@@ -3300,12 +3300,12 @@
                         "message": "Function app name must be 2-60 characters, containing only alphanumeric characters and hyphens."
                       },
                       {
-                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), steps('advanced').functionApp_checkNameAvailability.nameAvailable, equals(steps('advanced').functionApp_checkNameAvailability.reason, 'AlreadyExists'))]",
-                        "message": "[steps('advanced').functionApp_checkNameAvailability.message]"
+                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"nameAvailable\":true}')).nameAvailable, equals(coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"reason\":\"\"}')).reason, 'AlreadyExists'))]",
+                        "message": "[coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"message\":\"\"}')).message]"
                       },
                       {
-                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), steps('advanced').functionApp_checkNameAvailability.nameAvailable, equals(steps('advanced').functionAppName_rePUT.id, concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride)), not(equals(steps('advanced').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
-                        "message": "[steps('advanced').functionApp_checkNameAvailability.message]"
+                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"nameAvailable\":true}')).nameAvailable, equals(coalesce(steps('advanced').functionAppName_rePUT, parse('{\"id\":\"\"}')).id, concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride)), not(equals(coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"reason\":\"\"}')).reason, 'AlreadyExists')))]",
+                        "message": "[coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"message\":\"\"}')).message]"
                       }
                     ]
                   }
@@ -3325,8 +3325,8 @@
                         "message": "Storage account name must be 3-24 characters, lowercase alphanumeric only (no hyphens or special characters)."
                       },
                       {
-                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride), steps('advanced').storageAccount_checkNameAvailability.nameAvailable)]",
-                        "message": "[steps('advanced').storageAccount_checkNameAvailability.message]"
+                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride), coalesce(steps('advanced').storageAccount_checkNameAvailability, parse('{\"nameAvailable\":true}')).nameAvailable)]",
+                        "message": "[coalesce(steps('advanced').storageAccount_checkNameAvailability, parse('{\"message\":\"\"}')).message]"
                       }
                     ]
                   }
