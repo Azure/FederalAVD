@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "Test 1 - Basics Only",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "Basics",
+          "elements": [
+            {
+              "name": "subscription",
+              "type": "Microsoft.Common.SubscriptionSelector",
+              "label": "Subscription"
+            },
+            {
+              "name": "locationsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').subscription.id, '/locations?api-version=2022-12-01')]",
+                "transforms": {
+                  "list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
+                }
+              }
+            },
+            {
+              "name": "location",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Region",
+              "filter": true,
+              "allowedValues": "[steps('basics').locationsApi.transformed.list]"
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "parameters": {
+        "testString": "[steps('basics').location.name]",
+        "testBool": false,
+        "testObject": {}
+      },
+      "kind": "Subscription",
+      "location": "[steps('basics').location.name]",
+      "subscriptionId": "[steps('basics').subscription.subscriptionId]"
+    }
+  }
+}

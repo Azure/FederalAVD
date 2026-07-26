@@ -1,0 +1,107 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "Test 2 - Advanced: Infrastructure Naming (checkbox at step level)",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "Basics",
+          "elements": [
+            {
+              "name": "subscription",
+              "type": "Microsoft.Common.SubscriptionSelector",
+              "label": "Subscription"
+            },
+            {
+              "name": "locationsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').subscription.id, '/locations?api-version=2022-12-01')]",
+                "transforms": {
+                  "list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
+                }
+              }
+            },
+            {
+              "name": "location",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Region",
+              "filter": true,
+              "allowedValues": "[steps('basics').locationsApi.transformed.list]"
+            },
+            {
+              "name": "simulatedTagPresent",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Simulate: hpNamingConvention tag IS present",
+              "defaultValue": true,
+              "toolTip": "Check = tag present (shows abbreviation UI). Uncheck = tag absent (shows CAF naming UI)."
+            }
+          ]
+        },
+        {
+          "name": "advanced",
+          "label": "Advanced",
+          "elements": [
+            {
+              "name": "enableCustomAbbreviations",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Customize resource type abbreviations",
+              "visible": "[steps('basics').simulatedTagPresent]",
+              "defaultValue": false,
+              "toolTip": "Step-level checkbox (not inside a section). This tests that visible expressions work."
+            },
+            {
+              "name": "infrastructureNaming",
+              "type": "Microsoft.Common.Section",
+              "label": "Infrastructure Naming",
+              "visible": true,
+              "elements": [
+                {
+                  "name": "tagPresentInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[steps('basics').simulatedTagPresent]",
+                  "options": {
+                    "style": "Info",
+                    "text": "Names derived from naming convention tag."
+                  }
+                },
+                {
+                  "name": "functionApps",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Function Apps abbreviation",
+                  "visible": "[and(steps('basics').simulatedTagPresent, steps('advanced').enableCustomAbbreviations)]",
+                  "placeholder": "fa",
+                  "defaultValue": "fa",
+                  "constraints": { "required": false, "regex": "^[a-z0-9-]{0,10}$", "validationMessage": "max 10 chars" }
+                },
+                {
+                  "name": "cafNote",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(steps('basics').simulatedTagPresent)]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No naming convention tag. Using CAF defaults."
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "parameters": {
+        "testString": "[steps('basics').location.name]",
+        "testBool": "[steps('advanced').enableCustomAbbreviations]",
+        "testObject": "[parse(if(and(steps('basics').simulatedTagPresent, steps('advanced').enableCustomAbbreviations), concat('{\"functionApps\":\"', steps('advanced').infrastructureNaming.functionApps, '\"}'), '{}'))]"
+      },
+      "kind": "Subscription",
+      "location": "[steps('basics').location.name]",
+      "subscriptionId": "[steps('basics').subscription.subscriptionId]"
+    }
+  }
+}
