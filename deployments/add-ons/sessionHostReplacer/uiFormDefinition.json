@@ -3114,11 +3114,21 @@
               "name": "namingResourceTypeCodes",
               "type": "Microsoft.Common.Section",
               "label": "Resource Type Abbreviation Overrides",
-              "visible": "[steps('advanced').enableCustomAbbreviations]",
+              "visible": true,
               "elements": [
+                {
+                  "name": "defaultsNotice",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(steps('advanced').enableCustomAbbreviations)]",
+                  "options": {
+                    "style": "Info",
+                    "text": "Using CAF default resource type abbreviations. Enable 'Customize Resource Type Abbreviations' above to override."
+                  }
+                },
                 {
                   "name": "infoBox",
                   "type": "Microsoft.Common.InfoBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "options": {
                     "style": "Info",
                     "text": "Leave any field blank to use the CAF default shown in the placeholder. Changes here only affect infrastructure resource names (Function App, App Service Plan, etc.) — session host naming is configured separately below."
@@ -3127,6 +3137,7 @@
                 {
                   "name": "functionApps",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "label": "Function Apps",
                   "placeholder": "fa",
                   "defaultValue": "fa",
@@ -3140,6 +3151,7 @@
                 {
                   "name": "appServicePlans",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "label": "App Service Plans",
                   "placeholder": "asp",
                   "defaultValue": "asp",
@@ -3153,6 +3165,7 @@
                 {
                   "name": "applicationInsights",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "label": "Application Insights",
                   "placeholder": "appi",
                   "defaultValue": "appi",
@@ -3166,6 +3179,7 @@
                 {
                   "name": "templateSpecs",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "label": "Template Specs",
                   "placeholder": "ts",
                   "defaultValue": "ts",
@@ -3179,6 +3193,7 @@
                 {
                   "name": "userAssignedIdentities",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "label": "User-Assigned Identities",
                   "placeholder": "uai",
                   "defaultValue": "uai",
@@ -3192,6 +3207,7 @@
                 {
                   "name": "privateEndpoints",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "label": "Private Endpoints",
                   "placeholder": "pe",
                   "defaultValue": "pe",
@@ -3205,6 +3221,7 @@
                 {
                   "name": "networkInterfaces",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[steps('advanced').enableCustomAbbreviations]",
                   "label": "Network Interfaces",
                   "placeholder": "nic",
                   "defaultValue": "nic",
@@ -3368,8 +3385,17 @@
               "name": "sessionHostNaming",
               "type": "Microsoft.Common.Section",
               "label": "Session Host Resource Naming",
-              "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
+              "visible": true,
               "elements": [
+                {
+                  "name": "tagsNotice",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv))]",
+                  "options": {
+                    "style": "Info",
+                    "text": "Session host naming conventions are sourced from the resource group tags set during host pool deployment. No changes needed."
+                  }
+                },
                 {
                   "name": "missingTagWarning",
                   "type": "Microsoft.Common.InfoBox",
@@ -3382,6 +3408,7 @@
                 {
                   "name": "infoBox",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "options": {
                     "text": "Examples:\n• If existing VMs are 'avdvm-001', use 'SHNAME' (no prefix/suffix)\n• If existing VMs are 'vm-avdvm-001', use 'vm-SHNAME'\n• If existing VMs are 'avdvm-001-vm', use 'SHNAME-vm'"
                   }
@@ -3389,6 +3416,7 @@
                 {
                   "name": "namingPreview",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "options": {
                     "text": "[concat('Preview (substituting avdhost001 for SHNAME, 01 for ##):\n  VM: ', replace(steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, 'SHNAME', 'avdhost001'), '\n  Disk: ', replace(steps('advanced').sessionHostNaming.diskNameConvOverride, 'SHNAME', 'avdhost001'), '\n  NIC: ', replace(steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, 'SHNAME', 'avdhost001'), '\n  Avail. Set: ', replace(steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '##', '01'))]"
                   }
@@ -3396,6 +3424,7 @@
                 {
                   "name": "virtualMachineNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Virtual Machine Naming Convention",
                   "placeholder": "vm-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'vm-SHNAME')]",
@@ -3409,6 +3438,7 @@
                 {
                   "name": "diskNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "OS Disk Naming Convention",
                   "placeholder": "disk-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'disk-SHNAME')]",
@@ -3422,6 +3452,7 @@
                 {
                   "name": "networkInterfaceNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Network Interface Naming Convention",
                   "placeholder": "nic-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'nic-SHNAME')]",
@@ -3435,6 +3466,7 @@
                 {
                   "name": "availabilitySetNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
