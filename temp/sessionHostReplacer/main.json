@@ -1,0 +1,830 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "15194918540054272273"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[deployment().location]",
+      "metadata": {
+        "description": "Required. The location for all resources."
+      }
+    },
+    "functionAppResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[last(split(parameters('virtualMachinesResourceGroupId'), '/'))]",
+      "metadata": {
+        "description": "Required. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the virtual machines resource group."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Tags for all resources."
+      }
+    },
+    "namingConvention": {
+      "type": "object",
+      "defaultValue": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
+      "metadata": {
+        "description": "Naming convention controlling how Function App infrastructure resources are named.\nShould match the convention used when deploying the host pool. Pre-populated from the\nhpNamingConvention tag on the host pool resource."
+      }
+    },
+    "identifier": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The host pool base name / identifier used for naming (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the host pool resource. When empty, falls back to a generic placeholder."
+      }
+    },
+    "namingResourceTypeCodes": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Overrides for resource type abbreviations used when computing infrastructure resource names. Only the keys you provide are overridden; all others use CAF defaults. Supported keys: functionApps, appServicePlans, applicationInsights, templateSpecs, userAssignedIdentities, privateEndpoints, networkInterfaces."
+      }
+    },
+    "functionAppNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 60,
+      "metadata": {
+        "description": "Optional. Explicit name for the Function App. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique and follow Azure naming rules (2-60 chars, alphanumeric and hyphens)."
+      }
+    },
+    "storageAccountNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 24,
+      "metadata": {
+        "description": "Optional. Explicit name for the Storage Account (used by Function App). If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique, 3-24 chars, lowercase alphanumeric only."
+      }
+    },
+    "storageEncryptionIdentityNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 128,
+      "metadata": {
+        "description": "Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores)."
+      }
+    },
+    "applicationInsightsNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 260,
+      "metadata": {
+        "description": "Optional. Explicit name for the Application Insights instance. If not provided, name is derived from shared naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods)."
+      }
+    },
+    "virtualMachineNameConv": {
+      "type": "string",
+      "defaultValue": "vm-SHNAME",
+      "metadata": {
+        "description": "Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., \"vm-SHNAME\" becomes \"vm-avdhost001\"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group."
+      }
+    },
+    "virtualMachineDiskNameConv": {
+      "type": "string",
+      "defaultValue": "disk-SHNAME",
+      "metadata": {
+        "description": "Required. Naming convention for session host OS disks. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineDiskNameConv tag on the hosts resource group."
+      }
+    },
+    "virtualMachineNicNameConv": {
+      "type": "string",
+      "defaultValue": "nic-SHNAME",
+      "metadata": {
+        "description": "Required. Naming convention for session host network interfaces. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineNicNameConv tag on the hosts resource group."
+      }
+    },
+    "availabilitySetNameConv": {
+      "type": "string",
+      "defaultValue": "avset-##",
+      "metadata": {
+        "description": "Required. Naming convention for availability sets. ## is replaced with the set index (e.g., \"avset-##\" becomes \"avset-01\"). Pre-populated from the availabilitySetNameConv tag on the hosts resource group."
+      }
+    },
+    "appServicePlanNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 40,
+      "metadata": {
+        "description": "Optional. Explicit name for the App Service Plan. If not provided, name is derived from the naming convention. Use this for brownfield deployments where an existing plan was created with a non-standard name, or when sharing an ASP across add-ons."
+      }
+    },
+    "sessionHostReplacerUserAssignedIdentityResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). If not provided, the function app will use its system-assigned managed identity."
+      }
+    },
+    "existingAppServicePlanResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed."
+      }
+    },
+    "appServicePlanResourceGroupName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group."
+      }
+    },
+    "appServicePlanSku": {
+      "type": "string",
+      "defaultValue": "PremiumV3_P0v3",
+      "allowedValues": [
+        "PremiumV3_P0v3",
+        "PremiumV3_P1v3",
+        "PremiumV3_P2v3",
+        "PremiumV3_P3v3"
+      ],
+      "metadata": {
+        "description": "Optional. The SKU for the App Service Plan. Only applies if existingAppServicePlanResourceId is not provided. Default is P0v3 for cost optimization."
+      }
+    },
+    "zoneRedundant": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if existingAppServicePlanResourceId is not provided. Default is false."
+      }
+    },
+    "privateEndpoint": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable private endpoints for function app and storage. Default is false."
+      }
+    },
+    "permittedIPs": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary."
+      }
+    },
+    "privateEndpointSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The subnet resource ID for private endpoints. Required if privateEndpoint is true."
+      }
+    },
+    "functionAppDelegatedSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The subnet resource ID for the function app VNet integration. Required if privateEndpoint is true."
+      }
+    },
+    "azureBlobPrivateDnsZoneResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Private DNS Zone resource IDs. Required if privateEndpoint is true."
+      }
+    },
+    "azureFunctionAppPrivateDnsZoneResourceId": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "azureTablePrivateDnsZoneResourceId": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "encryptionKeyVaultResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of the Key Vault for encryption. Required if keyManagementStorageAccounts is set to Customer."
+      }
+    },
+    "keyManagementStorageAccounts": {
+      "type": "string",
+      "defaultValue": "PlatformManaged",
+      "allowedValues": [
+        "PlatformManaged",
+        "CustomerManaged",
+        "CustomerManagedHSM"
+      ],
+      "metadata": {
+        "description": "Optional. Key management solution for storage accounts. Options: Platform, Customer."
+      }
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Log Analytics Workspace resource ID for Application Insights."
+      }
+    },
+    "privateLinkScopeResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Private Link Scope resource ID for Application Insights."
+      }
+    },
+    "credentialsKeyVaultResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Required. The resource ID of the Key Vault containing session host credential secrets (VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, DomainJoinUserPrincipalName)."
+      }
+    },
+    "sessionHostTemplateSpecResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of the Template Spec version for session host deployments. If not provided, a new template spec will be created."
+      }
+    },
+    "templateSpecName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The name of the Template Spec to create. Defaults to hostpool-based naming."
+      }
+    },
+    "templateSpecVersion": {
+      "type": "string",
+      "defaultValue": "1.0.0",
+      "metadata": {
+        "description": "Optional. The version of the Template Spec. Default is 1.0.0."
+      }
+    },
+    "timerSchedule": {
+      "type": "string",
+      "defaultValue": "0 0,30 * * * *",
+      "metadata": {
+        "description": "Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every 30 minutes starting at minute 0 (runs at :00 and :30). To stagger across deployments, vary the minute (e.g., \"0 15,45 * * * *\" runs at :15 and :45 past each hour). For half-hourly execution during specific hours, use \"0 0,30 8-17 * * 1-5\" for 8 AM to 5 PM weekdays. The UI form automatically generates the correct format when you select hours and start minute."
+      }
+    },
+    "deployWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Whether to deploy the Azure Monitor Workbook dashboard. Set to true for the first deployment or when updating the workbook. Set to false for subsequent deployments in the same subscription to avoid conflicts. Default is true."
+      }
+    },
+    "workbookLocation": {
+      "type": "string",
+      "defaultValue": "[parameters('location')]",
+      "metadata": {
+        "description": "Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances."
+      }
+    },
+    "replacementMode": {
+      "type": "string",
+      "defaultValue": "SideBySide",
+      "allowedValues": [
+        "SideBySide",
+        "DeleteFirst"
+      ],
+      "metadata": {
+        "description": "Optional. Replacement mode strategy. SideBySide: Adds new hosts before deleting old ones (higher capacity during updates, zero downtime). DeleteFirst: Deletes idle hosts before adding replacements (lower cost, temporary capacity reduction). Default is SideBySide."
+      }
+    },
+    "drainGracePeriodHours": {
+      "type": "int",
+      "defaultValue": 24,
+      "minValue": 1,
+      "maxValue": 168,
+      "metadata": {
+        "description": "Optional. The grace period in hours after draining before deleting session hosts WITH active sessions. Default is 24 hours."
+      }
+    },
+    "minimumDrainMinutes": {
+      "type": "int",
+      "defaultValue": 15,
+      "minValue": 0,
+      "maxValue": 120,
+      "metadata": {
+        "description": "Optional. Minimum drain time in minutes for session hosts with ZERO sessions before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag, race conditions, and admin intervention. Default is 15 minutes."
+      }
+    },
+    "minimumCapacityPercentage": {
+      "type": "int",
+      "defaultValue": 80,
+      "minValue": 20,
+      "maxValue": 100,
+      "metadata": {
+        "description": "Optional. Safety floor: minimum percentage of target capacity to maintain during DeleteFirst mode. Deletions are capped to prevent dropping below this threshold. Higher values = more conservative (e.g., 80% keeps more hosts running), lower values = more aggressive (e.g., 50% allows faster replacement). Only applies when replacementMode is DeleteFirst. Default is 80%."
+      }
+    },
+    "maxDeletionsPerCycle": {
+      "type": "int",
+      "defaultValue": 50,
+      "minValue": 1,
+      "maxValue": 100,
+      "metadata": {
+        "description": "Optional. Maximum number of hosts to delete and deploy per cycle in DeleteFirst mode. Controls the pace of replacements - function deletes this many idle hosts, then deploys the same number of replacements. Lower values = slower, safer updates. Only applies when replacementMode is DeleteFirst. Default is 5."
+      }
+    },
+    "minimumHostIndex": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 0,
+      "maxValue": 999,
+      "metadata": {
+        "description": "Optional. Minimum host index for hostname numbering. Gap-filling logic starts from this index when deploying new hosts (e.g., 1 allows host01, host02; 10 allows host10, host11). Applies to both DeleteFirst and SideBySide modes. Default is 1."
+      }
+    },
+    "enableShutdownRetention": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable shutdown retention for replaced session hosts in SideBySide mode. When enabled, old session hosts are shutdown (deallocated) instead of deleted, allowing for rollback. They are automatically deleted after the retention period expires. Only applies when replacementMode is SideBySide. Default is false."
+      }
+    },
+    "shutdownRetentionDays": {
+      "type": "int",
+      "defaultValue": 3,
+      "minValue": 1,
+      "maxValue": 7,
+      "metadata": {
+        "description": "Optional. Number of days to retain shutdown session hosts before automatic deletion in SideBySide mode. Provides rollback window in case issues are discovered with new hosts. Only applies when replacementMode is SideBySide and enableShutdownRetention is true. Default is 3 days."
+      }
+    },
+    "targetSessionHostCount": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "maxValue": 1000,
+      "metadata": {
+        "description": "Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect mode: the function will automatically maintain whatever count exists when a replacement cycle begins, allowing you to manually scale between image updates."
+      }
+    },
+    "fixSessionHostTags": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Whether to fix session host tags during execution. Default is true."
+      }
+    },
+    "includePreExistingSessionHosts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Whether to include pre-existing session hosts in automation. Default is true."
+      }
+    },
+    "tagIncludeInAutomation": {
+      "type": "string",
+      "defaultValue": "IncludeInAutoReplace",
+      "metadata": {
+        "description": "Optional. Tag name to identify session hosts included in automation. Default is IncludeInAutoReplace."
+      }
+    },
+    "tagDeployTimestamp": {
+      "type": "string",
+      "defaultValue": "AutoReplaceDeployTimestamp",
+      "metadata": {
+        "description": "Optional. Tag name for deploy timestamp. Default is AutoReplaceDeployTimestamp."
+      }
+    },
+    "tagPendingDrainTimestamp": {
+      "type": "string",
+      "defaultValue": "AutoReplacePendingDrainTimestamp",
+      "metadata": {
+        "description": "Optional. Tag name for pending drain timestamp. Default is AutoReplacePendingDrainTimestamp."
+      }
+    },
+    "tagShutdownTimestamp": {
+      "type": "string",
+      "defaultValue": "AutoReplaceShutdownTimestamp",
+      "metadata": {
+        "description": "Optional. Tag name for shutdown timestamp in SideBySide mode with shutdown retention. Default is AutoReplaceShutdownTimestamp."
+      }
+    },
+    "tagScalingPlanExclusionTag": {
+      "type": "string",
+      "defaultValue": "ScalingPlanExclusion",
+      "metadata": {
+        "description": "Optional. Tag name for scaling plan exclusion. Default is ScalingPlanExclusion."
+      }
+    },
+    "removeEntraDevice": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Whether to remove Entra ID device records when deleting session hosts. Default is true."
+      }
+    },
+    "removeIntuneDevice": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Whether to remove Intune device records when deleting session hosts. Default is true."
+      }
+    },
+    "enableProgressiveScaleUp": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable progressive scale-up with percentage-based batching for deployments. When enabled, the function will start with a small percentage of needed hosts and gradually increase. Default is false."
+      }
+    },
+    "initialDeploymentPercentage": {
+      "type": "int",
+      "defaultValue": 20,
+      "minValue": 1,
+      "maxValue": 100,
+      "metadata": {
+        "description": "Optional. Initial deployment size as percentage of total needed hosts. Used when progressive scale-up is enabled. Default is 10%."
+      }
+    },
+    "scaleUpIncrementPercentage": {
+      "type": "int",
+      "defaultValue": 40,
+      "minValue": 5,
+      "maxValue": 50,
+      "metadata": {
+        "description": "Optional. Percentage increment added after each successful deployment run. Used when progressive scale-up is enabled. Default is 20%."
+      }
+    },
+    "maxDeploymentBatchSize": {
+      "type": "int",
+      "defaultValue": 100,
+      "minValue": 1,
+      "maxValue": 1000,
+      "metadata": {
+        "description": "Optional. Maximum number of hosts to deploy per run in SideBySide mode. Controls the pace of new deployments - function adds this many new hosts in parallel before deleting old ones. Lower values = slower rollout, higher values = faster but more resource-intensive. Only applies when replacementMode is SideBySide. Default is 100."
+      }
+    },
+    "successfulRunsBeforeScaleUp": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "maxValue": 5,
+      "metadata": {
+        "description": "Optional. Number of consecutive successful deployment runs required before increasing the deployment percentage. Default is 1."
+      }
+    },
+    "replaceSessionHostOnNewImageVersionDelayDays": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "maxValue": 30,
+      "metadata": {
+        "description": "Optional. Delay in days before replacing session hosts after a new image version is detected. Only used when replacementMode is ImageVersion. Default is 0 days."
+      }
+    },
+    "allowImageVersionRollback": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Allow replacement of session hosts even if their current image version is newer than the latest available version. When false (default), session hosts with newer versions will not be replaced to prevent unintended rollbacks. Only used when replacementMode is ImageVersion."
+      }
+    },
+    "virtualMachinesResourceGroupId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Required. The resource ID of the resource group where virtual machines are deployed."
+      }
+    },
+    "hostPoolResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Required. The resource ID of the AVD Host Pool where session hosts will be registered."
+      }
+    },
+    "sessionHostNamePrefix": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Required. The VM name prefix used for session hosts."
+      }
+    },
+    "sessionHostNameIndexLength": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "Optional. VM name index length for padding."
+      }
+    },
+    "imageReference": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Required. Image reference for session host VMs. Use {\"publisher\":\"...\",\"offer\":\"...\",\"sku\":\"...\"} for marketplace images or {\"id\":\"...\"} for Compute Gallery images."
+      }
+    },
+    "virtualMachineSize": {
+      "type": "string",
+      "defaultValue": "Standard_D4ads_v6",
+      "metadata": {
+        "description": "Optional. The VM size for session hosts."
+      }
+    },
+    "virtualMachineSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Required. The subnet resource ID for session host NICs."
+      }
+    },
+    "identitySolution": {
+      "type": "string",
+      "defaultValue": "ActiveDirectoryDomainServices",
+      "allowedValues": [
+        "ActiveDirectoryDomainServices",
+        "EntraDomainServices",
+        "EntraKerberos-Hybrid",
+        "EntraKerberos-CloudOnly",
+        "EntraId"
+      ],
+      "metadata": {
+        "description": "Optional. The identity solution for session hosts."
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The domain name for domain join."
+      }
+    },
+    "ouPath": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The OU path for domain join."
+      }
+    },
+    "intuneEnrollment": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable Intune enrollment for Entra joined VMs."
+      }
+    },
+    "timeZone": {
+      "type": "string",
+      "defaultValue": "Eastern Standard Time",
+      "metadata": {
+        "description": "Optional. The time zone for session hosts."
+      }
+    },
+    "availability": {
+      "type": "string",
+      "defaultValue": "None",
+      "allowedValues": [
+        "AvailabilityZones",
+        "AvailabilitySets",
+        "None"
+      ],
+      "metadata": {
+        "description": "Optional. Availability configuration."
+      }
+    },
+    "availabilityZones": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Availability zones for session hosts."
+      }
+    },
+    "securityType": {
+      "type": "string",
+      "defaultValue": "TrustedLaunch",
+      "allowedValues": [
+        "Standard",
+        "TrustedLaunch",
+        "ConfidentialVM"
+      ],
+      "metadata": {
+        "description": "Optional. Security type for session hosts."
+      }
+    },
+    "secureBootEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable secure boot."
+      }
+    },
+    "vTpmEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable vTPM."
+      }
+    },
+    "integrityMonitoring": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable integrity monitoring."
+      }
+    },
+    "encryptionAtHost": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable encryption at host."
+      }
+    },
+    "confidentialVMOSDiskEncryption": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable confidential VM OS disk encryption."
+      }
+    },
+    "diskSizeGB": {
+      "type": "int",
+      "defaultValue": 0,
+      "metadata": {
+        "description": "Optional. OS disk size in GB. 0 uses image default."
+      }
+    },
+    "diskSku": {
+      "type": "string",
+      "defaultValue": "Premium_LRS",
+      "allowedValues": [
+        "Premium_LRS",
+        "StandardSSD_LRS",
+        "Standard_LRS"
+      ],
+      "metadata": {
+        "description": "Optional. OS disk SKU."
+      }
+    },
+    "enableAcceleratedNetworking": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable accelerated networking."
+      }
+    },
+    "enableIPv6": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable IPv6 dynamic private IP on session hosts."
+      }
+    },
+    "enableMonitoring": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable monitoring with Azure Monitor Agent."
+      }
+    },
+    "diskEncryptionSetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing disk encryption set resource ID."
+      }
+    },
+    "avdInsightsDataCollectionRulesResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. AVD Insights data collection rules resource ID."
+      }
+    },
+    "dataCollectionEndpointResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Data collection endpoint resource ID."
+      }
+    },
+    "fslogixConfigureSessionHosts": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. FSLogix configuration - enable session host configuration."
+      }
+    },
+    "fslogixContainerType": {
+      "type": "string",
+      "defaultValue": "ProfileContainer",
+      "allowedValues": [
+        "ProfileContainer",
+        "OfficeContainer",
+        "ProfileContainer OfficeContainer",
+        "ProfileContainer CloudCache",
+        "OfficeContainer CloudCache",
+        "ProfileContainer OfficeContainer CloudCache"
+      ],
+      "metadata": {
+        "description": "Optional. FSLogix container type."
+      }
+    },
+    "fslogixSizeInMBs": {
+      "type": "int",
+      "defaultValue": 30720,
+      "metadata": {
+        "description": "Optional. FSLogix container size in MBs."
+      }
+    },
+    "fslogixStorageService": {
+      "type": "string",
+      "defaultValue": "AzureFiles",
+      "allowedValues": [
+        "AzureFiles",
+        "AzureNetAppFiles"
+      ],
+      "metadata": {
+        "description": "Optional. FSLogix storage service."
+      }
+    },
+    "fslogixLocalStorageAccountResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. FSLogix local storage account resource IDs."
+      }
+    },
+    "fslogixRemoteStorageAccountResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. FSLogix remote storage account resource IDs."
+      }
+    },
+    "fslogixLocalNetAppVolumeResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. FSLogix local NetApp volume resource IDs."
+      }
+    },
+    "fslogixRemoteNetAppVolumeResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. FSLogix remote NetApp volume resource IDs."
+      }
+    },
+    "fslogixOSSGroups": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. FSLogix OSS groups for sharding."
+      }
+    },
+    "agentBootLoaderDownloadUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds)."
+      }
+    },
+    "agentDownloadUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Custom URL for AVD Agent MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds)."
+      }
+    },
+    "artifactsContainerUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Artifacts container URI for custom scripts."
+      }
+    },
+    "artifactsUserAssignedIdentityResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Artifacts user assigned identity resource ID."
+      }
+    },
+    "sessionHostCustomizations": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional.\nArray of objects containing the following properties\n-name: The name of the script or application that is running minus extension\n-blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Arguments required by the installer or script being ran.\n\nJSON example:\n[\n  {\n    \"name\": \"FSLogix\",\n    \"blobNameOrUri\": \"https://aka.ms/fslogix_download\"\n  },\n  {\n    \"name\": \"VSCode\",\n    \"blobNameOrUri\": \"VSCode.zip\",\n    \"arguments\": \"/verysilent /mergetasks=!runcode\"\n  }\n]\n"
+      }
+    }
+  },
+  "resources": []
+}
