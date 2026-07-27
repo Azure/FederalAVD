@@ -105,7 +105,7 @@ function Write-Log {
 
     Switch ($Category) {
         'Info' { Write-Host $content }
-        'Error' { Write-Error $Content }
+        'Error' { Write-Error $Content -ErrorAction Continue }
         'Warning' { Write-Warning $Content }
     }
 }
@@ -853,6 +853,10 @@ try {
     Write-Log -Message "Resizing OS Disk"
     try {
         $driveLetter = $env:SystemDrive.Substring(0, 1)
+        $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop
+        # Force Windows to refresh disk geometry from hardware - on first boot Azure may not have
+        # yet updated the partition table visible to the OS after provisioning a larger disk.
+        Update-Disk -Number $currentPartition.DiskNumber -ErrorAction SilentlyContinue
         $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop
         $currentSizeGB = [math]::Round($currentPartition.Size / 1GB, 2)
         Write-Log -Message "Current partition size: $currentSizeGB GB (drive: $driveLetter)"
