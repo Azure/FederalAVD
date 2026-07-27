@@ -105,7 +105,10 @@
                             "condition": "[not(empty(steps('storage').storageResourceGroup))]",
                             "request": {
                                 "method": "GET",
-                                "path": "[concat(steps('storage').storageResourceGroup, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01')]"
+                                "path": "[concat(steps('storage').storageResourceGroup, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01')]",
+                                "transforms": {
+                                    "premiumAccounts": "value[?kind == 'FileStorage']"
+                                }
                             }
                         },
                         {
@@ -114,7 +117,7 @@
                             "visible": "[not(empty(steps('storage').storageResourceGroup))]",
                             "options": {
                                 "style": "Info",
-                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', concat(string(length(steps('storage').storageAccountsApi.value)), ' storage account(s) found. Prefix: ', substring(first(steps('storage').storageAccountsApi.value).name, 0, sub(length(first(steps('storage').storageAccountsApi.value).name), 2))))]"
+                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', if(empty(coalesce(steps('storage').storageAccountsApi.transformed.premiumAccounts, parse('[]'))), 'Storage accounts found but none are Azure Files Premium (FileStorage). Verify you selected the correct resource group.', concat(string(length(steps('storage').storageAccountsApi.transformed.premiumAccounts)), ' Azure Files Premium storage account(s) found. Prefix: ', substring(first(steps('storage').storageAccountsApi.transformed.premiumAccounts).name, 0, sub(length(first(steps('storage').storageAccountsApi.transformed.premiumAccounts).name), 2)))))]"
                             }
                         },
                         {
