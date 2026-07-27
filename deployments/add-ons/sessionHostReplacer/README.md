@@ -399,51 +399,18 @@ Click the button for your target cloud to open the deployment UI in Azure Portal
 
 #### Naming Convention Considerations
 
-The solution automatically detects naming conventions from your host pool name. However, if your host pool uses a non-standard naming pattern (e.g., `prod-avd-hostpool-01` instead of `vdpool-prod-eus`), you should provide explicit names for resources.
+Pass the same `namingConvention` and `identifier` values used in the host pool deployment. When deploying from the Portal, these are pre-populated from the `hpNamingConvention` and `hpIdentifier` tags on the host pool resource. Session host naming patterns (`virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv`) are pre-populated from tags on the hosts resource group.
 
-**Required override parameters for non-standard naming:**
+**Critical for brownfield:** Session host naming MUST match your existing VM naming. For example:
 
-```bicep
-// Function App infrastructure
-functionAppNameOverride: 'func-avdshr-prod-eus'           // 2-60 chars, globally unique
-storageAccountNameOverride: 'stavdshrprod'                // 3-24 chars, lowercase alphanumeric
-
-// Session host resources (CRITICAL - must match existing naming in host pool!)
-virtualMachineNameConvOverride: 'vm-SHNAME'               // Use SHNAME token
-diskNameConvOverride: 'disk-SHNAME'                       // Use SHNAME token
-networkInterfaceNameConvOverride: 'nic-SHNAME'            // Use SHNAME token
-availabilitySetNameConvOverride: 'avset-##'               // Use ## token for index
-```
+- If existing VMs are named `avdvm-001`, use `virtualMachineNameConv: 'SHNAME'` (no prefix/suffix)
+- If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConv: 'vm-SHNAME'`
+- If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConv: 'SHNAME-vm'`
 
 **Token Reference:**
 
-- `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001` or `avdvm-001-vm`)
+- `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001`)
 - `##` = Availability set index (e.g., `avset-01`, `avset-02`)
-
-**Critical for brownfield:** Session host naming MUST match your existing pattern. For example:
-
-- If existing VMs are named `avdvm-001`, use `virtualMachineNameConvOverride: 'SHNAME'` (no prefix/suffix)
-- If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConvOverride: 'vm-SHNAME'`
-- If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConvOverride: 'SHNAME-vm'`
-
-**Note on other resources:**
-
-- **App Service Plan**: Use existing via `appServicePlanResourceId` parameter (no naming needed)
-- **Private Endpoints & NICs**: Automatically derived from storage account and function app names
-- **Application Insights**: Uses shared naming convention (works across multiple host pools)
-
-**When to use overrides:**
-
-- Host pool name doesn't start with `vdpool-` or end with `-vdpool`
-- Host pool name contains special characters or patterns that don't follow the automatic detection logic
-- Existing session hosts use non-standard naming (VMs not following resource type prefix/suffix pattern)
-- You want explicit control over function app and session host resource naming
-
-**When overrides are NOT needed:**
-
-- Host pool follows standard patterns: `vdpool-avd-prod-eus` or `avd-prod-eus-vdpool`
-- Session hosts follow standard patterns: `vm-avdvm-001` or `avdvm-001-vm`
-- You're comfortable with automatically-derived names
 
 See the [Brownfield Example](#brownfield-deployment-example) below for a complete deployment scenario.
 
@@ -610,18 +577,16 @@ $params = @{
     storageAccountNameOverride = "stavdshrprod"
     applicationInsightsNameOverride = "appi-avdshr-prod-eus2"  # Only if monitoring enabled
     
-    # Required - session host naming overrides (MUST match existing VM naming!)
+    # Required - session host naming (MUST match existing VM naming!)
     # Existing VMs: vm-avdvm-001, vm-avdvm-002, etc.
-    virtualMachineNameConvOverride = "vm-SHNAME"
-    diskNameConvOverride = "disk-SHNAME"
-    networkInterfaceNameConvOverride = "nic-SHNAME"
-    availabilitySetNameConvOverride = "avset-##"
+    virtualMachineNameConv = "vm-SHNAME"
+    virtualMachineDiskNameConv = "disk-SHNAME"
+    virtualMachineNicNameConv = "nic-SHNAME"
+    availabilitySetNameConv = "avset-##"
     
     # Required - session host configuration
     sessionHostNamePrefix = "avdvm"
-    imagePublisher = "MicrosoftWindowsDesktop"
-    imageOffer = "windows-11"
-    imageSku = "win11-25h2-avd"
+    imageReference = @{ publisher = "MicrosoftWindowsDesktop"; offer = "windows-11"; sku = "win11-25h2-avd" }
     virtualMachineSize = "Standard_D4ads_v6"
     identitySolution = "ActiveDirectoryDomainServices"
     domainName = "corp.contoso.com"
