@@ -350,13 +350,11 @@ Function Get-InternetFile {
                 }
             }
             Catch {
-                Write-Error "${CmdletName}: Error downloading file. Please check url."
-                Exit 2
+                throw "${CmdletName}: Error downloading file from '$Url'. $($_.Exception.Message)"
             }
         }
         Else {
-            Write-Error "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Exit 2
+            throw "${CmdletName}: No OutputFileName could be determined from URL or headers."
         }
     }
     End {}
@@ -672,7 +670,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
 
     Write-Output ""
     Write-Output "=== Phase 1: Download ==="
-    $DownloadDir = Join-Path -Path $TempArtifactsDir -ChildPath 'downloads'
+    $DownloadDir = Join-Path -Path $TempArtifactsDir -ChildPath 'sources'
     New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null
     # Track parent dirs of preserve-layout destinations for post-loop deduplication.
     $PreserveLayoutParentFolders         = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
