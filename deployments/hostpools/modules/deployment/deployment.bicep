@@ -35,7 +35,7 @@ param virtualMachineAdminPassword string
 param virtualMachineAdminUserName string
 param virtualMachineSubnetResourceId string
 
-var deploymentUserAssignedIdentityName = replace(userAssignedIdentityNameConv, 'TOKEN', 'avd-deployment')
+var deploymentUserAssignedIdentityName = replace(userAssignedIdentityNameConv, 'TOKEN', 'deployment')
 var hostPoolParentTag = '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
 
 // ─── Role assignment definitions ──────────────────────────────────────────────

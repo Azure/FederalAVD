@@ -42,8 +42,8 @@ param imageReference object
 param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
-param networkInterfaceNameConv string
-param osDiskNameConv string
+param virtualMachineNicNameConv string
+param virtualMachineDiskNameConv string
 param ouPath string
 param preferredZones array
 param sessionHostCustomizations array
@@ -104,9 +104,9 @@ var identity = identityType != 'None'
     }
   : null
 
-var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(networkInterfaceNameConv) ? sessionHostNames[i] : replace(networkInterfaceNameConv, 'SHNAME', sessionHostNames[i])]
+var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(virtualMachineNicNameConv) ? sessionHostNames[i] : replace(virtualMachineNicNameConv, 'SHNAME', sessionHostNames[i])]
 var virtualMachineNames = [for i in range(0, sessionHostCount): empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(virtualMachineNameConv, 'SHNAME', sessionHostNames[i])]
-var osDiskNames = [for i in range(0, sessionHostCount): empty(osDiskNameConv) ? '${sessionHostNames[i]}-osdisk' : replace(osDiskNameConv, 'SHNAME', sessionHostNames[i])]
+var osDiskNames = [for i in range(0, sessionHostCount): empty(virtualMachineDiskNameConv) ? '${sessionHostNames[i]}-osdisk' : replace(virtualMachineDiskNameConv, 'SHNAME', sessionHostNames[i])]
 
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
   name: last(split(hostPoolResourceId, '/'))

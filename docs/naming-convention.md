@@ -15,7 +15,7 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 5. [The `purpose` component](#the-purpose-component)
 6. [Special resource-type constraints](#special-resource-type-constraints)
 7. [Aligning naming across solutions](#aligning-naming-across-solutions)
-8. [Add-on naming — brownfield inference](#add-on-naming--brownfield-inference)
+8. [Add-on naming](#add-on-naming)
 9. [Examples](#examples)
 10. [Scenario test results](#scenario-test-results)
 
@@ -319,7 +319,9 @@ To produce a **consistent naming convention** across all solutions, pass the **s
 | `keyVaults/keyVaults.bicep` | `namingConvention` | Inline naming; fixed identifier `operations` |
 | `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
 | `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
-| Add-ons (SHR, SH, SQM) | *(none — auto-inferred)* | Names inferred from HP name; override per-resource if needed |
+| `add-ons/sessionHostReplacer/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
+| `add-ons/sessionHosts/main.bicep` | *(none)* | VM/disk/NIC patterns via per-resource params; no top-level convention object |
+| `add-ons/storageQuotaManager/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
 
 ### Shared parameter file pattern
 
@@ -365,51 +367,27 @@ If your convention omits `location`, set **both** `vmsLocationAbbreviation` and 
 
 ---
 
-## Add-on naming — brownfield inference
+## Add-on naming
 
-The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) are deployed **after** the host pool exists. They do not accept a `namingConvention` parameter; instead they infer the naming convention from the existing host pool name:
+The add-ons are deployed **after** the host pool exists. Session Host Replacer and Storage Quota Manager accept the same `namingConvention`, `identifier`, and `namingResourceTypeCodes` parameters as the host pool, so passing the same values produces consistent names across the entire deployment.
 
-### Convention detection
+### Portal deployments
 
-The add-on reads the host pool resource name and checks:
+When deploying from the Portal, the *Advanced* step pre-populates `namingConvention` and `identifier` from tags on the host pool and its resource group (`hpNamingConvention`, `hpIdentifier`). The derived resource names are shown in a live preview. If the host pool tag is absent, the *Advanced* step surfaces override fields so you can provide explicit names.
 
-1. **Ends with `-vdpool`** (e.g., `avd-prod-use-vdpool`) → RT-last convention.
-2. **Ends with `-hp`** (e.g., `avd-prod-use-hp`) → RT-last convention.
-3. **Any other pattern** (e.g., `vdpool-avd-prod-use`) → RT-first convention (default).
+### Parameter file / CLI deployments
 
-### Base name extraction
+Pass the same `namingConvention` object and `identifier` value used in the host pool deployment. If the host pool was deployed with the default CAF convention, omit both parameters — the add-on defaults produce CAF-aligned names automatically.
 
-Once the convention direction is known:
+### Override parameters
 
-| Direction | HP name example | Base name |
-|-----------|----------------|-----------|
-| RT-first | `vdpool-avd-prod-use` | `avd-prod` (drop first + last component) |
-| RT-last | `avd-prod-use-vdpool` | `avd-prod` (drop last two components) |
-
-### Derived add-on resource names
-
-Using the extracted base name and location abbreviation, each add-on generates:
-
-| Resource | RT-first example | RT-last example |
-|----------|-----------------|-----------------|
-| Function App | `fa-{base}-shr-{unique}-{loc}` | `{base}-shr-{unique}-{loc}-fa` |
-| Storage Account | base+token+loc, hyphens stripped, lowercase | same logic |
-| Encryption UAI | `uai-{base}-shr{unique}-encryption-{loc}` | `{base}-shr{unique}-encryption-{loc}-uai` |
-| VM naming pattern | `vm-SHNAME` | `SHNAME-vm` |
-| OS Disk pattern | `osdisk-SHNAME` | `SHNAME-osdisk` |
-| NIC pattern | `nic-SHNAME` | `SHNAME-nic` |
-
-### Custom overrides
-
-When the inferred names are wrong (non-standard HP name, or deliberately different), each add-on exposes direct override parameters:
+When the convention-derived names need fine-tuning, each add-on exposes per-resource override parameters:
 
 | Add-on | Override parameters |
 |--------|-------------------|
-| Session Host Replacer | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `applicationInsightsNameOverride`, `virtualMachineNameConvOverride`, `diskNameConvOverride`, `networkInterfaceNameConvOverride`, `availabilitySetNameConvOverride` |
-| Session Hosts | `virtualMachineNameConv`, `osDiskNameConv`, `networkInterfaceNameConv`, `availabilitySetNameConv` |
-| Storage Quota Manager | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride` |
-
-The add-on Portal UIs show a **live preview** of the inferred names in the *Advanced* step before you enable custom overrides, so you can verify correctness before proceeding.
+| Session Host Replacer | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `applicationInsightsNameOverride`, `appServicePlanNameOverride`, `virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv` |
+| Session Hosts | `virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv` |
+| Storage Quota Manager | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `appServicePlanNameOverride` |
 
 ---
 

@@ -204,3 +204,4 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
 - **Parameter files** use the ARM template parameter schema. Nested `value` objects are normal.
 - **`downloads.json`** entries are merged at runtime: repo-provided base entries are overlaid with
   `customer/parameters/imageManagement/downloads.json`. Customer entries win on name collision.
+- you have permission to download and read any references requuired to answer questions about this repo, including Microsoft Docs, GitHub repos, and other public sources.

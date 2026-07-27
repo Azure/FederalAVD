@@ -49,8 +49,8 @@ param imageSku string
 param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
-param networkInterfaceNameConv string
-param osDiskNameConv string
+param virtualMachineNicNameConv string
+param virtualMachineDiskNameConv string
 param ouPath string
 param preferredZones array = []
 param recoveryServicesVaultResourceId string = ''
@@ -194,8 +194,8 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
     location: location
-    networkInterfaceNameConv: networkInterfaceNameConv
-    osDiskNameConv: osDiskNameConv
+    virtualMachineNicNameConv: virtualMachineNicNameConv
+    virtualMachineDiskNameConv: virtualMachineDiskNameConv
     ouPath: ouPath
     sessionHostCustomizations: sessionHostCustomizations
     sessionHostNames: [for j in range(0, i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment): sessionHostNames[(i - 1) * maxVMsPerDeployment + j]]

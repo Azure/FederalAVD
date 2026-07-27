@@ -190,7 +190,7 @@
               "min": 7,
               "max": 90,
               "visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
-            },
+            }
 
           ]
         },
@@ -447,11 +447,11 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Delimiter",
                   "defaultValue": "-",
-                  "toolTip": "Character(s) placed between each component. A hyphen (-) is most common. Note: Key Vault names allow only hyphens — underscores and dots are automatically replaced with hyphens in Key Vault names.",
+                  "toolTip": "Character placed between each component. A hyphen (-) is most common. Note: Key Vault names allow only hyphens — underscores are automatically replaced with hyphens in Key Vault names.",
                   "constraints": {
                     "required": true,
-                    "regex": "^[-_.]{1,3}$",
-                    "validationMessage": "Use 1 to 3 characters: hyphens (-), underscores (_), or dots (.) only."
+                    "regex": "^[-_]$",
+                    "validationMessage": "Must be a single character: hyphen (-) or underscore (_)."
                   }
                 },
                 {

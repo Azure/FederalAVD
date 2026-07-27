@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.44.1.10279",
-      "templateHash": "8308967082901147934"
+      "version": "0.39.26.7824",
+      "templateHash": "15791928350948844872"
     }
   },
   "parameters": {
@@ -361,7 +361,7 @@
       "netAppCapacityPools": "nacp",
       "networkInterfaces": "nic",
       "networkSecurityGroups": "nsg",
-      "osdisks": "osdisk",
+      "osdisks": "disk",
       "privateEndpoints": "pe",
       "privateLinkScopes": "pls",
       "publicIPAddresses": "pip",
@@ -439,8 +439,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "10878041138838706317"
+              "version": "0.39.26.7824",
+              "templateHash": "10805565186891118520"
             }
           },
           "parameters": {
@@ -633,7 +633,7 @@
               "condition": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]",
               "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2021-05-01-preview",
-              "scope": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
+              "scope": "[format('Microsoft.Automation/automationAccounts/{0}', parameters('automationAccountName'))]",
               "name": "[format('diag-{0}', parameters('automationAccountName'))]",
               "properties": {
                 "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
@@ -705,8 +705,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "17199828385253577684"
+              "version": "0.39.26.7824",
+              "templateHash": "6703123689452334995"
             }
           },
           "parameters": {

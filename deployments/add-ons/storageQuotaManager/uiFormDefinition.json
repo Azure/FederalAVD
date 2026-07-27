@@ -321,7 +321,7 @@
               "name": "zeroTrustNetworkingInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Zero Trust Networking for Function Apps and Azure Resources: This section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults). Private Endpoints: Enable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network. Virtual Network Integration: The function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
+                "text": "Zero Trust Networking for Function Apps and Azure Resources\n\nThis section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults).\n\nPrivate Endpoints\n\nEnable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network.\n\nVirtual Network Integration\n\nThe function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
               }
@@ -615,15 +615,108 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "This step is only needed for brownfield deployments where your host pool uses non-standard naming conventions. Leave 'Use Custom Naming' unchecked to automatically derive names from your host pool naming pattern."
+                "text": "Infrastructure resource names are derived from the hpNamingConvention tag on the host pool. Use 'Use Custom Naming Overrides' below to explicitly define individual resource names for brownfield scenarios."
+              }
+            },
+            {
+              "name": "tagAbsentWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(steps('basics').associateWithHostPool, empty(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
+              "options": {
+                "style": "Warning",
+                "text": "The hpNamingConvention tag was not found on the host pool. This is expected if the host pool was not deployed with this solution. Infrastructure resource names will use default CAF naming values unless you provide overrides below."
               }
             },
             {
               "name": "enableCustomNaming",
               "type": "Microsoft.Common.CheckBox",
               "label": "Use Custom Naming Overrides",
+              "defaultValue": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
+              "toolTip": "Check to explicitly define resource names for brownfield scenarios. When unchecked, names are derived from the hpNamingConvention tag on the host pool (or CAF defaults if the tag is absent)."
+            },
+            {
+              "name": "infrastructureNamingConvention",
+              "type": "Microsoft.Common.Section",
+              "label": "Infrastructure Naming Convention",
+              "visible": true,
+              "elements": [
+                {
+                  "name": "infoBox",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Infrastructure resource names are derived from the host pool naming convention and the identifier below. With identifier 'desktop-01' and the default CAF convention, names follow the pattern: [rt]-[identifier]-sqm-[unique]-[location] (e.g., fa-desktop-01-sqm-abc123-eus). Verify the identifier matches your host pool."
+                  }
+                },
+                {
+                  "name": "identifier",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Identifier",
+                  "defaultValue": "[coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, '')]",
+                  "placeholder": "e.g. finance",
+                  "toolTip": "Host pool base name used to name per-host-pool SQM resources (Function App, Storage Account). Pre-populated from the hpIdentifier tag on the host pool. Maximum 16 characters.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-zA-Z0-9-]{0,16}$",
+                    "validationMessage": "Identifier must be 0-16 characters, alphanumeric and hyphens only."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "enableCustomAbbreviations",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Customize Resource Type Abbreviations",
               "defaultValue": false,
-              "toolTip": "Check this box to explicitly define resource names. Required for brownfield deployments with non-standard host pool naming (e.g., 'prod-avd-hostpool-01' instead of 'hp-avd-prod-eus'). If unchecked, names are automatically derived from the host pool name."
+              "toolTip": "Override the default CAF resource type abbreviations used when computing infrastructure resource names (e.g. 'fa' for Function Apps, 'asp' for App Service Plans). Only needed if your organization uses non-standard abbreviations that differ from CAF defaults."
+            },
+            {
+              "name": "namingResourceTypeCodes",
+              "type": "Microsoft.Common.Section",
+              "label": "Resource Type Abbreviation Overrides",
+              "visible": "[steps('advanced').enableCustomAbbreviations]",
+              "elements": [
+                {
+                  "name": "functionApps",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Function Apps",
+                  "defaultValue": "fa",
+                  "toolTip": "Resource type abbreviation for Function Apps. Default CAF value: fa",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "appServicePlans",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "App Service Plans",
+                  "defaultValue": "asp",
+                  "toolTip": "Resource type abbreviation for App Service Plans. Default CAF value: asp",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "userAssignedIdentities",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "User Assigned Identities",
+                  "defaultValue": "uai",
+                  "toolTip": "Resource type abbreviation for User Assigned Identities. Default CAF value: uai",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "privateEndpoints",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private Endpoints",
+                  "defaultValue": "pe",
+                  "toolTip": "Resource type abbreviation for Private Endpoints. Default CAF value: pe",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "networkInterfaces",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Network Interfaces (PE NICs)",
+                  "defaultValue": "nic",
+                  "toolTip": "Resource type abbreviation for Network Interfaces (used for Private Endpoint NICs). Default CAF value: nic",
+                  "constraints": { "required": false }
+                }
+              ]
             },
             {
               "name": "derivedNamesPreview",
@@ -653,7 +746,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('basics').associateWithHostPool]",
                   "options": {
-                    "text": "[concat('Detected convention: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), 'Resource type LAST (e.g. avd-prod-eus-vdpool)', 'Resource type FIRST (e.g. vdpool-avd-prod-eus)'))]"
+                    "text": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), 'Convention not detected (hpNamingConvention tag absent on host pool). Names shown below are approximate based on host pool name pattern.', concat('Convention detected from hpNamingConvention tag. Identifier: ', coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, '(not set)')))]"         
                   }
                 },
                 {
@@ -757,6 +850,23 @@
                   }
                 },
                 {
+                  "name": "appServicePlanNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "App Service Plan Name",
+                  "placeholder": "asp-avd-eus",
+                  "toolTip": "Optional. Explicit name for the App Service Plan. Only applies when creating a new plan (not using an existing one). The ASP is shared across add-ons in the region — leave blank to use the convention-derived name (e.g., asp-avd-eus). Must be 1-40 characters, alphanumeric and hyphens.",
+                  "visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^$|^[a-zA-Z0-9-]{1,40}$",
+                        "message": "App Service Plan name must be 1-40 characters, alphanumeric and hyphens only."
+                      }
+                    ]
+                  }
+                },
+                {
                   "name": "storageAccountNameOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Storage Account Name",
@@ -835,6 +945,10 @@
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
         "permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
+        "namingConvention": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), parse('{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\",\"vmsLocationAbbreviation\":\"\"}'), parse(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
+        "namingResourceTypeCodes": "[if(steps('advanced').enableCustomAbbreviations, parse(concat('{\"functionApps\":\"', steps('advanced').namingResourceTypeCodes.functionApps, '\",\"appServicePlans\":\"', steps('advanced').namingResourceTypeCodes.appServicePlans, '\",\"userAssignedIdentities\":\"', steps('advanced').namingResourceTypeCodes.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').namingResourceTypeCodes.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').namingResourceTypeCodes.networkInterfaces, '\"}')), parse('{}'))]",
+        "identifier": "[steps('advanced').infrastructureNamingConvention.identifier]",
+        "appServicePlanNameOverride": "[if(and(steps('advanced').enableCustomNaming, not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
         "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
         "storageAccountNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
         "storageEncryptionIdentityNameOverride": "[if(and(steps('advanced').enableCustomNaming, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
