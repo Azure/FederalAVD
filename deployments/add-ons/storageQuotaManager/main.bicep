@@ -33,6 +33,13 @@ param identifier string = ''
 param automationAccountNameOverride string = ''
 
 // ================================================================================================
+// Host Pool Tagging
+// ================================================================================================
+
+@description('Optional. Resource ID of the host pool associated with this storage deployment. When provided, the Automation Account is tagged with cm-resource-parent to enable per-host-pool cost allocation and resource governance.')
+param hostPoolResourceId string = ''
+
+// ================================================================================================
 // Automation Infrastructure Parameters
 // ================================================================================================
 
@@ -91,6 +98,10 @@ var automationAccountName = !empty(automationAccountNameOverride)
     ? '${resourceAbbreviations.automationAccounts}-sqm-${identifier}-${regionAbbr}'
     : '${resourceAbbreviations.automationAccounts}-sqm-${regionAbbr}'
 
+var resolvedTags = !empty(hostPoolResourceId)
+  ? union(tags, { 'cm-resource-parent': hostPoolResourceId })
+  : tags
+
 var deploymentSuffix = take(uniqueString(resourceGroup().id, deployment().name), 8)
 
 // ========== //
@@ -111,7 +122,7 @@ module automation 'modules/automationAccount.bicep' = {
     scheduleFrequencyMinutes: scheduleFrequencyMinutes
     storageResourceGroupName: storageResourceGroupName
     storageSubscriptionId: storageSubscriptionId
-    tags: tags
+    tags: resolvedTags
   }
 }
 

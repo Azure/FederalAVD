@@ -27,7 +27,7 @@
                             },
                             "resourceGroup": {
                                 "allowExisting": true,
-                                "toolTip": "Resource group where the Automation Account will be deployed. This is typically an operations or management resource group, not the FSLogix storage resource group."
+                                "toolTip": "Resource group where the Automation Account will be deployed. This can be a dedicated operations resource group or the same resource group as the FSLogix storage."
                             },
                             "location": {
                                 "label": "Region",
@@ -48,7 +48,7 @@
                             "type": "Microsoft.Common.TextBlock",
                             "visible": true,
                             "options": {
-                                "text": "Select the resource group containing your FSLogix Azure Files Premium storage accounts. This is typically different from the resource group selected on the Basics page. The Automation Account managed identity will be granted Storage Account Contributor on this resource group."
+                                "text": "Select the resource group containing your FSLogix Azure Files Premium storage accounts. The Automation Account managed identity will be granted Storage Account Contributor on this resource group. If the resource group has a cm-resource-parent tag pointing to a host pool, the host pool identifier will be pre-filled below."
                             }
                         },
                         {
@@ -70,6 +70,32 @@
                             }
                         },
                         {
+                            "name": "storageRGProps",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "condition": "[not(empty(steps('storage').storageResourceGroup))]",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('storage').storageResourceGroup, '?api-version=2021-04-01')]"
+                            }
+                        },
+                        {
+                            "name": "hostPoolProps",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "condition": "[not(empty(coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '')))]",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('storage').storageRGProps.tags['cm-resource-parent'], '?api-version=2024-04-03')]"
+                            }
+                        },
+                        {
+                            "name": "hostPoolLink",
+                            "type": "Microsoft.Common.InfoBox",
+                            "visible": "[not(empty(coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '')))]",
+                            "options": {
+                                "style": "Success",
+                                "text": "[concat('Host pool linked via cm-resource-parent tag: ', last(split(coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '/unknown'), '/')), if(empty(coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')), ' | No hpIdentifier tag found on this host pool - enter an identifier below manually', concat(' | Identifier: ', steps('storage').hostPoolProps.tags.hpIdentifier, ' (pre-filled below)')))]"                            }
+                        },
+                        {
                             "name": "storageAccountsApi",
                             "type": "Microsoft.Solutions.ArmApiControl",
                             "condition": "[not(empty(steps('storage').storageResourceGroup))]",
@@ -84,7 +110,23 @@
                             "visible": "[not(empty(steps('storage').storageResourceGroup))]",
                             "options": {
                                 "style": "Info",
-                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group.', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix'))), concat('Storage accounts found but none start with \"fslogix\". Automation Account will be named: aa-sqm-{unique}-{regionAbbr}. Use the name override on the Advanced page if needed.'), concat('FSLogix storage detected: ', first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), '. Automation Account will be named: aa-sqm-', substring(first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), 7), '-{regionAbbr}.')))]"
+                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix'))), 'Storage accounts found but none start with \"fslogix\". Verify you selected the correct resource group.', concat('FSLogix storage detected: ', first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), '.')))]"                            }
+                        },
+                        {
+                            "name": "identifier",
+                            "type": "Microsoft.Common.TextBox",
+                            "label": "Host Pool Identifier (Optional)",
+                            "defaultValue": "[coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')]",
+                            "placeholder": "e.g. pooled-03 or personal-01",
+                            "toolTip": "Short token embedded in the Automation Account name to identify which host pool this instance manages. Pre-filled from the hpIdentifier tag on the linked host pool when present. For example, 'pooled-03' produces aa-sqm-pooled-03-{region}. Leave blank if you only have one SQM deployment in this resource group.",
+                            "constraints": {
+                                "required": false,
+                                "validations": [
+                                    {
+                                        "regex": "^$|^[a-zA-Z0-9-]{1,64}$",
+                                        "message": "Must be 1-64 characters, alphanumeric and hyphens only."
+                                    }
+                                ]
                             }
                         },
                         {
@@ -258,6 +300,7 @@
             "parameters": {
                 "automationAccountNameOverride": "[if(steps('advanced').namingSection.enableNameOverride, steps('advanced').namingSection.automationAccountNameOverride, '')]",
                 "identifier": "[steps('storage').identifier]",
+                "hostPoolResourceId": "[coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '')]",
                 "storageResourceGroupId": "[steps('storage').storageResourceGroup]",
                 "scheduleFrequencyMinutes": "[steps('storage').scheduleFrequencyMinutes]",
                 "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",

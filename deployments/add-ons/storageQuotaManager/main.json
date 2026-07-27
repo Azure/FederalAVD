@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "6288711956583973667"
+      "templateHash": "4846562331707514334"
     }
   },
   "parameters": {
@@ -36,6 +36,13 @@
       "maxLength": 128,
       "metadata": {
         "description": "Optional. Explicit name for the Automation Account. Overrides the auto-generated name entirely. Must be 6-128 characters, alphanumeric and hyphens."
+      }
+    },
+    "hostPoolResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of the host pool associated with this storage deployment. When provided, the Automation Account is tagged with cm-resource-parent to enable per-host-pool cost allocation and resource governance."
       }
     },
     "logAnalyticsWorkspaceResourceId": {
@@ -379,6 +386,7 @@
     "regionAbbr": "[variables('locations')[parameters('location')].abbreviation]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), if(not(empty(parameters('identifier'))), format('{0}-sqm-{1}-{2}', variables('resourceAbbreviations').automationAccounts, parameters('identifier'), variables('regionAbbr')), format('{0}-sqm-{1}', variables('resourceAbbreviations').automationAccounts, variables('regionAbbr'))))]",
+    "resolvedTags": "[if(not(empty(parameters('hostPoolResourceId'))), union(parameters('tags'), createObject('cm-resource-parent', parameters('hostPoolResourceId'))), parameters('tags'))]",
     "deploymentSuffix": "[take(uniqueString(resourceGroup().id, deployment().name), 8)]"
   },
   "resources": [
@@ -423,7 +431,7 @@
             "value": "[variables('storageSubscriptionId')]"
           },
           "tags": {
-            "value": "[parameters('tags')]"
+            "value": "[variables('resolvedTags')]"
           }
         },
         "template": {
