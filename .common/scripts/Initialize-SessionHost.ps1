@@ -100,7 +100,7 @@ function Write-Log {
     )
 
     $DateTime = Get-Date -Format 'MM-dd-yyyy HH:mm:ss'
-    $Content = "[$DateTime]`t$Category`t`t$Message`n" 
+    $Content = "[$DateTime]`t$Category`t`t$Message" 
     Add-Content $Script:LogPath $content -ErrorAction Stop
 
     Switch ($Category) {
