@@ -1,0 +1,243 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "9083110921019854766"
+    }
+  },
+  "parameters": {
+    "automationAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the Automation Account."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure region for all resources."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Tags to apply to all resources."
+      }
+    },
+    "storageResourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the resource group containing the FSLogix storage accounts."
+      }
+    },
+    "storageSubscriptionId": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Subscription ID containing the FSLogix storage resource group."
+      }
+    },
+    "resourceManagerUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure Resource Manager URI for this cloud (e.g. https://management.azure.com/)."
+      }
+    },
+    "scheduleFrequencyMinutes": {
+      "type": "int",
+      "defaultValue": 15,
+      "minValue": 15,
+      "metadata": {
+        "description": "Optional. How often the runbook runs, in minutes. Minimum 15."
+      }
+    },
+    "deploymentTime": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. UTC timestamp used to set the initial schedule start time (10 minutes from deployment)."
+      }
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Log Analytics Workspace resource ID for diagnostic settings."
+      }
+    },
+    "runbookContentUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. URI of the runbook PS1 file to publish at deployment time.\n\nLeave empty for air-gapped or internet-restricted environments. When empty the runbook\nresource is created in New (unpublished) state. The schedule and job schedule link are\nstill created so the account is fully configured; the runbook just needs to be published\nmanually before the first scheduled run. See README.md for portal and PowerShell steps."
+      }
+    },
+    "createJobSchedule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Set to true on first deployment to let ARM create the job schedule link between\nthe runbook and schedule. Set to false on every redeployment.\n\nWHY: Azure Automation caches the runbook/schedule association keyed on the automation account\nNAME. This cache persists even after deleting the job schedule resource, the child resources,\nor the automation account itself - and is restored the moment an account with that name exists\nagain. ARM cannot create a resource that already exists, so including this resource on\nredeployment always produces: Code: Conflict / A jobSchedule with same id already exists.\n\nThe existing link is not affected when this is false - the runbook continues to run on schedule."
+      }
+    }
+  },
+  "variables": {
+    "runbookName": "Set-StorageQuota",
+    "scheduleStartTime": "[dateTimeAdd(parameters('deploymentTime'), 'PT10M')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Automation/automationAccounts",
+      "apiVersion": "2023-11-01",
+      "name": "[parameters('automationAccountName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "sku": {
+          "name": "Basic"
+        },
+        "publicNetworkAccess": false,
+        "disableLocalAuth": false
+      }
+    },
+    {
+      "type": "Microsoft.Automation/automationAccounts/variables",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}/{1}', parameters('automationAccountName'), 'ResourceGroupName')]",
+      "properties": {
+        "value": "[format('\"{0}\"', parameters('storageResourceGroupName'))]",
+        "isEncrypted": false,
+        "description": "Name of the resource group containing the FSLogix storage accounts."
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Automation/automationAccounts/variables",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}/{1}', parameters('automationAccountName'), 'SubscriptionId')]",
+      "properties": {
+        "value": "[format('\"{0}\"', parameters('storageSubscriptionId'))]",
+        "isEncrypted": false,
+        "description": "Subscription ID containing the FSLogix storage resource group."
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Automation/automationAccounts/variables",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}/{1}', parameters('automationAccountName'), 'ResourceManagerUri')]",
+      "properties": {
+        "value": "[format('\"{0}\"', parameters('resourceManagerUri'))]",
+        "isEncrypted": false,
+        "description": "Azure Resource Manager endpoint URI for this cloud."
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Automation/automationAccounts/runbooks",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}/{1}', parameters('automationAccountName'), variables('runbookName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "runbookType": "PowerShell72",
+        "logVerbose": false,
+        "logProgress": false,
+        "description": "Automatically increases FSLogix file share quotas before they fill up.",
+        "publishContentLink": "[if(not(empty(parameters('runbookContentUri'))), createObject('uri', parameters('runbookContentUri')), null())]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Automation/automationAccounts/schedules",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}/{1}', parameters('automationAccountName'), 'StorageQuotaManager-Schedule')]",
+      "properties": {
+        "description": "Runs the storage quota manager on a recurring interval.",
+        "startTime": "[variables('scheduleStartTime')]",
+        "frequency": "Minute",
+        "interval": "[parameters('scheduleFrequencyMinutes')]",
+        "timeZone": "UTC"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('createJobSchedule')]",
+      "type": "Microsoft.Automation/automationAccounts/jobSchedules",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}/{1}', parameters('automationAccountName'), guid(resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName')), resourceId('Microsoft.Automation/automationAccounts/runbooks', parameters('automationAccountName'), variables('runbookName')), resourceId('Microsoft.Automation/automationAccounts/schedules', parameters('automationAccountName'), 'StorageQuotaManager-Schedule')))]",
+      "properties": {
+        "runbook": {
+          "name": "[variables('runbookName')]"
+        },
+        "schedule": {
+          "name": "StorageQuotaManager-Schedule"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
+        "[resourceId('Microsoft.Automation/automationAccounts/runbooks', parameters('automationAccountName'), variables('runbookName'))]",
+        "[resourceId('Microsoft.Automation/automationAccounts/schedules', parameters('automationAccountName'), 'StorageQuotaManager-Schedule')]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]",
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "scope": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
+      "name": "[format('diag-{0}', parameters('automationAccountName'))]",
+      "properties": {
+        "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
+        "logs": [
+          {
+            "category": "JobLogs",
+            "enabled": true
+          },
+          {
+            "category": "JobStreams",
+            "enabled": true
+          }
+        ],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "automationAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the deployed Automation Account."
+      },
+      "value": "[parameters('automationAccountName')]"
+    },
+    "principalId": {
+      "type": "string",
+      "metadata": {
+        "description": "Principal ID of the Automation Account system-assigned managed identity."
+      },
+      "value": "[reference(resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName')), '2023-11-01', 'full').identity.principalId]"
+    }
+  }
+}

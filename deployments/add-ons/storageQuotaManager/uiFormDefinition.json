@@ -1,962 +1,321 @@
-﻿{
-  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
-  "view": {
-    "kind": "Form",
-    "properties": {
-      "title": "Premium Azure Files Storage Account Quota Management",
-      "steps": [
-        {
-          "name": "basics",
-          "label": "Deployment Basics",
-          "elements": [
-            {
-              "name": "infoBox1",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": true,
-              "options": {
-                "text": "Configure the Storage Quota Manager to automatically increase FSLogix file share quotas before they fill up."
-              }
-            },
-            {
-              "name": "subscriptionsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "request": {
-                "method": "GET",
-                "path": "/subscriptions?api-version=2022-12-01"
-              }
-            },
-            {
-              "name": "subscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Subscription",
-              "toolTip": "Select the subscription where the Storage Quota Manager function app will be deployed.",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "associateWithHostPool",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Associate with a Host Pool",
-              "toolTip": "Enable to associate this deployment with an AVD host pool for tagging and automatic naming convention detection. Disable for standalone storage scenarios such as App Attach.",
-              "defaultValue": true
-            },
-            {
-              "name": "hostPoolsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('basics').associateWithHostPool, not(empty(steps('basics').subscription.id)))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.DesktopVirtualization/hostPools?api-version=2024-04-03')]"
-              }
-            },
-            {
-              "name": "hostPool",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Host Pool",
-              "visible": "[steps('basics').associateWithHostPool]",
-              "toolTip": "Select the host pool whose FSLogix storage accounts should be managed.",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"', first(skip(split(hp.id, '/'), 4)), '\",\"value\":{\"id\":\"', hp.id, '\",\"name\":\"', hp.name, '\",\"location\":\"', hp.location, '\"}}')))]",
-                "required": "[steps('basics').associateWithHostPool]"
-              }
-            },
-            {
-              "name": "hostPoolProps",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('basics').associateWithHostPool, not(empty(steps('basics').hostPool.id)))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('basics').hostPool.id, '?api-version=2024-04-03')]"
-              }
-            },
-            {
-              "name": "locationsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('basics').subscription.id))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('basics').subscription.id, '/locations?api-version=2022-12-01')]",
-                "transforms": {
-                  "list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: { displayName: displayName, name: name }}"
-                }
-              }
-            },
-            {
-              "name": "location",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Deployment Region",
-              "toolTip": "Select the region where the function app will be deployed.",
-              "defaultValue": "[if(and(steps('basics').associateWithHostPool, not(empty(steps('basics').hostPool.id))), first(map(filter(steps('basics').locationsApi.value, (loc) => equals(loc.name, steps('basics').hostPoolProps.location)), (loc) => loc.displayName)), '')]",
-              "constraints": {
-                "allowedValues": "[steps('basics').locationsApi.transformed.list]",
-                "required": true
-              }
-            },
-            {
-              "name": "noHostPoolNamingWarning",
-              "type": "Microsoft.Common.InfoBox",
-              "visible": "[not(steps('basics').associateWithHostPool)]",
-              "options": {
-                "text": "No host pool is associated. Resource naming cannot be derived automatically. You must provide custom names for the Function App and Storage Account on the Advanced page.",
-                "style": "Warning"
-              }
-            }
-          ]
-        },
-        {
-          "name": "quotaConfig",
-          "label": "Quota Manager Configuration",
-          "elements": [
-            {
-              "name": "storageSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Storage Subscription",
-              "toolTip": "Select the subscription containing the FSLogix storage accounts to manage. Defaults to the deployment subscription.",
-              "defaultValue": "[steps('basics').subscription.displayName]",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "storageResourceGroupsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('quotaConfig').storageSubscription.id))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('quotaConfig').storageSubscription.id, '/resourcegroups?api-version=2021-04-01')]"
-              }
-            },
-            {
-              "name": "storageResourceGroup",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Storage Resource Group",
-              "toolTip": "Select the resource group containing the FSLogix storage accounts. Defaults to the resource group from the host pool's storageResourceGroupId tag when a host pool is selected.",
-              "multiLine": true,
-              "defaultValue": "[if(and(steps('basics').associateWithHostPool, not(empty(steps('basics').hostPool.id))), last(split(steps('basics').hostPoolProps.tags.storageResourceGroupId, '/')), '')]",
-              "constraints": {
-                "allowedValues": "[map(steps('quotaConfig').storageResourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"Location: ', rg.location, '\",\"value\":\"', rg.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "functionAppResourceGroup",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Function App Resource Group",
-              "toolTip": "Select the resource group where the Storage Quota Manager function app will be deployed. Defaults to the storage resource group.",
-              "multiLine": true,
-              "defaultValue": "[last(split(steps('quotaConfig').storageResourceGroup, '/'))]",
-              "constraints": {
-                "allowedValues": "[map(steps('quotaConfig').storageResourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"Location: ', rg.location, '\",\"value\":\"', rg.id, '\"}')))]",
-                "required": true
-              }
-            }
-          ]
-        },
-        {
-          "name": "infrastructure",
-          "label": "Infrastructure",
-          "elements": [
-            {
-              "name": "useExistingHostingPlan",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Use Existing App Service Plan",
-              "toolTip": "Select an existing App Service Plan instead of creating a new one."
-            },
-            {
-              "name": "appServicePlanSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "App Service Plan Subscription",
-              "defaultValue": "[steps('basics').subscription.displayName]",
-              "toolTip": "Select the subscription that contains your app service plan.",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "resourceGroupsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('infrastructure').appServicePlanSubscription.id))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('infrastructure').appServicePlanSubscription.id, '/resourcegroups?api-version=2021-04-01')]"
-              }
-            },
-            {
-              "name": "resourceGroup",
-              "type": "Microsoft.Common.DropDown",
-              "label": "App Service Plan Resource Group",
-              "multiLine": true,
-              "toolTip": "Select the shared operations group containing resources used to manage all host pools.",
-              "constraints": {
-                "allowedValues": "[map(steps('infrastructure').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
-                "required": true
-              },
-              "visible": "[not(steps('infrastructure').useExistingHostingPlan)]"
-            },
-            {
-              "name": "serverFarmsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('infrastructure').appServicePlanSubscription)), steps('infrastructure').useExistingHostingPlan)]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('infrastructure').appServicePlanSubscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
-              }
-            },
-            {
-              "name": "appServicePlan",
-              "type": "Microsoft.Common.DropDown",
-              "visible": "[steps('infrastructure').useExistingHostingPlan]",
-              "label": "App Service Plan",
-              "multiLine": true,
-              "toolTip": "Select the existing App Service Plan. Only plans in the selected subscription and location are shown.",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').serverFarmsApi.value, (sf) => equals(sf.location, steps('basics').location.displayName)), (sf) => parse(concat('{\"label\":\"', sf.name, '\",\"description\":\"Location: ', sf.location, ' | Resource Group: ', first(skip(split(sf.id, '/'), 4)), '\",\"value\":\"', sf.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "planSku",
-              "type": "Microsoft.Common.DropDown",
-              "visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
-              "label": "App Service Plan SKU",
-              "defaultValue": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
-              "toolTip": "Select the SKU for the new App Service Plan. P0v3 is recommended for cost optimization and fully supports all required features (Always On, VNet integration, PowerShell 7.4).",
-              "constraints": {
-                "allowedValues": [
-                  {
-                    "label": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
-                    "value": "PremiumV3_P0v3"
-                  },
-                  {
-                    "label": "P1v3 (2 vCPU, 8 GB RAM)",
-                    "value": "PremiumV3_P1v3"
-                  },
-                  {
-                    "label": "P2v3 (4 vCPU, 16 GB RAM)",
-                    "value": "PremiumV3_P2v3"
-                  },
-                  {
-                    "label": "P3v3 (8 vCPU, 32 GB RAM)",
-                    "value": "PremiumV3_P3v3"
-                  }
-                ],
-                "required": true
-              }
-            },
-            {
-              "name": "zoneRedundant",
-              "type": "Microsoft.Common.CheckBox",
-              "visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
-              "label": "Enable Zone Redundancy",
-              "toolTip": "Deploy the App Service Plan with zone redundancy. Only applies when creating a new plan."
-            },
-            {
-              "name": "encryptionTextBlock",
-              "type": "Microsoft.Common.TextBlock",
-              "options": {
-                "text": "Configure encryption for the function app storage account."
-              }
-            },
-            {
-              "name": "keyManagementStorageAccounts",
-              "type": "Microsoft.Common.OptionsGroup",
-              "label": "Storage Account Key Management",
-              "defaultValue": "Platform-Managed Keys",
-              "toolTip": "Choose between platform-managed or customer-managed keys for storage encryption.",
-              "constraints": {
-                "allowedValues": [
-                  {
-                    "label": "Platform-Managed Keys",
-                    "value": "PlatformManaged"
-                  },
-                  {
-                    "label": "Customer-Managed Keys",
-                    "value": "CustomerManaged"
-                  },
-                  {
-                    "label": "Customer-Managed Keys backed by HSM",
-                    "value": "CustomerManagedHSM"
-                  }
-                ]
-              }
-            },
-            {
-              "name": "keyVaultSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Key Vault Subscription",
-              "defaultValue": "[steps('basics').subscription.displayName]",
-              "toolTip": "Select the subscription containing the Key Vault with customer-managed encryption keys. For brownfield deployments, this allows selecting Key Vaults from centralized security subscriptions.",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              },
-              "visible": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]"
-            },
-            {
-              "name": "keyVaultsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('infrastructure').keyVaultSubscription.id)), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('infrastructure').keyVaultSubscription.id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
-              }
-            },
-            {
-              "name": "encryptionKeyVault",
-              "type": "Microsoft.Common.DropDown",
-              "visible": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]",
-              "label": "Encryption Key Vault",
-              "multiLine": true,
-              "toolTip": "Select the Key Vault containing the customer-managed encryption key. Only Key Vaults in the selected location are shown.",
-              "constraints": {
-                "required": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]",
-                "allowedValues": "[map(filter(steps('infrastructure').keyVaultsApi.value, (kv) => equals(kv.location, steps('basics').location.name)), (kv) => parse(concat('{\"label\":\"', kv.name, '\",\"description\":\"Location: ', kv.location, ' | Resource Group: ', first(skip(split(kv.id, '/'), 4)), '\",\"value\":\"', kv.id, '\"}')))]"
-              }
-            },
-            {
-              "name": "zeroTrustNetworkingInfoBox",
-              "type": "Microsoft.Common.InfoBox",
-              "options": {
-                "text": "Zero Trust Networking for Function Apps and Azure Resources\n\nThis section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults).\n\nPrivate Endpoints\n\nEnable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network.\n\nVirtual Network Integration\n\nThe function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
-                "style": "Info",
-                "uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
-              }
-            },
-            {
-              "name": "configureZeroTrustNetworking",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Configure Zero Trust Networking",
-              "defaultValue": true
-            },
-            {
-              "name": "zeroTrustNetworkingTextBlock2",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "link": {
-                  "label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
-                  "uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
-                },
-                "text": "When deploying function app zero trust networking, you must select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks are dynamically filtered according to the regions specified for the resource types in earlier configuration screens. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
-              }
-            },
-            {
-              "name": "subnetsHeader",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "text": "Subnets"
-              }
-            },
-            {
-              "name": "virtualNetworksApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('basics').subscription.id))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-              }
-            },
-            {
-              "name": "virtualNetwork",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Virtual Network",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "multiLine": true,
-              "toolTip": "Select the virtual network to which the function app will be integrated. The list is filtered based on the subscription and location selected on the 'Deployment Basics' page.",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "subnetsApi",
-              "condition": "[not(empty(steps('infrastructure').virtualNetwork.id))]",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('infrastructure').virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-              }
-            },
-            {
-              "name": "functionAppOutboundSubnet",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Function App Outbound subnet",
-              "toolTip": "Select an existing subnet for function App Outbound access. This subnet must have a delegation for Microsoft.Web/serverFarms.",
-              "constraints": {
-                "required": true,
-                "allowedValues": "[map(filter(steps('infrastructure').subnetsApi.value, (snet) => equals(first(map(snet.properties.delegations, (del) => del.properties.serviceName)), 'Microsoft.Web/serverFarms')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-              },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
-            },
-            {
-              "name": "functionAppPrivateEndpointSubnet",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Function App Private Endpoint Subnet",
-              "toolTip": "Select the subnet for function app private endpoints (inbound access and storage account). This subnet must NOT have any delegations and must be different from the outbound subnet.",
-              "constraints": {
-                "required": true,
-                "allowedValues": "[map(filter(steps('infrastructure').subnetsApi.value, (snet) => and(empty(snet.properties.delegations), not(equals(snet.id, steps('infrastructure').functionAppOutboundSubnet)))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-              },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
-            },
-            {
-              "name": "privateDNSZonesHeader",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "text": "Private DNS Zones"
-              }
-            },
-            {
-              "name": "privateDNSZoneIntegrationTextBlock",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "text": "To connect privately with your function app and private endpoints, you need DNS records. We recommend that you integrate your function app private endpoints with private DNS zones. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
-                "link": {
-                  "label": "Learn more",
-                  "uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
-                }
-              }
-            },
-            {
-              "name": "enablePrivateDNSIntegration",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Enable Private DNS Zone Integration",
-              "toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
-              "defaultValue": true,
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
-            },
-            {
-              "name": "privateDNSZonesSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Private DNS Zone Subscription",
-              "placeholder": "",
-              "defaultValue": "[steps('basics').subscription.displayName]",
-              "toolTip": "Select the subscription that contains your Private DNS Zones.",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              },
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]"
-            },
-            {
-              "name": "privateDNSZonesApi",
-              "condition": "[and(steps('infrastructure').enablePrivateDNSIntegration, not(empty(steps('infrastructure').privateDNSZonesSubscription)))]",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('infrastructure').privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-              }
-            },
-            {
-              "name": "azureFunctionAppPrivateDnsZone",
-              "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => zone.name))]",
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
-              "label": "Azure Function App",
-              "multiLine": true,
-              "toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "azureBlobPrivateDnsZone",
-              "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
-              "label": "Azure Blob Storage",
-              "multiLine": true,
-              "toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "permittedIPsInfo",
-              "type": "Microsoft.Common.TextBlock",
-              "options": {
-                "text": "Permitted IP Addresses / CIDR Ranges (optional)",
-                "style": "Heading"
-              },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
-            },
-            {
-              "name": "permittedIPsDescription",
-              "type": "Microsoft.Common.TextBlock",
-              "options": {
-                "text": "Restrict public access to PaaS resources (storage accounts, function app) to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
-              },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
-            },
-            {
-              "name": "permittedIPs",
-              "type": "Microsoft.Common.EditableGrid",
-              "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
-              "label": "Permitted IP Addresses / CIDR Ranges",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "constraints": {
-                "width": "Full",
-                "rows": {
-                  "count": {
-                    "min": 0,
-                    "max": 50
-                  }
-                },
-                "columns": [
-                  {
-                    "id": "ipAddress",
-                    "header": "IP Address or CIDR Range",
-                    "width": "1fr",
-                    "element": {
-                      "type": "Microsoft.Common.TextBox",
-                      "placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
-                      "constraints": {
-                        "required": false,
-                        "regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-                        "validationMessage": "Enter a valid IPv4 address or CIDR range."
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "monitoring",
-          "label": "Monitoring",
-          "elements": [
-            {
-              "name": "enableMonitoring",
-              "type": "Microsoft.Common.CheckBox",
-              "visible": true,
-              "label": "Enable Monitoring for the Function App and AVD Insights",
-              "defaultValue": true,
-              "toolTip": "Deploy the required resources to enable AVD Insights monitoring."
-            },
-            {
-              "name": "subscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "AVD Monitoring Subscription",
-              "defaultValue": "[steps('basics').subscription.displayName]",
-              "toolTip": "Select the subscription where existing AVD monitoring resources are located",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              },
-              "visible": "[steps('monitoring').enableMonitoring]"
-            },
-            {
-              "name": "logAnalyticsWorkspacesApi",
-              "condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').subscription)))]",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('monitoring').subscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
-              }
-            },
-            {
-              "name": "logAnalyticsWorkspace",
-              "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => and(contains(la.name, '-avd-'), equals(la.location, steps('basics').location.name))), (la) => la.name))]",
-              "visible": "[steps('monitoring').enableMonitoring]",
-              "label": "Existing Log Analytics Workspace",
-              "multiLine": true,
-              "toolTip": "Select the existing Log Analytics Workspace to which function app diagnostic logs will be sent.",
-              "constraints": {
-                "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ', Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "privateLinkTextBlock",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": true,
-              "options": {
-                "text": "Azure Monitor is a constellation of different interconnected services that work together to monitor your workloads. An Azure Monitor private link connects a private endpoint to a set of Azure Monitor resources to define the boundaries of your monitoring network. That set is called an Azure Monitor Private Link Scope (AMPLS).",
-                "link": {
-                  "label": "Use Azure Private Link to connect networks to Azure Monitor - Azure Monitor | Microsoft Learn",
-                  "uri": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security"
-                }
-              }
-            },
-            {
-              "name": "enableAMPLS",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Attach function app Application Insights to an existing Azure Monitor Private Link Scope"
-            },
-            {
-              "name": "privateLinkScope",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Azure Monitor Private Link Scope",
-              "resourceType": "Microsoft.Insights/privateLinkScopes",
-              "constraints": {
-                "required": true
-              },
-              "visible": "[steps('monitoring').enableAMPLS]"
-            }
-          ]
-        },
-        {
-          "name": "advanced",
-          "label": "Advanced",
-          "elements": [
-            {
-              "name": "infoBox1",
-              "type": "Microsoft.Common.InfoBox",
-              "options": {
-                "style": "Info",
-                "text": "Infrastructure resource names are derived from the hpNamingConvention tag on the host pool. Use 'Use Custom Naming Overrides' below to explicitly define individual resource names for brownfield scenarios."
-              }
-            },
-            {
-              "name": "tagAbsentWarning",
-              "type": "Microsoft.Common.InfoBox",
-              "visible": "[and(steps('basics').associateWithHostPool, empty(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
-              "options": {
-                "style": "Warning",
-                "text": "The hpNamingConvention tag was not found on the host pool. This is expected if the host pool was not deployed with this solution. Infrastructure resource names will use default CAF naming values unless you provide overrides below."
-              }
-            },
-            {
-              "name": "enableCustomNaming",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Use Custom Naming Overrides",
-              "defaultValue": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
-              "toolTip": "Check to explicitly define resource names for brownfield scenarios. When unchecked, names are derived from the hpNamingConvention tag on the host pool (or CAF defaults if the tag is absent)."
-            },
-            {
-              "name": "infrastructureNamingConvention",
-              "type": "Microsoft.Common.Section",
-              "label": "Infrastructure Naming Convention",
-              "visible": true,
-              "elements": [
+{
+    "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+    "view": {
+        "kind": "Form",
+        "properties": {
+            "title": "FSLogix Storage Quota Manager",
+            "steps": [
                 {
-                  "name": "infoBox",
-                  "type": "Microsoft.Common.InfoBox",
-                  "options": {
-                    "style": "Info",
-                    "text": "Infrastructure resource names are derived from the host pool naming convention and the identifier below. With identifier 'desktop-01' and the default CAF convention, names follow the pattern: [rt]-[identifier]-sqm-[unique]-[location] (e.g., fa-desktop-01-sqm-abc123-eus). Verify the identifier matches your host pool."
-                  }
-                },
-                {
-                  "name": "identifier",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Identifier",
-                  "defaultValue": "[coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, '')]",
-                  "placeholder": "e.g. finance",
-                  "toolTip": "Host pool base name used to name per-host-pool SQM resources (Function App, Storage Account). Pre-populated from the hpIdentifier tag on the host pool. Maximum 16 characters.",
-                  "constraints": {
-                    "required": false,
-                    "regex": "^[a-zA-Z0-9-]{0,16}$",
-                    "validationMessage": "Identifier must be 0-16 characters, alphanumeric and hyphens only."
-                  }
-                }
-              ]
-            },
-            {
-              "name": "enableCustomAbbreviations",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Customize Resource Type Abbreviations",
-              "defaultValue": false,
-              "toolTip": "Override the default CAF resource type abbreviations used when computing infrastructure resource names (e.g. 'fa' for Function Apps, 'asp' for App Service Plans). Only needed if your organization uses non-standard abbreviations that differ from CAF defaults."
-            },
-            {
-              "name": "namingResourceTypeCodes",
-              "type": "Microsoft.Common.Section",
-              "label": "Resource Type Abbreviation Overrides",
-              "visible": "[steps('advanced').enableCustomAbbreviations]",
-              "elements": [
-                {
-                  "name": "functionApps",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Function Apps",
-                  "defaultValue": "fa",
-                  "toolTip": "Resource type abbreviation for Function Apps. Default CAF value: fa",
-                  "constraints": { "required": false }
-                },
-                {
-                  "name": "appServicePlans",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "App Service Plans",
-                  "defaultValue": "asp",
-                  "toolTip": "Resource type abbreviation for App Service Plans. Default CAF value: asp",
-                  "constraints": { "required": false }
-                },
-                {
-                  "name": "userAssignedIdentities",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "User Assigned Identities",
-                  "defaultValue": "uai",
-                  "toolTip": "Resource type abbreviation for User Assigned Identities. Default CAF value: uai",
-                  "constraints": { "required": false }
-                },
-                {
-                  "name": "privateEndpoints",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Private Endpoints",
-                  "defaultValue": "pe",
-                  "toolTip": "Resource type abbreviation for Private Endpoints. Default CAF value: pe",
-                  "constraints": { "required": false }
-                },
-                {
-                  "name": "networkInterfaces",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Network Interfaces (PE NICs)",
-                  "defaultValue": "nic",
-                  "toolTip": "Resource type abbreviation for Network Interfaces (used for Private Endpoint NICs). Default CAF value: nic",
-                  "constraints": { "required": false }
-                }
-              ]
-            },
-            {
-              "name": "derivedNamesPreview",
-              "type": "Microsoft.Common.Section",
-              "label": "Derived Resource Names (preview)",
-              "visible": "[not(steps('advanced').enableCustomNaming)]",
-              "elements": [
-                {
-                  "name": "previewInfo",
-                  "type": "Microsoft.Common.InfoBox",
-                  "options": {
-                    "style": "Info",
-                    "text": "These names will be automatically derived from your host pool name. To override any of them, enable 'Use Custom Naming Overrides' above."
-                  }
-                },
-                {
-                  "name": "previewNoHpWarning",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[not(steps('basics').associateWithHostPool)]",
-                  "options": {
-                    "style": "Warning",
-                    "text": "No host pool associated — automatic naming preview is unavailable. You must provide custom names on the Advanced page."
-                  }
-                },
-                {
-                  "name": "previewConventionNote",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[steps('basics').associateWithHostPool]",
-                  "options": {
-                    "text": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), 'Convention not detected (hpNamingConvention tag absent on host pool). Names shown below are approximate based on host pool name pattern.', concat('Convention detected from hpNamingConvention tag. Identifier: ', coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, '(not set)')))]"         
-                  }
-                },
-                {
-                  "name": "previewFunctionApp",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[steps('basics').associateWithHostPool]",
-                  "options": {
-                    "text": "[concat('Function App: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-sqm-{unique}-', steps('basics').location.name, '-fa'), concat('fa-', steps('basics').hostPool.name, '-sqm-{unique}-', steps('basics').location.name)))]"
-                  }
-                },
-                {
-                  "name": "previewStorageAccount",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[steps('basics').associateWithHostPool]",
-                  "options": {
-                    "text": "[concat('Storage Account: ', toLower(replace(concat(steps('basics').hostPool.name, 'sqm{unique}', steps('basics').location.name), '-', '')))]"
-                  }
-                },
-                {
-                  "name": "previewEncryptionIdentity",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(steps('basics').associateWithHostPool, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'))]",
-                  "options": {
-                    "text": "[concat('Storage Encryption Identity: ', if(or(endsWith(steps('basics').hostPool.name, '-vdpool'), endsWith(steps('basics').hostPool.name, '-hp')), concat(steps('basics').hostPool.name, '-sqm{unique}-storage-encryption-', steps('basics').location.name, '-uai'), concat('uai-', steps('basics').hostPool.name, '-sqm{unique}-storage-encryption-', steps('basics').location.name)))]"
-                  }
-                }
-              ]
-            },
-            {
-              "name": "functionApp_checkNameAvailability",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
-              "request": {
-                "method": "POST",
-                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Web/checkNameAvailability?api-version=2022-03-01')]",
-                "body": {
-                  "name": "[steps('advanced').infrastructureNaming.functionAppNameOverride]",
-                  "type": "Microsoft.Web/sites"
-                }
-              }
-            },
-            {
-              "name": "functionAppName_rePUT",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('quotaConfig').functionAppResourceGroup, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
-                "body": {}
-              }
-            },
-            {
-              "name": "storageAccount_checkNameAvailability",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('advanced').enableCustomNaming, not(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride)))]",
-              "request": {
-                "method": "POST",
-                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-05-01')]",
-                "body": {
-                  "name": "[steps('advanced').infrastructureNaming.storageAccountNameOverride]",
-                  "type": "Microsoft.Storage/storageAccounts"
-                }
-              }
-            },
-            {
-              "name": "infrastructureNaming",
-              "type": "Microsoft.Common.Section",
-              "label": "Function App Infrastructure Naming",
-              "visible": "[steps('advanced').enableCustomNaming]",
-              "elements": [
-                {
-                  "name": "infoBox",
-                  "type": "Microsoft.Common.InfoBox",
-                  "options": {
-                    "style": "Info",
-                    "text": "These names are used for the Azure Function App and its supporting resources. All fields are required when custom naming is enabled."
-                  }
-                },
-                {
-                  "name": "functionAppNameOverride",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Function App Name",
-                  "placeholder": "func-avdsqm-prod-eus2",
-                  "toolTip": "Required. Explicit name for the Function App. Must be globally unique in the azurewebsites.net namespace, 2-60 characters, alphanumeric and hyphens. Example: func-avdsqm-prod-eus2",
-                  "constraints": {
-                    "required": "[not(steps('basics').associateWithHostPool)]",
-                    "validations": [
-                      {
-                        "regex": "^[a-zA-Z0-9-]{2,60}$",
-                        "message": "Function app name must be 2-60 characters, containing only alphanumeric characters and hyphens."
-                      },
-                      {
-                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), steps('advanced').functionApp_checkNameAvailability.nameAvailable, equals(steps('advanced').functionApp_checkNameAvailability.reason, 'AlreadyExists'))]",
-                        "message": "[steps('advanced').functionApp_checkNameAvailability.message]"
-                      },
-                      {
-                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), steps('advanced').functionApp_checkNameAvailability.nameAvailable, equals(steps('advanced').functionAppName_rePUT.id, concat(steps('quotaConfig').functionAppResourceGroup, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride)), not(equals(steps('advanced').functionApp_checkNameAvailability.reason, 'AlreadyExists')))]",
-                        "message": "[steps('advanced').functionApp_checkNameAvailability.message]"
-                      }
+                    "name": "basics",
+                    "label": "Deployment Basics",
+                    "elements": [
+                        {
+                            "name": "infoBox1",
+                            "type": "Microsoft.Common.TextBlock",
+                            "visible": true,
+                            "options": {
+                                "text": "Deploys an Azure Automation Account with a PowerShell runbook that automatically increases or decreases FSLogix Azure Files Premium share quotas to keep provisioned capacity close to actual usage."
+                            }
+                        },
+                        {
+                            "name": "resourceScope",
+                            "type": "Microsoft.Common.ResourceScope",
+                            "subscription": {
+                                "resourceProviders": [
+                                    "Microsoft.Automation/automationAccounts"
+                                ]
+                            },
+                            "resourceGroup": {
+                                "allowExisting": true,
+                                "toolTip": "Resource group where the Automation Account will be deployed. This can be a dedicated operations resource group or the same resource group as the FSLogix storage."
+                            },
+                            "location": {
+                                "label": "Region",
+                                "toolTip": "Select the Azure region for the Automation Account.",
+                                "resourceTypes": [
+                                    "Microsoft.Automation/automationAccounts"
+                                ]
+                            }
+                        }
                     ]
-                  }
                 },
                 {
-                  "name": "appServicePlanNameOverride",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "App Service Plan Name",
-                  "placeholder": "asp-avd-eus",
-                  "toolTip": "Optional. Explicit name for the App Service Plan. Only applies when creating a new plan (not using an existing one). The ASP is shared across add-ons in the region — leave blank to use the convention-derived name (e.g., asp-avd-eus). Must be 1-40 characters, alphanumeric and hyphens.",
-                  "visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
-                  "constraints": {
-                    "required": false,
-                    "validations": [
-                      {
-                        "regex": "^$|^[a-zA-Z0-9-]{1,40}$",
-                        "message": "App Service Plan name must be 1-40 characters, alphanumeric and hyphens only."
-                      }
+                    "name": "storage",
+                    "label": "Storage Settings",
+                    "elements": [
+                        {
+                            "name": "infoStorage",
+                            "type": "Microsoft.Common.TextBlock",
+                            "visible": true,
+                            "options": {
+                                "text": "Select the resource group containing your FSLogix Azure Files Premium storage accounts. The Automation Account managed identity will be granted Storage Account Contributor on this resource group. If the resource group has a cm-resource-parent tag pointing to a host pool, the host pool identifier will be pre-filled on the Advanced page."
+                            }
+                        },
+                        {
+                            "name": "storageResourceGroupsApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('basics').resourceScope.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+                            }
+                        },
+                        {
+                            "name": "storageResourceGroup",
+                            "type": "Microsoft.Common.DropDown",
+                            "label": "Storage Resource Group",
+                            "toolTip": "Resource group containing the FSLogix storage accounts to monitor. The runbook will manage all Azure Files Premium shares found in this group.",
+                            "constraints": {
+                                "required": true,
+                                "allowedValues": "[map(steps('storage').storageResourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"', rg.location, '\",\"value\":\"', rg.id, '\"}')))]"
+                            }
+                        },
+                        {
+                            "name": "storageRGProps",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "condition": "[not(empty(steps('storage').storageResourceGroup))]",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('storage').storageResourceGroup, '?api-version=2021-04-01')]",
+                                "transforms": {
+                                    "parentId": "tags.\"cm-resource-parent\""
+                                }
+                            }
+                        },
+                        {
+                            "name": "hostPoolProps",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "condition": "[not(empty(coalesce(steps('storage').storageRGProps.transformed.parentId, '')))]",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(coalesce(steps('storage').storageRGProps.transformed.parentId, ''), '?api-version=2024-04-03')]"
+                            }
+                        },
+                        {
+                            "name": "hostPoolLink",
+                            "type": "Microsoft.Common.InfoBox",
+                            "visible": "[not(empty(coalesce(steps('storage').storageRGProps.transformed.parentId, '')))]",
+                            "options": {
+                                "style": "Success",
+                                "text": "[concat('Host pool linked via cm-resource-parent tag: ', last(split(coalesce(steps('storage').storageRGProps.transformed.parentId, '/unknown'), '/')), if(empty(coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')), ' | No hpIdentifier tag found on this host pool - enter an identifier on the Advanced pane', concat(' | Identifier: ', steps('storage').hostPoolProps.tags.hpIdentifier, ' (shown on Advanced pane)')))]"
+                            }
+                        },
+                        {
+                            "name": "storageAccountsApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "condition": "[not(empty(steps('storage').storageResourceGroup))]",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('storage').storageResourceGroup, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01')]"
+                            }
+                        },
+                        {
+                            "name": "storageAccountsPreview",
+                            "type": "Microsoft.Common.InfoBox",
+                            "visible": "[not(empty(steps('storage').storageResourceGroup))]",
+                            "options": {
+                                "style": "Info",
+                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage'))), 'Storage accounts found but none are Azure Files Premium (kind: FileStorage). Verify you selected the correct resource group.', concat(string(length(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage')))), ' Azure Files Premium storage account(s) found. Prefix: ', substring(coalesce(first(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage'))), parse('{\"name\":\"__\"}')).name, 0, sub(length(coalesce(first(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage'))), parse('{\"name\":\"__\"}')).name), 2)))))]"
+                            }
+                        },
+                        {
+                            "name": "scheduleFrequencyMinutes",
+                            "type": "Microsoft.Common.DropDown",
+                            "label": "Check Frequency",
+                            "defaultValue": "Every 15 minutes",
+                            "toolTip": "How often the runbook checks storage account share usage and adjusts quotas.",
+                            "constraints": {
+                                "required": true,
+                                "allowedValues": [
+                                    {
+                                        "label": "Every 15 minutes",
+                                        "value": 15
+                                    },
+                                    {
+                                        "label": "Every 30 minutes",
+                                        "value": 30
+                                    },
+                                    {
+                                        "label": "Every 60 minutes",
+                                        "value": 60
+                                    }
+                                ]
+                            }
+                        }
                     ]
-                  }
                 },
                 {
-                  "name": "storageAccountNameOverride",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Storage Account Name",
-                  "placeholder": "stavdsqmprod",
-                  "toolTip": "Required. Explicit name for the Storage Account (used by Function App). Must be globally unique in Azure, 3-24 characters, lowercase alphanumeric only. Example: stavdsqmprod",
-                  "constraints": {
-                    "required": "[not(steps('basics').associateWithHostPool)]",
-                    "validations": [
-                      {
-                        "regex": "^[a-z0-9]{3,24}$",
-                        "message": "Storage account name must be 3-24 characters, lowercase alphanumeric only (no hyphens or special characters)."
-                      },
-                      {
-                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride), steps('advanced').storageAccount_checkNameAvailability.nameAvailable)]",
-                        "message": "[steps('advanced').storageAccount_checkNameAvailability.message]"
-                      }
+                    "name": "monitoring",
+                    "label": "Monitoring",
+                    "elements": [
+                        {
+                            "name": "enableMonitoring",
+                            "type": "Microsoft.Common.CheckBox",
+                            "label": "Enable Monitoring",
+                            "defaultValue": true,
+                            "toolTip": "Send Automation Account job logs and metrics to a Log Analytics Workspace."
+                        },
+                        {
+                            "name": "logAnalyticsWorkspace",
+                            "type": "Microsoft.Solutions.ResourceSelector",
+                            "label": "Log Analytics Workspace",
+                            "resourceType": "Microsoft.OperationalInsights/workspaces",
+                            "visible": "[steps('monitoring').enableMonitoring]"
+                        }
                     ]
-                  }
                 },
                 {
-                  "name": "storageEncryptionIdentityNameOverride",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Storage Encryption Identity Name",
-                  "placeholder": "uai-avdsqm-prod-encryption-eus2",
-                  "toolTip": "Optional. Explicit name for the user-assigned identity used for storage account CMK encryption. Only relevant when Customer-Managed Keys are selected. Leave blank to derive from naming convention. Example: uai-avdsqm-prod-encryption-eus2",
-                  "visible": "[contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')]",
-                  "constraints": {
-                    "required": false,
-                    "validations": [
-                      {
-                        "regex": "^$|^[a-zA-Z0-9-_]{3,128}$",
-                        "message": "Identity name must be 3-128 characters, alphanumeric, hyphens, and underscores only."
-                      }
+                    "name": "advanced",
+                    "label": "Advanced",
+                    "elements": [
+                        {
+                            "name": "infoBox1",
+                            "type": "Microsoft.Common.InfoBox",
+                            "options": {
+                                "style": "Info",
+                                "text": "Use this page to override the Automation Account name, provide a custom runbook URI, or configure the job schedule link. Leave all fields at their defaults for a standard first deployment."
+                            }
+                        },
+                        {
+                            "name": "namingSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Resource Name Override",
+                            "elements": [
+                                {
+                                    "name": "identifier",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Host Pool Identifier (Optional)",
+                                    "defaultValue": "[coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')]",
+                                    "placeholder": "e.g. pooled-03 or personal-01",
+                                    "toolTip": "Short token embedded in the Automation Account name to identify which host pool this instance manages. Pre-filled from the hpIdentifier tag on the linked host pool when the storage resource group has a cm-resource-parent tag. For example, 'pooled-03' produces aa-sqm-pooled-03-{region}. Leave blank if you only have one SQM deployment in this resource group.",
+                                    "constraints": {
+                                        "required": false,
+                                        "validations": [
+                                            {
+                                                "regex": "^$|^[a-zA-Z0-9-]{1,64}$",
+                                                "message": "Must be 1-64 characters, alphanumeric and hyphens only."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "defaultNamePreview",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "visible": true,
+                                    "options": {
+                                        "text": "[concat('Default Automation Account name: ', if(empty(steps('advanced').namingSection.identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('advanced').namingSection.identifier, '-{regionAbbr}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "enableNameOverride",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Override Automation Account Name",
+                                    "defaultValue": false,
+                                    "toolTip": "Check to provide an explicit Automation Account name instead of the automatically derived name."
+                                },
+                                {
+                                    "name": "automationAccountNameOverride",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "visible": "[steps('advanced').namingSection.enableNameOverride]",
+                                    "label": "Automation Account Name",
+                                    "placeholder": "[if(empty(steps('advanced').namingSection.identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('advanced').namingSection.identifier, '-{regionAbbr}'))]",
+                                    "toolTip": "Optional. Explicit name for the Automation Account. Must be 6-128 characters, alphanumeric and hyphens.",
+                                    "constraints": {
+                                        "required": false,
+                                        "validations": [
+                                            {
+                                                "regex": "^$|^[a-zA-Z0-9-]{6,128}$",
+                                                "message": "Automation Account name must be 6-128 characters, alphanumeric and hyphens only."
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "runbookSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Runbook Content",
+                            "elements": [
+                                {
+                                    "name": "runbookInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "The Azure Automation service downloads the runbook directly from the URI below during deployment. The default URI points to the FederalAVD GitHub repository and works for all clouds including Azure Government.\n\nAIR-GAPPED ENVIRONMENTS ONLY (Azure Government Secret / Top Secret)\n\nIn air-gapped clouds, Azure infrastructure cannot reach the public internet, so the default GitHub URI will fail at deploy time. If deploying to an air-gapped environment:\n1. Clear this field entirely (leave it blank).\n2. Deploy the template. The runbook will be created in an unpublished (New) state; the schedule is configured but no jobs will run until it is published.\n3. After deployment, publish the runbook manually from a machine with access to the portal or via PowerShell using the run.ps1 file from this repository.\nSee the add-on README for full air-gapped deployment instructions."
+                                    }
+                                },
+                                {
+                                    "name": "runbookContentUri",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Runbook Content URI",
+                                    "defaultValue": "https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/storageQuotaManager/runbook/run.ps1",
+                                    "toolTip": "URI of the runbook PS1 file fetched by Azure at deployment time. Clear this field for air-gapped environments and publish the runbook manually after deployment.",
+                                    "constraints": {
+                                        "required": false,
+                                        "validations": [
+                                            {
+                                                "regex": "^$|^https?://.+\\.ps1$",
+                                                "message": "Must be a valid HTTPS URI ending in .ps1, or clear entirely for air-gapped deployments."
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "scheduleSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Job Schedule",
+                            "elements": [
+                                {
+                                    "name": "scheduleWarning",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "REDEPLOYMENT NOTICE\n\nAzure Automation caches the runbook-to-schedule link by automation account name. This cache persists even after deleting the automation account and recreating it with the same name. If you redeploy without unchecking 'Create Job Schedule Link' below, ARM will fail with: A jobSchedule with same id already exists (Conflict).\n\nOn first deployment: leave 'Create Job Schedule Link' checked.\n\nOn every redeployment: UNCHECK 'Create Job Schedule Link'. The runbook will continue running on its existing schedule."
+                                    }
+                                },
+                                {
+                                    "name": "createJobSchedule",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Create Job Schedule Link",
+                                    "defaultValue": true,
+                                    "toolTip": "Check on first deployment to link the runbook to its schedule. UNCHECK on every redeployment to avoid the 'jobSchedule already exists' conflict caused by Azure Automation's backend name-based caching."
+                                }
+                            ]
+                        }
                     ]
-                  }
                 },
                 {
-                  "name": "tagsSection",
-                  "type": "Microsoft.Common.Section",
-                  "label": "Resource Tags",
-                  "elements": [
-                    {
-                      "name": "tags",
-                      "type": "Microsoft.Common.TagsByResource",
-                      "resources": [
-                        "Microsoft.ManagedIdentity/userAssignedIdentities",
-                        "Microsoft.Network/networkInterfaces",
-                        "Microsoft.Network/privateEndpoints",
-                        "Microsoft.Storage/storageAccounts",
-                        "Microsoft.Web/serverFarms",
-                        "Microsoft.Web/sites"
-                      ]
-                    }
-                  ]
+                    "name": "tags",
+                    "label": "Tags",
+                    "elements": [
+                        {
+                            "name": "tags",
+                            "type": "Microsoft.Common.TagsByResource",
+                            "resources": [
+                                "Microsoft.Automation/automationAccounts"
+                            ]
+                        }
+                    ]
                 }
-              ]
-            }
-          ]
+            ]
+        },
+        "outputs": {
+            "parameters": {
+                "automationAccountNameOverride": "[if(steps('advanced').namingSection.enableNameOverride, steps('advanced').namingSection.automationAccountNameOverride, '')]",
+                "identifier": "[steps('advanced').namingSection.identifier]",
+                "hostPoolResourceId": "[coalesce(steps('storage').storageRGProps.transformed.parentId, '')]",
+                "storageResourceGroupId": "[steps('storage').storageResourceGroup]",
+                "scheduleFrequencyMinutes": "[steps('storage').scheduleFrequencyMinutes]",
+                "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",
+                "runbookContentUri": "[steps('advanced').runbookSection.runbookContentUri]",
+                "createJobSchedule": "[steps('advanced').scheduleSection.createJobSchedule]",
+                "tags": "[steps('tags').tags]"
+            },
+            "kind": "ResourceGroup",
+            "location": "[steps('basics').resourceScope.location.name]",
+            "resourceGroupId": "[steps('basics').resourceScope.resourceGroup.id]"
         }
-      ]
-    },
-    "outputs": {
-      "parameters": {
-        "location": "[steps('basics').location.name]",
-        "functionAppResourceGroupName": "[last(split(steps('quotaConfig').functionAppResourceGroup, '/'))]",
-        "hostPoolResourceId": "[if(steps('basics').associateWithHostPool, steps('basics').hostPool.id, '')]",
-        "storageResourceGroupId": "[steps('quotaConfig').storageResourceGroup]",
-        "appServicePlanResourceId": "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]",
-        "appServicePlanResourceGroupName": "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]",
-        "zoneRedundant": "[if(not(steps('infrastructure').useExistingHostingPlan), steps('infrastructure').zoneRedundant, false)]",
-        "keyManagementStorageAccounts": "[steps('infrastructure').keyManagementStorageAccounts]",
-        "encryptionKeyVaultResourceId": "[if(contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'), steps('infrastructure').encryptionKeyVault, '')]",
-        "privateEndpoint": "[steps('infrastructure').configureZeroTrustNetworking]",
-        "functionAppDelegatedSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppOutboundSubnet, '')]",
-        "privateEndpointSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppPrivateEndpointSubnet, '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
-        "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
-        "permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
-        "namingConvention": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), parse('{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\",\"vmsLocationAbbreviation\":\"\"}'), parse(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
-        "namingResourceTypeCodes": "[if(steps('advanced').enableCustomAbbreviations, parse(concat('{\"functionApps\":\"', steps('advanced').namingResourceTypeCodes.functionApps, '\",\"appServicePlans\":\"', steps('advanced').namingResourceTypeCodes.appServicePlans, '\",\"userAssignedIdentities\":\"', steps('advanced').namingResourceTypeCodes.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').namingResourceTypeCodes.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').namingResourceTypeCodes.networkInterfaces, '\"}')), parse('{}'))]",
-        "identifier": "[steps('advanced').infrastructureNamingConvention.identifier]",
-        "appServicePlanNameOverride": "[if(and(steps('advanced').enableCustomNaming, not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
-        "functionAppNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
-        "storageAccountNameOverride": "[if(steps('advanced').enableCustomNaming, coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
-        "storageEncryptionIdentityNameOverride": "[if(and(steps('advanced').enableCustomNaming, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
-        "tags": "[steps('advanced').tagsSection.tags]"
-      },
-      "kind": "Subscription",
-      "location": "[steps('basics').location.name]",
-      "subscriptionId": "[steps('basics').subscription.subscriptionId]"
     }
-  }
 }
