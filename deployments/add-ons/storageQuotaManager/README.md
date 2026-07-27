@@ -2,15 +2,11 @@
 
 ## Overview
 
-The FSLogix Storage Quota Manager is an Azure Automation Account runbook that monitors all
-Azure Files Premium file shares in a specified storage resource group and automatically
-increases quotas when capacity thresholds are reached. This add-on is designed to prevent
-FSLogix profile containers from running out of space without requiring manual intervention.
+The FSLogix Storage Quota Manager is an Azure Automation Account runbook that monitors all Azure Files Premium file shares in a specified storage resource group and automatically increases quotas when capacity thresholds are reached. This add-on is designed to prevent FSLogix profile containers from running out of space without requiring manual intervention.
 
 ## Features
 
-- **Automated Quota Management**: Monitors all file shares in a storage resource group and
-  automatically increases quotas to prevent storage exhaustion
+- **Automated Quota Management**: Monitors all file shares in a storage resource group and automatically increases quotas to prevent storage exhaustion
 - **Smart Tiered Scaling**:
   - **Small shares (< 500 GB)**: Increases by 100 GB when fewer than 50 GB remain
   - **Large shares (>= 500 GB)**: Increases by 500 GB when fewer than 500 GB remain
@@ -232,7 +228,7 @@ to receive notifications on runbook failures.
 
 - Monitors all storage accounts and file shares in the specified resource group — no per-share exclusions
 - Single resource group per deployment (deploy multiple instances for multiple groups)
-- Quota only increases — manual action required to decrease
+- Quota only increases — manual decreases are possible via Portal or PowerShell but are limited to once per 24 hours and cannot go below current used size
 - Minimum schedule interval is 15 minutes (Azure Automation constraint)
 - No data-plane access — cannot read file content, only management plane quota metadata
 
