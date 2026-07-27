@@ -151,6 +151,14 @@
                             "label": "Resource Name Override",
                             "elements": [
                                 {
+                                    "name": "defaultNamePreview",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "visible": true,
+                                    "options": {
+                                        "text": "[concat('Default Automation Account name: ', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix'))), 'aa-sqm-{unique}-{regionAbbr}  (complete the Storage Settings step to see the derived name)', concat('aa-sqm-', substring(first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), 7), '-{regionAbbr}  (unique suffix derived from FSLogix storage account prefix)'))]"
+                                    }
+                                },
+                                {
                                     "name": "enableNameOverride",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Override Automation Account Name",
@@ -186,7 +194,7 @@
                                     "type": "Microsoft.Common.InfoBox",
                                     "options": {
                                         "style": "Info",
-                                        "text": "The runbook is downloaded from the URI below when the template is deployed. The field is pre-populated with the public FederalAVD GitHub repository.\n\nAIR-GAPPED / INTERNET-RESTRICTED ENVIRONMENTS\n\nAzure Automation fetches this URI from Azure infrastructure, not from inside your network. If your environment cannot reach the public internet:\n1. Clear this field entirely (leave it blank).\n2. Deploy the template normally. The runbook resource will be created in an unpublished (New) state - the schedule is configured but no jobs will run.\n3. After deployment, publish the runbook manually:\n   - Portal: Automation Account > Runbooks > Import a runbook > browse to runbook/run.ps1\n   - PowerShell: Import-AzAutomationRunbook then Publish-AzAutomationRunbook\nSee the add-on README for full instructions."
+                                        "text": "The Azure Automation service downloads the runbook directly from the URI below during deployment. The default URI points to the FederalAVD GitHub repository and works for all clouds including Azure Government.\n\nAIR-GAPPED ENVIRONMENTS ONLY (Azure Government Secret / Top Secret)\n\nIn air-gapped clouds, Azure infrastructure cannot reach the public internet, so the default GitHub URI will fail at deploy time. If deploying to an air-gapped environment:\n1. Clear this field entirely (leave it blank).\n2. Deploy the template. The runbook will be created in an unpublished (New) state; the schedule is configured but no jobs will run until it is published.\n3. After deployment, publish the runbook manually from a machine with access to the portal or via PowerShell using the run.ps1 file from this repository.\nSee the add-on README for full air-gapped deployment instructions."
                                     }
                                 },
                                 {
