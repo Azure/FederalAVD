@@ -96,7 +96,7 @@
                             "visible": "[not(empty(coalesce(steps('storage').storageRGProps.transformed.parentId, '')))]",
                             "options": {
                                 "style": "Success",
-                                "text": "[concat('Host pool linked via cm-resource-parent tag: ', last(split(coalesce(steps('storage').storageRGProps.transformed.parentId, '/unknown'), '/')), if(empty(coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')), ' | No hpIdentifier tag found on this host pool - enter an identifier on the Advanced pane', concat(' | Identifier: ', steps('storage').hostPoolProps.tags.hpIdentifier, '(shown on Advanced pane)')))]"
+                                "text": "[concat('Host pool linked via cm-resource-parent tag: ', last(split(coalesce(steps('storage').storageRGProps.transformed.parentId, '/unknown'), '/')), if(empty(coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')), ' | No hpIdentifier tag found on this host pool - enter an identifier on the Advanced pane', concat(' | Identifier: ', steps('storage').hostPoolProps.tags.hpIdentifier, ' (shown on Advanced pane)')))]"
                             }
                         },
                         {
@@ -105,10 +105,7 @@
                             "condition": "[not(empty(steps('storage').storageResourceGroup))]",
                             "request": {
                                 "method": "GET",
-                                "path": "[concat(steps('storage').storageResourceGroup, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01')]",
-                                "transforms": {
-                                    "premiumAccounts": "value[?kind == 'FileStorage']"
-                                }
+                                "path": "[concat(steps('storage').storageResourceGroup, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01')]"
                             }
                         },
                         {
@@ -117,7 +114,7 @@
                             "visible": "[not(empty(steps('storage').storageResourceGroup))]",
                             "options": {
                                 "style": "Info",
-                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', if(empty(coalesce(steps('storage').storageAccountsApi.transformed.premiumAccounts, parse('[]'))), 'Storage accounts found but none are Azure Files Premium (FileStorage). Verify you selected the correct resource group.', concat(string(length(steps('storage').storageAccountsApi.transformed.premiumAccounts)), ' Azure Files Premium storage account(s) found. Prefix: ', substring(first(steps('storage').storageAccountsApi.transformed.premiumAccounts).name, 0, sub(length(first(steps('storage').storageAccountsApi.transformed.premiumAccounts).name), 2)))))]"
+                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage'))), 'Storage accounts found but none are Azure Files Premium (kind: FileStorage). Verify you selected the correct resource group.', concat(string(length(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage')))), ' Azure Files Premium storage account(s) found. Prefix: ', substring(first(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage'))).name, 0, sub(length(first(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage'))).name), 2)))))]"
                             }
                         },
                         {
