@@ -102,12 +102,6 @@ function Write-Log {
     $DateTime = Get-Date -Format 'MM-dd-yyyy HH:mm:ss'
     $Content = "[$DateTime]`t$Category`t`t$Message" 
     Add-Content $Script:LogPath $content -ErrorAction Stop
-
-    Switch ($Category) {
-        'Info' { Write-Host $content }
-        'Error' { Write-Error $Content -ErrorAction Continue }
-        'Warning' { Write-Warning $Content }
-    }
 }
 
 function Invoke-MsiWithRetry {
