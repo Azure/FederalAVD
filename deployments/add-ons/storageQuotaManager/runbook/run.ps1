@@ -1,20 +1,24 @@
 # FSLogix Storage Quota Manager - Azure Automation Runbook
-# Automatically increases file share quotas on Azure Premium Files storage accounts
-# when usage approaches the provisioned capacity limit.
+# Automatically increases or decreases file share quotas on Azure Premium Files
+# storage accounts to keep provisioned capacity close to actual usage.
 #
-# Reads configuration from Automation Account variables and authenticates via the
-# system-assigned managed identity on the Automation Account.
-#
-# Automation Variables required:
+# Reads configuration from Automation Account variables:
 #   ResourceGroupName   - Resource group containing the FSLogix storage accounts
 #   SubscriptionId      - Subscription ID containing the storage resource group
 #   ResourceManagerUri  - Azure Resource Manager URI for this cloud
 #
-# Quota scaling logic:
-#   - Below 500GB provisioned: increase by 100GB when fewer than 50GB remain
-#   - At or above 500GB provisioned: increase by 500GB when fewer than 500GB remain
-
-$isAutomation = $null -ne (Get-Command 'Get-AutomationVariable' -ErrorAction SilentlyContinue)
+# Quota scaling rules (symmetric, Option B):
+#   Small shares (quota < 500 GB):
+#     Increase +100 GB when remaining < 50 GB
+#     Decrease -100 GB when remaining > 200 GB and 24h cooldown elapsed
+#   Large shares (quota >= 500 GB):
+#     Increase +500 GB when remaining < 500 GB
+#     Decrease -500 GB when remaining > 1000 GB and 24h cooldown elapsed
+#
+# Decrease constraints:
+#   - Cannot decrease below (used size + 1 GB)
+#   - Cannot decrease more than once per 24 hours per share
+#   - Last decrease timestamp stored in share metadata key sqmLastDecreased (ISO 8601 UTC)
 
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
@@ -38,63 +42,33 @@ function Write-Log {
 
 #region Configuration
 
-if (-not $isAutomation) {
-    Write-Log 'Local mode - reading config from environment variables.'
-    $ResourceGroupName  = $env:ResourceGroupName
-    $SubscriptionId     = $env:SubscriptionId
-    $ResourceManagerUri = if ($env:ResourceManagerUri) { $env:ResourceManagerUri } else { 'https://management.azure.com/' }
-}
-else {
-    $ResourceGroupName  = Get-AutomationVariable -Name 'ResourceGroupName'
-    $SubscriptionId     = Get-AutomationVariable -Name 'SubscriptionId'
-    $ResourceManagerUri = Get-AutomationVariable -Name 'ResourceManagerUri'
-}
+$ResourceGroupName  = Get-AutomationVariable -Name 'ResourceGroupName'
+$SubscriptionId     = Get-AutomationVariable -Name 'SubscriptionId'
+$ResourceManagerUri = Get-AutomationVariable -Name 'ResourceManagerUri'
 
 if ([string]::IsNullOrEmpty($ResourceGroupName)) { throw 'ResourceGroupName automation variable is not set.' }
 if ([string]::IsNullOrEmpty($SubscriptionId))    { throw 'SubscriptionId automation variable is not set.' }
 
-# Normalise URI - ARM REST calls require a trailing slash
-if (-not $ResourceManagerUri.EndsWith('/')) {
-    $ResourceManagerUri = "$ResourceManagerUri/"
-}
+if (-not $ResourceManagerUri.EndsWith('/')) { $ResourceManagerUri = "$ResourceManagerUri/" }
 
 Write-Log "Starting | Resource Group: $ResourceGroupName | Subscription: $SubscriptionId"
 
 #endregion Configuration
 
-#region ARM Authentication
+#region Authentication
 
-if (-not $isAutomation) {
-    Write-Log 'Local mode - acquiring ARM token via Azure CLI.'
-    try {
-        $AzTokenJson = & az account get-access-token --resource ($ResourceManagerUri.TrimEnd('/')) 2>&1
-        if ($LASTEXITCODE -ne 0) { throw $AzTokenJson }
-        $ArmToken = ($AzTokenJson | ConvertFrom-Json).accessToken
-        if ([string]::IsNullOrEmpty($ArmToken)) { throw 'Token was null or empty.' }
+try {
+    Connect-AzAccount -Identity | Out-Null
+    $tokenObj = Get-AzAccessToken -ResourceUrl ($ResourceManagerUri.TrimEnd('/'))
+    $ArmToken = if ($tokenObj.Token -is [System.Security.SecureString]) {
+        [System.Net.NetworkCredential]::new('', $tokenObj.Token).Password
+    } else {
+        $tokenObj.Token
     }
-    catch {
-        throw "Failed to acquire ARM token via Azure CLI: $_"
-    }
+    if ([string]::IsNullOrEmpty($ArmToken)) { throw 'Token was null or empty.' }
 }
-else {
-    # Authenticate using the Automation Account system-assigned managed identity.
-    # Connect-AzAccount -Identity is the correct approach for Automation sandboxes.
-    try {
-        Connect-AzAccount -Identity | Out-Null
-        $tokenObj = Get-AzAccessToken -ResourceUrl ($ResourceManagerUri.TrimEnd('/'))
-        # Az module versions differ: Token may be a plain string or a SecureString
-        $ArmToken = if ($tokenObj.Token -is [System.Security.SecureString]) {
-            [System.Net.NetworkCredential]::new('', $tokenObj.Token).Password
-        } else {
-            $tokenObj.Token
-        }
-        if ([string]::IsNullOrEmpty($ArmToken)) {
-            throw 'Token was null or empty.'
-        }
-    }
-    catch {
-        throw "Failed to acquire ARM access token via managed identity: $_"
-    }
+catch {
+    throw "Failed to acquire ARM access token via managed identity: $_"
 }
 
 $Header = @{
@@ -104,7 +78,7 @@ $Header = @{
 
 Write-Log 'ARM token acquired.'
 
-#endregion ARM Authentication
+#endregion Authentication
 
 #region Storage Quota Management
 
