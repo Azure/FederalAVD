@@ -160,22 +160,21 @@
                                     "type": "Microsoft.Common.InfoBox",
                                     "options": {
                                         "style": "Info",
-                                        "text": "By default the runbook is downloaded from the public FederalAVD GitHub repository at deployment time. For air-gapped or private deployments, host the runbook file internally and provide the URI here."
+                                        "text": "The runbook is downloaded from the URI below when the template is deployed. The field is pre-populated with the public FederalAVD GitHub repository.\n\nAIR-GAPPED / INTERNET-RESTRICTED ENVIRONMENTS\n\nAzure Automation fetches this URI from Azure infrastructure, not from inside your network. If your environment cannot reach the public internet:\n1. Clear this field entirely (leave it blank).\n2. Deploy the template normally. The runbook resource will be created in an unpublished (New) state - the schedule is configured but no jobs will run.\n3. After deployment, publish the runbook manually:\n   - Portal: Automation Account > Runbooks > Import a runbook > browse to runbook/run.ps1\n   - PowerShell: Import-AzAutomationRunbook then Publish-AzAutomationRunbook\nSee the add-on README for full instructions."
                                     }
                                 },
                                 {
                                     "name": "runbookContentUri",
                                     "type": "Microsoft.Common.TextBox",
                                     "label": "Runbook Content URI",
-                                    "defaultValue": "",
-                                    "placeholder": "https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/storageQuotaManager/runbook/run.ps1",
-                                    "toolTip": "Optional. URI of the runbook PS1 file. Leave blank to use the default GitHub raw URI.",
+                                    "defaultValue": "https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/storageQuotaManager/runbook/run.ps1",
+                                    "toolTip": "URI of the runbook PS1 file fetched by Azure at deployment time. Clear this field for air-gapped environments and publish the runbook manually after deployment.",
                                     "constraints": {
                                         "required": false,
                                         "validations": [
                                             {
                                                 "regex": "^$|^https?://.+\\.ps1$",
-                                                "message": "Must be a valid HTTPS URI ending in .ps1, or leave blank for the default."
+                                                "message": "Must be a valid HTTPS URI ending in .ps1, or clear entirely for air-gapped deployments."
                                             }
                                         ]
                                     }
@@ -227,7 +226,7 @@
                 "storageResourceGroupId": "[steps('storage').storageResourceGroup.id]",
                 "scheduleFrequencyMinutes": "[steps('storage').scheduleFrequencyMinutes]",
                 "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",
-                "runbookContentUri": "[if(empty(steps('advanced').runbookSection.runbookContentUri), 'https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/storageQuotaManager/runbook/run.ps1', steps('advanced').runbookSection.runbookContentUri)]",
+                "runbookContentUri": "[steps('advanced').runbookSection.runbookContentUri]",
                 "createJobSchedule": "[steps('advanced').scheduleSection.createJobSchedule]",
                 "tags": "[steps('tags').tags]"
             },

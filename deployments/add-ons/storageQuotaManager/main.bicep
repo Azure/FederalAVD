@@ -47,7 +47,13 @@ param storageResourceGroupId string
 @minValue(15)
 param scheduleFrequencyMinutes int = 15
 
-@description('Optional. URI of the runbook PS1 file. Override for air-gapped or private deployments.')
+@description('''Optional. URI of the runbook PS1 file to download and publish at deployment time.
+Defaults to the public FederalAVD GitHub repository.
+
+For air-gapped or internet-restricted environments, set this to empty (\'\') to skip
+automatic publishing. The runbook will be created in an unpublished (New) state and must
+be published manually via the Portal or PowerShell before the first scheduled run.
+See the add-on README for step-by-step instructions.''')
 param runbookContentUri string = 'https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/storageQuotaManager/runbook/run.ps1'
 
 @description('Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time.')

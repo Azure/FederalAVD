@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "2467577030411124251"
+      "templateHash": "14061826614729141309"
     }
   },
   "parameters": {
@@ -56,7 +56,7 @@
       "type": "string",
       "defaultValue": "https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/storageQuotaManager/runbook/run.ps1",
       "metadata": {
-        "description": "Optional. URI of the runbook PS1 file. Override for air-gapped or private deployments."
+        "description": "Optional. URI of the runbook PS1 file to download and publish at deployment time.\nDefaults to the public FederalAVD GitHub repository.\n\nFor air-gapped or internet-restricted environments, set this to empty (\\'\\') to skip\nautomatic publishing. The runbook will be created in an unpublished (New) state and must\nbe published manually via the Portal or PowerShell before the first scheduled run.\nSee the add-on README for step-by-step instructions."
       }
     },
     "deploymentTime": {
@@ -427,7 +427,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "2609727862908249036"
+              "templateHash": "9083110921019854766"
             }
           },
           "parameters": {
@@ -491,8 +491,9 @@
             },
             "runbookContentUri": {
               "type": "string",
+              "defaultValue": "",
               "metadata": {
-                "description": "Required. URI of the runbook PS1 file to publish."
+                "description": "Optional. URI of the runbook PS1 file to publish at deployment time.\n\nLeave empty for air-gapped or internet-restricted environments. When empty the runbook\nresource is created in New (unpublished) state. The schedule and job schedule link are\nstill created so the account is fully configured; the runbook just needs to be published\nmanually before the first scheduled run. See README.md for portal and PowerShell steps."
               }
             },
             "createJobSchedule": {
@@ -575,9 +576,7 @@
                 "logVerbose": false,
                 "logProgress": false,
                 "description": "Automatically increases FSLogix file share quotas before they fill up.",
-                "publishContentLink": {
-                  "uri": "[parameters('runbookContentUri')]"
-                }
+                "publishContentLink": "[if(not(empty(parameters('runbookContentUri'))), createObject('uri', parameters('runbookContentUri')), null())]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"

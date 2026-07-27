@@ -33,8 +33,13 @@ param deploymentTime string
 @description('Optional. Log Analytics Workspace resource ID for diagnostic settings.')
 param logAnalyticsWorkspaceResourceId string = ''
 
-@description('Required. URI of the runbook PS1 file to publish.')
-param runbookContentUri string
+@description('''Optional. URI of the runbook PS1 file to publish at deployment time.
+
+Leave empty for air-gapped or internet-restricted environments. When empty the runbook
+resource is created in New (unpublished) state. The schedule and job schedule link are
+still created so the account is fully configured; the runbook just needs to be published
+manually before the first scheduled run. See README.md for portal and PowerShell steps.''')
+param runbookContentUri string = ''
 
 @description('''Optional. Set to true on first deployment to let ARM create the job schedule link between
 the runbook and schedule. Set to false on every redeployment.
@@ -111,6 +116,9 @@ resource varResourceManagerUri 'Microsoft.Automation/automationAccounts/variable
 }
 
 // Runbook
+// When runbookContentUri is provided the runbook is immediately published (Published state).
+// When empty the runbook is created in New state - publish manually after deployment via
+// the Portal (Automation Account -> Runbooks -> Import a runbook) or PowerShell.
 resource runbook 'Microsoft.Automation/automationAccounts/runbooks@2023-11-01' = {
   parent: automationAccount
   name: runbookName
@@ -121,9 +129,9 @@ resource runbook 'Microsoft.Automation/automationAccounts/runbooks@2023-11-01' =
     logVerbose: false
     logProgress: false
     description: 'Automatically increases FSLogix file share quotas before they fill up.'
-    publishContentLink: {
+    publishContentLink: !empty(runbookContentUri) ? {
       uri: runbookContentUri
-    }
+    } : null
   }
 }
 
