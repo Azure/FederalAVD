@@ -75,25 +75,29 @@
                             "condition": "[not(empty(steps('storage').storageResourceGroup))]",
                             "request": {
                                 "method": "GET",
-                                "path": "[concat(steps('storage').storageResourceGroup, '?api-version=2021-04-01')]"
+                                "path": "[concat(steps('storage').storageResourceGroup, '?api-version=2021-04-01')]",
+                                "transforms": {
+                                    "parentId": "tags.\"cm-resource-parent\""
+                                }
                             }
                         },
                         {
                             "name": "hostPoolProps",
                             "type": "Microsoft.Solutions.ArmApiControl",
-                            "condition": "[not(empty(coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '')))]",
+                            "condition": "[not(empty(coalesce(steps('storage').storageRGProps.transformed.parentId, '')))]",
                             "request": {
                                 "method": "GET",
-                                "path": "[concat(steps('storage').storageRGProps.tags['cm-resource-parent'], '?api-version=2024-04-03')]"
+                                "path": "[concat(coalesce(steps('storage').storageRGProps.transformed.parentId, ''), '?api-version=2024-04-03')]"
                             }
                         },
                         {
                             "name": "hostPoolLink",
                             "type": "Microsoft.Common.InfoBox",
-                            "visible": "[not(empty(coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '')))]",
+                            "visible": "[not(empty(coalesce(steps('storage').storageRGProps.transformed.parentId, '')))]",
                             "options": {
                                 "style": "Success",
-                                "text": "[concat('Host pool linked via cm-resource-parent tag: ', last(split(coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '/unknown'), '/')), if(empty(coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')), ' | No hpIdentifier tag found on this host pool - enter an identifier below manually', concat(' | Identifier: ', steps('storage').hostPoolProps.tags.hpIdentifier, ' (pre-filled below)')))]"                            }
+                                "text": "[concat('Host pool linked via cm-resource-parent tag: ', last(split(coalesce(steps('storage').storageRGProps.transformed.parentId, '/unknown'), '/')), if(empty(coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')), ' | No hpIdentifier tag found on this host pool - enter an identifier below manually', concat(' | Identifier: ', steps('storage').hostPoolProps.tags.hpIdentifier, ' (pre-filled below)')))]"
+                            }
                         },
                         {
                             "name": "storageAccountsApi",
@@ -110,7 +114,8 @@
                             "visible": "[not(empty(steps('storage').storageResourceGroup))]",
                             "options": {
                                 "style": "Info",
-                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix'))), 'Storage accounts found but none start with \"fslogix\". Verify you selected the correct resource group.', concat('FSLogix storage detected: ', first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), '.')))]"                            }
+                                "text": "[if(empty(coalesce(steps('storage').storageAccountsApi.value, parse('[]'))), 'No storage accounts found in the selected resource group. Verify you selected the correct resource group.', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix'))), 'Storage accounts found but none start with \"fslogix\". Verify you selected the correct resource group.', concat('FSLogix storage detected: ', first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), '.')))]"
+                            }
                         },
                         {
                             "name": "identifier",
@@ -300,7 +305,7 @@
             "parameters": {
                 "automationAccountNameOverride": "[if(steps('advanced').namingSection.enableNameOverride, steps('advanced').namingSection.automationAccountNameOverride, '')]",
                 "identifier": "[steps('storage').identifier]",
-                "hostPoolResourceId": "[coalesce(steps('storage').storageRGProps.tags['cm-resource-parent'], '')]",
+                "hostPoolResourceId": "[coalesce(steps('storage').storageRGProps.transformed.parentId, '')]",
                 "storageResourceGroupId": "[steps('storage').storageResourceGroup]",
                 "scheduleFrequencyMinutes": "[steps('storage').scheduleFrequencyMinutes]",
                 "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",
