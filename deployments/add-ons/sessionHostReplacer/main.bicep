@@ -13,10 +13,10 @@ targetScope = 'subscription'
 // ================================================================================================
 
 @description('Required. The location for all resources.')
-param location string
+param location string = deployment().location
 
-@description('Required. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the virtual machines resource group.')
-param functionAppResourceGroupName string
+@description('Optional. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the virtual machines resource group.')
+param functionAppResourceGroupName string = last(split(virtualMachinesResourceGroupId, '/'))
 
 @description('Optional. Tags for all resources.')
 param tags object = {}

@@ -5,20 +5,22 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "2162414167757919966"
+      "templateHash": "8538812045363229619"
     }
   },
   "parameters": {
     "location": {
       "type": "string",
+      "defaultValue": "[deployment().location]",
       "metadata": {
         "description": "Required. The location for all resources."
       }
     },
     "functionAppResourceGroupName": {
       "type": "string",
+      "defaultValue": "[last(split(parameters('virtualMachinesResourceGroupId'), '/'))]",
       "metadata": {
-        "description": "Required. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the virtual machines resource group."
+        "description": "Optional. Name of the resource group where the function app and its supporting resources are deployed. Defaults to the virtual machines resource group."
       }
     },
     "tags": {
