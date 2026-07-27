@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "13920235304149737992"
+      "templateHash": "6288711956583973667"
     }
   },
   "parameters": {
@@ -23,12 +23,19 @@
         "description": "Optional. Tags for all resources."
       }
     },
+    "identifier": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Short identifier embedded in the Automation Account name, typically the host pool identifier (e.g. pooled-03 or personal-01). Produces aa-sqm-{identifier}-{region}. Leave empty if only one SQM instance will be deployed in this resource group, which produces aa-sqm-{region}."
+      }
+    },
     "automationAccountNameOverride": {
       "type": "string",
       "defaultValue": "",
       "maxLength": 128,
       "metadata": {
-        "description": "Optional. Explicit name for the Automation Account. If not provided, derived from the storage resource group name. Must be 6-128 characters, alphanumeric and hyphens."
+        "description": "Optional. Explicit name for the Automation Account. Overrides the auto-generated name entirely. Must be 6-128 characters, alphanumeric and hyphens."
       }
     },
     "logAnalyticsWorkspaceResourceId": {
@@ -371,8 +378,7 @@
     "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
     "regionAbbr": "[variables('locations')[parameters('location')].abbreviation]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
-    "uniqueStringSqm": "[take(uniqueString(variables('storageSubscriptionId'), variables('storageResourceGroupName')), 6)]",
-    "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), format('{0}-sqm-{1}-{2}', variables('resourceAbbreviations').automationAccounts, variables('uniqueStringSqm'), variables('regionAbbr')))]",
+    "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), if(not(empty(parameters('identifier'))), format('{0}-sqm-{1}-{2}', variables('resourceAbbreviations').automationAccounts, parameters('identifier'), variables('regionAbbr')), format('{0}-sqm-{1}', variables('resourceAbbreviations').automationAccounts, variables('regionAbbr'))))]",
     "deploymentSuffix": "[take(uniqueString(resourceGroup().id, deployment().name), 8)]"
   },
   "resources": [

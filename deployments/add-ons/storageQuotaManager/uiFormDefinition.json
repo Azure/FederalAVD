@@ -155,7 +155,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": true,
                                     "options": {
-                                        "text": "[concat('Default Automation Account name: ', if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix'))), 'aa-sqm-{unique}-{regionAbbr}  (complete the Storage Settings step to see the derived name)', concat('aa-sqm-', substring(first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), 7), '-{regionAbbr}  (unique suffix derived from FSLogix storage account prefix)'))]"
+                                        "text": "[concat('Default Automation Account name: ', if(empty(steps('storage').identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('storage').identifier, '-{regionAbbr}')))]"
                                     }
                                 },
                                 {
@@ -170,7 +170,7 @@
                                     "type": "Microsoft.Common.TextBox",
                                     "visible": "[steps('advanced').namingSection.enableNameOverride]",
                                     "label": "Automation Account Name",
-                                    "placeholder": "[if(empty(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix'))), 'aa-sqm-{unique}-{regionAbbr}', concat('aa-sqm-', substring(first(map(filter(coalesce(steps('storage').storageAccountsApi.value, parse('[]')), (sa) => startsWith(sa.name, 'fslogix')), (sa) => sa.name)), 7), '-{regionAbbr}'))]",
+                                    "placeholder": "[if(empty(steps('storage').identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('storage').identifier, '-{regionAbbr}'))]",
                                     "toolTip": "Optional. Explicit name for the Automation Account. Must be 6-128 characters, alphanumeric and hyphens.",
                                     "constraints": {
                                         "required": false,
@@ -257,6 +257,7 @@
         "outputs": {
             "parameters": {
                 "automationAccountNameOverride": "[if(steps('advanced').namingSection.enableNameOverride, steps('advanced').namingSection.automationAccountNameOverride, '')]",
+                "identifier": "[steps('storage').identifier]",
                 "storageResourceGroupId": "[steps('storage').storageResourceGroup]",
                 "scheduleFrequencyMinutes": "[steps('storage').scheduleFrequencyMinutes]",
                 "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace.id, '')]",

@@ -22,10 +22,13 @@ param location string = resourceGroup().location
 param tags object = {}
 
 // ================================================================================================
-// Brownfield Naming Override Parameters
+// Naming Parameters
 // ================================================================================================
 
-@description('Optional. Explicit name for the Automation Account. If not provided, derived from the storage resource group name. Must be 6-128 characters, alphanumeric and hyphens.')
+@description('Optional. Short identifier embedded in the Automation Account name, typically the host pool identifier (e.g. pooled-03 or personal-01). Produces aa-sqm-{identifier}-{region}. Leave empty if only one SQM instance will be deployed in this resource group, which produces aa-sqm-{region}.')
+param identifier string = ''
+
+@description('Optional. Explicit name for the Automation Account. Overrides the auto-generated name entirely. Must be 6-128 characters, alphanumeric and hyphens.')
 @maxLength(128)
 param automationAccountNameOverride string = ''
 
@@ -82,11 +85,11 @@ var locations             = locationsObject[locationsEnvProperty]
 var regionAbbr            = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
-var uniqueStringSqm = take(uniqueString(storageSubscriptionId, storageResourceGroupName), 6)
-
 var automationAccountName = !empty(automationAccountNameOverride)
   ? automationAccountNameOverride
-  : '${resourceAbbreviations.automationAccounts}-sqm-${uniqueStringSqm}-${regionAbbr}'
+  : !empty(identifier)
+    ? '${resourceAbbreviations.automationAccounts}-sqm-${identifier}-${regionAbbr}'
+    : '${resourceAbbreviations.automationAccounts}-sqm-${regionAbbr}'
 
 var deploymentSuffix = take(uniqueString(resourceGroup().id, deployment().name), 8)
 
