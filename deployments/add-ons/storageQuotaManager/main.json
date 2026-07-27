@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "14061826614729141309"
+      "templateHash": "13920235304149737992"
     }
   },
   "parameters": {
@@ -371,7 +371,7 @@
     "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
     "regionAbbr": "[variables('locations')[parameters('location')].abbreviation]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
-    "uniqueStringSqm": "[take(uniqueString(resourceGroup().id, parameters('storageResourceGroupId')), 6)]",
+    "uniqueStringSqm": "[take(uniqueString(variables('storageSubscriptionId'), variables('storageResourceGroupName')), 6)]",
     "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), format('{0}-sqm-{1}-{2}', variables('resourceAbbreviations').automationAccounts, variables('uniqueStringSqm'), variables('regionAbbr')))]",
     "deploymentSuffix": "[take(uniqueString(resourceGroup().id, deployment().name), 8)]"
   },

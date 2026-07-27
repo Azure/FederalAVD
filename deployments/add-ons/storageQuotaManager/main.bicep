@@ -82,7 +82,7 @@ var locations             = locationsObject[locationsEnvProperty]
 var regionAbbr            = locations[location].abbreviation
 var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
 
-var uniqueStringSqm = take(uniqueString(resourceGroup().id, storageResourceGroupId), 6)
+var uniqueStringSqm = take(uniqueString(storageSubscriptionId, storageResourceGroupName), 6)
 
 var automationAccountName = !empty(automationAccountNameOverride)
   ? automationAccountNameOverride
