@@ -852,29 +852,21 @@ try {
     # Resize OS Disk
     Write-Log -Message "Resizing OS Disk"
     try {
-        $driveLetter = $env:SystemDrive.Substring(0, 1)
-        $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop
-        # Force Windows to refresh disk geometry from hardware - on first boot Azure may not have
-        # yet updated the partition table visible to the OS after provisioning a larger disk.
-        Update-Disk -Number $currentPartition.DiskNumber -ErrorAction SilentlyContinue
-        $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop
-        $currentSizeGB = [math]::Round($currentPartition.Size / 1GB, 2)
-        Write-Log -Message "Current partition size: $currentSizeGB GB (drive: $driveLetter)"
+        $DriveLetter = $env:SystemDrive.TrimEnd(':')
+        Update-HostStorageCache -ErrorAction SilentlyContinue
+        Get-Disk | ForEach-Object { Update-Disk -Number $_.Number -ErrorAction SilentlyContinue }
+        $Part = Get-Partition -DriveLetter $DriveLetter -ErrorAction Stop
+        $CurrentSizeGB = [math]::Round($Part.Size / 1GB, 2)
+        Write-Log -Message "Current partition size: $CurrentSizeGB GB (drive: $DriveLetter)"
+        $Supported = Get-PartitionSupportedSize -DriveLetter $DriveLetter -ErrorAction Stop
+        $MaxSizeGB = [math]::Round($Supported.SizeMax / 1GB, 2)
+        Write-Log -Message "Max supported partition size: $MaxSizeGB GB"
 
-        $size = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop
-        $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)
-        $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)
-        Write-Log -Message "Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB"
-
-        if ($null -eq $size -or $size.SizeMax -eq 0) {
-            Write-Log -Message "Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize." -Category 'Warning'
-        }
-        elseif ($currentPartition.Size -ge $size.SizeMax) {
-            Write-Log -Message "OS Disk partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed."
-        }
-        else {
-            Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop
-            Write-Log -Message "OS Disk resized successfully from $currentSizeGB GB to $maxSizeGB GB"
+        if ($Part.Size -lt $Supported.SizeMax) {
+            Resize-Partition -DriveLetter $DriveLetter -Size $Supported.SizeMax -ErrorAction Stop
+            Write-Log -Message "OS Disk resized successfully"
+        } Else {
+            Write-Log -Message "OS Disk is already at maximum size. No resize needed."
         }
     }
     catch {
