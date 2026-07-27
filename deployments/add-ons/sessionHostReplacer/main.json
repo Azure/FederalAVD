@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "273143231675524810"
+      "templateHash": "2162414167757919966"
     }
   },
   "parameters": {
@@ -7131,7 +7131,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "3094007988136838209"
+              "templateHash": "4471960904454126763"
             }
           },
           "parameters": {
@@ -7377,9 +7377,9 @@
             "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
             "azureStoragePrivateDnsZoneResourceIds": "[union(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(and(parameters('enableQueueStorage'), not(empty(parameters('azureQueuePrivateDnsZoneResourceId')))), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(and(parameters('enableTableStorage'), not(empty(parameters('azureTablePrivateDnsZoneResourceId')))), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
             "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'))]",
-            "createStorageEncryptionUai": "[and(variables('useCmk'), empty(parameters('functionAppUserAssignedIdentityResourceId')))]",
-            "storageEncryptionUaiResourceId": "[if(variables('createStorageEncryptionUai'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('storageEncryptionIdentityName')), '')]",
-            "cmkUaiResourceId": "[if(variables('useCmk'), if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), parameters('functionAppUserAssignedIdentityResourceId'), variables('storageEncryptionUaiResourceId')), '')]",
+            "createStorageEncryptionUai": "[variables('useCmk')]",
+            "storageEncryptionUaiResourceId": "[if(variables('useCmk'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('storageEncryptionIdentityName')), '')]",
+            "cmkUaiResourceId": "[if(variables('useCmk'), variables('storageEncryptionUaiResourceId'), '')]",
             "storageAccountRoleDefinitions": "[union(createArray('ba92f5b4-2d11-453d-a403-e96b0029c9fe', '974c5e8b-45b9-4653-ba55-5f855dd0fb88'), parameters('storageAccountRoleDefinitionIds'))]"
           },
           "resources": [

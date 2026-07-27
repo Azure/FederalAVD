@@ -3101,14 +3101,6 @@
               }
             },
             {
-              "name": "enableCustomAbbreviations",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Customize resource type abbreviations",
-              "visible": "[not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
-              "defaultValue": false,
-              "toolTip": "Override the default CAF resource type abbreviations used in the naming convention (e.g. change 'fa' to 'func' for Function Apps). Leave unchecked to use CAF defaults."
-            },
-            {
               "name": "infrastructureNaming",
               "type": "Microsoft.Common.Section",
               "label": "Infrastructure Naming",
@@ -3124,10 +3116,18 @@
                   }
                 },
                 {
+                  "name": "enableCustomAbbreviations",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Customize resource type abbreviations",
+                  "visible": "[not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
+                  "defaultValue": false,
+                  "toolTip": "Override the default CAF resource type abbreviations used in the naming convention (e.g. change 'fa' to 'func' for Function Apps). Leave unchecked to use CAF defaults."
+                },
+                {
                   "name": "functionApps",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Function Apps",
-                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations)]",
+                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "fa",
                   "defaultValue": "fa",
                   "toolTip": "Resource type abbreviation for Function Apps. CAF default: fa",
@@ -3141,7 +3141,7 @@
                   "name": "appServicePlans",
                   "type": "Microsoft.Common.TextBox",
                   "label": "App Service Plans",
-                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations)]",
+                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "asp",
                   "defaultValue": "asp",
                   "toolTip": "Resource type abbreviation for App Service Plans. CAF default: asp",
@@ -3155,7 +3155,7 @@
                   "name": "applicationInsights",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Application Insights",
-                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations)]",
+                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "appi",
                   "defaultValue": "appi",
                   "toolTip": "Resource type abbreviation for Application Insights. CAF default: appi",
@@ -3169,7 +3169,7 @@
                   "name": "templateSpecs",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Template Specs",
-                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations)]",
+                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "ts",
                   "defaultValue": "ts",
                   "toolTip": "Resource type abbreviation for Template Specs. CAF default: ts",
@@ -3183,7 +3183,7 @@
                   "name": "userAssignedIdentities",
                   "type": "Microsoft.Common.TextBox",
                   "label": "User-Assigned Identities",
-                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations)]",
+                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "uai",
                   "defaultValue": "uai",
                   "toolTip": "Resource type abbreviation for User-Assigned Managed Identities. CAF default: uai",
@@ -3197,7 +3197,7 @@
                   "name": "privateEndpoints",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Private Endpoints",
-                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations)]",
+                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "pe",
                   "defaultValue": "pe",
                   "toolTip": "Resource type abbreviation for Private Endpoints. CAF default: pe",
@@ -3211,7 +3211,7 @@
                   "name": "networkInterfaces",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interfaces",
-                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations)]",
+                  "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "nic",
                   "defaultValue": "nic",
                   "toolTip": "Resource type abbreviation for Network Interfaces. CAF default: nic",
@@ -3567,7 +3567,7 @@
         "dataCollectionEndpointResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpoint, ''), '')]",
         "privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
         "namingConvention": "[parse(if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), '{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\",\"vmsLocationAbbreviation\":\"\"}', steps('basics').hostPoolProps.tags.hpNamingConvention))]",
-        "namingResourceTypeCodes": "[parse(if(and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').enableCustomAbbreviations), concat('{\"functionApps\":\"', steps('advanced').infrastructureNaming.functionApps, '\",\"appServicePlans\":\"', steps('advanced').infrastructureNaming.appServicePlans, '\",\"applicationInsights\":\"', steps('advanced').infrastructureNaming.applicationInsights, '\",\"templateSpecs\":\"', steps('advanced').infrastructureNaming.templateSpecs, '\",\"userAssignedIdentities\":\"', steps('advanced').infrastructureNaming.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').infrastructureNaming.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').infrastructureNaming.networkInterfaces, '\"}'), '{}'))]",
+        "namingResourceTypeCodes": "[parse(if(and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations), concat('{\"functionApps\":\"', steps('advanced').infrastructureNaming.functionApps, '\",\"appServicePlans\":\"', steps('advanced').infrastructureNaming.appServicePlans, '\",\"applicationInsights\":\"', steps('advanced').infrastructureNaming.applicationInsights, '\",\"templateSpecs\":\"', steps('advanced').infrastructureNaming.templateSpecs, '\",\"userAssignedIdentities\":\"', steps('advanced').infrastructureNaming.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').infrastructureNaming.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').infrastructureNaming.networkInterfaces, '\"}'), '{}'))]",
         "identifier": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.identifier, ''), coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, ''))]",
         "functionAppNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
         "storageAccountNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
@@ -3582,7 +3582,7 @@
       },
       "kind": "Subscription",
       "location": "[steps('basics').location.name]",
-      "subscriptionId": "[steps('basics').subscription.subscriptionId]"
+      "subscriptionId": "[steps('basics').subscription.id]"
     }
   }
 }
