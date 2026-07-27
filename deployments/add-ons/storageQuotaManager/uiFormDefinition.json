@@ -48,7 +48,7 @@
                             "type": "Microsoft.Common.TextBlock",
                             "visible": true,
                             "options": {
-                                "text": "Select the resource group containing your FSLogix Azure Files Premium storage accounts. The Automation Account managed identity will be granted Storage Account Contributor on this resource group. If the resource group has a cm-resource-parent tag pointing to a host pool, the host pool identifier will be pre-filled below."
+                                "text": "Select the resource group containing your FSLogix Azure Files Premium storage accounts. The Automation Account managed identity will be granted Storage Account Contributor on this resource group. If the resource group has a cm-resource-parent tag pointing to a host pool, the host pool identifier will be pre-filled on the Advanced page."
                             }
                         },
                         {
@@ -118,23 +118,6 @@
                             }
                         },
                         {
-                            "name": "identifier",
-                            "type": "Microsoft.Common.TextBox",
-                            "label": "Host Pool Identifier (Optional)",
-                            "defaultValue": "[coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')]",
-                            "placeholder": "e.g. pooled-03 or personal-01",
-                            "toolTip": "Short token embedded in the Automation Account name to identify which host pool this instance manages. Pre-filled from the hpIdentifier tag on the linked host pool when present. For example, 'pooled-03' produces aa-sqm-pooled-03-{region}. Leave blank if you only have one SQM deployment in this resource group.",
-                            "constraints": {
-                                "required": false,
-                                "validations": [
-                                    {
-                                        "regex": "^$|^[a-zA-Z0-9-]{1,64}$",
-                                        "message": "Must be 1-64 characters, alphanumeric and hyphens only."
-                                    }
-                                ]
-                            }
-                        },
-                        {
                             "name": "scheduleFrequencyMinutes",
                             "type": "Microsoft.Common.DropDown",
                             "label": "Check Frequency",
@@ -198,11 +181,28 @@
                             "label": "Resource Name Override",
                             "elements": [
                                 {
+                                    "name": "identifier",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Host Pool Identifier (Optional)",
+                                    "defaultValue": "[coalesce(steps('storage').hostPoolProps.tags.hpIdentifier, '')]",
+                                    "placeholder": "e.g. pooled-03 or personal-01",
+                                    "toolTip": "Short token embedded in the Automation Account name to identify which host pool this instance manages. Pre-filled from the hpIdentifier tag on the linked host pool when the storage resource group has a cm-resource-parent tag. For example, 'pooled-03' produces aa-sqm-pooled-03-{region}. Leave blank if you only have one SQM deployment in this resource group.",
+                                    "constraints": {
+                                        "required": false,
+                                        "validations": [
+                                            {
+                                                "regex": "^$|^[a-zA-Z0-9-]{1,64}$",
+                                                "message": "Must be 1-64 characters, alphanumeric and hyphens only."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
                                     "name": "defaultNamePreview",
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": true,
                                     "options": {
-                                        "text": "[concat('Default Automation Account name: ', if(empty(steps('storage').identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('storage').identifier, '-{regionAbbr}')))]"
+                                        "text": "[concat('Default Automation Account name: ', if(empty(steps('advanced').namingSection.identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('advanced').namingSection.identifier, '-{regionAbbr}')))]"
                                     }
                                 },
                                 {
@@ -217,7 +217,7 @@
                                     "type": "Microsoft.Common.TextBox",
                                     "visible": "[steps('advanced').namingSection.enableNameOverride]",
                                     "label": "Automation Account Name",
-                                    "placeholder": "[if(empty(steps('storage').identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('storage').identifier, '-{regionAbbr}'))]",
+                                    "placeholder": "[if(empty(steps('advanced').namingSection.identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('advanced').namingSection.identifier, '-{regionAbbr}'))]",
                                     "toolTip": "Optional. Explicit name for the Automation Account. Must be 6-128 characters, alphanumeric and hyphens.",
                                     "constraints": {
                                         "required": false,
@@ -304,7 +304,7 @@
         "outputs": {
             "parameters": {
                 "automationAccountNameOverride": "[if(steps('advanced').namingSection.enableNameOverride, steps('advanced').namingSection.automationAccountNameOverride, '')]",
-                "identifier": "[steps('storage').identifier]",
+                "identifier": "[steps('advanced').namingSection.identifier]",
                 "hostPoolResourceId": "[coalesce(steps('storage').storageRGProps.transformed.parentId, '')]",
                 "storageResourceGroupId": "[steps('storage').storageResourceGroup]",
                 "scheduleFrequencyMinutes": "[steps('storage').scheduleFrequencyMinutes]",
