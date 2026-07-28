@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "7884161572304755827"
+      "version": "0.45.15.27210",
+      "templateHash": "3218992458843852511"
     }
   },
   "parameters": {
@@ -64,7 +64,7 @@
     "hostPoolInfo": {
       "type": "array",
       "metadata": {
-        "description": "Required. Array of host pool objects, one per host pool to monitor.\nEach object must have the following properties:\n  hostPoolResourceId:  string  - Full resource ID of the AVD host pool.\n  vmResourceGroupId:   string  - Resource ID of the resource group containing the session host VMs.\n\nExample:\n[\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-01\" }\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-02\" }\n]\n"
+        "description": "Required. Array of host pool objects, one per host pool to monitor.\nEach object must have the following properties:\n  hostPoolResourceId:  string  - Full resource ID of the AVD host pool.\n  vmResourceGroupId:   string  - Resource ID of the resource group containing the session host VMs.\n  hostPoolType:        string  - 'Pooled' or 'Personal'. Controls which alerts are deployed.\n\nExample:\n[\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-01\", \"hostPoolType\": \"Pooled\" }\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-02\", \"hostPoolType\": \"Personal\" }\n]\n"
       }
     },
     "storageAccountResourceIds": {
@@ -569,8 +569,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "9121094106321195839"
+              "version": "0.45.15.27210",
+              "templateHash": "6078037530023966258"
             }
           },
           "parameters": {
@@ -642,7 +642,7 @@
           },
           "variables": {
             "runbookNameStorage": "AvdStorageLogData",
-            "scheduleStorageStart": "[dateTimeAdd(parameters('deploymentTime'), 'PT5M')]"
+            "scheduleStorageStart": "[dateTimeAdd(parameters('deploymentTime'), 'PT10M')]"
           },
           "resources": [
             {
@@ -745,7 +745,7 @@
             {
               "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2021-05-01-preview",
-              "scope": "[format('Microsoft.Automation/automationAccounts/{0}', parameters('automationAccountName'))]",
+              "scope": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
               "name": "[format('diag-{0}', parameters('automationAccountName'))]",
               "properties": {
                 "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
@@ -825,8 +825,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "16703140947059556488"
+              "version": "0.45.15.27210",
+              "templateHash": "6089610056640259539"
             }
           },
           "parameters": {
@@ -908,8 +908,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "16703140947059556488"
+              "version": "0.45.15.27210",
+              "templateHash": "6089610056640259539"
             }
           },
           "parameters": {
@@ -1003,6 +1003,9 @@
           },
           "enableFslogixAlerts": {
             "value": "[parameters('enableFslogixAlerts')]"
+          },
+          "hostPoolType": {
+            "value": "[coalesce(tryGet(variables('hostPoolInfoDeduped')[copyIndex()], 'hostPoolType'), 'Pooled')]"
           }
         },
         "template": {
@@ -1011,8 +1014,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "11460574009713452450"
+              "version": "0.45.15.27210",
+              "templateHash": "1139871059419381241"
             }
           },
           "parameters": {
@@ -1088,6 +1091,17 @@
               "metadata": {
                 "description": "Optional. When false, FSLogix profile alert rules are not deployed."
               }
+            },
+            "hostPoolType": {
+              "type": "string",
+              "defaultValue": "Pooled",
+              "allowedValues": [
+                "Pooled",
+                "Personal"
+              ],
+              "metadata": {
+                "description": "Optional. Whether this is a Pooled or Personal host pool. Capacity alerts (50/85/95%) are only deployed for Pooled pools. The personal session host unhealthy alert is only deployed for Personal pools."
+              }
             }
           },
           "variables": {
@@ -1100,7 +1114,7 @@
           },
           "resources": [
             {
-              "condition": "[parameters('enableCapacityAlerts')]",
+              "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Cap-50Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
@@ -1120,7 +1134,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1159,7 +1173,7 @@
               }
             },
             {
-              "condition": "[parameters('enableCapacityAlerts')]",
+              "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Cap-85Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
@@ -1179,7 +1193,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1218,7 +1232,7 @@
               }
             },
             {
-              "condition": "[parameters('enableCapacityAlerts')]",
+              "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Cap-95Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
@@ -1238,7 +1252,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1277,7 +1291,7 @@
               }
             },
             {
-              "condition": "[parameters('enableAvailabilityAlerts')]",
+              "condition": "[and(parameters('enableAvailabilityAlerts'), equals(parameters('hostPoolType'), 'Personal'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-PersnlAssigndUnhlthy-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
@@ -1872,7 +1886,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1937,7 +1951,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 52 or EventID == 40\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 52 or EventID == 40\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2002,7 +2016,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2067,7 +2081,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2132,7 +2146,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2432,8 +2446,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "1054296779699370075"
+              "version": "0.45.15.27210",
+              "templateHash": "15467373896581539546"
             }
           },
           "parameters": {
@@ -2791,8 +2805,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "18239666501835204059"
+              "version": "0.45.15.27210",
+              "templateHash": "18422436285787005907"
             }
           },
           "parameters": {
@@ -3245,8 +3259,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "2289707323753529506"
+              "version": "0.45.15.27210",
+              "templateHash": "515343289064750994"
             }
           },
           "parameters": {
@@ -3393,8 +3407,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "3335835430844082378"
+              "version": "0.45.15.27210",
+              "templateHash": "9591429965134489688"
             }
           },
           "parameters": {
@@ -3422,15 +3436,41 @@
           "variables": {
             "subscriptionResourceId": "[subscription().id]",
             "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "agParts": "[split(parameters('actionGroupResourceId'), '/')]",
+            "agSubscriptionId": "[variables('agParts')[2]]",
+            "agRgName": "[variables('agParts')[4]]",
+            "agName": "[last(variables('agParts'))]",
             "alertActions": {
               "actionGroups": [
                 {
-                  "actionGroupId": "[parameters('actionGroupResourceId')]"
+                  "actionGroupId": "[if(parameters('enableServiceHealthAlerts'), resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix'))), '')]"
                 }
               ]
             }
           },
           "resources": [
+            {
+              "condition": "[parameters('enableServiceHealthAlerts')]",
+              "type": "Microsoft.Insights/actionGroups",
+              "apiVersion": "2022-06-01",
+              "name": "[format('{0}-SvcHealth-AG', parameters('alertNamePrefix'))]",
+              "location": "global",
+              "properties": {
+                "groupShortName": "[take(format('{0}-SH', parameters('alertNamePrefix')), 12)]",
+                "enabled": true,
+                "emailReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').emailReceivers]",
+                "smsReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').smsReceivers]",
+                "webhookReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').webhookReceivers]",
+                "armRoleReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').armRoleReceivers]",
+                "azureAppPushReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').azureAppPushReceivers]",
+                "logicAppReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').logicAppReceivers]",
+                "automationRunbookReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').automationRunbookReceivers]",
+                "azureFunctionReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').azureFunctionReceivers]",
+                "itsmReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').itsmReceivers]",
+                "voiceReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').voiceReceivers]",
+                "eventHubReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').eventHubReceivers]"
+              }
+            },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
               "type": "Microsoft.Insights/activityLogAlerts",
@@ -3460,7 +3500,10 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
+              ]
             },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
@@ -3491,7 +3534,10 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
+              ]
             },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
@@ -3526,7 +3572,10 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
+              ]
             },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
@@ -3557,7 +3606,10 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
+              ]
             }
           ]
         }

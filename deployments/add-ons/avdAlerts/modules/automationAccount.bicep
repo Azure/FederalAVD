@@ -56,7 +56,7 @@ param createJobSchedules bool = true
 var runbookNameStorage  = 'AvdStorageLogData'
 
 // Schedule start time a few minutes after deployment time
-var scheduleStorageStart = dateTimeAdd(deploymentTime, 'PT5M')
+var scheduleStorageStart = dateTimeAdd(deploymentTime, 'PT10M')
 
 // ========== //
 // Resources  //

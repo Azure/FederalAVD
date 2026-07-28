@@ -2,12 +2,12 @@
 // Deploys all Log Analytics scheduled query rules for a single AVD host pool.
 //
 // Alert rules in this module (all scoped to the Log Analytics workspace):
-//   Capacity alerts (use WVDAgentHealthStatus - native AVD diagnostic data, no runbook needed):
+//   Capacity alerts (Pooled pools only - use WVDAgentHealthStatus):
 //     - Host pool capacity >= 50%  (Sev 3)
 //     - Host pool capacity >= 85%  (Sev 2)
 //     - Host pool capacity >= 95%  (Sev 1)
-//     - Session host unhealthy in personal pool  (Sev 1)
-//   Availability alerts (use WVD diagnostic tables directly):
+//   Availability alerts:
+//     - Session host unhealthy in personal pool  (Sev 1) [Personal pools only]
 //     - No resources available for connection  (Sev 1)
 //     - VM health check failure  (Sev 1)
 //     - User connection failure  (Sev 3)
@@ -71,6 +71,10 @@ param enableLocalDiskAlerts bool = true
 @description('Optional. When false, FSLogix profile alert rules are not deployed.')
 param enableFslogixAlerts bool = true
 
+@description('Optional. Whether this is a Pooled or Personal host pool. Capacity alerts (50/85/95%) are only deployed for Pooled pools. The personal session host unhealthy alert is only deployed for Personal pools.')
+@allowed(['Pooled', 'Personal'])
+param hostPoolType string = 'Pooled'
+
 // ========== //
 // Variables  //
 // ========== //
@@ -89,7 +93,7 @@ var actions = {
 // Capacity Alerts (WVDAgentHealthStatus)
 // ------------------------------------
 
-resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts) {
+resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
   name: '${alertNamePrefix}-HP-Cap-50Prcnt-${hostPoolName}'
   location: location
   properties: {
@@ -109,10 +113,11 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId contains '${hostPoolName}'
-| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName
+| summarize arg_max(TimeGenerated, *) by SessionHostName
+| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))
 | summarize
     TotalActive   = sum(ActiveSessions),
-    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),
+    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)
 | where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85
@@ -134,7 +139,7 @@ WVDAgentHealthStatus
   }
 }
 
-resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts) {
+resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
   name: '${alertNamePrefix}-HP-Cap-85Prcnt-${hostPoolName}'
   location: location
   properties: {
@@ -154,10 +159,11 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId contains '${hostPoolName}'
-| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName
+| summarize arg_max(TimeGenerated, *) by SessionHostName
+| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))
 | summarize
     TotalActive   = sum(ActiveSessions),
-    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),
+    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)
 | where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95
@@ -179,7 +185,7 @@ WVDAgentHealthStatus
   }
 }
 
-resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts) {
+resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
   name: '${alertNamePrefix}-HP-Cap-95Prcnt-${hostPoolName}'
   location: location
   properties: {
@@ -199,10 +205,11 @@ resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId contains '${hostPoolName}'
-| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName
+| summarize arg_max(TimeGenerated, *) by SessionHostName
+| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))
 | summarize
     TotalActive   = sum(ActiveSessions),
-    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),
+    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)
 | where TotalCapacity > 0 and LoadPct >= 95
@@ -225,7 +232,7 @@ WVDAgentHealthStatus
 }
 
 // Personal host pool: session host is not in a healthy state
-resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts) {
+resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts && hostPoolType == 'Personal') {
   name: '${alertNamePrefix}-HP-VM-PersnlAssigndUnhlthy-${hostPoolName}'
   location: location
   properties: {
@@ -803,7 +810,7 @@ Event
 | where EventID == 43
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -855,7 +862,7 @@ Event
 | where EventID == 52 or EventID == 40
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -907,7 +914,7 @@ Event
 | where EventID == 60
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -959,7 +966,7 @@ Event
 | where EventID == 62 or EventID == 63
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -1011,7 +1018,7 @@ Event
 | where EventID == 51
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'

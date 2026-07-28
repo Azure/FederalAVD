@@ -207,7 +207,7 @@
                                             "multiLine": true,
                                             "constraints": {
                                                 "required": true,
-                                                "allowedValues": "[map(steps('hostPools').hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Host Pool RG: ', first(skip(split(hp.id, '/'), 4)), if(empty(coalesce(hp.tags.hostsResourceGroupId, '')), ' | VM RG: NOT SET - enter override', concat(' | VM RG: ', last(split(hp.tags.hostsResourceGroupId, '/')))), '\",\"value\":\"', hp.id, '|', coalesce(hp.tags.hostsResourceGroupId, ''), '\"}')))]"
+                                                "allowedValues": "[map(steps('hostPools').hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"', hp.properties.hostPoolType, ' | Host Pool RG: ', first(skip(split(hp.id, '/'), 4)), if(empty(coalesce(hp.tags.hostsResourceGroupId, '')), ' | VM RG: NOT SET - enter override', concat(' | VM RG: ', last(split(hp.tags.hostsResourceGroupId, '/')))), '\",\"value\":\"', hp.id, '|', coalesce(hp.tags.hostsResourceGroupId, ''), '|', hp.properties.hostPoolType, '\"}')))]"
                                             }
                                         }
                                     },
@@ -221,7 +221,7 @@
                                             "toolTip": "Leave blank to use the resource group from the hostsResourceGroupId tag (shown in the Host Pool description). Required only when the tag is not set.",
                                             "multiLine": true,
                                             "constraints": {
-                                                "required": "[empty(last(split(last(take(steps('hostPools').hostPoolGrid, $rowIndex)).hostPool, '|')))]",
+                                                "required": "[empty(split(last(take(steps('hostPools').hostPoolGrid, $rowIndex)).hostPool, '|')[1])]",
                                                 "allowedValues": "[map(steps('hostPools').rgApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"', rg.location, '\",\"value\":\"', rg.id, '\"}')))]"
                                             }
                                         }
@@ -274,37 +274,18 @@
                                     }
                                 },
                                 {
-                                    "name": "storageAccountGrid",
-                                    "type": "Microsoft.Common.EditableGrid",
-                                    "ariaLabel": "Azure Files Premium storage accounts for FSLogix",
+                                    "name": "storageAccountSelect",
+                                    "type": "Microsoft.Common.DropDown",
                                     "label": "Storage Accounts",
                                     "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                                    "placeholder": "Select one or more Azure Files Premium storage accounts",
+                                    "toolTip": "Select the Azure Files Premium (kind: FileStorage) storage accounts used for FSLogix profile containers.",
+                                    "multiselect": true,
+                                    "selectAll": true,
+                                    "multiLine": true,
                                     "constraints": {
-                                        "width": "Full",
-                                        "rows": {
-                                            "count": {
-                                                "min": 0,
-                                                "max": 50
-                                            }
-                                        },
-                                        "columns": [
-                                            {
-                                                "id": "storageAccountId",
-                                                "header": "Storage Account",
-                                                "width": "Full",
-                                                "element": {
-                                                    "type": "Microsoft.Common.DropDown",
-                                                    "placeholder": "Select an Azure Files Premium storage account",
-                                                    "toolTip": "Select the Azure Files Premium (kind: FileStorage) storage account used for FSLogix profile containers.",
-                                                    "multiLine": true,
-                                                    "constraints": {
-                                                        "required": true,
-                                                        "allowedValues": "[map(filter(coalesce(steps('storage').storageSection.storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage')), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":\"', sa.id, '\"}')))]"
-                                                    }
-                                                }
-                                            }
-                                        ]
-                                    }
+                                        "required": "[steps('storage').storageSection.enableStorageAlerts]",
+                                        "allowedValues": "[map(filter(coalesce(steps('storage').storageSection.storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage')), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":\"', sa.id, '\"}')))]"                                    }
                                 }
                             ]
                         },
@@ -628,15 +609,15 @@
         "outputs": {
             "kind": "Subscription",
             "location": "[steps('basics').resourceScope.location.name]",
-            "subscriptionId": "[steps('basics').resourceScope.subscription.subscriptionId]",
+            "subscriptionId": "[steps('basics').resourceScope.subscription.id]",
             "parameters": {
                 "location": "[steps('basics').resourceScope.location.name]",
                 "resourceGroupName": "[if(steps('alertsRg').createOrUse, steps('alertsRg').newResourceGroupName, steps('alertsRg').existingResourceGroupName)]",
                 "createResourceGroup": "[steps('alertsRg').createOrUse]",
                 "logAnalyticsWorkspaceResourceId": "[steps('monitoring').logAnalyticsWorkspace.id]",
                 "actionGroupResourceId": "[steps('monitoring').actionGroup.id]",
-                "hostPoolInfo": "[map(filter(steps('hostPools').hostPoolGrid, (row) => not(empty(row.hostPool))), (row) => parse(concat('{\"hostPoolResourceId\":\"', first(split(row.hostPool, '|')), '\",\"vmResourceGroupId\":\"', if(empty(row.vmRg), last(split(row.hostPool, '|')), row.vmRg), '\"}')))]",
-                "storageAccountResourceIds": "[if(steps('storage').storageSection.enableStorageAlerts, map(filter(steps('storage').storageSection.storageAccountGrid, (row) => not(empty(row.storageAccountId))), (row) => row.storageAccountId), parse('[]'))]",
+                "hostPoolInfo": "[map(filter(steps('hostPools').hostPoolGrid, (row) => not(empty(row.hostPool))), (row) => parse(concat('{\"hostPoolResourceId\":\"', split(row.hostPool, '|')[0], '\",\"vmResourceGroupId\":\"', if(empty(row.vmRg), split(row.hostPool, '|')[1], row.vmRg), '\",\"hostPoolType\":\"', split(row.hostPool, '|')[2], '\"}')))]",
+                "storageAccountResourceIds": "[if(steps('storage').storageSection.enableStorageAlerts, steps('storage').storageSection.storageAccountSelect, parse('[]'))]",
                 "anfVolumeResourceIds": "[if(steps('storage').anfSection.enableAnfAlerts, map(filter(steps('storage').anfSection.anfVolumeGrid, (row) => not(empty(row.volumeId))), (row) => row.volumeId), parse('[]'))]",
                 "alertNamePrefix": "[steps('advanced').alertSettings.alertNamePrefix]",
                 "autoResolveAlert": "[steps('advanced').alertSettings.autoResolveAlert]",

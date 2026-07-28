@@ -78,7 +78,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2023-11-01' 
       name: 'Basic'
     }
     publicNetworkAccess: false
-    disableLocalAuth: false
+    disableLocalAuth: true
   }
 }
 

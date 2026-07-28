@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "4846562331707514334"
+      "version": "0.39.26.7824",
+      "templateHash": "13134164733258970230"
     }
   },
   "parameters": {
@@ -440,8 +440,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "9083110921019854766"
+              "version": "0.39.26.7824",
+              "templateHash": "2993546972472151977"
             }
           },
           "parameters": {
@@ -537,7 +537,7 @@
                   "name": "Basic"
                 },
                 "publicNetworkAccess": false,
-                "disableLocalAuth": false
+                "disableLocalAuth": true
               }
             },
             {
@@ -634,7 +634,7 @@
               "condition": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]",
               "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2021-05-01-preview",
-              "scope": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
+              "scope": "[format('Microsoft.Automation/automationAccounts/{0}', parameters('automationAccountName'))]",
               "name": "[format('diag-{0}', parameters('automationAccountName'))]",
               "properties": {
                 "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
@@ -707,8 +707,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3585155273898172375"
+              "version": "0.39.26.7824",
+              "templateHash": "6703123689452334995"
             }
           },
           "parameters": {
