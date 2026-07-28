@@ -1,0 +1,110 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+
+        // ================================================================
+        // Required Parameters
+        // ================================================================
+
+        "location": {
+            "value": "usgovvirginia"
+        },
+
+        "resourceGroupName": {
+            "value": "rg-avd-alerts-p-ugv"
+        },
+
+        // Set to true only on first deployment. On redeployments the resource
+        // group already exists; leave as false.
+        "createResourceGroup": {
+            "value": true
+        },
+
+        // Resource ID of the Log Analytics Workspace that receives AVD diagnostics
+        // (host pool, session host, connection, and FSLogix event logs).
+        "logAnalyticsWorkspaceResourceId": {
+            "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-monitoring-p-ugv/providers/Microsoft.OperationalInsights/workspaces/law-avd-p-ugv"
+        },
+
+        // Resource ID of an existing Action Group to receive alert emails.
+        // Create the Action Group before deploying this add-on.
+        "actionGroupResourceId": {
+            "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-alerts-p-ugv/providers/Microsoft.Insights/actionGroups/ag-avd-p-ugv"
+        },
+
+        // ================================================================
+        // Host Pools
+        // ================================================================
+
+        // One entry per host pool. hostPoolName is the AVD host pool name (not ID).
+        // vmResourceGroupId is the resource ID of the resource group containing the
+        // session host VMs for that host pool.
+        "hostPoolInfo": {
+            "value": [
+                {
+                    "hostPoolResourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-pooled-01-p-ugv/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01",
+                    "vmResourceGroupId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-vms-pooled-01-p-ugv"
+                }
+            ]
+        },
+
+        // ================================================================
+        // Optional: Storage Accounts
+        // ================================================================
+
+        // Resource IDs of Azure Files storage accounts used for FSLogix profiles.
+        // Remove or leave as [] if not using Azure Files.
+        "storageAccountResourceIds": {
+            "value": [
+                "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-storage-p-ugv/providers/Microsoft.Storage/storageAccounts/stavdprofilesp01"
+            ]
+        },
+
+        // ================================================================
+        // Optional: Azure NetApp Files Volumes
+        // ================================================================
+
+        // Resource IDs of ANF volumes used for FSLogix profiles.
+        // Remove or leave as [] if not using ANF.
+        "anfVolumeResourceIds": {
+            "value": []
+        },
+
+        // ================================================================
+        // Naming / Environment
+        // ================================================================
+
+        "environmentTag": {
+            "value": "p"
+        },
+
+        "alertNamePrefix": {
+            "value": "AVD"
+        },
+
+        "tags": {
+            "value": {
+                "environment": "production",
+                "workload": "avd"
+            }
+        },
+
+        // ================================================================
+        // Automation Account / Runbooks
+        // ================================================================
+
+        // For air-gapped clouds (Secret / Top Secret), set these to empty strings.
+        // The runbooks will be created in an unpublished state and must be published
+        // manually via the Portal before the first scheduled run.
+        // For Azure Commercial and Government, leave these at their default values.
+        //
+        // "runbookContentUriHostPool": { "value": "" },
+        // "runbookContentUriStorage":  { "value": "" },
+
+        // Set to true on first deployment, false on redeployments.
+        "createJobSchedules": {
+            "value": true
+        }
+    }
+}
