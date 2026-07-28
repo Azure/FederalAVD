@@ -741,11 +741,15 @@ If ($null -ne $O365TemplatesExe) {
 }
 ElseIf ($Script:O365AdmxMissing) {
     Write-Log -Category Info -Message "Office 365 ADMX templates not found in PolicyDefinitions ($($Script:O365AdmxMissing | Split-Path -Leaf)) and no bundled EXE present. Attempting to download."
-    $WebsiteUrl = "https://www.microsoft.com/en-us/download/details.aspx?id=49030"
-    $SearchString = "admintemplates_x64*.exe"
-    $O365TemplatesDownloadUrl = Get-InternetUrl -WebSiteUrl $WebsiteUrl -SearchString $SearchString
-    If ($O365TemplatesDownloadUrl) {
-        $O365TemplatesExe = Get-InternetFile -Url $O365TemplatesDownloadUrl -OutputDirectory $Script:TempDir
+    try {
+        $WebsiteUrl = "https://www.microsoft.com/en-us/download/details.aspx?id=49030"
+        $SearchString = "admintemplates_x64*.exe"
+        $O365TemplatesDownloadUrl = Get-InternetUrl -WebSiteUrl $WebsiteUrl -SearchString $SearchString
+        If ($O365TemplatesDownloadUrl) {
+            $O365TemplatesExe = Get-InternetFile -Url $O365TemplatesDownloadUrl -OutputDirectory $Script:TempDir
+        }
+    } catch {
+        Write-Log -Category Warning -Message "Failed to download Office 365 policy templates: $_. Continuing without ADMX."
     }
 }
 Else {

@@ -645,23 +645,27 @@ If ($null -ne $EdgeTemplatesCab) {
     Write-Log -Category Info -Message "Bundled Edge policy CAB found: '$EdgeTemplatesCab'."
 } ElseIf (-not (Test-Path $Script:EdgeAdmx)) {
     Write-Log -Category Info -Message "'msedge.admx' not found in PolicyDefinitions and no bundled CAB present. Attempting to download Edge policy templates."
-    $APIUrl = "https://edgeupdates.microsoft.com/api/products?view=enterprise"
-    $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
-    $content = $EdgeUpdatesJSON.content | ConvertFrom-Json      
-    $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
-    $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -last 1
-    $EdgeLatestStableVersion = $latestrelease.ProductVersion
-    $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
-    $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
-    If (-not($latestPolicyFile)) {   
-        $latestpolicyfile = $policyfiles | Sort-Object ProductVersion | Select-Object -last 1
-    }  
-    $EdgeTemplatesUrl = $latestpolicyfile.artifacts.Location
-    If ($null -eq $EdgeTemplatesUrl) {
-        Write-Log -Category Warning -Message "Unable to get download Url for Edge Policy Templates."
-    } Else {
-        Write-Log -Category Info -Message "Getting download Urls for latest Edge browser and policy templates from '$APIUrl'."
-        $EdgeTemplatesCab = Get-InternetFile -Url $EdgeTemplatesUrl -OutputDirectory $Script:TempDir -Verbose
+    try {
+        $APIUrl = "https://edgeupdates.microsoft.com/api/products?view=enterprise"
+        $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
+        $content = $EdgeUpdatesJSON.content | ConvertFrom-Json      
+        $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
+        $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -last 1
+        $EdgeLatestStableVersion = $latestrelease.ProductVersion
+        $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
+        $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
+        If (-not($latestPolicyFile)) {   
+            $latestpolicyfile = $policyfiles | Sort-Object ProductVersion | Select-Object -last 1
+        }  
+        $EdgeTemplatesUrl = $latestpolicyfile.artifacts.Location
+        If ($null -eq $EdgeTemplatesUrl) {
+            Write-Log -Category Warning -Message "Unable to get download Url for Edge Policy Templates."
+        } Else {
+            Write-Log -Category Info -Message "Getting download Urls for latest Edge browser and policy templates from '$APIUrl'."
+            $EdgeTemplatesCab = Get-InternetFile -Url $EdgeTemplatesUrl -OutputDirectory $Script:TempDir -Verbose
+        }
+    } catch {
+        Write-Log -Category Warning -Message "Failed to download Edge policy templates: $_. Continuing without ADMX."
     }
 } Else {
     Write-Log -Category Info -Message "'msedge.admx' already present in PolicyDefinitions and no bundled CAB to apply. Skipping template download."
