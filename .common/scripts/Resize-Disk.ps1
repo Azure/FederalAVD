@@ -1,8 +1,9 @@
 $ErrorActionPreference = 'Stop'
 
 try {
-    $driveLetter = $env:SystemDrive.Substring(0, 1)
-
+    $DriveLetter = $env:SystemDrive.TrimEnd(':')
+    Update-HostStorageCache -ErrorAction SilentlyContinue
+    Get-Disk | ForEach-Object { Update-Disk -Number $_.Number -ErrorAction SilentlyContinue }
     $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop
     $currentSizeGB    = [math]::Round($currentPartition.Size / 1GB, 2)
     Write-Output "Current partition size: $currentSizeGB GB (drive: $driveLetter)"

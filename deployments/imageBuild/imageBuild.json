@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "18193105103333626306"
+      "version": "0.39.26.7824",
+      "templateHash": "7671829834736893003"
     }
   },
   "parameters": {
@@ -923,7 +923,7 @@
         "DestinationFileName": "vc_redist.x64.exe"
       }
     },
-    "$fxv#5": "$ErrorActionPreference = 'Stop'\r\n\r\ntry {\r\n    $driveLetter = $env:SystemDrive.Substring(0, 1)\r\n\r\n    $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop\r\n    $currentSizeGB    = [math]::Round($currentPartition.Size / 1GB, 2)\r\n    Write-Output \"Current partition size: $currentSizeGB GB (drive: $driveLetter)\"\r\n\r\n    $size    = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop\r\n    $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)\r\n    $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)\r\n    Write-Output \"Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB\"\r\n\r\n    if ($null -eq $size -or $size.SizeMax -eq 0) {\r\n        Write-Warning \"Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize.\"\r\n        exit 0\r\n    }\r\n\r\n    if ($currentPartition.Size -ge $size.SizeMax) {\r\n        Write-Output \"Partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed.\"\r\n        exit 0\r\n    }\r\n\r\n    Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop\r\n    Write-Output \"OS partition resized successfully from $currentSizeGB GB to $maxSizeGB GB.\"\r\n}\r\ncatch {\r\n    if ($_.Exception.Message -like '*already the requested size*') {\r\n        Write-Output \"Partition is already at maximum size. No resize needed.\"\r\n    }\r\n    else {\r\n        Write-Error \"Failed to resize OS partition: $($_.Exception.Message)\"\r\n        exit 1\r\n    }\r\n}\r\n",
+    "$fxv#5": "$ErrorActionPreference = 'Stop'\r\n\r\ntry {\r\n    $DriveLetter = $env:SystemDrive.TrimEnd(':')\r\n    Update-HostStorageCache -ErrorAction SilentlyContinue\r\n    Get-Disk | ForEach-Object { Update-Disk -Number $_.Number -ErrorAction SilentlyContinue }\r\n    $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop\r\n    $currentSizeGB    = [math]::Round($currentPartition.Size / 1GB, 2)\r\n    Write-Output \"Current partition size: $currentSizeGB GB (drive: $driveLetter)\"\r\n\r\n    $size    = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop\r\n    $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)\r\n    $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)\r\n    Write-Output \"Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB\"\r\n\r\n    if ($null -eq $size -or $size.SizeMax -eq 0) {\r\n        Write-Warning \"Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize.\"\r\n        exit 0\r\n    }\r\n\r\n    if ($currentPartition.Size -ge $size.SizeMax) {\r\n        Write-Output \"Partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed.\"\r\n        exit 0\r\n    }\r\n\r\n    Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop\r\n    Write-Output \"OS partition resized successfully from $currentSizeGB GB to $maxSizeGB GB.\"\r\n}\r\ncatch {\r\n    if ($_.Exception.Message -like '*already the requested size*') {\r\n        Write-Output \"Partition is already at maximum size. No resize needed.\"\r\n    }\r\n    else {\r\n        Write-Error \"Failed to resize OS partition: $($_.Exception.Message)\"\r\n        exit 1\r\n    }\r\n}\r\n",
     "$fxv#6": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ImageVmResourceId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ManagementVmResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ImageResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ResourceGroupId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token  -  use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Poll until ARM records this run command resource as 'Succeeded' before deleting the VM or resource group.\r\n    # asyncExecution=true means ARM marks the deployment Succeeded as soon as the VM agent starts the script,\r\n    # but we confirm this explicitly rather than relying on a fixed sleep to avoid the race condition where the\r\n    # agent hasn't yet phoned home to ARM before the VM is deleted.\r\n    $RunCommandUri = $ResourceManagerUriFixed + $ManagementVmResourceId + '/runCommands/RemoveImageBuildResources?api-version=2024-03-01'\r\n    $ArmConfirmed = $false\r\n    $Deadline = (Get-Date).AddSeconds(120)\r\n    while (-not $ArmConfirmed -and (Get-Date) -lt $Deadline) {\r\n        Start-Sleep -Seconds 5\r\n        Try {\r\n            $RunCommandResource = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'GET' -Uri $RunCommandUri\r\n            if ($RunCommandResource.properties.provisioningState -eq 'Succeeded') {\r\n                $ArmConfirmed = $true\r\n            }\r\n        } Catch {}\r\n    }\r\n\r\n    If (-not [string]::IsNullOrEmpty($ResourceGroupId)) {\r\n        # New RG path  -  delete the entire resource group (cleans up all VMs, disks, NICs, images)\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '?api-version=2021-04-01') | Out-Null\r\n    } Else {\r\n        # Existing RG path  -  delete individual VMs only, leave the RG intact\r\n\r\n        # Delete Image VM\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')\r\n\r\n        # Delete the managed image (if it exists  -  only present for Trusted Launch compatible security type)\r\n        If ($ImageResourceId -ne '') {\r\n            Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')\r\n        }\r\n\r\n        # Delete the Management VM\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}",
     "deploymentSuffix": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
     "uniqueCustomizers": "[map(range(0, length(parameters('customizations'))), lambda('i', createObject('name', if(greater(length(filter(parameters('customizations'), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('customizations')[lambdaVariables('i')].name, length(filter(take(parameters('customizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name))))), parameters('customizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('customizations')[lambdaVariables('i')].blobNameOrUri, 'arguments', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'arguments'), ''), 'restart', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'restart'), false()))))]",
@@ -1013,8 +1013,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "4237303995817804882"
+              "version": "0.39.26.7824",
+              "templateHash": "5885927420942671758"
             }
           },
           "parameters": {
@@ -1183,8 +1183,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "4237303995817804882"
+              "version": "0.39.26.7824",
+              "templateHash": "5885927420942671758"
             }
           },
           "parameters": {
@@ -1342,8 +1342,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3585155273898172375"
+              "version": "0.39.26.7824",
+              "templateHash": "6703123689452334995"
             }
           },
           "parameters": {
@@ -1489,8 +1489,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "12625193340093700361"
+              "version": "0.39.26.7824",
+              "templateHash": "18118982807251207040"
             }
           },
           "definitions": {
@@ -1956,8 +1956,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "12625193340093700361"
+              "version": "0.39.26.7824",
+              "templateHash": "18118982807251207040"
             }
           },
           "definitions": {
@@ -2382,8 +2382,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "9829260378627813363"
+              "version": "0.39.26.7824",
+              "templateHash": "1189707415401603641"
             }
           },
           "parameters": {
@@ -2610,8 +2610,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "8870586134568787718"
+              "version": "0.39.26.7824",
+              "templateHash": "15024728244055945407"
             }
           },
           "parameters": {
@@ -3191,8 +3191,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "4979352784516484738"
+                      "version": "0.39.26.7824",
+                      "templateHash": "7203310671505035970"
                     }
                   },
                   "parameters": {
@@ -3343,8 +3343,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "10324624827716730909"
+                      "version": "0.39.26.7824",
+                      "templateHash": "3679152026406265290"
                     }
                   },
                   "parameters": {
@@ -3480,8 +3480,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "6889898375397842150"
+                              "version": "0.39.26.7824",
+                              "templateHash": "17358380738022684369"
                             }
                           },
                           "parameters": {
@@ -3603,8 +3603,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "4979352784516484738"
+                      "version": "0.39.26.7824",
+                      "templateHash": "7203310671505035970"
                     }
                   },
                   "parameters": {
@@ -3735,8 +3735,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "4979352784516484738"
+                      "version": "0.39.26.7824",
+                      "templateHash": "7203310671505035970"
                     }
                   },
                   "parameters": {
@@ -3875,8 +3875,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "9577771434006615791"
+              "version": "0.39.26.7824",
+              "templateHash": "9519500588310079859"
             }
           },
           "parameters": {
@@ -4038,8 +4038,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3501945756254511255"
+              "version": "0.39.26.7824",
+              "templateHash": "18101169434163304726"
             }
           },
           "parameters": {
@@ -4139,8 +4139,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "13689835731946185652"
+                      "version": "0.39.26.7824",
+                      "templateHash": "9514168313051224957"
                     }
                   },
                   "parameters": {
@@ -4267,8 +4267,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "7348105262483193639"
+                      "version": "0.39.26.7824",
+                      "templateHash": "2253539786105966779"
                     }
                   },
                   "parameters": {
@@ -4592,8 +4592,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "9829260378627813363"
+              "version": "0.39.26.7824",
+              "templateHash": "1189707415401603641"
             }
           },
           "parameters": {
@@ -4784,8 +4784,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "7348105262483193639"
+              "version": "0.39.26.7824",
+              "templateHash": "2253539786105966779"
             }
           },
           "parameters": {
