@@ -848,29 +848,29 @@ try {
     try {
         $DriveLetter = $env:SystemDrive.TrimEnd(':')
         Update-HostStorageCache -ErrorAction SilentlyContinue
-        Get-Disk | ForEach-Object { Update-Disk -Number $_.Number -ErrorAction SilentlyContinue }
         $Part = Get-Partition -DriveLetter $DriveLetter -ErrorAction Stop
         $CurrentSizeGB = [math]::Round($Part.Size / 1GB, 2)
         Write-Log -Message "Current partition size: $CurrentSizeGB GB (drive: $DriveLetter)"
-        $Supported = Get-PartitionSupportedSize -DriveLetter $DriveLetter -ErrorAction Stop
-        $MaxSizeGB = [math]::Round($Supported.SizeMax / 1GB, 2)
-        Write-Log -Message "Max supported partition size: $MaxSizeGB GB"
 
-        if ($Part.Size -lt $Supported.SizeMax) {
-            Resize-Partition -DriveLetter $DriveLetter -Size $Supported.SizeMax -ErrorAction Stop
-            Write-Log -Message "OS Disk resized successfully"
-        } Else {
+        # Use diskpart to extend - bypasses VDS entirely, no timing race on first boot.
+        $diskpartScript = "select disk $($Part.DiskNumber)`r`nselect partition $($Part.PartitionNumber)`r`nextend"
+        $scriptPath = Join-Path $env:TEMP 'diskpart_extend.txt'
+        [System.IO.File]::WriteAllText($scriptPath, $diskpartScript, [System.Text.Encoding]::ASCII)
+        $diskpartOutput = & diskpart /s $scriptPath 2>&1
+        Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
+        Write-Log -Message "Diskpart result: $($diskpartOutput -join ' | ')"
+
+        $PartAfter = Get-Partition -DriveLetter $DriveLetter -ErrorAction SilentlyContinue
+        if ($PartAfter -and $PartAfter.Size -gt $Part.Size) {
+            $NewSizeGB = [math]::Round($PartAfter.Size / 1GB, 2)
+            Write-Log -Message "OS Disk resized successfully: $CurrentSizeGB GB -> $NewSizeGB GB"
+        } else {
             Write-Log -Message "OS Disk is already at maximum size. No resize needed."
         }
     }
     catch {
-        if ($_.Exception.Message -like "*already the requested size*") {
-            Write-Log -Message "OS Disk is already at maximum size. No resize needed."
-        }
-        else {
-            Write-Log -Message "Failed to resize OS Disk: $($_.Exception.Message)" -Category 'Warning'
-            Write-Log -Message "Continuing with deployment..."
-        }
+        Write-Log -Message "Failed to resize OS Disk: $($_.Exception.Message)" -Category 'Warning'
+        Write-Log -Message "Continuing with deployment..."
     }
     
     Write-Log -Message "Phase 1: Session Host Configuration Complete"
