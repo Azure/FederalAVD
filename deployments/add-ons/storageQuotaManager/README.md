@@ -74,7 +74,7 @@ New-AzResourceGroupDeployment `
 | `scheduleFrequencyMinutes` | `15` | How often the runbook checks quotas, in minutes. Minimum 15. |
 | `runbookContentUri` | GitHub raw URL | URI of the runbook PS1 file fetched by Azure at deployment. Leave empty for air-gapped environments — see [Air-Gapped Deployment](#air-gapped-deployment). |
 | `logAnalyticsWorkspaceResourceId` | _(none)_ | Log Analytics Workspace resource ID for Automation Account diagnostic settings (job logs and metrics). |
-| `createJobSchedule` | `true` | Set `true` on first deployment. Set `false` on all redeployments to avoid the `jobSchedule already exists` Conflict error. |
+| `createJobSchedule` | `true` | Leave `true` for all standard deployments. Set `false` **only** if you receive a `Conflict / jobSchedule already exists` error — this occurs when the account was deleted from ARM and recreated with the same name. |
 | `deploymentTime` | _(utcNow)_ | UTC timestamp used to compute the initial schedule start time (10 minutes after deployment). |
 
 ## Architecture

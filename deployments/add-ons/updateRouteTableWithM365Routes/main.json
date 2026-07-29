@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "13988651193491843971"
+      "version": "0.45.15.27210",
+      "templateHash": "9737508710482997808"
     }
   },
   "parameters": {
@@ -439,8 +439,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "2801032527601825515"
+              "version": "0.45.15.27210",
+              "templateHash": "13535660819004615752"
             }
           },
           "parameters": {
@@ -511,7 +511,7 @@
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Set to true on first deployment to let ARM create the job schedule link between\nthe runbook and schedule. Set to false on every redeployment.\n\nWHY: Azure Automation caches the runbook/schedule association keyed on the automation account\nNAME. This cache persists even after deleting the job schedule resource, the child resources,\nor the automation account itself - and is restored the moment an account with that name exists\nagain. ARM cannot create a resource that already exists, so including this resource on\nredeployment always produces: Code: Conflict / A jobSchedule with same id already exists.\n\nThe existing link is not affected when this is false - the runbook continues to run on schedule."
+                "description": "Optional. Controls whether ARM creates the job schedule link between the runbook and\nschedule. Leave true for normal deployments - ARM handles idempotent redeployment correctly when\nthe automation account already exists.\n\nSet to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.\nThis error occurs specifically when the automation account was previously DELETED from ARM and is\nbeing recreated with the same name. Azure Automation caches the runbook/schedule association by\naccount name; that cache persists through ARM deletion and is restored the moment an account with\nthe same name exists again, causing ARM\\'s create call to conflict with the cached association.\n\nWhen set to false, the existing job schedule link is preserved and the runbook continues to run\non schedule. To clear the conflict manually from Azure Cloud Shell (required before setting back\nto true), see the snippet in the comment above the jobSchedule resource below."
               }
             }
           },
@@ -633,7 +633,7 @@
               "condition": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]",
               "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2021-05-01-preview",
-              "scope": "[format('Microsoft.Automation/automationAccounts/{0}', parameters('automationAccountName'))]",
+              "scope": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
               "name": "[format('diag-{0}', parameters('automationAccountName'))]",
               "properties": {
                 "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
@@ -705,8 +705,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "6703123689452334995"
+              "version": "0.45.15.27210",
+              "templateHash": "3585155273898172375"
             }
           },
           "parameters": {

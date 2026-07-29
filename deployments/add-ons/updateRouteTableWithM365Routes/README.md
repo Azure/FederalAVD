@@ -186,7 +186,7 @@ Route Table (existing, managed by this add-on)
 **Security defaults:**
 
 - `publicNetworkAccess: false` on the Automation Account — no inbound exposure.
-- `disableLocalAuth: false` — ARM management plane remains accessible (required for deployment).
+- `disableLocalAuth: true` — all authentication uses Azure AD / managed identity only; shared key auth is disabled.
 - System-assigned managed identity — no stored credentials.
 - Network Contributor scoped to the route table's resource group only.
 
@@ -196,9 +196,11 @@ Route Table (existing, managed by this add-on)
 
 ### Deployment fails with "A jobSchedule with same id already exists"
 
-You are redeploying to an automation account that was previously deployed. Set `createJobSchedule` to `false` (uncheck the checkbox in the Advanced tab) and redeploy.
+This error does **not** occur on a normal incremental redeployment to an existing account. It occurs specifically when the Automation Account was **deleted from ARM** and is being recreated with the same name — Azure Automation's backend cache persists through ARM deletion and conflicts the moment an account with the same name is recreated.
 
-If the error occurs on a first deployment to what you believe is a new account name, Azure Automation may have cached state from a previous account with the same name. Use a different name via `automationAccountNameOverride`.
+To resolve: set `createJobSchedule` to `false` (uncheck in the Advanced tab) and redeploy. After the deployment succeeds, you can set it back to `true` on the next deployment.
+
+Alternatively, use a different account name via `automationAccountNameOverride`.
 
 ### Runbook is not running / job history is empty
 

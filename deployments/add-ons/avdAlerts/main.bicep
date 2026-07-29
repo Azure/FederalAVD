@@ -304,6 +304,7 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
     enableLocalDiskAlerts: enableLocalDiskAlerts
     enableFslogixAlerts: enableFslogixAlerts
     hostPoolType: hp.?hostPoolType ?? 'Pooled'
+    hostPoolResourceId: hp.hostPoolResourceId
   }
   dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]
@@ -322,6 +323,7 @@ module vmMetricAlerts 'modules/vmMetricAlerts.bicep' = [for hp in hostPoolInfoDe
     enableCpuAlerts: enableCpuAlerts
     enableMemoryAlerts: enableMemoryAlerts
     enableOsDiskAlerts: enableOsDiskAlerts
+    hostPoolResourceId: hp.hostPoolResourceId
   }
 }]
 

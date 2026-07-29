@@ -27,52 +27,18 @@ param enableServiceHealthAlerts bool = true
 var subscriptionResourceId = subscription().id
 var descriptionHeader      = 'FederalAVD - Automated Alert\n'
 
-// Parse the action group resource ID so we can reference it as an existing resource
-var agParts          = split(actionGroupResourceId, '/')
-var agSubscriptionId = agParts[2]
-var agRgName         = agParts[4]
-var agName           = last(agParts)
-
-// ========== //
-// Resources  //
-// ========== //
-
-// Read the caller-provided action group so we can copy its receivers into a global-location
-// clone. Service Health activity log alerts require the action group to be at 'global'.
-resource sourceActionGroup 'Microsoft.Insights/actionGroups@2022-06-01' existing = {
-  name: agName
-  scope: resourceGroup(agSubscriptionId, agRgName)
-}
-
-// Global-location action group used exclusively by Service Health alerts
-resource globalActionGroup 'Microsoft.Insights/actionGroups@2022-06-01' = if (enableServiceHealthAlerts) {
-  name: '${alertNamePrefix}-SvcHealth-AG'
-  location: 'global'
-  properties: {
-    groupShortName:              take('${alertNamePrefix}-SH', 12)
-    enabled:                     true
-    emailReceivers:              sourceActionGroup.properties.emailReceivers
-    smsReceivers:                sourceActionGroup.properties.smsReceivers
-    webhookReceivers:            sourceActionGroup.properties.webhookReceivers
-    armRoleReceivers:            sourceActionGroup.properties.armRoleReceivers
-    azureAppPushReceivers:       sourceActionGroup.properties.azureAppPushReceivers
-    logicAppReceivers:           sourceActionGroup.properties.logicAppReceivers
-    automationRunbookReceivers:  sourceActionGroup.properties.automationRunbookReceivers
-    azureFunctionReceivers:      sourceActionGroup.properties.azureFunctionReceivers
-    itsmReceivers:               sourceActionGroup.properties.itsmReceivers
-    voiceReceivers:              sourceActionGroup.properties.voiceReceivers
-    eventHubReceivers:           sourceActionGroup.properties.eventHubReceivers
-  }
-}
-
 var alertActions = {
   actionGroups: [
     {
-      actionGroupId: enableServiceHealthAlerts ? globalActionGroup.id : ''
+      actionGroupId: actionGroupResourceId
     }
   ]
 }
 
+
+// ========== //
+// Resources  //
+// ========== //
 
 // Service Issue (active incident)
 resource alertServiceIssue 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (enableServiceHealthAlerts) {

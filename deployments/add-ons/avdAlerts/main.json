@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "3218992458843852511"
+      "templateHash": "15730057200548243049"
     }
   },
   "parameters": {
@@ -570,7 +570,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "6078037530023966258"
+              "templateHash": "7989689542494056490"
             }
           },
           "parameters": {
@@ -636,7 +636,7 @@
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Set to true on first deployment to let ARM create the job schedule links.\nSet to false on redeployments. Azure Automation caches job schedule associations by account\nname and raises a Conflict error if ARM tries to create a link that already exists."
+                "description": "Optional. Controls whether ARM creates the job schedule links between runbooks and\nschedules. Leave true for normal deployments - ARM handles idempotent redeployment correctly when\nthe automation account already exists.\n\nSet to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.\nThis error occurs specifically when the automation account was previously deleted from ARM and is\nbeing recreated with the same name. The Azure Automation backend caches associations by account\nname through ARM deletion, causing the recreate to conflict with the cached link."
               }
             }
           },
@@ -1006,6 +1006,9 @@
           },
           "hostPoolType": {
             "value": "[coalesce(tryGet(variables('hostPoolInfoDeduped')[copyIndex()], 'hostPoolType'), 'Pooled')]"
+          },
+          "hostPoolResourceId": {
+            "value": "[variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId]"
           }
         },
         "template": {
@@ -1015,7 +1018,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "1139871059419381241"
+              "templateHash": "7205371454280276001"
             }
           },
           "parameters": {
@@ -1102,10 +1105,19 @@
               "metadata": {
                 "description": "Optional. Whether this is a Pooled or Personal host pool. Capacity alerts (50/85/95%) are only deployed for Pooled pools. The personal session host unhealthy alert is only deployed for Personal pools."
               }
+            },
+            "hostPoolResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for cost management."
+              }
             }
           },
           "variables": {
             "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "hostPoolTags": {
+              "cm-resource-parent": "[parameters('hostPoolResourceId')]"
+            },
             "actions": {
               "actionGroups": [
                 "[parameters('actionGroupResourceId')]"
@@ -1119,6 +1131,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Cap-50Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Host Pool Capacity 50% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}Host pool is at 50-84% capacity. Review scaling plan and available session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1134,7 +1147,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1178,6 +1191,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Cap-85Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Host Pool Capacity 85% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}Host pool is at 85-94% capacity. Review scaling plan and consider adding session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1193,7 +1207,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1237,6 +1251,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Cap-95Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Host Pool Capacity 95% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}Host pool is at or above 95% capacity. Immediate action required to add session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1252,7 +1267,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions = tolong(column_ifexists('MaxSessions', 0))\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1296,6 +1311,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-PersnlAssigndUnhlthy-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Personal Pool Session Host Unhealthy ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A session host in the personal host pool {1} is not in an Available state. Investigate the affected VM and its health check results.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1348,6 +1364,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-NoResAvail-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - No Resources Available ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}Catastrophic: no healthy session hosts available for new connections in {1}. Diagnose host pool dependencies immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1399,6 +1416,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-HlthChkFailure-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - VM Health Check Failure ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A session host in {1} is available but a dependent resource (domain, FSLogix, SxS stack, URL check) is in a failed state.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1464,6 +1482,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Usr-ConnctnFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - User Connection Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A user failed to connect to a session host in {1}. If frequent, investigate network latency (>150ms) and session host availability.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1522,6 +1541,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-DiscUser24Hrs-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Disconnected User Over 24 Hours ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A user in {1} has a disconnected session lasting more than 24 hours. Verify Remote Desktop session limit policies are applied. This could affect scaling plans.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1573,6 +1593,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-DiscUser72Hrs-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Disconnected User Over 72 Hours ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A user in {1} has a disconnected session lasting more than 72 hours. This likely indicates stale sessions blocking scaling automation. Verify session limit policies.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1624,6 +1645,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-LocDskFree10Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - VM Local Disk Free <= 10% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A session host in {1} has 10% or less free space on the C: drive. Review local profiles, temp files, and application logs consuming disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1683,6 +1705,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-LocDskFree5Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - VM Local Disk Free <= 5% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}CRITICAL: A session host in {1} has 5% or less free space on the C: drive. Immediate action required to free disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1742,13 +1765,15 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf5PrcntFree-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile < 5% Free Space ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}FSLogix Event ID 34: a user profile VHD in {1} has less than 5% free space. Expand the VHD or clean up profile data.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 34 in {1}: a user profile VHD has less than 5% free space. The alert includes the affected user, profile container, and storage account. Expand the VHD or clean up profile data.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
-                "windowSize": "PT5M",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "P2D",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1756,38 +1781,39 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 34\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "let fslogixWarnings =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 34\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixWarnings\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
-                          "name": "ComputerName",
+                          "name": "UserName",
                           "operator": "Include",
                           "values": [
                             "*"
                           ]
                         },
                         {
-                          "name": "RenderedDescription",
+                          "name": "ProfileID",
                           "operator": "Include",
                           "values": [
                             "*"
                           ]
                         },
                         {
-                          "name": "VMresourceGroup",
+                          "name": "SessionHostName",
                           "operator": "Include",
                           "values": [
                             "*"
                           ]
                         },
                         {
-                          "name": "HostPool",
+                          "name": "StorageAccount",
                           "operator": "Include",
                           "values": [
                             "*"
                           ]
                         }
                       ],
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -1806,6 +1832,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf2PrcntFree-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile < 2% Free Space ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}CRITICAL: FSLogix Event ID 33 in {1}: a user profile VHD has less than 2% free space. The alert includes the affected user, profile container, and storage account. Expand the VHD or clean up profile data immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1821,7 +1848,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 33\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.(windows|usgovcloudapi)\\.net)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
+                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 33\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1872,6 +1899,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf-NetwrkIssue-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile Network Issue ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 43: a session host in {1} cannot reach the FSLogix profile storage. Verify network connectivity between the session hosts and the storage account.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -1937,6 +1965,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf-FailAttVHD-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile Disk Failed to Attach ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 52 or 40: the profile VHD failed to attach for a session host in {1}. Investigate FSLogix errors for details.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -2002,6 +2031,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf-SvcDisabled-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Service Disabled ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 60: the FSLogix Profile service is disabled on a session host in {1}. Re-enable and start the FSLogix service immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -2067,6 +2097,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf-DskCmpFail-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile Disk Compaction Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 62 or 63: profile disk compaction failed on a session host in {1}. The disk was marked for compaction but the operation failed.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -2132,6 +2163,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf-DskInUse-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile Disk In Use by Another VM ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 51: a profile VHD is already attached to another VM in {1}. Ensure the user is not connected to multiple host pools sharing the same profile.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -2197,6 +2229,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf-Corrupt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Corrupted / Temp Profile ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 28 in {1}: a user profile VHD is corrupted or could not be mounted and the user was loaded into a temporary profile. Data written during this session will be lost. Investigate and repair the profile VHD.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -2212,7 +2245,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 28\r\n    | extend ProfileID = tostring(extract(@\"Username:\\s*([^\\s]+)\", 1, RenderedDescription))\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, EventID, RenderedDescription;\r\nlet storageLookup =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where RenderedDescription has \".file.core.\"\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.(windows|usgovcloudapi)\\.net)\", 1, RenderedDescription)\r\n    | where isnotempty(StorageAccount)\r\n    | project PathTime = TimeGenerated, Computer, StorageAccount;\r\nfslogixErrors\r\n| join kind=leftouter (storageLookup) on Computer\r\n| extend PathDiff = abs(datetime_diff('minute', EventTime, PathTime))\r\n| where PathDiff <= 60\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
+                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 28\r\n    | extend ProfileID = tostring(extract(@\"Username:\\s*([^\\s]+)\", 1, RenderedDescription))\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, EventID, RenderedDescription;\r\nlet storageLookup =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where RenderedDescription has \".file.core.\"\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | where isnotempty(StorageAccount)\r\n    | project PathTime = TimeGenerated, Computer, StorageAccount;\r\nfslogixErrors\r\n| join kind=leftouter (storageLookup) on Computer\r\n| extend PathDiff = abs(datetime_diff('minute', EventTime, PathTime))\r\n| where PathDiff <= 60\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2263,6 +2296,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-VM-FSLgxProf-CmpctPre-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix VHD Compaction Pre-Check Failure ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 58 or 61 in {1}: VHD disk compaction was aborted before starting, either because the host disk lacks free space for the operation (58) or the VHD is in use (61). Profile VHDs will grow unbounded until compaction can complete.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -2278,7 +2312,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID in (58, 61)\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.(windows|usgovcloudapi)\\.net)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
+                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID in (58, 61)\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2336,6 +2370,7 @@
               "apiVersion": "2022-06-15",
               "name": "[format('{0}-HP-Usr-SlowLogon-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Slow Session Logon > 2 Minutes ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A user in {1} took more than 2 minutes from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.', variables('descriptionHeader'), parameters('hostPoolName'))]",
@@ -2438,6 +2473,9 @@
           },
           "enableOsDiskAlerts": {
             "value": "[parameters('enableOsDiskAlerts')]"
+          },
+          "hostPoolResourceId": {
+            "value": "[variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId]"
           }
         },
         "template": {
@@ -2447,7 +2485,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "15467373896581539546"
+              "templateHash": "17583463568205084520"
             }
           },
           "parameters": {
@@ -2509,10 +2547,19 @@
               "metadata": {
                 "description": "Optional. When false, OS disk bandwidth alert rules are not deployed."
               }
+            },
+            "hostPoolResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for cost management."
+              }
             }
           },
           "variables": {
             "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "hostPoolTags": {
+              "cm-resource-parent": "[parameters('hostPoolResourceId')]"
+            },
             "metricActions": [
               {
                 "actionGroupId": "[parameters('actionGroupResourceId')]"
@@ -2526,6 +2573,7 @@
               "apiVersion": "2018-03-01",
               "name": "[format('{0}-HP-VM-HighCPU85Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "description": "[format('{0}Session host CPU usage exceeded 85% average over 15 minutes in {1}. Review high-CPU processes and consider adding more session hosts or adjusting the scaling plan.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
@@ -2561,6 +2609,7 @@
               "apiVersion": "2018-03-01",
               "name": "[format('{0}-HP-VM-HighCPU95Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "description": "[format('{0}CRITICAL: Session host CPU usage exceeded 95% average over 15 minutes in {1}. Users on this host are likely experiencing severe performance degradation.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
@@ -2596,6 +2645,7 @@
               "apiVersion": "2018-03-01",
               "name": "[format('{0}-HP-VM-AvailMemLess2GB-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "description": "[format('{0}Available memory on a session host in {1} dropped below 2 GB. Users on this host may experience application slowdowns. Review memory usage and consider adding more session hosts.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
@@ -2631,6 +2681,7 @@
               "apiVersion": "2018-03-01",
               "name": "[format('{0}-HP-VM-AvailMemLess1GB-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "description": "[format('{0}CRITICAL: Available memory on a session host in {1} dropped below 1 GB. Users will likely experience application crashes and severe performance issues.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
@@ -2666,6 +2717,7 @@
               "apiVersion": "2018-03-01",
               "name": "[format('{0}-HP-VM-OSDiskBW85Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "description": "[format('{0}OS Disk bandwidth consumption on a session host in {1} is at or above 85%. The VM is nearing its disk IOPS limit. Consider moving to a larger or premium disk SKU.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
@@ -2710,6 +2762,7 @@
               "apiVersion": "2018-03-01",
               "name": "[format('{0}-HP-VM-OSDiskBW95Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
+              "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "description": "[format('{0}CRITICAL: OS Disk bandwidth on a session host in {1} is at or above 95%. Users will experience severe I/O latency. Upgrade disk SKU immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
@@ -3408,7 +3461,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "9591429965134489688"
+              "templateHash": "16010515035944360491"
             }
           },
           "parameters": {
@@ -3436,41 +3489,15 @@
           "variables": {
             "subscriptionResourceId": "[subscription().id]",
             "descriptionHeader": "FederalAVD - Automated Alert\n",
-            "agParts": "[split(parameters('actionGroupResourceId'), '/')]",
-            "agSubscriptionId": "[variables('agParts')[2]]",
-            "agRgName": "[variables('agParts')[4]]",
-            "agName": "[last(variables('agParts'))]",
             "alertActions": {
               "actionGroups": [
                 {
-                  "actionGroupId": "[if(parameters('enableServiceHealthAlerts'), resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix'))), '')]"
+                  "actionGroupId": "[parameters('actionGroupResourceId')]"
                 }
               ]
             }
           },
           "resources": [
-            {
-              "condition": "[parameters('enableServiceHealthAlerts')]",
-              "type": "Microsoft.Insights/actionGroups",
-              "apiVersion": "2022-06-01",
-              "name": "[format('{0}-SvcHealth-AG', parameters('alertNamePrefix'))]",
-              "location": "global",
-              "properties": {
-                "groupShortName": "[take(format('{0}-SH', parameters('alertNamePrefix')), 12)]",
-                "enabled": true,
-                "emailReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').emailReceivers]",
-                "smsReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').smsReceivers]",
-                "webhookReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').webhookReceivers]",
-                "armRoleReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').armRoleReceivers]",
-                "azureAppPushReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').azureAppPushReceivers]",
-                "logicAppReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').logicAppReceivers]",
-                "automationRunbookReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').automationRunbookReceivers]",
-                "azureFunctionReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').azureFunctionReceivers]",
-                "itsmReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').itsmReceivers]",
-                "voiceReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').voiceReceivers]",
-                "eventHubReceivers": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('agSubscriptionId'), variables('agRgName')), 'Microsoft.Insights/actionGroups', variables('agName')), '2022-06-01').eventHubReceivers]"
-              }
-            },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
               "type": "Microsoft.Insights/activityLogAlerts",
@@ -3500,10 +3527,7 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
-              ]
+              }
             },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
@@ -3534,10 +3558,7 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
-              ]
+              }
             },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
@@ -3572,10 +3593,7 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
-              ]
+              }
             },
             {
               "condition": "[parameters('enableServiceHealthAlerts')]",
@@ -3606,10 +3624,7 @@
                   ]
                 },
                 "actions": "[variables('alertActions')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-SvcHealth-AG', parameters('alertNamePrefix')))]"
-              ]
+              }
             }
           ]
         }
