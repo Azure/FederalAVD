@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "7931967921813404300"
+      "templateHash": "14606138736453775732"
     }
   },
   "parameters": {
@@ -1019,7 +1019,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "4514201116207755219"
+              "templateHash": "13312670182559253943"
             }
           },
           "parameters": {
@@ -1915,7 +1915,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2054,7 +2054,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 56\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| summarize\r\n    EventCount      = count(),\r\n    VMresourceGroup = any(VMresourceGroup),\r\n    HostPool        = any(HostPool),\r\n    ResourceId      = any(_ResourceId)\r\n  by Computer, RenderedDescription\r\n| where EventCount >= 3\r\n| project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 56\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| summarize\r\n    EventCount      = count(),\r\n    VMresourceGroup = any(VMresourceGroup),\r\n    HostPool        = any(HostPool),\r\n    ResourceId      = any(_ResourceId)\r\n  by Computer, RenderedDescription\r\n| where EventCount >= 3\r\n| project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2114,8 +2114,8 @@
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - FSLogix Service Disabled ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}FSLogix Event ID 60: the FSLogix Profile service is disabled on a session host in {1}. Re-enable and start the FSLogix service immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - FSLogix Required Service Disabled ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 60: a service required by FSLogix is disabled on a session host in {1}. Re-enable the required service immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -2127,7 +2127,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2193,7 +2193,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2259,7 +2259,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {

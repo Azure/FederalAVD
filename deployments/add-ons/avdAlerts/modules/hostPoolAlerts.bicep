@@ -851,6 +851,11 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 43
+| join kind=inner (
+    WVDConnections
+    | where _ResourceId has "${hostPoolName}"
+    | distinct SessionHostName
+) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
     HostPool        = "${hostPoolName}"
@@ -961,6 +966,11 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 56
+| join kind=inner (
+    WVDConnections
+    | where _ResourceId has "${hostPoolName}"
+    | distinct SessionHostName
+) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
     HostPool        = "${hostPoolName}"
@@ -996,14 +1006,14 @@ Event
 // EventID 60 fires ONCE when the service transitions to disabled, then stops.
 // windowSize PT4H keeps the alert open long enough for operators to respond without
 // running all day; autoMitigate resolves it when the condition clears.
-// HostPool and VMresourceGroup derived directly -- no WVDAgentHealthStatus join.
+// Scoped to this host pool via WVDConnections inner join on Computer == SessionHostName.
 resource alertFSLogixServiceDisabled 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLogix-ServiceDisabled-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - FSLogix Service Disabled (${hostPoolName})'
-    description: '${descriptionHeader}FSLogix Event ID 60: the FSLogix Profile service is disabled on a session host in ${hostPoolName}. Re-enable and start the FSLogix service immediately.'
+    displayName: '${alertNamePrefix} - FSLogix Required Service Disabled (${hostPoolName})'
+    description: '${descriptionHeader}FSLogix Event ID 60: a service required by FSLogix is disabled on a session host in ${hostPoolName}. Re-enable the required service immediately.'
     severity: 1
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -1018,6 +1028,11 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Warning"
 | where EventID == 60
+| join kind=inner (
+    WVDConnections
+    | where _ResourceId has "${hostPoolName}"
+    | distinct SessionHostName
+) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
     HostPool        = "${hostPoolName}"
@@ -1064,6 +1079,11 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 62 or EventID == 63
+| join kind=inner (
+    WVDConnections
+    | where _ResourceId has "${hostPoolName}"
+    | distinct SessionHostName
+) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
     HostPool        = "${hostPoolName}"
@@ -1113,6 +1133,11 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Operational"
 | where EventLevelName == "Warning"
 | where EventID == 51
+| join kind=inner (
+    WVDConnections
+    | where _ResourceId has "${hostPoolName}"
+    | distinct SessionHostName
+) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
     HostPool        = "${hostPoolName}"
