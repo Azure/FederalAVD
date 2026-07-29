@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "6935866736860621826"
+      "templateHash": "567657568568630336"
     }
   },
   "parameters": {
@@ -1019,7 +1019,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "8502205886097621871"
+              "templateHash": "5293211698336392016"
             }
           },
           "parameters": {
@@ -1747,7 +1747,7 @@
                           ]
                         }
                       ],
-                      "resourceIdColumn": "_ResourceId",
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {

@@ -669,11 +669,11 @@ Perf
 '''
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'ComputerName', operator: 'Include', values: ['*'] }
+            { name: 'ComputerName',    operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup', operator: 'Include', values: ['*'] }
-            { name: 'HostPool', operator: 'Include', values: ['*'] }
+            { name: 'HostPool',        operator: 'Include', values: ['*'] }
           ]
-          resourceIdColumn: '_ResourceId'
+          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
