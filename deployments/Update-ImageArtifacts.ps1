@@ -1042,14 +1042,25 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         Else {
             # No download source configured - check whether the file was pre-staged in customer/artifacts/
             $DestFileName = $Download.DestinationFileName
-            $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
-            $PreStagedPaths = $DestFolders | ForEach-Object { Join-Path -Path $ArtifactsDir -ChildPath (Join-Path -Path $_ -ChildPath $DestFileName) }
-            $PreStagedFile = $PreStagedPaths | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
-            If ($null -ne $PreStagedFile) {
-                Write-Output "[$SoftwareName] No download URL configured - using pre-staged file found in artifacts directory."
+            If ([string]::IsNullOrWhiteSpace($DestFileName)) {
+                Write-Warning "[$SoftwareName] Skipping: entry has no DownloadUrl and no DestinationFileName. Add a DestinationFileName to enable pre-staged file lookup."
             }
             Else {
-                Write-Warning "[$SoftwareName] No download URL configured and '$DestFileName' was not found in the artifacts directory. If you have enabled the corresponding feature in your image build, pre-stage this file in customer/artifacts/ before running. If you are not using this software, no action is needed."
+                $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
+                $PreStagedPaths = $DestFolders | ForEach-Object {
+                    if ([string]::IsNullOrEmpty($_)) {
+                        Join-Path -Path $ArtifactsDir -ChildPath $DestFileName
+                    } else {
+                        Join-Path -Path $ArtifactsDir -ChildPath (Join-Path -Path $_ -ChildPath $DestFileName)
+                    }
+                }
+                $PreStagedFile = $PreStagedPaths | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
+                If ($null -ne $PreStagedFile) {
+                    Write-Output "[$SoftwareName] No download URL configured - using pre-staged file found in artifacts directory."
+                }
+                Else {
+                    Write-Warning "[$SoftwareName] No download URL configured and '$DestFileName' was not found in the artifacts directory. If you have enabled the corresponding feature in your image build, pre-stage this file in customer/artifacts/ before running. If you are not using this software, no action is needed."
+                }
             }
         }
     }
