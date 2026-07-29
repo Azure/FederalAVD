@@ -91,7 +91,6 @@ resource alertServerLatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if 
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
-        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessServerLatency'
@@ -126,7 +125,6 @@ resource alertServerLatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
-        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessServerLatency'
@@ -161,7 +159,6 @@ resource alertE2ELatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if (en
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
-        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessE2ELatency'
@@ -196,7 +193,6 @@ resource alertE2ELatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if (e
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
-        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessE2ELatency'
