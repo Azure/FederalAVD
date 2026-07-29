@@ -29,7 +29,7 @@ param enableAnfCapacityAlerts bool = true
 // ========== //
 
 var volumeName       = last(split(anfVolumeResourceId, '/'))
-var descriptionHeader = 'FederalAVD - Automated Alert\n'
+var descriptionHeader = 'AVD - Automated Alert\n'
 
 var metricActions = [
   {
@@ -43,10 +43,10 @@ var metricActions = [
 
 // ANF volume consumed >= 85% (Sev 2)
 resource alertAnfVolume85 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableAnfCapacityAlerts) {
-  name: '${alertNamePrefix}-StorLowSpcANF-85Prcnt-${volumeName}'
+  name: '${alertNamePrefix}-ANF-Capacity-85pct-${volumeName}'
   location: 'global'
   properties: {
-    description: '${descriptionHeader}Azure NetApp Files volume consumed capacity is at or above 85%. Review volume size and expand before it fills up. Volume: ${volumeName}.'
+    description: '${descriptionHeader}Azure NetApp Files volume ${volumeName} has consumed 85% or more of its provisioned capacity. Expand the volume before it fills completely to prevent profile load failures.'
     severity: 2
     enabled: true
     scopes: [anfVolumeResourceId]
@@ -74,10 +74,10 @@ resource alertAnfVolume85 'Microsoft.Insights/metricAlerts@2018-03-01' = if (ena
 
 // ANF volume consumed >= 95% (Sev 1)
 resource alertAnfVolume95 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableAnfCapacityAlerts) {
-  name: '${alertNamePrefix}-StorLowSpcANF-95Prcnt-${volumeName}'
+  name: '${alertNamePrefix}-ANF-Capacity-95pct-${volumeName}'
   location: 'global'
   properties: {
-    description: '${descriptionHeader}CRITICAL: Azure NetApp Files volume consumed capacity is at or above 95%. Expand the volume capacity immediately to prevent profile load failures. Volume: ${volumeName}.'
+    description: '${descriptionHeader}CRITICAL: Azure NetApp Files volume ${volumeName} has consumed 95% or more of its provisioned capacity. Expand the volume immediately - new FSLogix profile mounts will fail when the volume is full.'
     severity: 1
     enabled: true
     scopes: [anfVolumeResourceId]

@@ -2,12 +2,16 @@
 // Deploys metric-based and log-based alert rules for an Azure Files storage account
 // used for FSLogix profile storage.
 //
-// Metric alerts (per storage account):
-//   - SuccessServerLatency > 50ms  (Sev 2)
-//   - SuccessServerLatency > 100ms (Sev 1)
-//   - SuccessE2ELatency > 50ms     (Sev 2)
-//   - SuccessE2ELatency > 100ms    (Sev 1)
-//   - Availability < 99%           (Sev 1)
+// Metric alerts (per storage account) -- latency uses dynamic (learned) thresholds:
+//   - SuccessServerLatency above learned baseline, medium sensitivity (Sev 2)
+//   - SuccessServerLatency above learned baseline, low sensitivity    (Sev 1)
+//   - SuccessE2ELatency    above learned baseline, medium sensitivity (Sev 2)
+//   - SuccessE2ELatency    above learned baseline, low sensitivity    (Sev 1)
+//   - Availability < 99%                                              (Sev 1)
+//
+// NOTE: Latency alerts use dynamic thresholds so they adapt to peak/non-peak
+//       patterns and suppress false positives during idle periods. Azure Monitor
+//       requires ~3 days of metric history before the learned baseline fires.
 //
 // File share metric alerts (per file service):
 //   - Throttling (Transactions with throttling response types)  (Sev 2)
@@ -60,7 +64,7 @@ param enableStorageThrottlingAlerts bool = true
 
 var storageAccountName  = last(split(storageAccountResourceId, '/'))
 var fileServiceResourceId = '${storageAccountResourceId}/fileServices/default'
-var descriptionHeader   = 'FederalAVD - Automated Alert\n'
+var descriptionHeader   = 'AVD - Automated Alert\n'
 
 var metricActions = [
   {
@@ -72,12 +76,12 @@ var metricActions = [
 // Resources  //
 // ========== //
 
-// SuccessServerLatency > 50ms (Sev 2)
+// SuccessServerLatency above learned baseline - medium sensitivity (Sev 2)
 resource alertServerLatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableStorageLatencyAlerts) {
-  name: '${alertNamePrefix}-StorAcct-Ovr50msLatncy-${storageAccountName}'
+  name: '${alertNamePrefix}-AzFiles-Latency-ServerWarn-${storageAccountName}'
   location: 'global'
   properties: {
-    description: '${descriptionHeader}Storage account server latency exceeded 50ms average. This may indicate performance degradation for FSLogix user profiles. Storage account: ${storageAccountName}.'
+    description: '${descriptionHeader}Storage account server latency exceeded its dynamically learned baseline. This may indicate performance degradation for FSLogix user profiles. Storage account: ${storageAccountName}.'
     severity: 2
     enabled: true
     scopes: [storageAccountResourceId]
@@ -85,15 +89,20 @@ resource alertServerLatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if 
     windowSize: 'PT15M'
     targetResourceType: 'Microsoft.Storage/storageAccounts'
     criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
+        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessServerLatency'
           operator: 'GreaterThan'
-          threshold: 50
           timeAggregation: 'Average'
-          criterionType: 'StaticThresholdCriterion'
+          criterionType: 'DynamicThresholdCriterion'
+          alertSensitivity: 'Medium'
+          failingPeriods: {
+            numberOfEvaluationPeriods: 4
+            minFailingPeriodsToAlert: 3
+          }
         }
       ]
     }
@@ -102,12 +111,12 @@ resource alertServerLatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if 
   }
 }
 
-// SuccessServerLatency > 100ms (Sev 1)
+// SuccessServerLatency significantly above learned baseline - low sensitivity (Sev 1)
 resource alertServerLatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableStorageLatencyAlerts) {
-  name: '${alertNamePrefix}-StorAcct-Ovr100msLatncy-${storageAccountName}'
+  name: '${alertNamePrefix}-AzFiles-Latency-ServerCrit-${storageAccountName}'
   location: 'global'
   properties: {
-    description: '${descriptionHeader}Storage account server latency exceeded 100ms average. Users may experience slow profile loading or application performance. Storage account: ${storageAccountName}.'
+    description: '${descriptionHeader}Storage account server latency significantly exceeded its dynamically learned baseline. Users may be experiencing slow profile loading or degraded application performance. Storage account: ${storageAccountName}.'
     severity: 1
     enabled: true
     scopes: [storageAccountResourceId]
@@ -115,15 +124,20 @@ resource alertServerLatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if
     windowSize: 'PT15M'
     targetResourceType: 'Microsoft.Storage/storageAccounts'
     criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
+        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessServerLatency'
           operator: 'GreaterThan'
-          threshold: 100
           timeAggregation: 'Average'
-          criterionType: 'StaticThresholdCriterion'
+          criterionType: 'DynamicThresholdCriterion'
+          alertSensitivity: 'Low'
+          failingPeriods: {
+            numberOfEvaluationPeriods: 4
+            minFailingPeriodsToAlert: 4
+          }
         }
       ]
     }
@@ -132,12 +146,12 @@ resource alertServerLatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if
   }
 }
 
-// SuccessE2ELatency > 50ms (Sev 2)
+// SuccessE2ELatency above learned baseline - medium sensitivity (Sev 2)
 resource alertE2ELatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableStorageLatencyAlerts) {
-  name: '${alertNamePrefix}-StorAcct-Ovr50msE2ELatncy-${storageAccountName}'
+  name: '${alertNamePrefix}-AzFiles-Latency-E2EWarn-${storageAccountName}'
   location: 'global'
   properties: {
-    description: '${descriptionHeader}End-to-end latency from session host to storage exceeded 50ms average. This includes network latency and may indicate network path issues. Storage account: ${storageAccountName}.'
+    description: '${descriptionHeader}End-to-end latency from session host to storage exceeded its dynamically learned baseline. This includes network latency and may indicate network path or performance issues. Storage account: ${storageAccountName}.'
     severity: 2
     enabled: true
     scopes: [storageAccountResourceId]
@@ -145,15 +159,20 @@ resource alertE2ELatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if (en
     windowSize: 'PT15M'
     targetResourceType: 'Microsoft.Storage/storageAccounts'
     criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
+        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessE2ELatency'
           operator: 'GreaterThan'
-          threshold: 50
           timeAggregation: 'Average'
-          criterionType: 'StaticThresholdCriterion'
+          criterionType: 'DynamicThresholdCriterion'
+          alertSensitivity: 'Medium'
+          failingPeriods: {
+            numberOfEvaluationPeriods: 4
+            minFailingPeriodsToAlert: 3
+          }
         }
       ]
     }
@@ -162,12 +181,12 @@ resource alertE2ELatency50 'Microsoft.Insights/metricAlerts@2018-03-01' = if (en
   }
 }
 
-// SuccessE2ELatency > 100ms (Sev 1)
+// SuccessE2ELatency significantly above learned baseline - low sensitivity (Sev 1)
 resource alertE2ELatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableStorageLatencyAlerts) {
-  name: '${alertNamePrefix}-StorAcct-Ovr100msE2ELatncy-${storageAccountName}'
+  name: '${alertNamePrefix}-AzFiles-Latency-E2ECrit-${storageAccountName}'
   location: 'global'
   properties: {
-    description: '${descriptionHeader}End-to-end latency from session host to storage exceeded 100ms average. Users are likely experiencing degraded profile performance. Storage account: ${storageAccountName}.'
+    description: '${descriptionHeader}End-to-end latency from session host to storage significantly exceeded its dynamically learned baseline. Users are likely experiencing degraded profile performance. Storage account: ${storageAccountName}.'
     severity: 1
     enabled: true
     scopes: [storageAccountResourceId]
@@ -175,15 +194,20 @@ resource alertE2ELatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if (e
     windowSize: 'PT15M'
     targetResourceType: 'Microsoft.Storage/storageAccounts'
     criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
       allOf: [
+        #disable-next-line BCP035
         {
           name: 'Metric1'
           metricName: 'SuccessE2ELatency'
           operator: 'GreaterThan'
-          threshold: 100
           timeAggregation: 'Average'
-          criterionType: 'StaticThresholdCriterion'
+          criterionType: 'DynamicThresholdCriterion'
+          alertSensitivity: 'Low'
+          failingPeriods: {
+            numberOfEvaluationPeriods: 4
+            minFailingPeriodsToAlert: 4
+          }
         }
       ]
     }
@@ -194,7 +218,7 @@ resource alertE2ELatency100 'Microsoft.Insights/metricAlerts@2018-03-01' = if (e
 
 // Availability < 99% (Sev 1)
 resource alertAvailability 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableStorageAvailabilityAlerts) {
-  name: '${alertNamePrefix}-StorAcct-AvailBlw99Prcnt-${storageAccountName}'
+  name: '${alertNamePrefix}-AzFiles-Avail-Below99pct-${storageAccountName}'
   location: 'global'
   properties: {
     description: '${descriptionHeader}Storage account availability dropped below 99%. FSLogix user profiles and MSIX App Attach may be unavailable. Storage account: ${storageAccountName}.'
@@ -224,7 +248,7 @@ resource alertAvailability 'Microsoft.Insights/metricAlerts@2018-03-01' = if (en
 
 // File share throttling - IOPS limit reached (Sev 2)
 resource alertFileShareThrottling 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableStorageThrottlingAlerts) {
-  name: '${alertNamePrefix}-StorAcct-PossThrottle-${storageAccountName}'
+  name: '${alertNamePrefix}-AzFiles-Throttled-${storageAccountName}'
   location: 'global'
   properties: {
     description: '${descriptionHeader}Azure Files share is being throttled due to high IOPS. Users may experience slow profile operations. Consider upgrading to a higher tier or increasing the provisioned capacity. Storage account: ${storageAccountName}.'
@@ -275,7 +299,7 @@ resource alertFileShareThrottling 'Microsoft.Insights/metricAlerts@2018-03-01' =
 
 // Azure Files share <= 15% free space (Sev 2)
 resource alertStorageLowSpace15 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (createStorageLogAlerts) {
-  name: '${alertNamePrefix}-StorAzFile-LowSpc15Prcnt'
+  name: '${alertNamePrefix}-AzFiles-Space-Low15pct'
   location: location
   properties: {
     displayName: '${alertNamePrefix} - Azure Files Share Low Space - 15% Remaining'
@@ -325,7 +349,7 @@ AzureDiagnostics
 
 // Azure Files share <= 5% free space (Sev 1)
 resource alertStorageLowSpace5 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (createStorageLogAlerts) {
-  name: '${alertNamePrefix}-StorAzFile-LowSpc5Prcnt'
+  name: '${alertNamePrefix}-AzFiles-Space-Low5pct'
   location: location
   properties: {
     displayName: '${alertNamePrefix} - Azure Files Share Low Space - 5% Remaining'

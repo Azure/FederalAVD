@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "15730057200548243049"
+      "templateHash": "16678888432064059009"
     }
   },
   "parameters": {
@@ -509,7 +509,8 @@
     "deploymentSuffix": "[take(uniqueString(subscription().subscriptionId, parameters('resourceGroupName'), deployment().name), 8)]",
     "lawSubscriptionId": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[2]]",
     "lawResourceGroup": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[4]]",
-    "hostPoolInfoDeduped": "[reduce(parameters('hostPoolInfo'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').hostPoolResourceId)), lambdaVariables('item').hostPoolResourceId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]"
+    "hostPoolInfoDeduped": "[reduce(parameters('hostPoolInfo'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').hostPoolResourceId)), lambdaVariables('item').hostPoolResourceId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]",
+    "vmRgInfoDeduped": "[reduce(variables('hostPoolInfoDeduped'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').vmResourceGroupId)), lambdaVariables('item').vmResourceGroupId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]"
   },
   "resources": [
     {
@@ -1018,7 +1019,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "7205371454280276001"
+              "templateHash": "788650041652677678"
             }
           },
           "parameters": {
@@ -1114,7 +1115,7 @@
             }
           },
           "variables": {
-            "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "descriptionHeader": "AVD - Automated Alert\n",
             "hostPoolTags": {
               "cm-resource-parent": "[parameters('hostPoolResourceId')]"
             },
@@ -1129,7 +1130,7 @@
               "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-Cap-50Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Cap-50pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -1189,7 +1190,7 @@
               "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-Cap-85Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Cap-85pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -1249,7 +1250,7 @@
               "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-Cap-95Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Cap-95pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -1309,11 +1310,11 @@
               "condition": "[and(parameters('enableAvailabilityAlerts'), equals(parameters('hostPoolType'), 'Personal'))]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-PersnlAssigndUnhlthy-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Host-Unhealthy-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - Personal Pool Session Host Unhealthy ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - Session Host Unhealthy ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A session host in the personal host pool {1} is not in an Available state. Investigate the affected VM and its health check results.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
@@ -1362,7 +1363,7 @@
               "condition": "[parameters('enableAvailabilityAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-NoResAvail-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Host-NoResources-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -1414,11 +1415,11 @@
               "condition": "[parameters('enableAvailabilityAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-HlthChkFailure-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Host-HealthCheckFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - VM Health Check Failure ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - Host Health Check Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A session host in {1} is available but a dependent resource (domain, FSLogix, SxS stack, URL check) is in a failed state.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
@@ -1480,7 +1481,7 @@
               "condition": "[parameters('enableConnectionAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-Usr-ConnctnFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Conn-Failed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -1539,11 +1540,11 @@
               "condition": "[parameters('enableConnectionAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-DiscUser24Hrs-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Sess-Disconnected24h-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - Disconnected User Over 24 Hours ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - Session Disconnected Over 24 Hours ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A user in {1} has a disconnected session lasting more than 24 hours. Verify Remote Desktop session limit policies are applied. This could affect scaling plans.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
@@ -1591,11 +1592,11 @@
               "condition": "[parameters('enableConnectionAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-DiscUser72Hrs-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Sess-Disconnected72h-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - Disconnected User Over 72 Hours ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - Session Disconnected Over 72 Hours ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A user in {1} has a disconnected session lasting more than 72 hours. This likely indicates stale sessions blocking scaling automation. Verify session limit policies.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
@@ -1643,11 +1644,11 @@
               "condition": "[parameters('enableLocalDiskAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-LocDskFree10Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-DiskLow10pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - VM Local Disk Free <= 10% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - VM Local Disk Space Low - 10pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A session host in {1} has 10% or less free space on the C: drive. Review local profiles, temp files, and application logs consuming disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
@@ -1703,11 +1704,11 @@
               "condition": "[parameters('enableLocalDiskAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-LocDskFree5Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-DiskLow5pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - VM Local Disk Free <= 5% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - VM Local Disk Space Low - 5pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}CRITICAL: A session host in {1} has 5% or less free space on the C: drive. Immediate action required to free disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
@@ -1763,7 +1764,7 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf5PrcntFree-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-SpaceLow5pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -1830,7 +1831,7 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf2PrcntFree-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-SpaceLow2pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -1897,11 +1898,11 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf-NetwrkIssue-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-NetworkIssue-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - FSLogix Profile Network Issue ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - FSLogix Network Issue ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 43: a session host in {1} cannot reach the FSLogix profile storage. Verify network connectivity between the session hosts and the storage account.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
@@ -1963,12 +1964,12 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf-FailAttVHD-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-AttachFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - FSLogix Profile Disk Failed to Attach ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}FSLogix Event ID 52 or 40: the profile VHD failed to attach for a session host in {1}. Investigate FSLogix errors for details.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - FSLogix Profile Disk Attach Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 52 or 40: the profile VHD failed to attach on a session host in {1}. Check FSLogix agent logs on the affected session host, verify the storage account is reachable from the VM, and confirm the VHD is not locked by another session or process.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -2029,7 +2030,7 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf-SvcDisabled-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-ServiceDisabled-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -2095,12 +2096,12 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf-DskCmpFail-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-CompactFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile Disk Compaction Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}FSLogix Event ID 62 or 63: profile disk compaction failed on a session host in {1}. The disk was marked for compaction but the operation failed.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 62 or 63: profile disk compaction failed on a session host in {1}. VHD files will continue growing until compaction succeeds. Ensure the session host OS disk has sufficient free space and the profile VHD is not actively in use, then retry compaction.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -2161,7 +2162,7 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf-DskInUse-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-DiskInUse-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -2227,7 +2228,7 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf-Corrupt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-Corrupted-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -2294,11 +2295,11 @@
               "condition": "[parameters('enableFslogixAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-FSLgxProf-CmpctPre-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-VM-FSLogix-PreCheckFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - FSLogix VHD Compaction Pre-Check Failure ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - FSLogix Compaction Pre-Check Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 58 or 61 in {1}: VHD disk compaction was aborted before starting, either because the host disk lacks free space for the operation (58) or the VHD is in use (61). Profile VHDs will grow unbounded until compaction can complete.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
@@ -2368,7 +2369,7 @@
               "condition": "[parameters('enableConnectionAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-Usr-SlowLogon-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Conn-SlowLogon-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
@@ -2434,13 +2435,12 @@
     {
       "copy": {
         "name": "vmMetricAlerts",
-        "count": "[length(variables('hostPoolInfoDeduped'))]"
+        "count": "[length(variables('vmRgInfoDeduped'))]"
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-VMMetrics-{0}-{1}', last(split(variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId, '/')), variables('deploymentSuffix'))]",
-      "subscriptionId": "[split(variables('hostPoolInfoDeduped')[copyIndex()].vmResourceGroupId, '/')[2]]",
-      "resourceGroup": "[split(variables('hostPoolInfoDeduped')[copyIndex()].vmResourceGroupId, '/')[4]]",
+      "name": "[format('AvdAlerts-VMMetrics-{0}-{1}', last(split(variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId, '/')), variables('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -2448,10 +2448,10 @@
         "mode": "Incremental",
         "parameters": {
           "hostPoolName": {
-            "value": "[last(split(variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId, '/'))]"
+            "value": "[last(split(variables('vmRgInfoDeduped')[copyIndex()].hostPoolResourceId, '/'))]"
           },
           "vmResourceGroupId": {
-            "value": "[variables('hostPoolInfoDeduped')[copyIndex()].vmResourceGroupId]"
+            "value": "[variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId]"
           },
           "actionGroupResourceId": {
             "value": "[parameters('actionGroupResourceId')]"
@@ -2475,7 +2475,7 @@
             "value": "[parameters('enableOsDiskAlerts')]"
           },
           "hostPoolResourceId": {
-            "value": "[variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId]"
+            "value": "[variables('vmRgInfoDeduped')[copyIndex()].hostPoolResourceId]"
           }
         },
         "template": {
@@ -2485,16 +2485,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "17583463568205084520"
+              "templateHash": "3422754906432760225"
             }
           },
           "parameters": {
-            "hostPoolName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the host pool (used in alert names and descriptions)."
-              }
-            },
             "vmResourceGroupId": {
               "type": "string",
               "metadata": {
@@ -2548,15 +2542,22 @@
                 "description": "Optional. When false, OS disk bandwidth alert rules are not deployed."
               }
             },
+            "hostPoolName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the host pool whose VMs this module monitors. Used in alert rule names."
+              }
+            },
             "hostPoolResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for cost management."
+                "description": "Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for Azure Cost Management rollup."
               }
             }
           },
           "variables": {
-            "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "vmRgName": "[last(split(parameters('vmResourceGroupId'), '/'))]",
+            "descriptionHeader": "AVD - Automated Alert\n",
             "hostPoolTags": {
               "cm-resource-parent": "[parameters('hostPoolResourceId')]"
             },
@@ -2571,11 +2572,11 @@
               "condition": "[parameters('enableCpuAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-HP-VM-HighCPU85Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-VM-CPU-85pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "description": "[format('{0}Session host CPU usage exceeded 85% average over 15 minutes in {1}. Review high-CPU processes and consider adding more session hosts or adjusting the scaling plan.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Session host CPU usage exceeded 85% average over 15 minutes. Host pool: {1}. VM resource group: {2}. Review high-CPU processes and consider adding more session hosts or adjusting the scaling plan.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
                 "severity": 2,
                 "enabled": true,
                 "scopes": [
@@ -2607,11 +2608,11 @@
               "condition": "[parameters('enableCpuAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-HP-VM-HighCPU95Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-VM-CPU-95pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "description": "[format('{0}CRITICAL: Session host CPU usage exceeded 95% average over 15 minutes in {1}. Users on this host are likely experiencing severe performance degradation.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: Session host CPU usage exceeded 95% average over 15 minutes. Host pool: {1}. VM resource group: {2}. Users on this host are likely experiencing severe performance degradation.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
                 "severity": 1,
                 "enabled": true,
                 "scopes": [
@@ -2643,11 +2644,11 @@
               "condition": "[parameters('enableMemoryAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-HP-VM-AvailMemLess2GB-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-VM-Memory-Low2gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "description": "[format('{0}Available memory on a session host in {1} dropped below 2 GB. Users on this host may experience application slowdowns. Review memory usage and consider adding more session hosts.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Available memory on a session host dropped below 2 GB. Host pool: {1}. VM resource group: {2}. Users may experience application slowdowns. Review memory usage and consider adding more session hosts.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
                 "severity": 2,
                 "enabled": true,
                 "scopes": [
@@ -2679,11 +2680,11 @@
               "condition": "[parameters('enableMemoryAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-HP-VM-AvailMemLess1GB-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-VM-Memory-Low1gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "description": "[format('{0}CRITICAL: Available memory on a session host in {1} dropped below 1 GB. Users will likely experience application crashes and severe performance issues.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: Available memory on a session host dropped below 1 GB. Host pool: {1}. VM resource group: {2}. Users will likely experience application crashes and severe performance issues.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
                 "severity": 1,
                 "enabled": true,
                 "scopes": [
@@ -2715,11 +2716,11 @@
               "condition": "[parameters('enableOsDiskAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-HP-VM-OSDiskBW85Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-VM-OSDisk-BW85pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "description": "[format('{0}OS Disk bandwidth consumption on a session host in {1} is at or above 85%. The VM is nearing its disk IOPS limit. Consider moving to a larger or premium disk SKU.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}OS Disk bandwidth consumption on a session host is at or above 85%. Host pool: {1}. VM resource group: {2}. The VM is nearing its disk IOPS limit. Consider moving to a larger or premium disk SKU.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
                 "severity": 2,
                 "enabled": true,
                 "scopes": [
@@ -2760,11 +2761,11 @@
               "condition": "[parameters('enableOsDiskAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-HP-VM-OSDiskBW95Prcnt-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-VM-OSDisk-BW95pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
               "location": "global",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "description": "[format('{0}CRITICAL: OS Disk bandwidth on a session host in {1} is at or above 95%. Users will experience severe I/O latency. Upgrade disk SKU immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: OS Disk bandwidth on a session host is at or above 95%. Host pool: {1}. VM resource group: {2}. Users will experience severe I/O latency. Upgrade disk SKU immediately.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
                 "severity": 1,
                 "enabled": true,
                 "scopes": [
@@ -2803,7 +2804,10 @@
             }
           ]
         }
-      }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
     },
     {
       "copy": {
@@ -2813,8 +2817,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('AvdAlerts-Stor{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
-      "subscriptionId": "[split(parameters('storageAccountResourceIds')[copyIndex()], '/')[2]]",
-      "resourceGroup": "[split(parameters('storageAccountResourceIds')[copyIndex()], '/')[4]]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -2859,7 +2862,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "18422436285787005907"
+              "templateHash": "2617368336243791226"
             }
           },
           "parameters": {
@@ -2934,7 +2937,7 @@
           "variables": {
             "storageAccountName": "[last(split(parameters('storageAccountResourceId'), '/'))]",
             "fileServiceResourceId": "[format('{0}/fileServices/default', parameters('storageAccountResourceId'))]",
-            "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "descriptionHeader": "AVD - Automated Alert\n",
             "metricActions": [
               {
                 "actionGroupId": "[parameters('actionGroupResourceId')]"
@@ -2946,10 +2949,10 @@
               "condition": "[parameters('enableStorageLatencyAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorAcct-Ovr50msLatncy-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "name": "[format('{0}-AzFiles-Latency-ServerWarn-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
               "location": "global",
               "properties": {
-                "description": "[format('{0}Storage account server latency exceeded 50ms average. This may indicate performance degradation for FSLogix user profiles. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "description": "[format('{0}Storage account server latency exceeded its dynamically learned baseline. This may indicate performance degradation for FSLogix user profiles. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
                 "severity": 2,
                 "enabled": true,
                 "scopes": [
@@ -2959,15 +2962,19 @@
                 "windowSize": "PT15M",
                 "targetResourceType": "Microsoft.Storage/storageAccounts",
                 "criteria": {
-                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
                   "allOf": [
                     {
                       "name": "Metric1",
                       "metricName": "SuccessServerLatency",
                       "operator": "GreaterThan",
-                      "threshold": 50,
                       "timeAggregation": "Average",
-                      "criterionType": "StaticThresholdCriterion"
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Medium",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 3
+                      }
                     }
                   ]
                 },
@@ -2979,10 +2986,10 @@
               "condition": "[parameters('enableStorageLatencyAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorAcct-Ovr100msLatncy-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "name": "[format('{0}-AzFiles-Latency-ServerCrit-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
               "location": "global",
               "properties": {
-                "description": "[format('{0}Storage account server latency exceeded 100ms average. Users may experience slow profile loading or application performance. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "description": "[format('{0}Storage account server latency significantly exceeded its dynamically learned baseline. Users may be experiencing slow profile loading or degraded application performance. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
                 "severity": 1,
                 "enabled": true,
                 "scopes": [
@@ -2992,15 +2999,19 @@
                 "windowSize": "PT15M",
                 "targetResourceType": "Microsoft.Storage/storageAccounts",
                 "criteria": {
-                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
                   "allOf": [
                     {
                       "name": "Metric1",
                       "metricName": "SuccessServerLatency",
                       "operator": "GreaterThan",
-                      "threshold": 100,
                       "timeAggregation": "Average",
-                      "criterionType": "StaticThresholdCriterion"
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Low",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 4
+                      }
                     }
                   ]
                 },
@@ -3012,10 +3023,10 @@
               "condition": "[parameters('enableStorageLatencyAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorAcct-Ovr50msE2ELatncy-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "name": "[format('{0}-AzFiles-Latency-E2EWarn-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
               "location": "global",
               "properties": {
-                "description": "[format('{0}End-to-end latency from session host to storage exceeded 50ms average. This includes network latency and may indicate network path issues. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "description": "[format('{0}End-to-end latency from session host to storage exceeded its dynamically learned baseline. This includes network latency and may indicate network path or performance issues. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
                 "severity": 2,
                 "enabled": true,
                 "scopes": [
@@ -3025,15 +3036,19 @@
                 "windowSize": "PT15M",
                 "targetResourceType": "Microsoft.Storage/storageAccounts",
                 "criteria": {
-                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
                   "allOf": [
                     {
                       "name": "Metric1",
                       "metricName": "SuccessE2ELatency",
                       "operator": "GreaterThan",
-                      "threshold": 50,
                       "timeAggregation": "Average",
-                      "criterionType": "StaticThresholdCriterion"
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Medium",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 3
+                      }
                     }
                   ]
                 },
@@ -3045,10 +3060,10 @@
               "condition": "[parameters('enableStorageLatencyAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorAcct-Ovr100msE2ELatncy-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "name": "[format('{0}-AzFiles-Latency-E2ECrit-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
               "location": "global",
               "properties": {
-                "description": "[format('{0}End-to-end latency from session host to storage exceeded 100ms average. Users are likely experiencing degraded profile performance. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "description": "[format('{0}End-to-end latency from session host to storage significantly exceeded its dynamically learned baseline. Users are likely experiencing degraded profile performance. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
                 "severity": 1,
                 "enabled": true,
                 "scopes": [
@@ -3058,15 +3073,19 @@
                 "windowSize": "PT15M",
                 "targetResourceType": "Microsoft.Storage/storageAccounts",
                 "criteria": {
-                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
                   "allOf": [
                     {
                       "name": "Metric1",
                       "metricName": "SuccessE2ELatency",
                       "operator": "GreaterThan",
-                      "threshold": 100,
                       "timeAggregation": "Average",
-                      "criterionType": "StaticThresholdCriterion"
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Low",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 4
+                      }
                     }
                   ]
                 },
@@ -3078,7 +3097,7 @@
               "condition": "[parameters('enableStorageAvailabilityAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorAcct-AvailBlw99Prcnt-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "name": "[format('{0}-AzFiles-Avail-Below99pct-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
               "location": "global",
               "properties": {
                 "description": "[format('{0}Storage account availability dropped below 99%. FSLogix user profiles and MSIX App Attach may be unavailable. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
@@ -3111,7 +3130,7 @@
               "condition": "[parameters('enableStorageThrottlingAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorAcct-PossThrottle-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "name": "[format('{0}-AzFiles-Throttled-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
               "location": "global",
               "properties": {
                 "description": "[format('{0}Azure Files share is being throttled due to high IOPS. Users may experience slow profile operations. Consider upgrading to a higher tier or increasing the provisioned capacity. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
@@ -3159,7 +3178,7 @@
               "condition": "[parameters('createStorageLogAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-StorAzFile-LowSpc15Prcnt', parameters('alertNamePrefix'))]",
+              "name": "[format('{0}-AzFiles-Space-Low15pct', parameters('alertNamePrefix'))]",
               "location": "[parameters('location')]",
               "properties": {
                 "displayName": "[format('{0} - Azure Files Share Low Space - 15% Remaining', parameters('alertNamePrefix'))]",
@@ -3215,7 +3234,7 @@
               "condition": "[parameters('createStorageLogAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-StorAzFile-LowSpc5Prcnt', parameters('alertNamePrefix'))]",
+              "name": "[format('{0}-AzFiles-Space-Low5pct', parameters('alertNamePrefix'))]",
               "location": "[parameters('location')]",
               "properties": {
                 "displayName": "[format('{0} - Azure Files Share Low Space - 5% Remaining', parameters('alertNamePrefix'))]",
@@ -3282,8 +3301,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('AvdAlerts-ANF{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
-      "subscriptionId": "[split(parameters('anfVolumeResourceIds')[copyIndex()], '/')[2]]",
-      "resourceGroup": "[split(parameters('anfVolumeResourceIds')[copyIndex()], '/')[4]]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -3313,7 +3331,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "515343289064750994"
+              "templateHash": "5657292134707359737"
             }
           },
           "parameters": {
@@ -3353,7 +3371,7 @@
           },
           "variables": {
             "volumeName": "[last(split(parameters('anfVolumeResourceId'), '/'))]",
-            "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "descriptionHeader": "AVD - Automated Alert\n",
             "metricActions": [
               {
                 "actionGroupId": "[parameters('actionGroupResourceId')]"
@@ -3365,10 +3383,10 @@
               "condition": "[parameters('enableAnfCapacityAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorLowSpcANF-85Prcnt-{1}', parameters('alertNamePrefix'), variables('volumeName'))]",
+              "name": "[format('{0}-ANF-Capacity-85pct-{1}', parameters('alertNamePrefix'), variables('volumeName'))]",
               "location": "global",
               "properties": {
-                "description": "[format('{0}Azure NetApp Files volume consumed capacity is at or above 85%. Review volume size and expand before it fills up. Volume: {1}.', variables('descriptionHeader'), variables('volumeName'))]",
+                "description": "[format('{0}Azure NetApp Files volume {1} has consumed 85% or more of its provisioned capacity. Expand the volume before it fills completely to prevent profile load failures.', variables('descriptionHeader'), variables('volumeName'))]",
                 "severity": 2,
                 "enabled": true,
                 "scopes": [
@@ -3399,10 +3417,10 @@
               "condition": "[parameters('enableAnfCapacityAlerts')]",
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
-              "name": "[format('{0}-StorLowSpcANF-95Prcnt-{1}', parameters('alertNamePrefix'), variables('volumeName'))]",
+              "name": "[format('{0}-ANF-Capacity-95pct-{1}', parameters('alertNamePrefix'), variables('volumeName'))]",
               "location": "global",
               "properties": {
-                "description": "[format('{0}CRITICAL: Azure NetApp Files volume consumed capacity is at or above 95%. Expand the volume capacity immediately to prevent profile load failures. Volume: {1}.', variables('descriptionHeader'), variables('volumeName'))]",
+                "description": "[format('{0}CRITICAL: Azure NetApp Files volume {1} has consumed 95% or more of its provisioned capacity. Expand the volume immediately - new FSLogix profile mounts will fail when the volume is full.', variables('descriptionHeader'), variables('volumeName'))]",
                 "severity": 1,
                 "enabled": true,
                 "scopes": [
@@ -3431,7 +3449,10 @@
             }
           ]
         }
-      }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
     },
     {
       "type": "Microsoft.Resources/deployments",
@@ -3461,7 +3482,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "16010515035944360491"
+              "templateHash": "16753931454069317348"
             }
           },
           "parameters": {
@@ -3488,7 +3509,7 @@
           },
           "variables": {
             "subscriptionResourceId": "[subscription().id]",
-            "descriptionHeader": "FederalAVD - Automated Alert\n",
+            "descriptionHeader": "AVD - Automated Alert\n",
             "alertActions": {
               "actionGroups": [
                 {
@@ -3502,7 +3523,7 @@
               "condition": "[parameters('enableServiceHealthAlerts')]",
               "type": "Microsoft.Insights/activityLogAlerts",
               "apiVersion": "2020-10-01",
-              "name": "[format('{0}-SvcHealth-ServiceIssue', parameters('alertNamePrefix'))]",
+              "name": "[format('{0}-ServiceHealth-Incident', parameters('alertNamePrefix'))]",
               "location": "global",
               "properties": {
                 "description": "[format('{0}An active Azure service incident has been detected that may be affecting AVD components in this subscription.', variables('descriptionHeader'))]",
@@ -3533,7 +3554,7 @@
               "condition": "[parameters('enableServiceHealthAlerts')]",
               "type": "Microsoft.Insights/activityLogAlerts",
               "apiVersion": "2020-10-01",
-              "name": "[format('{0}-SvcHealth-PlannedMaintenance', parameters('alertNamePrefix'))]",
+              "name": "[format('{0}-ServiceHealth-Maintenance', parameters('alertNamePrefix'))]",
               "location": "global",
               "properties": {
                 "description": "[format('{0}Planned Azure maintenance has been scheduled that may affect AVD components in this subscription.', variables('descriptionHeader'))]",
@@ -3564,7 +3585,7 @@
               "condition": "[parameters('enableServiceHealthAlerts')]",
               "type": "Microsoft.Insights/activityLogAlerts",
               "apiVersion": "2020-10-01",
-              "name": "[format('{0}-SvcHealth-HealthAdvisory', parameters('alertNamePrefix'))]",
+              "name": "[format('{0}-ServiceHealth-Advisory', parameters('alertNamePrefix'))]",
               "location": "global",
               "properties": {
                 "description": "[format('{0}An Azure Health Advisory has been issued for services in this subscription. Review to determine if action is required for your AVD environment.', variables('descriptionHeader'))]",
@@ -3599,7 +3620,7 @@
               "condition": "[parameters('enableServiceHealthAlerts')]",
               "type": "Microsoft.Insights/activityLogAlerts",
               "apiVersion": "2020-10-01",
-              "name": "[format('{0}-SvcHealth-Security', parameters('alertNamePrefix'))]",
+              "name": "[format('{0}-ServiceHealth-Security', parameters('alertNamePrefix'))]",
               "location": "global",
               "properties": {
                 "description": "[format('{0}An Azure Security Advisory has been issued for services in this subscription. Review immediately for potential security impact on your AVD environment.', variables('descriptionHeader'))]",

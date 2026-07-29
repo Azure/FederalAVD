@@ -25,7 +25,7 @@ param enableServiceHealthAlerts bool = true
 // ========== //
 
 var subscriptionResourceId = subscription().id
-var descriptionHeader      = 'FederalAVD - Automated Alert\n'
+var descriptionHeader      = 'AVD - Automated Alert\n'
 
 var alertActions = {
   actionGroups: [
@@ -42,7 +42,7 @@ var alertActions = {
 
 // Service Issue (active incident)
 resource alertServiceIssue 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (enableServiceHealthAlerts) {
-  name: '${alertNamePrefix}-SvcHealth-ServiceIssue'
+  name: '${alertNamePrefix}-ServiceHealth-Incident'
   location: 'global'
   properties: {
     description: '${descriptionHeader}An active Azure service incident has been detected that may be affecting AVD components in this subscription.'
@@ -70,7 +70,7 @@ resource alertServiceIssue 'Microsoft.Insights/activityLogAlerts@2020-10-01' = i
 
 // Planned Maintenance
 resource alertPlannedMaintenance 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (enableServiceHealthAlerts) {
-  name: '${alertNamePrefix}-SvcHealth-PlannedMaintenance'
+  name: '${alertNamePrefix}-ServiceHealth-Maintenance'
   location: 'global'
   properties: {
     description: '${descriptionHeader}Planned Azure maintenance has been scheduled that may affect AVD components in this subscription.'
@@ -98,7 +98,7 @@ resource alertPlannedMaintenance 'Microsoft.Insights/activityLogAlerts@2020-10-0
 
 // Health Advisory (informational or action required)
 resource alertHealthAdvisory 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (enableServiceHealthAlerts) {
-  name: '${alertNamePrefix}-SvcHealth-HealthAdvisory'
+  name: '${alertNamePrefix}-ServiceHealth-Advisory'
   location: 'global'
   properties: {
     description: '${descriptionHeader}An Azure Health Advisory has been issued for services in this subscription. Review to determine if action is required for your AVD environment.'
@@ -130,7 +130,7 @@ resource alertHealthAdvisory 'Microsoft.Insights/activityLogAlerts@2020-10-01' =
 
 // Security Advisory
 resource alertSecurity 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (enableServiceHealthAlerts) {
-  name: '${alertNamePrefix}-SvcHealth-Security'
+  name: '${alertNamePrefix}-ServiceHealth-Security'
   location: 'global'
   properties: {
     description: '${descriptionHeader}An Azure Security Advisory has been issued for services in this subscription. Review immediately for potential security impact on your AVD environment.'

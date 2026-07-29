@@ -82,7 +82,7 @@ param hostPoolResourceId string
 // Variables  //
 // ========== //
 
-var descriptionHeader = 'FederalAVD - Automated Alert\n'
+var descriptionHeader = 'AVD - Automated Alert\n'
 
 var hostPoolTags = {
   'cm-resource-parent': hostPoolResourceId
@@ -101,7 +101,7 @@ var actions = {
 // ------------------------------------
 
 resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
-  name: '${alertNamePrefix}-HP-Cap-50Prcnt-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Cap-50pct-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -150,7 +150,7 @@ WVDAgentHealthStatus
 }
 
 resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
-  name: '${alertNamePrefix}-HP-Cap-85Prcnt-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Cap-85pct-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -199,7 +199,7 @@ WVDAgentHealthStatus
 }
 
 resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
-  name: '${alertNamePrefix}-HP-Cap-95Prcnt-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Cap-95pct-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -249,11 +249,11 @@ WVDAgentHealthStatus
 
 // Personal host pool: session host is not in a healthy state
 resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts && hostPoolType == 'Personal') {
-  name: '${alertNamePrefix}-HP-VM-PersnlAssigndUnhlthy-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Host-Unhealthy-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - Personal Pool Session Host Unhealthy (${hostPoolName})'
+    displayName: '${alertNamePrefix} - Session Host Unhealthy (${hostPoolName})'
     description: '${descriptionHeader}A session host in the personal host pool ${hostPoolName} is not in an Available state. Investigate the affected VM and its health check results.'
     severity: 1
     enabled: true
@@ -295,7 +295,7 @@ WVDAgentHealthStatus
 
 // No resources available - catastrophic, all hosts unhealthy or at capacity
 resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts) {
-  name: '${alertNamePrefix}-HP-NoResAvail-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Host-NoResources-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -350,11 +350,11 @@ WVDConnections
 
 // VM health check failure
 resource alertVMHealthCheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts) {
-  name: '${alertNamePrefix}-HP-VM-HlthChkFailure-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Host-HealthCheckFailed-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - VM Health Check Failure (${hostPoolName})'
+    displayName: '${alertNamePrefix} - Host Health Check Failed (${hostPoolName})'
     description: '${descriptionHeader}A session host in ${hostPoolName} is available but a dependent resource (domain, FSLogix, SxS stack, URL check) is in a failed state.'
     severity: 1
     enabled: true
@@ -415,7 +415,7 @@ WVDAgentHealthStatus
 
 // User connection failed
 resource alertConnectionFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
-  name: '${alertNamePrefix}-HP-Usr-ConnctnFailed-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Conn-Failed-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -476,11 +476,11 @@ WVDConnections
 
 // Disconnected user > 24 hours
 resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
-  name: '${alertNamePrefix}-HP-DiscUser24Hrs-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Sess-Disconnected24h-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - Disconnected User Over 24 Hours (${hostPoolName})'
+    displayName: '${alertNamePrefix} - Session Disconnected Over 24 Hours (${hostPoolName})'
     description: '${descriptionHeader}A user in ${hostPoolName} has a disconnected session lasting more than 24 hours. Verify Remote Desktop session limit policies are applied. This could affect scaling plans.'
     severity: 2
     enabled: true
@@ -524,11 +524,11 @@ WVDConnections
 
 // Disconnected user > 72 hours
 resource alertDisconnectedUser72h 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
-  name: '${alertNamePrefix}-HP-DiscUser72Hrs-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Sess-Disconnected72h-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - Disconnected User Over 72 Hours (${hostPoolName})'
+    displayName: '${alertNamePrefix} - Session Disconnected Over 72 Hours (${hostPoolName})'
     description: '${descriptionHeader}A user in ${hostPoolName} has a disconnected session lasting more than 72 hours. This likely indicates stale sessions blocking scaling automation. Verify session limit policies.'
     severity: 1
     enabled: true
@@ -576,11 +576,11 @@ WVDConnections
 
 // Local C: drive free space <= 10%
 resource alertLocalDiskFree10 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableLocalDiskAlerts) {
-  name: '${alertNamePrefix}-HP-VM-LocDskFree10Prcnt-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-DiskLow10pct-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - VM Local Disk Free <= 10% (${hostPoolName})'
+    displayName: '${alertNamePrefix} - VM Local Disk Space Low - 10pct (${hostPoolName})'
     description: '${descriptionHeader}A session host in ${hostPoolName} has 10% or less free space on the C: drive. Review local profiles, temp files, and application logs consuming disk space.'
     severity: 2
     enabled: true
@@ -633,11 +633,11 @@ Perf
 
 // Local C: drive free space <= 5%
 resource alertLocalDiskFree5 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableLocalDiskAlerts) {
-  name: '${alertNamePrefix}-HP-VM-LocDskFree5Prcnt-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-DiskLow5pct-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - VM Local Disk Free <= 5% (${hostPoolName})'
+    displayName: '${alertNamePrefix} - VM Local Disk Space Low - 5pct (${hostPoolName})'
     description: '${descriptionHeader}CRITICAL: A session host in ${hostPoolName} has 5% or less free space on the C: drive. Immediate action required to free disk space.'
     severity: 1
     enabled: true
@@ -696,7 +696,7 @@ Perf
 // Joins FSLogix warnings with WVDConnections to identify which user's profile is nearly full,
 // on which session host, and pointing to which storage account.
 resource alertFSLogixProfile5PctFree 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf5PrcntFree-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-SpaceLow5pct-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -765,7 +765,7 @@ fslogixWarnings
 // Joins FSLogix errors with WVDConnections to identify which user's profile is critically full,
 // on which session host, and pointing to which storage account.
 resource alertFSLogixProfile2PctFree 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf2PrcntFree-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-SpaceLow2pct-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -832,11 +832,11 @@ fslogixErrors
 
 // FSLogix profile network issue (EventID 43)
 resource alertFSLogixNetworkIssue 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf-NetwrkIssue-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-NetworkIssue-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - FSLogix Profile Network Issue (${hostPoolName})'
+    displayName: '${alertNamePrefix} - FSLogix Network Issue (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 43: a session host in ${hostPoolName} cannot reach the FSLogix profile storage. Verify network connectivity between the session hosts and the storage account.'
     severity: 1
     enabled: true
@@ -885,12 +885,12 @@ Event
 
 // FSLogix profile disk failed to attach (EventID 52 or 40)
 resource alertFSLogixDiskAttachFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf-FailAttVHD-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-AttachFailed-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - FSLogix Profile Disk Failed to Attach (${hostPoolName})'
-    description: '${descriptionHeader}FSLogix Event ID 52 or 40: the profile VHD failed to attach for a session host in ${hostPoolName}. Investigate FSLogix errors for details.'
+    displayName: '${alertNamePrefix} - FSLogix Profile Disk Attach Failed (${hostPoolName})'
+    description: '${descriptionHeader}FSLogix Event ID 52 or 40: the profile VHD failed to attach on a session host in ${hostPoolName}. Check FSLogix agent logs on the affected session host, verify the storage account is reachable from the VM, and confirm the VHD is not locked by another session or process.'
     severity: 1
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -938,7 +938,7 @@ Event
 
 // FSLogix service disabled (EventID 60)
 resource alertFSLogixServiceDisabled 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf-SvcDisabled-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-ServiceDisabled-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -991,12 +991,12 @@ Event
 
 // FSLogix disk compaction failed (EventID 62 or 63)
 resource alertFSLogixDiskCompaction 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf-DskCmpFail-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-CompactFailed-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Disk Compaction Failed (${hostPoolName})'
-    description: '${descriptionHeader}FSLogix Event ID 62 or 63: profile disk compaction failed on a session host in ${hostPoolName}. The disk was marked for compaction but the operation failed.'
+    description: '${descriptionHeader}FSLogix Event ID 62 or 63: profile disk compaction failed on a session host in ${hostPoolName}. VHD files will continue growing until compaction succeeds. Ensure the session host OS disk has sufficient free space and the profile VHD is not actively in use, then retry compaction.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -1044,7 +1044,7 @@ Event
 
 // FSLogix profile disk in use by another VM (EventID 51)
 resource alertFSLogixDiskInUse 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf-DskInUse-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-DiskInUse-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -1100,7 +1100,7 @@ Event
 // (EventID 28 itself does not include the path, so we find a nearby event that does),
 // then joins with WVDConnections to identify the affected user.
 resource alertFSLogixCorruptedProfile 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf-Corrupt-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-Corrupted-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
@@ -1178,11 +1178,11 @@ fslogixErrors
 // These are pre-conditions that will prevent compaction from completing and can mask a disk space problem.
 // EventIDs 60, 62, 63 have dedicated alerts; this rule covers the earlier-stage pre-check failures.
 resource alertFSLogixCompactionPrecheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
-  name: '${alertNamePrefix}-HP-VM-FSLgxProf-CmpctPre-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-VM-FSLogix-PreCheckFailed-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - FSLogix VHD Compaction Pre-Check Failure (${hostPoolName})'
+    displayName: '${alertNamePrefix} - FSLogix Compaction Pre-Check Failed (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 58 or 61 in ${hostPoolName}: VHD disk compaction was aborted before starting, either because the host disk lacks free space for the operation (58) or the VHD is in use (61). Profile VHDs will grow unbounded until compaction can complete.'
     severity: 2
     enabled: true
@@ -1250,7 +1250,7 @@ fslogixErrors
 // Fires at Sev 3 as an early warning; repeated occurrences indicate profile bloat, GPO issues,
 // or storage latency on the FSLogix share.
 resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
-  name: '${alertNamePrefix}-HP-Usr-SlowLogon-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Conn-SlowLogon-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {

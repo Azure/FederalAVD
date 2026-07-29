@@ -27,7 +27,7 @@ The AVD Alerts Add-On deploys 40 Azure Monitor alert rules for Azure Virtual Des
 | Session Host Disk | 2 | Local C: drive free space <= 10% / 5% |
 | FSLogix Profiles | 9 | VHD full (5% / 2%), network issue, attach failure, service disabled, compaction, VHD in use, corrupted, compaction pre-check |
 | VM Performance | 6 | CPU > 85% / 95%, Memory < 2 GB / 1 GB, OS Disk bandwidth > 85% / 95% |
-| Azure Files Storage | 5 | Latency 50ms / 100ms, availability < 99%, throttling, low space 15% / 5% — optional |
+| Azure Files Storage | 5 | Latency above dynamic baseline (Warn/Crit), availability < 99%, throttling, low space 15% / 5% — optional |
 | Azure NetApp Files | 2 | Volume capacity >= 85% / 95% — optional |
 | Azure Service Health | 4 | Service incident, planned maintenance, health advisory, security advisory |
 

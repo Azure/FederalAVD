@@ -47,7 +47,7 @@ This add-on is Zero Trust-aligned by default:
 | **Schedules** | Automation Account | Recurring 15-minute triggers |
 | **Job Schedules** | Automation Account | Link runbooks to schedules |
 | **Scheduled Query Rules** | Alert RG | Log Analytics-based alerts for host pool health, connections, FSLogix, disk, and storage space |
-| **Metric Alerts** | VM RG / Storage RG / ANF RG | VM performance, storage latency/availability/throttling, ANF capacity |
+| **Metric Alerts** | Alert RG (centralized) | VM performance, storage latency/availability/throttling, ANF capacity |
 | **Activity Log Alerts** | Alert RG | Azure Service Health (incident, maintenance, advisory, security) |
 | **Role Assignments** | Subscription / Workspace RG / Storage RG | RBAC for managed identity |
 | **Diagnostic Settings** | Automation Account | Job logs → Log Analytics workspace |
@@ -69,11 +69,18 @@ modules/
 
 - **Log-based alerts** (Scheduled Query Rules) are scoped to the Log Analytics workspace.
   Queries filter by host pool resource ID to isolate each pool's data.
-- **VM metric alerts** are scoped to the VM resource group and target all VMs in that group
-  via a multi-resource scope.
-- **Storage metric alerts** are scoped to each individual storage account resource.
-- **ANF capacity alerts** are scoped to each ANF volume resource.
+- **VM metric alerts** are deployed to the centralized alert resource group. Each alert rule's
+  metric scope targets the VM resource group, covering all VMs in that group via a
+  multi-resource scope.
+- **Storage metric alerts** are deployed to the centralized alert resource group. Each alert
+  rule's metric scope targets the individual storage account.
+- **ANF capacity alerts** are deployed to the centralized alert resource group. Each alert
+  rule's metric scope targets the individual ANF volume.
 - **Service Health alerts** are scoped to the subscription.
+
+Centralizing all alert rules in one resource group simplifies RBAC (a single IAM assignment
+grants read access to all alerts), audit (one Activity Log to watch), and incident response
+(Azure Monitor Alerts blade shows everything in one place).
 
 ### Host Pool Type Gating
 
@@ -98,7 +105,55 @@ pool they monitor.
   Enable diagnostics on each host pool: **Host Pool → Diagnostic settings → Send to Log Analytics**.
 - An existing **Action Group** at the **global** location in the same subscription.
   Service Health activity log alerts require a global action group.
+  See [Creating a Global Action Group](#creating-a-global-action-group) below.
 - **Permissions** to deploy resources and assign RBAC roles at the subscription scope.
+
+### Creating a Global Action Group
+
+Azure Monitor Service Health alerts can only fire against action groups at the `global` location.
+A standard action group created in a specific region will not appear in the deployment form and
+cannot be selected for Service Health alerts.
+
+**Azure Portal:**
+
+1. Open **Monitor** → **Alerts** → **Action groups** → **+ Create**.
+2. Select your **Subscription** and **Resource Group**.
+3. Set **Region** to **Global**.
+4. Give it a name (e.g., `ag-avd-alerts-global`).
+5. Add notification receivers on the **Notifications** tab (Email, SMS, Voice, etc.).
+6. Click **Review + create**.
+
+**PowerShell:**
+
+```powershell
+New-AzActionGroup `
+  -ResourceGroupName 'rg-avd-operations-p-eus2' `
+  -Name 'ag-avd-alerts-global' `
+  -Location 'global' `
+  -ShortName 'avdalerts' `
+  -EmailReceiver @(
+    New-AzActionGroupEmailReceiverObject `
+      -Name 'AVD Ops Team' `
+      -EmailAddress 'avd-ops@contoso.com'
+  )
+```
+
+**Azure CLI:**
+
+```bash
+az monitor action-group create \
+  --resource-group rg-avd-operations-p-eus2 \
+  --name ag-avd-alerts-global \
+  --location global \
+  --short-name avdalerts \
+  --action email avd-ops-email avd-ops@contoso.com
+```
+
+> **Tip:** If your deployment form shows no action groups in the dropdown, it is filtering for
+> `global`-location groups only. Verify your action group's location with:
+> ```powershell
+> (Get-AzActionGroup -ResourceGroupName '{rg}' -Name '{ag}').Location  # expected: global
+> ```
 
 ---
 

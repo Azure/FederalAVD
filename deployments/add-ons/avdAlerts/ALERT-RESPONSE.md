@@ -78,7 +78,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - VM Health Check Failure — Sev 1
+### AVD - Host Health Check Failed — Sev 1
 
 **Trigger:** A session host is in Available state but one or more dependent health checks are failing (domain reachability, FSLogix, SxS stack reverse connect, URL checks, IMDS).
 
@@ -94,7 +94,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - Personal Pool Session Host Unhealthy — Sev 1
+### AVD - Session Host Unhealthy — Sev 1
 
 **Trigger:** A session host in a Personal host pool is not in Available state.  
 **Meaning:** In a Personal pool, each VM is assigned to exactly one user. An unhealthy host means that user cannot work.
@@ -124,7 +124,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - Disconnected User Over 24 Hours — Sev 2
+### AVD - Session Disconnected Over 24 Hours — Sev 2
 
 **Trigger:** A user has a disconnected (not logged off) session lasting more than 24 hours.  
 **Meaning:** Stale sessions consume host capacity and block scaling automation.
@@ -137,7 +137,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - Disconnected User Over 72 Hours — Sev 1
+### AVD - Session Disconnected Over 72 Hours — Sev 1
 
 **Trigger:** A user has been disconnected for more than 72 hours.  
 **Meaning:** This is almost certainly a stale session that was never properly terminated. It may be blocking drain automation or consuming a host pool slot indefinitely.
@@ -170,7 +170,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 > Controlled by `enableLocalDiskAlerts`. Disable if using ephemeral OS disks.
 
-### AVD - VM Local Disk Free <= 10% — Sev 2
+### AVD - VM Local Disk Space Low - 10pct — Sev 2
 
 **Trigger:** A session host C: drive has 10% or less free space remaining.  
 **Meaning:** The OS disk is filling up. When it reaches 0%, the session host will become unstable and AVD services may fail.
@@ -187,7 +187,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - VM Local Disk Free <= 5% — Sev 1
+### AVD - VM Local Disk Space Low - 5pct — Sev 1
 
 **Trigger:** A session host C: drive has 5% or less free space.  
 **Meaning:** Critical. The session host is at risk of becoming unresponsive imminently.
@@ -237,7 +237,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - FSLogix Profile Network Issue — Sev 1
+### AVD - FSLogix Network Issue — Sev 1
 
 **Trigger:** FSLogix Event ID 43 — the session host cannot reach the FSLogix profile storage account over the network.  
 **Meaning:** Users on the affected host cannot load FSLogix profiles. They will receive temporary profiles and lose any work done in the session.
@@ -251,7 +251,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - FSLogix Profile Disk Failed to Attach — Sev 1
+### AVD - FSLogix Profile Disk Attach Failed — Sev 1
 
 **Trigger:** FSLogix Event ID 52 or 40 — the profile VHD failed to attach.  
 **Meaning:** FSLogix could not mount the profile container. The user received a temporary profile.
@@ -331,7 +331,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - FSLogix VHD Compaction Pre-Check Failure — Sev 2
+### AVD - FSLogix Compaction Pre-Check Failed — Sev 2
 
 **Trigger:** FSLogix Event ID 58 (host disk too full for compaction) or 61 (VHD in use at compaction time).  
 **Meaning:** Compaction was scheduled but aborted before it started. Profile VHDs will grow unbounded over time without compaction.
@@ -404,26 +404,42 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 > Controlled by `enableStorageLatencyAlerts`, `enableStorageAvailabilityAlerts`, `enableStorageThrottlingAlerts`. Applies when `storageAccountResourceIds` is provided.
 
-### AVD - Storage Server Latency > 50ms / > 100ms — Sev 2 / 1
+### AVD - AzFiles Server Latency Warning / Critical — Sev 2 / 1
 
-**Trigger:** Average server-side latency on the storage account exceeded 50ms (Sev 2) or 100ms (Sev 1).  
-**Meaning:** The Azure Files service itself is responding slowly. This will degrade FSLogix profile attach times and any I/O-intensive profile operations.
+**Trigger:** Server-side latency on the storage account has deviated above a dynamically learned
+baseline. The Sev 2 (Warning) rule uses medium sensitivity with 3 of 4 evaluation periods
+exceeding the baseline; the Sev 1 (Critical) rule uses low sensitivity with all 4 of 4 periods
+exceeding the baseline. Dynamic thresholds learn from historical patterns including peak vs.
+off-peak, so idle-period spikes from background maintenance operations do not generate alerts.
+
+> **Note:** Dynamic thresholds require approximately 3 days of metric history to establish a
+> reliable baseline. On fresh storage accounts, expect a brief warm-up period during which
+> the alert may be less accurate.
+
+**Meaning:** The Azure Files service itself is responding slowly. Elevated server latency will
+degrade FSLogix profile attach times and any I/O-intensive profile operations.
 
 **Response:**
 - Check Azure Status for Azure Files in the affected region.
 - Review the share's provisioned IOPS vs. consumed IOPS — if IOPS-limited, increase provisioned capacity.
 - Check for large concurrent profile loads (morning logon storm) and stagger logon times if possible.
-- For 100ms+: open an Azure support ticket referencing the storage account and time window.
+- For Critical (Sev 1): open an Azure support ticket referencing the storage account and time window.
 
 ---
 
-### AVD - E2E Latency > 50ms / > 100ms — Sev 2 / 1
+### AVD - AzFiles E2E Latency Warning / Critical — Sev 2 / 1
 
-**Trigger:** End-to-end latency from session host to storage exceeded 50ms (Sev 2) or 100ms (Sev 1).  
-**Meaning:** The total round-trip including network path is elevated. This is worse than server latency alone, implying a network path problem in addition to or instead of a storage problem.
+**Trigger:** End-to-end latency from session host to storage has deviated above a dynamically
+learned baseline. Same dynamic threshold behavior as the Server Latency alert above — medium
+sensitivity (3 of 4 periods) for Warning, low sensitivity (4 of 4 periods) for Critical.
+
+**Meaning:** The total round-trip including the network path is elevated. E2E latency above the
+baseline when server latency is normal implies a network path problem between session hosts and
+the storage private endpoint.
 
 **Response:**
-- Compare against the Server Latency alerts. If server latency is normal but E2E is high, the issue is the network path between session hosts and the storage private endpoint.
+- Compare against the Server Latency alerts. If server latency is at baseline but E2E is elevated,
+  the issue is the network path, not the storage service.
 - Verify the UDR on the session host subnet does not force-tunnel storage traffic through an on-premises appliance.
 - Check NSG flow logs for dropped packets on port 445.
 - Verify private DNS zone `privatelink.file.core.windows.net` (or cloud equivalent) resolves to the private endpoint IP.
@@ -488,7 +504,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 > Controlled by `enableServiceHealthAlerts`. Subscription-scoped.
 
-### AVD - ServiceHealth: Service Issue — Sev 1 (implied by activity log)
+### AVD - ServiceHealth: Incident — Sev 1 (implied by activity log)
 
 **Trigger:** An active Azure service incident affecting this subscription is detected.
 
@@ -500,7 +516,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - ServiceHealth: Planned Maintenance — Sev 2 (implied)
+### AVD - ServiceHealth: Maintenance — Sev 2 (implied)
 
 **Trigger:** Azure has scheduled planned maintenance affecting services in this subscription.
 
@@ -511,7 +527,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - ServiceHealth: Health Advisory — Sev 3 (implied)
+### AVD - ServiceHealth: Advisory — Sev 3 (implied)
 
 **Trigger:** An Azure health advisory has been issued (feature deprecations, required configuration changes, service behavior changes).
 
@@ -522,7 +538,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - ServiceHealth: Security Advisory — Sev 1 (implied)
+### AVD - ServiceHealth: Security — Sev 1 (implied)
 
 **Trigger:** A security advisory has been issued for services in this subscription.
 

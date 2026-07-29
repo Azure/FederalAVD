@@ -39,7 +39,7 @@
                             "name": "rgInfoBox",
                             "type": "Microsoft.Common.TextBlock",
                             "options": {
-                                "text": "Select or create the resource group for the alert rules and (if storage alerts are enabled) the Automation Account. Use a dedicated monitoring or operations resource group such as rg-avd-operations-{env}-{region}."
+                                "text": "Select or create the resource group for the alert rules and (if storage alerts are enabled) the Automation Account. Use a dedicated monitoring resource group such as rg-avd-monitoring-{env}-{region}."
                             }
                         },
                         {

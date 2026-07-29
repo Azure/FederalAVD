@@ -214,6 +214,14 @@ var hostPoolInfoDeduped = reduce(
   (acc, item) => contains(map(acc, (e) => e.hostPoolResourceId), item.hostPoolResourceId) ? acc : concat(acc, [item])
 )
 
+// Deduplicate by vmResourceGroupId for VM metric alerts - multiple host pools may share
+// a single VM resource group and must produce only one set of metric alert rules.
+var vmRgInfoDeduped = reduce(
+  hostPoolInfoDeduped,
+  [],
+  (acc, item) => contains(map(acc, (e) => e.vmResourceGroupId), item.vmResourceGroupId) ? acc : concat(acc, [item])
+)
+
 // ========== //
 // Resources  //
 // ========== //
@@ -309,10 +317,11 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
   dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]
 
-// Per-host-pool VM metric alerts (multi-resource, scoped to VM resource group)
-module vmMetricAlerts 'modules/vmMetricAlerts.bicep' = [for hp in hostPoolInfoDeduped: {
-  name: 'AvdAlerts-VMMetrics-${last(split(hp.hostPoolResourceId, '/'))}-${deploymentSuffix}'
-  scope: resourceGroup(split(hp.vmResourceGroupId, '/')[2], split(hp.vmResourceGroupId, '/')[4])
+// Per-VM-resource-group metric alerts - centralized in the monitoring resource group.
+// Deduplicated by vmResourceGroupId - one set of rules per unique VM RG.
+module vmMetricAlerts 'modules/vmMetricAlerts.bicep' = [for hp in vmRgInfoDeduped: {
+  name: 'AvdAlerts-VMMetrics-${last(split(hp.vmResourceGroupId, '/'))}-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupName)
   params: {
     hostPoolName: last(split(hp.hostPoolResourceId, '/'))
     vmResourceGroupId: hp.vmResourceGroupId
@@ -325,6 +334,7 @@ module vmMetricAlerts 'modules/vmMetricAlerts.bicep' = [for hp in hostPoolInfoDe
     enableOsDiskAlerts: enableOsDiskAlerts
     hostPoolResourceId: hp.hostPoolResourceId
   }
+  dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]
 
 // ------------------------------------------------------------------------------------------------
@@ -333,7 +343,7 @@ module vmMetricAlerts 'modules/vmMetricAlerts.bicep' = [for hp in hostPoolInfoDe
 
 module storageAlerts 'modules/storageAlerts.bicep' = [for (storId, i) in storageAccountResourceIds: {
   name: 'AvdAlerts-Stor${i}-${deploymentSuffix}'
-  scope: resourceGroup(split(storId, '/')[2], split(storId, '/')[4])
+  scope: resourceGroup(resourceGroupName)
   params: {
     storageAccountResourceId: storId
     actionGroupResourceId: actionGroupResourceId
@@ -347,7 +357,7 @@ module storageAlerts 'modules/storageAlerts.bicep' = [for (storId, i) in storage
     enableStorageAvailabilityAlerts: enableStorageAvailabilityAlerts
     enableStorageThrottlingAlerts: enableStorageThrottlingAlerts
   }
-  dependsOn: i == 0 && createResourceGroup ? [newResourceGroup] : []
+  dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]
 
 // ------------------------------------------------------------------------------------------------
@@ -356,7 +366,7 @@ module storageAlerts 'modules/storageAlerts.bicep' = [for (storId, i) in storage
 
 module anfAlerts 'modules/anfAlerts.bicep' = [for (anfId, i) in anfVolumeResourceIds: {
   name: 'AvdAlerts-ANF${i}-${deploymentSuffix}'
-  scope: resourceGroup(split(anfId, '/')[2], split(anfId, '/')[4])
+  scope: resourceGroup(resourceGroupName)
   params: {
     anfVolumeResourceId: anfId
     actionGroupResourceId: actionGroupResourceId
@@ -364,6 +374,7 @@ module anfAlerts 'modules/anfAlerts.bicep' = [for (anfId, i) in anfVolumeResourc
     autoResolveAlert: autoResolveAlert
     enableAnfCapacityAlerts: enableAnfCapacityAlerts
   }
+  dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]
 
 // ------------------------------------------------------------------------------------------------
