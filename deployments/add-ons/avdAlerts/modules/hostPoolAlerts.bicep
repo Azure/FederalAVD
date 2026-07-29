@@ -2,12 +2,12 @@
 // Deploys all Log Analytics scheduled query rules for a single AVD host pool.
 //
 // Alert rules in this module (all scoped to the Log Analytics workspace):
-//   Capacity alerts (use WVDAgentHealthStatus - native AVD diagnostic data, no runbook needed):
+//   Capacity alerts (Pooled pools only - use WVDAgentHealthStatus):
 //     - Host pool capacity >= 50%  (Sev 3)
 //     - Host pool capacity >= 85%  (Sev 2)
 //     - Host pool capacity >= 95%  (Sev 1)
-//     - Session host unhealthy in personal pool  (Sev 1)
-//   Availability alerts (use WVD diagnostic tables directly):
+//   Availability alerts:
+//     - Session host unhealthy in personal pool  (Sev 1) [Personal pools only]
 //     - No resources available for connection  (Sev 1)
 //     - VM health check failure  (Sev 1)
 //     - User connection failure  (Sev 3)
@@ -71,11 +71,22 @@ param enableLocalDiskAlerts bool = true
 @description('Optional. When false, FSLogix profile alert rules are not deployed.')
 param enableFslogixAlerts bool = true
 
+@description('Optional. Whether this is a Pooled or Personal host pool. Capacity alerts (50/85/95%) are only deployed for Pooled pools. The personal session host unhealthy alert is only deployed for Personal pools.')
+@allowed(['Pooled', 'Personal'])
+param hostPoolType string = 'Pooled'
+
+@description('Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for cost management.')
+param hostPoolResourceId string
+
 // ========== //
 // Variables  //
 // ========== //
 
 var descriptionHeader = 'FederalAVD - Automated Alert\n'
+
+var hostPoolTags = {
+  'cm-resource-parent': hostPoolResourceId
+}
 
 var actions = {
   actionGroups: [actionGroupResourceId]
@@ -89,9 +100,10 @@ var actions = {
 // Capacity Alerts (WVDAgentHealthStatus)
 // ------------------------------------
 
-resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts) {
+resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
   name: '${alertNamePrefix}-HP-Cap-50Prcnt-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Pool Capacity 50% (${hostPoolName})'
     description: '${descriptionHeader}Host pool is at 50-84% capacity. Review scaling plan and available session hosts for ${hostPoolName}.'
@@ -109,12 +121,15 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId contains '${hostPoolName}'
-| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName
+| summarize arg_max(TimeGenerated, *) by SessionHostName
+| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
+| extend ActiveSessions = tolong(ActiveSessions)
+| extend AllowNewSessions = tobool(AllowNewSessions)
 | summarize
     TotalActive   = sum(ActiveSessions),
-    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),
+    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
-| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)
+| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85
 '''
           timeAggregation: 'Count'
@@ -134,9 +149,10 @@ WVDAgentHealthStatus
   }
 }
 
-resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts) {
+resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
   name: '${alertNamePrefix}-HP-Cap-85Prcnt-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Pool Capacity 85% (${hostPoolName})'
     description: '${descriptionHeader}Host pool is at 85-94% capacity. Review scaling plan and consider adding session hosts for ${hostPoolName}.'
@@ -154,12 +170,15 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId contains '${hostPoolName}'
-| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName
+| summarize arg_max(TimeGenerated, *) by SessionHostName
+| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
+| extend ActiveSessions = tolong(ActiveSessions)
+| extend AllowNewSessions = tobool(AllowNewSessions)
 | summarize
     TotalActive   = sum(ActiveSessions),
-    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),
+    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
-| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)
+| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95
 '''
           timeAggregation: 'Count'
@@ -179,9 +198,10 @@ WVDAgentHealthStatus
   }
 }
 
-resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts) {
+resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
   name: '${alertNamePrefix}-HP-Cap-95Prcnt-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Pool Capacity 95% (${hostPoolName})'
     description: '${descriptionHeader}Host pool is at or above 95% capacity. Immediate action required to add session hosts for ${hostPoolName}.'
@@ -199,12 +219,15 @@ resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId contains '${hostPoolName}'
-| summarize arg_max(TimeGenerated, ActiveSessions, MaxSessions, AllowNewSessions, Status, _ResourceId) by SessionHostName
+| summarize arg_max(TimeGenerated, *) by SessionHostName
+| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
+| extend ActiveSessions = tolong(ActiveSessions)
+| extend AllowNewSessions = tobool(AllowNewSessions)
 | summarize
     TotalActive   = sum(ActiveSessions),
-    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)),
+    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
-| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0)
+| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 95
 '''
           timeAggregation: 'Count'
@@ -225,9 +248,10 @@ WVDAgentHealthStatus
 }
 
 // Personal host pool: session host is not in a healthy state
-resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts) {
+resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts && hostPoolType == 'Personal') {
   name: '${alertNamePrefix}-HP-VM-PersnlAssigndUnhlthy-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Personal Pool Session Host Unhealthy (${hostPoolName})'
     description: '${descriptionHeader}A session host in the personal host pool ${hostPoolName} is not in an Available state. Investigate the affected VM and its health check results.'
@@ -273,6 +297,7 @@ WVDAgentHealthStatus
 resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts) {
   name: '${alertNamePrefix}-HP-NoResAvail-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - No Resources Available (${hostPoolName})'
     description: '${descriptionHeader}Catastrophic: no healthy session hosts available for new connections in ${hostPoolName}. Diagnose host pool dependencies immediately.'
@@ -327,6 +352,7 @@ WVDConnections
 resource alertVMHealthCheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts) {
   name: '${alertNamePrefix}-HP-VM-HlthChkFailure-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - VM Health Check Failure (${hostPoolName})'
     description: '${descriptionHeader}A session host in ${hostPoolName} is available but a dependent resource (domain, FSLogix, SxS stack, URL check) is in a failed state.'
@@ -391,6 +417,7 @@ WVDAgentHealthStatus
 resource alertConnectionFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
   name: '${alertNamePrefix}-HP-Usr-ConnctnFailed-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - User Connection Failed (${hostPoolName})'
     description: '${descriptionHeader}A user failed to connect to a session host in ${hostPoolName}. If frequent, investigate network latency (>150ms) and session host availability.'
@@ -451,6 +478,7 @@ WVDConnections
 resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
   name: '${alertNamePrefix}-HP-DiscUser24Hrs-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Disconnected User Over 24 Hours (${hostPoolName})'
     description: '${descriptionHeader}A user in ${hostPoolName} has a disconnected session lasting more than 24 hours. Verify Remote Desktop session limit policies are applied. This could affect scaling plans.'
@@ -498,6 +526,7 @@ WVDConnections
 resource alertDisconnectedUser72h 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
   name: '${alertNamePrefix}-HP-DiscUser72Hrs-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Disconnected User Over 72 Hours (${hostPoolName})'
     description: '${descriptionHeader}A user in ${hostPoolName} has a disconnected session lasting more than 72 hours. This likely indicates stale sessions blocking scaling automation. Verify session limit policies.'
@@ -549,6 +578,7 @@ WVDConnections
 resource alertLocalDiskFree10 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableLocalDiskAlerts) {
   name: '${alertNamePrefix}-HP-VM-LocDskFree10Prcnt-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - VM Local Disk Free <= 10% (${hostPoolName})'
     description: '${descriptionHeader}A session host in ${hostPoolName} has 10% or less free space on the C: drive. Review local profiles, temp files, and application logs consuming disk space.'
@@ -605,6 +635,7 @@ Perf
 resource alertLocalDiskFree5 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableLocalDiskAlerts) {
   name: '${alertNamePrefix}-HP-VM-LocDskFree5Prcnt-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - VM Local Disk Free <= 5% (${hostPoolName})'
     description: '${descriptionHeader}CRITICAL: A session host in ${hostPoolName} has 5% or less free space on the C: drive. Immediate action required to free disk space.'
@@ -661,47 +692,65 @@ Perf
 // FSLogix Profile Alerts
 // ------------------------------------
 
-// FSLogix profile < 5% free (EventID 34, Warning)
+// FSLogix profile < 5% free (EventID 34, Warning) - enriched with user and storage account context
+// Joins FSLogix warnings with WVDConnections to identify which user's profile is nearly full,
+// on which session host, and pointing to which storage account.
 resource alertFSLogixProfile5PctFree 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf5PrcntFree-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile < 5% Free Space (${hostPoolName})'
-    description: '${descriptionHeader}FSLogix Event ID 34: a user profile VHD in ${hostPoolName} has less than 5% free space. Expand the VHD or clean up profile data.'
+    description: '${descriptionHeader}FSLogix Event ID 34 in ${hostPoolName}: a user profile VHD has less than 5% free space. The alert includes the affected user, profile container, and storage account. Expand the VHD or clean up profile data.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'
-    windowSize: 'PT5M'
+    windowSize: 'PT1H'
+    overrideQueryTimeRange: 'P2D'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
       allOf: [
         {
           query: '''
-Event
-| where EventLog == "Microsoft-FSLogix-Apps/Admin"
-| where EventLevelName == "Warning"
-| where EventID == 34
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
-| extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
-| join kind=leftouter (
-    WVDAgentHealthStatus
+let fslogixWarnings =
+    Event
+    | where Source == "Microsoft-FSLogix-Apps"
+    | where EventID == 34
+    | extend
+        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription),
+        ProfileRaw     = extract(@"profilecontainers\\([^\\]+)", 1, RenderedDescription)
+    | extend ProfileID = tostring(split(ProfileRaw, "_")[0])
+    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;
+fslogixWarnings
+| join kind=inner (
+    WVDConnections
     | where _ResourceId contains '${hostPoolName}'
-    | parse _ResourceId with "/subscriptions/" subscriptionAgentHealth "/resourcegroups/" ResourceGroupAgentHealth "/providers/microsoft.desktopvirtualization/hostpools/" HostPool
-    | parse SessionHostResourceId with "/subscriptions/" VMsubscription "/resourceGroups/" VMresourceGroup "/providers/Microsoft.Compute/virtualMachines/" ComputerName
-    | extend ComputerName=tolower(ComputerName)
-    | summarize arg_max(TimeGenerated, *) by ComputerName
-    | project VMresourceGroup, ComputerName, HostPool
-) on ComputerName
+    | where State == "Connected"
+    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
+) on $left.Computer == $right.SessionHostName
+| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))
+| where TimeDiff <= 30
+| summarize arg_min(TimeDiff, *) by EventTime, Computer
+| project
+    EventTime,
+    UserName,
+    ProfileID,
+    SessionHostName = Computer,
+    StorageAccount,
+    EventID,
+    RenderedDescription,
+    ResourceId
+| order by EventTime desc
 '''
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'ComputerName', operator: 'Include', values: ['*'] }
-            { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
-            { name: 'VMresourceGroup', operator: 'Include', values: ['*'] }
-            { name: 'HostPool', operator: 'Include', values: ['*'] }
+            { name: 'UserName',        operator: 'Include', values: ['*'] }
+            { name: 'ProfileID',       operator: 'Include', values: ['*'] }
+            { name: 'SessionHostName', operator: 'Include', values: ['*'] }
+            { name: 'StorageAccount',  operator: 'Include', values: ['*'] }
           ]
+          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
@@ -718,6 +767,7 @@ Event
 resource alertFSLogixProfile2PctFree 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf2PrcntFree-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile < 2% Free Space (${hostPoolName})'
     description: '${descriptionHeader}CRITICAL: FSLogix Event ID 33 in ${hostPoolName}: a user profile VHD has less than 2% free space. The alert includes the affected user, profile container, and storage account. Expand the VHD or clean up profile data immediately.'
@@ -737,7 +787,7 @@ let fslogixErrors =
     | where Source == "Microsoft-FSLogix-Apps"
     | where EventID == 33
     | extend
-        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.(windows|usgovcloudapi)\.net)", 1, RenderedDescription),
+        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription),
         ProfileRaw     = extract(@"profilecontainers\\([^\\]+)", 1, RenderedDescription)
     | extend ProfileID = tostring(split(ProfileRaw, "_")[0])
     | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;
@@ -784,6 +834,7 @@ fslogixErrors
 resource alertFSLogixNetworkIssue 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf-NetwrkIssue-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Network Issue (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 43: a session host in ${hostPoolName} cannot reach the FSLogix profile storage. Verify network connectivity between the session hosts and the storage account.'
@@ -803,7 +854,7 @@ Event
 | where EventID == 43
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -836,6 +887,7 @@ Event
 resource alertFSLogixDiskAttachFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf-FailAttVHD-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Disk Failed to Attach (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 52 or 40: the profile VHD failed to attach for a session host in ${hostPoolName}. Investigate FSLogix errors for details.'
@@ -855,7 +907,7 @@ Event
 | where EventID == 52 or EventID == 40
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -888,6 +940,7 @@ Event
 resource alertFSLogixServiceDisabled 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf-SvcDisabled-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Service Disabled (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 60: the FSLogix Profile service is disabled on a session host in ${hostPoolName}. Re-enable and start the FSLogix service immediately.'
@@ -907,7 +960,7 @@ Event
 | where EventID == 60
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -940,6 +993,7 @@ Event
 resource alertFSLogixDiskCompaction 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf-DskCmpFail-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Disk Compaction Failed (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 62 or 63: profile disk compaction failed on a session host in ${hostPoolName}. The disk was marked for compaction but the operation failed.'
@@ -959,7 +1013,7 @@ Event
 | where EventID == 62 or EventID == 63
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -992,6 +1046,7 @@ Event
 resource alertFSLogixDiskInUse 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf-DskInUse-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Disk In Use by Another VM (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 51: a profile VHD is already attached to another VM in ${hostPoolName}. Ensure the user is not connected to multiple host pools sharing the same profile.'
@@ -1011,7 +1066,7 @@ Event
 | where EventID == 51
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" ResourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend ComputerName=tolower(ComputerName)
-| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated
+| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId
 | join kind=leftouter (
     WVDAgentHealthStatus
     | where _ResourceId contains '${hostPoolName}'
@@ -1047,6 +1102,7 @@ Event
 resource alertFSLogixCorruptedProfile 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf-Corrupt-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Corrupted / Temp Profile (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 28 in ${hostPoolName}: a user profile VHD is corrupted or could not be mounted and the user was loaded into a temporary profile. Data written during this session will be lost. Investigate and repair the profile VHD.'
@@ -1071,7 +1127,7 @@ let storageLookup =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
     | where RenderedDescription has ".file.core."
-    | extend StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.(windows|usgovcloudapi)\.net)", 1, RenderedDescription)
+    | extend StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription)
     | where isnotempty(StorageAccount)
     | project PathTime = TimeGenerated, Computer, StorageAccount;
 fslogixErrors
@@ -1124,6 +1180,7 @@ fslogixErrors
 resource alertFSLogixCompactionPrecheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLgxProf-CmpctPre-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix VHD Compaction Pre-Check Failure (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 58 or 61 in ${hostPoolName}: VHD disk compaction was aborted before starting, either because the host disk lacks free space for the operation (58) or the VHD is in use (61). Profile VHDs will grow unbounded until compaction can complete.'
@@ -1143,7 +1200,7 @@ let fslogixErrors =
     | where Source == "Microsoft-FSLogix-Apps"
     | where EventID in (58, 61)
     | extend
-        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.(windows|usgovcloudapi)\.net)", 1, RenderedDescription),
+        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription),
         ProfileRaw     = extract(@"profilecontainers\\([^\\]+)", 1, RenderedDescription)
     | extend ProfileID = tostring(split(ProfileRaw, "_")[0])
     | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;
@@ -1195,6 +1252,7 @@ fslogixErrors
 resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
   name: '${alertNamePrefix}-HP-Usr-SlowLogon-${hostPoolName}'
   location: location
+  tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Slow Session Logon > 2 Minutes (${hostPoolName})'
     description: '${descriptionHeader}A user in ${hostPoolName} took more than 2 minutes from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.'

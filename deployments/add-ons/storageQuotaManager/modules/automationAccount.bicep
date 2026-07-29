@@ -41,16 +41,19 @@ still created so the account is fully configured; the runbook just needs to be p
 manually before the first scheduled run. See README.md for portal and PowerShell steps.''')
 param runbookContentUri string = ''
 
-@description('''Optional. Set to true on first deployment to let ARM create the job schedule link between
-the runbook and schedule. Set to false on every redeployment.
+@description('''Optional. Controls whether ARM creates the job schedule link between the runbook and
+schedule. Leave true for normal deployments - ARM handles idempotent redeployment correctly when
+the automation account already exists.
 
-WHY: Azure Automation caches the runbook/schedule association keyed on the automation account
-NAME. This cache persists even after deleting the job schedule resource, the child resources,
-or the automation account itself - and is restored the moment an account with that name exists
-again. ARM cannot create a resource that already exists, so including this resource on
-redeployment always produces: Code: Conflict / A jobSchedule with same id already exists.
+Set to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.
+This error occurs specifically when the automation account was previously DELETED from ARM and is
+being recreated with the same name. Azure Automation caches the runbook/schedule association by
+account name; that cache persists through ARM deletion and is restored the moment an account with
+the same name exists again, causing ARM's create call to conflict with the cached association.
 
-The existing link is not affected when this is false - the runbook continues to run on schedule.''')
+When set to false, the existing job schedule link is preserved and the runbook continues to run
+on schedule. To clear the conflict manually from Azure Cloud Shell (required before setting back
+to true), see the snippet in the comment above the jobSchedule resource below.''')
 param createJobSchedule bool = true
 
 // ========== //
@@ -78,7 +81,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2023-11-01' 
       name: 'Basic'
     }
     publicNetworkAccess: false
-    disableLocalAuth: false
+    disableLocalAuth: true
   }
 }
 

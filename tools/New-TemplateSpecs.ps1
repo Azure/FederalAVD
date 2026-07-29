@@ -121,6 +121,7 @@ if ($CreateAddOns) {
         @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
         @{ Name = 'avd-session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
         @{ Name = 'avd-session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
+        @{ Name = 'avd-alerts'; DisplayName = 'AVD Alerts'; Description = 'Deploys Azure Monitor alerts for Azure Virtual Desktop'; FolderName = 'avdAlerts' }
     )
 
     foreach ($addOn in $addOns) {

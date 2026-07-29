@@ -88,11 +88,12 @@ param actionGroupResourceId string
 Each object must have the following properties:
   hostPoolResourceId:  string  - Full resource ID of the AVD host pool.
   vmResourceGroupId:   string  - Resource ID of the resource group containing the session host VMs.
+  hostPoolType:        string  - 'Pooled' or 'Personal'. Controls which alerts are deployed.
 
 Example:
 [
-  { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-01" }
-  { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-02" }
+  { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-01", "hostPoolType": "Pooled" }
+  { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-02", "hostPoolType": "Personal" }
 ]
 ''')
 param hostPoolInfo array
@@ -302,6 +303,8 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
     enableConnectionAlerts: enableConnectionAlerts
     enableLocalDiskAlerts: enableLocalDiskAlerts
     enableFslogixAlerts: enableFslogixAlerts
+    hostPoolType: hp.?hostPoolType ?? 'Pooled'
+    hostPoolResourceId: hp.hostPoolResourceId
   }
   dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]
@@ -320,6 +323,7 @@ module vmMetricAlerts 'modules/vmMetricAlerts.bicep' = [for hp in hostPoolInfoDe
     enableCpuAlerts: enableCpuAlerts
     enableMemoryAlerts: enableMemoryAlerts
     enableOsDiskAlerts: enableOsDiskAlerts
+    hostPoolResourceId: hp.hostPoolResourceId
   }
 }]
 

@@ -41,11 +41,18 @@ param enableMemoryAlerts bool = true
 @description('Optional. When false, OS disk bandwidth alert rules are not deployed.')
 param enableOsDiskAlerts bool = true
 
+@description('Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for cost management.')
+param hostPoolResourceId string
+
 // ========== //
 // Variables  //
 // ========== //
 
 var descriptionHeader = 'FederalAVD - Automated Alert\n'
+
+var hostPoolTags = {
+  'cm-resource-parent': hostPoolResourceId
+}
 
 var metricActions = [
   {
@@ -61,6 +68,7 @@ var metricActions = [
 resource alertCPU85 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableCpuAlerts) {
   name: '${alertNamePrefix}-HP-VM-HighCPU85Prcnt-${hostPoolName}'
   location: 'global'
+  tags: hostPoolTags
   properties: {
     description: '${descriptionHeader}Session host CPU usage exceeded 85% average over 15 minutes in ${hostPoolName}. Review high-CPU processes and consider adding more session hosts or adjusting the scaling plan.'
     severity: 2
@@ -93,6 +101,7 @@ resource alertCPU85 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableCpu
 resource alertCPU95 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableCpuAlerts) {
   name: '${alertNamePrefix}-HP-VM-HighCPU95Prcnt-${hostPoolName}'
   location: 'global'
+  tags: hostPoolTags
   properties: {
     description: '${descriptionHeader}CRITICAL: Session host CPU usage exceeded 95% average over 15 minutes in ${hostPoolName}. Users on this host are likely experiencing severe performance degradation.'
     severity: 1
@@ -125,6 +134,7 @@ resource alertCPU95 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableCpu
 resource alertMemory2GB 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableMemoryAlerts) {
   name: '${alertNamePrefix}-HP-VM-AvailMemLess2GB-${hostPoolName}'
   location: 'global'
+  tags: hostPoolTags
   properties: {
     description: '${descriptionHeader}Available memory on a session host in ${hostPoolName} dropped below 2 GB. Users on this host may experience application slowdowns. Review memory usage and consider adding more session hosts.'
     severity: 2
@@ -157,6 +167,7 @@ resource alertMemory2GB 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enabl
 resource alertMemory1GB 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableMemoryAlerts) {
   name: '${alertNamePrefix}-HP-VM-AvailMemLess1GB-${hostPoolName}'
   location: 'global'
+  tags: hostPoolTags
   properties: {
     description: '${descriptionHeader}CRITICAL: Available memory on a session host in ${hostPoolName} dropped below 1 GB. Users will likely experience application crashes and severe performance issues.'
     severity: 1
@@ -189,6 +200,7 @@ resource alertMemory1GB 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enabl
 resource alertOSDiskBandwidth85 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableOsDiskAlerts) {
   name: '${alertNamePrefix}-HP-VM-OSDiskBW85Prcnt-${hostPoolName}'
   location: 'global'
+  tags: hostPoolTags
   properties: {
     description: '${descriptionHeader}OS Disk bandwidth consumption on a session host in ${hostPoolName} is at or above 85%. The VM is nearing its disk IOPS limit. Consider moving to a larger or premium disk SKU.'
     severity: 2
@@ -228,6 +240,7 @@ resource alertOSDiskBandwidth85 'Microsoft.Insights/metricAlerts@2018-03-01' = i
 resource alertOSDiskBandwidth95 'Microsoft.Insights/metricAlerts@2018-03-01' = if (enableOsDiskAlerts) {
   name: '${alertNamePrefix}-HP-VM-OSDiskBW95Prcnt-${hostPoolName}'
   location: 'global'
+  tags: hostPoolTags
   properties: {
     description: '${descriptionHeader}CRITICAL: OS Disk bandwidth on a session host in ${hostPoolName} is at or above 95%. Users will experience severe I/O latency. Upgrade disk SKU immediately.'
     severity: 1

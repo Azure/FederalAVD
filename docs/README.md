@@ -51,13 +51,23 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 
 ---
 
+## Add-Ons
+
+| Page | Description |
+|------|-------------|
+| [**Add-Ons Overview**](add-ons.md) | Index of all available add-ons with selection guidance, Zero Trust alignment summary, and deployment methods. Start here. |
+| [AVD Alerts](avd-alerts.md) | 40 Azure Monitor alert rules covering host pool capacity, session host health, FSLogix profiles, VM performance, storage, and Service Health. |
+| [Session Host Replacer](session-host-replacer.md) | Automated Azure Function that drains and replaces session hosts when a new gallery image version is published. |
+| [Storage Quota Manager](storage-quota-manager.md) | Automated Azure Automation runbook that expands Azure Files Premium share quotas before they fill. Prevents FSLogix profile outages. |
+| [M365 Route Table Updater](m365-route-table-updater.md) | Automated Azure Automation runbook that keeps an Azure Route Table current with M365 IP ranges. For force-tunneled environments. |
+
+---
+
 ## Operations and Cost Management
 
 | Page | Description |
 |------|-------------|
 | [BCDR — Business Continuity & Disaster Recovery](bcdr.md) | Availability zones, cross-region replication, FSLogix Cloud Cache, image gallery replication, VM backup, session host replacer rollback, and RTO/RPO reference. |
-| [Session Host Replacer Add-On](session-host-replacer.md) | Automated Azure Function that drains and replaces session hosts when a new image version is available. |
-| [M365 Route Table Updater Add-On](m365-route-table-updater.md) | Automated Azure Automation runbook that keeps an Azure Route Table current with M365 IP ranges. Designed for force-tunneled environments where M365 traffic must stay on the Microsoft backbone rather than traversing an on-premises path. |
 | [Chargeback for Shared Resources](chargeback-shared-resources.md) | Cost attribution strategies for shared infrastructure (RSV, storage, networking) using existing deployment tags — no code changes required. |
 
 ---

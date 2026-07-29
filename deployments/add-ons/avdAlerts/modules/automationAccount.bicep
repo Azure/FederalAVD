@@ -44,9 +44,14 @@ param storageAccountResourceIdsJson string = '[]'
 @description('Required. UTC timestamp used to compute the first schedule start time.')
 param deploymentTime string
 
-@description('''Optional. Set to true on first deployment to let ARM create the job schedule links.
-Set to false on redeployments. Azure Automation caches job schedule associations by account
-name and raises a Conflict error if ARM tries to create a link that already exists.''')
+@description('''Optional. Controls whether ARM creates the job schedule links between runbooks and
+schedules. Leave true for normal deployments - ARM handles idempotent redeployment correctly when
+the automation account already exists.
+
+Set to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.
+This error occurs specifically when the automation account was previously deleted from ARM and is
+being recreated with the same name. The Azure Automation backend caches associations by account
+name through ARM deletion, causing the recreate to conflict with the cached link.''')
 param createJobSchedules bool = true
 
 // ========== //
@@ -56,7 +61,7 @@ param createJobSchedules bool = true
 var runbookNameStorage  = 'AvdStorageLogData'
 
 // Schedule start time a few minutes after deployment time
-var scheduleStorageStart = dateTimeAdd(deploymentTime, 'PT5M')
+var scheduleStorageStart = dateTimeAdd(deploymentTime, 'PT10M')
 
 // ========== //
 // Resources  //
