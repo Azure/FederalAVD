@@ -64,11 +64,52 @@
 
         // ── Image Customizations ───────────────────────────────────────────────
         //    Artifacts are downloaded from artifactsContainerUri by blob name.
+        //    Each entry:
+        //      name          - Unique label (used in logs and Run Command name)
+        //      blobNameOrUri - Blob name relative to artifactsContainerUri, OR full HTTPS URI
+        //      arguments     - (Optional) For .ps1/.zip: "-ParamName Value -SwitchParam"
+        //                      For .exe/.msi: "/quiet /norestart"
+        //      restart       - (Optional, default false) Restart the build VM after this step
+        //
+        //    Switch parameters (no value) become $true in your script.
+        //    Example: "-EnableRemoteApp" passes $EnableRemoteApp = $true
         "applyWindowsDesktopOptimizations": {
             "value": true
         },
         "customizations": {
-            "value": []
+            "value": [
+                {
+                    // DoD-STIGs: applies DISA STIG GPOs. Version stamps the registry for
+                    // upgrade detection on subsequent builds. SearchForApplications skips
+                    // third-party app STIGs when those apps are not installed.
+                    "name": "DoD-STIGs",
+                    "blobNameOrUri": "DoD-STIGs.zip",
+                    "arguments": "-Version 2025.10 -Upgrade -SearchForApplications"
+                },
+                {
+                    // Configure-Office365Policy: optional overrides. Remove arguments
+                    // entirely to accept all defaults (1-month email cache, primary calendar).
+                    "name": "Configure-Office365Policy",
+                    "blobNameOrUri": "Configure-Office365Policy.zip",
+                    "arguments": "-EmailCacheTime \"1 month\" -CalendarSync \"Primary Calendar Only\" -CalendarSyncMonths 1"
+                },
+                {
+                    // Configure-EdgePolicy: SmartScreenAllowListDomains and
+                    // PopupsAllowedForUrls are JSON arrays. Defaults cover standard
+                    // Azure Commercial and Government portal URLs.
+                    "name": "Configure-EdgePolicy",
+                    "blobNameOrUri": "Configure-EdgePolicy.zip",
+                    "arguments": ""
+                },
+                {
+                    // Example: installer that requires a restart before the next step.
+                    // "restart": true causes the build VM to reboot before continuing.
+                    "name": "VSCode",
+                    "blobNameOrUri": "VSCode.zip",
+                    "arguments": "/verysilent /mergetasks=!runcode",
+                    "restart": true
+                }
+            ]
         },
 
         // ── Bloatware Removal ──────────────────────────────────────────────────

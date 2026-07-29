@@ -865,9 +865,18 @@ Edit your host pool parameters file:
   "sessionHostCustomizations": {
     "value": [
       {
-        "name": "Configure-OneDrive",
-        "blobNameOrUri": "Configure-OneDrive.zip",
-        "arguments": "-TenantId 12345678-1234-1234-1234-123456789012 -EnableKFM"
+        // Configure-OneDriveKFMPolicy: -TenantId is mandatory.
+        // Add -EnableRemoteApp for RemoteApp (not full-desktop) host pools.
+        "name": "Configure-OneDriveKFMPolicy",
+        "blobNameOrUri": "Configure-OneDriveKFMPolicy.zip",
+        "arguments": "-TenantId 12345678-1234-1234-1234-123456789012"
+      },
+      {
+        // Configure-RemoteDesktopPolicy: use -EnableRemoteApp for RemoteApp pools.
+        // Times are in milliseconds (21600000 = 6 hours).
+        "name": "Configure-RemoteDesktopPolicy",
+        "blobNameOrUri": "Configure-RemoteDesktopPolicy.zip",
+        "arguments": "-MaxIdleTime 21600000 -MaxDisconnectionionTime 21600000"
       },
       {
         "name": "Install-LineOfBusinessApp",
