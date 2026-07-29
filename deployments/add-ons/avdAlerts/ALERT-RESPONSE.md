@@ -137,7 +137,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - Session Disconnected Over 72 Hours — Sev 1
+### AVD - Session Disconnected Over 72 Hours — Sev 2
 
 **Trigger:** A user has been disconnected for more than 72 hours.  
 **Meaning:** This is almost certainly a stale session that was never properly terminated. It may be blocking drain automation or consuming a host pool slot indefinitely.
@@ -313,7 +313,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - FSLogix Corrupted / Temp Profile — Sev 2
+### AVD - FSLogix Corrupted / Temp Profile — Sev 1
 
 **Trigger:** FSLogix Event ID 28 — a user was loaded into a temporary profile because the profile VHD is corrupted or could not be mounted.  
 **Alert dimensions:** `UserName`, `ProfileID`, `SessionHostName`, `StorageAccount`

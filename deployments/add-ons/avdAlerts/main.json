@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "16678888432064059009"
+      "templateHash": "6935866736860621826"
     }
   },
   "parameters": {
@@ -1019,7 +1019,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "788650041652677678"
+              "templateHash": "8502205886097621871"
             }
           },
           "parameters": {
@@ -1598,7 +1598,7 @@
               "properties": {
                 "displayName": "[format('{0} - Session Disconnected Over 72 Hours ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}A user in {1} has a disconnected session lasting more than 72 hours. This likely indicates stale sessions blocking scaling automation. Verify session limit policies.', variables('descriptionHeader'), parameters('hostPoolName'))]",
-                "severity": 1,
+                "severity": 2,
                 "enabled": true,
                 "evaluationFrequency": "PT1H",
                 "windowSize": "PT1H",
@@ -1662,7 +1662,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Perf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 10.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, CounterValue, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool, _ResourceId\r\n) on ComputerName\r\n| where ComputerName1 contains ComputerName\r\n",
+                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 10.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = '${hostPoolName}'\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1687,7 +1687,7 @@
                           ]
                         }
                       ],
-                      "resourceIdColumn": "_ResourceId",
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -1722,7 +1722,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Perf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 5.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, CounterValue, subscription, ResourceGroup, TimeGenerated\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool, _ResourceId\r\n) on ComputerName\r\n| where ComputerName1 contains ComputerName\r\n",
+                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 5.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = '${hostPoolName}'\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1907,7 +1907,7 @@
                 "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
-                "windowSize": "P1D",
+                "windowSize": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1915,7 +1915,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1947,7 +1947,7 @@
                           ]
                         }
                       ],
-                      "resourceIdColumn": "_ResourceId",
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -1973,7 +1973,7 @@
                 "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
-                "windowSize": "P1D",
+                "windowSize": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1981,11 +1981,18 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 52 or EventID == 40\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 52 or EventID == 40\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project EventTime = TimeGenerated, ComputerName, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId\r\n| join kind=leftouter (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | extend SessionHostShort = tolower(split(SessionHostName, '.')[0])\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostShort\r\n) on $left.ComputerName == $right.SessionHostShort\r\n| extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)\r\n| summarize arg_min(TimeDiff, *) by EventTime, ComputerName\r\n| project EventTime, ComputerName, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
                           "name": "ComputerName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "UserName",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -2013,7 +2020,7 @@
                           ]
                         }
                       ],
-                      "resourceIdColumn": "_ResourceId",
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -2039,7 +2046,7 @@
                 "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
-                "windowSize": "P1D",
+                "windowSize": "PT4H",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -2047,7 +2054,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2079,7 +2086,7 @@
                           ]
                         }
                       ],
-                      "resourceIdColumn": "_ResourceId",
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -2105,7 +2112,7 @@
                 "severity": 2,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
-                "windowSize": "P1D",
+                "windowSize": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -2113,7 +2120,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2145,7 +2152,7 @@
                           ]
                         }
                       ],
-                      "resourceIdColumn": "_ResourceId",
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -2167,11 +2174,11 @@
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile Disk In Use by Another VM ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}FSLogix Event ID 51: a profile VHD is already attached to another VM in {1}. Ensure the user is not connected to multiple host pools sharing the same profile.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 51: a profile VHD is already attached to another VM in {1}. Check for a stale .lck file on the share, or a session that did not cleanly log off.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
-                "windowSize": "P1D",
+                "windowSize": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -2179,11 +2186,18 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" ResourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName=tolower(ComputerName)\r\n| project ComputerName, RenderedDescription, subscription, ResourceGroup, TimeGenerated, _ResourceId\r\n| join kind=leftouter (\r\n    WVDAgentHealthStatus\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse _ResourceId with \"/subscriptions/\" subscriptionAgentHealth \"/resourcegroups/\" ResourceGroupAgentHealth \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n    | parse SessionHostResourceId with \"/subscriptions/\" VMsubscription \"/resourceGroups/\" VMresourceGroup \"/providers/Microsoft.Compute/virtualMachines/\" ComputerName\r\n    | extend ComputerName=tolower(ComputerName)\r\n    | summarize arg_max(TimeGenerated, *) by ComputerName\r\n    | project VMresourceGroup, ComputerName, HostPool\r\n) on ComputerName\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project EventTime = TimeGenerated, ComputerName, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId\r\n| join kind=leftouter (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | extend SessionHostShort = tolower(split(SessionHostName, '.')[0])\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostShort\r\n) on $left.ComputerName == $right.SessionHostShort\r\n| extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)\r\n| summarize arg_min(TimeDiff, *) by EventTime, ComputerName\r\n| project EventTime, ComputerName, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
                           "name": "ComputerName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "UserName",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -2211,7 +2225,7 @@
                           ]
                         }
                       ],
-                      "resourceIdColumn": "_ResourceId",
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -2234,7 +2248,7 @@
               "properties": {
                 "displayName": "[format('{0} - FSLogix Corrupted / Temp Profile ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
                 "description": "[format('{0}FSLogix Event ID 28 in {1}: a user profile VHD is corrupted or could not be mounted and the user was loaded into a temporary profile. Data written during this session will be lost. Investigate and repair the profile VHD.', variables('descriptionHeader'), parameters('hostPoolName'))]",
-                "severity": 2,
+                "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT1H",
