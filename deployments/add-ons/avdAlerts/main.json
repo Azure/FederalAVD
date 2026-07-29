@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "567657568568630336"
+      "templateHash": "7931967921813404300"
     }
   },
   "parameters": {
@@ -1019,7 +1019,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "5293211698336392016"
+              "templateHash": "4514201116207755219"
             }
           },
           "parameters": {
@@ -1148,7 +1148,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1208,7 +1208,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1268,7 +1268,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))\r\n| extend ActiveSessions = tolong(ActiveSessions)\r\n| extend AllowNewSessions = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalActive   = sum(ActiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1328,7 +1328,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| summarize arg_max(TimeGenerated, Status, _ResourceId) by SessionHostName\r\n| where Status != 'Available' and Status != 'Shutdown'\r\n| project SessionHostName, Status, ResourceId = _ResourceId\r\n",
+                      "query": "WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| summarize arg_max(TimeGenerated, Status, _ResourceId) by SessionHostName\r\n| where Status != 'Available' and Status != 'Shutdown'\r\n| project SessionHostName, Status, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1381,7 +1381,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDConnections\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId\r\n) on CorrelationId\r\n| join kind=leftouter (\r\n    WVDCheckpoints\r\n    | summarize Checkpoints=make_list(pack('Time', TimeGenerated, 'Name', Name, 'Parameters', Parameters, 'Source', Source)) by CorrelationId\r\n    | mv-apply Checkpoints on (\r\n        order by todatetime(Checkpoints['Time']) asc\r\n        | summarize Checkpoints=make_list(Checkpoints)\r\n    )\r\n) on CorrelationId\r\n| project-away CorrelationId1, CorrelationId2\r\n| order by TimeGenerated desc\r\n| where Errors[0].CodeSymbolic == \"ConnectionFailedNoHealthyRdshAvailable\"\r\n",
+                      "query": "WVDConnections\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId\r\n) on CorrelationId\r\n| join kind=leftouter (\r\n    WVDCheckpoints\r\n    | summarize Checkpoints=make_list(pack('Time', TimeGenerated, 'Name', Name, 'Parameters', Parameters, 'Source', Source)) by CorrelationId\r\n    | mv-apply Checkpoints on (\r\n        order by todatetime(Checkpoints['Time']) asc\r\n        | summarize Checkpoints=make_list(Checkpoints)\r\n    )\r\n) on CorrelationId\r\n| project-away CorrelationId1, CorrelationId2\r\n| order by TimeGenerated desc\r\n| where Errors[0].CodeSymbolic == \"ConnectionFailedNoHealthyRdshAvailable\"\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1433,7 +1433,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let MapToDesc = (idx: long) {\r\n    case(idx == 0, \"DomainJoin\",\r\n    idx == 1, \"DomainTrust\",\r\n    idx == 2, \"FSLogix\",\r\n    idx == 3, \"SxSStack\",\r\n    idx == 4, \"URLCheck\",\r\n    idx == 5, \"GenevaAgent\",\r\n    idx == 6, \"DomainReachable\",\r\n    idx == 7, \"WebRTCRedirector\",\r\n    idx == 8, \"SxSStackEncryption\",\r\n    idx == 9, \"IMDSReachable\",\r\n    idx == 10, \"MSIXPackageStaging\",\r\n    \"InvalidIndex\")\r\n};\r\nWVDAgentHealthStatus\r\n| where TimeGenerated > ago(10m)\r\n| where Status != 'Available'\r\n| where AllowNewSessions == true\r\n| extend CheckFailed = parse_json(SessionHostHealthCheckResult)\r\n| mv-expand CheckFailed\r\n| where CheckFailed.AdditionalFailureDetails.ErrorCode != 0\r\n| extend HealthCheckName = tolong(CheckFailed.HealthCheckName)\r\n| extend HealthCheckResult = tolong(CheckFailed.HealthCheckResult)\r\n| extend HealthCheckDesc = MapToDesc(HealthCheckName)\r\n| where HealthCheckDesc != \"InvalidIndex\"\r\n| where _ResourceId contains '${hostPoolName}'\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" HostPoolResourceGroup \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n| parse SessionHostResourceId with \"/subscriptions/\" HostSubscription \"/resourceGroups/\" SessionHostRG \"/providers/Microsoft.Compute/virtualMachines/\" SessionHostName\r\n",
+                      "query": "let MapToDesc = (idx: long) {\r\n    case(idx == 0, \"DomainJoin\",\r\n    idx == 1, \"DomainTrust\",\r\n    idx == 2, \"FSLogix\",\r\n    idx == 3, \"SxSStack\",\r\n    idx == 4, \"URLCheck\",\r\n    idx == 5, \"GenevaAgent\",\r\n    idx == 6, \"DomainReachable\",\r\n    idx == 7, \"WebRTCRedirector\",\r\n    idx == 8, \"SxSStackEncryption\",\r\n    idx == 9, \"IMDSReachable\",\r\n    idx == 10, \"MSIXPackageStaging\",\r\n    \"InvalidIndex\")\r\n};\r\nWVDAgentHealthStatus\r\n| where TimeGenerated > ago(10m)\r\n| where Status != 'Available'\r\n| where AllowNewSessions == true\r\n| extend CheckFailed = parse_json(SessionHostHealthCheckResult)\r\n| mv-expand CheckFailed\r\n| where CheckFailed.AdditionalFailureDetails.ErrorCode != 0\r\n| extend HealthCheckName = tolong(CheckFailed.HealthCheckName)\r\n| extend HealthCheckResult = tolong(CheckFailed.HealthCheckResult)\r\n| extend HealthCheckDesc = MapToDesc(HealthCheckName)\r\n| where HealthCheckDesc != \"InvalidIndex\"\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" HostPoolResourceGroup \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n| parse SessionHostResourceId with \"/subscriptions/\" HostSubscription \"/resourceGroups/\" SessionHostRG \"/providers/Microsoft.Compute/virtualMachines/\" SessionHostName\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1499,7 +1499,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId\r\n) on CorrelationId\r\n| join kind=leftouter (\r\n    WVDCheckpoints\r\n    | summarize Checkpoints=make_list(pack('Time', TimeGenerated, 'Name', Name, 'Parameters', Parameters, 'Source', Source)) by CorrelationId\r\n    | mv-apply Checkpoints on (\r\n        order by todatetime(Checkpoints['Time']) asc\r\n        | summarize Checkpoints=make_list(Checkpoints)\r\n    )\r\n) on CorrelationId\r\n| project-away CorrelationId1, CorrelationId2\r\n| order by TimeGenerated desc\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, '/')[4])\r\n| extend HostPool=tostring(split(_ResourceId, '/')[8])\r\n| where HostPool =~ '${hostPoolName}'\r\n| where isnotempty(Errors)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| extend ErrorMessage=tostring(Errors[0].Message)\r\n| project TimeGenerated, HostPool, ResourceGroup, UserName, ClientOS, ClientVersion, ClientSideIPAddress, ConnectionType, ErrorShort, ErrorMessage\r\n",
+                      "query": "WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId\r\n) on CorrelationId\r\n| join kind=leftouter (\r\n    WVDCheckpoints\r\n    | summarize Checkpoints=make_list(pack('Time', TimeGenerated, 'Name', Name, 'Parameters', Parameters, 'Source', Source)) by CorrelationId\r\n    | mv-apply Checkpoints on (\r\n        order by todatetime(Checkpoints['Time']) asc\r\n        | summarize Checkpoints=make_list(Checkpoints)\r\n    )\r\n) on CorrelationId\r\n| project-away CorrelationId1, CorrelationId2\r\n| order by TimeGenerated desc\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, '/')[4])\r\n| extend HostPool=tostring(split(_ResourceId, '/')[8])\r\n| where HostPool =~ \"${hostPoolName}\"\r\n| where isnotempty(Errors)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| extend ErrorMessage=tostring(Errors[0].Message)\r\n| project TimeGenerated, HostPool, ResourceGroup, UserName, ClientOS, ClientVersion, ClientSideIPAddress, ConnectionType, ErrorShort, ErrorMessage\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1558,7 +1558,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDConnections\r\n| where TimeGenerated > ago(24h)\r\n| where State == \"Connected\"\r\n| where _ResourceId contains '${hostPoolName}'\r\n| project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName\r\n| join (\r\n    WVDConnections\r\n    | where State == \"Completed\"\r\n    | project EndTime=TimeGenerated, CorrelationId\r\n) on CorrelationId\r\n| project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName\r\n| where Duration >= timespan(24:00:00)\r\n| sort by Duration desc\r\n",
+                      "query": "WVDConnections\r\n| where TimeGenerated > ago(24h)\r\n| where State == \"Connected\"\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName\r\n| join (\r\n    WVDConnections\r\n    | where State == \"Completed\"\r\n    | project EndTime=TimeGenerated, CorrelationId\r\n) on CorrelationId\r\n| project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName\r\n| where Duration >= timespan(24:00:00)\r\n| sort by Duration desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1610,7 +1610,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDConnections\r\n| where TimeGenerated > ago(24h)\r\n| where State == \"Connected\"\r\n| where _ResourceId contains '${hostPoolName}'\r\n| project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName\r\n| join (\r\n    WVDConnections\r\n    | where State == \"Completed\"\r\n    | project EndTime=TimeGenerated, CorrelationId\r\n) on CorrelationId\r\n| project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName\r\n| where Duration >= timespan(72:00:00)\r\n| sort by Duration desc\r\n",
+                      "query": "WVDConnections\r\n| where TimeGenerated > ago(24h)\r\n| where State == \"Connected\"\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName\r\n| join (\r\n    WVDConnections\r\n    | where State == \"Completed\"\r\n    | project EndTime=TimeGenerated, CorrelationId\r\n) on CorrelationId\r\n| project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName\r\n| where Duration >= timespan(72:00:00)\r\n| sort by Duration desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1662,7 +1662,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 10.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = '${hostPoolName}'\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 10.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1722,7 +1722,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 5.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = '${hostPoolName}'\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 5.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1782,7 +1782,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let fslogixWarnings =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 34\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixWarnings\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
+                      "query": "let fslogixWarnings =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 34\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixWarnings\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1849,7 +1849,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 33\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
+                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 33\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1915,11 +1915,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
-                          "name": "ComputerName",
+                          "name": "Computer",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -1969,7 +1969,7 @@
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - FSLogix Profile Disk Attach Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}FSLogix Event ID 52 or 40: the profile VHD failed to attach on a session host in {1}. Check FSLogix agent logs on the affected session host, verify the storage account is reachable from the VM, and confirm the VHD is not locked by another session or process.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 52 or 40: the profile VHD failed to attach at logon on a session host in {1}. The user received a temporary profile. Check FSLogix agent logs on the affected session host, verify the storage account is reachable from the VM, and confirm the VHD is not locked by another session or process.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -1981,11 +1981,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 52 or EventID == 40\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project EventTime = TimeGenerated, ComputerName, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId\r\n| join kind=leftouter (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | extend SessionHostShort = tolower(split(SessionHostName, '.')[0])\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostShort\r\n) on $left.ComputerName == $right.SessionHostShort\r\n| extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)\r\n| summarize arg_min(TimeDiff, *) by EventTime, ComputerName\r\n| project EventTime, ComputerName, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID in (52, 40)\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project EventTime = TimeGenerated, Computer, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId\r\n| join kind=leftouter (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project EventTime, Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
-                          "name": "ComputerName",
+                          "name": "Computer",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -1993,6 +1993,79 @@
                         },
                         {
                           "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "RenderedDescription",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-ReattachFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix VHD Reattach Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 56: a session host in {1} failed to reattach a profile VHD during user reconnect, exhausting all retry attempts (>= 3 events in 15 minutes). The profile path in RenderedDescription identifies the affected user. Check storage account reachability and the FSLogix log on the affected session host.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 56\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| summarize\r\n    EventCount      = count(),\r\n    VMresourceGroup = any(VMresourceGroup),\r\n    HostPool        = any(HostPool),\r\n    ResourceId      = any(_ResourceId)\r\n  by Computer, RenderedDescription\r\n| where EventCount >= 3\r\n| project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId\r\n",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "EventCount",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -2054,11 +2127,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
-                          "name": "ComputerName",
+                          "name": "Computer",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -2120,11 +2193,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
-                          "name": "ComputerName",
+                          "name": "Computer",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -2186,11 +2259,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend\r\n    ComputerName = tolower(ComputerName),\r\n    HostPool     = '${hostPoolName}'\r\n| project EventTime = TimeGenerated, ComputerName, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId\r\n| join kind=leftouter (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | extend SessionHostShort = tolower(split(SessionHostName, '.')[0])\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostShort\r\n) on $left.ComputerName == $right.SessionHostShort\r\n| extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)\r\n| summarize arg_min(TimeDiff, *) by EventTime, ComputerName\r\n| project EventTime, ComputerName, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId\r\n",
+                      "query": "Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),\r\n    HostPool        = \"${hostPoolName}\"\r\n| project Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
-                          "name": "ComputerName",
+                          "name": "Computer",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -2260,7 +2333,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 28\r\n    | extend ProfileID = tostring(extract(@\"Username:\\s*([^\\s]+)\", 1, RenderedDescription))\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, EventID, RenderedDescription;\r\nlet storageLookup =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where RenderedDescription has \".file.core.\"\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | where isnotempty(StorageAccount)\r\n    | project PathTime = TimeGenerated, Computer, StorageAccount;\r\nfslogixErrors\r\n| join kind=leftouter (storageLookup) on Computer\r\n| extend PathDiff = abs(datetime_diff('minute', EventTime, PathTime))\r\n| where PathDiff <= 60\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
+                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 28\r\n    | extend ProfileID = tostring(extract(@\"Username:\\s*([^\\s]+)\", 1, RenderedDescription))\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, EventID, RenderedDescription;\r\nlet storageLookup =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where RenderedDescription has \".file.core.\"\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | where isnotempty(StorageAccount)\r\n    | project PathTime = TimeGenerated, Computer, StorageAccount;\r\nfslogixErrors\r\n| join kind=leftouter (storageLookup) on Computer\r\n| extend PathDiff = abs(datetime_diff('minute', EventTime, PathTime))\r\n| where PathDiff <= 60\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2327,7 +2400,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID in (58, 61)\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
+                      "query": "let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID in (58, 61)\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff('minute', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2401,7 +2474,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "WVDConnections\r\n| where TimeGenerated > ago(30m)\r\n| where _ResourceId contains '${hostPoolName}'\r\n| where State == \"Started\"\r\n| project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId\r\n| join kind=inner (\r\n    WVDCheckpoints\r\n    | where _ResourceId contains '${hostPoolName}'\r\n    | where Name =~ \"ShellReady\"\r\n        or (Name =~ \"LaunchExecutable\" and tostring(Parameters.connectionStage) == \"RdpShellAppExecuted\")\r\n        or Name =~ \"RdpShellAppExecuted\"\r\n    | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId\r\n) on CorrelationId\r\n| extend LogonSeconds = datetime_diff('second', ShellReadyTime, StartTime)\r\n| where LogonSeconds > 120\r\n| project\r\n    StartTime,\r\n    UserName,\r\n    SessionHostName,\r\n    LogonSeconds,\r\n    LogonMinutes = round(LogonSeconds / 60.0, 1),\r\n    ResourceId\r\n| order by LogonSeconds desc\r\n",
+                      "query": "WVDConnections\r\n| where TimeGenerated > ago(30m)\r\n| where _ResourceId has \"${hostPoolName}\"\r\n| where State == \"Started\"\r\n| project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId\r\n| join kind=inner (\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | where Name =~ \"ShellReady\"\r\n        or (Name =~ \"LaunchExecutable\" and tostring(Parameters.connectionStage) == \"RdpShellAppExecuted\")\r\n        or Name =~ \"RdpShellAppExecuted\"\r\n    | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId\r\n) on CorrelationId\r\n| extend LogonSeconds = datetime_diff('second', ShellReadyTime, StartTime)\r\n| where LogonSeconds > 120\r\n| project\r\n    StartTime,\r\n    UserName,\r\n    SessionHostName,\r\n    LogonSeconds,\r\n    LogonMinutes = round(LogonSeconds / 60.0, 1),\r\n    ResourceId\r\n| order by LogonSeconds desc\r\n",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {

@@ -20,6 +20,7 @@
 //     - FSLogix profile < 2% free   (EventID 33, Sev 1)
 //     - FSLogix profile network issue  (EventID 43, Sev 1)
 //     - FSLogix profile disk attach failure  (EventID 52/40, Sev 1)
+//     - FSLogix VHD reattach failed (>= 3 events per host)  (EventID 56, Sev 2)
 //     - FSLogix service disabled  (EventID 60, Sev 1)
 //     - FSLogix disk compaction failed  (EventID 62/63, Sev 2)
 //     - FSLogix profile disk in use by another VM  (EventID 51, Sev 2)
@@ -120,7 +121,7 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
           query: '''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
 | extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
 | extend ActiveSessions = tolong(ActiveSessions)
@@ -169,7 +170,7 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
           query: '''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
 | extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
 | extend ActiveSessions = tolong(ActiveSessions)
@@ -218,7 +219,7 @@ resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
           query: '''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
 | extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
 | extend ActiveSessions = tolong(ActiveSessions)
@@ -268,7 +269,7 @@ resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-
           query: '''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | summarize arg_max(TimeGenerated, Status, _ResourceId) by SessionHostName
 | where Status != 'Available' and Status != 'Shutdown'
 | project SessionHostName, Status, ResourceId = _ResourceId
@@ -314,7 +315,7 @@ resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-
           query: '''
 WVDConnections
 | where TimeGenerated > ago(15m)
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | project-away TenantId, SourceSystem
 | summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId
 | join kind=leftouter (
@@ -392,7 +393,7 @@ WVDAgentHealthStatus
 | extend HealthCheckResult = tolong(CheckFailed.HealthCheckResult)
 | extend HealthCheckDesc = MapToDesc(HealthCheckName)
 | where HealthCheckDesc != "InvalidIndex"
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" HostPoolResourceGroup "/providers/microsoft.desktopvirtualization/hostpools/" HostPool
 | parse SessionHostResourceId with "/subscriptions/" HostSubscription "/resourceGroups/" SessionHostRG "/providers/Microsoft.Compute/virtualMachines/" SessionHostName
 '''
@@ -452,7 +453,7 @@ WVDConnections
 | where TimeGenerated > ago(15m)
 | extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
 | extend HostPool=tostring(split(_ResourceId, '/')[8])
-| where HostPool =~ '${hostPoolName}'
+| where HostPool =~ "${hostPoolName}"
 | where isnotempty(Errors)
 | extend ErrorShort=tostring(Errors[0].CodeSymbolic)
 | extend ErrorMessage=tostring(Errors[0].Message)
@@ -496,7 +497,7 @@ resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-0
 WVDConnections
 | where TimeGenerated > ago(24h)
 | where State == "Connected"
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName
 | join (
     WVDConnections
@@ -544,7 +545,7 @@ resource alertDisconnectedUser72h 'Microsoft.Insights/scheduledQueryRules@2022-0
 WVDConnections
 | where TimeGenerated > ago(24h)
 | where State == "Connected"
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName
 | join (
     WVDConnections
@@ -596,7 +597,7 @@ resource alertLocalDiskFree10 'Microsoft.Insights/scheduledQueryRules@2022-06-15
 let hostPoolVMs =
     WVDAgentHealthStatus
     | where TimeGenerated > ago(15m)
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | parse SessionHostResourceId with "/subscriptions/" sub "/resourceGroups/" rg "/providers/Microsoft.Compute/virtualMachines/" vmName
     | extend vmName = tolower(vmName)
     | summarize by vmName;
@@ -609,7 +610,7 @@ Perf
 | extend ComputerName = tolower(ComputerName)
 | where ComputerName in (hostPoolVMs)
 | summarize arg_max(TimeGenerated, *) by ComputerName
-| extend HostPool = '${hostPoolName}'
+| extend HostPool = "${hostPoolName}"
 | project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId
 '''
           timeAggregation: 'Count'
@@ -651,7 +652,7 @@ resource alertLocalDiskFree5 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
 let hostPoolVMs =
     WVDAgentHealthStatus
     | where TimeGenerated > ago(15m)
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | parse SessionHostResourceId with "/subscriptions/" sub "/resourceGroups/" rg "/providers/Microsoft.Compute/virtualMachines/" vmName
     | extend vmName = tolower(vmName)
     | summarize by vmName;
@@ -664,7 +665,7 @@ Perf
 | extend ComputerName = tolower(ComputerName)
 | where ComputerName in (hostPoolVMs)
 | summarize arg_max(TimeGenerated, *) by ComputerName
-| extend HostPool = '${hostPoolName}'
+| extend HostPool = "${hostPoolName}"
 | project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId
 '''
           timeAggregation: 'Count'
@@ -721,7 +722,7 @@ let fslogixWarnings =
 fslogixWarnings
 | join kind=inner (
     WVDConnections
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -790,7 +791,7 @@ let fslogixErrors =
 fslogixErrors
 | join kind=inner (
     WVDConnections
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -850,15 +851,14 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 43
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" VMresourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend
-    ComputerName = tolower(ComputerName),
-    HostPool     = '${hostPoolName}'
-| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
+    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
+    HostPool        = "${hostPoolName}"
+| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
 '''
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'ComputerName',        operator: 'Include', values: ['*'] }
+            { name: 'Computer',            operator: 'Include', values: ['*'] }
             { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
             { name: 'HostPool',            operator: 'Include', values: ['*'] }
@@ -874,17 +874,18 @@ Event
   }
 }
 
-// FSLogix profile disk failed to attach (EventID 52 or 40)
-// HostPool and VMresourceGroup derived directly from the Event record.
-// UserName resolved via time-proximate WVDConnections join: attach failures fire during logon
-// so the affected user's connection record will be within the window.
+// FSLogix profile disk failed to attach or reattach (EventID 52, 40, or 56)
+// FSLogix profile disk failed to attach at logon (EventID 52 or 40)
+// Admin log, Error level. UserName is always NT AUTHORITY\SYSTEM in Event table;
+// actual user resolved via time-proximate WVDConnections join on Computer == SessionHostName.
+// EID 56 (reattach at reconnect) is a separate alert with an event-count threshold to reduce noise.
 resource alertFSLogixDiskAttachFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLogix-AttachFailed-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Disk Attach Failed (${hostPoolName})'
-    description: '${descriptionHeader}FSLogix Event ID 52 or 40: the profile VHD failed to attach on a session host in ${hostPoolName}. Check FSLogix agent logs on the affected session host, verify the storage account is reachable from the VM, and confirm the VHD is not locked by another session or process.'
+    description: '${descriptionHeader}FSLogix Event ID 52 or 40: the profile VHD failed to attach at logon on a session host in ${hostPoolName}. The user received a temporary profile. Check FSLogix agent logs on the affected session host, verify the storage account is reachable from the VM, and confirm the VHD is not locked by another session or process.'
     severity: 1
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -898,27 +899,84 @@ resource alertFSLogixDiskAttachFailed 'Microsoft.Insights/scheduledQueryRules@20
 Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
-| where EventID == 52 or EventID == 40
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" VMresourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
+| where EventID in (52, 40)
 | extend
-    ComputerName = tolower(ComputerName),
-    HostPool     = '${hostPoolName}'
-| project EventTime = TimeGenerated, ComputerName, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId
+    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
+    HostPool        = "${hostPoolName}"
+| project EventTime = TimeGenerated, Computer, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId
 | join kind=leftouter (
     WVDConnections
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | where State == "Connected"
-    | extend SessionHostShort = tolower(split(SessionHostName, '.')[0])
-    | project ConnTime = TimeGenerated, UserName, SessionHostShort
-) on $left.ComputerName == $right.SessionHostShort
+    | project ConnTime = TimeGenerated, UserName, SessionHostName
+) on $left.Computer == $right.SessionHostName
 | extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)
-| summarize arg_min(TimeDiff, *) by EventTime, ComputerName
-| project EventTime, ComputerName, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId
+| summarize arg_min(TimeDiff, *) by EventTime, Computer
+| project EventTime, Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId
 '''
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'ComputerName',        operator: 'Include', values: ['*'] }
+            { name: 'Computer',            operator: 'Include', values: ['*'] }
             { name: 'UserName',            operator: 'Include', values: ['*'] }
+            { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
+            { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
+            { name: 'HostPool',            operator: 'Include', values: ['*'] }
+          ]
+          resourceIdColumn: 'ResourceId'
+          operator: 'GreaterThanOrEqual'
+          threshold: 1
+          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+        }
+      ]
+    }
+    actions: actions
+  }
+}
+
+// FSLogix VHD reattach failed during session reconnect (EventID 56)
+// EID 56 fires on EACH retry attempt. FSLogix default retry count is 3 (ReAttachCount registry
+// value, default interval 10s), so one failed reconnect produces 3 events in ~30 seconds.
+// Threshold >= 3 events per session host in the window means at least one complete retry cycle
+// was exhausted -- a real problem, not a transient blip.
+// Severity 2: the user session already exists; data loss risk is lower than a logon failure.
+// If this alert is still noisy, raise the threshold or window to match observed retry behavior.
+resource alertFSLogixVhdReattachFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
+  name: '${alertNamePrefix}-HP-VM-FSLogix-ReattachFailed-${hostPoolName}'
+  location: location
+  tags: hostPoolTags
+  properties: {
+    displayName: '${alertNamePrefix} - FSLogix VHD Reattach Failed (${hostPoolName})'
+    description: '${descriptionHeader}FSLogix Event ID 56: a session host in ${hostPoolName} failed to reattach a profile VHD during user reconnect, exhausting all retry attempts (>= 3 events in 15 minutes). The profile path in RenderedDescription identifies the affected user. Check storage account reachability and the FSLogix log on the affected session host.'
+    severity: 2
+    enabled: true
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT15M'
+    scopes: [logAnalyticsWorkspaceResourceId]
+    autoMitigate: autoResolveAlert
+    criteria: {
+      allOf: [
+        {
+          query: '''
+Event
+| where EventLog == "Microsoft-FSLogix-Apps/Admin"
+| where EventLevelName == "Error"
+| where EventID == 56
+| extend
+    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
+    HostPool        = "${hostPoolName}"
+| summarize
+    EventCount      = count(),
+    VMresourceGroup = any(VMresourceGroup),
+    HostPool        = any(HostPool),
+    ResourceId      = any(_ResourceId)
+  by Computer, RenderedDescription
+| where EventCount >= 3
+| project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId
+'''
+          timeAggregation: 'Count'
+          dimensions: [
+            { name: 'Computer',            operator: 'Include', values: ['*'] }
+            { name: 'EventCount',          operator: 'Include', values: ['*'] }
             { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
             { name: 'HostPool',            operator: 'Include', values: ['*'] }
@@ -960,15 +1018,14 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Warning"
 | where EventID == 60
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" VMresourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend
-    ComputerName = tolower(ComputerName),
-    HostPool     = '${hostPoolName}'
-| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
+    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
+    HostPool        = "${hostPoolName}"
+| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
 '''
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'ComputerName',        operator: 'Include', values: ['*'] }
+            { name: 'Computer',            operator: 'Include', values: ['*'] }
             { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
             { name: 'HostPool',            operator: 'Include', values: ['*'] }
@@ -1007,15 +1064,14 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 62 or EventID == 63
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" VMresourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend
-    ComputerName = tolower(ComputerName),
-    HostPool     = '${hostPoolName}'
-| project ComputerName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
+    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
+    HostPool        = "${hostPoolName}"
+| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
 '''
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'ComputerName',        operator: 'Include', values: ['*'] }
+            { name: 'Computer',            operator: 'Include', values: ['*'] }
             { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
             { name: 'HostPool',            operator: 'Include', values: ['*'] }
@@ -1032,11 +1088,10 @@ Event
 }
 
 // FSLogix profile disk in use by another VM (EventID 51)
-// HostPool and VMresourceGroup are derived directly from the Event record so they are
-// never empty regardless of WVDAgentHealthStatus availability.
-// UserName is resolved via a time-proximate WVDConnections join: the affected user is
-// actively connecting when EventID 51 fires, so their connection record is recent.
-// windowSize is PT1H to avoid re-alerting on the same stale event for 24 hours.
+// Event fires in Operational log at Warning level. Computer and UserName are present
+// directly on the event record - no WVDConnections join is needed.
+// VMresourceGroup is derived from _ResourceId (split on '/'); may be empty when the agent
+// does not attach the VM ARM resource ID to Operational events.
 resource alertFSLogixDiskInUse 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLogix-DiskInUse-${hostPoolName}'
   location: location
@@ -1058,25 +1113,14 @@ Event
 | where EventLog == "Microsoft-FSLogix-Apps/Operational"
 | where EventLevelName == "Warning"
 | where EventID == 51
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" VMresourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
 | extend
-    ComputerName = tolower(ComputerName),
-    HostPool     = '${hostPoolName}'
-| project EventTime = TimeGenerated, ComputerName, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId
-| join kind=leftouter (
-    WVDConnections
-    | where _ResourceId contains '${hostPoolName}'
-    | where State == "Connected"
-    | extend SessionHostShort = tolower(split(SessionHostName, '.')[0])
-    | project ConnTime = TimeGenerated, UserName, SessionHostShort
-) on $left.ComputerName == $right.SessionHostShort
-| extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)
-| summarize arg_min(TimeDiff, *) by EventTime, ComputerName
-| project EventTime, ComputerName, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId
+    VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
+    HostPool        = "${hostPoolName}"
+| project Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
 '''
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'ComputerName',        operator: 'Include', values: ['*'] }
+            { name: 'Computer',            operator: 'Include', values: ['*'] }
             { name: 'UserName',            operator: 'Include', values: ['*'] }
             { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
@@ -1134,7 +1178,7 @@ fslogixErrors
 | where PathDiff <= 60
 | join kind=inner (
     WVDConnections
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -1205,7 +1249,7 @@ let fslogixErrors =
 fslogixErrors
 | join kind=inner (
     WVDConnections
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -1267,12 +1311,12 @@ resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-1
           query: '''
 WVDConnections
 | where TimeGenerated > ago(30m)
-| where _ResourceId contains '${hostPoolName}'
+| where _ResourceId has "${hostPoolName}"
 | where State == "Started"
 | project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId
 | join kind=inner (
     WVDCheckpoints
-    | where _ResourceId contains '${hostPoolName}'
+    | where _ResourceId has "${hostPoolName}"
     | where Name =~ "ShellReady"
         or (Name =~ "LaunchExecutable" and tostring(Parameters.connectionStage) == "RdpShellAppExecuted")
         or Name =~ "RdpShellAppExecuted"

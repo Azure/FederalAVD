@@ -253,8 +253,8 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ### AVD - FSLogix Profile Disk Attach Failed — Sev 1
 
-**Trigger:** FSLogix Event ID 52 or 40 — the profile VHD failed to attach.  
-**Meaning:** FSLogix could not mount the profile container. The user received a temporary profile.
+**Trigger:** FSLogix Event ID 52 or 40 — the profile VHD failed to attach at logon.  
+**Meaning:** FSLogix could not mount the profile container when the user logged in. The user received a temporary profile and their changes will not be saved.
 
 **Response:**
 - Review the FSLogix log on the session host: `C:\ProgramData\FSLogix\Logs\Profile\`.
@@ -263,6 +263,24 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
   - **Storage account reachability** — verify private endpoint connectivity.
   - **Corrupted VHD** — if the VHD is corrupt, restore from the most recent VSS snapshot.
   - **Permissions** — verify the session host's managed identity or computer account has Storage File Data SMB Share Contributor.
+
+---
+
+### AVD - FSLogix VHD Reattach Failed — Sev 2
+
+**Trigger:** FSLogix Event ID 56 — a session host exhausted all VHD reattach retry attempts (>= 3 events for the same profile in 15 minutes) during a user reconnect.  
+**Meaning:** The user's session already existed (they were disconnected, not logged off) and FSLogix could not remount the profile VHD when they reconnected. By default FSLogix retries 3 times at 10-second intervals (`ReAttachCount` / `ReAttachIntervalSeconds` registry values); the threshold of 3 events means at least one full retry cycle was exhausted.
+
+The `RenderedDescription` dimension contains the full profile path — use this to identify the affected user (e.g., `\\storage\share\profilecontainers\jdoe_S-1-5-21-...`). The `EventCount` dimension shows how many retry events fired for that user in the window.
+
+**Response:**
+- Check storage account reachability from the session host at the time of the reconnect.
+- Review `C:\ProgramData\FSLogix\Logs\Profile\` on the affected session host for the specific error code.
+- Common causes:
+  - **Transient storage connectivity blip** — if the VHD eventually reattached (user reconnect succeeded after a delay), this may be informational only.
+  - **VHD detached by another process** — check whether a concurrent host VM failure or force-logoff released the VHD lock while the session was active.
+  - **Persistent storage issue** — if `EventCount` is high or the same profile fires repeatedly across days, investigate Azure Files latency and private endpoint health.
+- If the user is stuck with a broken session, place the host in drain mode and ask the user to log off completely and log back in.
 
 ---
 
