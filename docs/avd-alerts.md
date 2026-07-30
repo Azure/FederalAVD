@@ -76,6 +76,8 @@ New-AzSubscriptionDeployment `
 | Diagnostic logging | Automation Account job logs → Log Analytics workspace |
 | Global action group enforced | UI form lists only `global`-location action groups — required for Service Health alerts |
 
+> **No Private Link or Hybrid Worker required.** The AVD Alerts runbook communicates exclusively with Azure Resource Manager using its managed identity. ARM endpoints are identity-gated, TLS-protected, and FedRAMP High authorized. Blocking inbound public access is the only required network control. See [add-ons.md — Zero Trust Alignment](add-ons.md#zero-trust-alignment) for the NIST control mapping and full rationale.
+
 ## Redeployment
 
 Standard redeployments are fully idempotent — leave `createJobSchedules = true`. The `false` value is only needed when the Automation Account was deleted from ARM and recreated with the same name.
@@ -89,7 +91,7 @@ Standard redeployments are fully idempotent — leave `createJobSchedules = true
 | CM — Configuration Management | Health check failure alerts detect unauthorized service changes (FSLogix service disabled) |
 | IR — Incident Response | All Sev 1 alerts trigger immediate incident response workflows |
 | SI — System and Information Integrity | Storage availability, throttling, and capacity alerts prevent data integrity failures |
-| SC — System and Communications Protection | No public endpoints on Automation Account; private endpoint path for all storage |
+| SC — System and Communications Protection | No public endpoints on Automation Account; all runbook traffic to ARM over TLS 1.2+ with managed identity (SC-7, SC-12, SC-13) |
 
 See [compliance.md](compliance.md) for the full control mapping.
 

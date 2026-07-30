@@ -74,6 +74,8 @@ New-AzResourceGroupDeployment `
 | Least-privilege RBAC | Network Contributor scoped to the route table's resource group only |
 | Diagnostic logging | Automation Account job logs → Log Analytics workspace |
 
+> **No Private Link or Hybrid Worker required.** This runbook communicates exclusively with Azure Resource Manager (to update route table entries) and the Microsoft 365 endpoints API (a public HTTPS endpoint) using its managed identity. ARM endpoints are identity-gated, TLS-protected, and FedRAMP High authorized. Blocking inbound public access is the only required network control. See [add-ons.md — Zero Trust Alignment](add-ons.md#zero-trust-alignment) for the NIST control mapping and full rationale.
+
 ## Redeployment
 
 Normal incremental redeployments work correctly — ARM handles the job schedule idempotently when the automation account already exists. Leave `createJobSchedule = true` for all standard deployments.

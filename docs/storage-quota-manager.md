@@ -67,6 +67,8 @@ New-AzResourceGroupDeployment `
 | Least-privilege RBAC | Storage Account Contributor scoped to storage resource group only |
 | Diagnostic logging | Automation Account job logs → Log Analytics workspace |
 
+> **No Private Link or Hybrid Worker required.** This runbook communicates exclusively with Azure Resource Manager (to read share quotas and issue update calls) using its managed identity. ARM endpoints are identity-gated, TLS-protected, and FedRAMP High authorized. Blocking inbound public access is the only required network control. See [add-ons.md — Zero Trust Alignment](add-ons.md#zero-trust-alignment) for the NIST control mapping and full rationale.
+
 ## Redeployment
 
 Normal incremental redeployments are fully idempotent — leave `createJobSchedule = true`. Set it to `false` only if you receive a `Conflict / jobSchedule already exists` error, which occurs only when the Automation Account was deleted from ARM and recreated with the same name.
