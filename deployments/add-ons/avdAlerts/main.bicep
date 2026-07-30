@@ -161,6 +161,11 @@ param enableCpuAlerts bool = true
 @description('Optional. When false, session host VM available memory alert rules are not deployed.')
 param enableMemoryAlerts bool = true
 
+@description('Optional. Minutes of Perf data stream age required before memory alerts fire. A VM whose oldest Perf record in the 1-hour lookback window is newer than this value is treated as still starting up and excluded. Set to 0 to disable.')
+@minValue(0)
+@maxValue(60)
+param memoryAlertStartupExclusionMinutes int = 20
+
 @description('Optional. When false, session host VM OS disk bandwidth alert rules are not deployed.')
 param enableOsDiskAlerts bool = true
 
@@ -309,7 +314,6 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
     enableCapacityAlerts: enableCapacityAlerts
     enableAvailabilityAlerts: enableAvailabilityAlerts
     enableConnectionAlerts: enableConnectionAlerts
-    enableLocalDiskAlerts: enableLocalDiskAlerts
     enableFslogixAlerts: enableFslogixAlerts
     hostPoolType: hp.?hostPoolType ?? 'Pooled'
     hostPoolResourceId: hp.hostPoolResourceId
@@ -319,19 +323,22 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
 
 // Per-VM-resource-group metric alerts - centralized in the monitoring resource group.
 // Deduplicated by vmResourceGroupId - one set of rules per unique VM RG.
-module vmMetricAlerts 'modules/vmMetricAlerts.bicep' = [for hp in vmRgInfoDeduped: {
-  name: 'AvdAlerts-VMMetrics-${last(split(hp.vmResourceGroupId, '/'))}-${deploymentSuffix}'
+module vmAlerts 'modules/vmAlerts.bicep' = [for hp in vmRgInfoDeduped: {
+  name: 'AvdAlerts-VM-${last(split(hp.vmResourceGroupId, '/'))}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     hostPoolName: last(split(hp.hostPoolResourceId, '/'))
     vmResourceGroupId: hp.vmResourceGroupId
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     actionGroupResourceId: actionGroupResourceId
     alertNamePrefix: alertNamePrefix
     autoResolveAlert: autoResolveAlert
     location: location
     enableCpuAlerts: enableCpuAlerts
-    enableMemoryAlerts: enableMemoryAlerts
     enableOsDiskAlerts: enableOsDiskAlerts
+    enableLocalDiskAlerts: enableLocalDiskAlerts
+    enableMemoryAlerts: enableMemoryAlerts
+    memoryAlertStartupExclusionMinutes: memoryAlertStartupExclusionMinutes
     hostPoolResourceId: hp.hostPoolResourceId
   }
   dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]

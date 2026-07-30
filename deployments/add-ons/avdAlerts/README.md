@@ -59,7 +59,7 @@ main.bicep                    ← subscription-scoped entry point
 modules/
   automationAccount.bicep     ← Automation Account, runbooks, schedules, RBAC
   hostPoolAlerts.bicep        ← log-based alerts per host pool (21 per pooled, 17 per personal)
-  vmMetricAlerts.bicep        ← VM metric alerts scoped to each VM resource group
+  vmAlerts.bicep              ← VM alerts (CPU/disk metrics + disk space/memory SQRs) scoped to each VM resource group
   serviceHealthAlerts.bicep   ← subscription-scoped Service Health activity log alerts
   storageAlerts.bicep         ← Azure Files metric + log-based alerts per storage account
   anfAlerts.bicep             ← ANF volume metric alerts

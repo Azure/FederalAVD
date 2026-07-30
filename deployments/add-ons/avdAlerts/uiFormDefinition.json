@@ -453,6 +453,17 @@
                                     "toolTip": "Alert when available memory on a session host drops below 2 GB or 1 GB."
                                 },
                                 {
+                                    "name": "memoryAlertStartupExclusionMinutes",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Memory Alert Startup Exclusion (minutes)",
+                                    "toolTip": "VMs whose oldest Perf record in the lookback window is newer than this value are excluded from memory alerts. Prevents false positives during VM startup. Set to 0 to disable.",
+                                    "min": 0,
+                                    "max": 60,
+                                    "defaultValue": 20,
+                                    "showStepMarkers": false,
+                                    "visible": "[steps('advanced').alertCategories.enableMemoryAlerts]"
+                                },
+                                {
                                     "name": "enableOsDiskAlerts",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "VM OS Disk Bandwidth Alerts (85% / 95%)",
@@ -636,6 +647,7 @@
                 "enableFslogixAlerts": "[steps('advanced').alertCategories.enableFslogixAlerts]",
                 "enableCpuAlerts": "[steps('advanced').alertCategories.enableCpuAlerts]",
                 "enableMemoryAlerts": "[steps('advanced').alertCategories.enableMemoryAlerts]",
+                "memoryAlertStartupExclusionMinutes": "[steps('advanced').alertCategories.memoryAlertStartupExclusionMinutes]",
                 "enableOsDiskAlerts": "[steps('advanced').alertCategories.enableOsDiskAlerts]",
                 "enableStorageLatencyAlerts": "[steps('advanced').alertCategories.enableStorageLatencyAlerts]",
                 "enableStorageAvailabilityAlerts": "[steps('advanced').alertCategories.enableStorageAvailabilityAlerts]",

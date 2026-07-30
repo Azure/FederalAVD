@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "14606138736453775732"
+      "templateHash": "4297480431906483614"
     }
   },
   "parameters": {
@@ -156,6 +156,15 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. When false, session host VM available memory alert rules are not deployed."
+      }
+    },
+    "memoryAlertStartupExclusionMinutes": {
+      "type": "int",
+      "defaultValue": 20,
+      "minValue": 0,
+      "maxValue": 60,
+      "metadata": {
+        "description": "Optional. Minutes of Perf data stream age required before memory alerts fire. A VM whose oldest Perf record in the 1-hour lookback window is newer than this value is treated as still starting up and excluded. Set to 0 to disable."
       }
     },
     "enableOsDiskAlerts": {
@@ -999,9 +1008,6 @@
           "enableConnectionAlerts": {
             "value": "[parameters('enableConnectionAlerts')]"
           },
-          "enableLocalDiskAlerts": {
-            "value": "[parameters('enableLocalDiskAlerts')]"
-          },
           "enableFslogixAlerts": {
             "value": "[parameters('enableFslogixAlerts')]"
           },
@@ -1019,7 +1025,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "13312670182559253943"
+              "templateHash": "4226818087534134936"
             }
           },
           "parameters": {
@@ -1080,13 +1086,6 @@
               "defaultValue": true,
               "metadata": {
                 "description": "Optional. When false, user connection failure and disconnected session alert rules are not deployed."
-              }
-            },
-            "enableLocalDiskAlerts": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Optional. When false, session host local disk free-space alert rules are not deployed."
               }
             },
             "enableFslogixAlerts": {
@@ -1628,126 +1627,6 @@
                           ]
                         }
                       ],
-                      "operator": "GreaterThanOrEqual",
-                      "threshold": 1,
-                      "failingPeriods": {
-                        "numberOfEvaluationPeriods": 1,
-                        "minFailingPeriodsToAlert": 1
-                      }
-                    }
-                  ]
-                },
-                "actions": "[variables('actions')]"
-              }
-            },
-            {
-              "condition": "[parameters('enableLocalDiskAlerts')]",
-              "type": "Microsoft.Insights/scheduledQueryRules",
-              "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-DiskLow10pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-              "location": "[parameters('location')]",
-              "tags": "[variables('hostPoolTags')]",
-              "properties": {
-                "displayName": "[format('{0} - VM Local Disk Space Low - 10pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}A session host in {1} has 10% or less free space on the C: drive. Review local profiles, temp files, and application logs consuming disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
-                "severity": 2,
-                "enabled": true,
-                "evaluationFrequency": "PT15M",
-                "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
-                "scopes": [
-                  "[parameters('logAnalyticsWorkspaceResourceId')]"
-                ],
-                "autoMitigate": "[parameters('autoResolveAlert')]",
-                "criteria": {
-                  "allOf": [
-                    {
-                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 10.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
-                      "timeAggregation": "Count",
-                      "dimensions": [
-                        {
-                          "name": "ComputerName",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "VMresourceGroup",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "HostPool",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        }
-                      ],
-                      "resourceIdColumn": "ResourceId",
-                      "operator": "GreaterThanOrEqual",
-                      "threshold": 1,
-                      "failingPeriods": {
-                        "numberOfEvaluationPeriods": 1,
-                        "minFailingPeriodsToAlert": 1
-                      }
-                    }
-                  ]
-                },
-                "actions": "[variables('actions')]"
-              }
-            },
-            {
-              "condition": "[parameters('enableLocalDiskAlerts')]",
-              "type": "Microsoft.Insights/scheduledQueryRules",
-              "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-VM-DiskLow5pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-              "location": "[parameters('location')]",
-              "tags": "[variables('hostPoolTags')]",
-              "properties": {
-                "displayName": "[format('{0} - VM Local Disk Space Low - 5pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}CRITICAL: A session host in {1} has 5% or less free space on the C: drive. Immediate action required to free disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
-                "severity": 1,
-                "enabled": true,
-                "evaluationFrequency": "PT15M",
-                "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
-                "scopes": [
-                  "[parameters('logAnalyticsWorkspaceResourceId')]"
-                ],
-                "autoMitigate": "[parameters('autoResolveAlert')]",
-                "criteria": {
-                  "allOf": [
-                    {
-                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 5.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
-                      "timeAggregation": "Count",
-                      "dimensions": [
-                        {
-                          "name": "ComputerName",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "VMresourceGroup",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "HostPool",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        }
-                      ],
-                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -2521,12 +2400,12 @@
     },
     {
       "copy": {
-        "name": "vmMetricAlerts",
+        "name": "vmAlerts",
         "count": "[length(variables('vmRgInfoDeduped'))]"
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-VMMetrics-{0}-{1}', last(split(variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId, '/')), variables('deploymentSuffix'))]",
+      "name": "[format('AvdAlerts-VM-{0}-{1}', last(split(variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId, '/')), variables('deploymentSuffix'))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2539,6 +2418,9 @@
           },
           "vmResourceGroupId": {
             "value": "[variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
           },
           "actionGroupResourceId": {
             "value": "[parameters('actionGroupResourceId')]"
@@ -2555,11 +2437,17 @@
           "enableCpuAlerts": {
             "value": "[parameters('enableCpuAlerts')]"
           },
+          "enableOsDiskAlerts": {
+            "value": "[parameters('enableOsDiskAlerts')]"
+          },
+          "enableLocalDiskAlerts": {
+            "value": "[parameters('enableLocalDiskAlerts')]"
+          },
           "enableMemoryAlerts": {
             "value": "[parameters('enableMemoryAlerts')]"
           },
-          "enableOsDiskAlerts": {
-            "value": "[parameters('enableOsDiskAlerts')]"
+          "memoryAlertStartupExclusionMinutes": {
+            "value": "[parameters('memoryAlertStartupExclusionMinutes')]"
           },
           "hostPoolResourceId": {
             "value": "[variables('vmRgInfoDeduped')[copyIndex()].hostPoolResourceId]"
@@ -2572,7 +2460,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "3422754906432760225"
+              "templateHash": "2386707509196278854"
             }
           },
           "parameters": {
@@ -2608,6 +2496,12 @@
                 "description": "Required. Azure region of the session host VMs (required for multi-resource metric alerts)."
               }
             },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Log Analytics Workspace. Used for Scheduled Query Rule scopes."
+              }
+            },
             "enableCpuAlerts": {
               "type": "bool",
               "defaultValue": true,
@@ -2615,18 +2509,34 @@
                 "description": "Optional. When false, CPU alert rules are not deployed."
               }
             },
-            "enableMemoryAlerts": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Optional. When false, available memory alert rules are not deployed."
-              }
-            },
             "enableOsDiskAlerts": {
               "type": "bool",
               "defaultValue": true,
               "metadata": {
                 "description": "Optional. When false, OS disk bandwidth alert rules are not deployed."
+              }
+            },
+            "enableLocalDiskAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, session host local disk free-space alert rules are not deployed."
+              }
+            },
+            "enableMemoryAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, session host VM available memory alert rules are not deployed."
+              }
+            },
+            "memoryAlertStartupExclusionMinutes": {
+              "type": "int",
+              "defaultValue": 20,
+              "minValue": 0,
+              "maxValue": 60,
+              "metadata": {
+                "description": "Optional. Minutes of Perf data stream age required before memory alerts fire. A VM whose oldest Perf record in the lookback window is newer than this value is treated as still starting up and excluded. Set to 0 to disable."
               }
             },
             "hostPoolName": {
@@ -2652,7 +2562,12 @@
               {
                 "actionGroupId": "[parameters('actionGroupResourceId')]"
               }
-            ]
+            ],
+            "actions": {
+              "actionGroups": [
+                "[parameters('actionGroupResourceId')]"
+              ]
+            }
           },
           "resources": [
             {
@@ -2718,78 +2633,6 @@
                       "metricName": "Percentage CPU",
                       "operator": "GreaterThan",
                       "threshold": 95,
-                      "timeAggregation": "Average",
-                      "criterionType": "StaticThresholdCriterion"
-                    }
-                  ]
-                },
-                "autoMitigate": "[parameters('autoResolveAlert')]",
-                "actions": "[variables('metricActions')]"
-              }
-            },
-            {
-              "condition": "[parameters('enableMemoryAlerts')]",
-              "type": "Microsoft.Insights/metricAlerts",
-              "apiVersion": "2018-03-01",
-              "name": "[format('{0}-VM-Memory-Low2gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-              "location": "global",
-              "tags": "[variables('hostPoolTags')]",
-              "properties": {
-                "description": "[format('{0}Available memory on a session host dropped below 2 GB. Host pool: {1}. VM resource group: {2}. Users may experience application slowdowns. Review memory usage and consider adding more session hosts.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
-                "severity": 2,
-                "enabled": true,
-                "scopes": [
-                  "[parameters('vmResourceGroupId')]"
-                ],
-                "evaluationFrequency": "PT5M",
-                "windowSize": "PT15M",
-                "targetResourceType": "microsoft.compute/virtualmachines",
-                "targetResourceRegion": "[parameters('location')]",
-                "criteria": {
-                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
-                  "allOf": [
-                    {
-                      "name": "Metric1",
-                      "metricNamespace": "microsoft.compute/virtualmachines",
-                      "metricName": "Available Memory Bytes",
-                      "operator": "LessThanOrEqual",
-                      "threshold": 2147483648,
-                      "timeAggregation": "Average",
-                      "criterionType": "StaticThresholdCriterion"
-                    }
-                  ]
-                },
-                "autoMitigate": "[parameters('autoResolveAlert')]",
-                "actions": "[variables('metricActions')]"
-              }
-            },
-            {
-              "condition": "[parameters('enableMemoryAlerts')]",
-              "type": "Microsoft.Insights/metricAlerts",
-              "apiVersion": "2018-03-01",
-              "name": "[format('{0}-VM-Memory-Low1gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-              "location": "global",
-              "tags": "[variables('hostPoolTags')]",
-              "properties": {
-                "description": "[format('{0}CRITICAL: Available memory on a session host dropped below 1 GB. Host pool: {1}. VM resource group: {2}. Users will likely experience application crashes and severe performance issues.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
-                "severity": 1,
-                "enabled": true,
-                "scopes": [
-                  "[parameters('vmResourceGroupId')]"
-                ],
-                "evaluationFrequency": "PT5M",
-                "windowSize": "PT15M",
-                "targetResourceType": "microsoft.compute/virtualmachines",
-                "targetResourceRegion": "[parameters('location')]",
-                "criteria": {
-                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
-                  "allOf": [
-                    {
-                      "name": "Metric1",
-                      "metricNamespace": "microsoft.compute/virtualmachines",
-                      "metricName": "Available Memory Bytes",
-                      "operator": "LessThanOrEqual",
-                      "threshold": 1073741824,
                       "timeAggregation": "Average",
                       "criterionType": "StaticThresholdCriterion"
                     }
@@ -2887,6 +2730,246 @@
                 },
                 "autoMitigate": "[parameters('autoResolveAlert')]",
                 "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableLocalDiskAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-DiskLow10pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - VM Local Disk Space Low - 10pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A session host in {1} has 10% or less free space on the C: drive. Review disk usage and clean up temporary files or expand the OS disk.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT15M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 10.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "ComputerName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableLocalDiskAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-DiskLow5pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - VM Local Disk Space Low - 5pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: A session host in {1} has 5% or less free space on the C: drive. Immediate action required to free disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT15M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 5.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "ComputerName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableMemoryAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-Memory-Low2gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Available Memory < 2 GB ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Available memory on a session host in {1} dropped below 2 GB average over 15 minutes. Users may experience application slowdowns. Review memory usage and consider adding more session hosts or adjusting the scaling plan. VMs booting within the last {2} minutes are excluded.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('memoryAlertStartupExclusionMinutes'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "let startupExclusionMins = ${memoryAlertStartupExclusionMinutes};\r\nlet hostPoolVmIds =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | summarize by vmResourceId = tolower(SessionHostResourceId);\r\nlet perfData =\r\n    Perf\r\n    | where TimeGenerated > ago(1h)\r\n    | where ObjectName == \"Memory\" and CounterName == \"Available MBytes\"\r\n    | extend vmResourceId = tolower(_ResourceId)\r\n    | where vmResourceId in (hostPoolVmIds);\r\nlet perfAge =\r\n    perfData\r\n    | summarize FirstPerf = min(TimeGenerated) by vmResourceId;\r\nperfData\r\n| where TimeGenerated > ago(15m)\r\n| summarize AvgMemMB = avg(CounterValue), ResourceId = any(_ResourceId), Computer = any(Computer) by vmResourceId\r\n| join kind=inner perfAge on vmResourceId\r\n| where FirstPerf < ago(startupExclusionMins * 1m)\r\n| where AvgMemMB <= 2048\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project Computer, AvgMemMB, HostPool, ResourceId\r\n",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "AvgMemMB",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableMemoryAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-Memory-Low1gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Available Memory < 1 GB ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: Available memory on a session host in {1} dropped below 1 GB average over 15 minutes. Users will likely experience application crashes and severe performance issues. Add more session hosts immediately. VMs booting within the last {2} minutes are excluded.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('memoryAlertStartupExclusionMinutes'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "let startupExclusionMins = ${memoryAlertStartupExclusionMinutes};\r\nlet hostPoolVmIds =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"${hostPoolName}\"\r\n    | summarize by vmResourceId = tolower(SessionHostResourceId);\r\nlet perfData =\r\n    Perf\r\n    | where TimeGenerated > ago(1h)\r\n    | where ObjectName == \"Memory\" and CounterName == \"Available MBytes\"\r\n    | extend vmResourceId = tolower(_ResourceId)\r\n    | where vmResourceId in (hostPoolVmIds);\r\nlet perfAge =\r\n    perfData\r\n    | summarize FirstPerf = min(TimeGenerated) by vmResourceId;\r\nperfData\r\n| where TimeGenerated > ago(15m)\r\n| summarize AvgMemMB = avg(CounterValue), ResourceId = any(_ResourceId), Computer = any(Computer) by vmResourceId\r\n| join kind=inner perfAge on vmResourceId\r\n| where FirstPerf < ago(startupExclusionMins * 1m)\r\n| where AvgMemMB <= 1024\r\n| extend HostPool = \"${hostPoolName}\"\r\n| project Computer, AvgMemMB, HostPool, ResourceId\r\n",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "AvgMemMB",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
               }
             }
           ]

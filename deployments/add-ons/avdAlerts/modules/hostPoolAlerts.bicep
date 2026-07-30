@@ -14,8 +14,6 @@
 //     - Disconnected user > 24 hours  (Sev 2)
 //     - Disconnected user > 72 hours  (Sev 1)
 //   FSLogix alerts (use Event log data from Log Analytics agent / AMA):
-//     - Local disk free space <= 10%  (Sev 2)
-//     - Local disk free space <= 5%   (Sev 1)
 //     - FSLogix profile < 5% free   (EventID 34, Sev 2)
 //     - FSLogix profile < 2% free   (EventID 33, Sev 1)
 //     - FSLogix profile network issue  (EventID 43, Sev 1)
@@ -65,9 +63,6 @@ param enableAvailabilityAlerts bool = true
 
 @description('Optional. When false, user connection failure and disconnected session alert rules are not deployed.')
 param enableConnectionAlerts bool = true
-
-@description('Optional. When false, session host local disk free-space alert rules are not deployed.')
-param enableLocalDiskAlerts bool = true
 
 @description('Optional. When false, FSLogix profile alert rules are not deployed.')
 param enableFslogixAlerts bool = true
@@ -561,120 +556,6 @@ WVDConnections
             { name: 'UserName', operator: 'Include', values: ['*'] }
             { name: 'SessionHostName', operator: 'Include', values: ['*'] }
           ]
-          operator: 'GreaterThanOrEqual'
-          threshold: 1
-          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
-        }
-      ]
-    }
-    actions: actions
-  }
-}
-
-// ------------------------------------
-// Local Disk Space Alerts
-// ------------------------------------
-
-// Local C: drive free space <= 10%
-resource alertLocalDiskFree10 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableLocalDiskAlerts) {
-  name: '${alertNamePrefix}-HP-VM-DiskLow10pct-${hostPoolName}'
-  location: location
-  tags: hostPoolTags
-  properties: {
-    displayName: '${alertNamePrefix} - VM Local Disk Space Low - 10pct (${hostPoolName})'
-    description: '${descriptionHeader}A session host in ${hostPoolName} has 10% or less free space on the C: drive. Review local profiles, temp files, and application logs consuming disk space.'
-    severity: 2
-    enabled: true
-    evaluationFrequency: 'PT15M'
-    windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
-    scopes: [logAnalyticsWorkspaceResourceId]
-    autoMitigate: autoResolveAlert
-    criteria: {
-      allOf: [
-        {
-          query: '''
-let hostPoolVMs =
-    WVDAgentHealthStatus
-    | where TimeGenerated > ago(15m)
-    | where _ResourceId has "${hostPoolName}"
-    | parse SessionHostResourceId with "/subscriptions/" sub "/resourceGroups/" rg "/providers/Microsoft.Compute/virtualMachines/" vmName
-    | extend vmName = tolower(vmName)
-    | summarize by vmName;
-Perf
-| where TimeGenerated > ago(15m)
-| where ObjectName == "LogicalDisk" and CounterName == "% Free Space"
-| where InstanceName !contains "D:" and InstanceName !contains "_Total"
-| where CounterValue <= 10.00
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" VMresourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
-| extend ComputerName = tolower(ComputerName)
-| where ComputerName in (hostPoolVMs)
-| summarize arg_max(TimeGenerated, *) by ComputerName
-| extend HostPool = "${hostPoolName}"
-| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
-          timeAggregation: 'Count'
-          dimensions: [
-            { name: 'ComputerName',    operator: 'Include', values: ['*'] }
-            { name: 'VMresourceGroup', operator: 'Include', values: ['*'] }
-            { name: 'HostPool',        operator: 'Include', values: ['*'] }
-          ]
-          resourceIdColumn: 'ResourceId'
-          operator: 'GreaterThanOrEqual'
-          threshold: 1
-          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
-        }
-      ]
-    }
-    actions: actions
-  }
-}
-
-// Local C: drive free space <= 5%
-resource alertLocalDiskFree5 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableLocalDiskAlerts) {
-  name: '${alertNamePrefix}-HP-VM-DiskLow5pct-${hostPoolName}'
-  location: location
-  tags: hostPoolTags
-  properties: {
-    displayName: '${alertNamePrefix} - VM Local Disk Space Low - 5pct (${hostPoolName})'
-    description: '${descriptionHeader}CRITICAL: A session host in ${hostPoolName} has 5% or less free space on the C: drive. Immediate action required to free disk space.'
-    severity: 1
-    enabled: true
-    evaluationFrequency: 'PT15M'
-    windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
-    scopes: [logAnalyticsWorkspaceResourceId]
-    autoMitigate: autoResolveAlert
-    criteria: {
-      allOf: [
-        {
-          query: '''
-let hostPoolVMs =
-    WVDAgentHealthStatus
-    | where TimeGenerated > ago(15m)
-    | where _ResourceId has "${hostPoolName}"
-    | parse SessionHostResourceId with "/subscriptions/" sub "/resourceGroups/" rg "/providers/Microsoft.Compute/virtualMachines/" vmName
-    | extend vmName = tolower(vmName)
-    | summarize by vmName;
-Perf
-| where TimeGenerated > ago(15m)
-| where ObjectName == "LogicalDisk" and CounterName == "% Free Space"
-| where InstanceName !contains "D:" and InstanceName !contains "_Total"
-| where CounterValue <= 5.00
-| parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" VMresourceGroup "/providers/microsoft.compute/virtualmachines/" ComputerName
-| extend ComputerName = tolower(ComputerName)
-| where ComputerName in (hostPoolVMs)
-| summarize arg_max(TimeGenerated, *) by ComputerName
-| extend HostPool = "${hostPoolName}"
-| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
-          timeAggregation: 'Count'
-          dimensions: [
-            { name: 'ComputerName',    operator: 'Include', values: ['*'] }
-            { name: 'VMresourceGroup', operator: 'Include', values: ['*'] }
-            { name: 'HostPool',        operator: 'Include', values: ['*'] }
-          ]
-          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
