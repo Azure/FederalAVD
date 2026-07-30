@@ -113,10 +113,10 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
 | extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
 | extend ActiveSessions = tolong(ActiveSessions)
@@ -127,7 +127,7 @@ WVDAgentHealthStatus
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'TotalActive',   operator: 'Include', values: ['*'] }
@@ -162,10 +162,10 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
 | extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
 | extend ActiveSessions = tolong(ActiveSessions)
@@ -176,7 +176,7 @@ WVDAgentHealthStatus
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'TotalActive',   operator: 'Include', values: ['*'] }
@@ -211,10 +211,10 @@ resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
 | extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
 | extend ActiveSessions = tolong(ActiveSessions)
@@ -225,7 +225,7 @@ WVDAgentHealthStatus
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 95
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'TotalActive',   operator: 'Include', values: ['*'] }
@@ -261,14 +261,14 @@ resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, Status, _ResourceId) by SessionHostName
 | where Status != 'Available' and Status != 'Shutdown'
 | project SessionHostName, Status, ResourceId = _ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'SessionHostName', operator: 'Include', values: ['*'] }
@@ -307,10 +307,10 @@ resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDConnections
 | where TimeGenerated > ago(15m)
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | project-away TenantId, SourceSystem
 | summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId
 | join kind=leftouter (
@@ -328,7 +328,7 @@ WVDConnections
 | project-away CorrelationId1, CorrelationId2
 | order by TimeGenerated desc
 | where Errors[0].CodeSymbolic == "ConnectionFailedNoHealthyRdshAvailable"
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName', operator: 'Include', values: ['*'] }
@@ -362,7 +362,7 @@ resource alertVMHealthCheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' 
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 let MapToDesc = (idx: long) {
     case(idx == 0, "DomainJoin",
     idx == 1, "DomainTrust",
@@ -388,10 +388,10 @@ WVDAgentHealthStatus
 | extend HealthCheckResult = tolong(CheckFailed.HealthCheckResult)
 | extend HealthCheckDesc = MapToDesc(HealthCheckName)
 | where HealthCheckDesc != "InvalidIndex"
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" HostPoolResourceGroup "/providers/microsoft.desktopvirtualization/hostpools/" HostPool
 | parse SessionHostResourceId with "/subscriptions/" HostSubscription "/resourceGroups/" SessionHostRG "/providers/Microsoft.Compute/virtualMachines/" SessionHostName
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'SessionHostName', operator: 'Include', values: ['*'] }
@@ -427,7 +427,7 @@ resource alertConnectionFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-1
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDConnections
 | project-away TenantId, SourceSystem
 | summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId
@@ -448,12 +448,12 @@ WVDConnections
 | where TimeGenerated > ago(15m)
 | extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
 | extend HostPool=tostring(split(_ResourceId, '/')[8])
-| where HostPool =~ "${hostPoolName}"
+| where HostPool =~ "__POOL__"
 | where isnotempty(Errors)
 | extend ErrorShort=tostring(Errors[0].CodeSymbolic)
 | extend ErrorMessage=tostring(Errors[0].Message)
 | project TimeGenerated, HostPool, ResourceGroup, UserName, ClientOS, ClientVersion, ClientSideIPAddress, ConnectionType, ErrorShort, ErrorMessage
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'HostPool', operator: 'Include', values: ['*'] }
@@ -488,11 +488,11 @@ resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-0
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDConnections
 | where TimeGenerated > ago(24h)
 | where State == "Connected"
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName
 | join (
     WVDConnections
@@ -502,7 +502,7 @@ WVDConnections
 | project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName
 | where Duration >= timespan(24:00:00)
 | sort by Duration desc
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName', operator: 'Include', values: ['*'] }
@@ -536,11 +536,11 @@ resource alertDisconnectedUser72h 'Microsoft.Insights/scheduledQueryRules@2022-0
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDConnections
 | where TimeGenerated > ago(24h)
 | where State == "Connected"
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName
 | join (
     WVDConnections
@@ -550,7 +550,7 @@ WVDConnections
 | project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName
 | where Duration >= timespan(72:00:00)
 | sort by Duration desc
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName', operator: 'Include', values: ['*'] }
@@ -590,7 +590,7 @@ resource alertFSLogixProfile5PctFree 'Microsoft.Insights/scheduledQueryRules@202
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 let fslogixWarnings =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
@@ -603,7 +603,7 @@ let fslogixWarnings =
 fslogixWarnings
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -620,7 +620,7 @@ fslogixWarnings
     RenderedDescription,
     ResourceId
 | order by EventTime desc
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }
@@ -659,7 +659,7 @@ resource alertFSLogixProfile2PctFree 'Microsoft.Insights/scheduledQueryRules@202
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 let fslogixErrors =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
@@ -672,7 +672,7 @@ let fslogixErrors =
 fslogixErrors
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -689,7 +689,7 @@ fslogixErrors
     RenderedDescription,
     ResourceId
 | order by EventTime desc
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }
@@ -727,21 +727,21 @@ resource alertFSLogixNetworkIssue 'Microsoft.Insights/scheduledQueryRules@2022-0
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 43
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | distinct SessionHostName
 ) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
-    HostPool        = "${hostPoolName}"
+    HostPool        = "__POOL__"
 | project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
@@ -781,25 +781,25 @@ resource alertFSLogixDiskAttachFailed 'Microsoft.Insights/scheduledQueryRules@20
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID in (52, 40)
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
-    HostPool        = "${hostPoolName}"
+    HostPool        = "__POOL__"
 | project EventTime = TimeGenerated, Computer, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId
 | join kind=leftouter (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName
 ) on $left.Computer == $right.SessionHostName
 | extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff('minute', EventTime, ConnTime)), 9999)
 | summarize arg_min(TimeDiff, *) by EventTime, Computer
 | project EventTime, Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
@@ -842,19 +842,19 @@ resource alertFSLogixVhdReattachFailed 'Microsoft.Insights/scheduledQueryRules@2
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 56
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | distinct SessionHostName
 ) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
-    HostPool        = "${hostPoolName}"
+    HostPool        = "__POOL__"
 | summarize
     EventCount      = count(),
     VMresourceGroup = any(VMresourceGroup),
@@ -863,7 +863,7 @@ Event
   by Computer, RenderedDescription
 | where EventCount >= 3
 | project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
@@ -904,21 +904,21 @@ resource alertFSLogixServiceDisabled 'Microsoft.Insights/scheduledQueryRules@202
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Warning"
 | where EventID == 60
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | distinct SessionHostName
 ) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
-    HostPool        = "${hostPoolName}"
+    HostPool        = "__POOL__"
 | project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
@@ -955,21 +955,21 @@ resource alertFSLogixDiskCompaction 'Microsoft.Insights/scheduledQueryRules@2022
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 Event
 | where EventLog == "Microsoft-FSLogix-Apps/Admin"
 | where EventLevelName == "Error"
 | where EventID == 62 or EventID == 63
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | distinct SessionHostName
 ) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
-    HostPool        = "${hostPoolName}"
+    HostPool        = "__POOL__"
 | project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
@@ -1009,21 +1009,21 @@ resource alertFSLogixDiskInUse 'Microsoft.Insights/scheduledQueryRules@2022-06-1
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 Event
 | where EventLog == "Microsoft-FSLogix-Apps/Operational"
 | where EventLevelName == "Warning"
 | where EventID == 51
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | distinct SessionHostName
 ) on $left.Computer == $right.SessionHostName
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
-    HostPool        = "${hostPoolName}"
+    HostPool        = "__POOL__"
 | project Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
@@ -1064,7 +1064,7 @@ resource alertFSLogixCorruptedProfile 'Microsoft.Insights/scheduledQueryRules@20
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 let fslogixErrors =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
@@ -1084,7 +1084,7 @@ fslogixErrors
 | where PathDiff <= 60
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -1101,7 +1101,7 @@ fslogixErrors
     RenderedDescription,
     ResourceId
 | order by EventTime desc
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }
@@ -1142,7 +1142,7 @@ resource alertFSLogixCompactionPrecheck 'Microsoft.Insights/scheduledQueryRules@
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 let fslogixErrors =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
@@ -1155,7 +1155,7 @@ let fslogixErrors =
 fslogixErrors
 | join kind=inner (
     WVDConnections
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | where State == "Connected"
     | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId
 ) on $left.Computer == $right.SessionHostName
@@ -1172,7 +1172,7 @@ fslogixErrors
     RenderedDescription,
     ResourceId
 | order by EventTime desc
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }
@@ -1214,15 +1214,15 @@ resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-1
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 WVDConnections
 | where TimeGenerated > ago(30m)
-| where _ResourceId has "${hostPoolName}"
+| where _ResourceId has "__POOL__"
 | where State == "Started"
 | project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId
 | join kind=inner (
     WVDCheckpoints
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | where Name =~ "ShellReady"
         or (Name =~ "LaunchExecutable" and tostring(Parameters.connectionStage) == "RdpShellAppExecuted")
         or Name =~ "RdpShellAppExecuted"
@@ -1238,7 +1238,7 @@ WVDConnections
     LogonMinutes = round(LogonSeconds / 60.0, 1),
     ResourceId
 | order by LogonSeconds desc
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }

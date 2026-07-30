@@ -260,11 +260,11 @@ resource alertLocalDiskFree10 'Microsoft.Insights/scheduledQueryRules@2022-06-15
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 let hostPoolVMs =
     WVDAgentHealthStatus
     | where TimeGenerated > ago(15m)
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | parse SessionHostResourceId with "/subscriptions/" sub "/resourceGroups/" rg "/providers/Microsoft.Compute/virtualMachines/" vmName
     | extend vmName = tolower(vmName)
     | summarize by vmName;
@@ -277,9 +277,9 @@ Perf
 | extend ComputerName = tolower(ComputerName)
 | where ComputerName in (hostPoolVMs)
 | summarize arg_max(TimeGenerated, *) by ComputerName
-| extend HostPool = "${hostPoolName}"
+| extend HostPool = "__POOL__"
 | project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'ComputerName',    operator: 'Include', values: ['*'] }
@@ -315,11 +315,11 @@ resource alertLocalDiskFree5 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
     criteria: {
       allOf: [
         {
-          query: '''
+          query: replace('''
 let hostPoolVMs =
     WVDAgentHealthStatus
     | where TimeGenerated > ago(15m)
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | parse SessionHostResourceId with "/subscriptions/" sub "/resourceGroups/" rg "/providers/Microsoft.Compute/virtualMachines/" vmName
     | extend vmName = tolower(vmName)
     | summarize by vmName;
@@ -332,9 +332,9 @@ Perf
 | extend ComputerName = tolower(ComputerName)
 | where ComputerName in (hostPoolVMs)
 | summarize arg_max(TimeGenerated, *) by ComputerName
-| extend HostPool = "${hostPoolName}"
+| extend HostPool = "__POOL__"
 | project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId
-'''
+''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'ComputerName',    operator: 'Include', values: ['*'] }
@@ -381,11 +381,11 @@ resource alertMemoryLow2GB 'Microsoft.Insights/scheduledQueryRules@2022-06-15' =
     criteria: {
       allOf: [
         {
-          query: '''let startupExclusionMins = ${memoryAlertStartupExclusionMinutes};
+          query: replace(replace('''let startupExclusionMins = __STARTUP__;
 let hostPoolVmIds =
     WVDAgentHealthStatus
     | where TimeGenerated > ago(15m)
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | summarize by vmResourceId = tolower(SessionHostResourceId);
 let perfData =
     Perf
@@ -402,9 +402,9 @@ perfData
 | join kind=inner perfAge on vmResourceId
 | where FirstPerf < ago(startupExclusionMins * 1m)
 | where AvgMemMB <= 2048
-| extend HostPool = "${hostPoolName}"
+| extend HostPool = "__POOL__"
 | project Computer, AvgMemMB, HostPool, ResourceId
-'''
+''', '__STARTUP__', string(memoryAlertStartupExclusionMinutes)), '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',  operator: 'Include', values: ['*'] }
@@ -440,11 +440,11 @@ resource alertMemoryLow1GB 'Microsoft.Insights/scheduledQueryRules@2022-06-15' =
     criteria: {
       allOf: [
         {
-          query: '''let startupExclusionMins = ${memoryAlertStartupExclusionMinutes};
+          query: replace(replace('''let startupExclusionMins = __STARTUP__;
 let hostPoolVmIds =
     WVDAgentHealthStatus
     | where TimeGenerated > ago(15m)
-    | where _ResourceId has "${hostPoolName}"
+    | where _ResourceId has "__POOL__"
     | summarize by vmResourceId = tolower(SessionHostResourceId);
 let perfData =
     Perf
@@ -461,9 +461,9 @@ perfData
 | join kind=inner perfAge on vmResourceId
 | where FirstPerf < ago(startupExclusionMins * 1m)
 | where AvgMemMB <= 1024
-| extend HostPool = "${hostPoolName}"
+| extend HostPool = "__POOL__"
 | project Computer, AvgMemMB, HostPool, ResourceId
-'''
+''', '__STARTUP__', string(memoryAlertStartupExclusionMinutes)), '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',  operator: 'Include', values: ['*'] }
