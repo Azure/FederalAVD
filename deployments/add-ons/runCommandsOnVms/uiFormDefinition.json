@@ -22,6 +22,26 @@
 							}
 						},
 						{
+							"name": "selectionMode",
+							"type": "Microsoft.Common.OptionsGroup",
+							"label": "VM Selection",
+							"toolTip": "Choose from list to pick VMs from a dropdown (limited to 50 by the ARM API). Use Name pattern to target VMs by prefix and index range, which is useful for large session host pools.",
+							"defaultValue": "Choose from list",
+							"constraints": {
+								"allowedValues": [
+									{
+										"label": "Choose from list",
+										"value": "list"
+									},
+									{
+										"label": "Name pattern",
+										"value": "pattern"
+									}
+								],
+								"required": true
+							}
+						},
+						{
 							"name": "subscriptionsApi",
 							"type": "Microsoft.Solutions.ArmApiControl",
 							"request": {
@@ -64,7 +84,7 @@
 						{
 							"name": "virtualMachinesApi",
 							"type": "Microsoft.Solutions.ArmApiControl",
-							"condition": "[not(empty(steps('basics').resourceGroup))]",
+							"condition": "[and(equals(steps('basics').selectionMode, 'list'), not(empty(steps('basics').resourceGroup)))]",
 							"request": {
 								"method": "GET",
 								"path": "[concat(steps('basics').resourceGroup.id, '/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01')]",
@@ -82,7 +102,59 @@
 							"constraints": {
 								"allowedValues": "[steps('basics').virtualMachinesApi.transformed.list]",
 								"required": true
-							}
+							},
+							"visible": "[equals(steps('basics').selectionMode, 'list')]"
+						},
+						{
+							"name": "vmPrefix",
+							"type": "Microsoft.Common.TextBox",
+							"label": "VM Name Prefix",
+							"toolTip": "The prefix shared by all target VMs (e.g. 'avd-vm-' produces 'avd-vm-01', 'avd-vm-02', ...).",
+							"constraints": {
+								"required": true,
+								"regex": "^[a-zA-Z][a-zA-Z0-9-]{0,19}$",
+								"validationMessage": "Must start with a letter, use only letters, numbers, and hyphens, and be 1-20 characters."
+							},
+							"visible": "[equals(steps('basics').selectionMode, 'pattern')]"
+						},
+						{
+							"name": "vmStartIndex",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Start Index",
+							"toolTip": "The first index in the range (inclusive).",
+							"defaultValue": "1",
+							"constraints": {
+								"required": true,
+								"regex": "^[0-9]{1,4}$",
+								"validationMessage": "Enter a whole number between 0 and 9999."
+							},
+							"visible": "[equals(steps('basics').selectionMode, 'pattern')]"
+						},
+						{
+							"name": "vmEndIndex",
+							"type": "Microsoft.Common.TextBox",
+							"label": "End Index",
+							"toolTip": "The last index in the range (inclusive).",
+							"defaultValue": "10",
+							"constraints": {
+								"required": true,
+								"regex": "^[0-9]{1,4}$",
+								"validationMessage": "Enter a whole number between 0 and 9999."
+							},
+							"visible": "[equals(steps('basics').selectionMode, 'pattern')]"
+						},
+						{
+							"name": "vmIndexPadding",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Index Padding",
+							"toolTip": "Total digits in the index number. Use 2 for 01-99, 3 for 001-999.",
+							"defaultValue": "2",
+							"constraints": {
+								"required": false,
+								"regex": "^[1-9]$",
+								"validationMessage": "Enter a single digit between 1 and 9."
+							},
+							"visible": "[equals(steps('basics').selectionMode, 'pattern')]"
 						}
 					]
 				},
@@ -441,7 +513,11 @@
 		},
 		"outputs": {
 			"parameters": {
-				"vmNames": "[steps('basics').vmNames]",
+				"vmNames": "[if(equals(steps('basics').selectionMode, 'list'), steps('basics').vmNames, parse('[]'))]",
+				"vmPrefix": "[if(equals(steps('basics').selectionMode, 'pattern'), steps('basics').vmPrefix, '')]",
+				"vmStartIndex": "[if(equals(steps('basics').selectionMode, 'pattern'), int(steps('basics').vmStartIndex), 0)]",
+				"vmEndIndex": "[if(equals(steps('basics').selectionMode, 'pattern'), int(steps('basics').vmEndIndex), 0)]",
+				"vmIndexPadding": "[if(equals(steps('basics').selectionMode, 'pattern'), int(steps('basics').vmIndexPadding), 2)]",
 				"runCommandName": "[if(equals(steps('scripts').source, 'paste'), steps('scripts').runCommandName, if(equals(steps('scripts').source, 'uri'), first(split(last(split(steps('scripts').scriptUri, '/')), '.')), ''))]",
 				"scriptContent": "[if(equals(steps('scripts').source, 'paste'), steps('scripts').scriptContent, '')]",
 				"scriptUri": "[if(equals(steps('scripts').source, 'uri'), steps('scripts').scriptUri, '')]",

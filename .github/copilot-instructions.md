@@ -205,3 +205,9 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
 - **`downloads.json`** entries are merged at runtime: repo-provided base entries are overlaid with
   `customer/parameters/imageManagement/downloads.json`. Customer entries win on name collision.
 - you have permission to download and read any references requuired to answer questions about this repo, including Microsoft Docs, GitHub repos, and other public sources.
+
+## References for working with file types in this repo
+
+- [Bicep](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview)
+- [ARM templates](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/overview)
+- [UI form definitions](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/form-view-overview) and the schema for `uiFormDefinition.json`

@@ -1,5 +1,17 @@
-@description('Required. The names of the virtual machines on which to run the scripts.')
-param vmNames array
+@description('Optional. The names of the virtual machines on which to run the scripts. Leave empty when using vmPrefix/vmStartIndex/vmEndIndex.')
+param vmNames array = []
+
+@description('Optional. VM name prefix for generating names from a pattern (e.g. "avd-vm-"). When set, vmStartIndex, vmEndIndex, and vmIndexPadding build the VM names list.')
+param vmPrefix string = ''
+
+@description('Optional. Start index for VM name pattern generation (inclusive).')
+param vmStartIndex int = 0
+
+@description('Optional. End index for VM name pattern generation (inclusive).')
+param vmEndIndex int = 0
+
+@description('Optional. Number of digits for index padding (e.g. 2 produces "01", 3 produces "001").')
+param vmIndexPadding int = 2
 
 @description('Optional. An array of objects that define the scripts to run. Each object must contain a "name" and "blobNameOrUri" property.')
 param scripts array = []
@@ -64,6 +76,9 @@ var multipleScripts = [
 // No base64 encoding needed - Run Command accepts inline scripts up to 256KB
 var normalizedScriptContent = empty(scriptContent) ? '' : replace(replace(scriptContent, '\r\n', '\n'), '\r', '\n')
 
+var patternVmNames = [for i in range(vmStartIndex, (vmEndIndex - vmStartIndex) + 1): '${vmPrefix}${padLeft(string(i), vmIndexPadding, '0')}']  
+var resolvedVmNames = !empty(vmPrefix) ? patternVmNames : vmNames
+
 resource logsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(logsUserAssignedIdentityResourceId)) {
   name: last(split(logsUserAssignedIdentityResourceId, '/'))
   scope: resourceGroup(
@@ -81,17 +96,17 @@ resource scriptsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIden
 }
 
 resource existingVms 'Microsoft.Compute/virtualMachines@2023-03-01' existing = [
-  for (vmName, i) in vmNames: {
+  for (vmName, i) in resolvedVmNames: {
     name: vmName
   }
 ]
 
 module updateVms 'modules/virtualMachineUpdate.bicep' = [
-   for (vmName, i) in vmNames: if(!empty(logsUserAssignedIdentityResourceId) || !empty(scriptsUserAssignedIdentityResourceId)) {
+   for (vmName, i) in resolvedVmNames: if(!empty(logsUserAssignedIdentityResourceId) || !empty(scriptsUserAssignedIdentityResourceId)) {
     name: 'VirtualMachineUpdate-${vmName}-${timeStamp}'
     params: {
       location: existingVms[i].location
-      name: vmNames[i]
+      name: vmName
       identity: existingVms[i].?identity
       logsUserAssignedIdentityResourceId: logsUserAssignedIdentityResourceId
       scriptsUserAssignedIdentityResourceId: scriptsUserAssignedIdentityResourceId
@@ -104,7 +119,7 @@ module updateVms 'modules/virtualMachineUpdate.bicep' = [
 ]
 
 module runCommands 'modules/runCommands.bicep' = [
-  for (vmName, i) in vmNames: if (!empty(scripts)) {
+  for (vmName, i) in resolvedVmNames: if (!empty(scripts)) {
     name: 'RunCommands-${vmName}-${timeStamp}'
     params: {
       scripts: multipleScripts
@@ -117,7 +132,7 @@ module runCommands 'modules/runCommands.bicep' = [
         ? ''
         : scriptsUserAssignedIdentity!.properties.clientId
       timeStamp: timeStamp
-      virtualMachineName: vmNames[i]
+      virtualMachineName: vmName
     }
     dependsOn: [
       updateVms[i]
@@ -126,7 +141,7 @@ module runCommands 'modules/runCommands.bicep' = [
 ]
 
 module runCommand '../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = [
-  for (vmName, i) in vmNames: if (empty(scripts)) {
+  for (vmName, i) in resolvedVmNames: if (empty(scripts)) {
     name: 'RunCommand-${vmName}-${timeStamp}'
     params: {
       location: existingVms[i].location
