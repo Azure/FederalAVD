@@ -183,9 +183,26 @@ In air-gapped environments, set `downloadLatestMicrosoftContent = false` (defaul
 
 ---
 
-### Windows Catalog Updates (air-gapped)
+### Windows Updates (air-gapped)
 
-The `Windows-Catalog-Updates` example artifact installs Windows patches downloaded manually from the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). It is fully self-contained and requires no internet access at image build time.
+Air-gapped environments have two options for patching the golden image during an image build:
+
+**Option 1 — WSUS (recommended when available)**
+
+The image build template has native WSUS support. Set the following parameters in your image build parameter file:
+
+```json
+"updateService": { "value": "WSUS" },
+"wsusServer":    { "value": "https://wsus.corp.contoso.com:8531" }
+```
+
+During the build, the image VM will contact your WSUS server and install all approved updates for its hardware group — no pre-staging or manual file handling required. This is the preferred path for organizations that already operate a WSUS server in the air-gapped enclave.
+
+> **Note:** `installUpdates` defaults to `true`. Set it to `false` only if you want to skip the Windows Update step entirely (e.g., the image is already fully patched).
+
+**Option 2 — Windows Update Catalog (no WSUS)**
+
+When a WSUS server is not available, use the `Windows-Catalog-Updates` example artifact to install patches downloaded manually from the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). It is fully self-contained and requires no internet access at image build time.
 
 **To use in an air-gapped image build:**
 
