@@ -777,20 +777,28 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $DownloadUrl = $Download.DownloadUrl
         }
         ElseIf ($null -ne $Download.APIUrl -and $Download.APIUrl -ne '') {
-            Write-Output "[$SoftwareName] Retrieving Edge Templates URL from API..."
+            Write-Output "[$SoftwareName] Retrieving URL from Edge Updates API..."
             $APIUrl = $Download.APIUrl
             $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
             $content = $EdgeUpdatesJSON.content | ConvertFrom-Json
             $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
             $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -Last 1
             $EdgeLatestStableVersion = $latestrelease.ProductVersion
-            $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
-            $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
-            If (-not($latestPolicyFile)) {
-                $latestPolicyFile = $policyfiles | Sort-Object ProductVersion | Select-Object -Last 1
+            If ($null -ne $Download.APIArtifact -and $Download.APIArtifact -ne '') {
+                # Generic artifact selector: find the named artifact from the latest Stable release
+                $DownloadUrl = ($latestrelease.artifacts | Where-Object { $_.ArtifactName -eq $Download.APIArtifact }).Location
+                Write-Verbose "[$SoftwareName] Resolved '$($Download.APIArtifact)' v$EdgeLatestStableVersion URL: $DownloadUrl"
             }
-            $DownloadUrl = $latestPolicyFile.artifacts.Location
-            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            Else {
+                # Default (legacy): fetch the policy templates CAB matching the Stable version
+                $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
+                $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
+                If (-not($latestPolicyFile)) {
+                    $latestPolicyFile = $policyfiles | Sort-Object ProductVersion | Select-Object -Last 1
+                }
+                $DownloadUrl = $latestPolicyFile.artifacts.Location
+                Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            }
         }
         ElseIf ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo

@@ -47,6 +47,15 @@
             "Configure-EdgePolicy"
         ]
     },
+    "MicrosoftEdgeEnterprise": {
+        "Description": "Microsoft Edge Enterprise Stable x64 MSI installer. Install-MicrosoftEdgeEnterprise.ps1 also downloads this at image build time if not pre-staged (connected builds only).",
+        "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
+        "APIArtifact": "msi",
+        "DestinationFileName": "MicrosoftEdgeEnterpriseX64.msi",
+        "DestinationFolders": [
+            "Microsoft-Edge-Enterprise"
+        ]
+    },
     "FSLogix": {
         "Description": "FSLogix",
         "DownloadUrl": "https://aka.ms/fslogix_download",

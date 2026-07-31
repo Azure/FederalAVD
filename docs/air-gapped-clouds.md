@@ -129,6 +129,7 @@ The following artifacts have empty `DownloadUrl` entries in the secret and top s
 | **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
 | **Visual Studio Redistributables** | `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
 | **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
+| **Microsoft Edge Enterprise** | `MicrosoftEdgeEnterpriseX64.msi` | `customer/artifacts/Microsoft-Edge-Enterprise/` | Optional. Download the Stable x64 MSI from [microsoft.com/en-us/edge/business/download](https://www.microsoft.com/en-us/edge/business/download) on an internet-connected system. On connected builds, `Install-MicrosoftEdgeEnterprise.ps1` downloads this automatically at image build time if no MSI is pre-staged — no manual step needed when internet access is available. |
 
 > **Transfer tip:** Download all of the above on an internet-connected system, copy them to the air-gapped network, then drop them into the `customer/artifacts/` directory before running the upload script.
 
@@ -179,5 +180,40 @@ cd C:\repos\FederalAVD\deployments
 ### Image Build Parameter Notes
 
 In air-gapped environments, set `downloadLatestMicrosoftContent = false` (default). The build VM will not have internet access to download software — all content must come from the artifacts storage account pre-populated above.
+
+---
+
+### Windows Catalog Updates (air-gapped)
+
+The `Windows-Catalog-Updates` example artifact installs Windows patches downloaded manually from the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). It is fully self-contained and requires no internet access at image build time.
+
+**To use in an air-gapped image build:**
+
+1. On any system with access to the Microsoft Update Catalog (or your organization's WSUS/SCCM/patch management server), download the required `.msu` or `.cab` patch files.
+
+2. If installation order matters (for example, a Servicing Stack Update must precede a Cumulative Update), prefix each filename with a sequence number:
+
+   ```text
+   customer\artifacts\Windows-Catalog-Updates\
+       Install-WindowsCatalogUpdates.ps1
+       01-SSU-KB5012170-x64.msu
+       02-CU-KB5040442-x64.msu
+   ```
+
+   Files without a numeric prefix are sorted alphabetically, so mixed prefixed and unprefixed files work as long as the prefixed ones sort before the unprefixed ones.
+
+3. Copy the entire folder to the air-gapped network and place it under `customer/artifacts/`.
+
+4. Upload to the artifacts storage account using `-SkipDownloadingNewSources`:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -SkipDownloadingNewSources
+   ```
+
+> **Refresh cadence:** Replace or add patch files each month as new Cumulative Updates are released, then repeat steps 3-4. Only the files in the folder at upload time are installed — there is no version tracking; the script installs all files it finds on each run and skips already-installed patches via exit code.
+
+---
 
 📖 **Full script reference:** [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md)
