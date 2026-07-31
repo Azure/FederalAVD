@@ -96,14 +96,15 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ### AVD - Session Host Unhealthy — Sev 1
 
-**Trigger:** A session host in a Personal host pool is not in Available state.  
-**Meaning:** In a Personal pool, each VM is assigned to exactly one user. An unhealthy host means that user cannot work.
+**Trigger:** A session host in any host pool (Pooled or Personal) has been in a non-Available, non-Shutdown state for 15 or more continuous minutes, and `AllowNewSessions` is `true` (not in admin drain mode or shutdown by a scaling plan).  
+**Meaning:** The host is failing to serve connections but is not intentionally offline. In a Personal pool this directly impacts the assigned user. In a Pooled pool it reduces available capacity and may degrade experience for active users.
 
 **Response:**
-- Identify the affected VM from the alert dimensions.
+- Identify the affected VM and current `Status` from the alert dimensions.
 - Check the health check details in the Portal (Host Pool → Session Hosts → VM → Health).
+- Review `WVDAgentHealthStatus` in Log Analytics for the health check failure sequence leading up to the alert.
 - Attempt to restart the VM. If it does not recover, reimage it (user data is in the FSLogix profile, not on the VM).
-- Notify the assigned user of the outage and expected resolution time.
+- For Personal pools, notify the assigned user of the outage and expected resolution time.
 
 ---
 
@@ -111,16 +112,30 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 > Controlled by `enableConnectionAlerts`.
 
-### AVD - User Connection Failed — Sev 3
+### AVD - User Auth / Service Connection Failed — Sev 3
 
-**Trigger:** A user received a connection failure to a session host in the host pool.  
-**Meaning:** Isolated connection failures are normal (transient network issues, user-side problems). Sustained or clustered failures indicate a platform issue.
+**Trigger:** The same user accumulates 3 or more connection failures at the gateway or broker level (no session host was assigned) in a 15-minute window.  
+**Meaning:** The failure occurred before a session host was assigned — the broker could not authenticate the user or locate an available host. This points to an identity or service issue rather than a VM problem.
 
 **Response:**
-- Check frequency. A single failure is usually noise. Five or more failures in a short window warrants investigation.
-- Review `WVDErrors` in Log Analytics for the specific error code.
-- Common causes: RDP 150ms+ round-trip latency, session host CPU saturation, reverse connect service issues.
-- If correlated with Capacity or Health Check alerts, address those first.
+- Check the `UserName` dimension. If it is one user, investigate their account: expired password, MFA failure, Conditional Access policy block, or token expiry.
+- If multiple users are affected simultaneously, check Azure Service Health for AVD service incidents and review the Action Group for concurrent Service Health alerts.
+- Review `WVDErrors` for the `ErrorCodes` dimension to identify the specific error code (e.g., `ConnectionFailedNoHealthyRdshAvailable`, `ConnectionFailedClientDisconnect`).
+- If correlated with Capacity or Session Host Unhealthy alerts, address those first — the broker may be failing to find a healthy host.
+
+---
+
+### AVD - Session Host Connection Failed — Sev 2
+
+**Trigger:** A session host accumulates 2 or more post-assignment connection failures in a 15-minute window (a session host was assigned but the connection failed on the VM side).  
+**Meaning:** The broker successfully assigned a host, but the RDP session could not be established to that specific VM. This points to a problem on the VM itself.
+
+**Response:**
+- Identify the affected `SessionHost` from the alert dimensions. Check `AffectedUsers` to understand the blast radius.
+- Common causes: RDP stack crash (restart `TermService`), FSLogix profile load failure (check Event 23/52 on the VM), VM networking issue (NSG rule or route blocking reverse connect), or high memory/CPU causing session rejection.
+- Review `WVDErrors` for the `ErrorCodes` dimension.
+- If the VM is unresponsive, redeploy or reimage the session host.
+- If correlated with Health Check alerts on the same host, address those first.
 
 ---
 
@@ -349,7 +364,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 
 ---
 
-### AVD - FSLogix Compaction Pre-Check Failed — Sev 2
+### AVD - FSLogix Compaction Pre-Check Failed — Sev 3
 
 **Trigger:** FSLogix Event ID 58 (host disk too full for compaction) or 61 (VHD in use at compaction time).  
 **Meaning:** Compaction was scheduled but aborted before it started. Profile VHDs will grow unbounded over time without compaction.
