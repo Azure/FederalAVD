@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "4750381303772779683"
+      "templateHash": "6866223834322036307"
     }
   },
   "parameters": {
@@ -165,6 +165,15 @@
       "maxValue": 60,
       "metadata": {
         "description": "Optional. Minutes of Perf data stream age required before memory alerts fire. A VM whose oldest Perf record in the 1-hour lookback window is newer than this value is treated as still starting up and excluded. Set to 0 to disable."
+      }
+    },
+    "slowLogonThresholdMinutes": {
+      "type": "int",
+      "defaultValue": 2,
+      "minValue": 1,
+      "maxValue": 30,
+      "metadata": {
+        "description": "Optional. Logon duration threshold in minutes. The slow logon alert fires when a user takes longer than this value to reach a productive desktop. Minimum 1, maximum 30."
       }
     },
     "enableOsDiskAlerts": {
@@ -1016,6 +1025,9 @@
           },
           "hostPoolResourceId": {
             "value": "[variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId]"
+          },
+          "slowLogonThresholdMinutes": {
+            "value": "[parameters('slowLogonThresholdMinutes')]"
           }
         },
         "template": {
@@ -1025,7 +1037,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "18029047808821857243"
+              "templateHash": "12624205881327006183"
             }
           },
           "parameters": {
@@ -1086,6 +1098,15 @@
               "defaultValue": true,
               "metadata": {
                 "description": "Optional. When false, user connection failure and disconnected session alert rules are not deployed."
+              }
+            },
+            "slowLogonThresholdMinutes": {
+              "type": "int",
+              "defaultValue": 2,
+              "minValue": 1,
+              "maxValue": 30,
+              "metadata": {
+                "description": "Optional. Logon duration threshold in minutes. The slow logon alert fires when a user takes longer than this value to reach a productive desktop. Minimum 1, maximum 30."
               }
             },
             "enableFslogixAlerts": {
@@ -2377,8 +2398,8 @@
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - Slow Session Logon > 2 Minutes ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}A user in {1} took more than 2 minutes from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - Slow Session Logon > {1} Minutes ({2})', parameters('alertNamePrefix'), parameters('slowLogonThresholdMinutes'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A user in {1} took more than {2} minute(s) from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('slowLogonThresholdMinutes'))]",
                 "severity": 3,
                 "enabled": true,
                 "evaluationFrequency": "PT15M",
@@ -2391,7 +2412,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDConnections\r\n| where TimeGenerated > ago(30m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where State == \"Started\"\r\n| project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId\r\n| join kind=inner (\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"ShellReady\"\r\n        or (Name =~ \"LaunchExecutable\" and tostring(Parameters.connectionStage) == \"RdpShellAppExecuted\")\r\n        or Name =~ \"RdpShellAppExecuted\"\r\n    | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId\r\n) on CorrelationId\r\n| extend LogonSeconds = datetime_diff(''second'', ShellReadyTime, StartTime)\r\n| where LogonSeconds > 120\r\n| project\r\n    StartTime,\r\n    UserName,\r\n    SessionHostName,\r\n    LogonSeconds,\r\n    LogonMinutes = round(LogonSeconds / 60.0, 1),\r\n    ResourceId\r\n| order by LogonSeconds desc\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace(replace('WVDConnections\r\n| where TimeGenerated > ago(30m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where State == \"Started\"\r\n| project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId\r\n| join kind=inner (\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"ShellReady\"\r\n        or (Name =~ \"LaunchExecutable\" and tostring(Parameters.connectionStage) == \"RdpShellAppExecuted\")\r\n        or Name =~ \"RdpShellAppExecuted\"\r\n    | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId\r\n) on CorrelationId\r\n| extend LogonSeconds = datetime_diff(''second'', ShellReadyTime, StartTime)\r\n| where LogonSeconds > __THRESHOLD__\r\n| project\r\n    StartTime,\r\n    UserName,\r\n    SessionHostName,\r\n    LogonSeconds,\r\n    LogonMinutes = round(LogonSeconds / 60.0, 1),\r\n    ResourceId\r\n| order by LogonSeconds desc\r\n', '__POOL__', parameters('hostPoolName')), '__THRESHOLD__', string(mul(parameters('slowLogonThresholdMinutes'), 60)))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {

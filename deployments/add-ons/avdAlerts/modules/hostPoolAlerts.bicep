@@ -26,7 +26,7 @@
 //     - FSLogix corrupted / temp profile            (EventID 28, Sev 1)
 //     - FSLogix VHD compaction pre-check failure    (EventID 58/61, Sev 3)
 //   Session experience alerts (use WVD checkpoint data directly):
-//     - Slow session logon > 2 minutes              (Sev 3)
+//     - Slow session logon > N minutes (default 2)  (Sev 3, threshold configurable via slowLogonThresholdMinutes)
 //
 // Capacity alert data source:
 //   WVDAgentHealthStatus is emitted by the AVD agent on each session host and is sent to
@@ -64,6 +64,11 @@ param enableAvailabilityAlerts bool = true
 
 @description('Optional. When false, user connection failure and disconnected session alert rules are not deployed.')
 param enableConnectionAlerts bool = true
+
+@description('Optional. Logon duration threshold in minutes. The slow logon alert fires when a user takes longer than this value to reach a productive desktop. Minimum 1, maximum 30.')
+@minValue(1)
+@maxValue(30)
+param slowLogonThresholdMinutes int = 2
 
 @description('Optional. When false, FSLogix profile alert rules are not deployed.')
 param enableFslogixAlerts bool = true
@@ -1263,8 +1268,8 @@ resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-1
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - Slow Session Logon > 2 Minutes (${hostPoolName})'
-    description: '${descriptionHeader}A user in ${hostPoolName} took more than 2 minutes from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.'
+    displayName: '${alertNamePrefix} - Slow Session Logon > ${slowLogonThresholdMinutes} Minutes (${hostPoolName})'
+    description: '${descriptionHeader}A user in ${hostPoolName} took more than ${slowLogonThresholdMinutes} minute(s) from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.'
     severity: 3
     enabled: true
     evaluationFrequency: 'PT15M'
@@ -1275,7 +1280,7 @@ resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-1
     criteria: {
       allOf: [
         {
-          query: replace('''
+          query: replace(replace('''
 WVDConnections
 | where TimeGenerated > ago(30m)
 | where _ResourceId has "__POOL__"
@@ -1290,7 +1295,7 @@ WVDConnections
     | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId
 ) on CorrelationId
 | extend LogonSeconds = datetime_diff('second', ShellReadyTime, StartTime)
-| where LogonSeconds > 120
+| where LogonSeconds > __THRESHOLD__
 | project
     StartTime,
     UserName,
@@ -1299,7 +1304,7 @@ WVDConnections
     LogonMinutes = round(LogonSeconds / 60.0, 1),
     ResourceId
 | order by LogonSeconds desc
-''', '__POOL__', hostPoolName)
+''', '__POOL__', hostPoolName), '__THRESHOLD__', string(slowLogonThresholdMinutes * 60))
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }

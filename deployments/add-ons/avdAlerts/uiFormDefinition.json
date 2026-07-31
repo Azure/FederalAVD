@@ -422,7 +422,18 @@
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Connection & Disconnected Session Alerts",
                                     "defaultValue": true,
-                                    "toolTip": "Alert on user connection failures, sessions disconnected > 24h / 72h, and slow logons (> 2 minutes)."
+                                    "toolTip": "Alert on user connection failures, sessions disconnected > 24h / 72h, and slow logons."
+                                },
+                                {
+                                    "name": "slowLogonThresholdMinutes",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Slow Logon Alert Threshold (minutes)",
+                                    "toolTip": "Alert fires when a user takes longer than this many minutes to reach a productive desktop. Covers FSLogix profile load time, GPO processing, and startup scripts.",
+                                    "min": 1,
+                                    "max": 30,
+                                    "defaultValue": 2,
+                                    "showStepMarkers": false,
+                                    "visible": "[steps('advanced').alertCategories.enableConnectionAlerts]"
                                 },
                                 {
                                     "name": "enableLocalDiskAlerts",
@@ -643,6 +654,7 @@
                 "enableCapacityAlerts": "[steps('advanced').alertCategories.enableCapacityAlerts]",
                 "enableAvailabilityAlerts": "[steps('advanced').alertCategories.enableAvailabilityAlerts]",
                 "enableConnectionAlerts": "[steps('advanced').alertCategories.enableConnectionAlerts]",
+                "slowLogonThresholdMinutes": "[steps('advanced').alertCategories.slowLogonThresholdMinutes]",
                 "enableLocalDiskAlerts": "[steps('advanced').alertCategories.enableLocalDiskAlerts]",
                 "enableFslogixAlerts": "[steps('advanced').alertCategories.enableFslogixAlerts]",
                 "enableCpuAlerts": "[steps('advanced').alertCategories.enableCpuAlerts]",
