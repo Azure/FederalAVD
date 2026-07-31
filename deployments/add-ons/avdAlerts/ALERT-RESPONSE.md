@@ -127,7 +127,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ### AVD - Session Host Connection Failed — Sev 2
 
-**Trigger:** A session host accumulates 2 or more post-assignment connection failures in a 15-minute window (a session host was assigned but the connection failed on the VM side).  
+**Trigger:** A session host accumulates 3 or more post-assignment connection failures in a 15-minute window (a session host was assigned but the connection failed on the VM side).  
 **Meaning:** The broker successfully assigned a host, but the RDP session could not be established to that specific VM. This points to a problem on the VM itself.
 
 **Response:**

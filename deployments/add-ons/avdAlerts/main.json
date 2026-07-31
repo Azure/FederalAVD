@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "6866223834322036307"
+      "templateHash": "16093772313710048727"
     }
   },
   "parameters": {
@@ -1037,7 +1037,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "12624205881327006183"
+              "templateHash": "1301883109838980840"
             }
           },
           "parameters": {
@@ -1558,7 +1558,7 @@
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Session Host Connection Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}A session host in {1} has had 2 or more post-assignment connection failures in the last 15 minutes. Likely causes: RDP stack crash, FSLogix profile load failure, or VM networking issue. Review the SessionHost dimension and investigate the VM directly.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A session host in {1} has had 3 or more post-assignment connection failures in the last 15 minutes. Likely causes: RDP stack crash, FSLogix profile load failure, or VM networking issue. Review the SessionHost dimension and investigate the VM directly.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -1571,7 +1571,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack(''Code'', Code, ''CodeSymbolic'', CodeSymbolic, ''Time'', TimeGenerated, ''Message'', Message, ''ServiceError'', ServiceError, ''Source'', Source)) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, ''/'')[4])\r\n| extend HostPool=tostring(split(_ResourceId, ''/'')[8])\r\n| where HostPool =~ \"__POOL__\"\r\n| where isnotempty(Errors)\r\n| where isnotempty(SessionHostName)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| extend SessionHost=tostring(split(SessionHostName, ''.'')[0])\r\n| summarize FailureCount=count(),\r\n            ErrorCodes=make_set(ErrorShort, 5),\r\n            AffectedUsers=make_set(UserName, 10),\r\n            ResourceGroup=take_any(ResourceGroup)\r\n  by HostPool, SessionHost\r\n| where FailureCount >= 2\r\n| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes)\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack(''Code'', Code, ''CodeSymbolic'', CodeSymbolic, ''Time'', TimeGenerated, ''Message'', Message, ''ServiceError'', ServiceError, ''Source'', Source)) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, ''/'')[4])\r\n| extend HostPool=tostring(split(_ResourceId, ''/'')[8])\r\n| where HostPool =~ \"__POOL__\"\r\n| where isnotempty(Errors)\r\n| where isnotempty(SessionHostName)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| extend SessionHost=tostring(split(SessionHostName, ''.'')[0])\r\n| summarize FailureCount=count(),\r\n            ErrorCodes=make_set(ErrorShort, 5),\r\n            AffectedUsers=make_set(UserName, 10),\r\n            ResourceGroup=take_any(ResourceGroup)\r\n  by HostPool, SessionHost\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes)\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {

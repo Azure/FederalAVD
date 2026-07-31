@@ -490,7 +490,7 @@ resource alertConnHostFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Session Host Connection Failed (${hostPoolName})'
-    description: '${descriptionHeader}A session host in ${hostPoolName} has had 2 or more post-assignment connection failures in the last 15 minutes. Likely causes: RDP stack crash, FSLogix profile load failure, or VM networking issue. Review the SessionHost dimension and investigate the VM directly.'
+    description: '${descriptionHeader}A session host in ${hostPoolName} has had 3 or more post-assignment connection failures in the last 15 minutes. Likely causes: RDP stack crash, FSLogix profile load failure, or VM networking issue. Review the SessionHost dimension and investigate the VM directly.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -523,7 +523,7 @@ WVDConnections
             AffectedUsers=make_set(UserName, 10),
             ResourceGroup=take_any(ResourceGroup)
   by HostPool, SessionHost
-| where FailureCount >= 2
+| where FailureCount >= 3
 | project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes)
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
