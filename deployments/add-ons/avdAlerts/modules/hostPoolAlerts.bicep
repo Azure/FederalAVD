@@ -7,10 +7,11 @@
 //     - Host pool capacity >= 85%  (Sev 2)
 //     - Host pool capacity >= 95%  (Sev 1)
 //   Availability alerts:
-//     - Session host unhealthy in personal pool  (Sev 1) [Personal pools only]
+//     - Session host unhealthy  (Sev 1) [all pool types]
 //     - No resources available for connection  (Sev 1)
 //     - VM health check failure  (Sev 1)
-//     - User connection failure  (Sev 3)
+//     - User auth / service connection failed  (>= 3 per user in 15 min, Sev 3)
+//     - Session host connection failed             (>= 2 per host in 15 min, Sev 2)
 //     - Disconnected user > 24 hours  (Sev 2)
 //     - Disconnected user > 72 hours  (Sev 1)
 //   FSLogix alerts (use Event log data from Log Analytics agent / AMA):
@@ -23,9 +24,9 @@
 //     - FSLogix disk compaction failed  (EventID 62/63, Sev 2)
 //     - FSLogix profile disk in use by another VM  (EventID 51, Sev 2)
 //     - FSLogix corrupted / temp profile            (EventID 28, Sev 1)
-//     - FSLogix VHD compaction pre-check failure    (EventID 58/61, Sev 2)
+//     - FSLogix VHD compaction pre-check failure    (EventID 58/61, Sev 3)
 //   Session experience alerts (use WVD checkpoint data directly):
-//     - Slow session logon > 2 minutes              (Sev 3)
+//     - Slow session logon > N minutes (default 2)  (Sev 3, threshold configurable via slowLogonThresholdMinutes)
 //
 // Capacity alert data source:
 //   WVDAgentHealthStatus is emitted by the AVD agent on each session host and is sent to
@@ -63,6 +64,11 @@ param enableAvailabilityAlerts bool = true
 
 @description('Optional. When false, user connection failure and disconnected session alert rules are not deployed.')
 param enableConnectionAlerts bool = true
+
+@description('Optional. Logon duration threshold in minutes. The slow logon alert fires when a user takes longer than this value to reach a productive desktop. Minimum 1, maximum 30.')
+@minValue(1)
+@maxValue(30)
+param slowLogonThresholdMinutes int = 2
 
 @description('Optional. When false, FSLogix profile alert rules are not deployed.')
 param enableFslogixAlerts bool = true
@@ -244,13 +250,13 @@ WVDAgentHealthStatus
 }
 
 // Personal host pool: session host is not in a healthy state
-resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts && hostPoolType == 'Personal') {
+resource alertSessionHostUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableAvailabilityAlerts) {
   name: '${alertNamePrefix}-HP-Host-Unhealthy-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Session Host Unhealthy (${hostPoolName})'
-    description: '${descriptionHeader}A session host in the personal host pool ${hostPoolName} is not in an Available state. Investigate the affected VM and its health check results.'
+    description: '${descriptionHeader}A session host in ${hostPoolName} has been in a non-Available, non-Shutdown state for 15 or more minutes and is not in drain mode. Only fires when AllowNewSessions is true (unplanned failure, not intentional maintenance). Investigate WVDAgentHealthStatus and the VM directly.'
     severity: 1
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -263,10 +269,16 @@ resource alertPersonalUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-06-
         {
           query: replace('''
 WVDAgentHealthStatus
-| where TimeGenerated > ago(15m)
+| where TimeGenerated > ago(20m)
 | where _ResourceId has "__POOL__"
-| summarize arg_max(TimeGenerated, Status, _ResourceId) by SessionHostName
-| where Status != 'Available' and Status != 'Shutdown'
+| where AllowNewSessions == true
+| where Status != 'Shutdown'
+| summarize 
+    arg_max(TimeGenerated, Status, _ResourceId),
+    LastAvailable = maxif(TimeGenerated, Status == 'Available')
+  by SessionHostName
+| where Status != 'Available'
+| where isnull(LastAvailable) or LastAvailable <= ago(15m)
 | project SessionHostName, Status, ResourceId = _ResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
@@ -351,11 +363,11 @@ resource alertVMHealthCheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' 
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Health Check Failed (${hostPoolName})'
-    description: '${descriptionHeader}A session host in ${hostPoolName} is available but a dependent resource (domain, FSLogix, SxS stack, URL check) is in a failed state.'
+    description: '${descriptionHeader}A session host in ${hostPoolName} is available but a dependent resource (domain, FSLogix, SxS stack, URL check) is in a failed state. Only fires for hosts not in drain mode; requires 3 consecutive evaluations (15 minutes) before alerting.'
     severity: 1
     enabled: true
-    evaluationFrequency: 'PT15M'
-    windowSize: 'PT15M'
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT5M'
     overrideQueryTimeRange: 'P2D'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
@@ -378,7 +390,7 @@ let MapToDesc = (idx: long) {
     "InvalidIndex")
 };
 WVDAgentHealthStatus
-| where TimeGenerated > ago(10m)
+| where TimeGenerated > ago(5m)
 | where Status != 'Available'
 | where AllowNewSessions == true
 | extend CheckFailed = parse_json(SessionHostHealthCheckResult)
@@ -401,7 +413,7 @@ WVDAgentHealthStatus
           ]
           operator: 'GreaterThanOrEqual'
           threshold: 1
-          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+          failingPeriods: { numberOfEvaluationPeriods: 3, minFailingPeriodsToAlert: 3 }
         }
       ]
     }
@@ -409,17 +421,20 @@ WVDAgentHealthStatus
   }
 }
 
-// User connection failed
-resource alertConnectionFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
-  name: '${alertNamePrefix}-HP-Conn-Failed-${hostPoolName}'
+// User auth / service connection failed
+// Fires when the same user accumulates 3+ failures at the gateway/broker level
+// (SessionHostName is empty = no session host was assigned).
+// Indicates account, MFA, Conditional Access, or AVD service issues - not a VM problem.
+resource alertConnAuthFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
+  name: '${alertNamePrefix}-HP-Conn-AuthFailed-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - User Connection Failed (${hostPoolName})'
-    description: '${descriptionHeader}A user failed to connect to a session host in ${hostPoolName}. If frequent, investigate network latency (>150ms) and session host availability.'
+    displayName: '${alertNamePrefix} - User Auth / Service Connection Failed (${hostPoolName})'
+    description: '${descriptionHeader}A user in ${hostPoolName} failed to connect 3 or more times at the gateway or broker level in the last 15 minutes (no session host was assigned). Likely causes: MFA failure, Conditional Access policy block, expired token, or no available session hosts. Review the UserName and ErrorCodes dimensions.'
     severity: 3
     enabled: true
-    evaluationFrequency: 'PT15M'
+    evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
     overrideQueryTimeRange: 'P2D'
     scopes: [logAnalyticsWorkspaceResourceId]
@@ -430,35 +445,91 @@ resource alertConnectionFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-1
           query: replace('''
 WVDConnections
 | project-away TenantId, SourceSystem
-| summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId
+| summarize arg_max(TimeGenerated, *) by CorrelationId
 | join kind=leftouter (
     WVDErrors
     | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId
 ) on CorrelationId
-| join kind=leftouter (
-    WVDCheckpoints
-    | summarize Checkpoints=make_list(pack('Time', TimeGenerated, 'Name', Name, 'Parameters', Parameters, 'Source', Source)) by CorrelationId
-    | mv-apply Checkpoints on (
-        order by todatetime(Checkpoints['Time']) asc
-        | summarize Checkpoints=make_list(Checkpoints)
-    )
-) on CorrelationId
-| project-away CorrelationId1, CorrelationId2
-| order by TimeGenerated desc
+| project-away CorrelationId1
 | where TimeGenerated > ago(15m)
 | extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
 | extend HostPool=tostring(split(_ResourceId, '/')[8])
 | where HostPool =~ "__POOL__"
 | where isnotempty(Errors)
+| where isempty(SessionHostName)
 | extend ErrorShort=tostring(Errors[0].CodeSymbolic)
-| extend ErrorMessage=tostring(Errors[0].Message)
-| project TimeGenerated, HostPool, ResourceGroup, UserName, ClientOS, ClientVersion, ClientSideIPAddress, ConnectionType, ErrorShort, ErrorMessage
+| summarize FailureCount=count(),
+            ErrorCodes=make_set(ErrorShort, 5),
+            ResourceGroup=take_any(ResourceGroup)
+  by HostPool, UserName
+| where FailureCount >= 3
+| project HostPool, ResourceGroup, UserName, FailureCount, ErrorCodes=tostring(ErrorCodes)
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'HostPool', operator: 'Include', values: ['*'] }
             { name: 'UserName', operator: 'Include', values: ['*'] }
-            { name: 'ErrorShort', operator: 'Include', values: ['*'] }
+          ]
+          operator: 'GreaterThanOrEqual'
+          threshold: 1
+          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+        }
+      ]
+    }
+    actions: actions
+  }
+}
+
+// Session host connection failed
+// Fires when a session host accumulates 2+ connection failures after host assignment.
+// SessionHostName is populated = the broker assigned a host but the connection failed on the VM side.
+// Indicates RDP stack crash, FSLogix profile load failure, or VM networking issues.
+resource alertConnHostFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
+  name: '${alertNamePrefix}-HP-Conn-HostFailed-${hostPoolName}'
+  location: location
+  tags: hostPoolTags
+  properties: {
+    displayName: '${alertNamePrefix} - Session Host Connection Failed (${hostPoolName})'
+    description: '${descriptionHeader}A session host in ${hostPoolName} has had 3 or more post-assignment connection failures in the last 15 minutes. Likely causes: RDP stack crash, FSLogix profile load failure, or VM networking issue. Review the SessionHost dimension and investigate the VM directly.'
+    severity: 2
+    enabled: true
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT15M'
+    overrideQueryTimeRange: 'P2D'
+    scopes: [logAnalyticsWorkspaceResourceId]
+    autoMitigate: autoResolveAlert
+    criteria: {
+      allOf: [
+        {
+          query: replace('''
+WVDConnections
+| project-away TenantId, SourceSystem
+| summarize arg_max(TimeGenerated, *) by CorrelationId
+| join kind=leftouter (
+    WVDErrors
+    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId
+) on CorrelationId
+| project-away CorrelationId1
+| where TimeGenerated > ago(15m)
+| extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
+| extend HostPool=tostring(split(_ResourceId, '/')[8])
+| where HostPool =~ "__POOL__"
+| where isnotempty(Errors)
+| where isnotempty(SessionHostName)
+| extend ErrorShort=tostring(Errors[0].CodeSymbolic)
+| extend SessionHost=tostring(split(SessionHostName, '.')[0])
+| summarize FailureCount=count(),
+            ErrorCodes=make_set(ErrorShort, 5),
+            AffectedUsers=make_set(UserName, 10),
+            ResourceGroup=take_any(ResourceGroup)
+  by HostPool, SessionHost
+| where FailureCount >= 3
+| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes)
+''', '__POOL__', hostPoolName)
+          timeAggregation: 'Count'
+          dimensions: [
+            { name: 'HostPool',    operator: 'Include', values: ['*'] }
+            { name: 'SessionHost', operator: 'Include', values: ['*'] }
           ]
           operator: 'GreaterThanOrEqual'
           threshold: 1
@@ -1132,7 +1203,7 @@ resource alertFSLogixCompactionPrecheck 'Microsoft.Insights/scheduledQueryRules@
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Compaction Pre-Check Failed (${hostPoolName})'
     description: '${descriptionHeader}FSLogix Event ID 58 or 61 in ${hostPoolName}: VHD disk compaction was aborted before starting, either because the host disk lacks free space for the operation (58) or the VHD is in use (61). Profile VHDs will grow unbounded until compaction can complete.'
-    severity: 2
+    severity: 3
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT1H'
@@ -1147,11 +1218,8 @@ let fslogixErrors =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
     | where EventID in (58, 61)
-    | extend
-        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription),
-        ProfileRaw     = extract(@"profilecontainers\\([^\\]+)", 1, RenderedDescription)
-    | extend ProfileID = tostring(split(ProfileRaw, "_")[0])
-    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;
+    | extend StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription)
+    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;
 fslogixErrors
 | join kind=inner (
     WVDConnections
@@ -1165,7 +1233,6 @@ fslogixErrors
 | project
     EventTime,
     UserName,
-    ProfileID,
     SessionHostName = Computer,
     StorageAccount,
     EventID,
@@ -1176,7 +1243,6 @@ fslogixErrors
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }
-            { name: 'ProfileID',       operator: 'Include', values: ['*'] }
             { name: 'SessionHostName', operator: 'Include', values: ['*'] }
             { name: 'StorageAccount',  operator: 'Include', values: ['*'] }
             { name: 'EventID',         operator: 'Include', values: ['*'] }
@@ -1202,8 +1268,8 @@ resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-1
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - Slow Session Logon > 2 Minutes (${hostPoolName})'
-    description: '${descriptionHeader}A user in ${hostPoolName} took more than 2 minutes from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.'
+    displayName: '${alertNamePrefix} - Slow Session Logon > ${slowLogonThresholdMinutes} Minutes (${hostPoolName})'
+    description: '${descriptionHeader}A user in ${hostPoolName} took more than ${slowLogonThresholdMinutes} minute(s) from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.'
     severity: 3
     enabled: true
     evaluationFrequency: 'PT15M'
@@ -1214,7 +1280,7 @@ resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-1
     criteria: {
       allOf: [
         {
-          query: replace('''
+          query: replace(replace('''
 WVDConnections
 | where TimeGenerated > ago(30m)
 | where _ResourceId has "__POOL__"
@@ -1229,7 +1295,7 @@ WVDConnections
     | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId
 ) on CorrelationId
 | extend LogonSeconds = datetime_diff('second', ShellReadyTime, StartTime)
-| where LogonSeconds > 120
+| where LogonSeconds > __THRESHOLD__
 | project
     StartTime,
     UserName,
@@ -1238,7 +1304,7 @@ WVDConnections
     LogonMinutes = round(LogonSeconds / 60.0, 1),
     ResourceId
 | order by LogonSeconds desc
-''', '__POOL__', hostPoolName)
+''', '__POOL__', hostPoolName), '__THRESHOLD__', string(slowLogonThresholdMinutes * 60))
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',        operator: 'Include', values: ['*'] }

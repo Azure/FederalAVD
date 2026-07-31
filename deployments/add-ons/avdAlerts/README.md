@@ -11,7 +11,7 @@ The add-on is subscription-scoped. A single deployment covers any number of host
 storage accounts across resource groups in the subscription.
 
 **Alert count per pooled host pool:** up to 21 scheduled query rule alerts  
-**Alert count per personal host pool:** up to 17 scheduled query rule alerts (capacity alerts replaced by personal-unhealthy alert)  
+**Alert count per personal host pool:** up to 18 scheduled query rule alerts (no capacity alerts; session host unhealthy applies to all pool types)  
 **Per-deployment fixed alerts:** 4 Service Health activity log alerts  
 **Per-storage-account alerts:** 6 metric alerts + 2 log-based (when storage alerts enabled)  
 **Per-ANF-volume alerts:** 2 metric alerts (when ANF alerts enabled)  
@@ -87,7 +87,7 @@ grants read access to all alerts), audit (one Activity Log to watch), and incide
 | Alert Category | Pooled | Personal |
 |----------------|--------|----------|
 | Capacity (50% / 85% / 95%) | ✅ | ❌ (meaningless for 1:1 assignment) |
-| Personal Host Unhealthy | ❌ | ✅ |
+| Session Host Unhealthy | ✅ | ✅ |
 | All other alerts | ✅ | ✅ |
 
 ### Resource Tagging

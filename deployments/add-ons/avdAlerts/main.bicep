@@ -166,6 +166,11 @@ param enableMemoryAlerts bool = true
 @maxValue(60)
 param memoryAlertStartupExclusionMinutes int = 20
 
+@description('Optional. Logon duration threshold in minutes. The slow logon alert fires when a user takes longer than this value to reach a productive desktop. Minimum 1, maximum 30.')
+@minValue(1)
+@maxValue(30)
+param slowLogonThresholdMinutes int = 2
+
 @description('Optional. When false, session host VM OS disk bandwidth alert rules are not deployed.')
 param enableOsDiskAlerts bool = true
 
@@ -317,6 +322,7 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
     enableFslogixAlerts: enableFslogixAlerts
     hostPoolType: hp.?hostPoolType ?? 'Pooled'
     hostPoolResourceId: hp.hostPoolResourceId
+    slowLogonThresholdMinutes: slowLogonThresholdMinutes
   }
   dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]
