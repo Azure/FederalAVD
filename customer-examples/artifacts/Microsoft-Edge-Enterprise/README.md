@@ -1,5 +1,7 @@
 # Microsoft-Edge-Enterprise
 
+> **Before you start:** Copy this folder to `customer/artifacts/Microsoft-Edge-Enterprise/` before running `Update-ImageArtifacts.ps1`. Add the `MicrosoftEdgeEnterprise` entry from [`customer-examples/parameters/imageManagement/downloads.json`](../../../customer-examples/parameters/imageManagement/downloads.json) to your `customer/parameters/imageManagement/downloads.json`. See the [example artifacts README](../README.md) for the full workflow.
+
 Installs the latest **Microsoft Edge Enterprise Stable x64** MSI silently and, optionally,
 disables Edge's auto-update mechanism via Group Policy registry keys.
 

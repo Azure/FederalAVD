@@ -1,5 +1,7 @@
 # Windows-Catalog-Updates
 
+> **Before you start:** Copy this folder to `customer/artifacts/Windows-Catalog-Updates/` before running `Update-ImageArtifacts.ps1`. This artifact has no `downloads.json` entry — the patch files (`.msu`/`.cab`) must be manually staged in the folder (see [How to get the patches](#how-to-get-the-patches) below). See the [example artifacts README](../README.md) for the full workflow.
+
 Installs Windows patches (`.msu` and `.cab`) downloaded from the
 [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). The script is
 fully self-contained — it requires no internet access during the image build and is designed

@@ -204,6 +204,8 @@ During the build, the image VM will contact your WSUS server and install all app
 
 When a WSUS server is not available, use the `Windows-Catalog-Updates` example artifact to install patches downloaded manually from the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). It is fully self-contained and requires no internet access at image build time.
 
+📖 **Artifact reference:** [Windows-Catalog-Updates README](../customer-examples/artifacts/Windows-Catalog-Updates/README.md)
+
 **To use in an air-gapped image build:**
 
 1. On any system with access to the Microsoft Update Catalog (or your organization's WSUS/SCCM/patch management server), download the required `.msu` or `.cab` patch files.
@@ -230,6 +232,43 @@ When a WSUS server is not available, use the `Windows-Catalog-Updates` example a
    ```
 
 > **Refresh cadence:** Replace or add patch files each month as new Cumulative Updates are released, then repeat steps 3-4. Only the files in the folder at upload time are installed — there is no version tracking; the script installs all files it finds on each run and skips already-installed patches via exit code.
+
+---
+
+### Microsoft Edge (air-gapped)
+
+The `Microsoft-Edge-Enterprise` example artifact installs the Edge Enterprise MSI during an image build. In connected environments, `Update-ImageArtifacts.ps1` downloads the installer automatically from Microsoft. In air-gapped environments, you pre-stage the installer manually.
+
+> **WSUS alternative:** If your WSUS server has the **Microsoft Edge** product category enabled and approved, Edge updates will be installed automatically during the Windows Update step of the image build — no artifact needed. Check WSUS → Products and Classifications → Products → Microsoft Edge to confirm. If Edge is not synced through WSUS, use the artifact below.
+
+📖 **Artifact reference:** [Microsoft-Edge-Enterprise README](../customer-examples/artifacts/Microsoft-Edge-Enterprise/README.md)
+
+**To use in an air-gapped image build:**
+
+1. On any system with internet access, download the Edge Enterprise MSI from the [Microsoft Edge Enterprise download page](https://www.microsoft.com/en-us/edge/business/download):
+   - Architecture: **x64**
+   - Channel: **Stable**
+   - File type: **MSI**
+
+2. Place the MSI in the artifact folder alongside the install script:
+
+   ```text
+   customer\artifacts\Microsoft-Edge-Enterprise\
+       Install-MicrosoftEdgeEnterprise.ps1
+       MicrosoftEdgeEnterpriseX64.msi
+   ```
+
+3. Copy the folder to the air-gapped network and place it under `customer/artifacts/`.
+
+4. Upload to the artifacts storage account using `-SkipDownloadingNewSources`:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -SkipDownloadingNewSources
+   ```
+
+> **Refresh cadence:** Replace the MSI with the latest stable release monthly, then repeat steps 3-4. The script detects the installed version and skips installation if Edge is already up to date.
 
 ---
 
