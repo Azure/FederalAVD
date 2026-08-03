@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "6216483068515203149"
+      "templateHash": "5359530377204299422"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "12147559179081523635"
+              "templateHash": "12140754064882860902"
             }
           },
           "parameters": {
@@ -1554,59 +1554,6 @@
                         },
                         {
                           "name": "UserName",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        }
-                      ],
-                      "resourceIdColumn": "ResourceId",
-                      "operator": "GreaterThanOrEqual",
-                      "threshold": 1,
-                      "failingPeriods": {
-                        "numberOfEvaluationPeriods": 1,
-                        "minFailingPeriodsToAlert": 1
-                      }
-                    }
-                  ]
-                },
-                "actions": "[variables('actions')]"
-              }
-            },
-            {
-              "condition": "[parameters('enableConnectionAlerts')]",
-              "type": "Microsoft.Insights/scheduledQueryRules",
-              "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-Conn-HostFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-              "location": "[parameters('location')]",
-              "tags": "[variables('hostPoolTags')]",
-              "properties": {
-                "displayName": "[format('{0} - Session Host Connection Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}A session host in {1} has had 3 or more post-assignment connection failures in the last 15 minutes. Likely causes: RDP stack crash, FSLogix profile load failure, or VM networking issue. Review the SessionHost dimension and investigate the VM directly.', variables('descriptionHeader'), parameters('hostPoolName'))]",
-                "severity": 2,
-                "enabled": true,
-                "evaluationFrequency": "PT5M",
-                "windowSize": "PT15M",
-                "overrideQueryTimeRange": "PT15M",
-                "scopes": [
-                  "[parameters('logAnalyticsWorkspaceResourceId')]"
-                ],
-                "autoMitigate": "[parameters('autoResolveAlert')]",
-                "criteria": {
-                  "allOf": [
-                    {
-                      "query": "[replace('let failures =\r\n    WVDConnections\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == ''Completed''\r\n    | where isnotempty(SessionHostName)\r\n    | join kind=leftanti (\r\n        WVDCheckpoints\r\n        | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | join kind=leftanti (\r\n        // Client disconnected before host could complete the handshake - not a host-side failure\r\n        WVDErrors\r\n        | where TimeGenerated > ago(15m)\r\n        | where CodeSymbolic == ''ConnectionFailedClientDisconnect''\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | extend SessionHost   = tostring(split(SessionHostName, ''.'')[0])\r\n    | extend HostPool      = tostring(split(_ResourceId, ''/'')[8])\r\n    | extend ResourceGroup = tostring(split(_ResourceId, ''/'')[4]);\r\nlet recentSuccessHosts =\r\n    WVDConnections\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where isnotempty(SessionHostName)\r\n    | join kind=inner (\r\n        WVDCheckpoints\r\n        | where TimeGenerated > ago(15m)\r\n        | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | extend SessionHost = tostring(split(SessionHostName, ''.'')[0])\r\n    | summarize by SessionHost;\r\nfailures\r\n| join kind=leftanti recentSuccessHosts on SessionHost\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | where TimeGenerated > ago(15m)\r\n    | summarize ErrorCode=take_any(CodeSymbolic) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| summarize FailureCount  = count(),\r\n            AffectedUsers = make_set(UserName, 10),\r\n            ErrorCodes    = make_set(ErrorCode, 5),\r\n            ResourceGroup = take_any(ResourceGroup),\r\n            ResourceId    = take_any(_ResourceId)\r\n  by HostPool, SessionHost\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes), ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
-                      "timeAggregation": "Count",
-                      "dimensions": [
-                        {
-                          "name": "HostPool",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "SessionHost",
                           "operator": "Include",
                           "values": [
                             "*"

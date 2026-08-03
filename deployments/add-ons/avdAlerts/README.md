@@ -10,8 +10,8 @@ Azure NetApp Files storage, and Azure Service Health.
 The add-on is subscription-scoped. A single deployment covers any number of host pools and
 storage accounts across resource groups in the subscription.
 
-**Alert count per pooled host pool:** up to 21 scheduled query rule alerts  
-**Alert count per personal host pool:** up to 18 scheduled query rule alerts (no capacity alerts; session host unhealthy applies to all pool types)  
+**Alert count per pooled host pool:** up to 20 scheduled query rule alerts  
+**Alert count per personal host pool:** up to 17 scheduled query rule alerts (no capacity alerts; session host unhealthy applies to all pool types)  
 **Per-deployment fixed alerts:** 4 Service Health activity log alerts  
 **Per-storage-account alerts:** 6 metric alerts + 2 log-based (when storage alerts enabled)  
 **Per-ANF-volume alerts:** 2 metric alerts (when ANF alerts enabled)  
@@ -58,7 +58,7 @@ This add-on is Zero Trust-aligned by default:
 main.bicep                    ← subscription-scoped entry point
 modules/
   automationAccount.bicep     ← Automation Account, runbooks, schedules, RBAC
-  hostPoolAlerts.bicep        ← log-based alerts per host pool (21 per pooled, 17 per personal)
+  hostPoolAlerts.bicep        ← log-based alerts per host pool (20 per pooled, 17 per personal)
   vmAlerts.bicep              ← VM alerts (CPU/disk metrics + disk space/memory SQRs) scoped to each VM resource group
   serviceHealthAlerts.bicep   ← subscription-scoped Service Health activity log alerts
   storageAlerts.bicep         ← Azure Files metric + log-based alerts per storage account
@@ -386,4 +386,4 @@ below.
 | `alertSlowSessionLogon` | Connection Performance workbook | Adopted the workbook's `RdpStackConnectionEstablished` leftsemi join to isolate new-session logons, and the `OnCredentialsAcquisitionCompleted` / `SSOTokenRetrieval` leftouter joins to subtract client-side latency (credential acquisition and SSO token retrieval) from the total logon duration. This ensures the alert measures host-side logon latency only. |
 | Capacity (50% / 85% / 95%) | Host Diagnostics / Utilization Report workbooks | `arg_max(TimeGenerated, *) by SessionHostName` pattern to get the latest row per host; `iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)` for denominator to exclude drained hosts. |
 | `alertSessionHostUnhealthy` | Host Diagnostics workbook | Status, AllowNewSessions, and LastAvailable pattern aligned with workbook; `FirstSeen` guard added for alert-specific noise suppression. |
-| `alertConnAuthFailed` / `alertConnHostFailed` | Connection Diagnostics workbook | Split into two alerts (gateway/broker failures vs. session host failures) rather than the workbook's combined view. `alertConnAuthFailed` uses `WVDErrors` + `isempty(SessionHostName)` — appropriate because auth/gateway failures always produce error codes. `alertConnHostFailed` uses the workbook's authoritative failure signal: `State == 'Completed'` + `leftanti join WVDCheckpoints.RdpStackConnectionEstablished` (WVDCheckpoints not time-bounded to handle long-running sessions whose checkpoint precedes the alert window). WVDErrors is joined as `leftouter` for error code enrichment only — not used for failure detection. Hosts that had any successful `RdpStackConnectionEstablished` checkpoint within the same 15-minute window are excluded via a `recentSuccessHosts` let variable (aligned with the workbook's `GetConnectionFailures` pattern of excluding slicers with recent successes) — this suppresses noise from transient client disconnects and reconnections on otherwise healthy hosts. |
+| `alertConnAuthFailed` | Connection Diagnostics workbook | Scoped to gateway/broker failures (`isempty(SessionHostName)`) rather than the workbook's combined view. Uses `WVDErrors` + `isempty(SessionHostName)` — appropriate because auth/gateway failures always produce error codes. A separate session-host-level connection failure alert was evaluated but removed: `WVDConnections State=='Completed'` without `RdpStackConnectionEstablished` is too ambiguous to alert on reliably — client crashes, network blips, and rapid reconnect storms are structurally indistinguishable from host-side failures at the query level. Host health is covered by `alertSessionHostUnhealthy` and `alertVMHealthCheck`. |
