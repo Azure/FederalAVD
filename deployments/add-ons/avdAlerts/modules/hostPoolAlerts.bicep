@@ -117,7 +117,7 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -167,7 +167,7 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -217,7 +217,7 @@ resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -267,7 +267,7 @@ resource alertSessionHostUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT30M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -320,7 +320,7 @@ resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-
     enabled: true
     evaluationFrequency: 'PT15M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -367,7 +367,7 @@ resource alertVMHealthCheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' 
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT5M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT5M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -437,7 +437,7 @@ resource alertConnAuthFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -498,7 +498,7 @@ resource alertConnHostFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -558,22 +558,28 @@ resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-0
     enabled: true
     evaluationFrequency: 'PT1H'
     windowSize: 'PT1H'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: disconnectedSessionAlertThresholdHours <= 2 ? 'PT3H'
+      : disconnectedSessionAlertThresholdHours <= 3 ? 'PT4H'
+      : disconnectedSessionAlertThresholdHours <= 4 ? 'PT5H'
+      : disconnectedSessionAlertThresholdHours <= 5 ? 'PT6H'
+      : disconnectedSessionAlertThresholdHours <= 11 ? 'PT12H'
+      : disconnectedSessionAlertThresholdHours <= 23 ? 'P1D'
+      : 'P2D'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
       allOf: [
         {
-          query: replace(replace('''
+          query: replace(replace(replace('''
 WVDConnections
-| where TimeGenerated > ago(48h)
+| where TimeGenerated > ago(__LOOKBACK__h)
 | where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, State, SessionHostName, _ResourceId) by UserName, SessionHostName
 | where State == "Disconnected"
 | where TimeGenerated < ago(__THRESHOLD__h)
 | extend DisconnectedHours = round(datetime_diff('minute', now(), TimeGenerated) / 60.0, 1)
 | project UserName, SessionHostName, DisconnectedSince = TimeGenerated, DisconnectedHours, ResourceId = _ResourceId
-''', '__POOL__', hostPoolName), '__THRESHOLD__', string(disconnectedSessionAlertThresholdHours))
+''', '__POOL__', hostPoolName), '__THRESHOLD__', string(disconnectedSessionAlertThresholdHours)), '__LOOKBACK__', string(disconnectedSessionAlertThresholdHours + 1))
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName',          operator: 'Include', values: ['*'] }
@@ -1229,9 +1235,12 @@ fslogixErrors
   }
 }
 
-// Slow session logon - time from connection start to productive desktop > configured threshold (default slowLogonThresholdMinutes minutes)
-// Uses WVDCheckpoints ShellReady / RdpShellAppExecuted to measure full logon time
-// (includes Windows logon, profile load, GPO processing, startup scripts).
+// Slow session logon - host-side time from connection start to productive desktop > configured threshold
+// Measures NEW sessions only (LoadBalancedNewConnection with NewSession outcome) to exclude fast
+// reconnections that skip full profile load and GPO processing.
+// Subtracts client-side credential acquisition (OnCredentialsAcquisitionCompleted) and SSO token
+// retrieval (SSOTokenRetrieval) time to isolate host-side latency (FSLogix, GPO, shell startup).
+// Query pattern aligned with the Microsoft AVD Connection Performance workbook.
 // Fires at Sev 3 as an early warning; repeated occurrences indicate profile bloat, GPO issues,
 // or storage latency on the FSLogix share.
 resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
@@ -1240,12 +1249,12 @@ resource alertSlowSessionLogon 'Microsoft.Insights/scheduledQueryRules@2022-06-1
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Slow Session Logon > ${slowLogonThresholdMinutes} Minutes (${hostPoolName})'
-    description: '${descriptionHeader}A user in ${hostPoolName} took more than ${slowLogonThresholdMinutes} minute(s) from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.'
+    description: '${descriptionHeader}A user in ${hostPoolName} took more than ${slowLogonThresholdMinutes} minute(s) to reach a productive desktop (new sessions only; client-side credential and SSO time excluded). Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.'
     severity: 3
     enabled: true
     evaluationFrequency: 'PT15M'
     windowSize: 'PT30M'
-    overrideQueryTimeRange: 'P2D'
+    overrideQueryTimeRange: 'PT30M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -1257,6 +1266,19 @@ WVDConnections
 | where _ResourceId has "__POOL__"
 | where State == "Started"
 | project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId
+| join kind=leftsemi (
+    // Exclude broker-level failures that never reached the RD stack on the VM
+    WVDCheckpoints
+    | where _ResourceId has "__POOL__"
+    | where Source == "RDStack" and Name == "RdpStackConnectionEstablished"
+) on CorrelationId
+| join kind=leftsemi (
+    // New sessions only - reconnections skip profile load and GPO, skewing the measurement
+    WVDCheckpoints
+    | where _ResourceId has "__POOL__"
+    | where Name == "LoadBalancedNewConnection"
+    | where tostring(Parameters.LoadBalanceOutcome) == "NewSession"
+) on CorrelationId
 | join kind=inner (
     WVDCheckpoints
     | where _ResourceId has "__POOL__"
@@ -1265,7 +1287,26 @@ WVDConnections
         or Name =~ "RdpShellAppExecuted"
     | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId
 ) on CorrelationId
+| project-away CorrelationId1
+| join kind=leftouter (
+    // Client-side credential acquisition time - excluded from host-side measurement
+    WVDCheckpoints
+    | where _ResourceId has "__POOL__"
+    | where Name =~ "OnCredentialsAcquisitionCompleted"
+    | project CorrelationId, CredAcquireMs = tolong(Parameters.DurationMS)
+) on CorrelationId
+| project-away CorrelationId1
+| join kind=leftouter (
+    // Client-side SSO token retrieval time - excluded from host-side measurement
+    WVDCheckpoints
+    | where _ResourceId has "__POOL__"
+    | where Name =~ "SSOTokenRetrieval"
+    | project CorrelationId, SsoTokenMs = tolong(Parameters.DurationMS)
+) on CorrelationId
+| project-away CorrelationId1
 | extend LogonSeconds = datetime_diff('second', ShellReadyTime, StartTime)
+    - coalesce(CredAcquireMs, 0) / 1000
+    - coalesce(SsoTokenMs, 0) / 1000
 | where LogonSeconds > __THRESHOLD__
 | project
     StartTime,

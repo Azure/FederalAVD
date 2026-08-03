@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "17445076666580136992"
+      "templateHash": "6104862281739803106"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "5217651800629212993"
+              "templateHash": "6953846673675136604"
             }
           },
           "parameters": {
@@ -1181,7 +1181,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1241,7 +1241,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1301,7 +1301,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1361,7 +1361,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT30M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1414,7 +1414,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT15M",
                 "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1467,7 +1467,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT5M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT5M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1534,7 +1534,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1587,7 +1587,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT15M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT15M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1640,7 +1640,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT1H",
                 "windowSize": "PT1H",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "[if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 2), 'PT3H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 3), 'PT4H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 4), 'PT5H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 5), 'PT6H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 11), 'PT12H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 23), 'P1D', 'P2D'))))))]",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1648,7 +1648,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace(replace('WVDConnections\r\n| where TimeGenerated > ago(48h)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, State, SessionHostName, _ResourceId) by UserName, SessionHostName\r\n| where State == \"Disconnected\"\r\n| where TimeGenerated < ago(__THRESHOLD__h)\r\n| extend DisconnectedHours = round(datetime_diff(''minute'', now(), TimeGenerated) / 60.0, 1)\r\n| project UserName, SessionHostName, DisconnectedSince = TimeGenerated, DisconnectedHours, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName')), '__THRESHOLD__', string(parameters('disconnectedSessionAlertThresholdHours')))]",
+                      "query": "[replace(replace(replace('WVDConnections\r\n| where TimeGenerated > ago(__LOOKBACK__h)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, State, SessionHostName, _ResourceId) by UserName, SessionHostName\r\n| where State == \"Disconnected\"\r\n| where TimeGenerated < ago(__THRESHOLD__h)\r\n| extend DisconnectedHours = round(datetime_diff(''minute'', now(), TimeGenerated) / 60.0, 1)\r\n| project UserName, SessionHostName, DisconnectedSince = TimeGenerated, DisconnectedHours, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName')), '__THRESHOLD__', string(parameters('disconnectedSessionAlertThresholdHours'))), '__LOOKBACK__', string(add(parameters('disconnectedSessionAlertThresholdHours'), 1)))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2394,12 +2394,12 @@
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Slow Session Logon > {1} Minutes ({2})', parameters('alertNamePrefix'), parameters('slowLogonThresholdMinutes'), parameters('hostPoolName'))]",
-                "description": "[format('{0}A user in {1} took more than {2} minute(s) from connection start to productive desktop. Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('slowLogonThresholdMinutes'))]",
+                "description": "[format('{0}A user in {1} took more than {2} minute(s) to reach a productive desktop (new sessions only; client-side credential and SSO time excluded). Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('slowLogonThresholdMinutes'))]",
                 "severity": 3,
                 "enabled": true,
                 "evaluationFrequency": "PT15M",
                 "windowSize": "PT30M",
-                "overrideQueryTimeRange": "P2D",
+                "overrideQueryTimeRange": "PT30M",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -2407,7 +2407,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace(replace('WVDConnections\r\n| where TimeGenerated > ago(30m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where State == \"Started\"\r\n| project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId\r\n| join kind=inner (\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"ShellReady\"\r\n        or (Name =~ \"LaunchExecutable\" and tostring(Parameters.connectionStage) == \"RdpShellAppExecuted\")\r\n        or Name =~ \"RdpShellAppExecuted\"\r\n    | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId\r\n) on CorrelationId\r\n| extend LogonSeconds = datetime_diff(''second'', ShellReadyTime, StartTime)\r\n| where LogonSeconds > __THRESHOLD__\r\n| project\r\n    StartTime,\r\n    UserName,\r\n    SessionHostName,\r\n    LogonSeconds,\r\n    LogonMinutes = round(LogonSeconds / 60.0, 1),\r\n    ResourceId\r\n| order by LogonSeconds desc\r\n', '__POOL__', parameters('hostPoolName')), '__THRESHOLD__', string(mul(parameters('slowLogonThresholdMinutes'), 60)))]",
+                      "query": "[replace(replace('WVDConnections\r\n| where TimeGenerated > ago(30m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where State == \"Started\"\r\n| project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId\r\n| join kind=leftsemi (\r\n    // Exclude broker-level failures that never reached the RD stack on the VM\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n) on CorrelationId\r\n| join kind=leftsemi (\r\n    // New sessions only - reconnections skip profile load and GPO, skewing the measurement\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name == \"LoadBalancedNewConnection\"\r\n    | where tostring(Parameters.LoadBalanceOutcome) == \"NewSession\"\r\n) on CorrelationId\r\n| join kind=inner (\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"ShellReady\"\r\n        or (Name =~ \"LaunchExecutable\" and tostring(Parameters.connectionStage) == \"RdpShellAppExecuted\")\r\n        or Name =~ \"RdpShellAppExecuted\"\r\n    | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| join kind=leftouter (\r\n    // Client-side credential acquisition time - excluded from host-side measurement\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"OnCredentialsAcquisitionCompleted\"\r\n    | project CorrelationId, CredAcquireMs = tolong(Parameters.DurationMS)\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| join kind=leftouter (\r\n    // Client-side SSO token retrieval time - excluded from host-side measurement\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"SSOTokenRetrieval\"\r\n    | project CorrelationId, SsoTokenMs = tolong(Parameters.DurationMS)\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| extend LogonSeconds = datetime_diff(''second'', ShellReadyTime, StartTime)\r\n    - coalesce(CredAcquireMs, 0) / 1000\r\n    - coalesce(SsoTokenMs, 0) / 1000\r\n| where LogonSeconds > __THRESHOLD__\r\n| project\r\n    StartTime,\r\n    UserName,\r\n    SessionHostName,\r\n    LogonSeconds,\r\n    LogonMinutes = round(LogonSeconds / 60.0, 1),\r\n    ResourceId\r\n| order by LogonSeconds desc\r\n', '__POOL__', parameters('hostPoolName')), '__THRESHOLD__', string(mul(parameters('slowLogonThresholdMinutes'), 60)))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
