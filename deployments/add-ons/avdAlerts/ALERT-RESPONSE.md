@@ -23,7 +23,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ### AVD - Host Pool Capacity 50% — Sev 3
 
-**Trigger:** Host pool is at 50-84% capacity (active sessions / available MaxSessions).  
+**Trigger:** Host pool is at 50-84% capacity (active sessions / available MaxSessions), sustained for 15 or more continuous minutes.  
 **Meaning:** The pool is filling up. If load continues to grow, users may encounter performance degradation or be blocked from connecting.
 
 **Response:**
@@ -36,7 +36,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ### AVD - Host Pool Capacity 85% — Sev 2
 
-**Trigger:** Host pool is at 85-94% capacity.  
+**Trigger:** Host pool is at 85-94% capacity, sustained for 15 or more continuous minutes.  
 **Meaning:** The pool is near-full. New user connections are at risk if growth continues.
 
 **Response:**
@@ -139,9 +139,9 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - Session Disconnected Over 24 Hours — Sev 2
+### AVD - Session Disconnected — Sev 3
 
-**Trigger:** A user has a disconnected (not logged off) session lasting more than 24 hours.  
+**Trigger:** A user is currently in a Disconnected state and has been in that state for longer than the configured threshold (default: 8 hours; controlled by `disconnectedSessionAlertThresholdHours`). The alert fires while the session is still open — not retrospectively after it ends.
 **Meaning:** Stale sessions consume host capacity and block scaling automation.
 
 **Response:**
@@ -152,22 +152,10 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ---
 
-### AVD - Session Disconnected Over 72 Hours — Sev 2
+### AVD - Slow Session Logon — Sev 3
 
-**Trigger:** A user has been disconnected for more than 72 hours.  
-**Meaning:** This is almost certainly a stale session that was never properly terminated. It may be blocking drain automation or consuming a host pool slot indefinitely.
-
-**Response:**
-- Immediately log off the session: Host Pool → User Sessions → select session → Log Off.
-- Enforce session timeout policy to prevent recurrence.
-- If this is a recurring pattern across multiple users, audit GP policy application — the timeout policy may not be applying to the OU containing the session host computer accounts.
-
----
-
-### AVD - Slow Session Logon > 2 Minutes — Sev 3
-
-**Trigger:** A user took more than 2 minutes from connection start to a productive desktop.  
-**Meaning:** Logon times above 2 minutes indicate a performance problem in the logon pipeline.
+**Trigger:** A user took longer than the configured threshold (default: 2 minutes; controlled by `slowLogonThresholdMinutes`) from connection start to a productive desktop.  
+**Meaning:** Logon times above the threshold indicate a performance problem in the logon pipeline.
 
 **Response:**
 - Check the alert dimensions for the affected `SessionHostName` and `UserName`.
@@ -320,7 +308,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 
 ### AVD - FSLogix Profile Disk Compaction Failed — Sev 2
 
-**Trigger:** FSLogix Event ID 62 or 63 — profile disk compaction failed after it was attempted.  
+**Trigger:** FSLogix Event ID 62 or 63 — profile disk compaction failed after it was attempted. Fires when 3 or more failure events are observed on the same session host within the 15-minute evaluation window (a single failed compaction attempt typically logs multiple events).  
 **Meaning:** The profile VHD was marked for compaction (to reclaim free space) but the operation failed mid-process. The VHD will continue to grow without compaction.
 
 **Response:**
@@ -335,7 +323,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 
 ### AVD - FSLogix Profile Disk In Use by Another VM — Sev 2
 
-**Trigger:** FSLogix Event ID 51 — a profile VHD is already attached to another VM.  
+**Trigger:** FSLogix Event ID 51 — a profile VHD is already attached to another VM. Fires when 3 or more Event 51 occurrences are observed on the same session host within the 15-minute evaluation window, because FSLogix retries attachment multiple times per incident.  
 **Meaning:** The same user profile is mounted on two different session hosts simultaneously. This should not happen in a correctly configured environment.
 
 **Response:**

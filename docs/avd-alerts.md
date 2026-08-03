@@ -7,7 +7,7 @@
 
 ## Overview
 
-The AVD Alerts Add-On deploys 40 Azure Monitor alert rules for Azure Virtual Desktop. A single subscription-scoped deployment covers any number of host pools, storage accounts, and ANF volumes.
+The AVD Alerts Add-On deploys 42 Azure Monitor alert rules for Azure Virtual Desktop. A single subscription-scoped deployment covers any number of host pools, storage accounts, and ANF volumes.
 
 **Key Features:**
 - **Comprehensive coverage**: Host pool capacity, session host health, user connections, FSLogix profiles, VM performance, Azure Files, ANF, and Service Health — all in one deployment
@@ -23,11 +23,11 @@ The AVD Alerts Add-On deploys 40 Azure Monitor alert rules for Azure Virtual Des
 |----------|--------|-----------|
 | Host Pool Capacity | 3 | Load at 50% / 85% / 95% — Pooled only |
 | Host Pool Availability | 3 | No resources, health check failure, personal host unhealthy |
-| User Connections | 4 | Connection failures, disconnected 24h / 72h, slow logon > 2 min |
+| User Connections | 4 | Auth/service connection failure, session host connection failure, disconnected sessions (configurable threshold, default 8h), slow logon (configurable threshold, default 2 min) |
 | Session Host Disk | 2 | Local C: drive free space <= 10% / 5% |
-| FSLogix Profiles | 9 | VHD full (5% / 2%), network issue, attach failure, service disabled, compaction, VHD in use, corrupted, compaction pre-check |
+| FSLogix Profiles | 10 | VHD full (5% / 2%), network issue, initial attach failure, VHD reattach failure, service disabled, compaction, VHD in use, corrupted, compaction pre-check |
 | VM Performance | 6 | CPU > 85% / 95%, Memory < 2 GB / 1 GB, OS Disk bandwidth > 85% / 95% |
-| Azure Files Storage | 5 | Latency above dynamic baseline (Warn/Crit), availability < 99%, throttling, low space 15% / 5% — optional |
+| Azure Files Storage | 8 | Server + E2E latency (Warn / Crit, 4 rules), availability < 99%, throttling, low space 15% / 5% — optional |
 | Azure NetApp Files | 2 | Volume capacity >= 85% / 95% — optional |
 | Azure Service Health | 4 | Service incident, planned maintenance, health advisory, security advisory |
 

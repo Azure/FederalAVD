@@ -171,6 +171,11 @@ param memoryAlertStartupExclusionMinutes int = 20
 @maxValue(30)
 param slowLogonThresholdMinutes int = 2
 
+@description('Optional. Hours after which a disconnected-but-not-logged-off session triggers an alert. Minimum 1, maximum 47.')
+@minValue(1)
+@maxValue(47)
+param disconnectedSessionAlertThresholdHours int = 8
+
 @description('Optional. When false, session host VM OS disk bandwidth alert rules are not deployed.')
 param enableOsDiskAlerts bool = true
 
@@ -323,6 +328,7 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
     hostPoolType: hp.?hostPoolType ?? 'Pooled'
     hostPoolResourceId: hp.hostPoolResourceId
     slowLogonThresholdMinutes: slowLogonThresholdMinutes
+    disconnectedSessionAlertThresholdHours: disconnectedSessionAlertThresholdHours
   }
   dependsOn: createResourceGroup ? [newResourceGroup] : [existingResourceGroup]
 }]

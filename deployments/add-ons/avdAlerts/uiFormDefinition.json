@@ -422,7 +422,7 @@
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Connection & Disconnected Session Alerts",
                                     "defaultValue": true,
-                                    "toolTip": "Alert on user connection failures, sessions disconnected > 24h / 72h, and slow logons."
+                                    "toolTip": "Alert on user connection failures, sessions disconnected for longer than a configurable threshold, and slow logons."
                                 },
                                 {
                                     "name": "slowLogonThresholdMinutes",
@@ -432,6 +432,17 @@
                                     "min": 1,
                                     "max": 30,
                                     "defaultValue": 2,
+                                    "showStepMarkers": false,
+                                    "visible": "[steps('advanced').alertCategories.enableConnectionAlerts]"
+                                },
+                                {
+                                    "name": "disconnectedSessionAlertThresholdHours",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Disconnected Session Alert Threshold (hours)",
+                                    "toolTip": "Alert fires when a user has been disconnected but not logged off for longer than this many hours. Set to slightly exceed your RDS/AVD idle-session timeout policy to catch sessions that slip through. Maximum is 47 hours, constrained by Azure Monitor's 48-hour scheduled query lookback limit.",
+                                    "min": 1,
+                                    "max": 47,
+                                    "defaultValue": 8,
                                     "showStepMarkers": false,
                                     "visible": "[steps('advanced').alertCategories.enableConnectionAlerts]"
                                 },
@@ -655,6 +666,7 @@
                 "enableAvailabilityAlerts": "[steps('advanced').alertCategories.enableAvailabilityAlerts]",
                 "enableConnectionAlerts": "[steps('advanced').alertCategories.enableConnectionAlerts]",
                 "slowLogonThresholdMinutes": "[steps('advanced').alertCategories.slowLogonThresholdMinutes]",
+                "disconnectedSessionAlertThresholdHours": "[steps('advanced').alertCategories.disconnectedSessionAlertThresholdHours]",
                 "enableLocalDiskAlerts": "[steps('advanced').alertCategories.enableLocalDiskAlerts]",
                 "enableFslogixAlerts": "[steps('advanced').alertCategories.enableFslogixAlerts]",
                 "enableCpuAlerts": "[steps('advanced').alertCategories.enableCpuAlerts]",

@@ -70,6 +70,11 @@ param enableConnectionAlerts bool = true
 @maxValue(30)
 param slowLogonThresholdMinutes int = 2
 
+@description('Optional. Hours after which a disconnected-but-not-logged-off session triggers an alert. Minimum 1, maximum 47.')
+@minValue(1)
+@maxValue(47)
+param disconnectedSessionAlertThresholdHours int = 8
+
 @description('Optional. When false, FSLogix profile alert rules are not deployed.')
 param enableFslogixAlerts bool = true
 
@@ -108,7 +113,7 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Pool Capacity 50% (${hostPoolName})'
-    description: '${descriptionHeader}Host pool is at 50-84% capacity. Review scaling plan and available session hosts for ${hostPoolName}.'
+    description: '${descriptionHeader}Host pool is at 50-84% capacity for 15 or more continuous minutes. Review scaling plan and available session hosts for ${hostPoolName}.'
     severity: 3
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -128,6 +133,7 @@ WVDAgentHealthStatus
 | extend ActiveSessions = tolong(ActiveSessions)
 | extend AllowNewSessions = tobool(AllowNewSessions)
 | summarize
+    TimeGenerated = max(TimeGenerated),
     TotalActive   = sum(ActiveSessions),
     TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
@@ -143,7 +149,7 @@ WVDAgentHealthStatus
           resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
-          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+          failingPeriods: { numberOfEvaluationPeriods: 3, minFailingPeriodsToAlert: 3 }
         }
       ]
     }
@@ -157,7 +163,7 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Pool Capacity 85% (${hostPoolName})'
-    description: '${descriptionHeader}Host pool is at 85-94% capacity. Review scaling plan and consider adding session hosts for ${hostPoolName}.'
+    description: '${descriptionHeader}Host pool is at 85-94% capacity for 15 or more continuous minutes. Review scaling plan and consider adding session hosts for ${hostPoolName}.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -177,6 +183,7 @@ WVDAgentHealthStatus
 | extend ActiveSessions = tolong(ActiveSessions)
 | extend AllowNewSessions = tobool(AllowNewSessions)
 | summarize
+    TimeGenerated = max(TimeGenerated),
     TotalActive   = sum(ActiveSessions),
     TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
@@ -192,7 +199,7 @@ WVDAgentHealthStatus
           resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
-          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+          failingPeriods: { numberOfEvaluationPeriods: 3, minFailingPeriodsToAlert: 3 }
         }
       ]
     }
@@ -324,29 +331,21 @@ resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-
 WVDConnections
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
-| project-away TenantId, SourceSystem
-| summarize arg_max(TimeGenerated, *), StartTime = min(iff(State == 'Started', TimeGenerated, datetime(null))), ConnectTime = min(iff(State == 'Connected', TimeGenerated, datetime(null))) by CorrelationId
-| join kind=leftouter (
+| summarize arg_max(TimeGenerated, UserName, SessionHostName, _ResourceId) by CorrelationId
+| join kind=inner (
     WVDErrors
-    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId
+    | where TimeGenerated > ago(15m)
+    | where CodeSymbolic == "ConnectionFailedNoHealthyRdshAvailable"
+    | summarize by CorrelationId
 ) on CorrelationId
-| join kind=leftouter (
-    WVDCheckpoints
-    | summarize Checkpoints=make_list(pack('Time', TimeGenerated, 'Name', Name, 'Parameters', Parameters, 'Source', Source)) by CorrelationId
-    | mv-apply Checkpoints on (
-        order by todatetime(Checkpoints['Time']) asc
-        | summarize Checkpoints=make_list(Checkpoints)
-    )
-) on CorrelationId
-| project-away CorrelationId1, CorrelationId2
-| order by TimeGenerated desc
-| where Errors[0].CodeSymbolic == "ConnectionFailedNoHealthyRdshAvailable"
+| project UserName, SessionHostName, ResourceId = _ResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName', operator: 'Include', values: ['*'] }
             { name: 'SessionHostName', operator: 'Include', values: ['*'] }
           ]
+          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
@@ -548,9 +547,9 @@ resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-0
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - Session Disconnected Over 24 Hours (${hostPoolName})'
-    description: '${descriptionHeader}A user in ${hostPoolName} has a disconnected session lasting more than 24 hours. Verify Remote Desktop session limit policies are applied. This could affect scaling plans.'
-    severity: 2
+    displayName: '${alertNamePrefix} - Session Disconnected > ${disconnectedSessionAlertThresholdHours}h (${hostPoolName})'
+    description: '${descriptionHeader}A user in ${hostPoolName} has been disconnected but not logged off for more than ${disconnectedSessionAlertThresholdHours} hours. Verify Remote Desktop session timeout and logoff policies are applied. This could affect scaling plans.'
+    severity: 3
     enabled: true
     evaluationFrequency: 'PT1H'
     windowSize: 'PT1H'
@@ -560,74 +559,23 @@ resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-0
     criteria: {
       allOf: [
         {
-          query: replace('''
+          query: replace(replace('''
 WVDConnections
-| where TimeGenerated > ago(24h)
-| where State == "Connected"
+| where TimeGenerated > ago(48h)
 | where _ResourceId has "__POOL__"
-| project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName
-| join (
-    WVDConnections
-    | where State == "Completed"
-    | project EndTime=TimeGenerated, CorrelationId
-) on CorrelationId
-| project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName
-| where Duration >= timespan(24:00:00)
-| sort by Duration desc
-''', '__POOL__', hostPoolName)
+| summarize arg_max(TimeGenerated, State, SessionHostName, _ResourceId) by UserName, SessionHostName
+| where State == "Disconnected"
+| where TimeGenerated < ago(__THRESHOLD__h)
+| extend DisconnectedHours = round(datetime_diff('minute', now(), TimeGenerated) / 60.0, 1)
+| project UserName, SessionHostName, DisconnectedSince = TimeGenerated, DisconnectedHours, ResourceId = _ResourceId
+''', '__POOL__', hostPoolName), '__THRESHOLD__', string(disconnectedSessionAlertThresholdHours))
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'UserName', operator: 'Include', values: ['*'] }
-            { name: 'SessionHostName', operator: 'Include', values: ['*'] }
+            { name: 'UserName',          operator: 'Include', values: ['*'] }
+            { name: 'SessionHostName',   operator: 'Include', values: ['*'] }
+            { name: 'DisconnectedHours', operator: 'Include', values: ['*'] }
           ]
-          operator: 'GreaterThanOrEqual'
-          threshold: 1
-          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
-        }
-      ]
-    }
-    actions: actions
-  }
-}
-
-// Disconnected user > 72 hours
-resource alertDisconnectedUser72h 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
-  name: '${alertNamePrefix}-HP-Sess-Disconnected72h-${hostPoolName}'
-  location: location
-  tags: hostPoolTags
-  properties: {
-    displayName: '${alertNamePrefix} - Session Disconnected Over 72 Hours (${hostPoolName})'
-    description: '${descriptionHeader}A user in ${hostPoolName} has a disconnected session lasting more than 72 hours. This likely indicates stale sessions blocking scaling automation. Verify session limit policies.'
-    severity: 2
-    enabled: true
-    evaluationFrequency: 'PT1H'
-    windowSize: 'PT1H'
-    overrideQueryTimeRange: 'P2D'
-    scopes: [logAnalyticsWorkspaceResourceId]
-    autoMitigate: autoResolveAlert
-    criteria: {
-      allOf: [
-        {
-          query: replace('''
-WVDConnections
-| where TimeGenerated > ago(24h)
-| where State == "Connected"
-| where _ResourceId has "__POOL__"
-| project CorrelationId, UserName, ConnectionType, StartTime=TimeGenerated, SessionHostName
-| join (
-    WVDConnections
-    | where State == "Completed"
-    | project EndTime=TimeGenerated, CorrelationId
-) on CorrelationId
-| project Duration = EndTime - StartTime, ConnectionType, UserName, SessionHostName
-| where Duration >= timespan(72:00:00)
-| sort by Duration desc
-''', '__POOL__', hostPoolName)
-          timeAggregation: 'Count'
-          dimensions: [
-            { name: 'UserName', operator: 'Include', values: ['*'] }
-            { name: 'SessionHostName', operator: 'Include', values: ['*'] }
-          ]
+          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
@@ -1017,7 +965,7 @@ resource alertFSLogixDiskCompaction 'Microsoft.Insights/scheduledQueryRules@2022
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Disk Compaction Failed (${hostPoolName})'
-    description: '${descriptionHeader}FSLogix Event ID 62 or 63: profile disk compaction failed on a session host in ${hostPoolName}. VHD files will continue growing until compaction succeeds. Ensure the session host OS disk has sufficient free space and the profile VHD is not actively in use, then retry compaction.'
+    description: '${descriptionHeader}FSLogix Event ID 62 or 63: profile disk compaction failed 3 or more times on a session host in ${hostPoolName}. VHD files will continue growing until compaction succeeds. Ensure the session host OS disk has sufficient free space and the profile VHD is not actively in use, then retry compaction.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -1040,12 +988,20 @@ Event
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
     HostPool        = "__POOL__"
-| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
+| summarize
+    EventCount      = count(),
+    VMresourceGroup = any(VMresourceGroup),
+    HostPool        = any(HostPool),
+    ResourceId      = any(_ResourceId)
+  by Computer, RenderedDescription
+| where EventCount >= 3
+| project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
             { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
+            { name: 'EventCount',          operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
             { name: 'HostPool',            operator: 'Include', values: ['*'] }
           ]
@@ -1071,7 +1027,7 @@ resource alertFSLogixDiskInUse 'Microsoft.Insights/scheduledQueryRules@2022-06-1
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - FSLogix Profile Disk In Use by Another VM (${hostPoolName})'
-    description: '${descriptionHeader}FSLogix Event ID 51: a profile VHD is already attached to another VM in ${hostPoolName}. Check for a stale .lck file on the share, or a session that did not cleanly log off.'
+    description: '${descriptionHeader}FSLogix Event ID 51: a session host in ${hostPoolName} has detected a profile VHD locked by another VM 3 or more times in the last 15 minutes. Check for a stale .lck file on the share, or a session that did not cleanly log off.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -1094,13 +1050,22 @@ Event
 | extend
     VMresourceGroup = tostring(split(_ResourceId, '/')[4]),
     HostPool        = "__POOL__"
-| project Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId
+| summarize
+    EventCount      = count(),
+    UserName        = any(UserName),
+    VMresourceGroup = any(VMresourceGroup),
+    HostPool        = any(HostPool),
+    ResourceId      = any(_ResourceId)
+  by Computer, RenderedDescription
+| where EventCount >= 3
+| project Computer, UserName, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'Computer',            operator: 'Include', values: ['*'] }
             { name: 'UserName',            operator: 'Include', values: ['*'] }
             { name: 'RenderedDescription', operator: 'Include', values: ['*'] }
+            { name: 'EventCount',          operator: 'Include', values: ['*'] }
             { name: 'VMresourceGroup',     operator: 'Include', values: ['*'] }
             { name: 'HostPool',            operator: 'Include', values: ['*'] }
           ]
