@@ -504,31 +504,46 @@ resource alertConnHostFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
       allOf: [
         {
           query: replace('''
-WVDConnections
-| where TimeGenerated > ago(15m)
-| where _ResourceId has "__POOL__"
-| summarize arg_max(TimeGenerated, *) by CorrelationId
-| where isnotempty(SessionHostName)
-| where State == 'Completed'
-| join kind=leftanti (
-    WVDCheckpoints
-    | where Source == "RDStack" and Name == "RdpStackConnectionEstablished"
-    | project CorrelationId
-) on CorrelationId
+let failures =
+    WVDConnections
+    | where TimeGenerated > ago(15m)
+    | where _ResourceId has "__POOL__"
+    | where State == 'Completed'
+    | where isnotempty(SessionHostName)
+    | join kind=leftanti (
+        WVDCheckpoints
+        | where Source == "RDStack" and Name == "RdpStackConnectionEstablished"
+        | project CorrelationId
+    ) on CorrelationId
+    | extend SessionHost   = tostring(split(SessionHostName, '.')[0])
+    | extend HostPool      = tostring(split(_ResourceId, '/')[8])
+    | extend ResourceGroup = tostring(split(_ResourceId, '/')[4]);
+let recentSuccessHosts =
+    WVDConnections
+    | where TimeGenerated > ago(15m)
+    | where _ResourceId has "__POOL__"
+    | where isnotempty(SessionHostName)
+    | join kind=inner (
+        WVDCheckpoints
+        | where TimeGenerated > ago(15m)
+        | where Source == "RDStack" and Name == "RdpStackConnectionEstablished"
+        | project CorrelationId
+    ) on CorrelationId
+    | extend SessionHost = tostring(split(SessionHostName, '.')[0])
+    | summarize by SessionHost;
+failures
+| join kind=leftanti recentSuccessHosts on SessionHost
 | join kind=leftouter (
     WVDErrors
     | where TimeGenerated > ago(15m)
     | summarize ErrorCode=take_any(CodeSymbolic) by CorrelationId
 ) on CorrelationId
 | project-away CorrelationId1
-| extend SessionHost=tostring(split(SessionHostName, '.')[0])
-| extend HostPool=tostring(split(_ResourceId, '/')[8])
-| extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
-| summarize FailureCount=count(),
-            AffectedUsers=make_set(UserName, 10),
-            ErrorCodes=make_set(ErrorCode, 5),
-            ResourceGroup=take_any(ResourceGroup),
-            ResourceId=take_any(_ResourceId)
+| summarize FailureCount  = count(),
+            AffectedUsers = make_set(UserName, 10),
+            ErrorCodes    = make_set(ErrorCode, 5),
+            ResourceGroup = take_any(ResourceGroup),
+            ResourceId    = take_any(_ResourceId)
   by HostPool, SessionHost
 | where FailureCount >= 3
 | project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes), ResourceId
