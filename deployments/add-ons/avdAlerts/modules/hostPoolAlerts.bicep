@@ -128,20 +128,21 @@ WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
-| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
-| extend ActiveSessions = tolong(ActiveSessions)
-| extend AllowNewSessions = tobool(AllowNewSessions)
+| extend MaxSessions       = tolong(column_ifexists('MaxSessions', 0))
+| extend ActiveSessions    = tolong(ActiveSessions)
+| extend InactiveSessions  = tolong(column_ifexists('InactiveSessions', 0))
+| extend AllowNewSessions  = tobool(AllowNewSessions)
 | summarize
     TimeGenerated = max(TimeGenerated),
-    TotalActive   = sum(ActiveSessions),
+    TotalSessions = sum(ActiveSessions + InactiveSessions),
     TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
-| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
+| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'TotalActive',   operator: 'Include', values: ['*'] }
+            { name: 'TotalSessions', operator: 'Include', values: ['*'] }
             { name: 'TotalCapacity', operator: 'Include', values: ['*'] }
             { name: 'LoadPct',       operator: 'Include', values: ['*'] }
           ]
@@ -178,20 +179,21 @@ WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
-| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
-| extend ActiveSessions = tolong(ActiveSessions)
-| extend AllowNewSessions = tobool(AllowNewSessions)
+| extend MaxSessions       = tolong(column_ifexists('MaxSessions', 0))
+| extend ActiveSessions    = tolong(ActiveSessions)
+| extend InactiveSessions  = tolong(column_ifexists('InactiveSessions', 0))
+| extend AllowNewSessions  = tobool(AllowNewSessions)
 | summarize
     TimeGenerated = max(TimeGenerated),
-    TotalActive   = sum(ActiveSessions),
+    TotalSessions = sum(ActiveSessions + InactiveSessions),
     TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
-| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
+| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'TotalActive',   operator: 'Include', values: ['*'] }
+            { name: 'TotalSessions', operator: 'Include', values: ['*'] }
             { name: 'TotalCapacity', operator: 'Include', values: ['*'] }
             { name: 'LoadPct',       operator: 'Include', values: ['*'] }
           ]
@@ -228,19 +230,20 @@ WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
-| extend MaxSessions    = tolong(column_ifexists('MaxSessions', 0))
-| extend ActiveSessions = tolong(ActiveSessions)
-| extend AllowNewSessions = tobool(AllowNewSessions)
+| extend MaxSessions       = tolong(column_ifexists('MaxSessions', 0))
+| extend ActiveSessions    = tolong(ActiveSessions)
+| extend InactiveSessions  = tolong(column_ifexists('InactiveSessions', 0))
+| extend AllowNewSessions  = tobool(AllowNewSessions)
 | summarize
-    TotalActive   = sum(ActiveSessions),
+    TotalSessions = sum(ActiveSessions + InactiveSessions),
     TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
-| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalActive / TotalCapacity, 0), 0.0)
+| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 95
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'TotalActive',   operator: 'Include', values: ['*'] }
+            { name: 'TotalSessions', operator: 'Include', values: ['*'] }
             { name: 'TotalCapacity', operator: 'Include', values: ['*'] }
             { name: 'LoadPct',       operator: 'Include', values: ['*'] }
           ]
