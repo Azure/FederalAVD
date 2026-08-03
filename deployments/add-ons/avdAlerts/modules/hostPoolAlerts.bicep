@@ -515,6 +515,13 @@ let failures =
         | where Source == "RDStack" and Name == "RdpStackConnectionEstablished"
         | project CorrelationId
     ) on CorrelationId
+    | join kind=leftanti (
+        // Client disconnected before host could complete the handshake - not a host-side failure
+        WVDErrors
+        | where TimeGenerated > ago(15m)
+        | where CodeSymbolic == 'ConnectionFailedClientDisconnect'
+        | project CorrelationId
+    ) on CorrelationId
     | extend SessionHost   = tostring(split(SessionHostName, '.')[0])
     | extend HostPool      = tostring(split(_ResourceId, '/')[8])
     | extend ResourceGroup = tostring(split(_ResourceId, '/')[4]);

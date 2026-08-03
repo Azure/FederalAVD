@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "17203629603415145229"
+      "templateHash": "2981979895618315883"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "12572855992146115551"
+              "templateHash": "16755942820885004930"
             }
           },
           "parameters": {
@@ -1595,7 +1595,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('let failures =\r\n    WVDConnections\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == ''Completed''\r\n    | where isnotempty(SessionHostName)\r\n    | join kind=leftanti (\r\n        WVDCheckpoints\r\n        | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | extend SessionHost   = tostring(split(SessionHostName, ''.'')[0])\r\n    | extend HostPool      = tostring(split(_ResourceId, ''/'')[8])\r\n    | extend ResourceGroup = tostring(split(_ResourceId, ''/'')[4]);\r\nlet recentSuccessHosts =\r\n    WVDConnections\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where isnotempty(SessionHostName)\r\n    | join kind=inner (\r\n        WVDCheckpoints\r\n        | where TimeGenerated > ago(15m)\r\n        | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | extend SessionHost = tostring(split(SessionHostName, ''.'')[0])\r\n    | summarize by SessionHost;\r\nfailures\r\n| join kind=leftanti recentSuccessHosts on SessionHost\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | where TimeGenerated > ago(15m)\r\n    | summarize ErrorCode=take_any(CodeSymbolic) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| summarize FailureCount  = count(),\r\n            AffectedUsers = make_set(UserName, 10),\r\n            ErrorCodes    = make_set(ErrorCode, 5),\r\n            ResourceGroup = take_any(ResourceGroup),\r\n            ResourceId    = take_any(_ResourceId)\r\n  by HostPool, SessionHost\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes), ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('let failures =\r\n    WVDConnections\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == ''Completed''\r\n    | where isnotempty(SessionHostName)\r\n    | join kind=leftanti (\r\n        WVDCheckpoints\r\n        | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | join kind=leftanti (\r\n        // Client disconnected before host could complete the handshake - not a host-side failure\r\n        WVDErrors\r\n        | where TimeGenerated > ago(15m)\r\n        | where CodeSymbolic == ''ConnectionFailedClientDisconnect''\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | extend SessionHost   = tostring(split(SessionHostName, ''.'')[0])\r\n    | extend HostPool      = tostring(split(_ResourceId, ''/'')[8])\r\n    | extend ResourceGroup = tostring(split(_ResourceId, ''/'')[4]);\r\nlet recentSuccessHosts =\r\n    WVDConnections\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where isnotempty(SessionHostName)\r\n    | join kind=inner (\r\n        WVDCheckpoints\r\n        | where TimeGenerated > ago(15m)\r\n        | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n        | project CorrelationId\r\n    ) on CorrelationId\r\n    | extend SessionHost = tostring(split(SessionHostName, ''.'')[0])\r\n    | summarize by SessionHost;\r\nfailures\r\n| join kind=leftanti recentSuccessHosts on SessionHost\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | where TimeGenerated > ago(15m)\r\n    | summarize ErrorCode=take_any(CodeSymbolic) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| summarize FailureCount  = count(),\r\n            AffectedUsers = make_set(UserName, 10),\r\n            ErrorCodes    = make_set(ErrorCode, 5),\r\n            ResourceGroup = take_any(ResourceGroup),\r\n            ResourceId    = take_any(_ResourceId)\r\n  by HostPool, SessionHost\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes), ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
