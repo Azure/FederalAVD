@@ -402,6 +402,7 @@ WVDAgentHealthStatus
 | where _ResourceId has "__POOL__"
 | parse _ResourceId with "/subscriptions/" subscription "/resourcegroups/" HostPoolResourceGroup "/providers/microsoft.desktopvirtualization/hostpools/" HostPool
 | parse SessionHostResourceId with "/subscriptions/" HostSubscription "/resourceGroups/" SessionHostRG "/providers/Microsoft.Compute/virtualMachines/" SessionHostName
+| extend ResourceId = SessionHostResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
@@ -410,6 +411,7 @@ WVDAgentHealthStatus
             { name: 'HostPool', operator: 'Include', values: ['*'] }
             { name: 'SessionHostRG', operator: 'Include', values: ['*'] }
           ]
+          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 3, minFailingPeriodsToAlert: 3 }
@@ -459,16 +461,18 @@ WVDConnections
 | extend ErrorShort=tostring(Errors[0].CodeSymbolic)
 | summarize FailureCount=count(),
             ErrorCodes=make_set(ErrorShort, 5),
-            ResourceGroup=take_any(ResourceGroup)
+            ResourceGroup=take_any(ResourceGroup),
+            ResourceId=take_any(_ResourceId)
   by HostPool, UserName
 | where FailureCount >= 3
-| project HostPool, ResourceGroup, UserName, FailureCount, ErrorCodes=tostring(ErrorCodes)
+| project HostPool, ResourceGroup, UserName, FailureCount, ErrorCodes=tostring(ErrorCodes), ResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'HostPool', operator: 'Include', values: ['*'] }
             { name: 'UserName', operator: 'Include', values: ['*'] }
           ]
+          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
@@ -520,16 +524,18 @@ WVDConnections
 | summarize FailureCount=count(),
             ErrorCodes=make_set(ErrorShort, 5),
             AffectedUsers=make_set(UserName, 10),
-            ResourceGroup=take_any(ResourceGroup)
+            ResourceGroup=take_any(ResourceGroup),
+            ResourceId=take_any(_ResourceId)
   by HostPool, SessionHost
 | where FailureCount >= 3
-| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes)
+| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes), ResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'HostPool',    operator: 'Include', values: ['*'] }
             { name: 'SessionHost', operator: 'Include', values: ['*'] }
           ]
+          resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
           threshold: 1
           failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }

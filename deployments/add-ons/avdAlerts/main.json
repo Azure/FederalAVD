@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "9108217980827806944"
+      "templateHash": "17445076666580136992"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "10901519248775807978"
+              "templateHash": "5217651800629212993"
             }
           },
           "parameters": {
@@ -1475,7 +1475,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('let MapToDesc = (idx: long) {\r\n    case(idx == 0, \"DomainJoin\",\r\n    idx == 1, \"DomainTrust\",\r\n    idx == 2, \"FSLogix\",\r\n    idx == 3, \"SxSStack\",\r\n    idx == 4, \"URLCheck\",\r\n    idx == 5, \"GenevaAgent\",\r\n    idx == 6, \"DomainReachable\",\r\n    idx == 7, \"WebRTCRedirector\",\r\n    idx == 8, \"SxSStackEncryption\",\r\n    idx == 9, \"IMDSReachable\",\r\n    idx == 10, \"MSIXPackageStaging\",\r\n    \"InvalidIndex\")\r\n};\r\nWVDAgentHealthStatus\r\n| where TimeGenerated > ago(5m)\r\n| where Status != ''Available''\r\n| where AllowNewSessions == true\r\n| extend CheckFailed = parse_json(SessionHostHealthCheckResult)\r\n| mv-expand CheckFailed\r\n| where CheckFailed.AdditionalFailureDetails.ErrorCode != 0\r\n| extend HealthCheckName = tolong(CheckFailed.HealthCheckName)\r\n| extend HealthCheckResult = tolong(CheckFailed.HealthCheckResult)\r\n| extend HealthCheckDesc = MapToDesc(HealthCheckName)\r\n| where HealthCheckDesc != \"InvalidIndex\"\r\n| where _ResourceId has \"__POOL__\"\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" HostPoolResourceGroup \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n| parse SessionHostResourceId with \"/subscriptions/\" HostSubscription \"/resourceGroups/\" SessionHostRG \"/providers/Microsoft.Compute/virtualMachines/\" SessionHostName\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('let MapToDesc = (idx: long) {\r\n    case(idx == 0, \"DomainJoin\",\r\n    idx == 1, \"DomainTrust\",\r\n    idx == 2, \"FSLogix\",\r\n    idx == 3, \"SxSStack\",\r\n    idx == 4, \"URLCheck\",\r\n    idx == 5, \"GenevaAgent\",\r\n    idx == 6, \"DomainReachable\",\r\n    idx == 7, \"WebRTCRedirector\",\r\n    idx == 8, \"SxSStackEncryption\",\r\n    idx == 9, \"IMDSReachable\",\r\n    idx == 10, \"MSIXPackageStaging\",\r\n    \"InvalidIndex\")\r\n};\r\nWVDAgentHealthStatus\r\n| where TimeGenerated > ago(5m)\r\n| where Status != ''Available''\r\n| where AllowNewSessions == true\r\n| extend CheckFailed = parse_json(SessionHostHealthCheckResult)\r\n| mv-expand CheckFailed\r\n| where CheckFailed.AdditionalFailureDetails.ErrorCode != 0\r\n| extend HealthCheckName = tolong(CheckFailed.HealthCheckName)\r\n| extend HealthCheckResult = tolong(CheckFailed.HealthCheckResult)\r\n| extend HealthCheckDesc = MapToDesc(HealthCheckName)\r\n| where HealthCheckDesc != \"InvalidIndex\"\r\n| where _ResourceId has \"__POOL__\"\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" HostPoolResourceGroup \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n| parse SessionHostResourceId with \"/subscriptions/\" HostSubscription \"/resourceGroups/\" SessionHostRG \"/providers/Microsoft.Compute/virtualMachines/\" SessionHostName\r\n| extend ResourceId = SessionHostResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1507,6 +1507,7 @@
                           ]
                         }
                       ],
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -1541,7 +1542,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack(''Code'', Code, ''CodeSymbolic'', CodeSymbolic, ''Time'', TimeGenerated, ''Message'', Message, ''ServiceError'', ServiceError, ''Source'', Source)) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, ''/'')[4])\r\n| extend HostPool=tostring(split(_ResourceId, ''/'')[8])\r\n| where HostPool =~ \"__POOL__\"\r\n| where isnotempty(Errors)\r\n| where isempty(SessionHostName)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| summarize FailureCount=count(),\r\n            ErrorCodes=make_set(ErrorShort, 5),\r\n            ResourceGroup=take_any(ResourceGroup)\r\n  by HostPool, UserName\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, UserName, FailureCount, ErrorCodes=tostring(ErrorCodes)\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack(''Code'', Code, ''CodeSymbolic'', CodeSymbolic, ''Time'', TimeGenerated, ''Message'', Message, ''ServiceError'', ServiceError, ''Source'', Source)) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, ''/'')[4])\r\n| extend HostPool=tostring(split(_ResourceId, ''/'')[8])\r\n| where HostPool =~ \"__POOL__\"\r\n| where isnotempty(Errors)\r\n| where isempty(SessionHostName)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| summarize FailureCount=count(),\r\n            ErrorCodes=make_set(ErrorShort, 5),\r\n            ResourceGroup=take_any(ResourceGroup),\r\n            ResourceId=take_any(_ResourceId)\r\n  by HostPool, UserName\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, UserName, FailureCount, ErrorCodes=tostring(ErrorCodes), ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1559,6 +1560,7 @@
                           ]
                         }
                       ],
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
@@ -1593,7 +1595,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack(''Code'', Code, ''CodeSymbolic'', CodeSymbolic, ''Time'', TimeGenerated, ''Message'', Message, ''ServiceError'', ServiceError, ''Source'', Source)) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, ''/'')[4])\r\n| extend HostPool=tostring(split(_ResourceId, ''/'')[8])\r\n| where HostPool =~ \"__POOL__\"\r\n| where isnotempty(Errors)\r\n| where isnotempty(SessionHostName)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| extend SessionHost=tostring(split(SessionHostName, ''.'')[0])\r\n| summarize FailureCount=count(),\r\n            ErrorCodes=make_set(ErrorShort, 5),\r\n            AffectedUsers=make_set(UserName, 10),\r\n            ResourceGroup=take_any(ResourceGroup)\r\n  by HostPool, SessionHost\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes)\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('WVDConnections\r\n| project-away TenantId, SourceSystem\r\n| summarize arg_max(TimeGenerated, *) by CorrelationId\r\n| join kind=leftouter (\r\n    WVDErrors\r\n    | summarize Errors=make_list(pack(''Code'', Code, ''CodeSymbolic'', CodeSymbolic, ''Time'', TimeGenerated, ''Message'', Message, ''ServiceError'', ServiceError, ''Source'', Source)) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| where TimeGenerated > ago(15m)\r\n| extend ResourceGroup=tostring(split(_ResourceId, ''/'')[4])\r\n| extend HostPool=tostring(split(_ResourceId, ''/'')[8])\r\n| where HostPool =~ \"__POOL__\"\r\n| where isnotempty(Errors)\r\n| where isnotempty(SessionHostName)\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| extend SessionHost=tostring(split(SessionHostName, ''.'')[0])\r\n| summarize FailureCount=count(),\r\n            ErrorCodes=make_set(ErrorShort, 5),\r\n            AffectedUsers=make_set(UserName, 10),\r\n            ResourceGroup=take_any(ResourceGroup),\r\n            ResourceId=take_any(_ResourceId)\r\n  by HostPool, SessionHost\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, SessionHost, FailureCount, AffectedUsers=tostring(AffectedUsers), ErrorCodes=tostring(ErrorCodes), ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1611,6 +1613,7 @@
                           ]
                         }
                       ],
+                      "resourceIdColumn": "ResourceId",
                       "operator": "GreaterThanOrEqual",
                       "threshold": 1,
                       "failingPeriods": {
