@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "10915041589255014196"
+      "templateHash": "9108217980827806944"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "9513372635612993314"
+              "templateHash": "10901519248775807978"
             }
           },
           "parameters": {
@@ -1627,7 +1627,7 @@
               "condition": "[parameters('enableConnectionAlerts')]",
               "type": "Microsoft.Insights/scheduledQueryRules",
               "apiVersion": "2022-06-15",
-              "name": "[format('{0}-HP-Sess-Disconnected24h-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "name": "[format('{0}-HP-Sess-Disconnected{1}h-{2}', parameters('alertNamePrefix'), parameters('disconnectedSessionAlertThresholdHours'), parameters('hostPoolName'))]",
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {

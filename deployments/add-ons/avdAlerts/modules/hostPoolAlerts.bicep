@@ -543,7 +543,7 @@ WVDConnections
 
 // Disconnected user > 24 hours
 resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
-  name: '${alertNamePrefix}-HP-Sess-Disconnected24h-${hostPoolName}'
+  name: '${alertNamePrefix}-HP-Sess-Disconnected${disconnectedSessionAlertThresholdHours}h-${hostPoolName}'
   location: location
   tags: hostPoolTags
   properties: {
