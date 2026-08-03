@@ -445,19 +445,18 @@ resource alertConnAuthFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
         {
           query: replace('''
 WVDConnections
-| project-away TenantId, SourceSystem
+| where TimeGenerated > ago(15m)
+| where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by CorrelationId
-| join kind=leftouter (
+| where isempty(SessionHostName)
+| join kind=inner (
     WVDErrors
-    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId
+    | where TimeGenerated > ago(15m)
+    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Message', Message, 'Source', Source), 5) by CorrelationId
 ) on CorrelationId
 | project-away CorrelationId1
-| where TimeGenerated > ago(15m)
 | extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
 | extend HostPool=tostring(split(_ResourceId, '/')[8])
-| where HostPool =~ "__POOL__"
-| where isnotempty(Errors)
-| where isempty(SessionHostName)
 | extend ErrorShort=tostring(Errors[0].CodeSymbolic)
 | summarize FailureCount=count(),
             ErrorCodes=make_set(ErrorShort, 5),
@@ -506,24 +505,28 @@ resource alertConnHostFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15'
         {
           query: replace('''
 WVDConnections
-| project-away TenantId, SourceSystem
+| where TimeGenerated > ago(15m)
+| where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by CorrelationId
+| where isnotempty(SessionHostName)
+| where State == 'Completed'
+| join kind=leftanti (
+    WVDCheckpoints
+    | where Source == "RDStack" and Name == "RdpStackConnectionEstablished"
+    | project CorrelationId
+) on CorrelationId
 | join kind=leftouter (
     WVDErrors
-    | summarize Errors=make_list(pack('Code', Code, 'CodeSymbolic', CodeSymbolic, 'Time', TimeGenerated, 'Message', Message, 'ServiceError', ServiceError, 'Source', Source)) by CorrelationId
+    | where TimeGenerated > ago(15m)
+    | summarize ErrorCode=take_any(CodeSymbolic) by CorrelationId
 ) on CorrelationId
 | project-away CorrelationId1
-| where TimeGenerated > ago(15m)
-| extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
-| extend HostPool=tostring(split(_ResourceId, '/')[8])
-| where HostPool =~ "__POOL__"
-| where isnotempty(Errors)
-| where isnotempty(SessionHostName)
-| extend ErrorShort=tostring(Errors[0].CodeSymbolic)
 | extend SessionHost=tostring(split(SessionHostName, '.')[0])
+| extend HostPool=tostring(split(_ResourceId, '/')[8])
+| extend ResourceGroup=tostring(split(_ResourceId, '/')[4])
 | summarize FailureCount=count(),
-            ErrorCodes=make_set(ErrorShort, 5),
             AffectedUsers=make_set(UserName, 10),
+            ErrorCodes=make_set(ErrorCode, 5),
             ResourceGroup=take_any(ResourceGroup),
             ResourceId=take_any(_ResourceId)
   by HostPool, SessionHost

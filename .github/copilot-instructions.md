@@ -211,3 +211,21 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
 - [Bicep](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview)
 - [ARM templates](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/overview)
 - [UI form definitions](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/form-view-overview) and the schema for `uiFormDefinition.json`
+
+## AVD Insights Workbooks (authoritative KQL source)
+
+When writing or reviewing KQL alert queries for the AVD Alerts add-on, always validate against
+the official Microsoft AVD Insights workbooks:
+
+**GitHub source:** https://github.com/microsoft/Application-Insights-Workbooks/tree/master/Workbooks/Windows%20Virtual%20Desktop
+
+Key workbooks and their raw URLs:
+- **Connection Diagnostics:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/Connection%20Diagnostics.workbook
+- **Host Diagnostics:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/Host%20Diagnostics.workbook
+- **Connection Performance:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/Connection%20Performance.workbook
+- **Utilization Report:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/Utilization%20Report.workbook
+- **User Report:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/User%20Report.workbook
+
+Alert queries that cover the same condition as a workbook query should use the workbook as the
+authoritative source. Deviations are intentional and documented in
+`deployments/add-ons/avdAlerts/README.md` under "Query Design and Validation".
