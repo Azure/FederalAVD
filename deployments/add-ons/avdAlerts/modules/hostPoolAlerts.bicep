@@ -10,10 +10,11 @@
 //     - Session host unhealthy  (Sev 1) [all pool types]
 //     - No resources available for connection  (Sev 1)
 //     - VM health check failure  (Sev 1)
+//   Connection alerts (gated by enableConnectionAlerts):
 //     - User auth / service connection failed  (>= 3 per user in 15 min, Sev 3)
-//     - Session host connection failed             (>= 2 per host in 15 min, Sev 2)
-//     - Disconnected user > 24 hours  (Sev 2)
-//     - Disconnected user > 72 hours  (Sev 1)
+//     - Session host connection failed         (>= 3 per host in 15 min, Sev 2)
+//     - Disconnected user > configured threshold (default 8h, max 47h)  (Sev 3)
+//     - Slow session logon > configured threshold (default 2 min)  (Sev 3)
 //   FSLogix alerts (use Event log data from Log Analytics agent / AMA):
 //     - FSLogix profile < 5% free   (EventID 34, Sev 2)
 //     - FSLogix profile < 2% free   (EventID 33, Sev 1)
@@ -25,8 +26,6 @@
 //     - FSLogix profile disk in use by another VM  (EventID 51, Sev 2)
 //     - FSLogix corrupted / temp profile            (EventID 28, Sev 1)
 //     - FSLogix VHD compaction pre-check failure    (EventID 58/61, Sev 3)
-//   Session experience alerts (use WVD checkpoint data directly):
-//     - Slow session logon > N minutes (default 2)  (Sev 3, threshold configurable via slowLogonThresholdMinutes)
 //
 // Capacity alert data source:
 //   WVDAgentHealthStatus is emitted by the AVD agent on each session host and is sent to
@@ -481,7 +480,7 @@ WVDConnections
 }
 
 // Session host connection failed
-// Fires when a session host accumulates 2+ connection failures after host assignment.
+// Fires when a session host accumulates 3+ connection failures after host assignment.
 // SessionHostName is populated = the broker assigned a host but the connection failed on the VM side.
 // Indicates RDP stack crash, FSLogix profile load failure, or VM networking issues.
 resource alertConnHostFailed 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
@@ -541,7 +540,7 @@ WVDConnections
   }
 }
 
-// Disconnected user > 24 hours
+// Disconnected user > configured threshold (default disconnectedSessionAlertThresholdHours hours)
 resource alertDisconnectedUser24h 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableConnectionAlerts) {
   name: '${alertNamePrefix}-HP-Sess-Disconnected${disconnectedSessionAlertThresholdHours}h-${hostPoolName}'
   location: location
@@ -1224,7 +1223,7 @@ fslogixErrors
   }
 }
 
-// Slow session logon - time from connection start to productive desktop > 2 minutes
+// Slow session logon - time from connection start to productive desktop > configured threshold (default slowLogonThresholdMinutes minutes)
 // Uses WVDCheckpoints ShellReady / RdpShellAppExecuted to measure full logon time
 // (includes Windows logon, profile load, GPO processing, startup scripts).
 // Fires at Sev 3 as an early warning; repeated occurrences indicate profile bloat, GPO issues,
