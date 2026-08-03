@@ -96,7 +96,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 ### AVD - Session Host Unhealthy — Sev 1
 
-**Trigger:** A session host in any host pool (Pooled or Personal) has been in a non-Available, non-Shutdown state for 15 or more continuous minutes, and `AllowNewSessions` is `true` (not in admin drain mode or shutdown by a scaling plan).  
+**Trigger:** A session host in any host pool (Pooled or Personal) has been in a non-Available, non-Shutdown state for 15 or more continuous minutes, and `AllowNewSessions` is `true` (not in admin drain mode or shutdown by a scaling plan). Newly deployed hosts are excluded until they have been visible in the health status data for at least 15 minutes.  
 **Meaning:** The host is failing to serve connections but is not intentionally offline. In a Personal pool this directly impacts the assigned user. In a Pooled pool it reduces available capacity and may degrade experience for active users.
 
 **Response:**
