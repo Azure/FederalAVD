@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "2981979895618315883"
+      "templateHash": "6216483068515203149"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "16755942820885004930"
+              "templateHash": "12147559179081523635"
             }
           },
           "parameters": {
@@ -1708,25 +1708,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('let fslogixWarnings =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 34\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixWarnings\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('let fslogixWarnings =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 34\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;\r\nfslogixWarnings\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
                           "name": "UserName",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "ProfileID",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "SessionHostName",
                           "operator": "Include",
                           "values": [
                             "*"
@@ -1775,25 +1761,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 33\r\n    | extend\r\n        StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription),\r\n        ProfileRaw     = extract(@\"profilecontainers\\\\([^\\\\]+)\", 1, RenderedDescription)\r\n    | extend ProfileID = tostring(split(ProfileRaw, \"_\")[0])\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 33\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
                           "name": "UserName",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "ProfileID",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "SessionHostName",
                           "operator": "Include",
                           "values": [
                             "*"

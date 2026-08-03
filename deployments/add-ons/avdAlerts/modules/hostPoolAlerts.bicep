@@ -651,11 +651,8 @@ let fslogixWarnings =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
     | where EventID == 34
-    | extend
-        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription),
-        ProfileRaw     = extract(@"profilecontainers\\([^\\]+)", 1, RenderedDescription)
-    | extend ProfileID = tostring(split(ProfileRaw, "_")[0])
-    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;
+    | extend StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription)
+    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;
 fslogixWarnings
 | join kind=inner (
     WVDConnections
@@ -669,7 +666,6 @@ fslogixWarnings
 | project
     EventTime,
     UserName,
-    ProfileID,
     SessionHostName = Computer,
     StorageAccount,
     EventID,
@@ -679,10 +675,8 @@ fslogixWarnings
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'UserName',        operator: 'Include', values: ['*'] }
-            { name: 'ProfileID',       operator: 'Include', values: ['*'] }
-            { name: 'SessionHostName', operator: 'Include', values: ['*'] }
-            { name: 'StorageAccount',  operator: 'Include', values: ['*'] }
+            { name: 'UserName',       operator: 'Include', values: ['*'] }
+            { name: 'StorageAccount', operator: 'Include', values: ['*'] }
           ]
           resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
@@ -720,11 +714,8 @@ let fslogixErrors =
     Event
     | where Source == "Microsoft-FSLogix-Apps"
     | where EventID == 33
-    | extend
-        StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription),
-        ProfileRaw     = extract(@"profilecontainers\\([^\\]+)", 1, RenderedDescription)
-    | extend ProfileID = tostring(split(ProfileRaw, "_")[0])
-    | project EventTime = TimeGenerated, Computer, ProfileID, StorageAccount, EventID, RenderedDescription;
+    | extend StorageAccount = extract(@"\\\\([^\\]+\.file\.core\.[^\\]+)", 1, RenderedDescription)
+    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;
 fslogixErrors
 | join kind=inner (
     WVDConnections
@@ -738,7 +729,6 @@ fslogixErrors
 | project
     EventTime,
     UserName,
-    ProfileID,
     SessionHostName = Computer,
     StorageAccount,
     EventID,
@@ -748,10 +738,8 @@ fslogixErrors
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
-            { name: 'UserName',        operator: 'Include', values: ['*'] }
-            { name: 'ProfileID',       operator: 'Include', values: ['*'] }
-            { name: 'SessionHostName', operator: 'Include', values: ['*'] }
-            { name: 'StorageAccount',  operator: 'Include', values: ['*'] }
+            { name: 'UserName',       operator: 'Include', values: ['*'] }
+            { name: 'StorageAccount', operator: 'Include', values: ['*'] }
           ]
           resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'
