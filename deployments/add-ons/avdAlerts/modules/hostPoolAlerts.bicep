@@ -117,7 +117,7 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'PT15M'
+    overrideQueryTimeRange: 'PT45M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -167,7 +167,7 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
-    overrideQueryTimeRange: 'PT15M'
+    overrideQueryTimeRange: 'PT45M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -367,7 +367,7 @@ resource alertVMHealthCheck 'Microsoft.Insights/scheduledQueryRules@2022-06-15' 
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT5M'
-    overrideQueryTimeRange: 'PT5M'
+    overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {

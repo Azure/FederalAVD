@@ -356,3 +356,34 @@ All queries in this add-on explicitly cast `WVDAgentHealthStatus` string columns
 correct numeric types (`tolong()`, `tobool()`) before aggregation. If you see KQL type errors
 in the Azure Portal alert rule editor, ensure you are viewing the version deployed from this
 add-on and not an older manually edited copy.
+
+---
+
+## Query Design and Validation
+
+All log-based alert queries in this add-on were validated against the official Microsoft
+**AVD Insights** workbooks (the five workbooks published to the Azure Monitor Workbooks
+gallery and accessible from the AVD host pool **Insights** blade): Alerts, Connection
+Diagnostics, Host Diagnostics, Utilization Report, and User Report.
+
+Where a workbook and an alert query cover the same condition, the workbook query was used
+as the authoritative source. Deviations from workbook patterns are intentional and documented
+below.
+
+### Why alert queries differ from workbook queries
+
+| Reason | Detail |
+|--------|--------|
+| **Point-in-time vs. exploration** | Workbook queries are written for interactive visualization — they use `render` clauses, `bin()` time bucketing, and wide time range parameters. Alert queries must return a single scalar count comparable to a threshold at a fixed point in time. These are structurally different objectives. |
+| **`overrideQueryTimeRange` constraint** | Azure Monitor Scheduled Query Rules enforce: `overrideQueryTimeRange >= windowSize × numberOfEvaluationPeriods`. Workbook queries have no equivalent constraint. Alerts with `numberOfEvaluationPeriods: 3` (capacity 50%/85%, VM health check) require a wider `overrideQueryTimeRange` than the KQL `ago()` lookback alone would suggest. |
+| **Noise suppression guards** | Some alert queries add guards that workbooks do not need. For example, `alertSessionHostUnhealthy` excludes hosts that have been visible in health status data for fewer than 15 minutes (`FirstSeen <= ago(15m)`). Workbooks show all history; alert rules should not fire for a host that is legitimately still initializing after deployment. |
+| **Cloud compatibility** | Workbook queries occasionally reference workspace-specific functions or preview features not available in all Azure clouds. Alert queries use only cloud-agnostic KQL constructs that work in Commercial, Government, and air-gapped environments. |
+
+### Specific workbook-aligned patterns adopted
+
+| Alert | Workbook source | Notes |
+|-------|----------------|-------|
+| `alertSlowSessionLogon` | Connection Performance workbook | Adopted the workbook's `RdpStackConnectionEstablished` leftsemi join to isolate new-session logons, and the `OnCredentialsAcquisitionCompleted` / `SSOTokenRetrieval` leftouter joins to subtract client-side latency (credential acquisition and SSO token retrieval) from the total logon duration. This ensures the alert measures host-side logon latency only. |
+| Capacity (50% / 85% / 95%) | Host Diagnostics / Utilization Report workbooks | `arg_max(TimeGenerated, *) by SessionHostName` pattern to get the latest row per host; `iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)` for denominator to exclude drained hosts. |
+| `alertSessionHostUnhealthy` | Host Diagnostics workbook | Status, AllowNewSessions, and LastAvailable pattern aligned with workbook; `FirstSeen` guard added for alert-specific noise suppression. |
+| `alertConnAuthFailed` / `alertConnHostFailed` | Connection Diagnostics workbook | `WVDConnections` + `WVDErrors` join pattern aligned with workbook; split into two separate alerts (gateway/broker failures vs. session host failures) rather than the workbook's combined view, for more actionable severity and routing. |
