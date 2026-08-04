@@ -265,7 +265,7 @@ resource alertSessionHostUnhealthy 'Microsoft.Insights/scheduledQueryRules@2022-
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Session Host Unhealthy (${hostPoolName})'
-    description: '${descriptionHeader}A session host in ${hostPoolName} has been in a non-Available, non-Shutdown state for 15 or more continuous minutes and is not in drain mode (AllowNewSessions == true). Newly deployed hosts are excluded until they have been visible in the health status data for at least 15 minutes. Investigate WVDAgentHealthStatus and the VM directly.'
+    description: '${descriptionHeader}A session host in ${hostPoolName} has been in a non-Available, non-Shutdown, non-Upgrading state for 15 or more continuous minutes and is not in drain mode (AllowNewSessions == true). Newly deployed hosts are excluded until they have been visible in the health status data for at least 15 minutes. Investigate WVDAgentHealthStatus and the VM directly.'
     severity: 1
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -281,7 +281,7 @@ WVDAgentHealthStatus
 | where TimeGenerated > ago(20m)
 | where _ResourceId has "__POOL__"
 | where AllowNewSessions == true
-| where Status != 'Shutdown'
+| where Status !in ('Shutdown', 'Upgrading')
 | summarize 
     arg_max(TimeGenerated, Status, _ResourceId),
     LastAvailable = maxif(TimeGenerated, Status == 'Available'),

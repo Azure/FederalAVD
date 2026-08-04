@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "5135242111275241135"
+      "templateHash": "6787903330113258850"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "9237232927103104300"
+              "templateHash": "1484204073218677849"
             }
           },
           "parameters": {
@@ -1356,7 +1356,7 @@
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Session Host Unhealthy ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}A session host in {1} has been in a non-Available, non-Shutdown state for 15 or more continuous minutes and is not in drain mode (AllowNewSessions == true). Newly deployed hosts are excluded until they have been visible in the health status data for at least 15 minutes. Investigate WVDAgentHealthStatus and the VM directly.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A session host in {1} has been in a non-Available, non-Shutdown, non-Upgrading state for 15 or more continuous minutes and is not in drain mode (AllowNewSessions == true). Newly deployed hosts are excluded until they have been visible in the health status data for at least 15 minutes. Investigate WVDAgentHealthStatus and the VM directly.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -1369,7 +1369,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(20m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where AllowNewSessions == true\r\n| where Status != ''Shutdown''\r\n| summarize \r\n    arg_max(TimeGenerated, Status, _ResourceId),\r\n    LastAvailable = maxif(TimeGenerated, Status == ''Available''),\r\n    FirstSeen = min(TimeGenerated)\r\n  by SessionHostName\r\n| where Status != ''Available''\r\n| where (isnull(LastAvailable) and FirstSeen <= ago(15m)) or LastAvailable <= ago(15m)\r\n| project SessionHostName, Status, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(20m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where AllowNewSessions == true\r\n| where Status !in (''Shutdown'', ''Upgrading'')\r\n| summarize \r\n    arg_max(TimeGenerated, Status, _ResourceId),\r\n    LastAvailable = maxif(TimeGenerated, Status == ''Available''),\r\n    FirstSeen = min(TimeGenerated)\r\n  by SessionHostName\r\n| where Status != ''Available''\r\n| where (isnull(LastAvailable) and FirstSeen <= ago(15m)) or LastAvailable <= ago(15m)\r\n| project SessionHostName, Status, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
