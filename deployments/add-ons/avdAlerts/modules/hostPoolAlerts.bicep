@@ -542,9 +542,9 @@ WVDConnections
 // FSLogix profile < 5% free (EventID 34, Warning) - enriched with user and storage account context
 // Joins FSLogix warnings with WVDConnections to identify which user's profile is nearly full,
 // on which session host, and pointing to which storage account.
-// overrideQueryTimeRange P7D: EventID 34 fires only at logon, not while the condition persists.
-// A 7-day window keeps the alert fired long enough for operators to remediate, reducing the risk
-// that it auto-resolves before the container is actually expanded or cleaned up.
+// overrideQueryTimeRange P2D: EventID 34 fires only at logon, not while the condition persists.
+// A 2-day window (the maximum supported granularity) keeps the alert fired long enough for
+// operators to remediate, reducing the risk that it auto-resolves before the container is fixed.
 resource alertFSLogixProfile5PctFree 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLogix-SpaceLow5pct-${hostPoolName}'
   location: location
@@ -556,7 +556,7 @@ resource alertFSLogixProfile5PctFree 'Microsoft.Insights/scheduledQueryRules@202
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT1H'
-    overrideQueryTimeRange: 'P7D'
+    overrideQueryTimeRange: 'P2D'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -608,8 +608,8 @@ fslogixWarnings
 // FSLogix profile < 2% free (EventID 33, Error) - enriched with user and storage account context
 // Joins FSLogix errors with WVDConnections to identify which user's profile is critically full,
 // on which session host, and pointing to which storage account.
-// overrideQueryTimeRange P7D: same rationale as EventID 34 -- logon-only event for a persistent
-// state condition; 7-day window prevents the alert from auto-resolving before the VHD is fixed.
+// overrideQueryTimeRange P2D: same rationale as EventID 34 -- logon-only event for a persistent
+// state condition; 2-day window (max supported) prevents premature auto-resolve before the VHD is fixed.
 resource alertFSLogixProfile2PctFree 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLogix-SpaceLow2pct-${hostPoolName}'
   location: location
@@ -621,7 +621,7 @@ resource alertFSLogixProfile2PctFree 'Microsoft.Insights/scheduledQueryRules@202
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT1H'
-    overrideQueryTimeRange: 'P7D'
+    overrideQueryTimeRange: 'P2D'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {
@@ -847,9 +847,9 @@ Event
 
 // FSLogix service disabled (EventID 60)
 // EventID 60 fires ONCE when the service transitions to disabled, then stops.
-// overrideQueryTimeRange P7D: the service-disabled state persists until someone re-enables it,
-// but no further events are emitted. P7D keeps the alert fired for up to 7 days after the event
-// so operators have time to respond before autoMitigate resolves it.
+// overrideQueryTimeRange P2D: the service-disabled state persists until someone re-enables it,
+// but no further events are emitted. P2D (max supported granularity) keeps the alert fired for
+// up to 2 days after the event so operators have time to respond before autoMitigate resolves it.
 // Scoped to this host pool via WVDConnections inner join on Computer == SessionHostName.
 resource alertFSLogixServiceDisabled 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableFslogixAlerts) {
   name: '${alertNamePrefix}-HP-VM-FSLogix-ServiceDisabled-${hostPoolName}'
@@ -862,7 +862,7 @@ resource alertFSLogixServiceDisabled 'Microsoft.Insights/scheduledQueryRules@202
     enabled: true
     evaluationFrequency: 'PT5M'
     windowSize: 'PT4H'
-    overrideQueryTimeRange: 'P7D'
+    overrideQueryTimeRange: 'P2D'
     scopes: [logAnalyticsWorkspaceResourceId]
     autoMitigate: autoResolveAlert
     criteria: {

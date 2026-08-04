@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "5720129858816765462"
+      "templateHash": "5135242111275241135"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "9541484127018561482"
+              "templateHash": "9237232927103104300"
             }
           },
           "parameters": {
@@ -1640,7 +1640,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT1H",
-                "overrideQueryTimeRange": "P7D",
+                "overrideQueryTimeRange": "P2D",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1693,7 +1693,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT1H",
-                "overrideQueryTimeRange": "P7D",
+                "overrideQueryTimeRange": "P2D",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
@@ -1958,7 +1958,7 @@
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
                 "windowSize": "PT4H",
-                "overrideQueryTimeRange": "P7D",
+                "overrideQueryTimeRange": "P2D",
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
