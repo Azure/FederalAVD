@@ -146,7 +146,7 @@ for ($i = $Start; $i -le $End; $i++) {
             -ResourceGroupName $HostPoolResourceGroup `
             -HostPoolName $HostPoolName `
             -Name $fqdn `
-            -AllowNewSession $allowNewSession
+            -AllowNewSession:$allowNewSession
 
         if ($Mode -eq 'Drain') {
             Write-Host '  Drain mode ENABLED (AllowNewSession=false)' -ForegroundColor Magenta
