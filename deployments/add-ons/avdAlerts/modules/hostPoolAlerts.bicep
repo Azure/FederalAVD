@@ -317,7 +317,7 @@ resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-
   location: location
   tags: hostPoolTags
   properties: {
-    displayName: '${alertNamePrefix} - No Resources Available (${hostPoolName})'
+    displayName: '${alertNamePrefix} - No Resources Available'
     description: '${descriptionHeader}Catastrophic: no healthy session hosts available for new connections in ${hostPoolName}. Diagnose host pool dependencies immediately.'
     severity: 1
     enabled: true
@@ -333,19 +333,18 @@ resource alertNoResourcesAvailable 'Microsoft.Insights/scheduledQueryRules@2022-
 WVDConnections
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
-| summarize arg_max(TimeGenerated, UserName, SessionHostName, _ResourceId) by CorrelationId
+| summarize arg_max(TimeGenerated, UserName, _ResourceId) by CorrelationId
 | join kind=inner (
     WVDErrors
     | where TimeGenerated > ago(15m)
     | where CodeSymbolic == "ConnectionFailedNoHealthyRdshAvailable"
     | summarize by CorrelationId
 ) on CorrelationId
-| project UserName, SessionHostName, ResourceId = _ResourceId
+| project UserName, ResourceId = _ResourceId
 ''', '__POOL__', hostPoolName)
           timeAggregation: 'Count'
           dimensions: [
             { name: 'UserName', operator: 'Include', values: ['*'] }
-            { name: 'SessionHostName', operator: 'Include', values: ['*'] }
           ]
           resourceIdColumn: 'ResourceId'
           operator: 'GreaterThanOrEqual'

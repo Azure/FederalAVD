@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "8305258233926489255"
+      "templateHash": "5720129858816765462"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "1518049872294416088"
+              "templateHash": "9541484127018561482"
             }
           },
           "parameters": {
@@ -1408,7 +1408,7 @@
               "location": "[parameters('location')]",
               "tags": "[variables('hostPoolTags')]",
               "properties": {
-                "displayName": "[format('{0} - No Resources Available ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "displayName": "[format('{0} - No Resources Available', parameters('alertNamePrefix'))]",
                 "description": "[format('{0}Catastrophic: no healthy session hosts available for new connections in {1}. Diagnose host pool dependencies immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 1,
                 "enabled": true,
@@ -1422,18 +1422,11 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDConnections\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, UserName, SessionHostName, _ResourceId) by CorrelationId\r\n| join kind=inner (\r\n    WVDErrors\r\n    | where TimeGenerated > ago(15m)\r\n    | where CodeSymbolic == \"ConnectionFailedNoHealthyRdshAvailable\"\r\n    | summarize by CorrelationId\r\n) on CorrelationId\r\n| project UserName, SessionHostName, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace('WVDConnections\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, UserName, _ResourceId) by CorrelationId\r\n| join kind=inner (\r\n    WVDErrors\r\n    | where TimeGenerated > ago(15m)\r\n    | where CodeSymbolic == \"ConnectionFailedNoHealthyRdshAvailable\"\r\n    | summarize by CorrelationId\r\n) on CorrelationId\r\n| project UserName, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
                           "name": "UserName",
-                          "operator": "Include",
-                          "values": [
-                            "*"
-                          ]
-                        },
-                        {
-                          "name": "SessionHostName",
                           "operator": "Include",
                           "values": [
                             "*"
