@@ -1,11 +1,11 @@
-{
+﻿{
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "2899361847774355606"
+      "version": "0.45.15.27210",
+      "templateHash": "1280206821907163745"
     }
   },
   "parameters": {
@@ -597,8 +597,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "16902460618555377546"
+              "version": "0.45.15.27210",
+              "templateHash": "7989689542494056490"
             }
           },
           "parameters": {
@@ -773,7 +773,7 @@
             {
               "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2021-05-01-preview",
-              "scope": "[format('Microsoft.Automation/automationAccounts/{0}', parameters('automationAccountName'))]",
+              "scope": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
               "name": "[format('diag-{0}', parameters('automationAccountName'))]",
               "properties": {
                 "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
@@ -853,8 +853,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "16703140947059556488"
+              "version": "0.45.15.27210",
+              "templateHash": "6089610056640259539"
             }
           },
           "parameters": {
@@ -936,8 +936,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "16703140947059556488"
+              "version": "0.45.15.27210",
+              "templateHash": "6089610056640259539"
             }
           },
           "parameters": {
@@ -1048,8 +1048,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "9877999373406246537"
+              "version": "0.45.15.27210",
+              "templateHash": "17186091475245988547"
             }
           },
           "parameters": {
@@ -1176,7 +1176,7 @@
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Host Pool Capacity 50% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}Host pool is at 50-84% capacity for 15 or more continuous minutes. Review scaling plan and available session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Host pool is at 50% or more capacity for 15 or more continuous minutes. Review scaling plan and available session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 3,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -1189,7 +1189,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1236,7 +1236,7 @@
               "tags": "[variables('hostPoolTags')]",
               "properties": {
                 "displayName": "[format('{0} - Host Pool Capacity 85% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
-                "description": "[format('{0}Host pool is at 85-94% capacity for 15 or more continuous minutes. Review scaling plan and consider adding session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Host pool is at 85% or more capacity for 15 or more continuous minutes. Review scaling plan and consider adding session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
                 "severity": 2,
                 "enabled": true,
                 "evaluationFrequency": "PT5M",
@@ -1249,7 +1249,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -2426,8 +2426,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "15558508891191891401"
+              "version": "0.45.15.27210",
+              "templateHash": "5710395126310250388"
             }
           },
           "parameters": {
@@ -2998,8 +2998,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "14425929198068821733"
+              "version": "0.45.15.27210",
+              "templateHash": "2617368336243791226"
             }
           },
           "parameters": {
@@ -3467,8 +3467,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "14204692839372280440"
+              "version": "0.45.15.27210",
+              "templateHash": "5657292134707359737"
             }
           },
           "parameters": {
@@ -3618,8 +3618,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "3607153925527534861"
+              "version": "0.45.15.27210",
+              "templateHash": "16753931454069317348"
             }
           },
           "parameters": {

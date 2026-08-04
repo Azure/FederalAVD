@@ -122,7 +122,7 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Pool Capacity 50% (${hostPoolName})'
-    description: '${descriptionHeader}Host pool is at 50-84% capacity for 15 or more continuous minutes. Review scaling plan and available session hosts for ${hostPoolName}.'
+    description: '${descriptionHeader}Host pool is at 50% or more capacity for 15 or more continuous minutes. Review scaling plan and available session hosts for ${hostPoolName}.'
     severity: 3
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -148,7 +148,7 @@ WVDAgentHealthStatus
     TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
-| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85
+| where TotalCapacity > 0 and LoadPct >= 50
 ''', '__POOL__', hostPoolName), '__MAX_PER_HOST__', string(maxSessionsPerHost))
           timeAggregation: 'Count'
           dimensions: [
@@ -173,7 +173,7 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
   tags: hostPoolTags
   properties: {
     displayName: '${alertNamePrefix} - Host Pool Capacity 85% (${hostPoolName})'
-    description: '${descriptionHeader}Host pool is at 85-94% capacity for 15 or more continuous minutes. Review scaling plan and consider adding session hosts for ${hostPoolName}.'
+    description: '${descriptionHeader}Host pool is at 85% or more capacity for 15 or more continuous minutes. Review scaling plan and consider adding session hosts for ${hostPoolName}.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -199,7 +199,7 @@ WVDAgentHealthStatus
     TotalCapacity = sum(iff(AllowNewSessions and Status == 'Available', MaxSessions, long(0))),
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
-| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95
+| where TotalCapacity > 0 and LoadPct >= 85
 ''', '__POOL__', hostPoolName), '__MAX_PER_HOST__', string(maxSessionsPerHost))
           timeAggregation: 'Count'
           dimensions: [
