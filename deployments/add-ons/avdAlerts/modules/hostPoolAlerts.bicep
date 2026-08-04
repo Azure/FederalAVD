@@ -102,8 +102,18 @@ var actions = {
 // Resources  //
 // ========== //
 
+// Read maxSessionLimit directly from the host pool at deploy time so no parameter is needed.
+resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
+  name: last(split(hostPoolResourceId, '/'))
+  scope: resourceGroup(split(hostPoolResourceId, '/')[2], split(hostPoolResourceId, '/')[4])
+}
+
+var maxSessionsPerHost = hostPool.properties.maxSessionLimit
+
 // ------------------------------------
 // Capacity Alerts (WVDAgentHealthStatus)
+// WVDAgentHealthStatus.MaxSessions is not reliably populated in all environments.
+// maxSessionsPerHost is read from the host pool resource at deploy time and used as fallback.
 // ------------------------------------
 
 resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (enableCapacityAlerts && hostPoolType == 'Pooled') {
@@ -123,12 +133,12 @@ resource alertCapacity50 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     criteria: {
       allOf: [
         {
-          query: replace('''
+          query: replace(replace('''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
-| extend MaxSessions       = tolong(column_ifexists('MaxSessions', 0))
+| extend MaxSessions       = iff(tolong(column_ifexists('MaxSessions', 0)) > 0, tolong(column_ifexists('MaxSessions', 0)), long(__MAX_PER_HOST__))
 | extend ActiveSessions    = tolong(ActiveSessions)
 | extend InactiveSessions  = tolong(column_ifexists('InactiveSessions', 0))
 | extend AllowNewSessions  = tobool(AllowNewSessions)
@@ -139,7 +149,7 @@ WVDAgentHealthStatus
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85
-''', '__POOL__', hostPoolName)
+''', '__POOL__', hostPoolName), '__MAX_PER_HOST__', string(maxSessionsPerHost))
           timeAggregation: 'Count'
           dimensions: [
             { name: 'TotalSessions', operator: 'Include', values: ['*'] }
@@ -174,12 +184,12 @@ resource alertCapacity85 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     criteria: {
       allOf: [
         {
-          query: replace('''
+          query: replace(replace('''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
-| extend MaxSessions       = tolong(column_ifexists('MaxSessions', 0))
+| extend MaxSessions       = iff(tolong(column_ifexists('MaxSessions', 0)) > 0, tolong(column_ifexists('MaxSessions', 0)), long(__MAX_PER_HOST__))
 | extend ActiveSessions    = tolong(ActiveSessions)
 | extend InactiveSessions  = tolong(column_ifexists('InactiveSessions', 0))
 | extend AllowNewSessions  = tobool(AllowNewSessions)
@@ -190,7 +200,7 @@ WVDAgentHealthStatus
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95
-''', '__POOL__', hostPoolName)
+''', '__POOL__', hostPoolName), '__MAX_PER_HOST__', string(maxSessionsPerHost))
           timeAggregation: 'Count'
           dimensions: [
             { name: 'TotalSessions', operator: 'Include', values: ['*'] }
@@ -225,12 +235,12 @@ resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     criteria: {
       allOf: [
         {
-          query: replace('''
+          query: replace(replace('''
 WVDAgentHealthStatus
 | where TimeGenerated > ago(15m)
 | where _ResourceId has "__POOL__"
 | summarize arg_max(TimeGenerated, *) by SessionHostName
-| extend MaxSessions       = tolong(column_ifexists('MaxSessions', 0))
+| extend MaxSessions       = iff(tolong(column_ifexists('MaxSessions', 0)) > 0, tolong(column_ifexists('MaxSessions', 0)), long(__MAX_PER_HOST__))
 | extend ActiveSessions    = tolong(ActiveSessions)
 | extend InactiveSessions  = tolong(column_ifexists('InactiveSessions', 0))
 | extend AllowNewSessions  = tobool(AllowNewSessions)
@@ -240,7 +250,7 @@ WVDAgentHealthStatus
     ResourceId    = any(_ResourceId)
 | extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)
 | where TotalCapacity > 0 and LoadPct >= 95
-''', '__POOL__', hostPoolName)
+''', '__POOL__', hostPoolName), '__MAX_PER_HOST__', string(maxSessionsPerHost))
           timeAggregation: 'Count'
           dimensions: [
             { name: 'TotalSessions', operator: 'Include', values: ['*'] }

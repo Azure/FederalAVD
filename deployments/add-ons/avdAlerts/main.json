@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "6787903330113258850"
+      "templateHash": "2899361847774355606"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "1484204073218677849"
+              "templateHash": "9877999373406246537"
             }
           },
           "parameters": {
@@ -1189,7 +1189,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = tolong(column_ifexists(''MaxSessions'', 0))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50 and LoadPct < 85\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1249,7 +1249,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = tolong(column_ifexists(''MaxSessions'', 0))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85 and LoadPct < 95\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
@@ -1309,7 +1309,7 @@
                 "criteria": {
                   "allOf": [
                     {
-                      "query": "[replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = tolong(column_ifexists(''MaxSessions'', 0))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
                       "timeAggregation": "Count",
                       "dimensions": [
                         {
