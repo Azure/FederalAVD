@@ -231,7 +231,7 @@ resource alertCapacity95 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = i
     windowSize: 'PT15M'
     overrideQueryTimeRange: 'PT15M'
     scopes: [logAnalyticsWorkspaceResourceId]
-    autoMitigate: autoResolveAlert
+    autoMitigate: false // Sev 1 critical alert - must be manually closed; prevents fire/resolve oscillation when load bounces around 95%
     criteria: {
       allOf: [
         {

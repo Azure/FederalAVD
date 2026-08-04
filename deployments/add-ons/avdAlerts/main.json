@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "1280206821907163745"
+      "templateHash": "18332939916653488919"
     }
   },
   "parameters": {
@@ -1049,7 +1049,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "17186091475245988547"
+              "templateHash": "12188417853054168833"
             }
           },
           "parameters": {
@@ -1305,7 +1305,7 @@
                 "scopes": [
                   "[parameters('logAnalyticsWorkspaceResourceId')]"
                 ],
-                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "autoMitigate": false,
                 "criteria": {
                   "allOf": [
                     {
