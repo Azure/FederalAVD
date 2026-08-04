@@ -1,4 +1,4 @@
-# SessionHostReplacer Tabletop Scenarios - SideBySide Mode - Code Walkthrough
+﻿# SessionHostReplacer Tabletop Scenarios - SideBySide Mode - Code Walkthrough
 
 This document walks through three detailed scenarios for SideBySide replacement mode, tracing actual code execution paths.
 
@@ -241,6 +241,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
     - **canDelete = 20 hosts**
 
 12. **Lines 975-1050**: Safety check & deletion
+
     ```powershell
     if ($newHostAvailability.SafeToProceed) {
         # Verify avd-101 to avd-120 are Available
@@ -253,6 +254,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
         Confirm-SessionHostDeletions(...) | Out-Null  # Log only
     }
     ```
+
     - 20 new hosts verified Available ✓
     - Delete 20 old hosts (avd-001 to avd-020) ✓
     - Device cleanup logged but doesn't block
@@ -271,6 +273,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
 **Code Execution Path:**
 
 1. **Lines 450-475**: Calculate capacity
+
    ```powershell
    $canDeployUpTo = 100 + 100 - 100 - 0 = 100
    $weNeedToDeploy = 100 - 20 = 80
@@ -278,11 +281,13 @@ This document walks through three detailed scenarios for SideBySide replacement 
    ```
 
 2. **Lines 490-510**: Progressive scale-up
+
    ```powershell
    $currentPercentage = 60  # ConsecutiveSuccesses = 1
    $percentageBasedCount = Ceiling(80 × 0.60) = 48
    $actualDeployCount = Min(48, 50, 80) = 48
    ```
+
    - Result: **Deploy 48 hosts**
 
 3. **Deploy**: avd-121 through avd-168 (48 new VMs)
@@ -290,11 +295,13 @@ This document walks through three detailed scenarios for SideBySide replacement 
 4. **Next Run**: Pool = 148 hosts (48 new + 100 existing)
 
 5. **Lines 594-650**: Calculate deletions
+
    ```powershell
    $overpopulation = 148 - 100 = 48
    $percentageBasedCount = Ceiling(80 × 0.60) = 48
    $canDelete = Min(48, 48) = 48
    ```
+
    - Result: **Delete 48 hosts**
 
 6. **Lines 975-1050**: Safety check & deletion
@@ -318,6 +325,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
 **Code Execution Path:**
 
 1. **Lines 490-510**: Progressive scale-up
+
    ```powershell
    $currentPercentage = 100
    $percentageBasedCount = Ceiling(32 × 1.0) = 32
@@ -329,6 +337,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
 3. **Next Run**: Pool = 132 hosts
 
 4. **Lines 594-650**: Calculate deletions
+
    ```powershell
    $overpopulation = 132 - 100 = 32
    $canDelete = 32
@@ -354,18 +363,21 @@ This document walks through three detailed scenarios for SideBySide replacement 
    - canDeploy = **20 hosts**
 
 2. **Lines 880-960**: Submit deployment
+
    ```powershell
    $deploymentResult = Start-SessionHostDeployment(...)
    $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
    $deploymentState.LastDeploymentCount = 20
    Save-DeploymentState
    ```
+
    - Deployment submitted for avd-101 to avd-120
    - **Deployment FAILS** (quota, token, network issue)
 
 **Next Function Run:**
 
 3. **Lines 193-220**: Handle deployment failure
+
    ```powershell
    elseif ($previousDeploymentStatus.Failed) {
        Write-LogEntry "Previous deployment failed"
@@ -378,15 +390,18 @@ This document walks through three detailed scenarios for SideBySide replacement 
        Save-DeploymentState
    }
    ```
+
    - ConsecutiveSuccesses reset to **0**
    - CurrentPercentage reset to **20%**
    - LastStatus = 'Failed'
 
 4. **Lines 594-650**: Calculate deletions
+
    ```powersharp
    $overpopulation = 100 - 100 = 0
    $canDelete = 0
    ```
+
    - Pool NOT overpopulated (deployment failed, no new hosts)
    - **No deletions** (capacity preserved) ✓
 
@@ -403,6 +418,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
 **Code Execution Path:**
 
 1. **Lines 450-510**: Calculate batch size
+
    ```powershell
    $canDeployUpTo = 100 + 100 - 100 - 0 = 100
    $weNeedToDeploy = 100 - 0 = 100
@@ -412,23 +428,28 @@ This document walks through three detailed scenarios for SideBySide replacement 
    $percentageBasedCount = Ceiling(100 × 0.20) = 20
    $canDeploy = 20
    ```
+
    - Retry same batch size: **20 hosts**
 
 2. **Lines 880-960**: Deploy
+
    ```powershell
    # Generate NEW session host names (avd-101 to avd-120 again)
    # These names were never used (previous deployment failed before VM creation)
    $deploymentResult = Start-SessionHostDeployment(...)
    ```
+
    - **Deployment succeeds this time** ✓
    - 20 VMs created (avd-101 to avd-120)
    - DSC registers hosts
 
 3. **Lines 594-650**: Calculate deletions (next run)
+
    ```powershell
    $overpopulation = 120 - 100 = 20
    $canDelete = 20
    ```
+
    - Pool now overpopulated ✓
 
 4. **Lines 975-1050**: Safety check & deletion
@@ -465,6 +486,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
 **Next Function Run:**
 
 3. **Lines 125-180**: Check previous deployment
+
    ```powershell
    if ($previousDeploymentStatus.Succeeded) {
        # Deployment succeeded (VMs created)
@@ -478,11 +500,13 @@ This document walks through three detailed scenarios for SideBySide replacement 
        }
    }
    ```
+
    - **ISSUE**: SideBySide mode doesn't verify registration before incrementing!
    - ConsecutiveSuccesses++ = 1 (incorrectly)
    - CurrentPercentage = 60%
 
 4. **Lines 594-650**: Calculate deletions
+
    ```powershell
    $overpopulation = 120 - 100 = 20
    $sessionHostsToReplace = Get-SessionHostsToReplace(...)
@@ -492,9 +516,11 @@ This document walks through three detailed scenarios for SideBySide replacement 
    $percentageBasedCount = Ceiling(100 × 0.60) = 60
    $canDelete = Min(60, 20) = 20
    ```
+
    - Wants to delete 20 hosts
 
 5. **Lines 975-1050**: Safety check
+
    ```powershell
    # Check if new hosts (avd-101 to avd-120) are Available
    $newHostAvailability = Get-NewHostAvailability(...)
@@ -507,6 +533,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
        # EXIT - Don't delete
    }
    ```
+
    - **Safety check FAILS** ✓
    - New hosts not Available
    - **BLOCKS deletion** ✓
@@ -525,6 +552,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
 **Code Execution Path:**
 
 1. **Lines 450-510**: Calculate capacity
+
    ```powershell
    $canDeployUpTo = 100 + 100 - 120 - 0 = 80
    # (120 VMs exist, even though 20 not registered)
@@ -537,6 +565,7 @@ This document walks through three detailed scenarios for SideBySide replacement 
    
    $canDeploy = 0
    ```
+
    - **ISSUE**: System can't deploy more because buffer full
    - Stuck until avd-101 to avd-120 register or are removed
 
@@ -556,6 +585,7 @@ If deployment was submitted again (e.g., force via redeployment):
    - Fresh registration token → **Registration succeeds** ✓
 
 3. **Next Run**: Safety check
+
    ```powershell
    $newHostAvailability = Get-NewHostAvailability(...)
    # avd-101 to avd-120 now Available ✓
@@ -564,6 +594,7 @@ If deployment was submitted again (e.g., force via redeployment):
        # Delete avd-001 to avd-020
    }
    ```
+
    - Safety check passes ✓
    - Deletions proceed ✓
 
@@ -577,21 +608,25 @@ If deployment was submitted again (e.g., force via redeployment):
 ## Key Differences from DeleteFirst Mode
 
 ### 1. No PendingHostMappings
+
 - **DeleteFirst**: Saves hostnames before deletion for reuse
 - **SideBySide**: Generates new sequential hostnames each deployment
 - Code: Lines 740-753 (`run.ps1`) only execute in DeleteFirst mode
 
 ### 2. Buffer Capacity Calculation (Lines 450-475)
+
 ```powershell
 if ($ReplacementMode -eq 'SideBySide') {
     $effectiveBuffer = $TargetSessionHostCount  # Allows pool to double
     $canDeployUpTo = Target + Buffer - Current - Running
 }
 ```
+
 - Allows pool to temporarily grow to 2× target capacity
 - DeleteFirst doesn't need buffer (deletes first to make room)
 
 ### 3. Deletion Timing (Lines 594-650)
+
 ```powershell
 # SideBySide: Only delete when overpopulated
 $overpopulation = $SessionHosts.Count - $TargetSessionHostCount
@@ -599,29 +634,35 @@ if ($overpopulation -gt 0) {
     $canDelete = Min($percentageBasedCount, $overpopulation)
 }
 ```
+
 - DeleteFirst: Deletes BEFORE deployment
 - SideBySide: Deletes AFTER deployment (when overpopulated)
 
 ### 4. Safety Check (Lines 975-983)
+
 ```powershell
 if (-not $newHostAvailability.SafeToProceed -and $newHostAvailability.TotalNewHosts -gt 0) {
     Write-LogEntry "SAFETY CHECK FAILED"
     # BLOCK deletions until new hosts Available
 }
 ```
+
 - Critical for SideBySide: Prevents deleting old hosts until new hosts are Available
 - DeleteFirst: Not used (hosts already deleted before deployment)
 
 ### 5. Device Cleanup (Lines 1013-1050)
+
 ```powershell
 # SideBySide mode doesn't halt on failures since name reuse isn't critical
 Confirm-SessionHostDeletions(...) | Out-Null  # Log only
 ```
+
 - DeleteFirst: BLOCKS deployment if device cleanup fails (hostname reuse requires it)
 - SideBySide: Logs device cleanup status but doesn't block (new hostnames used)
 
 ### 6. Registration Verification Gap
 **DeleteFirst** (Lines 125-180):
+
 ```powershell
 if ($replacementMode -eq 'DeleteFirst' && $deploymentState.PendingHostMappings -ne '{}') {
     # Verify hosts actually registered before clearing mappings
@@ -642,27 +683,33 @@ if ($replacementMode -eq 'DeleteFirst' && $deploymentState.PendingHostMappings -
 ## Protection Mechanisms in SideBySide Mode
 
 ### 1. Buffer Capacity (Line 467)
+
 - Allows pool to double during rolling updates
 - Prevents deployment failures due to capacity limits
 
 ### 2. Safety Check (Lines 975-983)
+
 - **Critical protection**: Verifies new hosts Available before deleting old hosts
 - Prevents capacity loss if deployment succeeds but registration fails
 - Blocks deletions until new capacity is confirmed
 
 ### 3. Overpopulation-Based Deletion (Lines 594-650)
+
 - Only deletes when pool exceeds target capacity
 - Natural throttle: Can only delete as many hosts as were deployed
 - Progressive scale-up applies to deletions (not just deployments)
 
 ### 4. Force Update Tag (virtualMachines.bicep:571)
+
 ```bicep
 forceUpdateTag: timestamp
 ```
+
 - Enables automatic DSC retry on redeployment
 - Fixes registration failures through idempotent redeployment
 
 ### 5. Device Cleanup (Non-Blocking)
+
 - Logs cleanup status but doesn't halt operations
 - Name reuse not required (new sequential names)
 - Hygiene operation, not critical path
@@ -672,6 +719,7 @@ forceUpdateTag: timestamp
 ## Code References
 
 ### Critical Files
+
 - **run.ps1**: Main orchestration
   - Lines 125-180: State management (no registration verification for SideBySide)
   - Lines 880-960: Deployment submission
@@ -705,6 +753,7 @@ All three scenarios verified against actual code:
 3. **Registration Failure**: Safety check prevents deletions until hosts Available, forceUpdateTag enables DSC retry
 
 The implementation correctly handles:
+
 - ✓ Buffer capacity for temporary pool doubling
 - ✓ Safety check prevents capacity loss
 - ✓ Overpopulation-based deletion timing

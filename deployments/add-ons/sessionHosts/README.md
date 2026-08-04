@@ -1,4 +1,4 @@
-# AVD Session Hosts Add-On
+﻿# AVD Session Hosts Add-On
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Host Pool Deployment Guide](../../../docs/hostpool-deployment.md) | [Session Host Replacer](../sessionHostReplacer/README.md)
 

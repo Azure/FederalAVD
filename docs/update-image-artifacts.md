@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **📚 Conceptual Guide:** For how the artifact system works, how artifacts are executed during image builds and session host deployments, and how to create custom artifact packages, see the [Artifacts and Image Management Guide](artifacts-guide.md).
 
@@ -66,20 +66,20 @@ The storage account can be identified by **either** its full resource ID **or** 
 ### Parameter Set 1: By Resource ID (default)
 
 | Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
+| --- | --- | --- | --- |
 | **StorageAccountResourceId** | String | **Yes** | Full resource ID of the artifacts storage account. Obtain from the `artifactsStorageAccountResourceId` imageManagement deployment output. |
 
 ### Parameter Set 2: By Name
 
 | Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
+| --- | --- | --- | --- |
 | **StorageAccountName** | String | **Yes** | Name of the artifacts storage account. |
 | **ResourceGroupName** | String | **Yes** | Resource group containing the storage account. |
 
 ### Common Parameters (both sets)
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | **DeleteExistingBlobs** | Switch | `$false` | Delete all existing blobs in the container before uploading. Use for a clean refresh rather than incremental update. |
 | **SkipDownloadingNewSources** | Switch | `$false` | Skip downloading new software. Use in air-gapped environments or when the artifacts directory is already current. |
 | **TempDir** | String | `$Env:Temp` | Temporary directory for packaging. Use a path on a high-performance drive for large artifact sets. |
@@ -147,7 +147,7 @@ If `customer/parameters/imageManagement/downloads.json` exists, the script merge
 The script automatically selects the base downloads file from `.common/data/` based on the connected Azure environment:
 
 | Azure Environment | Base File |
-|-------------------|-----------|
+| --- | --- |
 | AzureCloud | `.common/data/public.downloads.parameters.json` |
 | AzureUSGovernment | `.common/data/public.downloads.parameters.json` |
 | Azure Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
@@ -162,7 +162,7 @@ Customer-specific download definitions live at `customer/parameters/imageManagem
 Each top-level key is a unique entry name. The following fields are shared across all methods:
 
 | Field | Required | Description |
-|-------|----------|-------------|
+| --- | --- | --- |
 | `Description` | No | Human-readable description of what is being downloaded |
 | `DestinationFileName` | Yes | File name to save the downloaded file as |
 | `DestinationFolders` | No | Array of artifact folder names to copy the downloaded file into. Defaults to the blob container root when omitted. Use `""` explicitly to place the file in the root alongside zipped packages. |
@@ -183,7 +183,7 @@ Downloads a file from a static URL.
 ```
 
 | Field | Description |
-|-------|-------------|
+| --- | --- |
 | `DownloadUrl` | Direct download URL |
 
 #### 2. Web Scraping
@@ -201,7 +201,7 @@ Searches a web page for a download link that matches a string pattern.
 ```
 
 | Field | Description |
-|-------|-------------|
+| --- | --- |
 | `WebSiteUrl` | Page URL to scrape for a download link |
 | `SearchString` | Substring used to identify the correct link on that page |
 
@@ -219,7 +219,7 @@ Retrieves the latest version from a JSON API endpoint.
 ```
 
 | Field | Description |
-|-------|-------------|
+| --- | --- |
 | `APIUrl` | JSON API endpoint that returns version/download metadata |
 
 #### 4. GitHub Releases
@@ -237,7 +237,7 @@ Fetches the latest release asset from a GitHub repository.
 ```
 
 | Field | Description |
-|-------|-------------|
+| --- | --- |
 | `GitHubRepo` | `owner/repo` path on GitHub |
 | `GitHubFileNamePattern` | Wildcard pattern to match the desired release asset filename |
 
@@ -255,7 +255,7 @@ Downloads the installer for a Winget package by its package identifier or produc
 ```
 
 | Field | Description |
-|-------|-------------|
+| --- | --- |
 | `WingetId` | Winget package identifier or Microsoft Store product code |
 
 #### Finding a WingetId
@@ -270,7 +270,7 @@ winget search "<name>"
 
 Example output:
 
-```
+```text
 PS> winget search "git for windows"
 Name  Id       Version  Source
 -------------------------------
@@ -312,7 +312,7 @@ apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
 ```
 
 | Field | Description |
-|-------|-------------|
+| --- | --- |
 | `WingetId` | Microsoft Store product code (alphanumeric) |
 | `WingetPreserveLayout` | `true` -- preserves the `winget download` folder layout; no `DestinationFileName` used |
 | `Architecture` | Optional. Omit for most apps (`x64` is the default). Set to `"neutral"` for multi-arch bundles that do not publish a separate x64 installer (e.g., Clipchamp). |

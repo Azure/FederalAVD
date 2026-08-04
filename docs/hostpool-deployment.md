@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical Reference:** [Host Pool Template Documentation](../deployments/hostpools/README.md) - Complete parameter catalog and advanced scenarios
 
@@ -13,7 +13,7 @@ This guide covers deploying complete Azure Virtual Desktop (AVD) host pool envir
 A complete host pool deployment includes:
 
 | Component | Resources Created |
-|-----------|------------------|
+| --- | --- |
 | **🖥️ AVD Control Plane** | Host pool, workspace, application groups, session hosts |
 | **💾 Storage** | FSLogix profile storage (Azure Files or NetApp Files) |
 | **🔐 Security** | Secrets Key Vault (optional inline), Encryption Key Vault (optional inline), disk encryption sets, storage encryption UAI, RBAC assignments |
@@ -52,7 +52,7 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 **When to deploy Key Vaults first:**
 
 | Scenario | Recommendation |
-|----------|---------------|
+| --- | --- |
 | Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `existingEncryptionKeyVaultResourceId` to host pool |
 | Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `existingCredentialsKeyVaultResourceId` to host pool |
 | Multiple host pools sharing one encryption KV | 🔒 **Deploy Security first** — all host pools reference the same KV |
@@ -193,7 +193,7 @@ az deployment sub create \
 
 Use the sample files in `deployments/hostpools/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/hostpools/`:
 
-```
+```text
 customer/parameters/hostpools/
 ├── demo.hostpool.parameters.json
 ├── prod.hostpool.parameters.json
@@ -211,7 +211,7 @@ customer/parameters/hostpools/
 The host pool deployment always creates all resources — resource groups, AVD control plane, session hosts, monitoring, Key Vaults — based on the options you select. Use individual **Use Existing** toggles (portal) or pre-populated resource ID parameters (automation) to reuse shared infrastructure instead of creating new resources:
 
 | Shared resource | "Use Existing" control | Parameter to supply |
-|---|---|---|
+| --- | --- | --- |
 | AVD Workspace | **Workspace Creation Option → Update an existing Workspace** | `existingFeedWorkspaceResourceId` |
 | Monitoring (Log Analytics, DCR, DCE) | **Use Existing Monitoring Resources** checkbox | `existingLogAnalyticsWorkspaceResourceId` + DCR + DCE IDs |
 | Credentials Key Vault | **Credentials source → Key Vault** (Identity step) | `existingCredentialsKeyVaultResourceId` |
@@ -223,7 +223,7 @@ To deploy all host pool infrastructure without creating session host VMs, set `s
 #### Basic Configuration
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **identifier** | Host pool persona identifier (max 9 chars) | `general`, `finance`, `dev` |
 | **index** | Host pool index for sharding (0-99) | `0`, `1`, `-1` (no index) |
 | **hostPoolType** | Pooled or Personal | `Pooled` |
@@ -233,7 +233,7 @@ To deploy all host pool infrastructure without creating session host VMs, set `s
 #### Identity Configuration
 
 | Parameter | Description | Options |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **identitySolution** | Identity and authentication method | `ActiveDirectoryDomainServices`<br>`EntraDomainServices`<br>`EntraKerberos-Hybrid`<br>`EntraKerberos-CloudOnly`<br>`EntraId` |
 | **domainName** | AD domain name (if applicable) | `contoso.com` |
 | **domainJoinUserName** | Domain join account UPN | `djoin@contoso.com` |
@@ -501,7 +501,7 @@ Verify monitoring is working:
 Backup behavior depends on host pool type and the `recoveryServices` parameter:
 
 | Host Pool Type | `recoveryServices` | `useExistingRSV` | Additional requirements | Vault | Backed Up |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | **Personal** | `true` | `false` | — | Created inline | VM OS disks |
 | **Personal** | `true` | `true` | `existingVmBackupVaultResourceId` required | Existing | VM OS disks |
 | **Personal** | `false` | — | — | Not created | Nothing |
@@ -675,6 +675,7 @@ Automatically monitor and increase Azure Files Premium quotas:
 ## Best Practices
 
 ### Security
+
 - ✅ Enable private endpoints for all PaaS resources
 - ✅ Use managed identities instead of service principals
 - ✅ Implement customer-managed encryption keys
@@ -682,6 +683,7 @@ Automatically monitor and increase Azure Files Premium quotas:
 - ✅ Apply Azure Policy for compliance
 
 ### Performance
+
 - ✅ Use proximity placement groups for latency-sensitive workloads
 - ✅ Enable accelerated networking on session hosts
 - ✅ Right-size VM SKUs based on workload requirements
@@ -689,6 +691,7 @@ Automatically monitor and increase Azure Files Premium quotas:
 - ✅ Configure appropriate session timeouts
 
 ### Cost Optimization
+
 - ✅ Implement auto-scaling based on usage patterns
 - ✅ Use B-series or Dsv5 VMs for cost savings
 - ✅ Enable start VM on connect for personal host pools
@@ -696,6 +699,7 @@ Automatically monitor and increase Azure Files Premium quotas:
 - ✅ Review and optimize storage costs regularly
 
 ### Operational Excellence
+
 - ✅ Use custom images with pre-installed software
 - ✅ Implement backup and disaster recovery
 - ✅ Configure comprehensive monitoring and alerting
@@ -837,12 +841,14 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
 3. **Prepare for PowerShell use:**
    - Open the parameters file
    - **Remove the `timeStamp` parameter** (if present)
+
      ```json
      // REMOVE THIS PARAMETER:
      "timeStamp": {
        "value": "20260210143522"
      }
      ```
+
      **Why remove it?**
      - The `timeStamp` parameter is auto-generated on each deployment using `utcNow()`
      - Provides automatic uniqueness for deployment names and nested resource deployments
@@ -852,6 +858,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    - Save the file
 
 4. **Use for future deployments:**
+
    ```powershell
    # Option 1: Use descriptive name based on environment/identifier
    $identifier = "prod"  # or extract from parameter file name
@@ -913,7 +920,7 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
 When using private endpoints, these private DNS zones must be created and linked to your virtual networks:
 
 | Purpose | Azure Commercial | Azure Government |
-|---------|-----------------|------------------|
+| --- | --- | --- |
 | **AVD Global Feed** | `privatelink-global.wvd.microsoft.com` | `privatelink-global.wvd.usgovcloudapi.net` |
 | **AVD Workspace Feed** | `privatelink.wvd.microsoft.com` | `privatelink.wvd.usgovcloudapi.net` |
 | **Azure Backup** | `privatelink.<geo>.backup.windowsazure.com` | `privatelink.<geo>.backup.windowsazure.us` |
@@ -959,7 +966,7 @@ The hostpool deployment uses Run Commands executed on a temporary deployment VM 
 **Required outbound access from the session host subnet:**
 
 | Service Tag | Port | Protocol | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `AzureResourceManager` | 443 | HTTPS | Run Command orchestration via ARM API |
 
 > **Air-gapped / restricted networks:** Ensure the `AzureResourceManager` service tag is allowed outbound on port 443 from the subnet where session hosts (and the temporary deployment VM) are deployed. Without this, Run Command-based orchestration steps will fail silently and the deployment will time out.

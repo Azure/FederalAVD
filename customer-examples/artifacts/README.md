@@ -1,4 +1,4 @@
-# Example Artifact Packages
+﻿# Example Artifact Packages
 
 Ready-to-use reference packages for common software and configuration tasks.
 **These are not used automatically.** Copy the folders you want into `customer/artifacts/`
@@ -54,7 +54,7 @@ configuration only) or require manually staged files (such as patch files for
 ## Available packages
 
 | Package | Description | downloads.json key(s) |
-|---|---|---|
+| --- | --- | --- |
 | [7-Zip](7-Zip/) | 7-Zip archiver | `7Zip` |
 | [Adobe-Acrobat-Reader-DC](Adobe-Acrobat-Reader-DC/) | Adobe Acrobat Reader DC | `AdobeAcrobatReaderDC` |
 | [Amazon-Workspaces-Client](Amazon-Workspaces-Client/) | Amazon WorkSpaces client | `AmazonWorkSpacesClient` |

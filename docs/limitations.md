@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Solution Limitations
 
@@ -31,7 +31,7 @@ When multiple groups exist with the same name across different domains in the fo
 
 **Example Scenario:**
 
-```
+```text
 Forest: contoso.com
 ├── Domain A: us.contoso.com (where AVD VMs are joined)
 │   └── Group: "Sales Team" (SID: S-1-5-21-111111...)

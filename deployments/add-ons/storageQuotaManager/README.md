@@ -1,4 +1,4 @@
-# FSLogix Storage Quota Manager Add-On
+﻿# FSLogix Storage Quota Manager Add-On
 
 ## Overview
 
@@ -61,13 +61,13 @@ New-AzResourceGroupDeployment `
 ### Required
 
 | Parameter | Description |
-|-----------|-------------|
+| --- | --- |
 | `storageResourceGroupId` | Full resource ID of the resource group containing FSLogix storage accounts. The runbook monitors **all** storage accounts and file shares in this group. |
 
 ### Optional
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `location` | Resource group location | Azure region for the Automation Account. |
 | `tags` | `{}` | Tags applied to all deployed resources. |
 | `automationAccountNameOverride` | _(derived)_ | Explicit name for the Automation Account. If empty, derived from the storage resource group using the pattern `aa-sqm-{unique}-{region}`. |
@@ -82,7 +82,7 @@ New-AzResourceGroupDeployment `
 ### Deployed Resources
 
 | Resource | Purpose |
-|----------|---------|
+| --- | --- |
 | **Azure Automation Account** (Basic SKU) | Hosts the runbook, schedule, variables, and managed identity |
 | **Automation Variables** | `ResourceGroupName`, `SubscriptionId`, `ResourceManagerUri` — read by the runbook at runtime |
 | **PowerShell 7.2 Runbook** | `Set-StorageQuota` — quota monitoring and scaling logic |
@@ -162,7 +162,7 @@ The runbook (`Set-StorageQuota`) runs on its configured schedule and applies the
 quota scaling logic to every file share in the storage resource group:
 
 | Current Quota | Remaining Capacity | Action | New Quota |
-|---------------|-------------------|--------|-----------|
+| --- | --- | --- | --- |
 | Any | 0 GB used | None | Unchanged |
 | < 500 GB | > 50 GB remaining | None | Unchanged |
 | < 500 GB | < 50 GB remaining | +100 GB | Quota + 100 GB |
@@ -189,7 +189,7 @@ to receive notifications on runbook failures.
 ## Security
 
 | Control | Implementation |
-|---------|---------------|
+| --- | --- |
 | **Authentication** | System-assigned managed identity — no stored credentials |
 | **Authorization** | Storage Account Contributor on storage resource group only |
 | **Scope** | ARM management plane only — no data plane access |
@@ -207,10 +207,12 @@ to receive notifications on runbook failures.
 ### Quota not increasing
 
 1. **Permissions** — verify the managed identity has Storage Account Contributor on the storage resource group:
+
    ```powershell
    $principalId = (Get-AzAutomationAccount -ResourceGroupName <rg> -Name <aa-name>).Identity.PrincipalId
    Get-AzRoleAssignment -ObjectId $principalId
    ```
+
 2. **Threshold** — confirm shares have enough usage to trigger the logic (< 50 GB or < 500 GB remaining).
 3. **Automation Variables** — check that `ResourceGroupName`, `SubscriptionId`, and `ResourceManagerUri` are set correctly under the Automation Account > Shared Resources > Variables.
 

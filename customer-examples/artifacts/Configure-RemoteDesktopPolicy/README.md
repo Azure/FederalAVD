@@ -1,4 +1,4 @@
-# Configure-RemoteDesktopServicesPolicy.ps1
+﻿# Configure-RemoteDesktopServicesPolicy.ps1
 
 ## Overview
 
@@ -33,7 +33,7 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 ## Common Timeout Values
 
 | Duration | Milliseconds | Use Case |
-|----------|--------------|----------|
+| --- | --- | --- |
 | **15 minutes** | `900000` | Aggressive resource reclamation |
 | **30 minutes** | `1800000` | Moderate timeout |
 | **1 hour** | `3600000` | Standard office environment |
@@ -103,7 +103,7 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 
 ## Policy Settings Applied
 
-```
+```text
 Computer Configuration
 └── Administrative Templates
     └── Windows Components
@@ -118,7 +118,7 @@ Computer Configuration
 
 ## Registry Locations
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
   MaxIdleTime: [Value in milliseconds]
   MaxDisconnectionTime: [Value in milliseconds]
@@ -126,7 +126,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
 
 ## Session State Diagram
 
-```
+```text
 ┌──────────────┐
 │ Active       │ ◄── User actively working
 │ Session      │
@@ -232,7 +232,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Configuration\Configure-RemoteDesktopServicesPolicy-<timestamp>.log
 ```
 
@@ -244,7 +244,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
 | `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |

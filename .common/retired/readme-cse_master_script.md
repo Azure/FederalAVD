@@ -1,4 +1,4 @@
-# cse_master_script.ps1
+﻿# cse_master_script.ps1
 
 ## Overview
 
@@ -16,6 +16,7 @@ This PowerShell script is the master orchestration script for Azure Custom Scrip
 ## Parameters
 
 ### `DynParameters`
+
 - **Type:** Hashtable
 - **Default:** `@{}`
 - **Description:** Dynamic parameters to pass to all child scripts
@@ -24,11 +25,13 @@ This PowerShell script is the master orchestration script for Azure Custom Scrip
 ## Usage Examples
 
 ### Basic Usage (No Parameters)
+
 ```powershell
 .\cse_master_script.ps1
 ```
 
 ### With Parameters
+
 ```powershell
 $params = @{
     TenantId = "12345678-1234-1234-1234-123456789012"
@@ -39,6 +42,7 @@ $params = @{
 ```
 
 ### Azure CSE Extension JSON
+
 ```json
 {
   "fileUris": [
@@ -114,7 +118,8 @@ $params = @{
 ### Supported Structures
 
 **Structure 1: ZIP with script in root**
-```
+
+```text
 Configure-Office365.zip
   ├── Configure-Office365.ps1
   ├── Config.txt
@@ -122,7 +127,8 @@ Configure-Office365.zip
 ```
 
 **Structure 2: ZIP with script in subfolder**
-```
+
+```text
 STIGs.zip
   ├── STIGs\
   │   ├── Apply-STIGsAVD.ps1
@@ -131,7 +137,8 @@ STIGs.zip
 ```
 
 **Structure 3: ZIP with multiple scripts**
-```
+
+```text
 Tools.zip
   ├── Install-Tool1.ps1
   ├── Install-Tool2.ps1
@@ -139,7 +146,8 @@ Tools.zip
 ```
 
 **Structure 4: Standalone scripts**
-```
+
+```text
 Directory\
   ├── cse_master_script.ps1
   ├── Configure-Background.ps1
@@ -153,7 +161,8 @@ Directory\
 3. **Within ZIPs:** All discovered .ps1 files (alphabetical)
 
 Example execution order:
-```
+
+```text
 1. FSLogix.zip
    → Install-FSLogix.ps1
 2. Office365.zip
@@ -215,6 +224,7 @@ param(
 - `STIGs.zip` (applies DISA STIGs)
 
 **Parameters:**
+
 ```powershell
 $params = @{
     TenantId = "tenant-id"
@@ -234,6 +244,7 @@ $params = @{
 - `Install-VSCode.ps1`
 
 **Parameters:**
+
 ```powershell
 .\cse_master_script.ps1
 ```
@@ -248,6 +259,7 @@ $params = @{
 - `Cleanup.ps1` (standalone script)
 
 **Parameters:**
+
 ```powershell
 $params = @{
     Environment = "Production"
@@ -315,11 +327,13 @@ resource customScriptExtension 'Microsoft.Compute/virtualMachines/extensions@202
 ## Logging
 
 Logs are created at:
-```
+
+```text
 C:\Windows\Logs\cse_master_script.log
 ```
 
 Log entries include:
+
 - Script start/end timestamps
 - PowerShell version
 - Current execution policy
@@ -361,6 +375,7 @@ Log entries include:
 ### Verification
 
 Check execution logs:
+
 ```powershell
 # View transcript log
 Get-Content "C:\Windows\Logs\cse_master_script.log"
@@ -373,6 +388,7 @@ Get-Content "C:\Windows\Logs\cse_master_script.log" -Tail 50
 ```
 
 Check extracted files (during execution):
+
 ```powershell
 # List temp directories
 Get-ChildItem $env:TEMP -Directory | Where-Object {$_.Name -like "*.zip"}
@@ -381,7 +397,7 @@ Get-ChildItem $env:TEMP -Directory | Where-Object {$_.Name -like "*.zip"}
 ## Differences from aib_master_script.ps1
 
 | Feature | aib_master_script.ps1 | cse_master_script.ps1 |
-|---------|----------------------|----------------------|
+| --- | --- | --- |
 | **Artifact Discovery** | Explicit (JSON array) | Automatic (directory scan) |
 | **Download** | Yes (from storage) | No (CSE downloads) |
 | **Authentication** | Managed Identity | Not needed |

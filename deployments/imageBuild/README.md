@@ -1,4 +1,4 @@
-# AVD Custom Image Build Template
+﻿# AVD Custom Image Build Template
 
 > **📖 User Guide:** For deployment instructions and getting started, see the [Image Build Guide](../../docs/image-build.md)
 
@@ -92,7 +92,7 @@ The resulting image is stored in an Azure Compute Gallery for distribution to AV
 The Azure identity running this deployment needs different rights depending on which resource group path you use:
 
 | Path | Required role | Why |
-|---|---|---|
+| --- | --- | --- |
 | **New RG** (`imageBuildResourceGroupId` empty) | Owner **or** Contributor + User Access Administrator at **subscription** scope | Creates a temporary resource group; assigns Contributor to the orchestration VM's system-assigned identity on that RG |
 | **Existing RG** (`imageBuildResourceGroupId` set) | **Contributor** on the image build resource group | Deploys VMs into the pre-existing RG only — no role assignments |
 
@@ -289,7 +289,7 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 - **Description:** VDI optimization profile applied to the image by `Optimize-AVDImage.ps1`. Controls which optimization sections run and whether software update channels are locked down.
 
 | Value | Behavior |
-|---|---|
+| --- | --- |
 | `None` | No optimization. Only `vdiOptimizationAirGapped` takes effect. |
 | `NonPersistent-UpdatesOnly` | Locks down software update channels only (OS, M365, Teams, OneDrive, Edge, WebView2, Store). Use when you manage other VDI hardening separately. |
 | `NonPersistent-Full` | Full VDI optimization for pooled host pools (VMs replaced on a regular cadence). All optimization sections applied, including update-channel lockdown. |
@@ -302,7 +302,7 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 The script applies up to 11 sections depending on the selected profile. No LGPO.exe required — group policy values are written directly to `Registry.pol` (MS-GPREG format).
 
 | Section | Applies to | What it does |
-|---------|-----------|--------------|
+| --- | --- | --- |
 | **1 — System Services (All VDI)** | Full profiles | Disables ~15 services with no VDI value: Xbox services, cellular/hotspot, geolocation, maps, messaging, payments/NFC, Connected Devices Platform (CDP), Device Setup Manager, etc. |
 | **2 — System Services (NonPersistent)** | NonPersistent profiles | Disables Superfetch/SysMain, Optimize Drives, Windows Update, Windows Update Medic, VSS, WER, diagnostic services (DPS/DiagSvc/WdiSystemHost), DiagTrack telemetry, and Edge auto-update services. |
 | **3 — Scheduled Tasks (All VDI)** | Full profiles | Disables ~20 tasks: CEIP, Application Experience, power efficiency diagnostics, MUI, Retail Demo, disk activity logging, Windows Error Reporting queue processing, disk footprint optimizer, and more. |
@@ -988,7 +988,7 @@ Creates a new named image definition and replicates the image version to multipl
 The solution automatically detects and handles these file types:
 
 | Extension | Execution Method | Notes |
-|-----------|------------------|-------|
+| --- | --- | --- |
 | **.exe** | Direct execution | Use silent install arguments |
 | **.msi** | `msiexec /i` | Automatic MSI install |
 | **.ps1** | PowerShell | Executed with parameters |
@@ -999,7 +999,7 @@ The solution automatically detects and handles these file types:
 
 When using Zero Trust mode, organize artifacts in blob storage:
 
-```
+```text
 artifacts/                          (container)
 ├── FSLogix/
 │   └── FSLogix.zip
@@ -1020,7 +1020,8 @@ artifacts/                          (container)
 ZIP files must contain PowerShell script in root:
 
 **Correct:**
-```
+
+```text
 CompanyApp.zip
 ├── Install-CompanyApp.ps1    ← Script in root
 ├── CompanyApp.exe
@@ -1028,7 +1029,8 @@ CompanyApp.zip
 ```
 
 **Incorrect:**
-```
+
+```text
 CompanyApp.zip
 └── CompanyApp/
     ├── Install-CompanyApp.ps1    ← Script in subfolder (won't be found)
@@ -1091,7 +1093,8 @@ When `collectCustomizationLogs` is enabled:
 - Retention: 7 days (lifecycle management)
 
 **Log Files:**
-```
+
+```text
 image-customization-logs/
 ├── orchestration-vm-<timestamp>.log
 ├── image-vm-<timestamp>.log
@@ -1156,6 +1159,7 @@ image-customization-logs/
 4. Check nested deployments for details
 
 **PowerShell:**
+
 ```powershell
 # Get deployment status
 Get-AzSubscriptionDeployment -Name "imageBuild-20241211120000"
@@ -1168,6 +1172,7 @@ Get-AzSubscriptionDeployment -Name "imageBuild-20241211120000" | Select-Object -
 ```
 
 **Azure CLI:**
+
 ```bash
 # Get deployment status
 az deployment sub show --name imageBuild-20241211120000
@@ -1183,7 +1188,7 @@ az deployment sub show --name imageBuild-20241211120000 --query properties.provi
 Typical build times (D4ads_v6 VM):
 
 | Configuration | Approximate Time |
-|---------------|------------------|
+| --- | --- |
 | Base image only | 30-45 minutes |
 | + FSLogix | 40-50 minutes |
 | + Office 365 (5 apps) | 60-90 minutes |
@@ -1335,7 +1340,7 @@ jobs:
 
 Recommended approach for production:
 
-```
+```text
 Major.Minor.Patch
   │     │     │
   │     │     └─ Hotfixes, security patches
@@ -1353,7 +1358,7 @@ Major.Minor.Patch
 
 Default timestamp-based versioning:
 
-```
+```text
 yyyy.MMdd.HHmm
 ```
 

@@ -1,4 +1,4 @@
-# GitHub Copilot Instructions — FederalAVD
+﻿# GitHub Copilot Instructions — FederalAVD
 
 This file gives GitHub Copilot context about the FederalAVD repo so it can give you accurate,
 repo-aware answers in VS Code, github.com chat, and any other Copilot surface.
@@ -18,7 +18,7 @@ custom image builds → host pool deployment → ongoing image refresh.
 
 The components must be deployed in this order on first deployment:
 
-```
+```text
 Step 0 (optional): Networking      — VNet, subnets, NSGs, route tables, private DNS zones
 Step 1 (optional): Key Vaults      — Required only when using Customer-Managed Keys (CMK) with custom images
 Step 2 (optional): Image Management — Storage account, compute gallery, managed identity for artifacts
@@ -27,6 +27,7 @@ Step 4 (required): Host Pool        — AVD host pool, session hosts, FSLogix st
 ```
 
 Steps 0-3 are optional depending on your scenario:
+
 - **PoC / marketplace images**: Skip to Step 4 only. A VNet and subnet are the only hard prerequisites.
 - **Custom software, no CMK**: Steps 2 → (3 optional) → 4
 - **Custom software + CMK**: Steps 1 → 2 → (3 optional) → 4
@@ -41,7 +42,7 @@ Steps 0-3 are optional depending on your scenario:
 All customer-specific content lives in `customer/`. This folder is excluded from git tracking so
 repo updates never overwrite your files.
 
-```
+```text
 customer/
   parameters/         ← your parameter files (one per deployment, per environment)
     hostpools/
@@ -61,6 +62,7 @@ Artifacts are folders of scripts and binaries placed in `customer/artifacts/`. D
 build, artifacts are downloaded from Azure Blob Storage to the image VM and executed.
 
 Each artifact folder typically contains:
+
 - An `Install-*.ps1` (or similar) script that performs the installation
 - The installer binary or configuration file(s)
 
@@ -74,7 +76,7 @@ ready-to-use example packages.
 storage. Supported download methods:
 
 | Field | Description |
-|---|---|
+| --- | --- |
 | `DownloadUrl` | Direct URL to a file |
 | `GitHubRelease` | Latest release from a GitHub repo |
 | `WingetId` | Microsoft Store / winget package ID |
@@ -85,6 +87,7 @@ When `WingetId` is used with `"WingetPreserveLayout": true`, the folder structur
 ### Image Lifecycle (Ongoing Refresh)
 
 After initial deployment, the repeating update cycle is:
+
 1. Run `Update-ImageArtifacts.ps1` to pull new software versions → upload to blob storage
 2. Trigger a new Image Build (Step 3) to bake the updated artifacts into a new image version
 3. The **Session Host Replacer** add-on (`deployments/add-ons/sessionHostReplacer/`) detects the
@@ -97,7 +100,7 @@ For manual drain-and-replace, use `deployments/TagAndDrainSessionHosts.ps1`.
 
 ## Folder Map
 
-```
+```text
 deployments/
   hostpools/          ← host pool Bicep template + parameters
   imageBuild/         ← image build Bicep template + parameters
@@ -124,7 +127,7 @@ tools/                ← utility scripts
 ## Common Tasks — Where to Look
 
 | Task | Where to start |
-|------|---------------|
+| --- | --- |
 | First deployment | `docs/quick-start.md` |
 | Understanding the architecture | `docs/design.md` |
 | Deploying a host pool | `docs/hostpool-deployment.md` |
@@ -220,6 +223,7 @@ the official Microsoft AVD Insights workbooks:
 **GitHub source:** https://github.com/microsoft/Application-Insights-Workbooks/tree/master/Workbooks/Windows%20Virtual%20Desktop
 
 Key workbooks and their raw URLs:
+
 - **Connection Diagnostics:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/Connection%20Diagnostics.workbook
 - **Host Diagnostics:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/Host%20Diagnostics.workbook
 - **Connection Performance:** https://raw.githubusercontent.com/microsoft/Application-Insights-Workbooks/master/Workbooks/Windows%20Virtual%20Desktop/Connection%20Performance.workbook

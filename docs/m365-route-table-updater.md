@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # M365 Route Table Updater Add-On For complete deployment instructions, parameter reference, redeployment guidance, and troubleshooting, see the **[M365 Route Table Updater Add-On Documentation](../deployments/add-ons/updateRouteTableWithM365Routes/README.md)**.
 
@@ -68,7 +68,7 @@ New-AzResourceGroupDeployment `
 ## Zero Trust Alignment
 
 | Control | Implementation |
-|---------|----------------|
+| --- | --- |
 | No public inbound access | `publicNetworkAccess: false` on the Automation Account |
 | No stored credentials | System-assigned managed identity; `disableLocalAuth: true` |
 | Least-privilege RBAC | Network Contributor scoped to the route table's resource group only |

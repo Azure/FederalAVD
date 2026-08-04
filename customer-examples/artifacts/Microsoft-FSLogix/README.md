@@ -1,4 +1,4 @@
-# Install-FSLogix.ps1
+﻿# Install-FSLogix.ps1
 
 ## Overview
 
@@ -61,7 +61,7 @@ None - This script runs with default settings.
 
 ### Installation Location
 
-```
+```text
 C:\Program Files\FSLogix\Apps\
 ```
 
@@ -73,7 +73,7 @@ C:\Program Files\FSLogix\Apps\
 
 ### Installation Parameters
 
-```
+```text
 /install  - Perform installation
 /quiet    - Silent installation (no UI)
 /norestart - Do not restart after installation
@@ -111,7 +111,7 @@ FSLogix is a profile containerization solution that:
 ## Exit Codes
 
 | Exit Code | Meaning |
-|-----------|---------|
+| --- | --- |
 | **0** | Success |
 | **3010** | Success - Reboot required |
 | **Other** | Error occurred (see logs for details) |
@@ -150,20 +150,20 @@ New-ItemProperty -Path "HKLM:\SOFTWARE\Policies\FSLogix\ODFC" -Name "VHDLocation
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Install-FSLogix-<timestamp>.log
 ```
 
 FSLogix also creates its own logs:
 
-```
+```text
 C:\ProgramData\FSLogix\Logs\
 ```
 
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
 | `Write-Log` | Writes formatted log entries |
@@ -186,7 +186,7 @@ To use this script in air-gapped environments:
 
 2. **Place in Script Directory:**
 
-   ```
+```text
    Install-FSLogix.ps1
    FSLogix_Apps_2.9.8884.27471.zip
    ```
@@ -240,7 +240,7 @@ Test-Path "C:\Program Files\FSLogix\Apps"
 After installation, the following services are created:
 
 | Service | Description | Startup Type |
-|---------|-------------|--------------|
+| --- | --- | --- |
 | **FSLogix Apps Services** | Main FSLogix service | Automatic |
 
 ## Storage Requirements

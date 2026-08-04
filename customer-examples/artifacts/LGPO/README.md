@@ -1,4 +1,4 @@
-# install-lgpo.ps1
+﻿# install-lgpo.ps1
 
 ## Overview
 
@@ -59,7 +59,7 @@ None - This script runs with default settings.
 
 ### Installation Location
 
-```
+```text
 C:\Windows\System32\lgpo.exe
 ```
 
@@ -128,7 +128,7 @@ Many scripts in this artifacts folder depend on LGPO:
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\install-lgpo-<timestamp>.log
 ```
 
@@ -143,7 +143,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
 | `Write-Log` | Writes formatted log entries |
@@ -197,7 +197,7 @@ Get-Command lgpo.exe -ErrorAction SilentlyContinue
 
 Registry policy text files use this format:
 
-```
+```text
 Computer
 SOFTWARE\Policies\Microsoft\Edge
 SmartScreenEnabled
@@ -227,7 +227,7 @@ To use this script in air-gapped environments:
 
 2. **Place in Script Directory:**
 
-   ```
+```text
    install-lgpo.ps1
    LGPO.zip
    ```

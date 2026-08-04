@@ -1,4 +1,4 @@
-# AVD Alerts Add-On
+﻿# AVD Alerts Add-On
 
 ## Overview
 
@@ -54,7 +54,7 @@ This add-on is Zero Trust-aligned by default:
 
 ### Module Structure
 
-```
+```text
 main.bicep                    ← subscription-scoped entry point
 modules/
   automationAccount.bicep     ← Automation Account, runbooks, schedules, RBAC
@@ -287,6 +287,7 @@ infrastructure cannot reach `raw.githubusercontent.com`:
 Automation Account → Runbooks → `AvdStorageLogData` → Edit → Publish
 
 **Via Cloud Shell (required when `publicNetworkAccess: false` blocks local tools):**
+
 ```powershell
 $aa = '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Automation/automationAccounts/{name}'
 Invoke-AzRestMethod -Method POST -Path ($aa + '/runbooks/AvdStorageLogData/publish?api-version=2023-11-01')
@@ -309,6 +310,7 @@ association by account name. That cache persists through ARM deletion and is res
 an account with the same name exists again, causing the new create call to conflict.
 
 To clear the cached association before redeploying with `createJobSchedules: true`:
+
 ```powershell
 $base = '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Automation/automationAccounts/{name}'
 $jsId = ((Invoke-AzRestMethod -Method GET -Path ($base + '/jobSchedules?api-version=2023-11-01')).Content | ConvertFrom-Json).value[0].properties.jobScheduleId
@@ -350,6 +352,7 @@ deploying via PowerShell/CLI, verify the action group location:
 ```powershell
 (Get-AzActionGroup -ResourceGroupName '{rg}' -Name '{ag}').Location
 ```
+
 Expected: `global`
 
 ### KQL semantic errors on alert rules

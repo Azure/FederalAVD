@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Storage Quota Manager Add-On
 
@@ -51,7 +51,7 @@ New-AzResourceGroupDeployment `
 ## Key Parameters
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `storageResourceGroupId` | _(required)_ | Resource ID of the resource group containing the FSLogix storage accounts |
 | `scheduleFrequencyMinutes` | `15` | How often the runbook checks quotas (minimum 15) |
 | `logAnalyticsWorkspaceResourceId` | _(none)_ | Workspace for Automation Account job logs |
@@ -61,7 +61,7 @@ New-AzResourceGroupDeployment `
 ## Zero Trust Alignment
 
 | Control | Implementation |
-|---------|----------------|
+| --- | --- |
 | No public inbound access | `publicNetworkAccess: false` on the Automation Account |
 | No stored credentials | System-assigned managed identity; `disableLocalAuth: true` |
 | Least-privilege RBAC | Storage Account Contributor scoped to storage resource group only |

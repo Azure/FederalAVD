@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # AVD Alerts Add-On
 
@@ -20,7 +20,7 @@ The AVD Alerts Add-On deploys 42 Azure Monitor alert rules for Azure Virtual Des
 ## Alert Categories
 
 | Category | Alerts | Condition |
-|----------|--------|-----------|
+| --- | --- | --- |
 | Host Pool Capacity | 3 | Load at 50% / 85% / 95% — Pooled only |
 | Host Pool Availability | 3 | No resources, health check failure, personal host unhealthy |
 | User Connections | 4 | Auth/service connection failure, session host connection failure, disconnected sessions (configurable threshold, default 8h), slow logon (configurable threshold, default 2 min) |
@@ -69,7 +69,7 @@ New-AzSubscriptionDeployment `
 ## Zero Trust Alignment
 
 | Control | Implementation |
-|---------|----------------|
+| --- | --- |
 | No public inbound access | Automation Account: `publicNetworkAccess: false` |
 | No stored credentials | System-assigned managed identity; `disableLocalAuth: true` |
 | Least-privilege RBAC | Desktop Virtualization Reader (subscription), Log Analytics Contributor (workspace RG), Storage Account Contributor (storage RG) |
@@ -85,7 +85,7 @@ Standard redeployments are fully idempotent — leave `createJobSchedules = true
 ## Compliance Coverage
 
 | Control Family | Coverage |
-|----------------|----------|
+| --- | --- |
 | AU — Audit and Accountability | Service Health and Automation Account job logs sent to Log Analytics |
 | CA — Assessment and Authorization | Health check alerts surface configuration drift in real time |
 | CM — Configuration Management | Health check failure alerts detect unauthorized service changes (FSLogix service disabled) |

@@ -1,4 +1,4 @@
-# Common PowerShell Scripts
+﻿# Common PowerShell Scripts
 
 This directory contains reusable PowerShell scripts used by both the image management and host pool deployment solutions. These scripts are loaded dynamically into Bicep templates using `loadTextContent()` and executed via Azure Run Command or Custom Script Extension.
 
@@ -52,7 +52,7 @@ Unified session host initialization script that combines configuration and AVD a
 **Parameters:**
 
 | Parameter | Required | Description |
-|-----------|----------|-------------|
+| --- | --- | --- |
 | `RegistrationToken` | Yes | Host pool registration token for joining the session host |
 | `AgentBootLoaderUrl` | Yes | Direct URL to download the RDAgentBootLoader MSI |
 | `TimeZone` | Yes | Windows time zone ID to configure (e.g. `Eastern Standard Time`) |
@@ -125,6 +125,7 @@ Comprehensive session host configuration including FSLogix, GPU drivers, time zo
 #### [Set-FSLogixSessionHostConfiguration.ps1](Set-FSLogixSessionHostConfiguration.ps1)
 
 Dedicated FSLogix configuration for session hosts.
+
 - **Used by:** Host Pool Deployment
 - **Purpose:** Configure FSLogix registry settings for profile and ODFC containers
 
@@ -245,7 +246,7 @@ scheduled tasks, autologgers, and optional Windows features.
 ##### Optimization Profiles (`-OptimizationProfile`)
 
 | Value | Behavior |
-|---|---|
+| --- | --- |
 | `None` | No optimization. Only `-AirGapped` takes effect when `None`. |
 | `NonPersistent-UpdatesOnly` | Locks down all software update channels only (Sections 2, 4, 6): OS, M365, Teams, OneDrive, Edge, WebView2, Store. |
 | `NonPersistent-Full` | Full optimization for pooled AVD host pools replaced on a regular cadence. |
@@ -256,7 +257,7 @@ scheduled tasks, autologgers, and optional Windows features.
 When `true`, applies additional settings for environments with no outbound internet access (Section 7):
 
 | Setting | ADMX source | Rationale |
-|---|---|---|
+| --- | --- | --- |
 | **SmartScreen** disabled (Explorer + Edge) | `SmartScreen.admx` | Cloud lookups time out, causing 10–30 s delays on every exe launch and URL navigation |
 | **Online font providers** disabled | `ICM.admx` | Prevents outbound calls to Microsoft font CDN |
 | **Teredo IPv6** disabled | `TCPIP.admx` | No internet-facing IPv6 tunnel needed in VDI |
@@ -285,7 +286,7 @@ design (it is a Security Settings value) and is written via direct registry.
 ##### Deliberate Deviations from the Microsoft VDI Optimization Article
 
 | Item | Article Recommendation | What This Script Does | Reason |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Storage Sense** | Disable | Enable and configure | FSLogix + OneDrive Files On-Demand caches files in the profile container. Without dehydration the container grows monotonically. Storage Sense is configured to dehydrate cloud content not opened in 30 days and clean temp files. |
 | **WSearch** | Evaluate / disable | Leave at default (Manual) | Disabling breaks Outlook and File Explorer search for all users for the entire VM lifetime. The OS search index persists across the VM's full lifecycle and the FSLogix Outlook search index lives in the profile container. |
 | **InstallService** | Disable on NonPersistent | Leave at default (Manual) | Disabling causes WinAppSDK-based apps (Sticky Notes, Snipping Tool) to show a "needs an update" error at first launch, including on air-gapped networks. |

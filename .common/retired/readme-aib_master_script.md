@@ -1,4 +1,4 @@
-# aib_master_script.ps1
+﻿# aib_master_script.ps1
 
 ## Overview
 
@@ -15,11 +15,13 @@ This PowerShell script is the master orchestration script for Azure VM Image Bui
 ## Parameters
 
 ### `APIVersion`
+
 - **Type:** String
 - **Default:** `'2018-02-01'`
 - **Description:** API version for Azure VM Instance Metadata Service (IMDS)
 
 ### `BlobStorageSuffix`
+
 - **Type:** String
 - **Default:** Empty (must be provided)
 - **Values:** 
@@ -28,12 +30,14 @@ This PowerShell script is the master orchestration script for Azure VM Image Bui
 - **Description:** Azure Storage blob endpoint suffix for the environment
 
 ### `Customizers`
+
 - **Type:** String (JSON array)
 - **Default:** `'[]'`
 - **Format:** JSON array of customizer objects
 - **Description:** List of customizers to download and execute
 
 ### `UserAssignedIdentityClientId`
+
 - **Type:** String
 - **Default:** Empty (optional)
 - **Description:** Client ID of user-assigned managed identity for authenticated storage access
@@ -53,7 +57,7 @@ Each customizer in the JSON array has the following structure:
 ### Properties
 
 | Property | Required | Description |
-|----------|----------|-------------|
+| --- | --- | --- |
 | **name** | Yes | Friendly name for logging and temp folder creation |
 | **Uri** | Yes | Full URL to the artifact file |
 | **Arguments** | No | Command-line arguments for EXE/MSI or script parameters |
@@ -61,12 +65,14 @@ Each customizer in the JSON array has the following structure:
 ## Usage Examples
 
 ### Basic Usage (Single Customizer)
+
 ```json
 $Customizers = '[{"name":"FSLogix","Uri":"https://storage.blob.core.windows.net/artifacts/FSLogix.zip"}]'
 .\aib_master_script.ps1 -BlobStorageSuffix "core.windows.net" -Customizers $Customizers
 ```
 
 ### Multiple Customizers
+
 ```json
 $Customizers = @'
 [
@@ -79,6 +85,7 @@ $Customizers = @'
 ```
 
 ### With Managed Identity (Private Storage)
+
 ```json
 $Customizers = '[{"name":"App","Uri":"https://private.blob.core.windows.net/artifacts/app.zip"}]'
 .\aib_master_script.ps1 `
@@ -88,6 +95,7 @@ $Customizers = '[{"name":"App","Uri":"https://private.blob.core.windows.net/arti
 ```
 
 ### With Arguments
+
 ```json
 $Customizers = '[{"name":"Installer","Uri":"https://storage.blob.core.windows.net/artifacts/app.exe","Arguments":"/S /D=C:\\App"}]'
 .\aib_master_script.ps1 -BlobStorageSuffix "core.windows.net" -Customizers $Customizers
@@ -135,26 +143,31 @@ $Customizers = '[{"name":"Installer","Uri":"https://storage.blob.core.windows.ne
 ## Supported File Types
 
 ### Executable (.exe)
+
 ```powershell
 Start-Process -FilePath $file -ArgumentList $Arguments -Wait
 ```
 
 ### MSI Installer (.msi)
+
 ```powershell
 Start-Process msiexec.exe -ArgumentList "/i $file $Arguments" -Wait
 ```
 
 ### PowerShell Script (.ps1)
+
 ```powershell
 & $file $Arguments
 ```
 
 ### Batch File (.bat)
+
 ```powershell
 Start-Process cmd.exe -ArgumentList "$file $Arguments" -Wait
 ```
 
 ### ZIP Archive (.zip)
+
 ```powershell
 # Extract ZIP
 Expand-Archive -Path $file -DestinationPath $extractPath
@@ -189,11 +202,13 @@ In your AIB template JSON:
 ## Authentication Methods
 
 ### Public Storage (No Auth)
+
 - **Scenario:** Artifacts in public container
 - **Configuration:** Omit UserAssignedIdentityClientId parameter
 - **Access:** Anonymous HTTP download
 
 ### Private Storage (Managed Identity)
+
 - **Scenario:** Artifacts in private container
 - **Configuration:** Provide UserAssignedIdentityClientId
 - **Access:** OAuth token from IMDS, added as Bearer token
@@ -202,11 +217,13 @@ In your AIB template JSON:
 ## Logging
 
 Logs are created at:
-```
+
+```text
 C:\Windows\Logs\aib_master_script.log
 ```
 
 Log entries include:
+
 - Script start/end timestamps
 - Current working directory
 - Each customizer being processed
@@ -266,6 +283,7 @@ Log entries include:
 ### Verification
 
 Check execution logs:
+
 ```powershell
 # View transcript log
 Get-Content "C:\Windows\Logs\aib_master_script.log"

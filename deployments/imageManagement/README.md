@@ -1,4 +1,4 @@
-# AVD Image Management Infrastructure Template
+﻿# AVD Image Management Infrastructure Template
 
 > **📖 User Guides:**
 >
@@ -26,7 +26,7 @@ Provide foundational resources for AVD image management:
 
 ### Deployed Resources
 
-```
+```text
 Subscription
 ├── Image Management Resource Group (Primary Region)
 │   ├── Azure Compute Gallery (always deployed)
@@ -64,7 +64,7 @@ The managed identity is automatically assigned:
 The Azure identity running this deployment needs:
 
 | Role | Scope | Why |
-|---|---|---|
+| --- | --- | --- |
 | Owner **or** Contributor + User Access Administrator | Subscription | Creates resource groups; assigns Contributor to the managed identity on the image build RG, Storage Blob Data Reader on the artifacts storage account, and Storage Blob Data Contributor on the build logs storage account |
 
 ### Required Information
@@ -507,7 +507,7 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
 ### Storage Costs
 
 | SKU | Use Case | Cost |
-|-----|----------|------|
+| --- | --- | --- |
 | **Standard_LRS** | Development, non-critical | Lowest |
 | **Standard_ZRS** | Production, single region HA | Low |
 | **Standard_GRS** | Multi-region replication | Medium |
@@ -572,6 +572,7 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
 ## Support
 
 For issues, questions, or contributions:
+
 - **GitHub Issues:** [Azure/FederalAVD/issues](https://github.com/Azure/FederalAVD/issues)
 - **Documentation:** [docs/](../../docs/)
 

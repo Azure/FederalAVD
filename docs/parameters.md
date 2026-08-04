@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Parameters Reference
 
@@ -9,7 +9,7 @@ Parameter documentation lives alongside each deployment template. Find the secti
 ## Core Deployments
 
 | Solution | Parameters | Examples |
-|----------|-----------|---------|
+| --- | --- | --- |
 | 🌐 **Networking** | [networking/README.md](../deployments/networking/README.md) | [parameter files](../deployments/networking/README.md) |
 | 🔒 **Key Vaults** | [keyVaults/uiFormDefinition.json](../deployments/keyVaults/uiFormDefinition.json) *(see Quick Start Step 1)* | — |
 | 📦 **Image Management** | [imageManagement/README.md — Parameters](../deployments/imageManagement/README.md#parameters) | [imageManagement/README.md — Examples](../deployments/imageManagement/README.md#examples) |
@@ -23,6 +23,7 @@ Parameter documentation lives alongside each deployment template. Find the secti
 All resource names across solutions are controlled by the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, the same parameter object should be passed to every solution for a consistent enterprise naming strategy.
 
 See the **[Naming Convention guide](naming-convention.md)** for:
+
 - Full `namingConvention` parameter schema and property descriptions
 - How the built-in CAF default works
 - The eight naming segments and how `purpose` drives per-resource uniqueness
@@ -35,7 +36,7 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 ## Add-Ons
 
 | Add-On | Parameters |
-|--------|-----------|
+| --- | --- |
 | 🔄 **Session Host Replacer** | [sessionHostReplacer/README.md](../deployments/add-ons/sessionHostReplacer/README.md) |
 | 🖥️ **Session Hosts** | [sessionHosts/README.md](../deployments/add-ons/sessionHosts/README.md#parameters) |
 | 📊 **Storage Quota Manager** | [storageQuotaManager/README.md](../deployments/add-ons/storageQuotaManager/README.md) |
@@ -49,7 +50,7 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 When chaining deployments, use this mapping to pass outputs from one step to the next. See the **[End-to-End Automation Guide](automation-guide.md)** for the full pipeline diagram and scripted examples.
 
 | Source | Output | Destination | Parameter |
-|--------|--------|-------------|-----------|
+| --- | --- | --- | --- |
 | **keyVaults** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
 | **keyVaults** | `encryptionKeyVaultResourceId` | **imageManagement** | `encryptionKeyVaultResourceId` |
 | **keyVaults** | `encryptionKeyVaultResourceId` | **hostpool** | `existingEncryptionKeyVaultResourceId` |
@@ -74,7 +75,7 @@ The tables below are a quick developer reference for which parameters to set. Al
 **Reference:** [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final)
 
 | Control | Template | Parameter | Default | Compliant Value |
-|---------|----------|-----------|---------|----------------|
+| --- | --- | --- | --- | --- |
 | **SC-28** Protection of Information at Rest — VM disks | `hostpool.bicep` | `keyManagementDisks` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28** Protection of Information at Rest — FSLogix storage | `hostpool.bicep` | `keyManagementStorage` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28** Protection of Information at Rest — Recovery Services Vault | `hostpool.bicep` | `keyManagementRecoveryServicesVault` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
@@ -111,7 +112,7 @@ IL5 data hosted in Azure Government IL4 regions (Arizona, Texas, Virginia) requi
 Set the following parameters in addition to the NIST 800-53 values above:
 
 | Requirement | Template | Parameter | Required Value |
-|-------------|----------|-----------|---------------|
+| --- | --- | --- | --- |
 | Compute isolation (dedicated physical hosts) | `hostpool.bicep` | `deployToDedicatedHosts` | `true` |
 | Dedicated host group | `hostpool.bicep` | `dedicatedHostGroupResourceId` | Resource ID of pre-provisioned dedicated host group |
 | HSM key protection — VM disks | `hostpool.bicep` | `keyManagementDisks` | `CustomerManagedHSM` |

@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical References:**
 > - [Image Management Template Documentation](../deployments/imageManagement/README.md) - Artifacts storage infrastructure
@@ -18,7 +18,7 @@ The artifacts system in this AVD solution provides a flexible, Zero Trust-compli
 ### Key Concepts
 
 | Concept | Description |
-|---------|-------------|
+| --- | --- |
 | **Artifact** | A folder containing a PowerShell script and supporting files (installers, configuration files, etc.) |
 | **Artifact Package** | The zipped version of an artifact folder, uploaded to Azure Blob Storage |
 | **Invoke-Customization.ps1** | The orchestration script (`.common/scripts/Invoke-Customization.ps1`) that downloads and executes a single artifact |
@@ -73,7 +73,7 @@ graph TD
 
 ### Workflow Diagram
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │ 1. Preparation Phase (Update-ImageArtifacts.ps1)               │
 ├────────────────────────────────────────────────────────────────┤
@@ -171,7 +171,7 @@ For a complete reference of all download methods, `downloads.json` fields, pipel
 When `Invoke-Customization.ps1` downloads and executes an artifact during deployment:
 
 | File Extension | Execution Behavior | Arguments Handling |
-|----------------|-------------------|-------------------|
+| --- | --- | --- |
 | **.ps1** | Executed directly with PowerShell | Arguments string parsed into named parameters and splatted |
 | **.exe** | Executed with `Start-Process` | Arguments string passed directly to executable |
 | **.msi** | Executed with `msiexec.exe /i` | Arguments string passed directly to msiexec |
@@ -355,7 +355,7 @@ Your script receives: `$InstallMode = "Minimal"` and `$SkipShortcuts = $true`
 
 Place any required files in the same directory:
 
-```
+```text
 Chrome/
 ├── Install-Chrome.ps1
 └── GoogleChromeEnterpriseBundle64.msi
@@ -535,7 +535,7 @@ The `Invoke-Customization.ps1` script (`.common/scripts/Invoke-Customization.ps1
 ### Parameters
 
 | Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
+| --- | --- | --- | --- |
 | `APIVersion` | string | No | IMDS API version for managed identity tokens (default based on cloud) |
 | `Arguments` | string | No | Arguments string passed to the artifact (default: empty) |
 | `BlobStorageSuffix` | string | Yes | Blob storage endpoint suffix (e.g., `blob.core.usgovcloudapi.net`) |
@@ -548,7 +548,7 @@ The `Invoke-Customization.ps1` script (`.common/scripts/Invoke-Customization.ps1
 
 **Execution Flow:**
 
-```
+```text
 1. START: Invoke-Customization.ps1 receives parameters from Run Command
    ↓
 2. Start transcript logging to C:\Windows\Logs\[Name].log
@@ -599,7 +599,7 @@ The `Arguments` string is parsed into named parameters using the `ConvertTo-Para
 
 **Input Format:**
 
-```
+```text
 -ParameterName Value -SwitchParameter -AnotherParam "Value with spaces"
 ```
 
@@ -655,7 +655,7 @@ Arguments are passed directly to `Start-Process` without parsing. Use appropriat
 ### File Type Handling
 
 | Extension | Handler | Arguments Usage |
-|-----------|---------|-----------------|
+| --- | --- | --- |
 | **.exe** | `Start-Process -FilePath $file -ArgumentList $args` | Direct pass-through |
 | **.msi** | `msiexec.exe /i $file $args` | Direct pass-through |
 | **.bat** | `cmd.exe $file $args` | Direct pass-through |
@@ -679,7 +679,7 @@ All activity is logged via PowerShell transcript:
 
 **Example Log:**
 
-```
+```text
 [12/22/2024 10:30:15] Starting 'MyApp' script with the following parameters.
 [12/22/2024 10:30:15] APIVersion: 2018-02-01
 [12/22/2024 10:30:15] BlobStorageSuffix: blob.core.usgovcloudapi.net

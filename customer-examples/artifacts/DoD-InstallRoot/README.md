@@ -1,4 +1,4 @@
-# Install-InstallRoot.ps1
+﻿# Install-InstallRoot.ps1
 
 ## Overview
 
@@ -75,7 +75,7 @@ InstallRoot installs the following certificate types:
 
 Certificates are installed to:
 
-```
+```text
 Trusted Root Certification Authorities
 Intermediate Certification Authorities
 ```
@@ -104,7 +104,7 @@ Intermediate Certification Authorities
 ## Exit Codes
 
 | Exit Code | Meaning |
-|-----------|---------|
+| --- | --- |
 | **0** | Success |
 | **3010** | Success - Reboot required |
 | **1638** | Already installed (another version) |
@@ -116,7 +116,7 @@ After installation, the following certificate chains are available:
 
 ### DoD PKI Hierarchy
 
-```
+```text
 DoD Root CA 3
 ├── DoD Interoperability Root CA 2
 ├── DoD ID CA-59
@@ -143,7 +143,7 @@ Invoke-WebRequest -Uri "https://www.dmdc.osd.mil" -UseBasicParsing
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Install-InstallRoot-<timestamp>.log
 ```
 
@@ -158,7 +158,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InstalledApplication` | Queries registry for installed applications |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
@@ -242,7 +242,7 @@ To use this script in air-gapped environments:
 
 2. **Place in Script Directory:**
 
-   ```
+```text
    Install-InstallRoot.ps1
    InstallRoot_5.6x64.msi
    ```

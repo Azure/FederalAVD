@@ -1,4 +1,4 @@
-# Update FSLogix Storage Account Key On Hosts
+﻿# Update FSLogix Storage Account Key On Hosts
 
 This solution will update the FSLogix Storage Account Key on Session Hosts to support Entra ID only identities with FSLogix. This solution is intended to provide a measure of security by allowing you to easily rotate the storage account keys on a regular basis.
 

@@ -1,4 +1,4 @@
-# Install_VSCode.ps1
+﻿# Install_VSCode.ps1
 
 ## Overview
 
@@ -53,7 +53,7 @@ This PowerShell script automates the installation of Visual Studio Code (VS Code
 
 ### Installation Parameters
 
-```
+```text
 /VERYSILENT          - Completely silent installation (no UI)
 /NORESTART           - Do not restart after installation
 /MERGETASKS=!runcode - Do NOT launch VS Code after installation
@@ -69,7 +69,7 @@ This PowerShell script automates the installation of Visual Studio Code (VS Code
 
 ### Installation Location
 
-```
+```text
 C:\Users\<username>\AppData\Local\Programs\Microsoft VS Code\
 ```
 
@@ -83,7 +83,7 @@ C:\Users\<username>\AppData\Local\Programs\Microsoft VS Code\
 ## Exit Codes
 
 | Exit Code | Meaning |
-|-----------|---------|
+| --- | --- |
 | **0** | Success |
 | **1** | Installation failure |
 | **Other** | Error occurred (see logs for details) |
@@ -179,7 +179,7 @@ To use this script in air-gapped environments:
 
 2. **Place in Script Directory:**
 
-   ```
+```text
    Install_VSCode.ps1
    VSCodeSetup-x64-<version>.exe
    ```
@@ -194,7 +194,7 @@ To use this script in air-gapped environments:
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Install_VSCode-<timestamp>.log
 ```
 
@@ -208,7 +208,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `New-Log` | Initializes logging infrastructure |
 | `Set-RegistryValue` | Creates or updates registry values |
 | `Write-Log` | Writes formatted log entries |

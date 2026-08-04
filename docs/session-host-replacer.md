@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Session Host Replacer Add-On The Session Host Replacer is now available as a standalone add-on. For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/sessionHostReplacer/README.md)**.
 
@@ -23,6 +23,7 @@ The Session Host Replacer is an automated Azure Function that manages the lifecy
 ## Replacement Modes
 
 ### SideBySide Mode (Default)
+
 - **Zero downtime**: New hosts added before old ones removed
 - **Host pool temporarily doubles** during replacement cycles
 - **Shutdown retention option**: Keep old hosts powered off for rollback
@@ -30,6 +31,7 @@ The Session Host Replacer is an automated Azure Function that manages the lifecy
 - **Best for**: Production environments with SLA requirements
 
 ### DeleteFirst Mode
+
 - **Cost optimized**: No host pool doubling, pays only for needed capacity
 - **Temporary capacity reduction**: Deletes idle hosts before deploying replacements
 - **Hostname reuse**: Leverages deleted names for new hosts
@@ -49,6 +51,7 @@ For detailed deployment instructions, prerequisites, and configuration options, 
 
 ### Progressive Scale-Up
 Gradual deployment rollouts that start with small percentages and increase after successful deployments:
+
 - Configurable initial percentage (e.g., 10% of needed hosts)
 - Incremental scale-up after consecutive successes
 - Automatic reset on failures or new image versions
@@ -56,6 +59,7 @@ Gradual deployment rollouts that start with small percentages and increase after
 
 ### Shutdown Retention (SideBySide Mode)
 Rollback capability by retaining old session hosts in shutdown state:
+
 - Configurable retention period (1-7 days)
 - Automatic cleanup after retention expires
 - Enables quick rollback if issues discovered with new image
@@ -63,6 +67,7 @@ Rollback capability by retaining old session hosts in shutdown state:
 
 ### Auto-Detect Target Count (SideBySide Mode)
 Automatically maintains the current host count at replacement cycle start:
+
 - Perfect for environments using dynamic scaling plans
 - Adapts to manual scaling adjustments between image updates
 - Function captures initial count when first outdated host detected
@@ -70,6 +75,7 @@ Automatically maintains the current host count at replacement cycle start:
 
 ### Ringed Rollout Support
 Delay replacement after new image detection for validation:
+
 - Configurable delay (0-30 days)
 - Validate new image in production before fleet-wide rollout
 - Similar to Windows Update ring strategy
@@ -77,6 +83,7 @@ Delay replacement after new image detection for validation:
 
 ### Device Cleanup & Hostname Reuse
 Automatic cleanup of stale device records with intelligent hostname reuse:
+
 - Removes Entra ID and Intune device records
 - **DeleteFirst mode**: Reuses hostnames from deleted hosts (prevents name exhaustion)
 - **DeleteFirst mode**: Preserves dedicated host assignments
@@ -84,6 +91,7 @@ Automatic cleanup of stale device records with intelligent hostname reuse:
 
 ### Comprehensive Monitoring
 Pre-built Azure Monitor Workbook dashboard:
+
 - Real-time replacement cycle progress
 - Progressive scale-up status tracking
 - Deployment success/failure trends
@@ -95,6 +103,7 @@ Pre-built Azure Monitor Workbook dashboard:
 ## Migration from Integrated Feature
 
 If you were previously using the Session Host Replacer as an integrated hostpool feature, it is now deployed as a separate add-on. The add-on architecture provides:
+
 - Independent lifecycle management
 - Easier updates and maintenance
 - Support for multiple hostpools
@@ -113,13 +122,15 @@ The information below documents the previous integration approach and is retaine
 ## Architecture (Legacy)
 
 ### Components Created
+
 1. **Azure Function App** - Hosts the PowerShell-based session host replacement logic
 2. **Storage Account** - Stores function app artifacts and queue/table data
 3. **Application Insights** - Monitors function app performance and execution
 4. **App Service Plan** - Shared hosting plan in the management resource group
 
 ### Module Structure (Legacy)
-```
+
+```text
 deployments/hostpools/
 ├── hostpool.bicep (main deployment - updated)
 ├── modules/
@@ -164,6 +175,7 @@ azureTablePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatel
 ```
 
 ### Deployment Notes
+
 - **Function App**: Leave `existingHostingPlanResourceId` empty to deploy a new app service plan inline, or provide an existing one to share a plan across multiple deployments.
 - **Session Hosts add-on**: Not supported (requires control plane resources)
 
@@ -173,7 +185,7 @@ azureTablePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatel
 The following settings are automatically configured but can be customized:
 
 | Setting | Default Value | Description |
-|---------|--------------|-------------|
+| --- | --- | --- |
 | `TargetVMAgeDays` | `45` | Replace session hosts older than this many days |
 | `DrainGracePeriodHours` | `24` | Hours to wait before forcefully removing drained hosts |
 | `MaxSessionHostsToReplace` | `1` | Maximum concurrent replacements |
@@ -190,6 +202,7 @@ The following settings are automatically configured but can be customized:
 The function runs on a timer trigger: **Every 6 hours** (`0 0 */6 * * *`)
 
 This can be modified in `sessionHostReplacer.bicep`:
+
 ```bicep
 schedule: '0 0 */6 * * *' // Change as needed
 ```
@@ -198,10 +211,12 @@ schedule: '0 0 */6 * * *' // Change as needed
 
 ### Managed Identity Roles
 The function app is automatically assigned:
+
 - **Desktop Virtualization Virtual Machine Contributor** - On session hosts resource group
 - **Reader** - On host pool resource group
 
 Additional permissions may be needed for:
+
 - Entra ID device removal (requires Graph API permissions)
 - Intune device removal (requires Graph API permissions)
 
@@ -221,6 +236,7 @@ Additional permissions may be needed for:
 
 ### Application Insights
 When `enableMonitoring: true`:
+
 - Function execution logs
 - Performance metrics
 - Failure tracking
@@ -231,6 +247,7 @@ All function app logs are sent to the configured Log Analytics workspace.
 
 ### Alerts
 Consider creating alerts for:
+
 - Function execution failures
 - Long-running operations
 - High replacement frequency
@@ -239,6 +256,7 @@ Consider creating alerts for:
 
 ### Private Endpoints
 When `deployPrivateEndpoints: true`, the following private endpoints are created:
+
 - Function App (`sites`)
 - Storage Account (`blob`, `file`, `queue`, `table`)
 
@@ -281,12 +299,14 @@ The function app can be integrated with a virtual network using `functionAppSubn
 ## Cost Considerations
 
 ### Resources Deployed
+
 - App Service Plan: **Premium V3 P1v3** (shared with increase quota function if both enabled)
 - Storage Account: **Standard LRS**
 - Application Insights: **Pay-as-you-go**
 - Private Endpoints: **Per endpoint + data processing**
 
 ### Cost Optimization
+
 - Shared app service plan reduces costs when multiple function apps are deployed
 - Premium plan is required for virtual network integration
 - Consider Consumption plan for low-frequency executions (requires code changes)
@@ -303,6 +323,7 @@ The function app can be integrated with a virtual network using `functionAppSubn
 ## Future Enhancements
 
 Potential improvements:
+
 - Support for Consumption plan deployment option
 - Configurable replacement schedules per host pool
 - Integration with change management systems
@@ -310,6 +331,7 @@ Potential improvements:
 - Advanced placement constraints (availability zones, dedicated hosts)
 
 ## Related Documentation
+
 - [Azure Functions PowerShell Developer Guide](https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell)
 - [AVD Session Host Management](https://learn.microsoft.com/azure/virtual-desktop/set-up-scaling-script)
 - [Azure Function App Networking](https://learn.microsoft.com/azure/azure-functions/functions-networking-options)

@@ -1,4 +1,4 @@
-# Custom RBAC Roles for FederalAVD Operators
+﻿# Custom RBAC Roles for FederalAVD Operators
 
 The [quickStart](quick-start.md#required-deployer-roles-by-deployment) guide lists the minimum built-in roles for each deployment. For organizations that need tighter constraints — for example, preventing operators from creating arbitrary resources outside the AVD-specific scope — this guide provides ready-to-use custom role definitions scoped to exactly the permissions each deployment path requires.
 
@@ -15,7 +15,7 @@ The [quickStart](quick-start.md#required-deployer-roles-by-deployment) guide lis
 ### What the deployment does
 
 | Action | Resource | Scope |
-|---|---|---|
+| --- | --- | --- |
 | Create resource group | Image management RG | Subscription |
 | Create resource group | Image build RG (if `deployImageBuildResourceGroup = true`) | Subscription |
 | Create user-assigned managed identity | Image management RG | RG |
@@ -66,7 +66,7 @@ The [quickStart](quick-start.md#required-deployer-roles-by-deployment) guide lis
 ### What the deployment does
 
 | Action | Resource | Scope |
-|---|---|---|
+| --- | --- | --- |
 | Create resource group | Temporary image build RG | Subscription |
 | Assign **Contributor** to orchestration VM system identity | Image build RG | RG (newly created) |
 | Deploy orchestration VM + image VM | Image build RG | RG |
@@ -127,7 +127,7 @@ The [quickStart](quick-start.md#required-deployer-roles-by-deployment) guide lis
 This is the recommended production path and the **tightest permission model available** for image builds. It is unlocked by two parameter choices:
 
 | Parameter | Value | What it eliminates |
-|---|---|---|
+| --- | --- | --- |
 | `imageBuildResourceGroupId` | Existing RG resource ID | Removes `resourceGroups/write` and `roleAssignments/write` at subscription scope — the orchestration VM no longer needs a system identity with a self-assigned Contributor role |
 | `imageDefinitionResourceId` | Existing image definition resource ID | Removes `Compute/galleries/images/write` on the gallery RG — only new image *versions* are written |
 
@@ -140,7 +140,7 @@ With **both** parameters provided, the operator needs **zero role assignment rig
 #### Tightest path — both `imageBuildResourceGroupId` AND `imageDefinitionResourceId` provided
 
 | Action | Resource | Scope |
-|---|---|---|
+| --- | --- | --- |
 | Submit ARM deployment | Subscription (deployment object only) | Subscription |
 | Deploy orchestration VM + image VM | Image build RG (pre-existing) | RG |
 | Create image version | Compute gallery RG | RG |
@@ -151,7 +151,7 @@ With **both** parameters provided, the operator needs **zero role assignment rig
 Same as above, plus:
 
 | Action | Resource | Scope |
-|---|---|---|
+| --- | --- | --- |
 | Create image definition | Compute gallery RG | RG |
 
 This adds `Microsoft.Compute/galleries/images/write` to the required actions on the gallery RG. All other rights are identical.
@@ -161,7 +161,7 @@ This adds `Microsoft.Compute/galleries/images/write` to the required actions on 
 Assign the **same** custom role at all three scopes. The subscription-scope assignment grants only `deployments/*` and `resourceGroups/read`; the RG-scope assignments activate the actual resource creation permissions. Because custom role assignments are additive, the operator gets the union without receiving broad subscription-level resource creation rights.
 
 | Scope | Purpose |
-|---|---|
+| --- | --- |
 | **Subscription** | Submit the ARM deployment (`deployments/write`) |
 | Image build RG | Create VMs, NICs, disks, run commands |
 | Compute gallery RG | Create image version (and image definition if not pre-existing) |
@@ -220,6 +220,7 @@ The role below covers both variants. When `imageDefinitionResourceId` is provide
 **Minimum scope:** Subscription (creates resource groups, assigns subscription-scoped roles to AVD service principal)
 
 The full hostpool deployment (`SessionHostsAdd` for adding VMs only, or a full redeploy) makes role assignments at three scopes:
+
 - **Subscription** — AVD service principal for Start VM On Connect or Scaling Plan
 - **Control plane RG** — Desktop Virtualization User to Entra groups on the app group; deployment VM UAI cleanup roles
 - **Hosts RG** — VM User Login (Entra-only), deployment VM UAI roles, FSLogix storage roles
@@ -282,7 +283,7 @@ Because the subscription-scoped role assignments use AVD built-in roles (not Con
 To prevent the operator identity from granting itself or others arbitrary roles, apply an [Azure ABAC condition](https://learn.microsoft.com/en-us/azure/role-based-access-control/conditions-role-assignments-portal) on the `Microsoft.Authorization/roleAssignments/write` action restricting `Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId]` to the set of role definition IDs that the hostpool deployment actually uses:
 
 | Role | ID |
-|---|---|
+| --- | --- |
 | Desktop Virtualization Power On Contributor | `489581de-a3bd-480d-9518-53dea7416b33` |
 | Desktop Virtualization Power On Off Contributor | `40c5ff49-9181-41f8-ae61-143b0e78555e` |
 | Desktop Virtualization User | `1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63` |
@@ -306,7 +307,7 @@ This role covers deployments using `deployments/add-ons/sessionHosts/main.bicep`
 ### What the deployment does
 
 | Action | Resource | Scope |
-|---|---|---|
+| --- | --- | --- |
 | Create virtual machines | Hosts RG | RG |
 | Create network interfaces | Hosts RG | RG |
 | Create OS disks | Hosts RG | RG |
@@ -320,7 +321,7 @@ This role covers deployments using `deployments/add-ons/sessionHosts/main.bicep`
 ### Required role assignments
 
 | Role | Scope |
-|---|---|
+| --- | --- |
 | `FederalAVD - Session Hosts Add-On Operator` (below) | Hosts **resource group** |
 | Built-in: `Desktop Virtualization Host Pool Contributor` | Host pool **resource group** |
 | Built-in: `Key Vault Secrets User` | Credentials **Key Vault** |
@@ -412,6 +413,6 @@ resource customRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
 Replace the `"/"` placeholder in the JSON definitions above with your actual scope before deploying:
 
 | Target | Value |
-|---|---|
+| --- | --- |
 | Single subscription | `/subscriptions/{subscriptionId}` |
 | Management group | `/providers/Microsoft.Management/managementGroups/{mgId}` |

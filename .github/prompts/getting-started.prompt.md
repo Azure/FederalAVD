@@ -1,4 +1,4 @@
----
+﻿---
 mode: ask
 description: Guide me through getting started with FederalAVD — deployment path, prerequisites, and first steps.
 ---

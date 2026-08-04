@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # End-to-End Automation Guide
 
@@ -89,7 +89,7 @@ flowchart TD
 ### Key outputs
 
 | Output | Used by |
-|--------|---------|
+| --- | --- |
 | `secretsKeyVaultResourceId` | Host pool — `existingCredentialsKeyVaultResourceId`; Session Host Replacer / Session Hosts add-on — `credentialsKeyVaultResourceId` |
 | `encryptionKeyVaultResourceId` | Image Management — `encryptionKeyVaultResourceId`; Host Pool — `existingEncryptionKeyVaultResourceId` |
 | `encryptionKeyVaultUri` | Available if needed for manual key references |
@@ -106,7 +106,7 @@ flowchart TD
 **Script:** `deployments/Deploy-ImageManagement.ps1`  
 **Template:** `deployments/imageManagement/imageManagement.json`
 
-```
+```text
 Inputs from Step 1 (if CMK):
   encryptionKeyVaultResourceId  →  imageManagement parameter: encryptionKeyVaultResourceId
 
@@ -120,7 +120,7 @@ If your customer parameter files live outside the extracted repo zip, pass `-Cus
 ### Key outputs
 
 | Output | Used by |
-|--------|---------|
+| --- | --- |
 | `computeGalleryResourceId` | Image Build — `computeGalleryResourceId` parameter |
 | `artifactsStorageAccountResourceId` | Update-ImageArtifacts.ps1 — `StorageAccountResourceId` |
 | `artifactsBlobContainerUrl` | Image Build — `artifactsContainerUri` parameter |
@@ -144,7 +144,7 @@ If your customer parameter files live outside the extracted repo zip, pass `-Cus
 **Script:** `deployments/Update-ImageArtifacts.ps1`  
 **When required:** Every time software packages are added or updated. Skip if Step 2 was run with `-UpdateArtifacts`.
 
-```
+```text
 Inputs from Step 2:
   artifactsStorageAccountResourceId  →  -StorageAccountResourceId
   (or pass -StorageAccountName / -ResourceGroupName instead)
@@ -166,7 +166,7 @@ This step has **no Azure deployment outputs** — it only writes blobs to storag
 **Script:** `deployments/Invoke-ImageBuilds.ps1`  
 **Template:** `deployments/imageBuild/imageBuild.json`
 
-```
+```text
 Inputs from Step 2:
   computeGalleryResourceId      →  imageBuild parameter: computeGalleryResourceId
   artifactsBlobContainerUrl     →  imageBuild parameter: artifactsContainerUri
@@ -185,7 +185,7 @@ These values are typically pre-populated in the image build parameter files afte
 ### Key outputs
 
 | Output | Used by |
-|--------|---------|
+| --- | --- |
 | `imageDefinitionId` | Host Pool — `customImageResourceId` parameter |
 
 ### Notes
@@ -204,7 +204,7 @@ These values are typically pre-populated in the image build parameter files afte
 **Script:** None yet — deploy directly via ARM/PowerShell/CLI or the Azure Portal.  
 **Template:** `deployments/hostpools/hostpool.json`
 
-```
+```text
 Inputs from Step 4:
   imageDefinitionId + /versions/latest  →  hostpool parameter: customImageResourceId
 
@@ -225,7 +225,7 @@ Example PowerShell invocation:
 ### Key outputs
 
 | Output | Description |
-|--------|-------------|
+| --- | --- |
 | `hostPoolResourceId` | Host pool resource ID — useful for Session Host Replacer add-on |
 | `workspaceResourceId` | AVD workspace resource ID |
 | `virtualMachineNames` | Array of deployed session host VM names |
@@ -284,7 +284,7 @@ $galleryId = $imgMgmt.Outputs.computeGalleryResourceId.Value
 
 Keep one parameter file per component per environment. Update only the fields that change between runs (typically `customImageResourceId` after a new build):
 
-```
+```text
 customer/
   parameters/
     keyVaults/

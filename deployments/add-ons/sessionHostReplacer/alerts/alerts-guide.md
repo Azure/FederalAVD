@@ -1,4 +1,4 @@
-# SessionHostReplacer - Monitoring and Alerting Guide
+﻿# SessionHostReplacer - Monitoring and Alerting Guide
 
 This document provides recommended alerts and monitoring configurations for the SessionHostReplacer function.
 
@@ -18,6 +18,7 @@ This document provides recommended alerts and monitoring configurations for the 
 **Scenario**: Deployment failed and hosts are deleted but not replaced (DeleteFirst mode)
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(1h)
@@ -48,6 +49,7 @@ traces
 **Scenario**: DeleteFirst mode cannot proceed because Entra/Intune cleanup failed (Graph API permissions)
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(30m)
@@ -78,6 +80,7 @@ traces
 **Scenario**: SideBySide mode - new hosts deployed but not Available, old hosts not yet deleted, but pool under capacity
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(1h)
@@ -117,6 +120,7 @@ traces
 **Scenario**: Hosts deployed but consistently failing to register in AVD
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(2h)
@@ -154,6 +158,7 @@ traces
 **Scenario**: DeleteFirst mode blocked from deleting more hosts because previous deletions not resolved
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(1h)
@@ -189,6 +194,7 @@ traces
 **Scenario**: ConsecutiveSuccesses remains at 0 after multiple runs (deployments failing repeatedly)
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(6h)
@@ -225,6 +231,7 @@ traces
 **Scenario**: Function attempting device cleanup but lacks Graph API permissions
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(1h)
@@ -257,6 +264,7 @@ traces
 **Scenario**: Some hosts failed to delete (VM, Entra, or Intune cleanup incomplete)
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(2h)
@@ -292,6 +300,7 @@ traces
 **Scenario**: Available capacity dropped below configured minimum during replacement cycle
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(30m)
@@ -327,6 +336,7 @@ traces
 **Scenario**: All hosts successfully replaced
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(1h)
@@ -350,6 +360,7 @@ traces
 **Scenario**: Progressive scale-up percentage increased (milestone achieved)
 
 **KQL Query**:
+
 ```kusto
 traces
 | where timestamp > ago(1h)
@@ -553,6 +564,7 @@ Write-Host "`nDeployed $($alerts.Count) alert(s)" -ForegroundColor Green
 ### Recommended Log Analytics Queries for Dashboard
 
 #### Query 1: Replacement Progress Over Time
+
 ```kusto
 traces
 | where timestamp > ago(7d)
@@ -565,6 +577,7 @@ traces
 ```
 
 #### Query 2: Progressive Scale-Up Progression
+
 ```kusto
 traces
 | where timestamp > ago(7d)
@@ -577,6 +590,7 @@ traces
 ```
 
 #### Query 3: Deployment Success Rate
+
 ```kusto
 traces
 | where timestamp > ago(7d)
@@ -598,6 +612,7 @@ traces
 ```
 
 #### Query 4: Capacity Trend During Replacements
+
 ```kusto
 traces
 | where timestamp > ago(7d)
@@ -615,26 +630,31 @@ traces
 ## Alert Tuning Recommendations
 
 ### 1. Adjust Thresholds Based on Pool Size
+
 - Small pools (< 50 hosts): More sensitive thresholds
 - Large pools (> 200 hosts): Higher thresholds to avoid noise
 
 ### 2. Business Hours vs. Off-Hours
+
 - Configure different action groups for peak vs. off-peak
 - Higher urgency during business hours
 - Lower notification frequency overnight
 
 ### 3. Alert Fatigue Prevention
+
 - Start with Critical and High severity only
 - Add Medium/Informational after team is comfortable
 - Use alert suppression rules for known maintenance windows
 
 ### 4. Testing Alerts
+
 ```powershell
 # Trigger test alert by forcing a log entry
 Write-Host "Test alert trigger: Deployment failed with 5 pending host mappings"
 ```
 
 ### 5. Integration with ITSM
+
 - Configure action groups to create incidents in ServiceNow/JIRA
 - Include runbook links in alert descriptions
 - Tag alerts with service names for routing
@@ -644,18 +664,21 @@ Write-Host "Test alert trigger: Deployment failed with 5 pending host mappings"
 ## Troubleshooting Common Alert Issues
 
 ### Alert Not Triggering
+
 1. Verify Application Insights receiving logs
 2. Check KQL query syntax in Log Analytics
 3. Confirm evaluation frequency and time window
 4. Verify action group has valid notification channels
 
 ### Too Many False Positives
+
 1. Increase threshold or time window
 2. Add additional filters to KQL query
 3. Use `summarize` to aggregate before alerting
 4. Implement alert suppression rules
 
 ### Missing Notifications
+
 1. Verify action group notification channels configured
 2. Check email/SMS quota limits
 3. Review action group activity log for delivery failures

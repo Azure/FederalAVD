@@ -1,4 +1,4 @@
-# Configure-WindowsUpdatePolicy.ps1
+﻿# Configure-WindowsUpdatePolicy.ps1
 
 ## Overview
 
@@ -114,7 +114,7 @@ This PowerShell script configures Windows Update policies for Azure Virtual Desk
 
 ## Policy Settings Applied
 
-```
+```text
 Computer Configuration
 └── Administrative Templates
     └── Windows Components
@@ -130,7 +130,7 @@ Computer Configuration
 
 ## Registry Locations
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU
   NoAutoUpdate: 1 (Updates disabled) or 0 (Updates enabled)
   AUOptions: 4 (Auto download and schedule install)
@@ -253,7 +253,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Configuration\Configure-WindowsUpdatePolicy-<timestamp>.log
 ```
 
@@ -266,7 +266,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
 | `Remove-RegistryValue` | Deletes registry values |

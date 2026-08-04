@@ -1,4 +1,4 @@
-# Microsoft-Edge-Enterprise
+﻿# Microsoft-Edge-Enterprise
 
 > **Before you start:** Copy this folder to `customer/artifacts/Microsoft-Edge-Enterprise/` before running `Update-ImageArtifacts.ps1`. Add the `MicrosoftEdgeEnterprise` entry from [`customer-examples/parameters/imageManagement/downloads.json`](../../../customer-examples/parameters/imageManagement/downloads.json) to your `customer/parameters/imageManagement/downloads.json`. See the [example artifacts README](../README.md) for the full workflow.
 
@@ -8,7 +8,7 @@ disables Edge's auto-update mechanism via Group Policy registry keys.
 ## Parameters
 
 | Parameter | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `DisableUpdates` | `bool` | `$true` | Write `UpdateDefault = 0` to the EdgeUpdate policy keys after install. Recommended for VDI/AVD where the golden image owns the browser version. |
 
 ## Folder contents
@@ -95,7 +95,7 @@ and uploads it to your artifacts storage account alongside the script.
 ## Exit codes
 
 | Exit Code | Meaning |
-|---|---|
+| --- | --- |
 | `0` | Success |
 | `3010` | Success — reboot required |
 | Other | Installer error — review `C:\Windows\Logs\Install-MicrosoftEdgeEnterprise-*.log` |

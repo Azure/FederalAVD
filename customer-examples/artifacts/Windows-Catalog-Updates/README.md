@@ -1,4 +1,4 @@
-# Windows-Catalog-Updates
+﻿# Windows-Catalog-Updates
 
 > **Before you start:** Copy this folder to `customer/artifacts/Windows-Catalog-Updates/` before running `Update-ImageArtifacts.ps1`. This artifact has no `downloads.json` entry — the patch files (`.msu`/`.cab`) must be manually staged in the folder (see [How to get the patches](#how-to-get-the-patches) below). See the [example artifacts README](../README.md) for the full workflow.
 
@@ -13,7 +13,7 @@ for air-gapped environments where WSUS is not available.
 
 ## Folder contents
 
-```
+```text
 Windows-Catalog-Updates/
     Install-WindowsCatalogUpdates.ps1   <- installer script (required)
     01-SSU-KB5012170-x64.msu            <- example: Servicing Stack Update
@@ -30,7 +30,7 @@ Files are sorted **alphabetically by filename** before installation. Use a numer
 to control order when prerequisites must be installed first:
 
 | Filename | Installs as |
-|---|---|
+| --- | --- |
 | `01-SSU-KB5012170-x64.msu` | First (Servicing Stack) |
 | `02-CU-KB5040442-x64.msu` | Second (Cumulative Update) |
 | `SomeFeatureUpdate.msu` | Third (no prefix — sorts after numeric-prefixed files) |
@@ -58,7 +58,7 @@ On the release information page:
    `YYYY-MM <channel>`, where the channel letter means:
 
    | Channel | Meaning | Should you use it? |
-   |---|---|---|
+   | --- | --- | --- |
    | `B` | Monthly Security Update — Patch Tuesday (2nd Tuesday) | **Yes — this is the standard monthly patch** |
    | `C` | Optional non-security preview (3rd Tuesday) | No — preview only, not yet fully tested |
    | `D` | Optional non-security preview (4th Tuesday) | No — preview only |
@@ -100,7 +100,7 @@ To check whether your build requires a separate SSU:
 **Typical monthly patch sequence:**
 
 | Order | Type | How to find KB |
-|---|---|---|
+| --- | --- | --- |
 | 1 (if needed) | Servicing Stack Update (SSU) | "Servicing stack updates" section on the release health page — only required if listed separately for your build |
 | 2 | Cumulative Update (CU) | Latest `B`-channel row in the release history table |
 | 3 (optional) | .NET Framework CU | Search catalog for ".NET Framework" + your OS version |
@@ -156,7 +156,7 @@ There is no `downloads.json` entry for this artifact — patches must always be 
 ## Exit codes handled
 
 | Code | Meaning |
-|---|---|
+| --- | --- |
 | `0` | Success |
 | `3010` | Success — reboot required |
 | `2359302` | Already installed — skipped |

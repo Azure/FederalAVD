@@ -1,4 +1,4 @@
-↩ **Back to:** [Quick Start](quick-start.md)
+﻿↩ **Back to:** [Quick Start](quick-start.md)
 
 [**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
@@ -47,7 +47,7 @@ During session host deployment (host pool creation and Session Host Replacer ope
 The `Update-ImageArtifacts.ps1` script automatically selects the correct downloads configuration file from `.common/data/` based on the connected Azure environment:
 
 | Azure Environment | Base File |
-|---|---|
+| --- | --- |
 | AzureCloud / AzureUSGovernment | `.common/data/public.downloads.parameters.json` |
 | Azure Government Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
 | Azure Government Top Secret (IL7) | `.common/data/topsecret.downloads.parameters.json` |
@@ -125,7 +125,7 @@ To use these apps in an air-gapped image build:
 The following artifacts have empty `DownloadUrl` entries in the secret and top secret downloads files — no automated download source is configured. If you wish, you can obtain these files from a reachable source (internet-connected system, Azure Toolbox, vendor portal, etc.) and place them at the paths shown before running `Update-ImageArtifacts.ps1`.
 
 | Software | Destination Filename | Place In | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
 | **Visual Studio Redistributables** | `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
 | **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
@@ -140,7 +140,7 @@ The following artifacts have empty `DownloadUrl` entries in the secret and top s
 The following artifacts have working URLs in the secret and top secret downloads files (using air-gapped cloud endpoints). `Update-ImageArtifacts.ps1` downloads them automatically when the URLs are reachable from the management system:
 
 | Software | Destination Filename | Air-Gapped URL Pattern |
-|---|---|---|
+| --- | --- | --- |
 | **AVD Agent** | `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | `aka.<env-suffix>/RdAgent_latest` |
 | **AVD Agent Bootloader** | `Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi` | `aka.<env-suffix>/RdAgentBootLoader_latest` |
 | **Office 365 Deployment Tool** | `Office365DeploymentTool.exe` | `officexo.azurefd.<env-suffix>/...` |

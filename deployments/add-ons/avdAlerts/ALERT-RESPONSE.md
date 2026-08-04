@@ -1,4 +1,4 @@
-# AVD Alerts - Alert Response Playbook
+﻿# AVD Alerts - Alert Response Playbook
 
 This document describes every alert rule deployed by the AVD Alerts Add-On, including its
 severity, trigger condition, what it means operationally, and the recommended response actions.
@@ -313,10 +313,12 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 
 - **Immediate:** Put the host in drain mode.
 - Re-enable and start the FSLogix Profile service:
+
   ```powershell
   Set-Service -Name frxsvc -StartupType Automatic
   Start-Service -Name frxsvc
   ```
+
 - Investigate how the service was disabled — this should not happen spontaneously. Check for:
   - GPO or ConfigMgr policy applying a conflicting setting.
   - Antivirus disabling the service.

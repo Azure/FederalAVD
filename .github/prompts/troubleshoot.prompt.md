@@ -1,4 +1,4 @@
----
+﻿---
 mode: ask
 description: Help me diagnose and fix a FederalAVD deployment error or unexpected behavior.
 ---
@@ -14,6 +14,7 @@ To help me diagnose the problem, please ask me:
 5. Is this a first-time deployment or a re-deployment / update?
 
 Based on my answers:
+
 - Check `docs/troubleshooting.md` for matching errors and apply any documented fix
 - If the error is not in the troubleshooting doc, reason through the most likely cause based on the deployment step and error details
 - Identify the specific parameter, resource, or permission most likely responsible

@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Add-Ons
 
@@ -9,7 +9,7 @@ Add-ons extend the core FederalAVD deployment with operational automation, monit
 ## Available Add-Ons
 
 | Add-On | Purpose | When to Deploy |
-|--------|---------|----------------|
+| --- | --- | --- |
 | [**AVD Alerts**](avd-alerts.md) | Azure Monitor alert rules for host pools, session hosts, FSLogix, VM performance, storage, and Service Health | Any production AVD environment |
 | [**Session Host Replacer**](session-host-replacer.md) | Automatically drains and replaces session hosts when a new gallery image version is published | Environments using custom images with recurring image builds |
 | [**Storage Quota Manager**](storage-quota-manager.md) | Automatically expands Azure Files Premium share quotas before they fill up | Environments using Azure Files for FSLogix profile containers |
@@ -25,7 +25,7 @@ Add-ons extend the core FederalAVD deployment with operational automation, monit
 All add-ons support three deployment methods:
 
 | Method | Availability | Best For |
-|--------|-------------|----------|
+| --- | --- | --- |
 | **Blue Button (Azure Portal)** | Commercial and Government | First deployment with guided form |
 | **Template Spec** | All clouds including air-gapped | Repeatable deployments; air-gapped clouds |
 | **PowerShell / Azure CLI** | All clouds | Scripted or CI/CD deployments |
@@ -46,15 +46,19 @@ This publishes all add-on templates as Template Specs in the specified resource 
 ## Add-On Selection Guide
 
 ### Always deploy
+
 - **AVD Alerts** — Every production AVD environment benefits from alerting.
 
 ### Deploy when using custom images
+
 - **Session Host Replacer** — Automates the drain-and-replace cycle triggered by new image versions. Without it, you must drain and replace manually using `TagAndDrainSessionHosts.ps1`.
 
 ### Deploy when using Azure Files for FSLogix
+
 - **Storage Quota Manager** — Prevents outages caused by share quota exhaustion. Azure Files Premium shares have a fixed provisioned quota; the runbook expands it automatically.
 
 ### Deploy when force-tunneling internet traffic
+
 - **M365 Route Table Updater** — Microsoft 365 IP ranges change frequently. Without automation, routes go stale and M365 traffic begins traversing the on-premises path, degrading Teams/OneDrive performance.
 
 ---
@@ -64,7 +68,7 @@ This publishes all add-on templates as Template Specs in the specified resource 
 Each Automation Account add-on is designed to the same Zero Trust baseline as the core FederalAVD deployment:
 
 | Control | All Automation Add-Ons |
-|---------|------------------------|
+| --- | --- |
 | No public inbound access | `publicNetworkAccess: false` on all Automation Accounts |
 | No stored credentials | System-assigned managed identity only; `disableLocalAuth: true` |
 | Least-privilege RBAC | Each add-on's managed identity is scoped to the minimum required resource group |
@@ -90,7 +94,7 @@ Although the Automation cloud worker runs on shared compute, this is not a compl
 This design satisfies the following NIST SP 800-53 controls without Private Link or a Hybrid Worker:
 
 | Control | How it is met |
-|---------|---------------|
+| --- | --- |
 | **SC-7 / SC-7(5)** Boundary Protection | Inbound public access blocked; all outbound calls go to identity-gated ARM endpoints |
 | **AC-4** Information Flow Enforcement | Traffic flows only to authorized ARM endpoints over TLS 1.2+; no unrestricted egress |
 | **AC-3** Access Enforcement | Managed identity enforces least-privilege per explicit role assignment; no shared credential |

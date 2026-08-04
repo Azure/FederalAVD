@@ -89,7 +89,7 @@ FSLogix Cloud Cache is an **active/active** replication mechanism built into the
 The host pool template supports Cloud Cache across both Azure Files and Azure NetApp Files. The session hosts are configured automatically when the following parameters are set:
 
 | Parameter | Purpose |
-|-----------|---------|
+| --- | --- |
 | `fslogixContainerType` | Must be `CloudCacheProfileContainer` or `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` or `deployFSLogixStorage` | Creates the **primary-region** storage during deployment |
 | `fslogixExistingRemoteStorageAccountResourceIds` | **Pre-provisioned** secondary-region Azure Files accounts |
@@ -136,7 +136,7 @@ The template configures FSLogix `CCDLocations` registry keys on every session ho
 
 Image gallery replication requires **two imageManagement deployments** — one per region. Each creates an independent Azure Compute Gallery. The imageBuild template then replicates each image version to both galleries automatically.
 
-```
+```text
 imageManagement → Primary Region Gallery (always created)
 imageManagement → Secondary Region Gallery (separate deployment, prerequisite for DR)
 
@@ -159,6 +159,7 @@ Run the imageManagement template twice — once per region. Storage accounts and
 ```
 
 Secondary region parameter file:
+
 ```json
 {
   "deployArtifactsStorageAccount": { "value": false },
@@ -213,7 +214,7 @@ If `keyManagementGalleryImageVersions` is not `PlatformManaged`, the `diskEncryp
 
 The `identifier` + `index` combination drives all resource group and AVD resource naming. Using the same identifier and index in both regions creates parallel, independently named resource groups that align logically but do not conflict:
 
-```
+```text
 Primary:   identifier=finance, index=1, location=usgovvirginia
   → rg-finance-01-hosts-va
   → rg-finance-01-storage-va
@@ -350,6 +351,7 @@ param existingVmBackupVaultResourceId string = '' // omit to create a new vault
 ```
 
 For personal host pools:
+
 - `GeoRedundant` replicates backup recovery points to a paired Azure region and automatically enables Cross-Region Restore (CRR), allowing VM recovery in that secondary region even if the primary region is completely unavailable. CRR is enabled automatically when GRS is selected — no separate parameter is needed. GRS storage costs roughly 2× LRS regardless of whether CRR is on or off; without CRR the geo-redundant copy is passive data durability with no recovery capability, so enabling CRR with GRS is always the right choice. The only additional cost for CRR is the restore operation itself, which occurs only during an actual DR event. In environments aligned to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-6 (Alternate Storage Site) and CP-7 (Alternate Processing Site), GRS is the recommended configuration — backup data physically resides at an alternate facility and can be restored there within an acceptable RTO.
 - `ZoneRedundant` protects backup data against a zone-level failure within the region. Satisfies NIST CP-9 zone-resilience expectations when cross-region restore is not required.
 - `LocallyRedundant` is the default and is appropriate when cross-region recovery of backup data is not a requirement and the host pool is already zone-redundant.
@@ -451,7 +453,7 @@ graph TB
 ## RTO/RPO Reference
 
 | Pattern | RTO | RPO | Action on Failure | Prerequisites |
-|---------|-----|-----|-------------------|---------------|
+| --- | --- | --- | --- | --- |
 | **Availability Zones** | 0 | 0 | None | Default — enabled by default |
 | **FSLogix Cloud Cache** | ~0 | Near-zero | None | Remote storage pre-provisioned; network path to secondary storage |
 | **Image Gallery replication** | 0 | 0 | None (pre-replicated) | Secondary imageManagement deployed; `remoteComputeGalleryResourceId` set in imageBuild |
@@ -497,7 +499,7 @@ This solution does not deploy Azure Site Recovery replication for personal host 
 For most AVD personal desktop deployments, Azure Backup with GRS + CRR provides adequate DR capability when the Contingency Plan (CP-2) documents an RPO of hours rather than minutes. The two approaches differ:
 
 | | **Azure Backup + GRS + CRR** | **Azure Site Recovery** |
-|---|---|---|
+| --- | --- | --- |
 | RPO | Hours (last backup point) | Minutes (continuous replication) |
 | RTO | Hours (restore + reconfigure) | Minutes to hours (failover) |
 | VM state on recovery | Point-in-time snapshot | Near-current replica |

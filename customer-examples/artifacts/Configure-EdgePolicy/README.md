@@ -1,4 +1,4 @@
-# Configure-EdgePolicy.ps1
+﻿# Configure-EdgePolicy.ps1
 
 ## Overview
 
@@ -100,7 +100,7 @@ $popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
 
 ## Policy Settings Applied
 
-```
+```text
 Computer Configuration
 └── Administrative Templates
     └── Microsoft Edge
@@ -115,14 +115,14 @@ Computer Configuration
 
 ### Developer Tools
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Edge
   DeveloperToolsAvailability: 1 (Allowed) or 2 (Disallowed)
 ```
 
 ### SmartScreen Allowlist
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Edge\SmartScreenAllowListDomains
   1: portal.azure.com
   2: core.windows.net
@@ -131,7 +131,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Edge\SmartScreenAllowListDomains
 
 ### Popup Allowlist
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Edge\PopupsAllowedForUrls
   1: [*.]mil
   2: [*.]gov
@@ -145,7 +145,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Edge\PopupsAllowedForUrls
 The `PopupsAllowedForUrls` policy supports wildcard patterns:
 
 | Pattern | Matches |
-|---------|---------|
+| --- | --- |
 | `[*.]mil` | All `.mil` domains and subdomains |
 | `[*.]gov` | All `.gov` domains and subdomains |
 | `portal.azure.us` | Exact domain match only |
@@ -160,7 +160,7 @@ The `PopupsAllowedForUrls` policy supports wildcard patterns:
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Configuration\Configure-EdgePolicy-<timestamp>.log
 ```
 
@@ -174,7 +174,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
 | `Remove-RegistryKey` | Removes a registry key |

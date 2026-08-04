@@ -1,4 +1,4 @@
-# Apply-STIGsAVD.ps1
+﻿# Apply-STIGsAVD.ps1
 
 ## Overview
 
@@ -123,7 +123,7 @@ This PowerShell script automates the application of Defense Information Systems 
 ### 6. Additional Security Mitigations
 
 | STIG ID | Severity | Action |
-|---------|----------|--------|
+| --- | --- | --- |
 | V-253289 | MEDIUM | Disables Secondary Logon service |
 | V-257592 | MEDIUM | Disables PortProxy |
 | V-253396 | MEDIUM | Enables Explorer Data Execution Prevention |
@@ -183,7 +183,7 @@ The script implements version tracking to support upgrades:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Disable-OptionalFeatureIfEnabled` | Disables a Windows optional feature if currently enabled |
 | `Get-InstalledApplication` | Queries registry for installed applications |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |

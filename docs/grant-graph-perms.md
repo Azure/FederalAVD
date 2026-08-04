@@ -1,15 +1,17 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Grant Graph API Permissions to Managed Identity
 
 ## For SessionHostReplacer
 
 Use the provided script:
+
 ```powershell
 .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id>
 ```
 
 This script grants the required permissions:
+
 - `Device.ReadWrite.All` - For Entra ID device deletion
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 

@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Troubleshooting
 
@@ -106,7 +106,7 @@ Reinstall Bicep by following the steps at [Bicep Installation](quick-start.md#bi
 
 Deployment fails with an error similar to:
 
-```
+```text
 Encryption at host is not enabled for this subscription.
 To enable it, register the 'EncryptionAtHost' feature for provider 'Microsoft.Compute'.
 ```
@@ -134,7 +134,7 @@ Once `RegistrationState` shows `Registered`, redeploy. If you cannot enable this
 
 Deployment fails with an error similar to:
 
-```
+```text
 A vault with the same name already exists in deleted state.
 You need to either recover or purge existing key vault before creating the new one.
 ```
@@ -186,7 +186,7 @@ If the failure recurs consistently, check that the managed identity being used i
 
 Deployment fails with an error similar to:
 
-```
+```text
 Operation could not be completed as it results in exceeding approved Total Regional Cores quota.
 Location: usgovvirginia, Current Limit: 10, Current Usage: 8, Additional Required: 4.
 ```
@@ -324,14 +324,14 @@ az vm run-command list --resource-group rg-avd-sessionhosts --vm-name avd-vm-01 
 
 Running `Update-ImageArtifacts.ps1` or `Deploy-ImageManagement.ps1` (or any script that uploads to the artifacts or build-logs storage account) fails with:
 
-```
+```text
 403 AuthorizationFailure
 This request is not authorized to perform this operation using this permission.
 ```
 
 or
 
-```
+```text
 AuthorizationFailed: The client '…' does not have authorization to perform action
 'Microsoft.Storage/storageAccounts/…'
 ```
@@ -345,7 +345,7 @@ Azure Storage accounts in this solution have **shared key access disabled by def
 Assign the appropriate data-plane role to the identity that runs the upload or deployment scripts:
 
 | Operation | Required role | Scope |
-|---|---|---|
+| --- | --- | --- |
 | Upload artifacts (`Update-ImageArtifacts.ps1`) | **Storage Blob Data Contributor** | Artifacts storage account |
 | Image build log collection | **Storage Blob Data Contributor** | Build logs storage account |
 | Image build reads artifacts | **Storage Blob Data Reader** | Artifacts storage account |
@@ -370,7 +370,7 @@ After assigning the role, wait a few minutes for RBAC propagation (see [RBAC Pro
 
 A deployment that uses Customer-Managed Keys (CMK) fails with:
 
-```
+```text
 Forbidden: The user, group, or application does not have keys get/wrapKey/unwrapKey permission
 on key vault '…'.
 ```
@@ -459,7 +459,7 @@ Copy-Item customer-examples/parameters/hostpools/hostpool.parameters.example.jso
 
 The Image Management deployment (`Deploy-ImageManagement.ps1` / Step 2) fails with an error such as:
 
-```
+```text
 Resource 'kv-avd-enc-…' was not found.
 ```
 
@@ -473,7 +473,7 @@ When using Customer-Managed Keys, the Image Management template needs the Key Va
 
 Follow the documented deployment sequence when using CMK:
 
-```
+```text
 Step 1 (keyVaults)  →  Step 2 (imageManagement)  →  Step 3 (imageBuild, optional)  →  Step 4 (hostpool)
 ```
 

@@ -1,4 +1,4 @@
-# Set-DesktopBackground.ps1
+﻿# Set-DesktopBackground.ps1
 
 ## Overview
 
@@ -66,7 +66,7 @@ Run directly on session hosts with Administrator privileges
 ### Image Specifications
 
 | Requirement | Recommendation |
-|-------------|----------------|
+| --- | --- |
 | **Format** | JPG (JPEG) |
 | **Resolution** | 4K (3840x2560 pixels) or higher |
 | **Aspect Ratio** | 3:2 (width:height) |
@@ -96,7 +96,7 @@ The script sets the wallpaper style via Group Policy. The default style is appli
 
 ### Policy Settings Applied
 
-```
+```text
 User Configuration
 └── Administrative Templates
     └── Desktop
@@ -125,7 +125,7 @@ Log format includes:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `New-Log` | Initializes logging infrastructure |
 | `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
 | `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
@@ -142,7 +142,7 @@ Log format includes:
 
 ### Script Directory
 
-```
+```text
 Configure-DesktopBackground/
 ├── Set-DesktopBackground.ps1
 └── sunrise.jpg (Replace with your image)
@@ -150,7 +150,7 @@ Configure-DesktopBackground/
 
 ### System Locations
 
-```
+```text
 C:\Windows\Web\Wallpaper\Custom\<your-image>.jpg
 C:\Windows\System32\GroupPolicy\
 C:\Windows\Logs\Configuration\

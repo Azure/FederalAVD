@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical Reference:** [Image Build Template Documentation](../deployments/imageBuild/README.md) - Complete parameter reference and CI/CD examples
 
@@ -37,7 +37,7 @@ The Federal AVD solution includes an automated custom image building capability.
 The Azure identity running this deployment (user, service principal, or managed identity) needs different rights depending on which resource group path you use:
 
 | Path | Required role | Why |
-|---|---|---|
+| --- | --- | --- |
 | **New RG** (`imageBuildResourceGroupId` empty) | Owner **or** Contributor + User Access Administrator at **subscription** scope | Deployment creates a temporary resource group and assigns **Contributor** to the orchestration VM's system-assigned identity on that RG |
 | **Existing RG** (`imageBuildResourceGroupId` set) | `Microsoft.Resources/deployments/write` at **subscription** scope + **Contributor** on the image build resource group + **Contributor** on the compute gallery resource group | `imageBuild.bicep` uses `targetScope = 'subscription'` — subscription deployment write is unavoidable. No resource group creation or role assignments; deploys VMs into the pre-existing build RG; creates the image version (and image definition if not pre-existing) in the compute gallery RG. |
 
@@ -54,7 +54,7 @@ Custom image building **requires** the Image Management resources to be deployed
 The Image Management deployment creates and pre-configures everything imageBuild needs when using an **existing resource group** (the recommended production path):
 
 | Resource | Purpose |
-|---|---|
+| --- | --- |
 | Azure Compute Gallery | Stores captured image versions for distribution |
 | Artifacts storage account + container | Holds scripts and installers used during the build |
 | Build logs storage account + container | Persists customization logs from each image build |
@@ -66,6 +66,7 @@ The Image Management deployment creates and pre-configures everything imageBuild
 **Why imageManagement must deploy these for the existing RG path:**
 
 The imageBuild deployment grants **no RBAC roles** when using an existing resource group. The managed identity you supply must already have:
+
 - **Contributor** on the image build resource group
 - **Storage Blob Data Reader** on the artifacts storage account
 - **Storage Blob Data Contributor** on the build logs storage account
@@ -105,7 +106,7 @@ Use the sample files in `deployments/imageBuild/parameters/` as starting points,
 
 **Example structure:**
 
-```
+```text
 customer/parameters/imageBuild/
 ├── demo.imageBuild.parameters.json
 ├── dev.imageBuild.parameters.json
@@ -123,7 +124,7 @@ The image build VMs make direct calls to the **Azure Resource Manager (ARM) API*
 **Required outbound access from the image build subnet:**
 
 | Service Tag | Port | Protocol | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `AzureResourceManager` | 443 | HTTPS | VM generalization, restart, and resource cleanup via ARM API |
 
 > **Air-gapped / restricted networks:** If your firewall or NSG blocks outbound internet and you use service tags to limit traffic, ensure the `AzureResourceManager` service tag is allowed outbound on port 443 from the image build subnet. Without this, the Run Command scripts that call ARM (sysprep, restart, generalize) will time out and the build will fail.
@@ -196,7 +197,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 **Image identity & distribution:**
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **imageDefinitionName** | Name for the image in Compute Gallery | `avd-win11-23h2` |
 | **sourceImagePublisher** | Base image publisher (marketplace) | `MicrosoftWindowsDesktop` |
 | **sourceImageOffer** | Base image offer | `office-365` |
@@ -209,7 +210,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 **Built-in Microsoft content:**
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **installFsLogix** | Install FSLogix Apps agent | `true` |
 | **office365AppsToInstall** | M365 Apps to install | `["Excel", "Outlook", "PowerPoint", "Word"]` |
 | **installOneDrive** | Install OneDrive per-machine (VDI) | `true` |
@@ -220,7 +221,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 **Built-in image customizations:**
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **appsToRemove** | AppX package names to remove | `["Microsoft.BingWeather", "Microsoft.XboxApp"]` |
 | **customizations** | Array of artifacts to run during build (supports restarts) | See [Customizations Array](#customizations-array) above |
 | **vdiCustomizations** | Artifact array run last before sysprep (no restart; for software that generates unique IDs on first boot) | Same structure as `customizations` |
@@ -231,14 +232,14 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 **Windows Updates:**
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **runWindowsUpdate** | Install Windows Updates during build | `true` |
 | **windowsUpdateCategories** | Categories of updates to install | `Critical, Security, UpdateRollup` |
 
 **Logging:**
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **collectCustomizationLogs** | Save customization logs to an existing blob storage container | `true` (optional, default: `false`) |
 | **logStorageAccountResourceId** | Resource ID of the storage account to receive build logs (deploy imageManagement with `deployBuildLogsStorageAccount = true`) | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}` |
 | **logContainerName** | Blob container name to write logs into | `image-customization-logs` (default) |
@@ -248,7 +249,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 The `vdiOptimizationProfile` parameter controls which optimization sections `Optimize-AVDImage.ps1` applies to the image. The `vdiOptimizationAirGapped` parameter operates independently and can be combined with any profile.
 
 | Profile | What it does | When to use |
-|---|---|---|
+| --- | --- | --- |
 | `NonPersistent-Full` **(default)** | Full VDI optimization: disables services, scheduled tasks, registry policies, autologgers, and optional Windows features with no VDI value. Also locks down all software update channels. | Pooled host pools replaced on a monthly cadence |
 | `NonPersistent-UpdatesOnly` | Locks down software update channels only (OS, M365, Teams, OneDrive, Edge, WebView2, Store). Skips all other service/task/registry changes. | When you manage other VDI hardening via a separate tool (e.g., LGPO, CIS tooling) |
 | `Persistent` | Full optimization minus update-channel lockdown. Update channels remain intact for SCCM/Intune. | Personal (persistent) host pools |
@@ -265,7 +266,7 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
 Gallery image version encryption is managed by the **imageManagement** template. Deploy imageManagement with `keyManagement = CustomerManaged` or `CustomerManagedHSM` to create one Disk Encryption Set for the gallery, then pass its `diskEncryptionSetResourceId` output here. This avoids creating a new DES on every build.
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **diskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
 
 ### Image Management Resource References
@@ -273,7 +274,7 @@ Gallery image version encryption is managed by the **imageManagement** template.
 These parameters reference Image Management outputs and belong in the same `<prefix>.imageBuild.parameters.json` file:
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | **computeGalleryResourceId** | Resource ID of the Azure Compute Gallery | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/galleries/{gallery-name}` |
 | **artifactsContainerUri** | URI of the blob container with artifacts | `https://{storage-account}.blob.core.usgovcloudapi.net/artifacts` |
 | **userAssignedIdentityResourceId** | Managed identity to attach to the build VMs. **Required when using an existing resource group** — must be pre-granted **Contributor** on the build RG, **Storage Blob Data Reader** on artifacts storage (if enabled), and **Storage Blob Data Contributor** on log storage (if enabled). This deployment grants no roles on the existing RG path — use imageManagement to pre-stage the identity. Optional when creating a new resource group (the orchestration VM uses its system-assigned identity; the image VM runs without a UAI unless storage features are enabled). | `/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identity-name}` |
@@ -349,7 +350,7 @@ Build multiple images simultaneously:
 #### Script Parameters
 
 | Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
+| --- | --- | --- | --- |
 | **Location** | String | Yes | Azure region where build will execute |
 | **ParameterFilePrefixes** | Array | Yes | List of parameter file prefixes to process |
 | **SubscriptionId** | String | No | Target subscription (uses current context if not specified) |

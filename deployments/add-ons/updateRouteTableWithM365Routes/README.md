@@ -1,4 +1,4 @@
-# M365 Route Table Updater Add-On
+﻿# M365 Route Table Updater Add-On
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Features Overview](../../../docs/features.md) | [Quick Start Guide](../../../docs/quick-start.md)
 
@@ -105,20 +105,21 @@ az deployment group create \
 
 Azure Automation caches the runbook-to-schedule association internally, keyed on the **automation account name**. This cache persists even after deleting the job schedule resource, all child resources, or the automation account itself and recreating it with the same name. If ARM tries to create the `jobSchedule` resource when that cached link already exists, the deployment fails with:
 
-```
+```text
 A jobSchedule with same id already exists. (Code: Conflict)
 ```
 
 The template includes a `createJobSchedule` parameter (default `true`) to control this behavior.
 
 | Scenario | `createJobSchedule` |
-|---|---|
+| --- | --- |
 | First deployment to a new automation account name | `true` (default) |
 | Redeployment to an existing automation account | `false` |
 
 **In the Template Spec form:** Advanced tab → **Job Schedule** section → uncheck **"Create Job Schedule Link"** before redeploying.
 
 **Via PowerShell:**
+
 ```powershell
 New-AzResourceGroupDeployment ... -createJobSchedule $false
 ```
@@ -151,7 +152,7 @@ Invoke-AzRestMethod -Method DELETE -Path ($base + '/jobSchedules/' + $jsId + '?a
 ## Parameters
 
 | Parameter | Required | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `location` | No | Resource group location | Azure region for all resources. |
 | `tags` | No | `{}` | Tags applied to all resources. |
 | `automationAccountNameOverride` | No | Auto-generated | Explicit Automation Account name. Leave blank to use the derived name. |
@@ -166,7 +167,7 @@ Invoke-AzRestMethod -Method DELETE -Path ($base + '/jobSchedules/' + $jsId + '?a
 
 ## Architecture
 
-```
+```text
 Azure Automation Account (System-Assigned MI)
 ├── Automation Variables
 │   ├── RouteTableResourceId
