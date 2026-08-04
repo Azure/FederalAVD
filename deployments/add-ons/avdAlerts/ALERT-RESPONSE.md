@@ -10,7 +10,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 ## Severity Reference
 
 | Sev | Label | Meaning |
-|-----|-------|---------|
+| :---: | :---: | --- |
 | 1 | Critical | Immediate user impact or imminent failure. Page on-call. |
 | 2 | Warning | Degraded state that will become critical without intervention. Address within hours. |
 | 3 | Informational | Notable event that warrants awareness but is not yet impacting users. |
@@ -27,6 +27,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The pool is filling up. If load continues to grow, users may encounter performance degradation or be blocked from connecting.
 
 **Response:**
+
 - Review the host pool scaling plan — ensure scale-out rules will trigger before the 85% threshold.
 - Verify all session hosts are in Available state (`WVDAgentHealthStatus`).
 - If capacity is expected (morning logon storm), no action needed; monitor through the peak.
@@ -40,6 +41,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The pool is near-full. New user connections are at risk if growth continues.
 
 **Response:**
+
 - Verify the scaling plan is actively adding hosts. Check Azure Virtual Desktop → Scaling Plans → Activity.
 - If autoscale is not responding, manually add session hosts via the host pool.
 - Check for session hosts stuck in Unavailable state that are consuming MaxSessions quota without accepting connections.
@@ -53,6 +55,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** Critical. New connections will fail imminently. Users are about to be blocked.
 
 **Response:**
+
 - **Immediate:** Manually add session hosts to the host pool.
 - Force-drain disconnected sessions that have been idle for more than 1 hour.
 - If using a scaling plan, check for throttling or quota limits preventing scale-out.
@@ -70,6 +73,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** Catastrophic outage. No users can connect to this host pool.
 
 **Response:**
+
 - Check host pool → Session Hosts for health status. Look for mass Unavailable state.
 - Investigate the most recent health check failures: domain connectivity, FSLogix, SxS stack.
 - Restart unavailable session hosts if they appear stuck.
@@ -85,6 +89,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The host is accepting connections but underlying dependencies are degraded. User experience on this host may be impaired or fail at logon.
 
 **Response:**
+
 - The alert includes `SessionHostName` and `HealthCheckDesc` dimensions — identify which check is failing.
 - **Domain unreachable:** Verify VNet/NSG rules allow the session host to reach domain controllers on ports 88, 389, 445, 636.
 - **FSLogix:** Verify the FSLogix service is running on the host and the storage account is reachable.
@@ -100,6 +105,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The host is failing to serve connections but is not intentionally offline. In a Personal pool this directly impacts the assigned user. In a Pooled pool it reduces available capacity and may degrade experience for active users.
 
 **Response:**
+
 - Identify the affected VM and current `Status` from the alert dimensions.
 - Check the health check details in the Portal (Host Pool → Session Hosts → VM → Health).
 - Review `WVDAgentHealthStatus` in Log Analytics for the health check failure sequence leading up to the alert.
@@ -118,6 +124,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The failure occurred before a session host was assigned — the broker could not authenticate the user or locate an available host. This points to an identity or service issue rather than a VM problem.
 
 **Response:**
+
 - Check the `UserName` dimension. If it is one user, investigate their account: expired password, MFA failure, Conditional Access policy block, or token expiry.
 - If multiple users are affected simultaneously, check Azure Service Health for AVD service incidents and review the Action Group for concurrent Service Health alerts.
 - Review `WVDErrors` for the `ErrorCodes` dimension to identify the specific error code (e.g., `ConnectionFailedNoHealthyRdshAvailable`, `ConnectionFailedClientDisconnect`).
@@ -131,6 +138,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The broker successfully assigned a host, but the RDP session could not be established to that specific VM. This points to a problem on the VM itself.
 
 **Response:**
+
 - Identify the affected `SessionHost` from the alert dimensions. Check `AffectedUsers` to understand the blast radius.
 - Common causes: RDP stack crash (restart `TermService`), FSLogix profile load failure (check Event 23/52 on the VM), VM networking issue (NSG rule or route blocking reverse connect), or high memory/CPU causing session rejection.
 - Review `WVDErrors` for the `ErrorCodes` dimension.
@@ -145,6 +153,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** Stale sessions consume host capacity and block scaling automation.
 
 **Response:**
+
 - Verify that Remote Desktop session timeout Group Policy settings are applied:
   - `Set time limit for disconnected sessions` — recommend 4-8 hours.
   - `End session when time limits are reached` — set to Yes.
@@ -158,6 +167,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** Logon times above the threshold indicate a performance problem in the logon pipeline.
 
 **Response:**
+
 - Check the alert dimensions for the affected `SessionHostName` and `UserName`.
 - Common causes in order of frequency:
   1. **FSLogix profile bloat** — profile VHD too large, taking too long to attach. Check profile size.
@@ -179,6 +189,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The OS disk is filling up. When it reaches 0%, the session host will become unstable and AVD services may fail.
 
 **Response:**
+
 - Identify the affected `ComputerName` from the alert dimensions.
 - Check what is consuming disk space. Common culprits:
   - Windows temp files (`%TEMP%`, `C:\Windows\Temp`)
@@ -196,6 +207,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** Critical. The session host is at risk of becoming unresponsive imminently.
 
 **Response:**
+
 - **Immediate:** Put the host in drain mode (Host Pool → Session Hosts → Allow New Sessions: off).
 - Connect to the host and free disk space immediately.
 - If you cannot free enough space, drain active sessions and reimage the host.
@@ -215,6 +227,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** The user's profile container is nearly full. If it reaches 0%, FSLogix will mount a temporary profile and the user will lose any work done in that session.
 
 **Response:**
+
 - Identify the affected user from `UserName` and the storage account from `StorageAccount`.
 - Check the profile VHD size in the storage account file share.
 - Options to resolve:
@@ -233,6 +246,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** Critical. The profile container is nearly full. The next significant write may cause FSLogix to fail over to a temporary profile — any work done in that session will be lost.
 
 **Response:**
+
 - **Immediate:** Contact the affected user to save all work and log off cleanly.
 - Expand the profile VHD before they log back in.
 - Review the `ProfileID` to locate the VHD file in the storage share.
@@ -246,6 +260,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** Users on the affected host cannot load FSLogix profiles. They will receive temporary profiles and lose any work done in the session.
 
 **Response:**
+
 - Verify network connectivity from the session host to the storage account:
   - Private endpoint DNS resolution: `nslookup {storageaccount}.file.core.windows.net` should resolve to a private IP.
   - NSG rules allowing port 445 from the session host subnet to the storage private endpoint subnet.
@@ -260,6 +275,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 **Meaning:** FSLogix could not mount the profile container when the user logged in. The user received a temporary profile and their changes will not be saved.
 
 **Response:**
+
 - Review the FSLogix log on the session host: `C:\ProgramData\FSLogix\Logs\Profile\`.
 - Common causes:
   - **VHD locked by another process** — check if the VHD file has an `.lck` file alongside it in the share.
@@ -277,6 +293,7 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 The `RenderedDescription` dimension contains the full profile path — use this to identify the affected user (e.g., `\\storage\share\profilecontainers\jdoe_S-1-5-21-...`). The `EventCount` dimension shows how many retry events fired for that user in the window.
 
 **Response:**
+
 - Check storage account reachability from the session host at the time of the reconnect.
 - Review `C:\ProgramData\FSLogix\Logs\Profile\` on the affected session host for the specific error code.
 - Common causes:
@@ -293,6 +310,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** FSLogix is not running on the session host. All users on this host receive temporary profiles.
 
 **Response:**
+
 - **Immediate:** Put the host in drain mode.
 - Re-enable and start the FSLogix Profile service:
   ```powershell
@@ -312,6 +330,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** The profile VHD was marked for compaction (to reclaim free space) but the operation failed mid-process. The VHD will continue to grow without compaction.
 
 **Response:**
+
 - Check `C:\ProgramData\FSLogix\Logs\Profile\` for the specific compaction error.
 - Common causes:
   - Insufficient free disk space on the session host's C: drive to hold a temporary compaction file.
@@ -327,6 +346,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** The same user profile is mounted on two different session hosts simultaneously. This should not happen in a correctly configured environment.
 
 **Response:**
+
 - Determine which session host currently holds the VHD by checking for a `.lck` file in the file share profile directory.
 - If the other session is stale (the user is not connected there), log it off from the host pool.
 - If the VHD has a `.lck` file but no active session holds it, delete the lock file after verifying no session is active.
@@ -342,6 +362,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** The user's profile VHD is corrupted. Any work done in the current session will be lost when they log off.
 
 **Response:**
+
 - **Notify the user immediately** — they are in a temporary profile. Advise them to save work to a non-profile location (OneDrive, SharePoint).
 - Locate the profile VHD in the storage share using `ProfileID` and `StorageAccount`.
 - Attempt VHD repair:
@@ -358,6 +379,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** Compaction was scheduled but aborted before it started. Profile VHDs will grow unbounded over time without compaction.
 
 **Response:**
+
 - **EventID 58 (disk too full):** Free space on the session host's C: drive. Compaction requires temporary scratch space equal to the VHD size. See Local Disk alerts.
 - **EventID 61 (VHD in use):** The user was still connected at compaction time. Compaction only runs during logoff. Ensure users log off rather than only disconnecting. Enforce session idle timeout policy.
 
@@ -373,6 +395,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** The host is under heavy CPU load. Users on this host may notice application sluggishness.
 
 **Response:**
+
 - Identify the affected VM from the alert resource metadata.
 - Check which processes are consuming CPU (Process Explorer, `Get-Process`).
 - Drain new connections to this host while investigating.
@@ -387,6 +410,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** The host is saturated. Users are experiencing severe performance degradation.
 
 **Response:**
+
 - **Immediate:** Set AllowNewSessions = false on this host.
 - If there are active sessions, gracefully log off or migrate users.
 - Investigate and resolve the CPU cause. If a user process is responsible, terminate it.
@@ -400,6 +424,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** The session host is running low on memory. Application crashes and paging to disk will follow.
 
 **Response:**
+
 - Drain new connections to the affected host.
 - Identify high-memory processes. Common culprits: browser tabs, Teams, Office applications with large documents.
 - For < 1 GB: log off users immediately to prevent crashes.
@@ -413,6 +438,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Meaning:** The session host is near or at its disk I/O limit. This causes I/O queuing and latency spikes for all users on the host.
 
 **Response:**
+
 - Check if FSLogix profile I/O is the driver — large profiles with heavy write activity.
 - Check for antivirus scanning the OS disk during peak hours.
 - Consider upgrading the OS disk tier (Standard HDD → Standard SSD → Premium SSD → Ultra Disk).
@@ -441,6 +467,7 @@ off-peak, so idle-period spikes from background maintenance operations do not ge
 degrade FSLogix profile attach times and any I/O-intensive profile operations.
 
 **Response:**
+
 - Check Azure Status for Azure Files in the affected region.
 - Review the share's provisioned IOPS vs. consumed IOPS — if IOPS-limited, increase provisioned capacity.
 - Check for large concurrent profile loads (morning logon storm) and stagger logon times if possible.
@@ -459,6 +486,7 @@ baseline when server latency is normal implies a network path problem between se
 the storage private endpoint.
 
 **Response:**
+
 - Compare against the Server Latency alerts. If server latency is at baseline but E2E is elevated,
   the issue is the network path, not the storage service.
 - Verify the UDR on the session host subnet does not force-tunnel storage traffic through an on-premises appliance.
@@ -473,6 +501,7 @@ the storage private endpoint.
 **Meaning:** The Azure Files service is experiencing errors for a meaningful percentage of requests. Profile loads and saves are failing.
 
 **Response:**
+
 - Check Azure Service Health for Azure Files incidents in the region.
 - If no platform incident, investigate whether the share is full (check Share Capacity alerts).
 - Check for throttling (see Storage Throttling alert below).
@@ -486,6 +515,7 @@ the storage private endpoint.
 **Meaning:** The share's provisioned IOPS limit has been reached. Requests are being queued or failed with throttle responses.
 
 **Response:**
+
 - Increase the file share's provisioned capacity. For Azure Files Premium, IOPS scale with provisioned capacity (1 IOPS per GiB, minimum 400 IOPS).
 - Review whether the share is overprovisioned with users — reduce the concurrent session count or distribute profiles across multiple shares.
 - Check whether a compaction operation or large file transfer is causing a burst.
@@ -498,6 +528,7 @@ the storage private endpoint.
 **Meaning:** The share is filling up. When it reaches 100%, new profile VHDs cannot be created and existing ones cannot grow.
 
 **Response:**
+
 - Identify the affected share from the alert dimensions.
 - Increase the share's provisioned size: Storage Account → File Shares → {share} → Quota → Edit.
 - Review whether old or orphaned VHDs exist in the share (profiles for users who have left).
@@ -515,6 +546,7 @@ the storage private endpoint.
 **Meaning:** The ANF volume is filling up. At 100%, profile VHDs cannot grow and FSLogix will fail.
 
 **Response:**
+
 - Increase the ANF volume size: NetApp Account → Capacity Pool → Volume → Resize.
 - Check whether volume auto-grow is configured — ANF supports automatic capacity expansion.
 - Review orphaned profile VHDs from departed users.
@@ -530,6 +562,7 @@ the storage private endpoint.
 **Trigger:** An active Azure service incident affecting this subscription is detected.
 
 **Response:**
+
 - Open the Azure Service Health blade to review the incident scope and estimated resolution time.
 - Communicate the incident to users if AVD-affecting services are listed (Azure Virtual Desktop, Microsoft Entra ID, Azure Files, Azure Automation).
 - Check the [Azure Status page](https://azure.status.microsoft) for broader visibility.
@@ -542,6 +575,7 @@ the storage private endpoint.
 **Trigger:** Azure has scheduled planned maintenance affecting services in this subscription.
 
 **Response:**
+
 - Review the maintenance window and affected services in Azure Service Health.
 - Notify users if maintenance falls during business hours.
 - For maintenance affecting session host VMs, consider a proactive reimage or drain before the window.
@@ -553,6 +587,7 @@ the storage private endpoint.
 **Trigger:** An Azure health advisory has been issued (feature deprecations, required configuration changes, service behavior changes).
 
 **Response:**
+
 - Review the advisory text. Determine if any action is required for your AVD environment.
 - Common advisories: TLS version requirements, storage API changes, networking endpoint changes.
 - Track action items in your change management backlog.
@@ -564,6 +599,7 @@ the storage private endpoint.
 **Trigger:** A security advisory has been issued for services in this subscription.
 
 **Response:**
+
 - **Immediate review required.** Treat as a potential vulnerability disclosure.
 - Review the advisory in Azure Service Health for affected services and recommended actions.
 - If the advisory relates to session host operating system components, accelerate the image refresh cycle.

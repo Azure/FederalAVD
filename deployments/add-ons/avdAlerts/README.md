@@ -24,7 +24,7 @@ storage accounts across resource groups in the subscription.
 This add-on is Zero Trust-aligned by default:
 
 | Control | Implementation |
-|---------|----------------|
+| --- | --- |
 | **No public network access** | Automation Account deployed with `publicNetworkAccess: false` and `disableLocalAuth: true` |
 | **Managed identity only** | System-assigned managed identity — no stored credentials, no service principals, no connection strings |
 | **Least-privilege RBAC** | Three scoped role assignments: Desktop Virtualization Reader (subscription), Log Analytics Contributor (workspace RG), Storage Account Contributor (storage RG, when applicable) |
@@ -39,7 +39,7 @@ This add-on is Zero Trust-aligned by default:
 ### Deployed Resources
 
 | Resource | Location | Purpose |
-|----------|----------|---------|
+| --- | --- | --- |
 | **Resource Group** | Subscription | Created if `createResourceGroup: true`; otherwise uses existing |
 | **Automation Account** (Basic SKU) | Alert RG | Hosts runbooks, schedules, variables, and managed identity |
 | **Automation Variables** | Automation Account | `HostPoolInfo`, `StorageAccountIds`, `ResourceManagerUri` — read by runbooks at runtime |
@@ -85,7 +85,7 @@ grants read access to all alerts), audit (one Activity Log to watch), and incide
 ### Host Pool Type Gating
 
 | Alert Category | Pooled | Personal |
-|----------------|--------|----------|
+| --- | :-: | :-: |
 | Capacity (50% / 85% / 95%) | ✅ | ❌ (meaningless for 1:1 assignment) |
 | Session Host Unhealthy | ✅ | ✅ |
 | All other alerts | ✅ | ✅ |
@@ -216,7 +216,7 @@ az deployment sub create \
 ### Required
 
 | Parameter | Description |
-|-----------|-------------|
+| --- | --- |
 | `location` | Azure region for the Automation Account and alert rules. |
 | `resourceGroupName` | Name of the resource group to deploy into. |
 | `logAnalyticsWorkspaceResourceId` | Resource ID of the Log Analytics Workspace receiving AVD diagnostics. |
@@ -226,7 +226,7 @@ az deployment sub create \
 ### Optional - Deployment Behavior
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | :-: | --- |
 | `createResourceGroup` | `false` | Create the resource group if it does not exist. |
 | `alertNamePrefix` | `AVD` | Short prefix prepended to every alert name. Change when deploying multiple environments in the same subscription. |
 | `autoResolveAlert` | `true` | Auto-resolve alerts when the condition clears on the next evaluation. |
@@ -236,7 +236,7 @@ az deployment sub create \
 ### Optional - Storage / ANF
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `storageAccountResourceIds` | `[]` | Resource IDs of Azure Files Premium storage accounts. When provided, storage metric and log-based alerts are deployed. |
 | `anfVolumeResourceIds` | `[]` | Resource IDs of Azure NetApp Files volumes. When provided, ANF capacity alerts are deployed. |
 | `runbookContentUriStorage` | GitHub raw URL | URI of the `AvdStorageLogData` runbook PS1 file. Set to empty string `''` for air-gapped environments. |
@@ -248,7 +248,7 @@ az deployment sub create \
 All default to `true`. Set to `false` to skip that category.
 
 | Parameter | Alert Category |
-|-----------|---------------|
+| --- | --- |
 | `enableCapacityAlerts` | Host pool capacity (50% / 85% / 95%) — Pooled pools only |
 | `enableAvailabilityAlerts` | Session host health, personal host unhealthy, no resources available |
 | `enableConnectionAlerts` | Connection failures, disconnected sessions (24h / 72h), slow logon |
@@ -333,6 +333,7 @@ Invoke-AzRestMethod -Method DELETE -Path ($base + '/jobSchedules/' + $jsId + '?a
 
 The `AvdStorageLogData` runbook writes share usage data to the Automation Account job stream,
 which Log Analytics ingests via diagnostic settings. If no data appears:
+
 1. Check Automation Account → Jobs for `AvdStorageLogData` run status and output.
 2. Verify the managed identity has **Storage Account Contributor** on the storage RGs.
 3. Verify diagnostic settings on the Automation Account are pointing to the workspace.
@@ -345,6 +346,7 @@ See [Redeployment](#redeployment) above.
 
 The Action Group must be at the **global** location. The deployment form enforces this, but if
 deploying via PowerShell/CLI, verify the action group location:
+
 ```powershell
 (Get-AzActionGroup -ResourceGroupName '{rg}' -Name '{ag}').Location
 ```
@@ -373,7 +375,7 @@ below.
 ### Why alert queries differ from workbook queries
 
 | Reason | Detail |
-|--------|--------|
+| --- | --- |
 | **Point-in-time vs. exploration** | Workbook queries are written for interactive visualization — they use `render` clauses, `bin()` time bucketing, and wide time range parameters. Alert queries must return a single scalar count comparable to a threshold at a fixed point in time. These are structurally different objectives. |
 | **`overrideQueryTimeRange` constraint** | Azure Monitor Scheduled Query Rules enforce: `overrideQueryTimeRange >= windowSize × numberOfEvaluationPeriods`. Workbook queries have no equivalent constraint. Alerts with `numberOfEvaluationPeriods: 3` (capacity 50%/85%, VM health check) require a wider `overrideQueryTimeRange` than the KQL `ago()` lookback alone would suggest. |
 | **Noise suppression guards** | Some alert queries add guards that workbooks do not need. For example, `alertSessionHostUnhealthy` excludes hosts that have been visible in health status data for fewer than 15 minutes (`FirstSeen <= ago(15m)`). Workbooks show all history; alert rules should not fire for a host that is legitimately still initializing after deployment. |
@@ -383,7 +385,7 @@ below.
 ### Specific workbook-aligned patterns adopted
 
 | Alert | Workbook source | Notes |
-|-------|----------------|-------|
+| --- | --- | --- |
 | `alertSlowSessionLogon` | Connection Performance workbook | Adopted the workbook's `RdpStackConnectionEstablished` leftsemi join to isolate new-session logons, and the `OnCredentialsAcquisitionCompleted` / `SSOTokenRetrieval` leftouter joins to subtract client-side latency (credential acquisition and SSO token retrieval) from the total logon duration. This ensures the alert measures host-side logon latency only. |
 | Capacity (50% / 85% / 95%) | Host Diagnostics / Utilization Report workbooks | `arg_max(TimeGenerated, *) by SessionHostName` pattern to get the latest row per host; `iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)` for denominator to exclude drained hosts. Numerator uses `ActiveSessions + InactiveSessions` (aligned with Utilization Report workbook) — disconnected sessions (`InactiveSessions`) keep their slot on the host and count against `MaxSessions`, so omitting them caused capacity alerts to not fire when users disconnected without logging off. `InactiveSessions` is cast via `tolong(column_ifexists('InactiveSessions', 0))` for cloud compatibility. **Denominator fallback:** `WVDAgentHealthStatus.MaxSessions` is not reliably populated in all environments (the Microsoft Utilization Report workbook retrieves `maxSessionLimit` from the ARM API via Azure Resource Graph, not from this column). The alert module reads `maxSessionLimit` directly from the host pool resource at deployment time (`existing` resource reference) and uses it as the fallback: `iff(tolong(column_ifexists('MaxSessions', 0)) > 0, tolong(column_ifexists('MaxSessions', 0)), long(<maxSessionLimit>))`. No user-supplied parameter is required. |
 | `alertSessionHostUnhealthy` | Host Diagnostics workbook | Status, AllowNewSessions, and LastAvailable pattern aligned with workbook; `FirstSeen` guard added for alert-specific noise suppression. |
