@@ -5,7 +5,7 @@
 Monitors smart card state via PC/SC redirection and locks the AVD session host
 workstation when the smart card is removed from the remote client.
 
-Intended for environments using **Entra ID SSO** (`enableSso:i:1`) where the
+Intended for environments using **Entra ID SSO** (`enablerdsaadauth:i:1`) where the
 Windows built-in Smart Card Removal Policy (`SCRemoveOption`) does not fire —
 because Windows on the session host sees an Entra ID token, not a smart card
 logon — and therefore cannot lock the screen on card removal without this
@@ -41,7 +41,7 @@ logon. No console window ever appears.
 | Entra ID SSO | Optional — this artifact is designed for SSO environments but works without it |
 
 > **Note:** Smart card **redirection** (`redirect smartcards:i:1`) and Entra ID
-> **SSO** (`enableSso:i:1`) are independent RDP properties. Both can be active
+> **SSO** (`enablerdsaadauth:i:1`) are independent RDP properties. Both can be active
 > simultaneously. SSO handles authentication to the session host; redirection
 > makes the physical card available inside the session and to this monitor script.
 
@@ -49,8 +49,9 @@ logon. No console window ever appears.
 
 | File | Description |
 | --- | --- |
-| `Install-SmartCardLockMonitor.ps1` | Run during image build as SYSTEM. Copies the monitor script, creates the event log source, and registers the scheduled task. |
+| `Install-SmartCardLockMonitor.ps1` | Run during image build as SYSTEM. Copies the monitor script and VBScript launcher, creates the event log source, and registers the scheduled task. |
 | `Watch-SmartCardRemoval.ps1` | Monitor script. Runs hidden at user logon via scheduled task. Exits cleanly if no readers are redirected. |
+| `Watch-SmartCardRemoval.vbs` | VBScript launcher. Invokes the PS1 via `wscript.exe` with window style `0` so no console window or taskbar entry ever appears. |
 
 ## Usage
 
@@ -79,7 +80,9 @@ Set-Location "C:\path\to\SmartCard-Lock-Monitor"
 | Task name | `SmartCard-Lock-Monitor` |
 | Trigger | At logon (any user) |
 | Principal | `BUILTIN\Users`, RunLevel Limited |
-| Window style | Hidden (no console window) |
+| Execute | `wscript.exe` |
+| Argument | `"C:\ProgramData\FederalAVD\SmartCardLock\Watch-SmartCardRemoval.vbs"` |
+| Window | None — `wscript.exe` with style `0` suppresses all window creation |
 | Execution time limit | None (runs for the duration of the session) |
 | Multiple instances | Ignore New (prevents duplicate instances on reconnect) |
 

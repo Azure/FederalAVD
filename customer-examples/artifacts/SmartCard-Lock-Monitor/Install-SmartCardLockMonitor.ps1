@@ -61,9 +61,18 @@ if (-not (Test-Path $MonitorScript)) {
     exit 1
 }
 
-$Destination = Join-Path $Script:InstallDir 'Watch-SmartCardRemoval.ps1'
-Copy-Item -Path $MonitorScript -Destination $Destination -Force
+$VbsLauncher = Join-Path $PSScriptRoot 'Watch-SmartCardRemoval.vbs'
+if (-not (Test-Path $VbsLauncher)) {
+    Write-Log -Category 'Error' -Message "Watch-SmartCardRemoval.vbs not found in $PSScriptRoot"
+    exit 1
+}
+
+$Destination    = Join-Path $Script:InstallDir 'Watch-SmartCardRemoval.ps1'
+$VbsDestination = Join-Path $Script:InstallDir 'Watch-SmartCardRemoval.vbs'
+Copy-Item -Path $MonitorScript -Destination $Destination    -Force
+Copy-Item -Path $VbsLauncher  -Destination $VbsDestination -Force
 Write-Log -Category 'Info' -Message "Monitoring script copied to: $Destination"
+Write-Log -Category 'Info' -Message "VBScript launcher copied to: $VbsDestination"
 
 # Restrict write access so standard users cannot tamper with the script
 $Acl = Get-Acl -Path $Script:InstallDir
@@ -96,9 +105,12 @@ if (-not [System.Diagnostics.EventLog]::SourceExists($Script:EventSource)) {
 # PowerShell is launched with -WindowStyle Hidden so no console window appears.
 # ExecutionTimeLimit = PT0S means the task runs indefinitely until the user logs off.
 
+# Use wscript.exe + VBScript launcher so no console window or taskbar entry appears.
+# powershell.exe -WindowStyle Hidden still briefly creates a console host; wscript.exe
+# with window style 0 prevents any window from ever being created.
 $TaskAction = New-ScheduledTaskAction `
-    -Execute 'powershell.exe' `
-    -Argument "-WindowStyle Hidden -NonInteractive -ExecutionPolicy Bypass -File `"$Destination`""
+    -Execute 'wscript.exe' `
+    -Argument "`"$VbsDestination`""
 
 $TaskTrigger = New-ScheduledTaskTrigger -AtLogOn
 
@@ -130,6 +142,6 @@ Register-ScheduledTask `
     | Out-Null
 
 Write-Log -Category 'Info' -Message "Scheduled task registered: $Script:TaskName"
-Write-Log -Category 'Info' -Message "Task runs hidden at logon for all users. No console window will appear."
+Write-Log -Category 'Info' -Message "Task launches via wscript.exe + VBScript (window style 0). No console window or taskbar entry will appear."
 Write-Log -Category 'Info' -Message "$Script:Name completed successfully."
 #endregion
