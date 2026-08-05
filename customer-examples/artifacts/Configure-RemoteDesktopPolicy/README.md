@@ -17,18 +17,27 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 ### `MaxIdleTime`
 
 - **Type:** String
-- **Default:** `'21600000'` (6 hours)
+- **Default:** `'10800000'` (3 hours)
 - **Format:** Milliseconds
-- **Description:** Maximum time an active session can remain idle before being disconnected
+- **Description:** Maximum time an active session can remain idle before the action defined by `EndSessionOnLimit` is taken (disconnect or logoff)
 - **Range:** `0` (no limit) to `4294967295` (max value)
 
-### `MaxDisconnectionionTime`
+### `MaxDisconnectionTime`
 
 - **Type:** String
-- **Default:** `'21600000'` (6 hours)
+- **Default:** `'10800000'` (3 hours)
 - **Format:** Milliseconds
-- **Description:** Maximum time a disconnected session can remain before being logged off
+- **Description:** Maximum time a disconnected session can remain before being logged off. Always results in logoff regardless of `EndSessionOnLimit`.
 - **Range:** `0` (no limit) to `4294967295` (max value)
+
+### `EndSessionOnLimit`
+
+- **Type:** String
+- **Default:** `'0'` (disconnect on timeout)
+- **Values:** `0` or `1`
+- **Description:** Controls whether session time limit expiry disconnects or ends (logs off) the session. Maps to the Group Policy setting **"End session when time limits are reached"** (registry value `fResetBroken`).
+  - `0` — Idle timeout **disconnects** the session. The FSLogix profile VHD stays mounted. Compaction does not run until `MaxDisconnectionTime` subsequently expires and forces a logoff.
+  - `1` — Idle timeout **logs off** the session immediately. The FSLogix profile VHD is dismounted and compaction runs at logoff.
 
 ## Common Timeout Values
 
@@ -39,7 +48,8 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 | **1 hour** | `3600000` | Standard office environment |
 | **2 hours** | `7200000` | Extended work sessions |
 | **4 hours** | `14400000` | Long-running tasks |
-| **6 hours** | `21600000` | Default (work day half) |
+| **3 hours** | `10800000` | Default (balanced for pooled desktops) |
+| **6 hours** | `21600000` | Extended work sessions |
 | **8 hours** | `28800000` | Full work day |
 | **12 hours** | `43200000` | Extended availability |
 | **24 hours** | `86400000` | Maximum recommended |
@@ -47,34 +57,34 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 
 ## Usage Examples
 
-### Basic Usage (Default: 6 Hours)
+### Basic Usage (Default: 3-hour idle + 3-hour disconnected, disconnect on timeout)
 
 ```powershell
 .\Configure-RemoteDesktopServicesPolicy.ps1
 ```
 
-### 2-Hour Timeouts
+### Logoff on Idle Timeout (compaction runs at idle timeout)
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '7200000' -MaxDisconnectionionTime '7200000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -EndSessionOnLimit '1'
 ```
 
-### 1-Hour Idle, 4-Hour Disconnection
+### 1-Hour Idle, 4-Hour Disconnection, Logoff on Limit
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '3600000' -MaxDisconnectionionTime '14400000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '3600000' -MaxDisconnectionTime '14400000' -EndSessionOnLimit '1'
 ```
 
 ### Full Work Day (8 Hours)
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '28800000' -MaxDisconnectionionTime '28800000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '28800000' -MaxDisconnectionTime '28800000'
 ```
 
-### Aggressive Resource Reclamation (30 Minutes)
+### Aggressive Resource Reclamation (30 Minutes, logoff immediately)
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '1800000' -MaxDisconnectionionTime '1800000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '1800000' -MaxDisconnectionTime '1800000' -EndSessionOnLimit '1'
 ```
 
 ## What the Script Does
@@ -112,46 +122,46 @@ Computer Configuration
                 └── Session Time Limits
                     ├── Set time limit for active but idle Remote Desktop Services sessions: [Enabled]
                     │   └── Idle session limit: [MaxIdleTime value]
-                    └── Set time limit for disconnected sessions: [Enabled]
-                        └── Disconnected session limit: [MaxDisconnectionionTime value]
+                    ├── Set time limit for disconnected sessions: [Enabled]
+                    │   └── Disconnected session limit: [MaxDisconnectionTime value]
+                    └── End session when time limits are reached: [Enabled if EndSessionOnLimit = 1]
 ```
 
 ## Registry Locations
 
 ```text
 HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
-  MaxIdleTime: [Value in milliseconds]
-  MaxDisconnectionTime: [Value in milliseconds]
+  MaxIdleTime:          [Value in milliseconds]  -- idle timeout
+  MaxDisconnectionTime: [Value in milliseconds]  -- disconnected session timeout
+  fResetBroken:         0 or 1                   -- 0 = disconnect on timeout, 1 = logoff on timeout
 ```
 
 ## Session State Diagram
 
+The behavior when `MaxIdleTime` expires depends on `EndSessionOnLimit` (`fResetBroken`):
+
 ```text
-┌──────────────┐
-│ Active       │ ◄── User actively working
-│ Session      │
-└──────┬───────┘
-       │
-       │ (No user input for MaxIdleTime)
-       ▼
-┌──────────────┐
-│ Idle         │ ◄── Session active but user not interacting
-│ Session      │
-└──────┬───────┘
-       │
-       │ (MaxIdleTime expires)
-       ▼
-┌──────────────┐
-│ Disconnected │ ◄── Session disconnected, apps still running
-│ Session      │
-└──────┬───────┘
-       │
-       │ (MaxDisconnectionTime expires)
-       ▼
-┌──────────────┐
-│ Logged Off   │ ◄── Session terminated, apps closed
-│ Session      │
-└──────────────┘
+Active Session (user working)
+       |
+       | (no input for MaxIdleTime)
+       |
+       +-- EndSessionOnLimit = 0 (default) --> Disconnected
+       |                                          |  VHD still mounted, compaction: NO
+       |                                          |
+       |                                          | (disconnected for MaxDisconnectionTime)
+       |                                          |
+       |                                        Logged Off
+       |                                          |  VHD dismounted, compaction: YES
+       |
+       +-- EndSessionOnLimit = 1 ------------> Logged Off
+                                                  |  VHD dismounted, compaction: YES
+
+Disconnected Session (user closed RDP client)
+       |
+       | (disconnected for MaxDisconnectionTime, regardless of EndSessionOnLimit)
+       |
+     Logged Off
+       |  VHD dismounted, compaction: YES
 ```
 
 ## Recommendations by Environment

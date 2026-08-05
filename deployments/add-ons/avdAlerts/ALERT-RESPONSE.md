@@ -154,9 +154,10 @@ Alerts are grouped by category matching the add-on's enable/disable parameters.
 
 **Response:**
 
-- Verify that Remote Desktop session timeout Group Policy settings are applied:
-  - `Set time limit for disconnected sessions` — recommend 4-8 hours.
-  - `End session when time limits are reached` — set to Yes.
+- Verify that Remote Desktop session timeout Group Policy settings are applied (Computer Configuration > Windows Components > Remote Desktop Services > Session Host > Session Time Limits):
+  - `Set time limit for active but idle sessions` (`MaxIdleTime`) — recommend 3 hours. **By default this disconnects the session rather than logging it off.** The FSLogix profile VHD stays mounted and compaction does not run until the disconnected session timeout fires.
+  - `Set time limit for disconnected sessions` (`MaxDisconnectionTime`) — recommend 3–4 hours. This **always** logs off the session when it expires regardless of the setting below, and will trigger FSLogix compaction.
+  - `End session when time limits are reached` (`fResetBroken`) — when enabled, idle timeout logs off the session immediately instead of disconnecting, so FSLogix compaction runs sooner. Default is disabled (disconnect only); enable this to have compaction triggered at idle timeout.
 - Manually log off the stale session if needed: Host Pool → User Sessions → Log Off.
 
 ---
@@ -338,7 +339,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
   - Insufficient free disk space on the session host's C: drive to hold a temporary compaction file.
   - The VHD was in use by another process during compaction.
 - Ensure the session host has sufficient local disk space (at least 10% free).
-- Compaction is attempted automatically on clean logoff — ensure users are logging off completely rather than just disconnecting.
+- Compaction runs at logoff, not at disconnect. Ensure users log off rather than closing the RDP client window. If relying on session timeout policy, note that idle timeout (`MaxIdleTime`) **disconnects** by default — FSLogix compaction will not run until the disconnected session timeout (`MaxDisconnectionTime`) expires and forces a logoff. To have compaction run at idle timeout, enable `End session when time limits are reached` (`fResetBroken = 1`) in Group Policy.
 
 ---
 
@@ -383,7 +384,7 @@ The `RenderedDescription` dimension contains the full profile path — use this 
 **Response:**
 
 - **EventID 58 (disk too full):** Free space on the session host's C: drive. Compaction requires temporary scratch space equal to the VHD size. See Local Disk alerts.
-- **EventID 61 (VHD in use):** The user was still connected at compaction time. Compaction only runs during logoff. Ensure users log off rather than only disconnecting. Enforce session idle timeout policy.
+- **EventID 61 (VHD in use):** The session was still active (connected or disconnected) at compaction time — the profile VHD was still mounted. Compaction only runs when the session is fully logged off and the VHD is dismounted. Idle timeout (`MaxIdleTime`) **disconnects** by default without logging off, so the VHD remains mounted until `MaxDisconnectionTime` expires. To have compaction triggered by idle timeout, enable `End session when time limits are reached` (`fResetBroken = 1`) in Group Policy. The disconnected session timeout (`MaxDisconnectionTime`) always logs off and will trigger compaction when it fires.
 
 ---
 

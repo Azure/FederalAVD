@@ -1,91 +1,37 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
-    [string]$MaxIdleTime = '21600000',
-    [string]$MaxDisconnectionionTime = '21600000',
+    # Maximum idle time before session action (milliseconds). Default: 10800000 = 3 hours.
+    # When EndSessionOnLimit = 0 (default), expiry disconnects the session.
+    # When EndSessionOnLimit = 1, expiry logs off the session.
+    [string]$MaxIdleTime = '10800000',
+
+    # Maximum time a disconnected session persists before being logged off (milliseconds).
+    # Default: 10800000 = 3 hours. Always results in logoff regardless of EndSessionOnLimit.
+    [string]$MaxDisconnectionTime = '10800000',
+
+    # Controls whether idle/active timeout disconnects or ends (logs off) the session.
+    # 0 - Disconnect on idle timeout; logoff only when MaxDisconnectionTime fires.
+    # 1 - Log off immediately when MaxIdleTime expires.
+    # Leave unset (default) to not write this value; OS default is 0 (disconnect on timeout).
+    # Maps to GP: "End session when time limits are reached" (registry: fResetBroken).
+    [ValidateSet('0', '1')]
+    [string]$EndSessionOnLimit,
+
+    # Controls whether locking the remote session disconnects the RDP client or shows the
+    # remote lock screen. Only applies when Entra ID SSO is enabled on the host pool.
+    # '1' = disconnect on lock (default when Not Configured -- recommended for Entra ID SSO)
+    # '0' = show remote lock screen on lock (both MaxIdleTime and MaxDisconnectionTime apply)
+    # Leave unset (default) to not write this value and preserve the OS / existing policy default.
+    # Maps to GP: "Disconnect remote session on lock for Microsoft identity platform authentication"
+    # Registry: fDisconnectOnLockMicrosoftIdentity
+    # Reference: https://learn.microsoft.com/azure/virtual-desktop/configure-session-lock-behavior
+    [ValidateSet('0', '1')]
+    [string]$DisconnectOnLockMsIdentity,
+
     [switch]$EnableRemoteApp
 )
 
 #region Functions
-
-Function Get-InternetFile {
-    [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [uri]$Url,
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$OutputDirectory,
-        [Parameter(Mandatory = $false, Position = 2)]
-        [string]$OutputFileName
-    )
-
-    Begin {
-        $ProgressPreference = 'SilentlyContinue'
-        ## Get the name of this function and write header
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Log -Message "Starting ${CmdletName} with the following parameters: $PSBoundParameters"
-    }
-    Process {
-
-        $start_time = Get-Date
-
-        If (!$OutputFileName) {
-            Write-Log -Message "${CmdletName}: No OutputFileName specified. Trying to get file name from URL."
-            If ((split-path -path $Url -leaf).Contains('.')) {
-                $OutputFileName = split-path -path $url -leaf
-                Write-Log -Message "${CmdletName}: Url contains file name - '$OutputFileName'."
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
-                $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect = $false
-                $response = $request.GetResponse()
-                $Location = $response.GetResponseHeader("Location")
-                If ($Location) {
-                    $OutputFileName = [System.IO.Path]::GetFileName($Location)
-                    Write-Log -Message "${CmdletName}: File Name from 'Location' Response Header is '$OutputFileName'."
-                }
-                Else {
-                    Write-Log -Message "${CmdletName}: No 'Location' Response Header returned. Trying 'Content-Disposition' Response Header."
-                    $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
-                    $contentDisposition = $result.Headers.'Content-Disposition'
-                    If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
-                        Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
-                    }
-                }
-            }
-        }
-
-        If ($OutputFileName) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
-            $wc = New-Object System.Net.WebClient
-            $OutputFile = Join-Path $OutputDirectory $OutputFileName
-            Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."
-            Try {
-                $wc.DownloadFile($url, $OutputFile)
-                $time = (Get-Date).Subtract($start_time).Seconds
-                
-                Write-Log -Message "${CmdletName}: Time taken: '$time' seconds."
-                if (Test-Path -Path $outputfile) {
-                    $totalSize = (Get-Item $outputfile).Length / 1MB
-                    Write-Log -Message "${CmdletName}: Download was successful. Final file size: '$totalsize' mb"
-                    Return $OutputFile
-                }
-            }
-            Catch {
-                Write-Log -Category Error -Message "${CmdletName}: Error downloading file. Please check url."
-                Return $Null
-            }
-        }
-        Else {
-            Write-Log -Category Error -Message "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Return $Null
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
 
 Function Write-Log {
     Param (
@@ -624,18 +570,128 @@ function Get-RelativePolicyKeyPath {
 
 #region Initialization
 [int]$MaxIdleTime = $MaxIdleTime
-[int]$MaxDisconnectionTime = $MaxDisconnectionionTime
+[int]$MaxDisconnectionTime = $MaxDisconnectionTime
 [string]$Script:Name = "Configure-RemoteDesktopServicesPolicy"
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime', MaxDisconnectionTime='$MaxDisconnectionTime', EnableRemoteApp='$EnableRemoteApp'."
+Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime', MaxDisconnectionTime='$MaxDisconnectionTime', EndSessionOnLimit='$EndSessionOnLimit', DisconnectOnLockMsIdentity='$DisconnectOnLockMsIdentity', EnableRemoteApp='$EnableRemoteApp'."
 #endregion
+
+# =============================================================================
+# Remote Desktop Services Session Timeout Policy
+# =============================================================================
+# References:
+#   GP path : Computer Configuration -> Administrative Templates -> Windows Components
+#             -> Remote Desktop Services -> Remote Desktop Session Host -> Session Time Limits
+#   MS docs : https://learn.microsoft.com/windows/client-management/mdm/policy-csp-remotedesktopservices
+#   ADMX    : https://admx.help/?Category=Windows_10_2016&Policy=Microsoft.Policies.TerminalServer::TS_SESSIONS_Idle_Limit_1
+#
+# Registry key: HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
+#
+# MaxIdleTime (DWORD, milliseconds)
+#   GP name : "Set time limit for active but idle Remote Desktop Services sessions"
+#   Effect  : When an active session is idle for this duration, the action depends on
+#             fResetBroken (EndSessionOnLimit). 0 = no limit.
+#
+# MaxDisconnectionTime (DWORD, milliseconds)
+#   GP name : "Set time limit for disconnected sessions"
+#   Effect  : When a session has been in the Disconnected state for this duration, it is
+#             ALWAYS ended (logged off), regardless of fResetBroken. 0 = no limit.
+#
+# fResetBroken (DWORD, 0 or 1) -- controlled by EndSessionOnLimit parameter
+#   GP name : "End session when time limits are reached"
+#   Values  :
+#     0 (default) - When MaxIdleTime expires, the session is DISCONNECTED. The FSLogix
+#                   profile VHD stays mounted. Compaction does NOT run until
+#                   MaxDisconnectionTime expires and the session is fully logged off.
+#     1           - When MaxIdleTime expires, the session is ENDED (logged off). The
+#                   FSLogix profile VHD is dismounted and compaction runs at logoff.
+#
+# Session lifecycle with defaults (EndSessionOnLimit = 0, both timeouts = 3 hours):
+#
+#   Active idle  -> MaxIdleTime (3h)         -> Disconnect  [VHD mounted, compaction: NO ]
+#   Disconnected -> MaxDisconnectionTime (3h) -> Logoff     [VHD dismounted, compaction: YES]
+#   Total worst-case time before compaction = 6 hours
+#
+# Session lifecycle with EndSessionOnLimit = 1 (both timeouts = 3 hours):
+#
+#   Active idle  -> MaxIdleTime (3h)         -> Logoff      [VHD dismounted, compaction: YES]
+#   Disconnected -> MaxDisconnectionTime (3h) -> Logoff     [VHD dismounted, compaction: YES]
+#   Total worst-case time before compaction = 3 hours (whichever fires first)
+#
+# =============================================================================
+# Entra ID SSO and MachineInactivityTimeout interaction
+# =============================================================================
+# References:
+#   Session lock behavior : https://learn.microsoft.com/azure/virtual-desktop/configure-session-lock-behavior
+#   SSO overview          : https://learn.microsoft.com/azure/virtual-desktop/configure-single-sign-on
+#
+# When Entra ID SSO (Microsoft identity platform authentication) is enabled on the host
+# pool, a separate timeout mechanism -- the Windows security policy "Interactive logon:
+# Machine inactivity limit" (MachineInactivityTimeout) -- can BYPASS MaxIdleTime entirely.
+#
+#   Registry : HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\InactivityTimeoutSecs
+#   GP path  : Computer Configuration -> Windows Settings -> Security Settings ->
+#              Local Policies -> Security Options ->
+#              "Interactive logon: Machine inactivity limit"
+#   Common value in STIG / CIS baselines: 900 seconds (15 minutes)
+#
+# MachineInactivityTimeout locks the Windows session after N seconds of no
+# keyboard/mouse input. What happens next depends on the session lock behavior:
+#
+# -----------------------------------------------------------------------------
+# DEFAULT: disconnect on lock (Entra ID SSO)
+# GP: "Disconnect remote session on lock for Microsoft identity platform authentication"
+# Registry: SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\fDisconnectOnLockMicrosoftIdentity
+# Default / Not Configured = 1 (Enabled = disconnect on lock)
+# -----------------------------------------------------------------------------
+# When the session locks (via MachineInactivityTimeout or manually), the Entra ID SSO
+# client DISCONNECTS the RDP session instead of showing a remote lock screen.
+# The session immediately enters the Disconnected state and MaxDisconnectionTime starts.
+# MaxIdleTime never fires because the session was already disconnected.
+#
+# Effective flow (Entra ID SSO, disconnect on lock, MachineInactivityTimeout = 15 min):
+#
+#   Active idle  -> MachineInactivityTimeout (15 min) -> Disconnect [VHD mounted, compaction: NO]
+#   Disconnected -> MaxDisconnectionTime (3h)         -> Logoff     [VHD dismounted, compaction: YES]
+#   Total time before compaction = MachineInactivityTimeout + MaxDisconnectionTime (~3h 15min)
+#
+# In this scenario MaxIdleTime is irrelevant -- the session disconnects via screen lock
+# before MaxIdleTime (3h) would ever fire. Only MaxDisconnectionTime governs when the
+# session is logged off and compaction runs.
+#
+# -----------------------------------------------------------------------------
+# ALTERNATE: show remote lock screen instead of disconnect
+# Set fDisconnectOnLockMicrosoftIdentity = 0 (Disabled)
+# GP: Disable "Disconnect remote session on lock for Microsoft identity platform authentication"
+# -----------------------------------------------------------------------------
+# In this mode, MachineInactivityTimeout locks the screen but keeps the session Connected.
+# The RDS idle timer (MaxIdleTime) continues accumulating from the last user input.
+# All three parameters in this script now interact:
+#
+#   Active idle  -> MachineInactivityTimeout (15 min) -> Screen locks (still Connected)
+#   Locked/idle  -> MaxIdleTime (3h from last input)  -> Disconnect or Logoff per fResetBroken
+#   Disconnected -> MaxDisconnectionTime (3h)         -> Logoff [VHD dismounted, compaction: YES]
+#
+# Note: MaxIdleTime counts from last user INPUT, not from when the screen locked. A user
+# who returns within 3h resets the idle clock; MachineInactivityTimeout re-locks again
+# after the next 15 min of inactivity. MaxDisconnectionTime only starts once the session
+# is Disconnected (by MaxIdleTime expiry or the user closing the RDP client window).
+# =============================================================================
 
 Write-Log -Category Info -Message "Now Configuring Remote Desktop Services Timeout Settings."
 $rdKey = 'Software\Policies\Microsoft\Windows NT\Terminal Services'
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxDisconnectionTime' -RegistryType 'DWORD' -RegistryData $MaxDisconnectionTime
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxIdleTime' -RegistryType 'DWORD' -RegistryData $MaxIdleTime
+If ($PSBoundParameters.ContainsKey('EndSessionOnLimit')) {
+    Write-Log -Category Info -Message "Configuring fResetBroken = $EndSessionOnLimit."
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fResetBroken' -RegistryType 'DWORD' -RegistryData $EndSessionOnLimit
+}
+If ($PSBoundParameters.ContainsKey('DisconnectOnLockMsIdentity')) {
+    Write-Log -Category Info -Message "Configuring fDisconnectOnLockMicrosoftIdentity = $DisconnectOnLockMsIdentity."
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fDisconnectOnLockMicrosoftIdentity' -RegistryType 'DWORD' -RegistryData $DisconnectOnLockMsIdentity
+}
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fEnableTimeZoneRedirection' -RegistryType 'DWORD' -RegistryData 1
 If ($EnableRemoteApp) {
     Write-Log -Category Info -Message "Enabling enhanced shell experience for RemoteApp."
