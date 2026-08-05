@@ -267,9 +267,7 @@ Log entries include:
 
 | Function | Description |
 | --- | --- |
-| `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
-| `Remove-RegistryValue` | Deletes registry values |
 | `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
 | `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
 | `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |

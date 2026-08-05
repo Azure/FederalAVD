@@ -190,7 +190,6 @@ Log entries include:
 
 | Function | Description |
 | --- | --- |
-| `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
 | `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
 | `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
