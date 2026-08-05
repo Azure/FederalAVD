@@ -1,13 +1,28 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
-    # Maximum idle time before session action (milliseconds). Default: 10800000 = 3 hours.
+    # Maximum time an active session can remain idle before the action defined by
+    # EndSessionOnLimit is taken (disconnect or logoff). Default: '3 Hours'.
     # When EndSessionOnLimit = 0 (default), expiry disconnects the session.
     # When EndSessionOnLimit = 1, expiry logs off the session.
-    [string]$MaxIdleTime = '10800000',
+    # Values are the exact ADMX enum detents; the script converts to milliseconds.
+    # Maps to GP: "Set time limit for active but idle Remote Desktop Services sessions"
+    # Registry: MaxIdleTime (DWORD, milliseconds)
+    [ValidateSet('Never', '1 Minute', '5 Minutes', '10 Minutes', '15 Minutes',
+                 '30 Minutes', '1 Hour', '2 Hours', '3 Hours', '6 Hours',
+                 '8 Hours', '12 Hours', '16 Hours', '18 Hours',
+                 '1 Day', '2 Days', '3 Days', '4 Days', '5 Days')]
+    [string]$MaxIdleTime = '3 Hours',
 
-    # Maximum time a disconnected session persists before being logged off (milliseconds).
-    # Default: 10800000 = 3 hours. Always results in logoff regardless of EndSessionOnLimit.
-    [string]$MaxDisconnectionTime = '10800000',
+    # Maximum time a disconnected session persists before being logged off. Default: '3 Hours'.
+    # Always results in logoff regardless of EndSessionOnLimit.
+    # Values are the exact ADMX enum detents; the script converts to milliseconds.
+    # Maps to GP: "Set time limit for disconnected sessions"
+    # Registry: MaxDisconnectionTime (DWORD, milliseconds)
+    [ValidateSet('Never', '1 Minute', '5 Minutes', '10 Minutes', '15 Minutes',
+                 '30 Minutes', '1 Hour', '2 Hours', '3 Hours', '6 Hours',
+                 '8 Hours', '12 Hours', '16 Hours', '18 Hours',
+                 '1 Day', '2 Days', '3 Days', '4 Days', '5 Days')]
+    [string]$MaxDisconnectionTime = '3 Hours',
 
     # Controls whether idle/active timeout disconnects or ends (logs off) the session.
     # 0 - Disconnect on idle timeout; logoff only when MaxDisconnectionTime fires.
@@ -28,6 +43,9 @@ param (
     [ValidateSet('0', '1')]
     [string]$DisconnectOnLockMsIdentity,
 
+    # When specified, enables the enhanced shell experience for RemoteApp sessions.
+    # Writes EnableEnhancedShellExperienceForRemoteApp = 1 to the Terminal Services policy key.
+    # Has no effect on standard Remote Desktop sessions; only set this for RemoteApp host pools.
     [switch]$EnableRemoteApp
 )
 
@@ -569,13 +587,34 @@ function Get-RelativePolicyKeyPath {
 #endregion RegistryPol
 
 #region Initialization
-[int]$MaxIdleTime = $MaxIdleTime
-[int]$MaxDisconnectionTime = $MaxDisconnectionTime
+$script:TimeoutMs = @{
+    'Never'      = 0
+    '1 Minute'   = 60000
+    '5 Minutes'  = 300000
+    '10 Minutes' = 600000
+    '15 Minutes' = 900000
+    '30 Minutes' = 1800000
+    '1 Hour'     = 3600000
+    '2 Hours'    = 7200000
+    '3 Hours'    = 10800000
+    '6 Hours'    = 21600000
+    '8 Hours'    = 28800000
+    '12 Hours'   = 43200000
+    '16 Hours'   = 57600000
+    '18 Hours'   = 64800000
+    '1 Day'      = 86400000
+    '2 Days'     = 172800000
+    '3 Days'     = 259200000
+    '4 Days'     = 345600000
+    '5 Days'     = 432000000
+}
+[int]$MaxIdleTimeMs = $script:TimeoutMs[$MaxIdleTime]
+[int]$MaxDisconnectionTimeMs = $script:TimeoutMs[$MaxDisconnectionTime]
 [string]$Script:Name = "Configure-RemoteDesktopServicesPolicy"
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime', MaxDisconnectionTime='$MaxDisconnectionTime', EndSessionOnLimit='$EndSessionOnLimit', DisconnectOnLockMsIdentity='$DisconnectOnLockMsIdentity', EnableRemoteApp='$EnableRemoteApp'."
+Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime' ($MaxIdleTimeMs ms), MaxDisconnectionTime='$MaxDisconnectionTime' ($MaxDisconnectionTimeMs ms), EndSessionOnLimit='$EndSessionOnLimit', DisconnectOnLockMsIdentity='$DisconnectOnLockMsIdentity', EnableRemoteApp='$EnableRemoteApp'."
 #endregion
 
 # =============================================================================
@@ -682,8 +721,8 @@ Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime', MaxDi
 
 Write-Log -Category Info -Message "Now Configuring Remote Desktop Services Timeout Settings."
 $rdKey = 'Software\Policies\Microsoft\Windows NT\Terminal Services'
-Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxDisconnectionTime' -RegistryType 'DWORD' -RegistryData $MaxDisconnectionTime
-Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxIdleTime' -RegistryType 'DWORD' -RegistryData $MaxIdleTime
+Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxDisconnectionTime' -RegistryType 'DWORD' -RegistryData $MaxDisconnectionTimeMs
+Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxIdleTime' -RegistryType 'DWORD' -RegistryData $MaxIdleTimeMs
 If ($PSBoundParameters.ContainsKey('EndSessionOnLimit')) {
     Write-Log -Category Info -Message "Configuring fResetBroken = $EndSessionOnLimit."
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fResetBroken' -RegistryType 'DWORD' -RegistryData $EndSessionOnLimit
