@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "15900088246204275163"
+      "version": "0.45.15.27210",
+      "templateHash": "7604959144070590516"
     }
   },
   "parameters": {
@@ -43,7 +43,7 @@
       "location": "[parameters('location')]",
       "properties": {
         "source": {
-          "script": "param (\r\n    [string]$StorageAccountName,\r\n    [string]$StorageAccountSuffix,\r\n    [string]$StorageAccountKey\r\n)\r\n\r\nStart-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$($StorageAccountName).file.$($StorageAccountSuffix) /user:localhost\\$($StorageAccountName) /pass:$($StorageAccountKey)\" -NoNewWindow -Wait\r\n            "
+          "script": "param (\r\n    [string]$StorageAccountName,\r\n    [string]$StorageAccountSuffix,\r\n    [string]$StorageAccountKey\r\n)\r\n\r\n# Belt-and-suspenders: ensure \"Network Access: Do not allow storage of passwords\r\n# and credentials for network authentication\" (DisableDomainCreds) is Disabled so\r\n# cmdkey can persist the storage key credential in Credential Manager.\r\n# This is an older STIG control not commonly seen in current releases, but may\r\n# still be enforced by legacy baselines. Using secedit ensures the Security\r\n# Configuration Engine does not revert a raw registry write on the next refresh.\r\n$seceditInf = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.inf'\r\n$seceditDb  = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.sdb'\r\n$seceditLog = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.log'\r\n$infLines = @(\r\n    '[Unicode]'\r\n    'Unicode=yes'\r\n    '[Version]'\r\n    'signature=\"$CHICAGO$\"'\r\n    'Revision=1'\r\n    '[Registry Values]'\r\n    'MACHINE\\System\\CurrentControlSet\\Control\\Lsa\\DisableDomainCreds=4,0'\r\n)\r\n[System.IO.File]::WriteAllLines($seceditInf, $infLines, [System.Text.Encoding]::Unicode)\r\n$null = Start-Process -FilePath 'secedit.exe' `\r\n    -ArgumentList \"/configure /cfg `\"$seceditInf`\" /db `\"$seceditDb`\" /log `\"$seceditLog`\" /quiet\" `\r\n    -Wait -PassThru -NoNewWindow\r\nRemove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue\r\n\r\nStart-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$($StorageAccountName).file.$($StorageAccountSuffix) /user:localhost\\$($StorageAccountName) /pass:$($StorageAccountKey)\" -NoNewWindow -Wait\r\n            "
         },
         "protectedParameters": [
           {

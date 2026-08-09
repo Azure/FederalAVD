@@ -785,6 +785,39 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\Software\Policies\Microsoft\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })
         }
 
+        # Cloud-only identity with storage keys (EntraId) requires credentials to be stored
+        # in Credential Manager via cmdkey so FSLogix can authenticate to Azure Files.
+        # "Network Access: Do not allow storage of passwords and credentials for network
+        # authentication" (DisableDomainCreds) is an older STIG control not commonly seen
+        # in current STIG releases, but may still be enforced by legacy baselines or other
+        # policy. This is a belt-and-suspenders measure: applying Disabled (0) via secedit
+        # ensures the Security Configuration Engine does not silently revert the setting on
+        # the next policy refresh, keeping cmdkey credentials intact across reboots.
+        If ($IdentitySolution -eq 'EntraId') {
+            Write-Log -message "EntraId identity with storage keys detected - setting 'DisableDomainCreds' to 0 (Disabled) via secedit so FSLogix storage key credentials can be stored in Credential Manager."
+            $seceditInf = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.inf'
+            $seceditDb  = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.sdb'
+            $seceditLog = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.log'
+            $infLines = @(
+                '[Unicode]'
+                'Unicode=yes'
+                '[Version]'
+                'signature="$CHICAGO$"'
+                'Revision=1'
+                '[Registry Values]'
+                'MACHINE\System\CurrentControlSet\Control\Lsa\DisableDomainCreds=4,0'
+            )
+            [System.IO.File]::WriteAllLines($seceditInf, $infLines, [System.Text.Encoding]::Unicode)
+            $secedit = Start-Process -FilePath 'secedit.exe' `
+                -ArgumentList "/configure /cfg `"$seceditInf`" /db `"$seceditDb`" /log `"$seceditLog`" /quiet" `
+                -Wait -PassThru -NoNewWindow
+            Write-Log -Message "secedit.exe exited with code [$($secedit.ExitCode)]."
+            If ($secedit.ExitCode -ne 0) {
+                Write-Log -Category Warning -Message "secedit returned a non-zero exit code. Review log at '$seceditLog'."
+            }
+            Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue
+        }
+
         # Windows Defender Exclusions for FSLogix
         $LocalPathExclusions = @(
             "$env:ProgramData\FSLogix",
