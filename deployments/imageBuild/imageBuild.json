@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "16260502654818585249"
+      "templateHash": "1328555717294321513"
     }
   },
   "parameters": {
@@ -274,7 +274,7 @@
     },
     "installUpdates": {
       "type": "bool",
-      "defaultValue": true,
+      "defaultValue": false,
       "metadata": {
         "description": "Optional. Determines if the latest updates from the specified update service will be installed."
       }
@@ -801,6 +801,7 @@
       },
       "WebView2Runtime": {
         "Description": "Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
+        "DownloadUrl": "",
         "DestinationFileName": "WebView2.exe"
       },
       "RemoteDesktopWebRTCRedirectorService": {

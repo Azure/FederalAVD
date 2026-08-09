@@ -232,6 +232,7 @@
 						{
 							"name": "defineParameters",
 							"type": "Microsoft.Common.CheckBox",
+							"defaultValue": false,
 							"label": "Define Script Parameters",
 							"toolTip": "Define up to 5 parameters to pass to the script. These appear in plain text in your deployment history.",
 							"visible": "[equals(steps('scripts').source, 'uri')]"
@@ -282,6 +283,7 @@
 						{
 							"name": "defineProtectedParameter",
 							"type": "Microsoft.Common.CheckBox",
+							"defaultValue": false,
 							"label": "Define Protected Parameter",
 							"toolTip": "Define a single protected (secret) parameter. The name and value will not appear in your deployment history.",
 							"visible": "[equals(steps('scripts').source, 'uri')]"
@@ -462,8 +464,7 @@
 							"elements": [
 								{
 									"name": "enable",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Script Logging"
+									"type": "Microsoft.Common.CheckBox",								"defaultValue": false,									"label": "Enable Script Logging"
 								},
 								{
 									"name": "storageAccount",

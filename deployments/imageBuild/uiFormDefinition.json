@@ -1260,6 +1260,7 @@
                                     "name": "installUpdates",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Install Windows Updates",
+                                    "defaultValue": false,
                                     "toolTip": "Select to install updates and specify an update source."
                                 },
                                 {

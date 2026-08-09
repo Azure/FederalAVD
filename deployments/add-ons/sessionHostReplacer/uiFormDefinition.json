@@ -421,6 +421,7 @@
             {
               "name": "allowImageVersionRollback",
               "type": "Microsoft.Common.CheckBox",
+              "defaultValue": false,
               "label": "Allow Image Version Rollback",
               "toolTip": "When enabled, allows session hosts to be replaced even if their current image version is newer than the latest available version. When disabled (recommended), prevents unintended rollbacks to older images.",
               "constraints": {
@@ -2491,6 +2492,7 @@
             {
               "name": "useExistingHostingPlan",
               "type": "Microsoft.Common.CheckBox",
+              "defaultValue": false,
               "label": "Use Existing App Service Plan",
               "toolTip": "Select an existing App Service Plan instead of creating a new one."
             },
@@ -2579,6 +2581,7 @@
             {
               "name": "zoneRedundant",
               "type": "Microsoft.Common.CheckBox",
+              "defaultValue": false,
               "visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
               "label": "Enable Zone Redundancy",
               "toolTip": "Deploy the App Service Plan with zone redundancy. Only applies when creating a new plan."
