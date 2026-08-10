@@ -272,4 +272,67 @@ The `Microsoft-Edge-Enterprise` example artifact installs the Edge Enterprise MS
 
 ---
 
+### Microsoft 365 Apps, Teams, and OneDrive (air-gapped)
+
+<a id="microsoft-365-apps-teams-and-onedrive-air-gapped"></a>
+
+> **Custom image is required.** In air-gapped clouds, Microsoft 365 Apps (Office), New Teams for VDI, and OneDrive cannot be reliably installed at session host runtime — AGC has specific offline installation requirements for these products, and the runtime environment on a session host does not satisfy them. **Baking these into a custom image is the correct and supported approach.** This solution handles the offline installation automatically once you stage the installers.
+
+#### Why a custom image is required
+
+The Microsoft documentation for Microsoft 365 Apps in Azure Government Classified (AGC) environments calls out specific installation methods, channel configurations, and activation endpoints that differ from commercial and unclassified government deployments. Installing Office at session host runtime (post-image) is not a supported path in these environments. The same applies to New Teams (which requires WebView2, Visual C++ Redistributables, and the RTC service to be present before Teams is installed) and OneDrive (which must be installed per-machine for VDI).
+
+> For the authoritative Microsoft guidance, refer to the Microsoft 365 Apps documentation available on your air-gapped cloud's internal Microsoft Docs site or through your Microsoft account team.
+
+#### How this solution handles it
+
+The image build template has first-class support for M365 Apps, Teams, and OneDrive via dedicated parameters:
+
+| Parameter | Description | Typical Value (air-gapped) |
+| --- | --- | --- |
+| `office365AppsToInstall` | M365 apps to install (Excel, Outlook, Word, etc.) | `["Excel", "Outlook", "PowerPoint", "Word"]` |
+| `installOneDrive` | Install OneDrive per-machine for VDI | `true` |
+| `installTeams` | Install New Teams for VDI | `true` |
+| `teamsCloudType` | Teams cloud variant | `GovSecret` for Azure Government Secret (IL6); `GovTopSecret` for Azure Government Top Secret (IL7) |
+| `downloadLatestMicrosoftContent` | Download from web instead of storage account | `false` — **do not change this** in air-gapped environments |
+
+When `downloadLatestMicrosoftContent` is `false` (the default), the image build VM downloads all Microsoft content from the artifacts storage account. The Office 365 Deployment Tool, Teams bootstrapper, Teams MSIX, and OneDrive setup are all auto-downloadable from air-gapped cloud endpoints by `Update-ImageArtifacts.ps1`.
+
+#### Artifacts to stage
+
+The following files are fetched automatically by `Update-ImageArtifacts.ps1` from air-gapped cloud endpoints:
+
+| File | Auto-downloaded | Notes |
+| --- | :---: | --- |
+| `Office365DeploymentTool.exe` | Yes | ODT; drives M365 Apps install |
+| `OneDriveSetup.exe` | Yes | Per-machine OneDrive for VDI |
+| `teamsbootstrapper.exe` | Yes | New Teams bootstrapper |
+| `MSTeams-x64.msix` | Yes | New Teams MSIX package |
+
+The following are **required by Teams** and must be staged manually:
+
+| File | Place In | Source |
+| --- | --- | --- |
+| `WebView2.exe` | `customer/artifacts/` | [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) |
+| `vc_redist.x64.exe` | `customer/artifacts/` | [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
+| `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) |
+
+Download all three on an internet-connected system, copy them to the air-gapped network, and place them in `customer/artifacts/` before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.
+
+#### Image build parameter notes
+
+```json
+"office365AppsToInstall":          { "value": ["Excel", "Outlook", "PowerPoint", "Word"] },
+"installOneDrive":                 { "value": true },
+"installTeams":                    { "value": true },
+"teamsCloudType":                  { "value": "GovSecret" },    // GovTopSecret for Azure Government Top Secret (IL7)
+"downloadLatestMicrosoftContent":  { "value": false }
+```
+
+> **`vdiOptimizationRestrictInternet`** — set this to `true` in air-gapped image builds. It locks down update channels for M365, Teams, OneDrive, Edge, WebView2, and the Windows Store so these apps do not attempt to phone home after deployment.
+
+📖 **Image build parameter reference:** [image-build.md — Built-in Microsoft content](image-build.md#image-build-parameters)
+
+---
+
 📖 **Full script reference:** [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md)
