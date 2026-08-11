@@ -109,95 +109,6 @@ if ($AppFolders.Count -eq 0) {
 
 Write-Log "Found $($AppFolders.Count) app folder(s) to provision."
 
-# ----------------------------------------------------------------
-# Pre-provision shared framework dependencies.
-# Packages in SharedDependencies\ (VCLibs, Windows App Runtime, etc.)
-# must be staged as first-class provisioned packages BEFORE the app
-# loop. When Add-AppxProvisionedPackage succeeds without explicit
-# -DependencyPackagePath, those frameworks are NOT staged -- they are
-# only resolved from the running OS at that moment. At user logon,
-# AppX tries to register the app, cannot find the required framework
-# version in the provisioned store, and fails (e.g. Notepad requires
-# Windows App Runtime 1.7 but only 1.6 is staged).
-# Pre-provisioning them here ensures they are present for every new
-# user profile created from this image, regardless of which apps
-# subsequently depend on them.
-# ----------------------------------------------------------------
-$SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
-if (Test-Path $SharedDepDir) {
-    $PackageExtensions = @('.msixbundle', '.appxbundle', '.msix', '.appx')
-    $SharedDepFiles = Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Extension -in $PackageExtensions }
-    if ($SharedDepFiles.Count -gt 0) {
-        Write-Log ""
-        Write-Log "=== Pre-provisioning $($SharedDepFiles.Count) shared framework package(s) ==="
-        # Sort in dependency order: VCLibs must be staged before WinUI/Xaml,
-        # WinUI/Xaml before Windows App Runtime. Alphabetical order (the default)
-        # puts UI.Xaml before VCLibs, causing 'Element not found' on the first pass.
-        $SortedDepFiles = $SharedDepFiles | Sort-Object {
-            switch -Wildcard ($_.Name) {
-                'Microsoft.VCLibs*'             { 0 }
-                'Microsoft.UI.Xaml*'            { 1 }
-                'Microsoft.WindowsAppRuntime*'  { 2 }
-                default                         { 3 }
-            }
-        }, Name
-        foreach ($DepFile in $SortedDepFiles) {
-            $DepNamePrefix = [System.IO.Path]::GetFileNameWithoutExtension($DepFile.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
-            $DepVersion    = Get-PackageFileVersion $DepFile.Name
-            $AlreadyStaged = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-                Where-Object { $_.PackageName -like "*$DepNamePrefix*" } |
-                Select-Object -First 1
-            if ($null -ne $AlreadyStaged) {
-                $StagedVersion = Get-PackageFileVersion $AlreadyStaged.PackageName
-                if ($StagedVersion -ge $DepVersion) {
-                    Write-Log "SKIP (framework): $($DepFile.Name) -- provisioned version ($StagedVersion) >= staged ($DepVersion)"
-                    continue
-                }
-            }
-            try {
-                Write-Log "Provisioning framework: $($DepFile.Name)"
-                Add-AppxProvisionedPackage -Online -PackagePath $DepFile.FullName -SkipLicense -Regions 'all' | Out-Null
-                Write-Log "OK: $($DepFile.Name)"
-            }
-            catch {
-                # Single-arch framework packages (.appx, not .msixbundle) can fail with
-                # 'Element not found' (0x80070490) when DISM cannot auto-resolve their own
-                # dependencies from the running OS store. Retry with all peer shared-dep
-                # packages passed explicitly as -DependencyPackagePath.
-                Write-Log "First attempt failed for '$($DepFile.Name)': $_ -- retrying with peer shared dependencies."
-                # Bundles (.msixbundle/.appxbundle) cannot be passed as -DependencyPackagePath;
-                # DISM only accepts single-arch .appx/.msix files there. Filtering them out
-                # prevents 'parameter is incorrect' (0x80070057) on the retry.
-                $PeerDeps = @($SharedDepFiles | Where-Object {
-                    $_.FullName -ne $DepFile.FullName -and
-                    $_.Extension -notin @('.msixbundle', '.appxbundle')
-                })
-                if ($PeerDeps.Count -gt 0) {
-                    try {
-                        Add-AppxProvisionedPackage -Online -PackagePath $DepFile.FullName `
-                            -DependencyPackagePath ($PeerDeps | Select-Object -ExpandProperty FullName) `
-                            -SkipLicense -Regions 'all' | Out-Null
-                        Write-Log "OK: $($DepFile.Name) (with explicit peer dependencies)"
-                    }
-                    catch {
-                        Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
-                    }
-                }
-                else {
-                    Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
-                }
-            }
-        }
-    }
-    else {
-        Write-Log "SharedDependencies folder is empty -- skipping framework pre-provisioning."
-    }
-}
-else {
-    Write-Log "No SharedDependencies folder found -- skipping framework pre-provisioning."
-}
-
 $SuccessCount = 0
 $SkipCount    = 0
 $ErrorCount   = 0
@@ -275,58 +186,28 @@ foreach ($AppFolder in $AppFolders) {
 
     # ----------------------------------------------------------------
     # Locate dependency packages.
-    # The staging pipeline deduplicates shared framework packages
-    # (VCLibs, WinAppSDK, etc.) into a sibling SharedDependencies\
-    # folder at the builtin-uwp-apps root so they are stored once
-    # instead of once per app. Per-app Dependencies\ folders may still
-    # exist for packages unique to a single app.
-    # Both locations are searched; where the same package family
-    # appears in both, the highest version wins.
+    # Update-ImageArtifacts.ps1 (Optimize-SharedDependencies) has already:
+    #   - collected x64/neutral dep files from every app's Dependencies\ subfolder
+    #   - deduped them (highest version wins per package family)
+    #   - moved them all into a single SharedDependencies\ folder at the artifact root
+    #   - removed the per-app Dependencies\ folders
+    # So reading that one folder is sufficient -- no per-app scan or dedup needed here.
+    #
+    # .msixbundle/.appxbundle files are excluded: DISM rejects multi-arch bundles as
+    # -DependencyPackagePath inputs (0x80070057 "The parameter is incorrect").
     # ----------------------------------------------------------------
-    $DepCandidates = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-
-    # Per-app dependencies
-    Get-ChildItem -Path $AppFolder.FullName -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.Extension -in $PackageExtensions -and
-            $_.FullName  -match '(?i)\\dependencies\\' -and
-            $_.Name      -match '(?i)_(x64|neutral)[._]'
-        } |
-        ForEach-Object { $DepCandidates.Add($_) }
-
-    # Shared dependencies (dedup pool at the parent root)
     $SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
+    $DepPackages  = @()
     if (Test-Path -Path $SharedDepDir) {
-        Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
-            Where-Object {
-                $_.Extension -in $PackageExtensions -and
-                $_.Name      -match '(?i)_(x64|neutral)[._]'
-            } |
-            ForEach-Object { $DepCandidates.Add($_) }
+        $DepPackages = @(Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in @('.appx', '.msix') })
     }
 
-    # Deduplicate by base name (strip version), keep highest version
-    $DepPackages = @(
-        $DepCandidates |
-            Group-Object { $_.Name -replace '_[0-9]+(?:\.[0-9]+){1,3}(?=_)', '' } |
-            ForEach-Object {
-                $_.Group |
-                    Sort-Object { Get-PackageFileVersion $_.Name } -Descending |
-                    Select-Object -First 1
-            } |
-            Sort-Object FullName
-    )
-
-    $AppSpecificDeps = @($DepPackages | Where-Object { $_.DirectoryName -notlike '*SharedDependencies' })
-    $SharedDeps       = @($DepPackages | Where-Object { $_.DirectoryName -like  '*SharedDependencies' })
-    if ($AppSpecificDeps.Count -gt 0) {
-        Write-Log "App-specific deps: $($AppSpecificDeps.Count) package(s)"
-        $AppSpecificDeps | ForEach-Object { Write-Log "  $($_.Name)" }
+    if ($DepPackages.Count -gt 0) {
+        Write-Log "Shared deps  : $($DepPackages.Count) package(s)"
+        $DepPackages | ForEach-Object { Write-Log "  $($_.Name)" }
     }
-    if ($SharedDeps.Count -gt 0) {
-        Write-Log "Shared framework deps: $($SharedDeps.Count) package(s) (pre-provisioned above)"
-    }
-    if ($DepPackages.Count -eq 0) {
+    else {
         Write-Log "Dependencies : none"
     }
 
@@ -478,6 +359,12 @@ Write-Log "Provisioned  : $SuccessCount"
 Write-Log "Skipped      : $SkipCount (already up-to-date or no package found)"
 Write-Log "Errors       : $ErrorCount"
 Write-Log "Install-BuiltinUwpApps: Complete"
+
+Write-Log ""
+Write-Log "=== Final Provisioned Packages ==="
+Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+    Sort-Object PackageName |
+    ForEach-Object { Write-Log "  $($_.PackageName)" }
 
 if ($ErrorCount -gt 0) {
     exit 1

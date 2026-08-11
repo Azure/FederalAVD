@@ -567,7 +567,9 @@ function Optimize-SharedDependencies {
 
     $PkgExts = @('.msixbundle', '.appxbundle', '.msix', '.appx')
 
-    # Collect all x64/neutral dep files from every app subfolder.
+    # Collect all x86, x64, and neutral dep files from every app subfolder.
+    # DISM requires both x86 and x64 dependency packages on x64 target images.
+    # Arm/Arm64 packages are excluded as they do not apply to x64 AVD hosts.
     $AllDeps = Get-ChildItem -Path $ParentDir -Directory |
         Where-Object { $_.Name -ne 'SharedDependencies' } |
         ForEach-Object {
@@ -575,7 +577,7 @@ function Optimize-SharedDependencies {
                 Where-Object {
                     $_.Extension -in $PkgExts -and
                     $_.FullName  -match '(?i)\\dependencies\\' -and
-                    $_.Name      -match '(?i)_(x64|neutral)[._]'
+                    $_.Name      -match '(?i)_(x86|x64|neutral)[._]'
                 }
         }
 
@@ -897,16 +899,17 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                             Write-Output "[$SoftwareName] Best bundle kept         : $($BestMain.Name)"
                         }
 
-                        # --- Prune non-x64/neutral dependency packages ---
-                        # winget may download deps for all architectures; drop everything
-                        # that is not x64 or neutral to avoid provisioning errors.
+                        # --- Prune Arm/Arm64 dependency packages ---
+                        # Keep x86, x64, and neutral packages. DISM requires both x86 and
+                        # x64 on x64 target images. Arm/Arm64 packages are not applicable
+                        # to x64 AVD hosts and are pruned to keep the upload size reasonable.
                         Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File |
                             Where-Object {
                                 $_.Extension -in $PruneExts -and
                                 $_.FullName  -match '(?i)\\dependencies\\' -and
-                                $_.Name      -notmatch '(?i)_(x64|neutral)[._]'
+                                $_.Name      -notmatch '(?i)_(x86|x64|neutral)[._]'
                             } | ForEach-Object {
-                                Write-Output "[$SoftwareName] Pruning non-x64 dep    : $($_.Name)"
+                                Write-Output "[$SoftwareName] Pruning non-applicable dep : $($_.Name)"
                                 Remove-Item -Path $_.FullName -Force
                             }
 
