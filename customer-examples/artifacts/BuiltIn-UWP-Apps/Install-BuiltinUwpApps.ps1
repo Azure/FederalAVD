@@ -365,13 +365,118 @@ Write-Log "Skipped      : $SkipCount (already up-to-date or no package found)"
 Write-Log "Errors       : $ErrorCount"
 Write-Log "Install-BuiltinUwpApps: Complete"
 
+# ----------------------------------------------------------------
+# Image health check.
+# Runs after all provisioning to verify the provisioned store is in
+# the expected state. Three things are checked:
+#   1. Every app folder that was processed (and did not error) has a
+#      corresponding entry in Get-AppxProvisionedPackage.
+#   2. No provisioned app has a lingering Deprovisioned registry entry
+#      that would silently remove it at the next user logon.
+#   3. Every framework dependency package in SharedDependencies is
+#      present in the provisioned store -- either from the OS baseline
+#      or staged as a side-effect of provisioning an app that needed it.
+# ----------------------------------------------------------------
+Write-Log ""
+Write-Log "=== Image Health Check ==="
+$HealthIssues     = [System.Collections.Generic.List[string]]::new()
+$FinalPkgs        = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+$PkgExtensions2   = @('.msixbundle', '.appxbundle', '.msix', '.appx')
+
+Write-Log ""
+Write-Log "-- App packages --"
+foreach ($Row in ($ChangeLog | Sort-Object App)) {
+    if ($Row.Change -eq 'no package') { continue }
+
+    if ($Row.Change -eq 'ERROR') {
+        Write-Log ("  FAIL  {0,-30} provisioning error (see log above)" -f $Row.App)
+        continue
+    }
+
+    # Re-derive the package name prefix from the main bundle file so we can
+    # look it up in the provisioned store without storing extra state in the loop.
+    $CheckPath = Join-Path -Path $PSScriptRoot -ChildPath $Row.App
+    $CheckMain = Get-ChildItem -Path $CheckPath -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in $PkgExtensions2 } | Select-Object -First 1
+    $CheckPrefix = if ($null -ne $CheckMain) {
+        [System.IO.Path]::GetFileNameWithoutExtension($CheckMain.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+    } else { '' }
+
+    if (-not $CheckPrefix) {
+        Write-Log ("  SKIP  {0,-30} could not derive package prefix for verification" -f $Row.App)
+        continue
+    }
+
+    $CheckFound = $FinalPkgs | Where-Object { $_.PackageName -like "*$CheckPrefix*" } | Select-Object -First 1
+    if ($null -eq $CheckFound) {
+        Write-Log ("  FAIL  {0,-30} not found in provisioned store" -f $Row.App)
+        $HealthIssues.Add("$($Row.App): not found in provisioned store")
+        continue
+    }
+
+    $CheckVer = Get-PackageFileVersion $CheckFound.PackageName
+    $CheckFamily = ''
+    if ($CheckFound.PackageName -match '^(.+?)_[\d\.]+_[^_]+__([^_]+)$') {
+        $CheckFamily = "$($Matches[1])_$($Matches[2])"
+    }
+    $DeprovKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned\$CheckFamily"
+    if ($CheckFamily -and (Test-Path $DeprovKey)) {
+        Write-Log ("  WARN  {0,-30} v{1} -- Deprovisioned registry entry present; app will be removed at next user logon" -f $Row.App, $CheckVer)
+        $HealthIssues.Add("$($Row.App): Deprovisioned registry entry present. Fix: Remove-Item -Path '$DeprovKey' -Recurse -Force")
+    }
+    else {
+        Write-Log ("  OK    {0,-30} v{1}" -f $Row.App, $CheckVer)
+    }
+}
+
+Write-Log ""
+Write-Log "-- Framework dependencies --"
+$SharedDepCheck = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
+if (Test-Path -Path $SharedDepCheck) {
+    $DepFilesCheck = Get-ChildItem -Path $SharedDepCheck -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in @('.appx', '.msix') } | Sort-Object Name
+    if ($DepFilesCheck.Count -gt 0) {
+        $SeenPrefixes = [System.Collections.Generic.HashSet[string]]::new(
+            [System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($DepFileCheck in $DepFilesCheck) {
+            $DepPfx = [System.IO.Path]::GetFileNameWithoutExtension($DepFileCheck.Name) `
+                -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+            if (-not $SeenPrefixes.Add($DepPfx)) { continue }  # skip arch duplicates already reported
+            $DepPkgFound = $FinalPkgs | Where-Object { $_.PackageName -like "*$DepPfx*" } |
+                Select-Object -First 1
+            if ($null -eq $DepPkgFound) {
+                Write-Log ("  WARN  {0}" -f $DepPfx)
+                Write-Log "        not in provisioned store -- apps that depend on it may fail to register at logon"
+                $HealthIssues.Add("Framework dep not provisioned: $DepPfx")
+            }
+            else {
+                $DepPkgVer = Get-PackageFileVersion $DepPkgFound.PackageName
+                Write-Log ("  OK    {0,-52} v{1}" -f $DepPfx, $DepPkgVer)
+            }
+        }
+    }
+    else {
+        Write-Log "  (no .appx/.msix files in SharedDependencies)"
+    }
+}
+else {
+    Write-Log "  (SharedDependencies folder not present -- skipping framework dep check)"
+}
+
+Write-Log ""
+if ($HealthIssues.Count -eq 0) {
+    Write-Log "Health        : PASS -- all packages verified, no issues found"
+}
+else {
+    Write-Log "Health        : FAIL -- $($HealthIssues.Count) issue(s) detected:"
+    $HealthIssues | ForEach-Object { Write-Log "  - $_" }
+}
+
 Write-Log ""
 Write-Log "=== Final Provisioned Packages ==="
-Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-    Sort-Object PackageName |
-    ForEach-Object { Write-Log "  $($_.PackageName)" }
+$FinalPkgs | Sort-Object PackageName | ForEach-Object { Write-Log "  $($_.PackageName)" }
 
-if ($ErrorCount -gt 0) {
+if ($ErrorCount -gt 0 -or $HealthIssues.Count -gt 0) {
     exit 1
 }
 exit 0
