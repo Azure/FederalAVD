@@ -85,7 +85,7 @@ resource varRouteTableResourceId 'Microsoft.Automation/automationAccounts/variab
   name: 'RouteTableResourceId'
   properties: {
     value: '"${routeTableResourceId}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'Resource ID of the Azure Route Table to manage.'
   }
 }
@@ -96,7 +96,7 @@ resource varM365Instance 'Microsoft.Automation/automationAccounts/variables@2023
   name: 'M365EndpointInstance'
   properties: {
     value: '"${m365EndpointInstance}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'Microsoft 365 endpoint instance (worldwide, usgovdod, usgovgcchigh, china).'
   }
 }
@@ -107,7 +107,7 @@ resource varResourceManagerUri 'Microsoft.Automation/automationAccounts/variable
   name: 'ResourceManagerUri'
   properties: {
     value: '"${resourceManagerUri}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'Azure Resource Manager endpoint URI for this cloud.'
   }
 }

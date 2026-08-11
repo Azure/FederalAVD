@@ -91,7 +91,7 @@ resource varResourceGroupName 'Microsoft.Automation/automationAccounts/variables
   name: 'ResourceGroupName'
   properties: {
     value: '"${storageResourceGroupName}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'Name of the resource group containing the FSLogix storage accounts.'
   }
 }
@@ -102,7 +102,7 @@ resource varSubscriptionId 'Microsoft.Automation/automationAccounts/variables@20
   name: 'SubscriptionId'
   properties: {
     value: '"${storageSubscriptionId}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'Subscription ID containing the FSLogix storage resource group.'
   }
 }
@@ -113,7 +113,7 @@ resource varResourceManagerUri 'Microsoft.Automation/automationAccounts/variable
   name: 'ResourceManagerUri'
   properties: {
     value: '"${resourceManagerUri}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'Azure Resource Manager endpoint URI for this cloud.'
   }
 }

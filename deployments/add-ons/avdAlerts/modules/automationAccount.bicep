@@ -90,7 +90,7 @@ resource varResourceManagerUri 'Microsoft.Automation/automationAccounts/variable
   name: 'ResourceManagerUri'
   properties: {
     value: '"${resourceManagerUri}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'Azure Resource Manager endpoint URI for this cloud.'
   }
 }
@@ -101,7 +101,7 @@ resource varStorageAccountResourceIDs 'Microsoft.Automation/automationAccounts/v
   name: 'StorageAccountResourceIDs'
   properties: {
     value: '"${replace(storageAccountResourceIdsJson, '"', '\\"')}"'
-    isEncrypted: false
+    isEncrypted: true
     description: 'JSON array of storage account resource IDs for the storage space collector.'
   }
 }
