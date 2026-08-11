@@ -501,7 +501,7 @@ foreach ($Installer in $Installers) {
     
     $Process = Start-Process -FilePath $Installer.FullName -ArgumentList "/S" -Wait -PassThru
     
-    if ($Process.ExitCode -eq 0 -or $Process.ExitCode -eq 3010) {
+    if ($Process.ExitCode -in $SuccessExitCodes) {
         Write-Log -Category Info -Message "$($Installer.Name) completed successfully"
     }
     else {
