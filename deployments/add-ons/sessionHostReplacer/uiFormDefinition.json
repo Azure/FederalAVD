@@ -3366,7 +3366,7 @@
                   "visible": "[not(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv))]",
                   "options": {
                     "style": "Info",
-                    "text": "Session host naming conventions are sourced from the resource group tags set during host pool deployment. No changes needed."
+                    "text": "Session host naming conventions have been pre-populated from the host pool resource group tags. Review the values below and modify only if they do not match your existing VM naming."
                   }
                 },
                 {
@@ -3397,7 +3397,7 @@
                 {
                   "name": "virtualMachineNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
+                  "visible": true,
                   "label": "Virtual Machine Naming Convention",
                   "placeholder": "vm-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'vm-SHNAME')]",
@@ -3411,7 +3411,7 @@
                 {
                   "name": "diskNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
+                  "visible": true,
                   "label": "OS Disk Naming Convention",
                   "placeholder": "disk-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'disk-SHNAME')]",
@@ -3425,7 +3425,7 @@
                 {
                   "name": "networkInterfaceNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
+                  "visible": true,
                   "label": "Network Interface Naming Convention",
                   "placeholder": "nic-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'nic-SHNAME')]",
@@ -3439,7 +3439,7 @@
                 {
                   "name": "availabilitySetNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
+                  "visible": true,
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
@@ -3577,10 +3577,10 @@
         "storageEncryptionIdentityNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
         "applicationInsightsNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
         "appServicePlanNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
-        "virtualMachineNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv), steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
-        "virtualMachineDiskNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv), steps('advanced').sessionHostNaming.diskNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv)]",
-        "virtualMachineNicNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv), steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNicNameConv)]",
-        "availabilitySetNameConv": "[if(empty(steps('basics').hostsRGProps.tags.availabilitySetNameConv), steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, steps('basics').hostsRGProps.tags.availabilitySetNameConv)]",
+        "virtualMachineNameConv": "[steps('advanced').sessionHostNaming.virtualMachineNameConvOverride]",
+        "virtualMachineDiskNameConv": "[steps('advanced').sessionHostNaming.diskNameConvOverride]",
+        "virtualMachineNicNameConv": "[steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride]",
+        "availabilitySetNameConv": "[steps('advanced').sessionHostNaming.availabilitySetNameConvOverride]",
         "tags": "[steps('advanced').tagsSection.tags]"
       },
       "kind": "Subscription",

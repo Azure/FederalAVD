@@ -1912,11 +1912,21 @@
               "name": "sessionHostNaming",
               "type": "Microsoft.Common.Section",
               "label": "Session Host Resource Naming",
-              "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
+              "visible": true,
               "elements": [
+                {
+                  "name": "tagsNotice",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention))]",
+                  "options": {
+                    "style": "Info",
+                    "text": "Session host naming conventions have been pre-populated from the host pool resource group tags. Review the values below and modify only if they do not match your existing VM naming."
+                  }
+                },
                 {
                   "name": "infoBox",
                   "type": "Microsoft.Common.InfoBox",
+                  "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
                   "options": {
                     "style": "Warning",
                     "text": "CRITICAL: Session host naming conventions MUST match your existing VMs in the host pool! New VMs deployed as replacements will use these patterns. Use 'SHNAME' token for session host name and '##' token for availability set index."
