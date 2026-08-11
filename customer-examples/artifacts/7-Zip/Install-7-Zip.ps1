@@ -1,4 +1,8 @@
-﻿#region Initialization
+﻿param (
+    [int[]]$SuccessExitCodes = @(0, 3010)
+)
+
+#region Initialization
 $SoftwareName = '7-Zip'
 $Script:Name = 'Install-7-Zip'
 #endregion
@@ -86,24 +90,27 @@ if ($PathMSI) {
     $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /quiet /noreboot" -PassThru
     if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
         $Installer.Kill()
-        Write-Log -Category Warning -Message "'$SoftwareName' MSI installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+        Write-Log -Category Error -Message "'$SoftwareName' MSI installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+        exit 1
     }
-    elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
+    elseif ($Installer.ExitCode -in $SuccessExitCodes) {
         if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -message "'$SoftwareName' installed successfully. A reboot is required." }
         else { Write-Log -Category Info -message "'$SoftwareName' installed successfully." }
     }
     else {
-        Write-Log -Category Warning -Message "The MSI installer exit code is $($Installer.ExitCode)"
+        Write-Log -Category Error -Message "'$SoftwareName' MSI installer failed with exit code $($Installer.ExitCode)."
+        exit $Installer.ExitCode
     }
 }
 elseif ($PathEXE) {
     Write-Log -Category Info -message "No MSI found. Installing '$SoftwareName' via EXE: '$PathEXE /S'."
     $Installer = Start-Process -FilePath $PathEXE -ArgumentList '/S' -Wait -PassThru
-    if ($Installer.ExitCode -eq 0) {
+    if ($Installer.ExitCode -in $SuccessExitCodes) {
         Write-Log -Category Info -message "'$SoftwareName' installed successfully."
     }
     else {
-        Write-Log -Category Warning -Message "The EXE installer exit code is $($Installer.ExitCode)"
+        Write-Log -Category Error -Message "'$SoftwareName' EXE installer failed with exit code $($Installer.ExitCode)."
+        exit $Installer.ExitCode
     }
 }
 else {

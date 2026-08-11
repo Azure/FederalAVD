@@ -1,5 +1,6 @@
 ﻿param (
-    [string]$DeploymentType = 'Install'
+    [string]$DeploymentType = 'Install',
+    [int[]]$SuccessExitCodes = @(0, 3010)
 )
 
 #region Supporting Functions
@@ -363,14 +364,16 @@ If ($DeploymentType -ne 'UnInstall') {
     $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$pathMSI`" /quiet" -PassThru
     if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
         $Installer.Kill()
-        Write-Log -Category Warning -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+        Write-Log -Category Error -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+        exit 1
     }
-    elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
+    elseif ($Installer.ExitCode -in $SuccessExitCodes) {
         if ($Installer.ExitCode -eq 3010) { Write-Log -Message "'$SoftwareName' installed successfully. A reboot is required." }
         else { Write-Log -Message "'$SoftwareName' installed successfully." }
     }
     else {
-        Write-Log -Category Error -Message "The Installer exit code is $($Installer.ExitCode)"
+        Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)."
+        exit $Installer.ExitCode
     }
     If ($TempDir) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Log -Message "Completed '$SoftwareName' Installation."

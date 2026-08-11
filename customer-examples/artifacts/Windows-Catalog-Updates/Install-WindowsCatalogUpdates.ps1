@@ -171,11 +171,11 @@ foreach ($cab in $CabFiles) {
 
 #endregion
 
+Write-Log -Category Info -Message "Completed '$PSCommandPath'."
 if ($failures -gt 0) {
-    Write-Log -Category Warning -Message "Completed with $failures failure(s). Review the log for details."
+    Write-Log -Category Error -Message "$failures update(s) failed to install. Review the log for details."
+    exit 1
 }
 else {
     Write-Log -Category Info -Message "All Windows Catalog updates installed successfully."
 }
-
-Write-Log -Category Info -Message "Completed '$PSCommandPath'."

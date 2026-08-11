@@ -178,11 +178,16 @@ try {
         If ($Arguments) {
           Write-Log "Calling '$DestFile' with arguments '$Arguments'"
           $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
+          $LASTEXITCODE = 0
           & $DestFile @parameterSplat *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
         Else {
           Write-Log "Calling '$DestFile'"
+          $LASTEXITCODE = 0
           & $DestFile *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
+        }
+        if ($LASTEXITCODE) {
+          throw "Script '$DestFile' exited with code $LASTEXITCODE."
         }
       }
       'zip' {
@@ -195,11 +200,16 @@ try {
         If ($Arguments) {
           Write-Log "Calling '$PSScript' with arguments '$Arguments'"
           $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments
+          $LASTEXITCODE = 0
           & $PSScript @parameterSplat *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
         Else {
           Write-Log "Calling '$PSScript'"
+          $LASTEXITCODE = 0
           & $PSScript *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
+        }
+        if ($LASTEXITCODE) {
+          throw "Script '$PSScript' exited with code $LASTEXITCODE."
         }
       }
     }

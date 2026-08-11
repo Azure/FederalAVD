@@ -237,7 +237,9 @@ Param(
     [string]$InstallMode = 'Full',
     
     [Parameter(Mandatory = $false)]
-    [switch]$SkipShortcuts
+    [switch]$SkipShortcuts,
+
+    [int[]]$SuccessExitCodes = @(0, 3010)
 )
 #endregion
 
@@ -314,7 +316,7 @@ try {
     $Process = Start-Process -FilePath "msiexec.exe" -ArgumentList $Arguments -Wait -PassThru
     $ExitCode = $Process.ExitCode
     
-    if ($ExitCode -eq 0 -or $ExitCode -eq 3010) {
+    if ($ExitCode -in $SuccessExitCodes) {
         Write-Log -Category Info -Message "Installation completed successfully. Exit code: $ExitCode"
         exit 0
     }
@@ -499,11 +501,12 @@ foreach ($Installer in $Installers) {
     
     $Process = Start-Process -FilePath $Installer.FullName -ArgumentList "/S" -Wait -PassThru
     
-    if ($Process.ExitCode -ne 0 -and $Process.ExitCode -ne 3010) {
-        Write-Log -Category Warning -Message "$($Installer.Name) failed with exit code: $($Process.ExitCode)"
+    if ($Process.ExitCode -eq 0 -or $Process.ExitCode -eq 3010) {
+        Write-Log -Category Info -Message "$($Installer.Name) completed successfully"
     }
     else {
-        Write-Log -Category Info -Message "$($Installer.Name) completed successfully"
+        Write-Log -Category Error -Message "$($Installer.Name) failed with exit code: $($Process.ExitCode)"
+        exit $Process.ExitCode
     }
 }
 ```
@@ -513,7 +516,7 @@ foreach ($Installer in $Installers) {
 - [ ] Script uses standard PowerShell named parameters (NOT DynParameters)
 - [ ] Script includes logging functionality
 - [ ] Script handles errors gracefully
-- [ ] Script returns appropriate exit codes (0 = success)
+- [ ] Script exits non-zero when the installer fails (any exit code other than 0 or 3010)
 - [ ] Script uses relative paths for file access (`$PSScriptRoot` or `Split-Path`)
 - [ ] Script includes header comments explaining purpose
 - [ ] Script name follows convention: `Install-[Name].ps1` or `Configure-[Name].ps1`
@@ -1125,6 +1128,10 @@ New-AzDeployment `
    if ($ExitCode -eq 0 -or $ExitCode -eq 3010 -or $ExitCode -eq 1641) {
        Write-Log "Installation successful (exit code: $ExitCode)"
        exit 0
+   }
+   else {
+       Write-Log -Category Error -Message "Installation failed with exit code: $ExitCode"
+       exit $ExitCode
    }
    ```
 

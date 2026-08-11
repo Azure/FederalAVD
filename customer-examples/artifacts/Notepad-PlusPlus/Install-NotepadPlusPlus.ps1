@@ -1,4 +1,8 @@
-﻿#region Initialization
+﻿param (
+    [int[]]$SuccessExitCodes = @(0, 3010)
+)
+
+#region Initialization
 $SoftwareName = 'Notepad++'
 $Script:Name = 'Install-NotepadPlusPlus'
 #endregion
@@ -56,12 +60,13 @@ Write-Log -category Info -message "Starting '$PSCommandPath'."
 
 $PathExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: '$PathExe /S /noUpdater' ."
-$Installer = Start-Process -FilePath $PathExe  -ArgumentList "/S /noUpdater" -Wait -PassThru
-If ($($Installer.ExitCode) -eq 0) {
+$Installer = Start-Process -FilePath $PathExe -ArgumentList "/S /noUpdater" -Wait -PassThru
+If ($Installer.ExitCode -in $SuccessExitCodes) {
     Write-Log -Category Info -message "'$SoftwareName' installed successfully."
 }
 Else {
-    Write-Log -Category Warning -Message "The Installer exit code is $($Installer.ExitCode)"
+    Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)."
+    exit $Installer.ExitCode
 }
 
 Write-Log -Category Info -message "Completed '$SoftwareName' Installation."
