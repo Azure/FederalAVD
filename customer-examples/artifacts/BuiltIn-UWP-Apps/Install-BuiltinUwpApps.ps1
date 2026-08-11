@@ -116,6 +116,24 @@ $ErrorCount   = 0
 # Track per-app before/after for the change summary.
 $ChangeLog = [System.Collections.Generic.List[PSCustomObject]]::new()
 
+# Collect shared framework dependencies once -- the same set is used for every app.
+# Log the full list here so it appears once in the output rather than repeating for
+# each app in the provisioning loop below.
+$SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
+$DepPackages  = @()
+if (Test-Path -Path $SharedDepDir) {
+    $DepPackages = @(Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in @('.appx', '.msix') })
+}
+if ($DepPackages.Count -gt 0) {
+    Write-Log ""
+    Write-Log "Shared framework deps: $($DepPackages.Count) package(s)"
+    $DepPackages | Sort-Object Name | ForEach-Object { Write-Log "  $($_.Name)" }
+}
+else {
+    Write-Log "No shared framework dependencies found in SharedDependencies\."
+}
+
 foreach ($AppFolder in $AppFolders) {
     Write-Log ""
     Write-Log "=== $($AppFolder.Name) ==="
@@ -184,37 +202,7 @@ foreach ($AppFolder in $AppFolders) {
         Write-Log "Staged package is newer ($PackageVersion > $ProvisionedVersion). Provisioning update."
     }
 
-    # ----------------------------------------------------------------
-    # Locate dependency packages.
-    # Update-ImageArtifacts.ps1 (Optimize-SharedDependencies) has already:
-    #   - collected x86, x64, and neutral dep files from every app's Dependencies\ subfolder
-    #   - deduped them (highest version wins per package family + arch)
-    #   - moved them all into a single SharedDependencies\ folder at the artifact root
-    #   - removed the per-app Dependencies\ folders
-    # So reading that one folder is sufficient -- no per-app scan or dedup needed here.
-    #
-    # Both x86 AND x64 packages are required per DISM docs: an .msixbundle contains
-    # sub-packages for each architecture; on an x64 host DISM registers both the x64
-    # and x86 sub-packages, so framework deps (VCLibs, WinUI Xaml, etc.) are needed
-    # for both architectures.
-    #
-    # .msixbundle/.appxbundle files are excluded: DISM rejects multi-arch bundles as
-    # -DependencyPackagePath inputs (0x80070057 "The parameter is incorrect").
-    # ----------------------------------------------------------------
-    $SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
-    $DepPackages  = @()
-    if (Test-Path -Path $SharedDepDir) {
-        $DepPackages = @(Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Extension -in @('.appx', '.msix') })
-    }
-
-    if ($DepPackages.Count -gt 0) {
-        Write-Log "Shared deps  : $($DepPackages.Count) package(s)"
-        $DepPackages | ForEach-Object { Write-Log "  $($_.Name)" }
-    }
-    else {
-        Write-Log "Dependencies : none"
-    }
+    Write-Log "Shared deps  : $($DepPackages.Count) package(s)"
 
     # ----------------------------------------------------------------
     # Provision the app for all users via DISM (online mode).
@@ -431,36 +419,43 @@ foreach ($Row in ($ChangeLog | Sort-Object App)) {
 
 Write-Log ""
 Write-Log "-- Framework dependencies --"
-$SharedDepCheck = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
-if (Test-Path -Path $SharedDepCheck) {
-    $DepFilesCheck = Get-ChildItem -Path $SharedDepCheck -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Extension -in @('.appx', '.msix') } | Sort-Object Name
-    if ($DepFilesCheck.Count -gt 0) {
-        $SeenPrefixes = [System.Collections.Generic.HashSet[string]]::new(
-            [System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($DepFileCheck in $DepFilesCheck) {
+if ($DepPackages.Count -gt 0) {
+    $SeenPrefixes = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($DepFileCheck in ($DepPackages | Sort-Object Name)) {
             $DepPfx = [System.IO.Path]::GetFileNameWithoutExtension($DepFileCheck.Name) `
                 -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
             if (-not $SeenPrefixes.Add($DepPfx)) { continue }  # skip arch duplicates already reported
             $DepPkgFound = $FinalPkgs | Where-Object { $_.PackageName -like "*$DepPfx*" } |
                 Select-Object -First 1
             if ($null -eq $DepPkgFound) {
-                Write-Log ("  WARN  {0}" -f $DepPfx)
-                Write-Log "        not in provisioned store -- apps that depend on it may fail to register at logon"
-                $HealthIssues.Add("Framework dep not provisioned: $DepPfx")
+                # Not in the provisioned store. Framework packages shipped with Windows or
+                # registered as side-effects of provisioning an app do not always appear in
+                # Get-AppxProvisionedPackage -- they live in the all-users AppX package store
+                # (C:\Program Files\WindowsApps\) and are found there instead. Check there
+                # before reporting a warning. This is the normal outcome when all apps succeed
+                # on the first provisioning attempt (DISM satisfied deps from the OS baseline).
+                $WinAppsDir  = Join-Path $env:ProgramFiles 'WindowsApps'
+                $DepFolder   = Get-ChildItem -Path $WinAppsDir -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like "$DepPfx*" } | Select-Object -First 1
+                if ($null -ne $DepFolder) {
+                    $DepFolderVer = Get-PackageFileVersion $DepFolder.Name
+                    Write-Log ("  OK    {0,-52} v{1} (WindowsApps)" -f $DepPfx, $DepFolderVer)
+                }
+                else {
+                    Write-Log ("  WARN  {0}" -f $DepPfx)
+                    Write-Log "        not found in provisioned store or WindowsApps -- apps that depend on it may fail to register at logon"
+                    $HealthIssues.Add("Framework dep not available: $DepPfx")
+                }
             }
             else {
                 $DepPkgVer = Get-PackageFileVersion $DepPkgFound.PackageName
                 Write-Log ("  OK    {0,-52} v{1}" -f $DepPfx, $DepPkgVer)
             }
-        }
-    }
-    else {
-        Write-Log "  (no .appx/.msix files in SharedDependencies)"
     }
 }
 else {
-    Write-Log "  (SharedDependencies folder not present -- skipping framework dep check)"
+    Write-Log "  (no shared framework dependencies -- skipping dep check)"
 }
 
 Write-Log ""
