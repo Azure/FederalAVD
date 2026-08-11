@@ -3,22 +3,33 @@
     Provisions built-in UWP apps from offline MSIX packages for all users on the system.
 
 .DESCRIPTION
-    Iterates through each app subfolder inside the builtin-uwp-apps artifact directory.
-    For each subfolder it installs dependency packages found in a Dependencies subfolder,
-    then provisions the main bundle with Add-AppxProvisionedPackage so the app is
+    Iterates through each app subfolder inside the builtin-uwp-apps artifact directory
+    and provisions the main bundle with Add-AppxProvisionedPackage so the app is
     available to every user who signs in after imaging.
 
-    Expected folder structure (populated by Update-ImageArtifacts.ps1 via winget download):
+    Expected folder structure (produced by Update-ImageArtifacts.ps1 via winget download
+    followed by Optimize-SharedDependencies, which deduplicates all per-app dependency
+    packages into a single SharedDependencies folder and removes the per-app folders):
 
         builtin-uwp-apps\
+            SharedDependencies\
+                Microsoft.VCLibs.140.00_<version>_x64__8wekyb3d8bbwe.appx
+                Microsoft.VCLibs.140.00_<version>_x86__8wekyb3d8bbwe.appx
+                Microsoft.VCLibs.140.00.UWPDesktop_<version>_x64__8wekyb3d8bbwe.appx
+                Microsoft.VCLibs.140.00.UWPDesktop_<version>_x86__8wekyb3d8bbwe.appx
+                Microsoft.UI.Xaml.2.8_<version>_x64__8wekyb3d8bbwe.appx
+                Microsoft.UI.Xaml.2.8_<version>_x86__8wekyb3d8bbwe.appx
+                Microsoft.WindowsAppRuntime.<major.minor>_<version>_x64__8wekyb3d8bbwe.appx
+                ...
             Calculator\
                 Microsoft.WindowsCalculator_<version>_neutral_~_8wekyb3d8bbwe.msixbundle
-                Dependencies\
-                    x64\
-                        Microsoft.VCLibs.140.00.UWPDesktop_<version>_x64_8wekyb3d8bbwe.appx
-                        ...
             Paint\
-                ...
+                Microsoft.Paint_<version>_neutral_~_8wekyb3d8bbwe.msixbundle
+            ...
+
+    Framework dependencies are passed to DISM via -DependencyPackagePath (not installed
+    standalone). Both x86 and x64 variants are included because an .msixbundle contains
+    sub-packages for both architectures and DISM registers them both on x64 hosts.
 
     IMPORTANT -- PROVISIONING PREREQUISITE:
     Add-AppxProvisionedPackage must be called with -Regions all. Without this parameter,
