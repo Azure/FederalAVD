@@ -187,11 +187,16 @@ foreach ($AppFolder in $AppFolders) {
     # ----------------------------------------------------------------
     # Locate dependency packages.
     # Update-ImageArtifacts.ps1 (Optimize-SharedDependencies) has already:
-    #   - collected x64/neutral dep files from every app's Dependencies\ subfolder
-    #   - deduped them (highest version wins per package family)
+    #   - collected x86, x64, and neutral dep files from every app's Dependencies\ subfolder
+    #   - deduped them (highest version wins per package family + arch)
     #   - moved them all into a single SharedDependencies\ folder at the artifact root
     #   - removed the per-app Dependencies\ folders
     # So reading that one folder is sufficient -- no per-app scan or dedup needed here.
+    #
+    # Both x86 AND x64 packages are required per DISM docs: an .msixbundle contains
+    # sub-packages for each architecture; on an x64 host DISM registers both the x64
+    # and x86 sub-packages, so framework deps (VCLibs, WinUI Xaml, etc.) are needed
+    # for both architectures.
     #
     # .msixbundle/.appxbundle files are excluded: DISM rejects multi-arch bundles as
     # -DependencyPackagePath inputs (0x80070057 "The parameter is incorrect").
