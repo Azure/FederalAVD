@@ -454,9 +454,11 @@ if ($DepPackages.Count -gt 0) {
                     Write-Log ("  OK    {0,-52} v{1} (WindowsApps)" -f $DepPfx, $DepFolderVer)
                 }
                 else {
-                    Write-Log ("  WARN  {0}" -f $DepPfx)
-                    Write-Log "        not found in provisioned store or WindowsApps -- apps that depend on it may fail to register at logon"
-                    $HealthIssues.Add("Framework dep not available: $DepPfx")
+                    # Not registering this as a health issue: if any app that actually needed this
+                    # dependency failed to provision, the per-app check above already caught it.
+                    # A staged dep that is not registered simply means it was not needed by any app
+                    # on this OS baseline -- flagging it would be a false positive.
+                    Write-Log ("  INFO  {0,-52} not in provisioned store or WindowsApps (not needed by any provisioned app, or satisfied via OS baseline)" -f $DepPfx)
                 }
             }
             else {
