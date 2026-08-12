@@ -26,7 +26,7 @@ Deploy production-ready AVD environments with:
 
 The template deploys resources across multiple resource groups:
 
-```
+```text
 Subscription
 ├── Control Plane Resource Group
 │   ├── Host Pool
@@ -71,7 +71,7 @@ Subscription
 ### Identity Solutions
 
 | Solution | Description | Domain Join | User Accounts |
-|----------|-------------|-------------|---------------|
+| --- | --- | --- | --- |
 | **ActiveDirectoryDomainServices** | Traditional AD DS | AD DS | AD DS |
 | **EntraDomainServices** | Azure AD DS | Azure AD DS | Azure AD or AD DS |
 | **EntraKerberos-Hybrid** | Hybrid Entra ID with Kerberos | Entra ID | AD DS (synced) |
@@ -147,17 +147,20 @@ Subscription
 ### Core Deployment Settings
 
 #### `identifier`
+
 - **Type:** String (max 9 chars)
 - **Required:** Yes
 - **Description:** Persona identifier for host pool naming
 - **Example:** `finance`, `callctr`, `dev`
 
 #### `index`
+
 - **Type:** Integer (0-99)
 - **Default:** `-1` (no index)
 - **Description:** Index for sharding host pools with same persona
 
 #### `namingConvention`
+
 - **Type:** Object
 - **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
 - **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (keyVaults, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
@@ -165,6 +168,7 @@ Subscription
 ### Identity & Authentication
 
 #### `identitySolution`
+
 - **Type:** String
 - **Required:** Yes
 - **Allowed Values:**
@@ -175,32 +179,38 @@ Subscription
   - `EntraId`
 
 #### `virtualMachineAdminUserName`
+
 - **Type:** String (secure)
 - **Required:** Yes
 - **Description:** Local administrator username
 
 #### `virtualMachineAdminPassword`
+
 - **Type:** String (secure)
 - **Required:** Yes
 - **Description:** Local administrator password
 
 #### `domainJoinUserPrincipalName`
+
 - **Type:** String (secure)
 - **Required when:** Using domain services
 - **Description:** UPN for domain join account
 
 #### `domainJoinUserPassword`
+
 - **Type:** String (secure)
 - **Required when:** Using domain services
 - **Description:** Password for domain join account
 
 #### `domainName`
+
 - **Type:** String
 - **Required when:** Using domain services
 - **Description:** FQDN of domain
 - **Example:** `contoso.com`
 
 #### `vmOUPath`
+
 - **Type:** String
 - **Optional**
 - **Description:** OU path for session hosts
@@ -209,34 +219,40 @@ Subscription
 ### Control Plane
 
 #### `controlPlaneLocation`
+
 - **Type:** String
 - **Required:** Yes
 - **Description:** Location for control plane resources
 - **Example:** `eastus2`, `usgovvirginia`
 
 #### `hostPoolType`
+
 - **Type:** String
 - **Allowed:** `Pooled`, `Personal`
 - **Default:** `Pooled`
 - **Description:** Host pool type
 
 #### `loadBalancerType`
+
 - **Type:** String
 - **Allowed:** `BreadthFirst`, `DepthFirst`, `Persistent`
 - **Default:** `BreadthFirst`
 - **Description:** Load balancing algorithm (Pooled only)
 
 #### `maxSessionLimit`
+
 - **Type:** Integer
 - **Default:** `12`
 - **Description:** Maximum sessions per session host (Pooled only)
 
 #### `validationEnvironment`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Enable validation environment (early features)
 
 #### `startVMOnConnect`
+
 - **Type:** Boolean
 - **Default:** `true`
 - **Description:** Enables the Start VM on Connect feature so deallocated session hosts are powered on when a user connects
@@ -244,30 +260,35 @@ Subscription
 ### Session Hosts
 
 #### `virtualMachineSize`
+
 - **Type:** String
 - **Required:** Yes
 - **Description:** Azure VM size
 - **Example:** `Standard_D4ads_v5`, `Standard_E4as_v5`
 
 #### `virtualMachineCount`
+
 - **Type:** Integer
 - **Required:** Yes
 - **Description:** Number of session hosts to deploy
 - **Example:** `5`, `10`, `50`
 
 #### `virtualMachineNamePrefix`
+
 - **Type:** String (max 11 chars)
 - **Required:** Yes
 - **Description:** Prefix for VM names
 - **Example:** `avd-vm-`
 
 #### `availabilityZones`
+
 - **Type:** Array
 - **Optional**
 - **Description:** Availability zones for VMs
 - **Example:** `["1", "2", "3"]`
 
 #### `virtualMachineSubnetResourceId`
+
 - **Type:** String
 - **Required:** Yes
 - **Description:** Subnet resource ID for session hosts
@@ -275,53 +296,53 @@ Subscription
 ### Storage
 
 #### `fslogixStorageService`
+
 - **Type:** String
 - **Allowed:** `AzureFiles Standard`, `AzureFiles Premium`, `AzureNetAppFiles Standard`, `AzureNetAppFiles Premium`
 - **Default:** `AzureFiles Standard`
 - **Description:** Storage solution and performance tier for FSLogix profiles.
 
 #### `fslogixStorageRedundancy`
+
 - **Type:** String (Azure Files only)
 - **Allowed:** `LocallyRedundant`, `ZoneRedundant`
 - **Default:** `LocallyRedundant`
 - **Description:** Redundancy for newly created Azure Files storage accounts used by FSLogix. This is configured independently from session host availability zone settings.
 
 #### `keyManagementStorage`
+
 - **Type:** String
 - **Allowed:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
 - **Default:** `PlatformManaged`
 - **Description:** Key management mode for Azure Files (FSLogix) storage account encryption.
 
 #### `keyManagementRecoveryServicesVault`
+
 - **Type:** String
 - **Allowed:** `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM`
 - **Default:** `PlatformManaged`
-- **Description:** Key management mode for Recovery Services Vault encryption. When `CustomerManaged` is combined with `deployPrivateEndpoints=true`, see `encryptionKeyVaultForcePublicAccess` below — Azure Backup has no AzureServices trusted service bypass for Key Vault.
-
-#### `encryptionKeyVaultForcePublicAccess`
-- **Type:** Boolean
-- **Default:** `false`
-- **Description:** Controls the trade-off between two mutually exclusive controls when `deployPrivateEndpoints = true` and `keyManagementRecoveryServicesVault = CustomerManaged`. Azure Backup has no `AzureServices` trusted service bypass for Key Vault, making simultaneous satisfaction of both SC-28 (CMK on RSV) and SC-7 (private-only KV) impossible.
-  - **`true`** — RSV uses customer-managed keys (SC-28 satisfied). The encryption Key Vault’s `publicNetworkAccess` is set to Enabled and all IP-based firewall rules are cleared — the Key Vault becomes reachable by any authenticated principal on Azure’s public network (SC-7 weakened).
-  - **`false`** (default) — The Key Vault remains private-only (SC-7 maintained). RSV silently falls back to platform-managed keys rather than failing the deployment (SC-28 not satisfied for RSV).
-- **This is a compliance risk decision for your ISSO and AO**, not a solution default or recommendation. Document the selected option and accepted control gap in your SSP.
+- **Description:** Key management mode for Recovery Services Vault encryption.
 
 #### `fslogixShareSizeInGB`
+
 - **Type:** Integer
 - **Default:** `100`
 - **Description:** Azure Files share quota in GB
 
 #### `fslogixStorageIndex`
+
 - **Type:** Integer
 - **Default:** `1`
 - **Description:** Starting index for created FSLogix storage accounts.
 
 #### `fslogixOUPath`
+
 - **Type:** String
 - **Optional**
 - **Description:** OU path used when joining FSLogix storage resources to AD DS.
 
 #### `netAppVolumesSubnetResourceId`
+
 - **Type:** String (Azure NetApp Files only)
 - **Optional**
 - **Description:** Subnet resource ID delegated to `Microsoft.NetApp/volumes`.
@@ -329,24 +350,29 @@ Subscription
 ### Monitoring
 
 #### `monitoringResourceGroupName`
+
 - **Type:** String
 - **Description:** Resource group for Log Analytics workspace
 
 #### `enableMonitoring`
+
 - **Type:** Boolean
 - **Default:** `true`
 - **Description:** Deploy AVD Insights monitoring resources (Log Analytics workspace, AVD Insights DCR, Data Collection Endpoint) and associate session hosts with the DCR.
 
 #### `logAnalyticsWorkspaceResourceId`
+
 - **Type:** String
 - **Description:** Existing Log Analytics workspace resource ID. When provided together with the existing DCR and DCE resource IDs, the deployment reuses these resources instead of creating new ones.
 
 #### `existingAVDInsightsDataCollectionRuleResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Resource ID of an existing AVD Insights Data Collection Rule. When provided along with `logAnalyticsWorkspaceResourceId` and `existingDataCollectionEndpointResourceId`, the deployment skips creating monitoring resources.
 
 #### `existingDataCollectionEndpointResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Resource ID of an existing Data Collection Endpoint associated with the existing monitoring workspace.
@@ -354,17 +380,20 @@ Subscription
 ### Backup
 
 #### `recoveryServices`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Enable Azure Backup. For pooled host pools this backs up the Azure Files share; for personal host pools this backs up the session host VM disks.
 
 #### `recoveryServicesVaultStorageRedundancy`
+
 - **Type:** String
 - **Allowed:** `LocallyRedundant`, `ZoneRedundant`, `GeoRedundant`
 - **Default:** `LocallyRedundant`
 - **Description:** Storage redundancy for backup recovery points in the Recovery Services vault. Independent of storage account SKU. When set to `GeoRedundant`, Cross-Region Restore (CRR) is automatically enabled — no separate parameter is needed. GRS storage costs the same whether CRR is on or off; without CRR the geo-redundant copy provides passive data durability only with no recovery capability in the secondary region. See [bcdr.md](../../docs/bcdr.md#personal-host-pool-vm-backup) for CP-6/CP-7 mapping and the Azure Policy gap note.
 
 #### `existingRecoveryServicesVaultResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Resource ID of an existing Recovery Services vault. Required when `recoveryServices` is `true` and **Use Existing Recovery Services Vault** is selected (or `existingRecoveryServicesVaultResourceId` is provided in a parameter file).
@@ -372,6 +401,7 @@ Subscription
 ### Networking
 
 #### `permittedIPs`
+
 - **Type:** Array
 - **Optional**
 - **Description:** IP addresses or CIDR blocks permitted on the firewall of all PaaS resources (storage accounts, Key Vaults). Behavior depends on `deployPrivateEndpoints`:
@@ -383,47 +413,56 @@ Subscription
 ### Security & Encryption
 
 #### `deploySecretsKeyVault`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed Key Vaults foundation deployment.
 
 #### `secretsKeyVaultEnableSoftDelete`
+
 - **Type:** Boolean
 - **Default:** `true`
 - **Description:** Enable soft delete on the inline Secrets Key Vault. Allows recovery of deleted objects within the retention period.
 
 #### `secretsKeyVaultEnablePurgeProtection`
+
 - **Type:** Boolean
 - **Default:** `true`
 - **Description:** Enable purge protection on the inline Secrets Key Vault. Prevents permanent deletion during the retention period.
 
 #### `secretsKeyVaultRetentionInDays`
+
 - **Type:** Integer (7–90)
 - **Default:** `90`
 - **Description:** Soft-delete retention period in days for the inline Secrets Key Vault.
 
 #### `encryptionKeyVaultRetentionInDays`
+
 - **Type:** Integer (7–90)
 - **Default:** `90`
 - **Description:** Soft-delete retention period in days for the inline Encryption Key Vault. Configured in **Zero Trust → Encryption Key Management** when CMK is enabled and no existing KV is provided.
 
 #### `encryptionAtHost`
+
 - **Type:** Boolean
 - **Default:** `true`
 - **Description:** Enable encryption at host for session host VMs.
 
 #### `keyManagementDisks`
+
 - **Type:** String
 - **Default:** `PlatformManaged`
 - **Description:** Session host disk key-management mode.
 
 #### `securityType`
+
 - **Type:** String
 - **Allowed:** `Standard`, `TrustedLaunch`, `ConfidentialVM`
 - **Default:** `TrustedLaunch`
 - **Description:** VM security configuration
 
 #### `existingEncryptionKeyVaultResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Resource ID of an existing Encryption Key Vault containing customer-managed keys. Typically provided from the Key Vaults (Foundation) deployment. Leave empty to have a Key Vault created automatically when CMK is enabled. In the portal form, toggle **Use Existing Encryption Key Vault** in the **Zero Trust → Encryption Key Management** step.
@@ -432,6 +471,7 @@ Subscription
 ### 📖 Complete Parameter Reference
 
 For a complete list of all 150+ parameters with detailed descriptions, see:
+
 - [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 - [Parameters Reference Index](../../docs/parameters.md)
 
@@ -665,18 +705,21 @@ New-AzSubscriptionDeployment `
 ## Cost Optimization
 
 ### Compute
+
 - Use **D-series VMs** for general workloads (balanced cost/performance)
 - Use **B-series VMs** for light workloads (burstable, lower cost)
 - Enable **Autoscale** to scale down during off-hours
 - Use **Azure Hybrid Benefit** for Windows licensing
 
 ### Storage
+
 - Use **Standard storage** for most scenarios (ZRS for HA)
 - Use **Premium** only for high-IOPS workloads (>5000 IOPS)
 - Right-size file share quotas
 - Enable **Storage Quota Automation** to avoid over-provisioning
 
 ### Networking
+
 - Consolidate private endpoints where possible
 - Use **VNet peering** instead of VPN for hub-spoke
 
@@ -692,6 +735,7 @@ New-AzSubscriptionDeployment `
 ## Support
 
 For issues, questions, or contributions:
+
 - **GitHub Issues:** [Azure/FederalAVD/issues](https://github.com/Azure/FederalAVD/issues)
 - **Documentation:** [docs/](../../docs/)
 

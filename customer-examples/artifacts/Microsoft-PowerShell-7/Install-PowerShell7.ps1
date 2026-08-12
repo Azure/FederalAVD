@@ -1,4 +1,8 @@
-﻿#region Initialization
+﻿param (
+    [int[]]$SuccessExitCodes = @(0, 3010)
+)
+
+#region Initialization
 $SoftwareName = 'PowerShell 7'
 $Script:Name = 'Install-PowerShell7'
 #endregion
@@ -82,14 +86,16 @@ $InstallerTimeoutMs = 600000 # 10 minutes
 $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /qn" -PassThru
 if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
     $Installer.Kill()
-    Write-Log -Category Warning -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+    Write-Log -Category Error -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+    exit 1
 }
-elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
+elseif ($Installer.ExitCode -in $SuccessExitCodes) {
     if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -message "'$SoftwareName' installed successfully. A reboot is required." }
     else { Write-Log -Category Info -message "'$SoftwareName' installed successfully." }
 }
 else {
-    Write-Log -Category Warning -Message "The Installer exit code is $($Installer.ExitCode)"
+    Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)."
+    exit $Installer.ExitCode
 }
 
 Write-Log -Category Info -message "Completed '$SoftwareName' Installation."

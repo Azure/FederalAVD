@@ -1,4 +1,4 @@
-# Install-GitForWindows.ps1
+﻿# Install-GitForWindows.ps1
 
 ## Overview
 
@@ -59,7 +59,7 @@ None - This script runs with default settings.
 
 ### Default Installation Location
 
-```
+```text
 C:\Program Files\Git\
 ```
 
@@ -72,7 +72,7 @@ C:\Program Files\Git\
 
 ### Installation Parameters
 
-```
+```text
 /VERYSILENT       - No UI, completely silent installation
 /NORESTART        - Do not restart after installation
 /NOCANCEL         - No cancel button in progress dialog
@@ -121,7 +121,7 @@ git config --global user.email "your.email@example.com"
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Install-GitforWindows-<timestamp>.log
 ```
 
@@ -136,7 +136,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetUrl` | Extracts download URLs from web pages |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
@@ -283,7 +283,8 @@ For air-gapped environments, pre-download the installer:
    - Download: `Git-<version>-64-bit.exe`
 
 2. **Place in Script Directory:**
-   ```
+
+```text
    Install-GitForWindows.ps1
    Git-2.43.0-64-bit.exe
    ```

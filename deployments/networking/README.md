@@ -1,4 +1,4 @@
-# AVD Networking Infrastructure Template
+﻿# AVD Networking Infrastructure Template
 
 > **📖 User Guide:** For deployment instructions and scenarios, see the [Quick Start Guide - Networking](../../docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield)
 
@@ -22,7 +22,7 @@ Provide a production-ready network foundation for AVD with:
 
 ### Deployed Resources
 
-```
+```text
 Subscription
 ├── Resource Group (VNet)
 │   ├── Virtual Network
@@ -50,7 +50,7 @@ Subscription
 ### Routing Options
 
 | Option | Description | Use Case |
-|--------|-------------|----------|
+| --- | --- | --- |
 | **NAT Gateway** (default) | Outbound internet via NAT gateway | Simplest option, Azure-managed outbound connectivity |
 | **NVA Force-Tunnel** | All traffic routed through Network Virtual Appliance | Centralized inspection, hub-spoke with firewall |
 | **NVA + AVD Bypass** | NVA routing with AVD service traffic bypass routes | Hybrid: Firewall for internet, direct AVD service connectivity |
@@ -75,31 +75,37 @@ Subscription
 ### Core Settings
 
 #### `location`
+
 - **Type:** String
 - **Default:** `deployment().location`
 - **Description:** Azure region for network resources
 
 #### `deployVnet`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Whether to deploy the virtual network
 
 #### `deployVnetResourceGroup`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Whether to deploy the VNet resource group
 
 #### `vnetResourceGroupName`
+
 - **Type:** String
 - **Required when:** `deployVnet` is `true`
 - **Description:** Resource group name for VNet
 
 #### `vnetName`
+
 - **Type:** String
 - **Required when:** `deployVnet` is `true`
 - **Description:** Virtual network name
 
 #### `vnetAddressPrefixes`
+
 - **Type:** Array
 - **Required when:** `deployVnet` is `true`
 - **Description:** Address prefixes for VNet
@@ -108,10 +114,12 @@ Subscription
 ### Subnet Configuration
 
 #### `hostsSubnets`
+
 - **Type:** Array
 - **Required when:** `deployVnet` is `true`
 - **Description:** Session host subnets configuration. Supports one or more subnets — all share the same NSG and routing configuration.
 - **Schema:**
+
   ```json
   [
     {
@@ -120,7 +128,9 @@ Subscription
     }
   ]
   ```
+
 - **Example (single subnet):**
+
   ```json
   [
     {
@@ -129,7 +139,9 @@ Subscription
     }
   ]
   ```
+
 - **Example (multiple subnets):**
+
   ```json
   [
     { "name": "snet-avd-hosts-1", "addressPrefix": "10.0.0.0/24" },
@@ -138,10 +150,12 @@ Subscription
   ```
 
 #### `privateEndpointsSubnet`
+
 - **Type:** Object
 - **Optional**
 - **Description:** Private endpoints subnet configuration (for Zero Trust)
 - **Example:**
+
   ```json
   {
     "name": "snet-avd-endpoints",
@@ -150,10 +164,12 @@ Subscription
   ```
 
 #### `functionAppSubnet`
+
 - **Type:** Object
 - **Optional**
 - **Description:** Function app subnet configuration (for Storage Quota Manager)
 - **Example:**
+
   ```json
   {
     "name": "snet-avd-functions",
@@ -164,6 +180,7 @@ Subscription
 ### Routing & Connectivity
 
 #### `defaultRouting`
+
 - **Type:** String
 - **Default:** `nat`
 - **Allowed Values:** `nat`, `nva`
@@ -172,18 +189,21 @@ Subscription
   - `nva` - Route through Network Virtual Appliance (firewall)
 
 #### `includeAvdBypassRoutes`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** When using NVA routing, adds AVD service bypass routes to allow direct AVD service connectivity
 - **Use when:** NVA force-tunnel with optimized AVD service traffic
 
 #### `nvaIPAddress`
+
 - **Type:** String
 - **Required when:** `defaultRouting` is `nva`
 - **Description:** IP address of the Network Virtual Appliance
 - **Example:** `10.1.0.4`
 
 #### `customDNSServers`
+
 - **Type:** Array
 - **Optional**
 - **Description:** Custom DNS server IP addresses
@@ -192,12 +212,14 @@ Subscription
 ### Hub Peering
 
 #### `hubVnetResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Resource ID of hub VNet for peering
 - **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}`
 
 #### `virtualNetworkGatewayOnHub`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Whether hub VNet has a virtual network gateway (VPN/ExpressRoute)
@@ -205,11 +227,13 @@ Subscription
 ### Security & Monitoring
 
 #### `deployDDoSNetworkProtection`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Deploy DDoS Network Protection plan
 
 #### `logAnalyticsWorkspaceResourceId`
+
 - **Type:** String
 - **Optional**
 - **Description:** Log Analytics workspace resource ID for NSG flow logs
@@ -218,16 +242,19 @@ Subscription
 ### Private DNS Zones
 
 #### `privateDNSZonesSubscriptionId`
+
 - **Type:** String
 - **Default:** Current subscription
 - **Description:** Subscription for private DNS zones deployment
 
 #### `deployPrivateDNSZonesResourceGroup`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Deploy resource group for private DNS zones
 
 #### `privateDNSZonesResourceGroupName`
+
 - **Type:** String
 - **Required when:** Any DNS zone is created
 - **Description:** Resource group name for private DNS zones
@@ -235,7 +262,7 @@ Subscription
 #### Private DNS Zone Creation Flags
 
 | Parameter | Service | When to Create |
-|-----------|---------|----------------|
+| --- | --- | --- |
 | `createAzureBlobZone` | Blob Storage | Using private endpoints for storage accounts |
 | `createAzureFilesZone` | Files Storage | Using private endpoints for FSLogix profiles |
 | `createAzureQueueZone` | Queue Storage | Using private endpoints for storage queues |
@@ -261,11 +288,13 @@ If zones already exist, provide their resource IDs:
 - `azureWebAppZoneId`
 
 #### `linkPrivateDnsZonesToNewVnet`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Link DNS zones to the newly created VNet
 
 #### `privateDnsZonesVnetId`
+
 - **Type:** String
 - **Required when:** `linkPrivateDnsZonesToNewVnet` is `false` and DNS zones are used
 - **Description:** Existing VNet resource ID to link DNS zones to
@@ -273,6 +302,7 @@ If zones already exist, provide their resource IDs:
 ### Naming & Tagging
 
 #### `nameConvResTypeAtEnd`
+
 - **Type:** Boolean
 - **Default:** `false`
 - **Description:** Resource naming convention (CAF-style)
@@ -280,10 +310,12 @@ If zones already exist, provide their resource IDs:
   - `true` - `avd-networking-use2-rg`
 
 #### `tags`
+
 - **Type:** Object
 - **Optional**
 - **Description:** Tags to apply to resources
 - **Example:**
+
   ```json
   {
     "Environment": "Production",
@@ -293,6 +325,7 @@ If zones already exist, provide their resource IDs:
   ```
 
 #### `timeStamp`
+
 - **Type:** String
 - **Default:** `utcNow('yyyyMMddhhmmss')`
 - **Description:** Timestamp for deployment uniqueness (DO NOT MODIFY)
@@ -300,6 +333,7 @@ If zones already exist, provide their resource IDs:
 ### Air-Gapped Cloud Specific
 
 #### `azureRecoveryServicesGeoCode`
+
 - **Type:** String
 - **Optional**
 - **Description:** Recovery Services geo code for air-gapped clouds (e.g., `USN` for USNat)
@@ -412,6 +446,7 @@ az deployment sub create \
 ## Outputs
 
 ### `vnetResourceId`
+
 - **Type:** String
 - **Description:** Resource ID of the deployed virtual network
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-networking-usgv/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgv`
@@ -419,20 +454,24 @@ az deployment sub create \
 ## Security Considerations
 
 ### Network Segmentation
+
 - **Separate subnets** for different workload types
 - **NSGs** provide traffic filtering at subnet level
 - **Private endpoints** eliminate public exposure of Azure services
 
 ### Routing Security
+
 - **NAT Gateway** - Azure-managed, no inbound internet access
 - **NVA Force-Tunnel** - All traffic inspected by firewall
 - **AVD Bypass Routes** - Optimized AVD service connectivity while maintaining firewall for internet
 
 ### DNS Security
+
 - **Private DNS zones** ensure Azure services resolve to private endpoints
 - **Custom DNS** for integration with on-premises DNS servers
 
 ### Monitoring
+
 - **NSG flow logs** capture all network traffic for auditing
 - **Log Analytics** centralized log storage and analysis
 - **DDoS Protection** mitigates volumetric attacks (optional)
@@ -442,7 +481,7 @@ az deployment sub create \
 ### Network Costs
 
 | Resource | Cost Driver | Optimization |
-|----------|-------------|--------------|
+| --- | --- | --- |
 | **NAT Gateway** | Per gateway-hour, data processed | Use single NAT for multiple subnets |
 | **Public IP** | Static IP reservation | Standard SKU for NAT gateway |
 | **VNet Peering** | Data transfer between VNets | Peer only when needed (hub-spoke) |
@@ -451,6 +490,7 @@ az deployment sub create \
 | **NSG Flow Logs** | Log Analytics ingestion | Enable only for production |
 
 ### Right-Sizing
+
 - Use appropriate address spaces (avoid over-provisioning)
 - Create only needed private DNS zones
 - Deploy DDoS protection only for production workloads
@@ -491,6 +531,7 @@ az deployment sub create \
 ## Support
 
 For issues, questions, or contributions:
+
 - **GitHub Issues:** [Azure/FederalAVD/issues](https://github.com/Azure/FederalAVD/issues)
 - **Documentation:** [docs/](../../docs/)
 

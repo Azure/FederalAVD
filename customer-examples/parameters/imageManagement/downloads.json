@@ -33,7 +33,7 @@
     },
     "DoDSTIGGPOPackage": {
         "Description": "DoD STIG GPO Package - Keep it updated! Used for applying STIGs via LGPO.",
-        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/zip/U_STIG_GPO_Package_April_2026.zip",
+        "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2026.zip",
         "DestinationFileName": "STIGs.zip",
         "DestinationFolders": [
             "DoD-STIGs"
@@ -45,6 +45,15 @@
         "DestinationFileName": "MicrosoftEdgePolicyTemplates.cab",
         "DestinationFolders": [
             "Configure-EdgePolicy"
+        ]
+    },
+    "MicrosoftEdgeEnterprise": {
+        "Description": "Microsoft Edge Enterprise Stable x64 MSI installer. Install-MicrosoftEdgeEnterprise.ps1 also downloads this at image build time if not pre-staged (connected builds only).",
+        "APIUrl": "https://edgeupdates.microsoft.com/api/products?view=enterprise",
+        "APIArtifact": "msi",
+        "DestinationFileName": "MicrosoftEdgeEnterpriseX64.msi",
+        "DestinationFolders": [
+            "Microsoft-Edge-Enterprise"
         ]
     },
     "FSLogix": {

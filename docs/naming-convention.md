@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Naming Convention
 
@@ -15,7 +15,7 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 5. [The `purpose` component](#the-purpose-component)
 6. [Special resource-type constraints](#special-resource-type-constraints)
 7. [Aligning naming across solutions](#aligning-naming-across-solutions)
-8. [Add-on naming — brownfield inference](#add-on-naming--brownfield-inference)
+8. [Add-on naming](#add-on-naming)
 9. [Examples](#examples)
 10. [Scenario test results](#scenario-test-results)
 
@@ -25,14 +25,14 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 
 Every resource name in FederalAVD is assembled from an ordered list of **components**. Each component is a named slot that the engine fills with a context-specific value at deployment time:
 
-```
+```text
 [component1][delimiter][component2][delimiter]...[componentN]
 ```
 
 For each resource, the engine substitutes:
 
 | Component | Filled with |
-|---------|-------------|
+| --- | --- |
 | `resourceType` | The resource type abbreviation (e.g., `kv`, `vm`, `vdpool`) |
 | `purpose` | A per-resource differentiator (e.g., `avd-01`, `control-plane`, `sec`) |
 | `location` | The region abbreviation (e.g., `use`, `usw2`, `use2`) |
@@ -51,7 +51,7 @@ Empty-valued components are automatically removed before joining, so there are n
 
 When `namingConvention` is left at its default value, FederalAVD uses this pattern:
 
-```
+```text
 {resourceType}-avd-{purpose}-{location}
 ```
 
@@ -60,7 +60,7 @@ This follows the CAF recommendation of *abbreviation → workload → component 
 ### Default name examples (identifier = `desktop`, index = `1`, region = `eastus` → `use`)
 
 | Resource | Default name |
-|----------|-------------|
+| --- | --- |
 | Resource Group (Control Plane) | `rg-avd-control-plane-use` |
 | Resource Group (Hosts) | `rg-avd-desktop-01-hosts-use` |
 | Resource Group (Operations) | `rg-avd-operations-use` |
@@ -88,7 +88,7 @@ All abbreviations come from [`.common/data/resourceAbbreviations.json`](../.comm
 Key abbreviations:
 
 | Azure resource | Abbreviation |
-|---------------|-------------|
+| --- | --- |
 | Resource Group | `rg` |
 | Host Pool | `vdpool` |
 | Desktop App Group | `vddag` |
@@ -136,7 +136,7 @@ Key abbreviations:
 ### Properties
 
 | Property | Type | Required | Description |
-|----------|------|----------|-------------|
+| --- | --- | --- | --- |
 | `components` | `string[]` | Yes | Ordered array of component names. Each element must be one of the [eight component names](#the-eight-naming-components). |
 | `delimiter` | `string` | Yes | Character inserted between non-empty components. Typically `-`. |
 | `workload` | `string` | No | Static label for the solution workload. Fills the `workload` component. Example: `avd`. |
@@ -193,7 +193,7 @@ param namingConvention = {
 Each element of `components` must be one of these values:
 
 | Component name | Description | Example value |
-|-------------|-------------|--------------|
+| --- | --- | --- |
 | `resourceType` | Resource type abbreviation from the abbreviation table | `kv`, `vm`, `vdpool` |
 | `purpose` | Per-resource differentiator — see [below](#the-purpose-component) | `avd-01`, `sec`, `control-plane` |
 | `location` | Region abbreviation | `use`, `usw2`, `use2` |
@@ -206,7 +206,7 @@ Each element of `components` must be one of these values:
 ### Minimum required components
 
 | Component | Requirement | What happens without it |
-|-----------|-------------|------------------------|
+| --- | --- | --- |
 | `purpose` | **Required** | Multiple resources of the same type share an identical name → ARM conflict error. Every deployment creates several same-type resources (multiple RGs, two Key Vaults, two UAIs, etc.). The Portal UI blocks submission with an **Error** when `purpose` is absent. |
 | `resourceType` | Strongly recommended | Resource names carry no type identifier, making them hard to distinguish in the portal. |
 | `location` | Optional | The location abbreviation is still embedded in storage account names and added to Key Vault unique-string seeds, so cross-region deployments remain collision-free. Other resource names simply won't contain a location segment. The Portal UI shows a **Warning** (not an error) when `location` is absent. |
@@ -217,7 +217,7 @@ Each element of `components` must be one of these values:
 The position of `resourceType` in the array controls the naming style for **all** resources:
 
 | Style | Example | When to use |
-|-------|---------|-------------|
+| --- | --- | --- |
 | **RT-first** (prefix) | `vm-avd-prod-use` | CAF-aligned default; most Azure portal views sort by type |
 | **RT-last** (suffix) | `avd-prod-use-vm` | Some organisations prefer alphabetic sorting by workload |
 
@@ -236,7 +236,7 @@ The `purpose` component is the most powerful part of the naming system. It is th
 You never set `purpose` manually. The Bicep engine assigns the correct purpose string for each resource automatically:
 
 | Resource | Purpose value |
-|----------|--------------|
+| --- | --- |
 | Host Pool | `{identifier}` (e.g., `avd-01`) |
 | Desktop App Group | `{identifier}` |
 | Scaling Plan | `{identifier}` |
@@ -314,12 +314,14 @@ To produce a **consistent naming convention** across all solutions, pass the **s
 ### Alignment matrix
 
 | Solution | Parameter name | Notes |
-|----------|---------------|-------|
+| --- | --- | --- |
 | `hostpools/hostpool.bicep` | `namingConvention` | Full object; naming resolved in `modules/naming.bicep` |
 | `keyVaults/keyVaults.bicep` | `namingConvention` | Inline naming; fixed identifier `operations` |
 | `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
 | `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
-| Add-ons (SHR, SH, SQM) | *(none — auto-inferred)* | Names inferred from HP name; override per-resource if needed |
+| `add-ons/sessionHostReplacer/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
+| `add-ons/sessionHosts/main.bicep` | *(none)* | VM/disk/NIC patterns via per-resource params; no top-level convention object |
+| `add-ons/storageQuotaManager/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
 
 ### Shared parameter file pattern
 
@@ -349,7 +351,7 @@ Then merge this into each solution's parameter file or pass it as a parameter fi
 The `identifier` (or equivalent) parameter creates the **per-deployment unique token** placed in the `purpose` slot. Use these values to produce names that cross-reference each other clearly:
 
 | Solution | Recommended identifier | Example purpose tokens |
-|----------|----------------------|----------------------|
+| --- | --- | --- |
 | hostpool | `avd-01`, `avd-prod-desktop` | `avd-01`, `avd-01-hosts`, `avd-01-storage` |
 | keyVaults standalone | `operations` | `sec`, `enc` |
 | imageManagement | `image-management` | `image-management` |
@@ -365,51 +367,27 @@ If your convention omits `location`, set **both** `vmsLocationAbbreviation` and 
 
 ---
 
-## Add-on naming — brownfield inference
+## Add-on naming
 
-The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) are deployed **after** the host pool exists. They do not accept a `namingConvention` parameter; instead they infer the naming convention from the existing host pool name:
+The add-ons are deployed **after** the host pool exists. Session Host Replacer and Storage Quota Manager accept the same `namingConvention`, `identifier`, and `namingResourceTypeCodes` parameters as the host pool, so passing the same values produces consistent names across the entire deployment.
 
-### Convention detection
+### Portal deployments
 
-The add-on reads the host pool resource name and checks:
+When deploying from the Portal, the *Advanced* step pre-populates `namingConvention` and `identifier` from tags on the host pool and its resource group (`hpNamingConvention`, `hpIdentifier`). The derived resource names are shown in a live preview. If the host pool tag is absent, the *Advanced* step surfaces override fields so you can provide explicit names.
 
-1. **Ends with `-vdpool`** (e.g., `avd-prod-use-vdpool`) → RT-last convention.
-2. **Ends with `-hp`** (e.g., `avd-prod-use-hp`) → RT-last convention.
-3. **Any other pattern** (e.g., `vdpool-avd-prod-use`) → RT-first convention (default).
+### Parameter file / CLI deployments
 
-### Base name extraction
+Pass the same `namingConvention` object and `identifier` value used in the host pool deployment. If the host pool was deployed with the default CAF convention, omit both parameters — the add-on defaults produce CAF-aligned names automatically.
 
-Once the convention direction is known:
+### Override parameters
 
-| Direction | HP name example | Base name |
-|-----------|----------------|-----------|
-| RT-first | `vdpool-avd-prod-use` | `avd-prod` (drop first + last component) |
-| RT-last | `avd-prod-use-vdpool` | `avd-prod` (drop last two components) |
-
-### Derived add-on resource names
-
-Using the extracted base name and location abbreviation, each add-on generates:
-
-| Resource | RT-first example | RT-last example |
-|----------|-----------------|-----------------|
-| Function App | `fa-{base}-shr-{unique}-{loc}` | `{base}-shr-{unique}-{loc}-fa` |
-| Storage Account | base+token+loc, hyphens stripped, lowercase | same logic |
-| Encryption UAI | `uai-{base}-shr{unique}-encryption-{loc}` | `{base}-shr{unique}-encryption-{loc}-uai` |
-| VM naming pattern | `vm-SHNAME` | `SHNAME-vm` |
-| OS Disk pattern | `osdisk-SHNAME` | `SHNAME-osdisk` |
-| NIC pattern | `nic-SHNAME` | `SHNAME-nic` |
-
-### Custom overrides
-
-When the inferred names are wrong (non-standard HP name, or deliberately different), each add-on exposes direct override parameters:
+When the convention-derived names need fine-tuning, each add-on exposes per-resource override parameters:
 
 | Add-on | Override parameters |
-|--------|-------------------|
-| Session Host Replacer | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `applicationInsightsNameOverride`, `virtualMachineNameConvOverride`, `diskNameConvOverride`, `networkInterfaceNameConvOverride`, `availabilitySetNameConvOverride` |
-| Session Hosts | `virtualMachineNameConv`, `osDiskNameConv`, `networkInterfaceNameConv`, `availabilitySetNameConv` |
-| Storage Quota Manager | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride` |
-
-The add-on Portal UIs show a **live preview** of the inferred names in the *Advanced* step before you enable custom overrides, so you can verify correctness before proceeding.
+| --- | --- |
+| Session Host Replacer | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `applicationInsightsNameOverride`, `appServicePlanNameOverride`, `virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv` |
+| Session Hosts | `virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv` |
+| Storage Quota Manager | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `appServicePlanNameOverride` |
 
 ---
 
@@ -419,7 +397,7 @@ The add-on Portal UIs show a **live preview** of the inferred names in the *Adva
 
 Do nothing. Deploy using the Portal or parameter files without overriding `namingConvention`. With `identifier = 'desktop'`, `index = 1`, `region = 'eastus'`, resources are named:
 
-```
+```text
 vdpool-avd-desktop-01-use
 rg-avd-control-plane-use
 kv-avd-sec-d527e9-use
@@ -441,7 +419,7 @@ Four segments, RT first, workload `avd`, environment `prod`:
 
 Results (identifier = `desktop`, index = `1`, region = `eastus`):
 
-```
+```text
 vdpool-avd-desktop-01-use
 rg-avd-desktop-01-hosts-use
 kv-avd-sec-d527e9-use
@@ -461,7 +439,7 @@ vm-SHNAME  →  vm-desktophost001
 
 Results (identifier = `prod`, region = `eastus2`):
 
-```
+```text
 avd-prod-use2-vdpool
 avd-prod-use2-vddag
 avd-sec-75d05c-use2-kv
@@ -482,7 +460,7 @@ SHNAME-vm  →  avdhost001-vm
 
 Results (identifier = `avd`, region = `eastus`):
 
-```
+```text
 contoso-avd-avd-use-vdpool
 contoso-avd-control-plane-use-rg
 contoso-avd-sec-9ef5b1-u
@@ -504,7 +482,7 @@ SHNAME-vm  →  avdhost001-vm
 
 Results (identifier = `avd`, region = `westus2`):
 
-```
+```text
 vdpool_avd_prod_avd_usw2
 rg_avd_prod_control-plane_usw2
 kv-avd-prod-sec-f0485a-u
@@ -530,7 +508,7 @@ Override `keyVaults` abbreviation to `vault` for an organisation standard:
 
 Results:
 
-```
+```text
 vault-avd-sec-d527e9-use    ← instead of kv-avd-sec-d527e9-use
 vdpool-avd-desktop-01-use   ← other types unchanged
 ```
@@ -544,7 +522,7 @@ See **[naming-convention-test-results.md](naming-convention-test-results.md)** f
 The 8 scenarios cover:
 
 | # | Scenario |
-|---|---------|
+| --- | --- |
 | 1 | CAF default, single region |
 | 2 | CAF default, split CP / VMs regions |
 | 3 | Custom RT-first, 4 components, workload + environment |

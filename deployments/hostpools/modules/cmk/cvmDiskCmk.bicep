@@ -46,7 +46,7 @@ module setEncryptionKeyRunCommand '../../../../.common/bicepModules/compute/virt
 
 // Step 2: Create the DiskEncryptionSet and role assignments.
 // skipKeyCreation: true — the key was already created by the Run Command above.
-module cmk '../../../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = {
+module cmk '../../../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = {
   name: 'CVM-DiskCMK-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {

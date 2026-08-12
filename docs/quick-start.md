@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Quick Start Guide
 
@@ -13,13 +13,12 @@ Get your Azure Virtual Desktop environment deployed. Pick your path below.
 | 🧪 | **[PoC / Evaluation](#poc-fast-path)** — existing VNet, marketplace images, no compliance requirements | Step 4 only | ~20 min |
 | 🖼️ | **[Custom software, no CMK](#step-2-deploy-image-management-resources)** — pre-install software baked into images | Steps 2 → 3 → 4 | 2–4 hrs |
 | 🏛️ | **[Enterprise / compliance (CMK)](#step-1-deploy-key-vaults-cmk-with-custom-images)** — FedRAMP High, DoD IL4/IL5, CMMC | Steps 1 → 2 → 3 → 4 | 4–8 hrs |
+| ✈️ | **[Air-Gapped (Secret / Top Secret)](#-air-gapped-start-here)** — no Blue Button, bring-your-own artifacts, M365/Teams/OneDrive via custom image | Steps 1 → 2 → 3 → 4 | Setup day + deployment |
 | 🌐 | **No existing VNet?** — add [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first to any path above | + Step 0 | +30 min |
 
 > **🏛️ Enterprise / compliance path:** CMK is the only reason Step 1 must precede Step 2. Key Vaults must exist before Image Management can encrypt its storage account and compute gallery at creation time. Get that sequence right and the rest is identical to the custom-software path.
 >
 > **🔒 Compliance is parameter choices, not a separate path:** FedRAMP High, DoD IL4/IL5, CMMC, and similar frameworks are enabled by setting the right parameter values at each step — the deployment structure is the same. See [Compliance Configuration](parameters.md#compliance-configuration-reference). The portal form flags non-compliant defaults in a Zero Trust tab.
->
-> **✈️ Air-gapped clouds (Azure Secret / Top Secret):** Blue Button is not available. [Template Spec setup ↓](#-air-gapped-clouds-template-specs-optional-but-recommended)
 
 <details>
 <summary><b>Full deployment decision diagram</b></summary>
@@ -131,26 +130,74 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 
 ---
 
+<a id="-air-gapped-start-here"></a>
+
+## ✈️ Air-Gapped Clouds (Azure Secret / Top Secret) — Start Here
+
+> **This section is for Azure Government Secret (IL6) and Azure Government Top Secret (IL7) deployments.**
+> If you are deploying to Azure Commercial or Azure Government (IL2/IL4/IL5), skip to [Prerequisites](#prerequisites).
+
+Air-gapped cloud deployments differ from connected deployments in three ways:
+
+1. **Blue Button is unavailable.** Use Template Specs + Portal UI or PowerShell. See [Template Spec setup below](#-air-gapped-clouds-template-specs-optional-but-recommended).
+2. **Software cannot be downloaded at build time.** All artifacts must be staged in the artifacts storage account before running an image build. `downloadLatestMicrosoftContent` defaults to `false` — do not change this.
+3. **Microsoft 365 Apps, Teams, and OneDrive must be installed via a custom image.** AGC has specific offline installation requirements for these products; they cannot be reliably installed at session host runtime. Custom image builds using this solution handle the offline installation automatically once artifacts are staged. See [Microsoft 365 Apps, Teams, and OneDrive](#microsoft-365-apps-teams-and-onedrive-air-gapped) in the air-gapped reference for details.
+
+### What to Bring Over — Master Checklist
+
+Before you transfer the repo to the air-gapped network, collect the following on an internet-connected system. All files are staged in `customer/artifacts/` and uploaded via `Update-ImageArtifacts.ps1`.
+
+**Auto-downloaded from air-gapped cloud endpoints** (run `Update-ImageArtifacts.ps1` and the script fetches these if the endpoints are reachable from your management system):
+
+| File | Purpose |
+| --- | --- |
+| `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | AVD Agent |
+| `Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi` | AVD Agent Bootloader |
+| `Office365DeploymentTool.exe` | M365 Apps installation |
+| `OneDriveSetup.exe` | OneDrive per-machine install |
+| `teamsbootstrapper.exe` + `MSTeams-x64.msix` | New Teams for VDI |
+| `FSLogix.zip` | FSLogix Apps agent |
+
+**Must be staged manually** (download on an internet-connected system and copy into `customer/artifacts/`):
+
+| File | Place In | Purpose |
+| --- | --- | --- |
+| `WebView2.exe` | `customer/artifacts/` | Required by Teams |
+| `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams |
+| `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Teams media optimizations |
+| `MicrosoftEdgeEnterpriseX64.msi` | `customer/artifacts/Microsoft-Edge-Enterprise/` | Edge Enterprise (optional) |
+
+**BuiltIn UWP apps** (Calculator, Snipping Tool, Notepad, etc.) require a one-time staged download using winget on an internet-connected system. See [BuiltIn-UWP-Apps (air-gapped)](air-gapped-clouds.md#built-in-uwp-apps-and-codec-extensions-air-gapped).
+
+**Windows Updates** — use WSUS (preferred) or pre-stage `.msu`/`.cab` files via the [Windows-Catalog-Updates](air-gapped-clouds.md#windows-updates-air-gapped) artifact.
+
+> **Transfer tip:** Run `Update-ImageArtifacts.ps1` once on the internet-connected system to auto-download everything it can, then manually add the items above. Copy the entire `customer/` folder to the air-gapped network.
+
+### Your Deployment Path
+
+Air-gapped deployments always follow the full steps — custom images are required to deliver M365 Apps, Teams, and OneDrive:
+
+```text
+Step 0 (optional): Networking
+Step 1 (if using CMK):  Key Vaults
+Step 2: Image Management  — deploy infrastructure + upload artifacts
+Step 3: Image Build       — bake M365, Teams, OneDrive, and other software into the image
+Step 4: Host Pool         — deploy session hosts from the custom gallery image
+```
+
+📖 **[Full air-gapped reference](air-gapped-clouds.md)** — network requirements, agent handling, Office installation, UWP apps, Windows Updates, and more.
+
+---
+
 ## 🔒 Air-Gapped Clouds: Template Specs (Optional but Recommended)
 
-<details>
-<summary><b>Setup and usage instructions</b></summary>
-
-> **ℹ️ FOR AIR-GAPPED ENVIRONMENTS (Azure Secret / Azure Top Secret)**
->
-> Blue Button deployments are not available in air-gapped clouds. You have two options:
+> **Blue Button deployments are not available in air-gapped clouds.** You have two options:
 >
 > **Option A: Template Spec + Portal UI (Recommended for first deployment)**
->
-> - Provides guided form with built-in validation
-> - Easy parameter selection and configuration
-> - Generate parameter files for future use
+> — Provides guided form with built-in validation; easy parameter selection; generates parameter files for future use.
 >
 > **Option B: PowerShell/CLI with parameter files**
->
-> - Direct deployment without Template Specs
-> - Requires manual parameter file creation
-> - Best for automation and CI/CD
+> — Direct deployment without Template Specs; best for automation and CI/CD.
 
 ### Option A: Template Spec Setup (For UI-Guided Deployment)
 
@@ -225,8 +272,6 @@ New-AzDeployment `
 - Used for automatic image version numbers (e.g., `2026.0210.1435`) based on build time
 
 📖 **[Complete Template Spec Instructions](hostpool-deployment.md#b-template-spec-creation)**
-
-</details>
 
 ---
 
@@ -480,11 +525,13 @@ cd deployments
 > **This is the standard recommended workflow for production.** imageManagement pre-stages all infrastructure and grants all required roles. imageBuild deployments never assign roles — they simply consume pre-staged resources.
 
 Deploy imageManagement with all defaults enabled (`deployArtifactsStorageAccount = true`, `deployBuildLogsStorageAccount = true`, `deployImageBuildResourceGroup = true`). The managed identity is granted:
+
 - **Contributor** on the image build resource group
 - **Storage Blob Data Reader** on the artifacts storage account
 - **Storage Blob Data Contributor** on the build logs storage account
 
 Image builders then supply these three outputs to imageBuild:
+
 - `imageBuildResourceGroupId` — pre-created persistent RG; imageBuild deploys VMs into it each run and deletes only the VMs on completion (the RG is left intact)
 - `userAssignedIdentityResourceId` — the managed identity with all roles pre-granted
 - `logStorageAccountResourceId` + `logContainerName` — for build log collection

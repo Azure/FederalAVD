@@ -1,4 +1,4 @@
-# Chargeback Approaches for Shared AVD Resources
+﻿# Chargeback Approaches for Shared AVD Resources
 
 This document covers cost attribution strategies for shared infrastructure resources in the FederalAVD deployment. All approaches use tagging already present in the deployment — no code changes are required.
 
@@ -11,7 +11,7 @@ The RSV is shared across host pools. Backup storage cost is billed to the vault 
 ### What is tagged
 
 | Resource | Tag | Set by |
-|---|---|---|
+| --- | --- | --- |
 | `protectedItems` (VM) | `cm-resource-parent: <hostPoolResourceId>` | `vmBackupItems.bicep` |
 | `protectionContainers` (file share) | `cm-resource-parent: <hostPoolResourceId>` | `fslogixBackupItems.bicep` |
 | `protectedItems` (file share) | `cm-resource-parent: <hostPoolResourceId>` | `fslogixBackupItems.bicep` |
@@ -103,7 +103,7 @@ Key Vaults may be shared (a single vault holds keys for multiple host pools). Th
 Keys get `cm-resource-parent: <hostPoolResourceId>` via `parentTag` in `customerManagedKeys.bicep`. This flows onto:
 
 | Key type | Tag source |
-|---|---|
+| --- | --- |
 | Disk CMK (RSA / RSA-HSM) | `diskCmk.bicep` → `customerManagedKeys.bicep` → `parentTag` |
 | Storage CMK (FSLogix) | `storageCmk.bicep` → `customerManagedKeys.bicep` → `parentTag` |
 | CVM disk key | `cvmDiskCmk.bicep` → `customerManagedKeys.bicep` → `parentTag` |
@@ -142,7 +142,7 @@ In this deployment, secrets (domain join credentials, VM admin passwords) are re
 ## Summary
 
 | Shared Resource | Tags Present | Recommended Chargeback Method | Effort |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Recovery Services Vault | Yes — on protected items and containers | LA query joining ARG (`AddonAzureBackupStorage` + Resource Graph) | Low |
 | Log Analytics Workspace | Yes — on DCRs (indirectly) | Session volume proxy via `WVDConnections` | Medium |
 | Key Vault (keys) | Yes — `cm-resource-parent` on each key | Resource Graph key count ratio | Low |

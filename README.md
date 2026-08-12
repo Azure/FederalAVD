@@ -1,4 +1,4 @@
-# 🖥️ Federal Azure Virtual Desktop Automation
+﻿# 🖥️ Federal Azure Virtual Desktop Automation
 
 > **Enterprise-grade Azure Virtual Desktop deployment automation for Azure Commercial, Government, Secret, and Top Secret clouds**
 
@@ -105,7 +105,7 @@ Complete AVD environment deployment with enterprise features.
 Optional add-ons extend the base AVD deployment with advanced lifecycle management and operational automation:
 
 | Add-On | Purpose | Documentation |
-|--------|---------|---------------|
+| --- | --- | --- |
 | 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/sessionHostReplacer/README.md) |
 | 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/storageQuotaManager/README.md) |
 | 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md) |
@@ -121,7 +121,7 @@ This solution is architected to align with [Microsoft's Zero Trust principles fo
 ### Security Controls
 
 | Layer | Capability |
-|-------|------------|
+| --- | --- |
 | **🌐 Network** | Private endpoints, no public IPs, network segmentation |
 | **🔐 Identity** | Managed identities, Entra ID authentication, conditional access |
 | **📁 Data** | Customer-managed keys, encryption at rest/transit, private connectivity |
@@ -138,7 +138,7 @@ This solution is architected to align with [Microsoft's Zero Trust principles fo
 Support for multiple identity configurations to meet organizational requirements:
 
 | Identity Solution | Description | Use Case |
-|------------------|-------------|----------|
+| --- | --- | --- |
 | **Active Directory Domain Services** | Traditional hybrid identity with AD domain join | Enterprise hybrid environments with on-premises AD |
 | **Entra Domain Services** | Managed domain services in Azure | Cloud-focused without on-premises AD infrastructure |
 | **Entra Kerberos (Hybrid)** | Entra ID-joined hosts with AD user accounts | Modernizing while maintaining AD user accounts |

@@ -1,4 +1,4 @@
-# Copilot Task Brief — Make First Deployment Mistake-Proof (FederalAVD)
+﻿# Copilot Task Brief — Make First Deployment Mistake-Proof (FederalAVD)
 
 > **Use:** Run in GitHub Copilot **agent mode** (VS Code or the coding agent), or save as `.github/prompts/improve-onboarding.prompt.md`. This updates **docs and prompts only** — no deployment templates. One PR per task group.
 

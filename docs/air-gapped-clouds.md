@@ -1,4 +1,4 @@
-↩ **Back to:** [Quick Start](quick-start.md)
+﻿↩ **Back to:** [Quick Start](quick-start.md)
 
 [**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
@@ -47,7 +47,7 @@ During session host deployment (host pool creation and Session Host Replacer ope
 The `Update-ImageArtifacts.ps1` script automatically selects the correct downloads configuration file from `.common/data/` based on the connected Azure environment:
 
 | Azure Environment | Base File |
-|---|---|
+| --- | --- |
 | AzureCloud / AzureUSGovernment | `.common/data/public.downloads.parameters.json` |
 | Azure Government Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
 | Azure Government Top Secret (IL7) | `.common/data/topsecret.downloads.parameters.json` |
@@ -125,11 +125,11 @@ To use these apps in an air-gapped image build:
 The following artifacts have empty `DownloadUrl` entries in the secret and top secret downloads files — no automated download source is configured. If you wish, you can obtain these files from a reachable source (internet-connected system, Azure Toolbox, vendor portal, etc.) and place them at the paths shown before running `Update-ImageArtifacts.ps1`.
 
 | Software | Destination Filename | Place In | Notes |
-|---|---|---|---|
-| **FSLogix** | `FSLogix.zip` | `customer/artifacts/` | Available from Azure Toolbox in air-gapped clouds. Also available at [aka.ms/fslogix_download](https://aka.ms/fslogix_download) on internet-connected systems. |
+| --- | --- | --- | --- |
 | **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
 | **Visual Studio Redistributables** | `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
 | **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
+| **Microsoft Edge Enterprise** | `MicrosoftEdgeEnterpriseX64.msi` | `customer/artifacts/Microsoft-Edge-Enterprise/` | Optional. Download the Stable x64 MSI from [microsoft.com/en-us/edge/business/download](https://www.microsoft.com/en-us/edge/business/download) on an internet-connected system. On connected builds, `Install-MicrosoftEdgeEnterprise.ps1` downloads this automatically at image build time if no MSI is pre-staged — no manual step needed when internet access is available. |
 
 > **Transfer tip:** Download all of the above on an internet-connected system, copy them to the air-gapped network, then drop them into the `customer/artifacts/` directory before running the upload script.
 
@@ -140,13 +140,14 @@ The following artifacts have empty `DownloadUrl` entries in the secret and top s
 The following artifacts have working URLs in the secret and top secret downloads files (using air-gapped cloud endpoints). `Update-ImageArtifacts.ps1` downloads them automatically when the URLs are reachable from the management system:
 
 | Software | Destination Filename | Air-Gapped URL Pattern |
-|---|---|---|
+| --- | --- | --- |
 | **AVD Agent** | `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | `aka.<env-suffix>/RdAgent_latest` |
 | **AVD Agent Bootloader** | `Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi` | `aka.<env-suffix>/RdAgentBootLoader_latest` |
 | **Office 365 Deployment Tool** | `Office365DeploymentTool.exe` | `officexo.azurefd.<env-suffix>/...` |
 | **OneDrive** | `OneDriveSetup.exe` | `update.azure.odsync.<env-suffix>/...` |
 | **Teams Bootstrapper** | `teamsbootstrapper.exe` | `statics.teams.<env-suffix>/...` |
 | **Teams 64-bit MSIX** | `MSTeams-x64.msix` | `statics.teams.<env-suffix>/...` |
+| **FSLogix** | `FSLogix.zip` | `aka.<env-suffix>/FSLogix_latest` |
 
 > **Note:** The AVD Agent and Bootloader are not used during custom image builds — they are included in this upload so that `agentDownloadUrl` and `agentBootLoaderDownloadUrl` host pool parameters can reference them from the artifacts storage account instead of relying on the permalink.
 
@@ -179,5 +180,159 @@ cd C:\repos\FederalAVD\deployments
 ### Image Build Parameter Notes
 
 In air-gapped environments, set `downloadLatestMicrosoftContent = false` (default). The build VM will not have internet access to download software — all content must come from the artifacts storage account pre-populated above.
+
+---
+
+### Windows Updates (air-gapped)
+
+Air-gapped environments have two options for patching the golden image during an image build:
+
+**Option 1 — WSUS (recommended when available)**
+
+The image build template has native WSUS support. Set the following parameters in your image build parameter file:
+
+```json
+"updateService": { "value": "WSUS" },
+"wsusServer":    { "value": "https://wsus.corp.contoso.com:8531" }
+```
+
+During the build, the image VM will contact your WSUS server and install all approved updates for its hardware group — no pre-staging or manual file handling required. This is the preferred path for organizations that already operate a WSUS server in the air-gapped enclave.
+
+> **Note:** `installUpdates` defaults to `true`. Set it to `false` only if you want to skip the Windows Update step entirely (e.g., the image is already fully patched).
+
+**Option 2 — Windows Update Catalog (no WSUS)**
+
+When a WSUS server is not available, use the `Windows-Catalog-Updates` example artifact to install patches downloaded manually from the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). It is fully self-contained and requires no internet access at image build time.
+
+📖 **Artifact reference:** [Windows-Catalog-Updates README](../customer-examples/artifacts/Windows-Catalog-Updates/README.md)
+
+**To use in an air-gapped image build:**
+
+1. On any system with access to the Microsoft Update Catalog (or your organization's WSUS/SCCM/patch management server), download the required `.msu` or `.cab` patch files.
+
+2. If installation order matters (for example, a Servicing Stack Update must precede a Cumulative Update), prefix each filename with a sequence number:
+
+   ```text
+   customer\artifacts\Windows-Catalog-Updates\
+       Install-WindowsCatalogUpdates.ps1
+       01-SSU-KB5012170-x64.msu
+       02-CU-KB5040442-x64.msu
+   ```
+
+   Files without a numeric prefix are sorted alphabetically, so mixed prefixed and unprefixed files work as long as the prefixed ones sort before the unprefixed ones.
+
+3. Copy the entire folder to the air-gapped network and place it under `customer/artifacts/`.
+
+4. Upload to the artifacts storage account using `-SkipDownloadingNewSources`:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -SkipDownloadingNewSources
+   ```
+
+> **Refresh cadence:** Replace or add patch files each month as new Cumulative Updates are released, then repeat steps 3-4. Only the files in the folder at upload time are installed — there is no version tracking; the script installs all files it finds on each run and skips already-installed patches via exit code.
+
+---
+
+### Microsoft Edge (air-gapped)
+
+The `Microsoft-Edge-Enterprise` example artifact installs the Edge Enterprise MSI during an image build. In connected environments, `Update-ImageArtifacts.ps1` downloads the installer automatically from Microsoft. In air-gapped environments, you pre-stage the installer manually.
+
+> **WSUS alternative:** If your WSUS server has the **Microsoft Edge** product category enabled and approved, Edge updates will be installed automatically during the Windows Update step of the image build — no artifact needed. Check WSUS → Products and Classifications → Products → Microsoft Edge to confirm. If Edge is not synced through WSUS, use the artifact below.
+
+📖 **Artifact reference:** [Microsoft-Edge-Enterprise README](../customer-examples/artifacts/Microsoft-Edge-Enterprise/README.md)
+
+**To use in an air-gapped image build:**
+
+1. On any system with internet access, download the Edge Enterprise MSI from the [Microsoft Edge Enterprise download page](https://www.microsoft.com/en-us/edge/business/download):
+   - Architecture: **x64**
+   - Channel: **Stable**
+   - File type: **MSI**
+
+2. Place the MSI in the artifact folder alongside the install script:
+
+   ```text
+   customer\artifacts\Microsoft-Edge-Enterprise\
+       Install-MicrosoftEdgeEnterprise.ps1
+       MicrosoftEdgeEnterpriseX64.msi
+   ```
+
+3. Copy the folder to the air-gapped network and place it under `customer/artifacts/`.
+
+4. Upload to the artifacts storage account using `-SkipDownloadingNewSources`:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -SkipDownloadingNewSources
+   ```
+
+> **Refresh cadence:** Replace the MSI with the latest stable release monthly, then repeat steps 3-4. The script detects the installed version and skips installation if Edge is already up to date.
+
+---
+
+### Microsoft 365 Apps, Teams, and OneDrive (air-gapped)
+
+<a id="microsoft-365-apps-teams-and-onedrive-air-gapped"></a>
+
+> **Custom image is required.** In air-gapped clouds, Microsoft 365 Apps (Office), New Teams for VDI, and OneDrive cannot be reliably installed at session host runtime — AGC has specific offline installation requirements for these products, and the runtime environment on a session host does not satisfy them. **Baking these into a custom image is the correct and supported approach.** This solution handles the offline installation automatically once you stage the installers.
+
+#### Why a custom image is required
+
+The Microsoft documentation for Microsoft 365 Apps in Azure Government Classified (AGC) environments calls out specific installation methods, channel configurations, and activation endpoints that differ from commercial and unclassified government deployments. Installing Office at session host runtime (post-image) is not a supported path in these environments. The same applies to New Teams (which requires WebView2, Visual C++ Redistributables, and the RTC service to be present before Teams is installed) and OneDrive (which must be installed per-machine for VDI).
+
+> For the authoritative Microsoft guidance, refer to the Microsoft 365 Apps documentation available on your air-gapped cloud's internal Microsoft Docs site or through your Microsoft account team.
+
+#### How this solution handles it
+
+The image build template has first-class support for M365 Apps, Teams, and OneDrive via dedicated parameters:
+
+| Parameter | Description | Typical Value (air-gapped) |
+| --- | --- | --- |
+| `office365AppsToInstall` | M365 apps to install (Excel, Outlook, Word, etc.) | `["Excel", "Outlook", "PowerPoint", "Word"]` |
+| `installOneDrive` | Install OneDrive per-machine for VDI | `true` |
+| `installTeams` | Install New Teams for VDI | `true` |
+| `teamsCloudType` | Teams cloud variant | `GovSecret` for Azure Government Secret (IL6); `GovTopSecret` for Azure Government Top Secret (IL7) |
+| `downloadLatestMicrosoftContent` | Download from web instead of storage account | `false` — **do not change this** in air-gapped environments |
+
+When `downloadLatestMicrosoftContent` is `false` (the default), the image build VM downloads all Microsoft content from the artifacts storage account. The Office 365 Deployment Tool, Teams bootstrapper, Teams MSIX, and OneDrive setup are all auto-downloadable from air-gapped cloud endpoints by `Update-ImageArtifacts.ps1`.
+
+#### Artifacts to stage
+
+The following files are fetched automatically by `Update-ImageArtifacts.ps1` from air-gapped cloud endpoints:
+
+| File | Auto-downloaded | Notes |
+| --- | :---: | --- |
+| `Office365DeploymentTool.exe` | Yes | ODT; drives M365 Apps install |
+| `OneDriveSetup.exe` | Yes | Per-machine OneDrive for VDI |
+| `teamsbootstrapper.exe` | Yes | New Teams bootstrapper |
+| `MSTeams-x64.msix` | Yes | New Teams MSIX package |
+
+The following are **required by Teams** and must be staged manually:
+
+| File | Place In | Source |
+| --- | --- | --- |
+| `WebView2.exe` | `customer/artifacts/` | [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) |
+| `vc_redist.x64.exe` | `customer/artifacts/` | [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
+| `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) |
+
+Download all three on an internet-connected system, copy them to the air-gapped network, and place them in `customer/artifacts/` before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.
+
+#### Image build parameter notes
+
+```json
+"office365AppsToInstall":          { "value": ["Excel", "Outlook", "PowerPoint", "Word"] },
+"installOneDrive":                 { "value": true },
+"installTeams":                    { "value": true },
+"teamsCloudType":                  { "value": "GovSecret" },    // GovTopSecret for Azure Government Top Secret (IL7)
+"downloadLatestMicrosoftContent":  { "value": false }
+```
+
+> **`vdiOptimizationRestrictInternet`** — set this to `true` in air-gapped image builds. It locks down update channels for M365, Teams, OneDrive, Edge, WebView2, and the Windows Store so these apps do not attempt to phone home after deployment.
+
+📖 **Image build parameter reference:** [image-build.md — Built-in Microsoft content](image-build.md#image-build-parameters)
+
+---
 
 📖 **Full script reference:** [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md)

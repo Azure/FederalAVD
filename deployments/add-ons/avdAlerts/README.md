@@ -1,0 +1,395 @@
+﻿# AVD Alerts Add-On
+
+## Overview
+
+The AVD Alerts Add-On deploys a comprehensive set of Azure Monitor alert rules for Azure Virtual
+Desktop. It covers the full operational surface of an AVD environment: host pool capacity,
+session host health, user connections, FSLogix profile storage, VM performance, Azure Files and
+Azure NetApp Files storage, and Azure Service Health.
+
+The add-on is subscription-scoped. A single deployment covers any number of host pools and
+storage accounts across resource groups in the subscription.
+
+**Alert count per pooled host pool:** up to 20 scheduled query rule alerts  
+**Alert count per personal host pool:** up to 17 scheduled query rule alerts (no capacity alerts; session host unhealthy applies to all pool types)  
+**Per-deployment fixed alerts:** 4 Service Health activity log alerts  
+**Per-storage-account alerts:** 6 metric alerts + 2 log-based (when storage alerts enabled)  
+**Per-ANF-volume alerts:** 2 metric alerts (when ANF alerts enabled)  
+**Per-host-pool VM alerts:** 6 metric alerts
+
+---
+
+## Zero Trust Alignment
+
+This add-on is Zero Trust-aligned by default:
+
+| Control | Implementation |
+| --- | --- |
+| **No public network access** | Automation Account deployed with `publicNetworkAccess: false` and `disableLocalAuth: true` |
+| **Managed identity only** | System-assigned managed identity — no stored credentials, no service principals, no connection strings |
+| **Least-privilege RBAC** | Three scoped role assignments: Desktop Virtualization Reader (subscription), Log Analytics Contributor (workspace RG), Storage Account Contributor (storage RG, when applicable) |
+| **Diagnostic logging** | Automation Account job logs and streams sent to Log Analytics workspace |
+| **No inbound traffic** | Automation runbooks make outbound ARM control-plane calls only — no inbound triggers, no webhooks |
+| **Action group enforcement** | UI form enforces selection of a `global`-location action group — required for Service Health alerts |
+
+---
+
+## Architecture
+
+### Deployed Resources
+
+| Resource | Location | Purpose |
+| --- | --- | --- |
+| **Resource Group** | Subscription | Created if `createResourceGroup: true`; otherwise uses existing |
+| **Automation Account** (Basic SKU) | Alert RG | Hosts runbooks, schedules, variables, and managed identity |
+| **Automation Variables** | Automation Account | `HostPoolInfo`, `StorageAccountIds`, `ResourceManagerUri` — read by runbooks at runtime |
+| **PowerShell 7.2 Runbooks** | Automation Account | `AvdStorageLogData` — collects Azure Files share usage metrics for log-based storage space alerts |
+| **Schedules** | Automation Account | Recurring 15-minute triggers |
+| **Job Schedules** | Automation Account | Link runbooks to schedules |
+| **Scheduled Query Rules** | Alert RG | Log Analytics-based alerts for host pool health, connections, FSLogix, disk, and storage space |
+| **Metric Alerts** | Alert RG (centralized) | VM performance, storage latency/availability/throttling, ANF capacity |
+| **Activity Log Alerts** | Alert RG | Azure Service Health (incident, maintenance, advisory, security) |
+| **Role Assignments** | Subscription / Workspace RG / Storage RG | RBAC for managed identity |
+| **Diagnostic Settings** | Automation Account | Job logs → Log Analytics workspace |
+
+### Module Structure
+
+```text
+main.bicep                    ← subscription-scoped entry point
+modules/
+  automationAccount.bicep     ← Automation Account, runbooks, schedules, RBAC
+  hostPoolAlerts.bicep        ← log-based alerts per host pool (20 per pooled, 17 per personal)
+  vmAlerts.bicep              ← VM alerts (CPU/disk metrics + disk space/memory SQRs) scoped to each VM resource group
+  serviceHealthAlerts.bicep   ← subscription-scoped Service Health activity log alerts
+  storageAlerts.bicep         ← Azure Files metric + log-based alerts per storage account
+  anfAlerts.bicep             ← ANF volume metric alerts
+```
+
+### Alert Scoping
+
+- **Log-based alerts** (Scheduled Query Rules) are scoped to the Log Analytics workspace.
+  Queries filter by host pool resource ID to isolate each pool's data.
+- **VM metric alerts** are deployed to the centralized alert resource group. Each alert rule's
+  metric scope targets the VM resource group, covering all VMs in that group via a
+  multi-resource scope.
+- **Storage metric alerts** are deployed to the centralized alert resource group. Each alert
+  rule's metric scope targets the individual storage account.
+- **ANF capacity alerts** are deployed to the centralized alert resource group. Each alert
+  rule's metric scope targets the individual ANF volume.
+- **Service Health alerts** are scoped to the subscription.
+
+Centralizing all alert rules in one resource group simplifies RBAC (a single IAM assignment
+grants read access to all alerts), audit (one Activity Log to watch), and incident response
+(Azure Monitor Alerts blade shows everything in one place).
+
+### Host Pool Type Gating
+
+| Alert Category | Pooled | Personal |
+| --- | :-: | :-: |
+| Capacity (50% / 85% / 95%) | ✅ | ❌ (meaningless for 1:1 assignment) |
+| Session Host Unhealthy | ✅ | ✅ |
+| All other alerts | ✅ | ✅ |
+
+### Resource Tagging
+
+Every alert rule deployed by this add-on receives a `cm-resource-parent` tag set to the host
+pool resource ID. This enables cost management tools to associate alert costs with the host
+pool they monitor.
+
+---
+
+## Prerequisites
+
+- An existing **Log Analytics Workspace** where AVD host pool diagnostic data is flowing
+  (`WVDConnections`, `WVDAgentHealthStatus`, `WVDErrors`, `Perf`, `Event`).  
+  Enable diagnostics on each host pool: **Host Pool → Diagnostic settings → Send to Log Analytics**.
+- An existing **Action Group** at the **global** location in the same subscription.
+  Service Health activity log alerts require a global action group.
+  See [Creating a Global Action Group](#creating-a-global-action-group) below.
+- **Permissions** to deploy resources and assign RBAC roles at the subscription scope.
+
+### Creating a Global Action Group
+
+Azure Monitor Service Health alerts can only fire against action groups at the `global` location.
+A standard action group created in a specific region will not appear in the deployment form and
+cannot be selected for Service Health alerts.
+
+**Azure Portal:**
+
+1. Open **Monitor** → **Alerts** → **Action groups** → **+ Create**.
+2. Select your **Subscription** and **Resource Group**.
+3. Set **Region** to **Global**.
+4. Give it a name (e.g., `ag-avd-alerts-global`).
+5. Add notification receivers on the **Notifications** tab (Email, SMS, Voice, etc.).
+6. Click **Review + create**.
+
+**PowerShell:**
+
+```powershell
+New-AzActionGroup `
+  -ResourceGroupName 'rg-avd-operations-p-eus2' `
+  -Name 'ag-avd-alerts-global' `
+  -Location 'global' `
+  -ShortName 'avdalerts' `
+  -EmailReceiver @(
+    New-AzActionGroupEmailReceiverObject `
+      -Name 'AVD Ops Team' `
+      -EmailAddress 'avd-ops@contoso.com'
+  )
+```
+
+**Azure CLI:**
+
+```bash
+az monitor action-group create \
+  --resource-group rg-avd-operations-p-eus2 \
+  --name ag-avd-alerts-global \
+  --location global \
+  --short-name avdalerts \
+  --action email avd-ops-email avd-ops@contoso.com
+```
+
+> **Tip:** If your deployment form shows no action groups in the dropdown, it is filtering for
+> `global`-location groups only. Verify your action group's location with:
+> ```powershell
+> (Get-AzActionGroup -ResourceGroupName '{rg}' -Name '{ag}').Location  # expected: global
+> ```
+
+---
+
+## Deployment Methods
+
+### Template Spec (Recommended)
+
+```powershell
+.\tools\New-TemplateSpecs.ps1 `
+  -ResourceGroupName 'rg-avd-operations-p-eus2' `
+  -Location 'eastus2' `
+  -CreateAddOns $true
+```
+
+Then open the published spec `ts-avd-alerts-{region}` in the Azure Portal.
+
+### Blue Button (Azure Commercial / Government only)
+
+> Not available in air-gapped (Secret / Top Secret) clouds.
+
+[![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2FuiFormDefinition.json)
+
+### PowerShell
+
+```powershell
+New-AzSubscriptionDeployment `
+  -Location 'eastus2' `
+  -TemplateFile '.\main.json' `
+  -resourceGroupName 'rg-avd-monitoring-p-eus2' `
+  -createResourceGroup $true `
+  -logAnalyticsWorkspaceResourceId '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{ws}' `
+  -actionGroupResourceId '/subscriptions/{sub}/resourceGroups/{rg}/providers/microsoft.insights/actionGroups/{ag}' `
+  -hostPoolInfo @(
+    @{
+      hostPoolResourceId = '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/{hp}'
+      vmResourceGroupId  = '/subscriptions/{sub}/resourceGroups/{vm-rg}'
+      hostPoolType       = 'Pooled'
+    }
+  )
+```
+
+### Azure CLI
+
+```bash
+az deployment sub create \
+  --location eastus2 \
+  --template-file main.json \
+  --parameters \
+    resourceGroupName='rg-avd-monitoring-p-eus2' \
+    createResourceGroup=true \
+    logAnalyticsWorkspaceResourceId='/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{ws}' \
+    actionGroupResourceId='/subscriptions/{sub}/resourceGroups/{rg}/providers/microsoft.insights/actionGroups/{ag}' \
+    hostPoolInfo='[{"hostPoolResourceId":"...","vmResourceGroupId":"...","hostPoolType":"Pooled"}]'
+```
+
+---
+
+## Parameters
+
+### Required
+
+| Parameter | Description |
+| --- | --- |
+| `location` | Azure region for the Automation Account and alert rules. |
+| `resourceGroupName` | Name of the resource group to deploy into. |
+| `logAnalyticsWorkspaceResourceId` | Resource ID of the Log Analytics Workspace receiving AVD diagnostics. |
+| `actionGroupResourceId` | Resource ID of an existing Action Group at the **global** location. |
+| `hostPoolInfo` | Array of host pool objects. Each must have `hostPoolResourceId`, `vmResourceGroupId`, and `hostPoolType` (`Pooled` or `Personal`). |
+
+### Optional - Deployment Behavior
+
+| Parameter | Default | Description |
+| --- | :-: | --- |
+| `createResourceGroup` | `false` | Create the resource group if it does not exist. |
+| `alertNamePrefix` | `AVD` | Short prefix prepended to every alert name. Change when deploying multiple environments in the same subscription. |
+| `autoResolveAlert` | `true` | Auto-resolve alerts when the condition clears on the next evaluation. |
+| `automationAccountNameOverride` | _(derived)_ | Explicit name for the Automation Account. When empty, uses `aa-avd-alerts-{regionAbbr}`. |
+| `tags` | `{}` | Tags applied to all deployed resources. |
+
+### Optional - Storage / ANF
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `storageAccountResourceIds` | `[]` | Resource IDs of Azure Files Premium storage accounts. When provided, storage metric and log-based alerts are deployed. |
+| `anfVolumeResourceIds` | `[]` | Resource IDs of Azure NetApp Files volumes. When provided, ANF capacity alerts are deployed. |
+| `runbookContentUriStorage` | GitHub raw URL | URI of the `AvdStorageLogData` runbook PS1 file. Set to empty string `''` for air-gapped environments. |
+| `createJobSchedules` | `true` | Leave `true` for all standard deployments. Set `false` only if you receive a `Conflict / jobSchedule already exists` error — see [Redeployment](#redeployment). |
+| `deploymentTime` | `utcNow()` | UTC timestamp used to compute the schedule start time (10 min after deployment). |
+
+### Optional - Alert Categories
+
+All default to `true`. Set to `false` to skip that category.
+
+| Parameter | Alert Category |
+| --- | --- |
+| `enableCapacityAlerts` | Host pool capacity (50% / 85% / 95%) — Pooled pools only |
+| `enableAvailabilityAlerts` | Session host health, personal host unhealthy, no resources available |
+| `enableConnectionAlerts` | Connection failures, disconnected sessions (24h / 72h), slow logon |
+| `enableLocalDiskAlerts` | Session host C: drive free space (<= 10% / <= 5%) |
+| `enableFslogixAlerts` | FSLogix profile errors (VHD full, network, attach, service, compaction) |
+| `enableCpuAlerts` | Session host CPU (> 85% / > 95%) |
+| `enableMemoryAlerts` | Session host available memory (< 2 GB / < 1 GB) |
+| `enableOsDiskAlerts` | Session host OS disk bandwidth (> 85% / > 95%) |
+| `enableStorageLatencyAlerts` | Azure Files latency (> 50ms / > 100ms) |
+| `enableStorageAvailabilityAlerts` | Azure Files availability (< 99%) |
+| `enableStorageThrottlingAlerts` | Azure Files throttling |
+| `enableAnfCapacityAlerts` | ANF volume capacity (>= 85% / >= 95%) |
+| `enableServiceHealthAlerts` | Azure Service Health (incident, maintenance, advisory, security) |
+
+---
+
+## Alert Reference
+
+See [ALERT-RESPONSE.md](./ALERT-RESPONSE.md) for the full alert inventory with severity levels,
+trigger conditions, and recommended response actions.
+
+---
+
+## Air-Gapped Deployment
+
+In Secret, Top Secret, and other internet-restricted environments where Azure deployment
+infrastructure cannot reach `raw.githubusercontent.com`:
+
+1. Set `runbookContentUriStorage` to `''` (empty string) — or clear the field in the form.
+2. Deploy the template. The Automation Account and all alert rules are fully deployed.
+   The runbook is created in **New** (unpublished) state — storage space log alerts will not
+   fire until the runbook is published and has run at least once.
+3. Publish the runbook manually:
+
+**Via Azure Portal:**  
+Automation Account → Runbooks → `AvdStorageLogData` → Edit → Publish
+
+**Via Cloud Shell (required when `publicNetworkAccess: false` blocks local tools):**
+
+```powershell
+$aa = '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Automation/automationAccounts/{name}'
+Invoke-AzRestMethod -Method POST -Path ($aa + '/runbooks/AvdStorageLogData/publish?api-version=2023-11-01')
+```
+
+---
+
+## Redeployment
+
+Normal incremental redeployments work correctly — ARM handles the job schedule idempotently
+when the Automation Account already exists. Leave `createJobSchedules: true` for all standard
+redeployments.
+
+Set `createJobSchedules: false` **only** if you receive:
+> `Code: Conflict / A jobSchedule with same id already exists`
+
+This error occurs specifically when the Automation Account was **deleted from ARM** and is being
+recreated with the same name. Azure Automation's backend caches the runbook-to-schedule
+association by account name. That cache persists through ARM deletion and is restored the moment
+an account with the same name exists again, causing the new create call to conflict.
+
+To clear the cached association before redeploying with `createJobSchedules: true`:
+
+```powershell
+$base = '/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Automation/automationAccounts/{name}'
+$jsId = ((Invoke-AzRestMethod -Method GET -Path ($base + '/jobSchedules?api-version=2023-11-01')).Content | ConvertFrom-Json).value[0].properties.jobScheduleId
+Invoke-AzRestMethod -Method DELETE -Path ($base + '/jobSchedules/' + $jsId + '?api-version=2023-11-01')
+```
+
+---
+
+## Troubleshooting
+
+### Alert rules deployed but no alerts firing
+
+1. Verify AVD diagnostic settings are enabled and sending data to the workspace:
+   `WVDConnections`, `WVDAgentHealthStatus`, `WVDErrors`, `Perf`, `Event`.
+2. Confirm the workspace is the same one selected during deployment.
+3. For log-based alerts, the query window must contain matching data. Use Log Analytics
+   to run the alert query manually against the workspace.
+4. For storage log-based alerts, verify the `AvdStorageLogData` runbook has run at
+   least once successfully (Automation Account → Jobs).
+
+### Storage space alerts not firing
+
+The `AvdStorageLogData` runbook writes share usage data to the Automation Account job stream,
+which Log Analytics ingests via diagnostic settings. If no data appears:
+
+1. Check Automation Account → Jobs for `AvdStorageLogData` run status and output.
+2. Verify the managed identity has **Storage Account Contributor** on the storage RGs.
+3. Verify diagnostic settings on the Automation Account are pointing to the workspace.
+
+### Deployment fails with `Conflict / jobSchedule already exists`
+
+See [Redeployment](#redeployment) above.
+
+### Service Health alerts not firing
+
+The Action Group must be at the **global** location. The deployment form enforces this, but if
+deploying via PowerShell/CLI, verify the action group location:
+
+```powershell
+(Get-AzActionGroup -ResourceGroupName '{rg}' -Name '{ag}').Location
+```
+
+Expected: `global`
+
+### KQL semantic errors on alert rules
+
+All queries in this add-on explicitly cast `WVDAgentHealthStatus` string columns to their
+correct numeric types (`tolong()`, `tobool()`) before aggregation. If you see KQL type errors
+in the Azure Portal alert rule editor, ensure you are viewing the version deployed from this
+add-on and not an older manually edited copy.
+
+---
+
+## Query Design and Validation
+
+All log-based alert queries in this add-on were validated against the official Microsoft
+**AVD Insights** workbooks (the five workbooks published to the Azure Monitor Workbooks
+gallery and accessible from the AVD host pool **Insights** blade): Alerts, Connection
+Diagnostics, Host Diagnostics, Utilization Report, and User Report.
+
+Where a workbook and an alert query cover the same condition, the workbook query was used
+as the authoritative source. Deviations from workbook patterns are intentional and documented
+below.
+
+### Why alert queries differ from workbook queries
+
+| Reason | Detail |
+| --- | --- |
+| **Point-in-time vs. exploration** | Workbook queries are written for interactive visualization — they use `render` clauses, `bin()` time bucketing, and wide time range parameters. Alert queries must return a single scalar count comparable to a threshold at a fixed point in time. These are structurally different objectives. |
+| **`overrideQueryTimeRange` constraint** | Azure Monitor Scheduled Query Rules enforce: `overrideQueryTimeRange >= windowSize × numberOfEvaluationPeriods`. Workbook queries have no equivalent constraint. Alerts with `numberOfEvaluationPeriods: 3` (capacity 50%/85%, VM health check) require a wider `overrideQueryTimeRange` than the KQL `ago()` lookback alone would suggest. |
+| **Noise suppression guards** | Some alert queries add guards that workbooks do not need. For example, `alertSessionHostUnhealthy` excludes hosts that have been visible in health status data for fewer than 15 minutes (`FirstSeen <= ago(15m)`). Workbooks show all history; alert rules should not fire for a host that is legitimately still initializing after deployment. |
+| **Cloud compatibility** | Workbook queries occasionally reference workspace-specific functions or preview features not available in all Azure clouds. Alert queries use only cloud-agnostic KQL constructs that work in Commercial, Government, and air-gapped environments. |
+| **Persistent-state event sources** | Some FSLogix conditions (container < 5% free — EventID 34; container < 2% free — EventID 33; required service disabled — EventID 60) emit a single event at a specific moment (logon, service transition) and then go silent — even while the underlying condition remains. Workbooks are browsed on demand and have no resolution concept. Alert rules with `autoMitigate: true` would auto-resolve as soon as the event ages out of the query window, giving a false "resolved" signal. These three alerts use `overrideQueryTimeRange: P2D` (48 hours — the maximum supported granularity) to hold the alert fired as long as possible after the last triggering event, giving operators time to remediate before auto-resolution occurs. |
+
+### Specific workbook-aligned patterns adopted
+
+| Alert | Workbook source | Notes |
+| --- | --- | --- |
+| `alertSlowSessionLogon` | Connection Performance workbook | Adopted the workbook's `RdpStackConnectionEstablished` leftsemi join to isolate new-session logons, and the `OnCredentialsAcquisitionCompleted` / `SSOTokenRetrieval` leftouter joins to subtract client-side latency (credential acquisition and SSO token retrieval) from the total logon duration. This ensures the alert measures host-side logon latency only. |
+| Capacity (50% / 85% / 95%) | Host Diagnostics / Utilization Report workbooks | `arg_max(TimeGenerated, *) by SessionHostName` pattern to get the latest row per host; `iff(AllowNewSessions and Status == 'Available', MaxSessions, 0)` for denominator to exclude drained hosts. Numerator uses `ActiveSessions + InactiveSessions` (aligned with Utilization Report workbook) — disconnected sessions (`InactiveSessions`) keep their slot on the host and count against `MaxSessions`, so omitting them caused capacity alerts to not fire when users disconnected without logging off. `InactiveSessions` is cast via `tolong(column_ifexists('InactiveSessions', 0))` for cloud compatibility. **Denominator fallback:** `WVDAgentHealthStatus.MaxSessions` is not reliably populated in all environments (the Microsoft Utilization Report workbook retrieves `maxSessionLimit` from the ARM API via Azure Resource Graph, not from this column). The alert module reads `maxSessionLimit` directly from the host pool resource at deployment time (`existing` resource reference) and uses it as the fallback: `iff(tolong(column_ifexists('MaxSessions', 0)) > 0, tolong(column_ifexists('MaxSessions', 0)), long(<maxSessionLimit>))`. No user-supplied parameter is required. |
+| `alertSessionHostUnhealthy` | Host Diagnostics workbook | Status, AllowNewSessions, and LastAvailable pattern aligned with workbook; `FirstSeen` guard added for alert-specific noise suppression. |
+| `alertConnAuthFailed` | Connection Diagnostics workbook | Scoped to gateway/broker failures (`isempty(SessionHostName)`) rather than the workbook's combined view. Uses `WVDErrors` + `isempty(SessionHostName)` — appropriate because auth/gateway failures always produce error codes. A separate session-host-level connection failure alert was evaluated but removed: `WVDConnections State=='Completed'` without `RdpStackConnectionEstablished` is too ambiguous to alert on reliably — client crashes, network blips, and rapid reconnect storms are structurally indistinguishable from host-side failures at the query level. Host health is covered by `alertSessionHostUnhealthy` and `alertVMHealthCheck`. |

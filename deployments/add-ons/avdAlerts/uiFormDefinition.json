@@ -1,0 +1,685 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+    "view": {
+        "kind": "Form",
+        "properties": {
+            "title": "AVD Alerts Add-On",
+            "steps": [
+                {
+                    "name": "basics",
+                    "label": "Deployment Basics",
+                    "elements": [
+                        {
+                            "name": "infoBox",
+                            "type": "Microsoft.Common.TextBlock",
+                            "options": {
+                                "text": "Deploys Azure Monitor alert rules for one or more AVD host pools. Covers host pool capacity (pooled), session host health, user connections, FSLogix profiles, VM performance, Azure service health, and (optionally) Azure Files and ANF storage capacity.\n\nResources created in the Alerts Resource Group below: scheduled query rule alert rules (one set per host pool), Service Health activity log alert rules, and - when Azure Files storage alerts are enabled - an Automation Account with a runbook and schedule.\n\nVM metric alerts (CPU, memory, disk) are deployed directly into each host pool's VM resource group. Storage and ANF alerts are deployed into the respective storage resource groups."
+                            }
+                        },
+                        {
+                            "name": "resourceScope",
+                            "type": "Microsoft.Common.ResourceScope",
+                            "subscription": {
+                                "resourceProviders": [
+                                    "Microsoft.Automation/automationAccounts",
+                                    "Microsoft.Insights/scheduledQueryRules",
+                                    "Microsoft.Insights/metricAlerts",
+                                    "Microsoft.Insights/activityLogAlerts"
+                                ]
+                            },
+                            "location": {
+                                "label": "Region",
+                                "toolTip": "Azure region where the alert rules and Automation Account will be deployed. Use the same region as your Log Analytics workspace and host pool to minimize cross-region data transfer and latency.",
+                                "resourceTypes": [
+                                    "Microsoft.Automation/automationAccounts"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "rgInfoBox",
+                            "type": "Microsoft.Common.TextBlock",
+                            "options": {
+                                "text": "Select or create the resource group for the alert rules and (if storage alerts are enabled) the Automation Account. Use a dedicated monitoring resource group such as rg-avd-monitoring-{env}-{region}."
+                            }
+                        },
+                        {
+                            "name": "createOrUse",
+                            "type": "Microsoft.Common.OptionsGroup",
+                            "label": "Alerts Resource Group",
+                            "defaultValue": "Use existing",
+                            "toolTip": "Choose whether to create a new resource group or deploy into an existing one.",
+                            "constraints": {
+                                "required": true,
+                                "allowedValues": [
+                                    {
+                                        "label": "Use existing",
+                                        "value": false
+                                    },
+                                    {
+                                        "label": "Create new",
+                                        "value": true
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "resourceGroupsApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('basics').resourceScope.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+                            }
+                        },
+                        {
+                            "name": "existingResourceGroupName",
+                            "type": "Microsoft.Common.DropDown",
+                            "label": "Existing Resource Group",
+                            "toolTip": "Select the existing resource group to deploy into.",
+                            "visible": "[equals(steps('basics').createOrUse, false)]",
+                            "constraints": {
+                                "required": "[equals(steps('basics').createOrUse, false)]",
+                                "allowedValues": "[map(steps('basics').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"', rg.location, '\",\"value\":\"', rg.name, '\"}')))]"
+                            }
+                        },
+                        {
+                            "name": "newResourceGroupName",
+                            "type": "Microsoft.Common.TextBox",
+                            "label": "New Resource Group Name",
+                            "toolTip": "Name for the new resource group to create in the selected subscription and region.",
+                            "visible": "[equals(steps('basics').createOrUse, true)]",
+                            "placeholder": "rg-avd-operations-p-eus2",
+                            "constraints": {
+                                "required": "[equals(steps('basics').createOrUse, true)]",
+                                "regex": "^[a-zA-Z0-9()_.\\-]{1,90}$",
+                                "validationMessage": "Resource group names can be 1-90 characters and contain letters, digits, underscores, hyphens, parentheses, and periods."
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "monitoring",
+                    "label": "Monitoring",
+                    "elements": [
+                        {
+                            "name": "infoBox",
+                            "type": "Microsoft.Common.TextBlock",
+                            "options": {
+                                "text": "Select the Log Analytics Workspace where AVD diagnostic data is collected (configured during the host pool deployment) and the Action Group that will receive alert notifications."
+                            }
+                        },
+                        {
+                            "name": "logAnalyticsWorkspace",
+                            "type": "Microsoft.Solutions.ResourceSelector",
+                            "label": "Log Analytics Workspace",
+                            "toolTip": "The workspace where AVD diagnostic data flows (WVDConnections, WVDAgentHealthStatus, WVDErrors, Perf, Event). This workspace was configured when the host pool was deployed.",
+                            "resourceType": "Microsoft.OperationalInsights/workspaces",
+                            "options": {
+                                "filter": {
+                                    "subscription": "onBasics"
+                                }
+                            },
+                            "constraints": {
+                                "required": true
+                            }
+                        },
+                        {
+                            "name": "actionGroupsApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Insights/actionGroups?api-version=2023-01-01')]"
+                            }
+                        },
+                        {
+                            "name": "actionGroup",
+                            "type": "Microsoft.Common.DropDown",
+                            "label": "Action Group",
+                            "toolTip": "The action group to notify when an alert fires. Only action groups in the 'global' location are listed — service health alerts require a global action group.",
+                            "placeholder": "Select a global action group...",
+                            "constraints": {
+                                "required": true,
+                                "allowedValues": "[map(filter(steps('monitoring').actionGroupsApi.value, (ag) => equals(toLower(ag.location), 'global')), (ag) => parse(concat('{\"label\":\"', ag.name, '\",\"value\":\"', ag.id, '\"}')))]"
+                            }
+                        },
+                        {
+                            "name": "globalAgNote",
+                            "type": "Microsoft.Common.InfoBox",
+                            "options": {
+                                "style": "Info",
+                                "text": "Only action groups in the 'global' region are listed above. Service Health activity log alerts require a global action group. To create one, go to Azure Monitor > Action groups and set the region to 'Global'."
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "hostPools",
+                    "label": "Host Pools",
+                    "elements": [
+                        {
+                            "name": "infoBox",
+                            "type": "Microsoft.Common.TextBlock",
+                            "options": {
+                                "text": "Add each AVD host pool to monitor. For each host pool you must also identify the resource group that contains its session host VMs — this is a separate resource group from the host pool itself in a FederalAVD deployment. The VM Resource Group column is auto-populated from the hostsResourceGroupId tag that FederalAVD sets on every host pool at deployment time. You can override it if your VMs are in a different resource group."
+                            }
+                        },
+                        {
+                            "name": "hostPoolsApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.DesktopVirtualization/hostPools?api-version=2024-04-03')]"
+                            }
+                        },
+                        {
+                            "name": "rgApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "GET",
+                                "path": "[concat(steps('basics').resourceScope.subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+                            }
+                        },
+                        {
+                            "name": "noTagWarning",
+                            "type": "Microsoft.Common.InfoBox",
+                            "visible": "[not(empty(filter(coalesce(steps('hostPools').hostPoolsApi.value, parse('[]')), (hp) => empty(coalesce(hp.tags.hostsResourceGroupId, '')))))]",
+                            "options": {
+                                "style": "Warning",
+                                "text": "One or more host pools in this subscription do not have the hostsResourceGroupId tag. For those pools no '(from tag)' entry will appear in the VM Resource Group dropdown — select the correct resource group from the full list."
+                            }
+                        },
+                        {
+                            "name": "hostPoolGrid",
+                            "type": "Microsoft.Common.EditableGrid",
+                            "ariaLabel": "Host pools to monitor",
+                            "label": "Host Pools",
+                            "constraints": {
+                                "width": "Full",
+                                "rows": {
+                                    "count": {
+                                        "min": 1,
+                                        "max": 20
+                                    }
+                                },
+                                "columns": [
+                                    {
+                                        "id": "hostPool",
+                                        "header": "Host Pool",
+                                        "width": "2fr",
+                                        "element": {
+                                            "type": "Microsoft.Common.DropDown",
+                                            "placeholder": "Select a host pool",
+                                            "toolTip": "Select the AVD host pool to monitor. The VM Resource Group is read from the hostsResourceGroupId tag and embedded in the selection — leave the override blank to use it.",
+                                            "multiLine": true,
+                                            "constraints": {
+                                                "required": true,
+                                                "allowedValues": "[map(steps('hostPools').hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"', hp.properties.hostPoolType, ' | Host Pool RG: ', first(skip(split(hp.id, '/'), 4)), if(empty(coalesce(hp.tags.hostsResourceGroupId, '')), ' | VM RG: NOT SET - enter override', concat(' | VM RG: ', last(split(hp.tags.hostsResourceGroupId, '/')))), '\",\"value\":\"', hp.id, '|', coalesce(hp.tags.hostsResourceGroupId, ''), '|', hp.properties.hostPoolType, '\"}')))]"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "id": "vmRg",
+                                        "header": "VM Resource Group",
+                                        "width": "2fr",
+                                        "element": {
+                                            "type": "Microsoft.Common.DropDown",
+                                            "placeholder": "Leave blank to use hostsResourceGroupId tag",
+                                            "toolTip": "Leave blank to use the resource group from the hostsResourceGroupId tag (shown in the Host Pool description). Required only when the tag is not set.",
+                                            "multiLine": true,
+                                            "constraints": {
+                                                "required": "[empty(last(take(split(last(take(steps('hostPools').hostPoolGrid, $rowIndex)).hostPool, '|'), 2)))]",
+                                                "allowedValues": "[map(steps('hostPools').rgApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"', rg.location, '\",\"value\":\"', rg.id, '\"}')))]"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "vmRgInfo",
+                            "type": "Microsoft.Common.InfoBox",
+                            "options": {
+                                "style": "Info",
+                                "text": "VM metric alerts (CPU, memory, disk bandwidth) are scoped to the VM Resource Group. Log-based alerts query the Log Analytics workspace you selected on the Monitoring tab and are automatically filtered to each host pool by name."
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "storage",
+                    "label": "Storage (Optional)",
+                    "elements": [
+                        {
+                            "name": "storageSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Azure Files Storage Accounts",
+                            "elements": [
+                                {
+                                    "name": "enableStorageAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Enable Azure Files storage alerts",
+                                    "defaultValue": false,
+                                    "toolTip": "Deploy metric and log-based alerts for Azure Files Premium storage accounts used for FSLogix profile containers. Requires an Automation Account runbook to collect share usage data."
+                                },
+                                {
+                                    "name": "storageAccountsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[steps('storage').storageSection.enableStorageAlerts]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "noStorageWarning",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(steps('storage').storageSection.enableStorageAlerts, empty(filter(coalesce(steps('storage').storageSection.storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage'))))]",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "No Azure Files Premium (FileStorage kind) storage accounts found in this subscription. Verify the correct subscription is selected."
+                                    }
+                                },
+                                {
+                                    "name": "storageAccountSelect",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Storage Accounts",
+                                    "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                                    "placeholder": "Select one or more Azure Files Premium storage accounts",
+                                    "toolTip": "Select the Azure Files Premium (kind: FileStorage) storage accounts used for FSLogix profile containers.",
+                                    "multiselect": true,
+                                    "selectAll": true,
+                                    "multiLine": true,
+                                    "constraints": {
+                                        "required": "[steps('storage').storageSection.enableStorageAlerts]",
+                                        "allowedValues": "[map(filter(coalesce(steps('storage').storageSection.storageAccountsApi.value, parse('[]')), (sa) => equals(sa.kind, 'FileStorage')), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\",\"value\":\"', sa.id, '\"}')))]"                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "anfSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Azure NetApp Files Volumes",
+                            "elements": [
+                                {
+                                    "name": "enableAnfAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Enable Azure NetApp Files volume alerts",
+                                    "defaultValue": false,
+                                    "toolTip": "Deploy metric-based capacity alerts for Azure NetApp Files volumes used for FSLogix profile containers."
+                                },
+                                {
+                                    "name": "anfVolumeInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[steps('storage').anfSection.enableAnfAlerts]",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Enter the full resource ID of each ANF volume. Format: /subscriptions/{id}/resourceGroups/{rg}/providers/Microsoft.NetApp/netAppAccounts/{account}/capacityPools/{pool}/volumes/{volume}"
+                                    }
+                                },
+                                {
+                                    "name": "anfVolumeGrid",
+                                    "type": "Microsoft.Common.EditableGrid",
+                                    "ariaLabel": "ANF volumes for FSLogix",
+                                    "label": "ANF Volumes",
+                                    "visible": "[steps('storage').anfSection.enableAnfAlerts]",
+                                    "constraints": {
+                                        "width": "Full",
+                                        "rows": {
+                                            "count": {
+                                                "min": 0,
+                                                "max": 10
+                                            }
+                                        },
+                                        "columns": [
+                                            {
+                                                "id": "volumeId",
+                                                "header": "ANF Volume Resource ID",
+                                                "width": "Full",
+                                                "element": {
+                                                    "type": "Microsoft.Common.TextBox",
+                                                    "placeholder": "/subscriptions/.../resourceGroups/.../providers/Microsoft.NetApp/netAppAccounts/.../capacityPools/.../volumes/...",
+                                                    "toolTip": "Full ARM resource ID of the ANF volume.",
+                                                    "constraints": {
+                                                        "required": true,
+                                                        "regex": "^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.NetApp/netAppAccounts/[^/]+/capacityPools/[^/]+/volumes/[^/]+$",
+                                                        "validationMessage": "Must be a valid ANF volume resource ID."
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "advanced",
+                    "label": "Advanced",
+                    "elements": [
+                        {
+                            "name": "infoBox",
+                            "type": "Microsoft.Common.InfoBox",
+                            "options": {
+                                "style": "Info",
+                                "text": "Use this page to override alert naming, the Automation Account name, and deployment behavior. Leave all fields at their defaults for a standard first deployment."
+                            }
+                        },
+                        {
+                            "name": "alertSettings",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Alert Settings",
+                            "elements": [
+                                {
+                                    "name": "alertNamePrefix",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Alert Name Prefix",
+                                    "defaultValue": "AVD",
+                                    "toolTip": "Short prefix prepended to every alert rule name. Change this if deploying alerts for multiple environments in the same subscription to avoid name collisions.",
+                                    "constraints": {
+                                        "required": true,
+                                        "regex": "^[a-zA-Z0-9-]{1,10}$",
+                                        "validationMessage": "Must be 1-10 alphanumeric characters or hyphens."
+                                    }
+                                },
+                                {
+                                    "name": "autoResolveAlert",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Auto-resolve alerts when condition clears",
+                                    "defaultValue": true,
+                                    "toolTip": "When checked, alert rules automatically close when the underlying condition is no longer detected during the next evaluation."
+                                }
+                            ]
+                        },
+                        {
+                            "name": "alertCategories",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Alert Categories",
+                            "elements": [
+                                {
+                                    "name": "categoriesInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Uncheck any category you do not need. Unchecked categories are not deployed and will be removed on the next redeployment."
+                                    }
+                                },
+                                {
+                                    "name": "enableCapacityAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Host Pool Capacity Alerts (50% / 85% / 95%)",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert when host pool load reaches 50%, 85%, or 95% capacity."
+                                },
+                                {
+                                    "name": "enableAvailabilityAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Host Availability & VM Health Alerts",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert when session hosts are unhealthy, no resources are available, or VM health checks fail."
+                                },
+                                {
+                                    "name": "enableConnectionAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Connection & Disconnected Session Alerts",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert on user connection failures, sessions disconnected for longer than a configurable threshold, and slow logons."
+                                },
+                                {
+                                    "name": "slowLogonThresholdMinutes",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Slow Logon Alert Threshold (minutes)",
+                                    "toolTip": "Alert fires when a user takes longer than this many minutes to reach a productive desktop. Covers FSLogix profile load time, GPO processing, and startup scripts.",
+                                    "min": 1,
+                                    "max": 30,
+                                    "defaultValue": 2,
+                                    "showStepMarkers": false,
+                                    "visible": "[steps('advanced').alertCategories.enableConnectionAlerts]"
+                                },
+                                {
+                                    "name": "disconnectedSessionAlertThresholdHours",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Disconnected Session Alert Threshold (hours)",
+                                    "toolTip": "Alert fires when a user has been disconnected but not logged off for longer than this many hours. Set to slightly exceed your RDS/AVD idle-session timeout policy to catch sessions that slip through. Maximum is 47 hours, constrained by Azure Monitor's 48-hour scheduled query lookback limit.",
+                                    "min": 1,
+                                    "max": 47,
+                                    "defaultValue": 8,
+                                    "showStepMarkers": false,
+                                    "visible": "[steps('advanced').alertCategories.enableConnectionAlerts]"
+                                },
+                                {
+                                    "name": "enableLocalDiskAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Session Host Local Disk Space Alerts",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert when C: drive free space drops to 10% or 5%. Disable if using ephemeral OS disks."
+                                },
+                                {
+                                    "name": "enableFslogixAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "FSLogix Profile Alerts",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert on FSLogix profile errors: VHD full, network issues, attach failures, service disabled, compaction failures. Disable if not using FSLogix."
+                                },
+                                {
+                                    "name": "enableCpuAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "VM CPU Alerts (85% / 95%)",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert when average session host CPU exceeds 85% or 95% over 15 minutes."
+                                },
+                                {
+                                    "name": "enableMemoryAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "VM Available Memory Alerts (< 2 GB / < 1 GB)",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert when available memory on a session host drops below 2 GB or 1 GB."
+                                },
+                                {
+                                    "name": "memoryAlertStartupExclusionMinutes",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Memory Alert Startup Exclusion (minutes)",
+                                    "toolTip": "VMs whose oldest Perf record in the lookback window is newer than this value are excluded from memory alerts. Prevents false positives during VM startup. Set to 0 to disable.",
+                                    "min": 0,
+                                    "max": 60,
+                                    "defaultValue": 20,
+                                    "showStepMarkers": false,
+                                    "visible": "[steps('advanced').alertCategories.enableMemoryAlerts]"
+                                },
+                                {
+                                    "name": "enableOsDiskAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "VM OS Disk Bandwidth Alerts (85% / 95%)",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert when OS disk bandwidth consumption exceeds 85% or 95%. Disable if using ephemeral or high-IOPS disks where this is expected."
+                                },
+                                {
+                                    "name": "enableStorageLatencyAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Storage Latency Alerts (> 50ms / > 100ms)",
+                                    "defaultValue": true,
+                                    "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                                    "toolTip": "Alert when server or end-to-end latency on Azure Files storage accounts exceeds 50ms or 100ms."
+                                },
+                                {
+                                    "name": "enableStorageAvailabilityAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Storage Availability Alerts (< 99%)",
+                                    "defaultValue": true,
+                                    "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                                    "toolTip": "Alert when storage account availability drops below 99%."
+                                },
+                                {
+                                    "name": "enableStorageThrottlingAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Storage Throttling Alerts",
+                                    "defaultValue": true,
+                                    "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                                    "toolTip": "Alert when Azure Files share IOPS are being throttled."
+                                },
+                                {
+                                    "name": "enableAnfCapacityAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "ANF Volume Capacity Alerts (>= 85% / >= 95%)",
+                                    "defaultValue": true,
+                                    "visible": "[steps('storage').anfSection.enableAnfAlerts]",
+                                    "toolTip": "Alert when ANF volume consumed capacity reaches 85% or 95%."
+                                },
+                                {
+                                    "name": "enableServiceHealthAlerts",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Azure Service Health Alerts",
+                                    "defaultValue": true,
+                                    "toolTip": "Alert on Azure service incidents, planned maintenance, health advisories, and security advisories affecting this subscription."
+                                }
+                            ]
+                        },
+                        {
+                            "name": "resourceNames",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Resource Name Override",
+                            "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                            "elements": [
+                                {
+                                    "name": "defaultNamePreview",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "Default Automation Account name: aa-avd-alerts-{locAbbrev}  (e.g. aa-avd-alerts-eus2)"
+                                    }
+                                },
+                                {
+                                    "name": "enableNameOverride",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Override Automation Account Name",
+                                    "defaultValue": false,
+                                    "toolTip": "Check to specify an explicit Automation Account name instead of the auto-generated name."
+                                },
+                                {
+                                    "name": "automationAccountNameOverride",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "visible": "[steps('advanced').resourceNames.enableNameOverride]",
+                                    "label": "Automation Account Name",
+                                    "placeholder": "aa-avd-alerts-{locAbbrev}",
+                                    "toolTip": "Explicit name for the Automation Account. Must be 6-50 characters, start with a letter, end with a letter or digit, and contain only letters, digits, and hyphens.",
+                                    "constraints": {
+                                        "required": false,
+                                        "validations": [
+                                            {
+                                                "regex": "^$|^[a-zA-Z][a-zA-Z0-9-]{4,48}[a-zA-Z0-9]$",
+                                                "message": "Must be 6-50 characters, start with a letter, end with a letter or digit, and contain only letters, digits, and hyphens."
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "runbookSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Runbook Configuration",
+                            "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                            "elements": [
+                                {
+                                    "name": "runbookInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Azure Automation downloads the runbook from the URI below during deployment. The default URI points to the FederalAVD GitHub repository and works for Azure Commercial and Azure Government.\n\nAIR-GAPPED ENVIRONMENTS (Azure Government Secret / Top Secret): Clear this field entirely. The runbook will be created in an unpublished state. After deployment, publish it manually from a machine with portal or PowerShell access."
+                                    }
+                                },
+                                {
+                                    "name": "runbookContentUriStorage",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Storage Runbook URI",
+                                    "defaultValue": "https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/avdAlerts/scripts/Get-StorAcctInfo.ps1",
+                                    "toolTip": "URI of the PowerShell runbook that collects Azure Files share usage data. Clear for air-gapped environments.",
+                                    "constraints": {
+                                        "required": false,
+                                        "validations": [
+                                            {
+                                                "regex": "^$|^https?://.+\\.ps1$",
+                                                "message": "Must be a valid HTTPS URI ending in .ps1, or leave blank for air-gapped deployments."
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "scheduleSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Job Schedule",
+                            "visible": "[steps('storage').storageSection.enableStorageAlerts]",
+                            "elements": [
+                                {
+                                    "name": "scheduleWarning",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Leave 'Create job schedule links' checked for all standard deployments — normal redeployments are fully idempotent. Only uncheck if you receive a Conflict error after deleting and recreating the Automation Account with the same name."
+                                    }
+                                },
+                                {
+                                    "name": "createJobSchedules",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Create job schedule links",
+                                    "defaultValue": true,
+                                    "toolTip": "Leave checked for all standard deployments. Only uncheck if you see a Conflict / jobSchedule already exists error — this happens only when the Automation Account was deleted from ARM and recreated with the same name, not on normal incremental redeployments."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "tags",
+                    "label": "Tags",
+                    "elements": [
+                        {
+                            "name": "tags",
+                            "type": "Microsoft.Common.TagsByResource",
+                            "resources": [
+                                "Microsoft.Automation/automationAccounts"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "outputs": {
+            "kind": "Subscription",
+            "location": "[steps('basics').resourceScope.location.name]",
+            "subscriptionId": "[steps('basics').resourceScope.subscription.id]",
+            "parameters": {
+                "location": "[steps('basics').resourceScope.location.name]",
+                "resourceGroupName": "[if(steps('basics').createOrUse, steps('basics').newResourceGroupName, steps('basics').existingResourceGroupName)]",
+                "createResourceGroup": "[steps('basics').createOrUse]",
+                "logAnalyticsWorkspaceResourceId": "[steps('monitoring').logAnalyticsWorkspace.id]",
+                "actionGroupResourceId": "[steps('monitoring').actionGroup]",
+                "hostPoolInfo": "[map(filter(steps('hostPools').hostPoolGrid, (row) => not(empty(row.hostPool))), (row) => parse(concat('{\"hostPoolResourceId\":\"', first(split(row.hostPool, '|')), '\",\"vmResourceGroupId\":\"', if(empty(row.vmRg), last(take(split(row.hostPool, '|'), 2)), row.vmRg), '\",\"hostPoolType\":\"', last(split(row.hostPool, '|')), '\"}')))]",
+                "storageAccountResourceIds": "[if(steps('storage').storageSection.enableStorageAlerts, steps('storage').storageSection.storageAccountSelect, parse('[]'))]",
+                "anfVolumeResourceIds": "[if(steps('storage').anfSection.enableAnfAlerts, map(filter(steps('storage').anfSection.anfVolumeGrid, (row) => not(empty(row.volumeId))), (row) => row.volumeId), parse('[]'))]",
+                "alertNamePrefix": "[steps('advanced').alertSettings.alertNamePrefix]",
+                "autoResolveAlert": "[steps('advanced').alertSettings.autoResolveAlert]",
+                "automationAccountNameOverride": "[if(steps('advanced').resourceNames.enableNameOverride, coalesce(steps('advanced').resourceNames.automationAccountNameOverride, ''), '')]",
+                "runbookContentUriStorage": "[if(steps('storage').storageSection.enableStorageAlerts, coalesce(steps('advanced').runbookSection.runbookContentUriStorage, ''), '')]",
+                "createJobSchedules": "[if(steps('storage').storageSection.enableStorageAlerts, steps('advanced').scheduleSection.createJobSchedules, true)]",
+                "enableCapacityAlerts": "[steps('advanced').alertCategories.enableCapacityAlerts]",
+                "enableAvailabilityAlerts": "[steps('advanced').alertCategories.enableAvailabilityAlerts]",
+                "enableConnectionAlerts": "[steps('advanced').alertCategories.enableConnectionAlerts]",
+                "slowLogonThresholdMinutes": "[steps('advanced').alertCategories.slowLogonThresholdMinutes]",
+                "disconnectedSessionAlertThresholdHours": "[steps('advanced').alertCategories.disconnectedSessionAlertThresholdHours]",
+                "enableLocalDiskAlerts": "[steps('advanced').alertCategories.enableLocalDiskAlerts]",
+                "enableFslogixAlerts": "[steps('advanced').alertCategories.enableFslogixAlerts]",
+                "enableCpuAlerts": "[steps('advanced').alertCategories.enableCpuAlerts]",
+                "enableMemoryAlerts": "[steps('advanced').alertCategories.enableMemoryAlerts]",
+                "memoryAlertStartupExclusionMinutes": "[steps('advanced').alertCategories.memoryAlertStartupExclusionMinutes]",
+                "enableOsDiskAlerts": "[steps('advanced').alertCategories.enableOsDiskAlerts]",
+                "enableStorageLatencyAlerts": "[steps('advanced').alertCategories.enableStorageLatencyAlerts]",
+                "enableStorageAvailabilityAlerts": "[steps('advanced').alertCategories.enableStorageAvailabilityAlerts]",
+                "enableStorageThrottlingAlerts": "[steps('advanced').alertCategories.enableStorageThrottlingAlerts]",
+                "enableAnfCapacityAlerts": "[steps('advanced').alertCategories.enableAnfCapacityAlerts]",
+                "enableServiceHealthAlerts": "[steps('advanced').alertCategories.enableServiceHealthAlerts]",
+                "tags": "[steps('tags').tags]"
+            }
+        }
+    }
+}

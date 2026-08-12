@@ -1,4 +1,4 @@
-# Session Host Replacer - Logging Guidelines
+﻿# Session Host Replacer - Logging Guidelines
 
 ## Logging Levels
 
@@ -21,6 +21,7 @@ FUNCTIONS_WORKER_RUNTIME_VERSION = "7"
 ```
 
 In Azure Portal:
+
 1. Navigate to Function App → Configuration → Application Settings
 2. Add: `FUNCTIONS_WORKER_RUNTIME_VERSION` = `7`
 3. To see verbose logs in Application Insights, add a query filter
@@ -69,6 +70,7 @@ traces
 ## Current Logging Strategy
 
 ### Host Level (Always Visible)
+
 - Function start/stop
 - Token acquisition status
 - Session host counts
@@ -77,12 +79,14 @@ traces
 - Major state transitions
 
 ### Information Level (Default)
+
 - Deployment state tracking
 - Previous deployment status checks
 - Image version detection
 - State persistence operations
 
 ### Verbose Level (Diagnostic)
+
 - Individual session host details
 - VM tag operations
 - Image version enumeration
@@ -90,11 +94,13 @@ traces
 - Cache operations
 
 ### Warning Level
+
 - Non-critical failures (Graph token, device cleanup)
 - Unexpected conditions that don't stop execution
 - Previous deployment still running
 
 ### Error Level  
+
 - Token acquisition failures
 - Deployment submission errors
 - Critical API failures
@@ -105,12 +111,14 @@ traces
 To reduce log noise while maintaining visibility, the following logs should be changed from Host/Information to Verbose:
 
 ### In run.ps1:
+
 - Subscription IDs → Verbose
 - Token acquisition success → Verbose (keep failure as Host)
 - Image reference details → Verbose
 - Running deployment count → Verbose
 
 ### In SessionHostReplacer.psm1:
+
 - Individual session host processing → Verbose
 - VM tag operations → Verbose
 - Image version details → Verbose
@@ -119,6 +127,7 @@ To reduce log noise while maintaining visibility, the following logs should be c
 - Individual drain operations → Verbose
 
 ### Keep as Host/Information:
+
 - Overall session host counts
 - Deployment decisions (how many to deploy/delete)
 - Deployment submission results

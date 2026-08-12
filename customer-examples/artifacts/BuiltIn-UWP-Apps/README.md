@@ -1,4 +1,4 @@
-# BuiltIn-UWP-Apps
+﻿# BuiltIn-UWP-Apps
 
 ## Overview
 
@@ -29,7 +29,7 @@ retained after sysprep".
 ## Apps included
 
 | Folder | App | Winget Store ID |
-|--------|-----|-----------------|
+| --- | --- | --- |
 | `Calculator` | Windows Calculator | `9WZDNCRFHVN5` |
 | `Paint` | Microsoft Paint | `9PCFS5B6T72H` |
 | `SnippingTool` | Snipping Tool | `9MZ95KL8MR0L` |
@@ -161,7 +161,7 @@ No special arguments are needed — the script handles prerequisites automatical
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
-|---------|-------|-----|
+| --- | --- | --- |
 | App folder skipped with "No package file found" | `winget download` failed or the Store ID is wrong | Check winget output in `Update-ImageArtifacts.ps1` log; verify the WingetId in `downloads.json` |
 | `0xc1570118 APPX_E_PREREQUISITE_NOT_MET` | Explicit dependencies conflict with OS-registered versions | The two-attempt provisioning handles this automatically; if it persists, the staged dependency version may be older than what the OS has -- update your artifacts |
 | App shows "up-to-date" unexpectedly | A newer version was already provisioned from a previous build | This is correct behavior; the script never downgrades |

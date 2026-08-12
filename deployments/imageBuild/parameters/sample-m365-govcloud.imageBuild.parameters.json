@@ -63,11 +63,48 @@
         },
 
         // ── Image Customizations ───────────────────────────────────────────────
+        //    Artifacts are downloaded from artifactsContainerUri by blob name.
+        //    Each entry:
+        //      name          - Unique label (used in logs and Run Command name)
+        //      blobNameOrUri - Blob name relative to artifactsContainerUri, OR full HTTPS URI
+        //      arguments     - (Optional) For .ps1/.zip: "-ParamName Value -SwitchParam"
+        //                      For .exe/.msi: "/quiet /norestart"
+        //      restart       - (Optional, default false) Restart the build VM after this step
+        //
+        //    Switch parameters (no value) become $true in your script.
+        //    Example: "-SearchForApplications" passes $SearchForApplications = $true
         "applyWindowsDesktopOptimizations": {
             "value": true
         },
         "customizations": {
-            "value": []
+            "value": [
+                {
+                    // DoD-STIGs: applies DISA STIG GPOs. Version stamps the registry for
+                    // upgrade detection. SearchForApplications skips third-party app STIGs
+                    // when those apps are not installed.
+                    "name": "DoD-STIGs",
+                    "blobNameOrUri": "DoD-STIGs.zip",
+                    "arguments": "-Version 2025.10 -Upgrade -SearchForApplications"
+                },
+                {
+                    // DoD-InstallRoot: installs DoD root certificates. No arguments needed.
+                    "name": "DoD-InstallRoot",
+                    "blobNameOrUri": "DoD-InstallRoot.zip",
+                    "arguments": ""
+                },
+                {
+                    // Configure-Office365Policy: remove arguments to accept all defaults.
+                    "name": "Configure-Office365Policy",
+                    "blobNameOrUri": "Configure-Office365Policy.zip",
+                    "arguments": "-EmailCacheTime \"1 month\" -CalendarSync \"Primary Calendar Only\""
+                },
+                {
+                    // Configure-EdgePolicy: defaults cover standard Azure Government portal URLs.
+                    "name": "Configure-EdgePolicy",
+                    "blobNameOrUri": "Configure-EdgePolicy.zip",
+                    "arguments": ""
+                }
+            ]
         },
 
         // ── Bloatware Removal ──────────────────────────────────────────────────

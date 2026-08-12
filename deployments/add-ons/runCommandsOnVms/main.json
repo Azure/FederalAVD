@@ -4,15 +4,44 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.44.1.10279",
-      "templateHash": "4876120855438581468"
+      "version": "0.45.15.27210",
+      "templateHash": "7034582031425451132"
     }
   },
   "parameters": {
     "vmNames": {
       "type": "array",
+      "defaultValue": [],
       "metadata": {
-        "description": "Required. The names of the virtual machines on which to run the scripts."
+        "description": "Optional. The names of the virtual machines on which to run the scripts. Leave empty when using vmPrefix/vmStartIndex/vmEndIndex."
+      }
+    },
+    "vmPrefix": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. VM name prefix for generating names from a pattern (e.g. \"avd-vm-\"). When set, vmStartIndex, vmEndIndex, and vmIndexPadding build the VM names list."
+      }
+    },
+    "vmStartIndex": {
+      "type": "int",
+      "defaultValue": 0,
+      "metadata": {
+        "description": "Optional. Start index for VM name pattern generation (inclusive)."
+      }
+    },
+    "vmEndIndex": {
+      "type": "int",
+      "defaultValue": 0,
+      "metadata": {
+        "description": "Optional. End index for VM name pattern generation (inclusive)."
+      }
+    },
+    "vmIndexPadding": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "Optional. Number of digits for index padding (e.g. 2 produces \"01\", 3 produces \"001\")."
       }
     },
     "scripts": {
@@ -124,22 +153,28 @@
           "uri": "[if(contains(parameters('scripts')[copyIndex('multipleScripts')].blobNameOrUri, '://'), parameters('scripts')[copyIndex('multipleScripts')].blobNameOrUri, format('{0}/{1}', variables('scriptsContainerUri'), parameters('scripts')[copyIndex('multipleScripts')].blobNameOrUri))]",
           "arguments": "[coalesce(tryGet(parameters('scripts')[copyIndex('multipleScripts')], 'arguments'), '')]"
         }
+      },
+      {
+        "name": "patternVmNames",
+        "count": "[length(range(parameters('vmStartIndex'), add(sub(parameters('vmEndIndex'), parameters('vmStartIndex')), 1)))]",
+        "input": "[format('{0}{1}', parameters('vmPrefix'), padLeft(string(range(parameters('vmStartIndex'), add(sub(parameters('vmEndIndex'), parameters('vmStartIndex')), 1))[copyIndex('patternVmNames')]), parameters('vmIndexPadding'), '0'))]"
       }
     ],
     "logsContainerUri": "[if(or(empty(parameters('logsContainerName')), empty(parameters('logsStorageAccountName'))), '', format('https://{0}.blob.{1}/{2}', parameters('logsStorageAccountName'), environment().suffixes.storage, parameters('logsContainerName')))]",
     "scriptsContainerUri": "[if(or(empty(parameters('scriptsContainerName')), empty(parameters('scriptsStorageAccountName'))), '', format('https://{0}.blob.{1}/{2}', parameters('scriptsStorageAccountName'), environment().suffixes.storage, parameters('scriptsContainerName')))]",
-    "normalizedScriptContent": "[if(empty(parameters('scriptContent')), '', replace(replace(parameters('scriptContent'), '\r\n', '\n'), '\r', '\n'))]"
+    "normalizedScriptContent": "[if(empty(parameters('scriptContent')), '', replace(replace(parameters('scriptContent'), '\r\n', '\n'), '\r', '\n'))]",
+    "resolvedVmNames": "[if(not(empty(parameters('vmPrefix'))), variables('patternVmNames'), parameters('vmNames'))]"
   },
   "resources": [
     {
       "copy": {
         "name": "updateVms",
-        "count": "[length(parameters('vmNames'))]"
+        "count": "[length(variables('resolvedVmNames'))]"
       },
       "condition": "[or(not(empty(parameters('logsUserAssignedIdentityResourceId'))), not(empty(parameters('scriptsUserAssignedIdentityResourceId'))))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('VirtualMachineUpdate-{0}-{1}', parameters('vmNames')[copyIndex()], parameters('timeStamp'))]",
+      "name": "[format('VirtualMachineUpdate-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -147,13 +182,13 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01', 'full').location]"
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full').location]"
           },
           "name": {
-            "value": "[parameters('vmNames')[copyIndex()]]"
+            "value": "[variables('resolvedVmNames')[copyIndex()]]"
           },
           "identity": {
-            "value": "[tryGet(reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01', 'full'), 'identity')]"
+            "value": "[tryGet(reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full'), 'identity')]"
           },
           "logsUserAssignedIdentityResourceId": {
             "value": "[parameters('logsUserAssignedIdentityResourceId')]"
@@ -162,16 +197,16 @@
             "value": "[parameters('scriptsUserAssignedIdentityResourceId')]"
           },
           "hardwareProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01').hardwareProfile]"
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').hardwareProfile]"
           },
           "storageProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01').storageProfile]"
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').storageProfile]"
           },
           "osProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01').osProfile]"
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').osProfile]"
           },
           "networkProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01').networkProfile]"
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').networkProfile]"
           }
         },
         "template": {
@@ -180,8 +215,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "6107216627601116792"
+              "version": "0.45.15.27210",
+              "templateHash": "2675318906065691323"
             }
           },
           "parameters": {
@@ -241,12 +276,12 @@
     {
       "copy": {
         "name": "runCommands",
-        "count": "[length(parameters('vmNames'))]"
+        "count": "[length(variables('resolvedVmNames'))]"
       },
       "condition": "[not(empty(parameters('scripts')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RunCommands-{0}-{1}', parameters('vmNames')[copyIndex()], parameters('timeStamp'))]",
+      "name": "[format('RunCommands-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -257,7 +292,7 @@
             "value": "[variables('multipleScripts')]"
           },
           "location": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01', 'full').location]"
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full').location]"
           },
           "logsContainerUri": {
             "value": "[variables('logsContainerUri')]"
@@ -268,7 +303,7 @@
             "value": "[parameters('timeStamp')]"
           },
           "virtualMachineName": {
-            "value": "[parameters('vmNames')[copyIndex()]]"
+            "value": "[variables('resolvedVmNames')[copyIndex()]]"
           }
         },
         "template": {
@@ -277,8 +312,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "16946161491674314624"
+              "version": "0.45.15.27210",
+              "templateHash": "6530934888457946183"
             }
           },
           "parameters": {
@@ -305,7 +340,7 @@
             }
           },
           "variables": {
-            "$fxv#0": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments='',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\nfunction Write-OutputWithTimeStamp {\r\n  param(\r\n      [string]$Message\r\n  )    \r\n  $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'\r\n  $Entry = '[' + $Timestamp + '] ' + $Message\r\n  Write-Output $Entry\r\n}\r\n\r\nFunction Split-ArgumentString {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @()\r\n    }\r\n\r\n    # For PowerShell execution with &, we want individual arguments, not combined ones\r\n    $arguments = @()\r\n    $currentArg = \"\"\r\n    $inQuotes = $false\r\n    $quoteChar = $null\r\n    \r\n    for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n        $char = $ArgumentString[$i]\r\n        \r\n        if (!$inQuotes -and (($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i-1] -ne '\\')) -or $char -eq \"'\")) {\r\n            $inQuotes = $true\r\n            $quoteChar = $char\r\n            $currentArg += $char\r\n        }\r\n        elseif ($inQuotes -and $char -eq $quoteChar) {\r\n            $inQuotes = $false\r\n            $quoteChar = $null\r\n            $currentArg += $char\r\n        }\r\n        elseif ($char -eq ' ' -and !$inQuotes) {\r\n            if ($currentArg.Length -gt 0) {\r\n                # Handle boolean conversion\r\n                $value = $currentArg.Trim('\"').Trim(\"'\")\r\n                if ($value -eq 'true') {\r\n                    $arguments += '$true'\r\n                }\r\n                elseif ($value -eq 'false') {\r\n                    $arguments += '$false'\r\n                }\r\n                else {\r\n                    $arguments += $value\r\n                }\r\n                $currentArg = \"\"\r\n            }\r\n        }\r\n        else {\r\n            $currentArg += $char\r\n        }\r\n    }\r\n    \r\n    # Add the last argument\r\n    if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"').Trim(\"'\")\r\n        if ($value -eq 'true') {\r\n            $arguments += '$true'\r\n        }\r\n        elseif ($value -eq 'false') {\r\n            $arguments += '$false'\r\n        }\r\n        else {\r\n            $arguments += $value\r\n        }\r\n    }\r\n    \r\n    return $arguments\r\n}\r\n\r\nFunction ConvertTo-ParametersSplat {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @{}\r\n    }\r\n\r\n    $tokens = Split-ArgumentString -ArgumentString $ArgumentString\r\n    $parameters = @{}\r\n    \r\n    $i = 0\r\n    while ($i -lt $tokens.Count) {\r\n        $token = $tokens[$i]\r\n        \r\n        # If this is a parameter (starts with -)\r\n        if ($token -match '^-(\\w+)$') {\r\n            $paramName = $matches[1]  # Remove the dash\r\n            \r\n            # Check if there's a value following this parameter\r\n            if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n                # Parameter with value\r\n                $i++  # Move to the value\r\n                $value = $tokens[$i]\r\n                \r\n                # Handle PowerShell booleans\r\n                if ($value -eq '$true') {\r\n                    $parameters[$paramName] = $true\r\n                }\r\n                elseif ($value -eq '$false') {\r\n                    $parameters[$paramName] = $false\r\n                }\r\n                else {\r\n                    # Remove quotes if present\r\n                    $cleanValue = $value.Trim('\"')\r\n                    $parameters[$paramName] = $cleanValue\r\n                }\r\n            }\r\n            else {\r\n                # This is a switch parameter (no value)\r\n                $parameters[$paramName] = $true\r\n            }\r\n        }\r\n        else {\r\n            # Handle positional arguments (rare in this context)\r\n            # You could add logic here if needed\r\n        }\r\n        \r\n        $i++\r\n    }\r\n    \r\n    return $parameters\r\n}\r\n\r\nStart-Transcript -Path \"$env:SystemRoot\\Logs\\$Name.log\" -Force\r\nWrite-OutputWithTimeStamp \"Starting '$Name' script with the following parameters.\"\r\nWrite-Output ( $PSBoundParameters | Format-Table -AutoSize )\r\nIf ($Arguments -eq '') { $Arguments = $null }\r\n$TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\nNew-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n$WebClient = New-Object System.Net.WebClient\r\nIf ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n  Write-OutputWithTimeStamp \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n  $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n  $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n  $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n  $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n  $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n}\r\n$SourceFileName = ($Uri -Split \"/\")[-1]\r\nWrite-OutputWithTimeStamp \"Downloading '$Uri' to '$TempDir'.\"\r\n$DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n$webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\nStart-Sleep -Seconds 10\r\nIf (!(Test-Path -Path $DestFile)) { Write-Error \"Failed to download $SourceFileName\"; Exit 1 }\r\nWrite-OutputWithTimeStamp 'Finished downloading'\r\nSet-Location -Path $TempDir\r\n$Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.','')\r\nswitch ($Ext) {\r\n  'exe' {\r\n      If ($Arguments) {\r\n        Write-OutputWithTimeStamp \"Executing '`\"$DestFile`\" $Arguments'\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }\r\n      Else {\r\n        Write-OutputWithTimeStamp \"Executing `\"$DestFile`\"\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }      \r\n    }\r\n  'msi' {\r\n    If ($Arguments) {\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $InstallArg = \"/i $DestFile\"\r\n        $Arguments = @($InstallArg) + $Arguments\r\n      }\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe $Arguments'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }    \r\n  }\r\n  'bat' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $Arguments = @(\"$DestFile\") + $Arguments\r\n      }\r\n      Start-Process -FilePath cmd.exe -ArgumentList $Arguments -Wait\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n      Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n    }\r\n  }\r\n  'ps1' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $DestFile @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile'\"\r\n      & $DestFile\r\n    }\r\n  }\r\n  'zip' {\r\n    $DestinationPath = Join-Path -Path \"$TempDir\" -ChildPath $([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n    Write-OutputWithTimeStamp \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n    Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n    Write-OutputWithTimeStamp \"Finding PowerShell script in root of '$DestinationPath'.\"\r\n    $PSScript = (Get-ChildItem -Path $DestinationPath -filter '*.ps1').FullName\r\n    If ($PSScript.count -gt 1) { $PSScript = $PSScript[0] }\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $PSScript @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$PSScript'\"         \r\n      & $PSScript\r\n    }\r\n  }\r\n}\r\nRemove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue\r\nStop-Transcript",
+            "$fxv#0": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments='',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$Name,\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\nfunction Write-OutputWithTimeStamp {\r\n  param(\r\n      [string]$Message\r\n  )    \r\n  $Timestamp = Get-Date -Format 'MM/dd/yyyy HH:mm:ss'\r\n  $Entry = '[' + $Timestamp + '] ' + $Message\r\n  Write-Output $Entry\r\n}\r\n\r\nFunction Split-ArgumentString {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @()\r\n    }\r\n\r\n    # For PowerShell execution with &, we want individual arguments, not combined ones\r\n    $arguments = @()\r\n    $currentArg = \"\"\r\n    $inQuotes = $false\r\n    $quoteChar = $null\r\n    \r\n    for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n        $char = $ArgumentString[$i]\r\n        \r\n        if (!$inQuotes -and (($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i-1] -ne '\\')) -or $char -eq \"'\")) {\r\n            $inQuotes = $true\r\n            $quoteChar = $char\r\n            $currentArg += $char\r\n        }\r\n        elseif ($inQuotes -and $char -eq $quoteChar) {\r\n            $inQuotes = $false\r\n            $quoteChar = $null\r\n            $currentArg += $char\r\n        }\r\n        elseif ($char -eq ' ' -and !$inQuotes) {\r\n            if ($currentArg.Length -gt 0) {\r\n                # Handle boolean conversion\r\n                $value = $currentArg.Trim('\"').Trim(\"'\")\r\n                if ($value -eq 'true') {\r\n                    $arguments += '$true'\r\n                }\r\n                elseif ($value -eq 'false') {\r\n                    $arguments += '$false'\r\n                }\r\n                else {\r\n                    $arguments += $value\r\n                }\r\n                $currentArg = \"\"\r\n            }\r\n        }\r\n        else {\r\n            $currentArg += $char\r\n        }\r\n    }\r\n    \r\n    # Add the last argument\r\n    if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"').Trim(\"'\")\r\n        if ($value -eq 'true') {\r\n            $arguments += '$true'\r\n        }\r\n        elseif ($value -eq 'false') {\r\n            $arguments += '$false'\r\n        }\r\n        else {\r\n            $arguments += $value\r\n        }\r\n    }\r\n    \r\n    return $arguments\r\n}\r\n\r\nFunction ConvertTo-ParametersSplat {\r\n    param (\r\n        [string]$ArgumentString\r\n    )\r\n\r\n    if ([string]::IsNullOrWhiteSpace($ArgumentString)) {\r\n        return @{}\r\n    }\r\n\r\n    $tokens = Split-ArgumentString -ArgumentString $ArgumentString\r\n    $parameters = @{}\r\n    \r\n    $i = 0\r\n    while ($i -lt $tokens.Count) {\r\n        $token = $tokens[$i]\r\n        \r\n        # If this is a parameter (starts with -)\r\n        if ($token -match '^-(\\w+)$') {\r\n            $paramName = $matches[1]  # Remove the dash\r\n            \r\n            # Check if there's a value following this parameter\r\n            if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n                # Parameter with value\r\n                $i++  # Move to the value\r\n                $value = $tokens[$i]\r\n                \r\n                # Handle PowerShell booleans\r\n                if ($value -eq '$true') {\r\n                    $parameters[$paramName] = $true\r\n                }\r\n                elseif ($value -eq '$false') {\r\n                    $parameters[$paramName] = $false\r\n                }\r\n                else {\r\n                    # Remove quotes if present\r\n                    $cleanValue = $value.Trim('\"')\r\n                    $parameters[$paramName] = $cleanValue\r\n                }\r\n            }\r\n            else {\r\n                # This is a switch parameter (no value)\r\n                $parameters[$paramName] = $true\r\n            }\r\n        }\r\n        else {\r\n            # Handle positional arguments (rare in this context)\r\n            # You could add logic here if needed\r\n        }\r\n        \r\n        $i++\r\n    }\r\n    \r\n    return $parameters\r\n}\r\n\r\nStart-Transcript -Path \"$env:SystemRoot\\Logs\\$Name.log\" -Force\r\nWrite-OutputWithTimeStamp \"Starting '$Name' script with the following parameters.\"\r\nWrite-Output ( $PSBoundParameters | Format-Table -AutoSize )\r\nIf ($Arguments -eq '') { $Arguments = $null }\r\n$TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\nNew-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n$WebClient = New-Object System.Net.WebClient\r\nIf ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n  Write-OutputWithTimeStamp \"Getting access token for '$Uri' using User Assigned Identity.\"\r\n  $StorageEndpoint = ($Uri -split \"://\")[0] + \"://\" + ($Uri -split \"/\")[2] + \"/\"\r\n  $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n  $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token\r\n  $WebClient.Headers.Add('x-ms-version', '2017-11-09')\r\n  $webClient.Headers.Add(\"Authorization\", \"Bearer $AccessToken\")\r\n}\r\n$SourceFileName = ($Uri -Split \"/\")[-1]\r\nWrite-OutputWithTimeStamp \"Downloading '$Uri' to '$TempDir'.\"\r\n$DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n$webClient.DownloadFile(\"$Uri\", \"$DestFile\")\r\nStart-Sleep -Seconds 10\r\nIf (!(Test-Path -Path $DestFile)) { Write-Error \"Failed to download $SourceFileName\"; Exit 1 }\r\nWrite-OutputWithTimeStamp 'Finished downloading'\r\nSet-Location -Path $TempDir\r\n$Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.','')\r\nswitch ($Ext) {\r\n  'exe' {\r\n      If ($Arguments) {\r\n        Write-OutputWithTimeStamp \"Executing '`\"$DestFile`\" $Arguments'\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }\r\n      Else {\r\n        Write-OutputWithTimeStamp \"Executing `\"$DestFile`\"\"\r\n        $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n        Write-OutputWithTimeStamp \"Installation ended with exit code $($Install.ExitCode).\"\r\n      }      \r\n    }\r\n  'msi' {\r\n    If ($Arguments) {\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $InstallArg = \"/i $DestFile\"\r\n        $Arguments = @($InstallArg) + $Arguments\r\n      }\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe $Arguments'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'msiexec.exe /i $DestFile /qn'\"\r\n      $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList \"/i $DestFile /qn\" -Wait -PassThru\r\n      Write-OutputWithTimeStamp \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n    }    \r\n  }\r\n  'bat' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n      $Arguments = Split-ArgumentString -ArgumentString $Arguments\r\n      If ($Arguments -notcontains $DestFile) {\r\n        $Arguments = @(\"$DestFile\") + $Arguments\r\n      }\r\n      Start-Process -FilePath cmd.exe -ArgumentList $Arguments -Wait\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n      Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait\r\n    }\r\n  }\r\n  'ps1' {\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $DestFile @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile'\"\r\n      & $DestFile\r\n    }\r\n  }\r\n  'zip' {\r\n    $DestinationPath = Join-Path -Path \"$TempDir\" -ChildPath $([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n    Write-OutputWithTimeStamp \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n    Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n    Write-OutputWithTimeStamp \"Finding PowerShell script in root of '$DestinationPath'.\"\r\n    $PSScript = (Get-ChildItem -Path $DestinationPath -filter '*.ps1').FullName\r\n    If ($PSScript.count -gt 1) { $PSScript = $PSScript[0] }\r\n    If ($Arguments) {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$DestFile' with arguments '$Arguments'\"\r\n      $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n      & $PSScript @parameterSplat\r\n    }\r\n    Else {\r\n      Write-OutputWithTimeStamp \"Calling PowerShell Script '$PSScript'\"         \r\n      & $PSScript\r\n    }\r\n  }\r\n}\r\nRemove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue\r\nStop-Transcript",
             "apiVersion": "[if(startsWith(environment().name, 'USN'), '2017-08-01', '2018-02-01')]"
           },
           "resources": [
@@ -360,18 +395,18 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('VirtualMachineUpdate-{0}-{1}', parameters('vmNames')[copyIndex()], parameters('timeStamp')))]"
+        "[resourceId('Microsoft.Resources/deployments', format('VirtualMachineUpdate-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp')))]"
       ]
     },
     {
       "copy": {
         "name": "runCommand",
-        "count": "[length(parameters('vmNames'))]"
+        "count": "[length(variables('resolvedVmNames'))]"
       },
       "condition": "[empty(parameters('scripts'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RunCommand-{0}-{1}', parameters('vmNames')[copyIndex()], parameters('timeStamp'))]",
+      "name": "[format('RunCommand-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp'))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -379,10 +414,10 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmNames')[copyIndex()]), '2023-03-01', 'full').location]"
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full').location]"
           },
           "virtualMachineName": {
-            "value": "[parameters('vmNames')[copyIndex()]]"
+            "value": "[variables('resolvedVmNames')[copyIndex()]]"
           },
           "name": {
             "value": "[parameters('runCommandName')]"
@@ -398,8 +433,8 @@
             "value": "[parameters('parameters')]"
           },
           "protectedParameters": "[if(empty(parameters('protectedParameter')), createObject('value', createArray()), createObject('value', createArray(parameters('protectedParameter'))))]",
-          "outputBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-output-{3}.log', variables('logsContainerUri'), parameters('vmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
-          "errorBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-error-{3}.log', variables('logsContainerUri'), parameters('vmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
+          "outputBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-output-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
+          "errorBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-error-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
           "outputBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
           "errorBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
           "timeoutInSeconds": {
@@ -412,8 +447,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "6484157504036730489"
+              "version": "0.45.15.27210",
+              "templateHash": "9829260378627813363"
             }
           },
           "parameters": {
@@ -549,7 +584,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('VirtualMachineUpdate-{0}-{1}', parameters('vmNames')[copyIndex()], parameters('timeStamp')))]"
+        "[resourceId('Microsoft.Resources/deployments', format('VirtualMachineUpdate-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp')))]"
       ]
     }
   ]

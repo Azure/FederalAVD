@@ -1,4 +1,8 @@
-﻿#region Initialization
+﻿param (
+    [int[]]$SuccessExitCodes = @(0, 3010)
+)
+
+#region Initialization
 $DownloadUrl = "https://aka.ms/fslogix_download"
 $Script:Name = 'Install-FSLogix'
 #endregion
@@ -143,11 +147,13 @@ Expand-Archive -Path $pathZip -DestinationPath $TempDir -Force
 $Installer = (Get-ChildItem -Path $TempDir -File -Recurse -Filter 'FSLogixAppsSetup.exe' | Where-Object { $_.FullName -like '*x64*' } | Select-Object -First 1).FullName
 Write-Log -Message "Installation file found: [$Installer], executing installation."
 $Install = Start-Process -FilePath $Installer -ArgumentList "/install /quiet /norestart" -Wait -PassThru
-If ($($Install.ExitCode) -eq 0) {
-    Write-Log -Message "'Microsoft FSLogix Apps' installed successfully."
+If ($Install.ExitCode -in $SuccessExitCodes) {
+    if ($Install.ExitCode -eq 3010) { Write-Log -Message "'Microsoft FSLogix Apps' installed successfully. A reboot is required." }
+    else { Write-Log -Message "'Microsoft FSLogix Apps' installed successfully." }
 }
 Else {
-    Write-Error "The Install exit code is $($Install.ExitCode)"
+    Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Install.ExitCode)."
+    exit $Install.ExitCode
 }
 Write-Log -Message "Copying the FSLogix ADMX and ADML files to the PolicyDefinitions folders."
 Get-ChildItem -Path $TempDir -File -Recurse -Filter '*.admx' | ForEach-Object { Write-Log -Message "Copying $($_.Name)"; Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }

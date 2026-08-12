@@ -30,8 +30,8 @@ param artifactsUserAssignedIdentityResourceId string = ''
 @description('Optional. VM availability strategy.')
 param availability string = 'None'
 
-@description('Optional. Naming convention for availability sets with ## placeholder for index. Auto-detected from the host pool name when empty.')
-param availabilitySetNameConv string = ''
+@description('Optional. Naming convention for availability sets. Use ## token for the index (e.g., "avset-01"). Defaults to "avset-##".')
+param availabilitySetNameConv string = 'avset-##'
 
 @description('Optional. Availability zones to spread session hosts across when availability is AvailabilityZones.')
 param availabilityZones array = []
@@ -153,20 +153,8 @@ param hostPoolResourceId string
 @description('Required. Identity join method for session hosts.')
 param identitySolution string
 
-@description('Optional. Pre-built image reference object. When non-empty, takes precedence over imageOffer/imageSku/customImageResourceId.')
-param imageReference object = {}
-
-@description('Optional. Marketplace image offer. Used when imageReference and customImageResourceId are both empty.')
-param imageOffer string = ''
-
-@description('Optional. Marketplace image publisher.')
-param imagePublisher string = 'MicrosoftWindowsDesktop'
-
-@description('Optional. Marketplace image SKU.')
-param imageSku string = ''
-
-@description('Optional. Resource ID of an Azure Compute Gallery image version. Used when imageReference is empty.')
-param customImageResourceId string = ''
+@description('Required. Image reference for session host VMs. Use {"publisher":"...","offer":"...","sku":"..."} for marketplace images or {"id":"..."} for Compute Gallery images.')
+param imageReference object
 
 @description('Optional. Enable Guest Attestation extension for boot integrity monitoring.')
 param integrityMonitoring bool = false
@@ -177,11 +165,11 @@ param intuneEnrollment bool = false
 @description('Optional. Azure region for session host VMs.')
 param location string = resourceGroup().location
 
-@description('Optional. Naming convention for NICs with SHNAME placeholder. Auto-detected from host pool name when empty.')
-param networkInterfaceNameConv string = ''
+@description('Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to "nic-SHNAME".')
+param virtualMachineNicNameConv string = 'nic-SHNAME'
 
-@description('Optional. Naming convention for OS disks with SHNAME placeholder. Auto-detected from host pool name when empty.')
-param osDiskNameConv string = ''
+@description('Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to "disk-SHNAME".')
+param virtualMachineDiskNameConv string = 'disk-SHNAME'
 
 @description('Optional. OU path in Active Directory for session host computer accounts.')
 param ouPath string = ''
@@ -228,8 +216,8 @@ param tags object = {}
 @description('Optional. Windows time zone for session host VMs.')
 param timeZone string = 'Eastern Standard Time'
 
-@description('Optional. Naming convention for VM names with SHNAME placeholder. Auto-detected from host pool name when empty.')
-param virtualMachineNameConv string = ''
+@description('Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to "vm-SHNAME".')
+param virtualMachineNameConv string = 'vm-SHNAME'
 
 @description('Required. Azure VM size for session hosts.')
 param virtualMachineSize string
@@ -242,52 +230,6 @@ param recoveryServicesVaultResourceId string = ''
 
 @description('Optional. Name of the backup policy within the Recovery Services Vault to apply to session host VMs. Defaults to the standard AVD VM policy name when empty.')
 param vmBackupPolicyName string = ''
-
-// ── Shared data ───────────────────────────────────────────────────────────────
-var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
-var locationsObject = loadJsonContent('../../../.common/data/locations.json')
-var cloud = toLower(environment().name)
-var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : environment().name
-var locations = locationsObject[locationsEnvProperty]
-#disable-next-line BCP329
-var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
-var regionAbbreviation = locations[varLocation].abbreviation
-
-// ── Naming convention auto-detection ─────────────────────────────────────────
-// Mirrors the same logic used in the Session Host Replacer function app.
-var hostPoolName = last(split(hostPoolResourceId, '/'))
-// Naming convention auto-detection: reversed = resource type at the end (e.g., "avd-prod-eus-vdpool" or "avd-prod-eus-hp")
-var nameConvReversed = endsWith(hostPoolName, '-${resourceAbbreviations.hostPools}') || endsWith(hostPoolName, '-hp')
-
-var arrHostPoolName = split(hostPoolName, '-')
-var hpBaseName = nameConvReversed
-  ? join(take(arrHostPoolName, length(arrHostPoolName) - 2), '-')
-  : join(take(skip(arrHostPoolName, 1), length(arrHostPoolName) - 2), '-')
-var hpResPrfx = nameConvReversed ? hpBaseName : 'RESOURCETYPE-${hpBaseName}'
-var nameConv_HP_Resources = '${hpResPrfx}-TOKEN-${nameConvReversed ? 'LOCATION-RESOURCETYPE' : 'LOCATION'}'
-
-var effectiveVirtualMachineNameConv = !empty(virtualMachineNameConv)
-  ? virtualMachineNameConv
-  : nameConvReversed
-      ? 'SHNAME-${resourceAbbreviations.virtualMachines}'
-      : '${resourceAbbreviations.virtualMachines}-SHNAME'
-
-var effectiveNetworkInterfaceNameConv = !empty(networkInterfaceNameConv)
-  ? networkInterfaceNameConv
-  : nameConvReversed
-      ? 'SHNAME-${resourceAbbreviations.networkInterfaces}'
-      : '${resourceAbbreviations.networkInterfaces}-SHNAME'
-
-var effectiveOsDiskNameConv = !empty(osDiskNameConv)
-  ? osDiskNameConv
-  : nameConvReversed
-      ? 'SHNAME-${resourceAbbreviations.osdisks}'
-      : '${resourceAbbreviations.osdisks}-SHNAME'
-
-// ## is appended after the full name (CAF instance-last): as-{base}-{loc}-## / {base}-{loc}-as-##
-var generatedAvSetNameConv = '${replace(replace(replace(nameConv_HP_Resources, '-TOKEN', ''), 'RESOURCETYPE', resourceAbbreviations.availabilitySets), 'LOCATION', regionAbbreviation)}-##'
-
-var avSetNameConv = !empty(availabilitySetNameConv) ? availabilitySetNameConv : generatedAvSetNameConv
 
 // ── FSLogix file share names ──────────────────────────────────────────────────
 var fslogixFileShareNames = contains(fslogixContainerType, 'Office')
@@ -337,13 +279,12 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     availability: availability
-    availabilitySetNameConv: avSetNameConv
+    availabilitySetNameConv: availabilitySetNameConv
     availabilitySetsCount: calculatedAvailabilitySetsCount
     availabilitySetsIndex: calculatedAvailabilitySetsIndex
     availabilityZones: availabilityZones
     avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRulesResourceId
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
-    customImageResourceId: customImageResourceId
     dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
     dedicatedHostGroupResourceIds: dedicatedHostGroupResourceIds
     dedicatedHostResourceIds: dedicatedHostResourceIds
@@ -377,21 +318,21 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     imageReference: imageReference
-    imageOffer: imageOffer
-    imagePublisher: imagePublisher
-    imageSku: imageSku
+    imageOffer: ''
+    imagePublisher: ''
+    imageSku: ''
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
     location: location
-    networkInterfaceNameConv: effectiveNetworkInterfaceNameConv
-    osDiskNameConv: effectiveOsDiskNameConv
+    virtualMachineNicNameConv: virtualMachineNicNameConv
+    virtualMachineDiskNameConv: virtualMachineDiskNameConv
     ouPath: ouPath
     secureBootEnabled: secureBootEnabled
     securityType: securityType
     sessionHostCustomizations: sessionHostCustomizations
     sessionHostNames: effectiveSessionHostNames
     vmNameIndexLength: sessionHostNameIndexLength
-    virtualMachineNameConv: effectiveVirtualMachineNameConv
+    virtualMachineNameConv: virtualMachineNameConv
     virtualMachineSize: virtualMachineSize
     virtualMachineAdminPassword: kvCredentials.getSecret('VirtualMachineAdminPassword')
     virtualMachineAdminUserName: kvCredentials.getSecret('VirtualMachineAdminUserName')

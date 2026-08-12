@@ -710,6 +710,22 @@ If (-not $IsDomainJoined) {
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\WindowsFirewall\PublicProfile' -RegistryValue 'AllowLocalPolicyMerge' -Delete -OutputFile $LgpoTxtFile
 }
 
+# M365 Apps STIG - Privacy / Trust Center (User Configuration > Administrative Templates >
+# Microsoft Office 2016 > Privacy > Trust Center)
+# The STIG GPO package available for download from cyber.mil does not yet include the
+# M365 Apps STIG v3r5, which removed these four settings. If an older GPO package is
+# applied, these values may be written to policy. These Delete entries are a
+# belt-and-suspenders measure to ensure settings that DISA has already validated should
+# not be applied are cleared out regardless of which package version was downloaded.
+Write-Log -Message "[AdminTemplate] Deleting 'disconnectedstate' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of connected experiences in Office' so it reverts to Not Configured."
+Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'disconnectedstate' -Delete -OutputFile $LgpoTxtFile
+Write-Log -Message "[AdminTemplate] Deleting 'useroptintoserviceexperiences' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of additional optional connected experiences in Office' so it reverts to Not Configured."
+Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'useroptintoserviceexperiences' -Delete -OutputFile $LgpoTxtFile
+Write-Log -Message "[AdminTemplate] Deleting 'usercontenteval' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of connected experiences in Office that analyze content' so it reverts to Not Configured."
+Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'usercontenteval' -Delete -OutputFile $LgpoTxtFile
+Write-Log -Message "[AdminTemplate] Deleting 'downloadcontentdisabled' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of connected experiences in Office that download online content' so it reverts to Not Configured."
+Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'downloadcontentdisabled' -Delete -OutputFile $LgpoTxtFile
+
 # Apply registry policy overrides built above
 Write-Log -Message "Applying AVD Exceptions registry overrides via lgpo.exe /t"
 $r = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/t `"$LgpoTxtFile`"" -Wait -PassThru

@@ -89,7 +89,7 @@ FSLogix Cloud Cache is an **active/active** replication mechanism built into the
 The host pool template supports Cloud Cache across both Azure Files and Azure NetApp Files. The session hosts are configured automatically when the following parameters are set:
 
 | Parameter | Purpose |
-|-----------|---------|
+| --- | --- |
 | `fslogixContainerType` | Must be `CloudCacheProfileContainer` or `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` or `deployFSLogixStorage` | Creates the **primary-region** storage during deployment |
 | `fslogixExistingRemoteStorageAccountResourceIds` | **Pre-provisioned** secondary-region Azure Files accounts |
@@ -136,7 +136,7 @@ The template configures FSLogix `CCDLocations` registry keys on every session ho
 
 Image gallery replication requires **two imageManagement deployments** — one per region. Each creates an independent Azure Compute Gallery. The imageBuild template then replicates each image version to both galleries automatically.
 
-```
+```text
 imageManagement → Primary Region Gallery (always created)
 imageManagement → Secondary Region Gallery (separate deployment, prerequisite for DR)
 
@@ -159,6 +159,7 @@ Run the imageManagement template twice — once per region. Storage accounts and
 ```
 
 Secondary region parameter file:
+
 ```json
 {
   "deployArtifactsStorageAccount": { "value": false },
@@ -213,7 +214,7 @@ If `keyManagementGalleryImageVersions` is not `PlatformManaged`, the `diskEncryp
 
 The `identifier` + `index` combination drives all resource group and AVD resource naming. Using the same identifier and index in both regions creates parallel, independently named resource groups that align logically but do not conflict:
 
-```
+```text
 Primary:   identifier=finance, index=1, location=usgovvirginia
   → rg-finance-01-hosts-va
   → rg-finance-01-storage-va
@@ -350,6 +351,7 @@ param existingVmBackupVaultResourceId string = '' // omit to create a new vault
 ```
 
 For personal host pools:
+
 - `GeoRedundant` replicates backup recovery points to a paired Azure region and automatically enables Cross-Region Restore (CRR), allowing VM recovery in that secondary region even if the primary region is completely unavailable. CRR is enabled automatically when GRS is selected — no separate parameter is needed. GRS storage costs roughly 2× LRS regardless of whether CRR is on or off; without CRR the geo-redundant copy is passive data durability with no recovery capability, so enabling CRR with GRS is always the right choice. The only additional cost for CRR is the restore operation itself, which occurs only during an actual DR event. In environments aligned to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-6 (Alternate Storage Site) and CP-7 (Alternate Processing Site), GRS is the recommended configuration — backup data physically resides at an alternate facility and can be restored there within an acceptable RTO.
 - `ZoneRedundant` protects backup data against a zone-level failure within the region. Satisfies NIST CP-9 zone-resilience expectations when cross-region restore is not required.
 - `LocallyRedundant` is the default and is appropriate when cross-region recovery of backup data is not a requirement and the host pool is already zone-redundant.
@@ -368,21 +370,13 @@ When a regional outage requires recovering personal VMs into the paired region, 
 
 For the full procedure including CLI and PowerShell options, see [Restore Azure VM data in Azure portal — Cross Region Restore](https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#cross-region-restore).
 
-Customer-managed key (CMK) encryption is supported for the vault via `keyManagementRecoveryServicesVault`. The vault always uses its system-assigned identity for CMK access — this avoids an extra user-assigned identity resource and is also required by Azure when the vault has a private endpoint.
+Customer-managed key (CMK) encryption is supported for the vault via `keyManagementRecoveryServicesVault`. The vault always uses its system-assigned identity for CMK access — this avoids an extra user-assigned identity resource and is also required by Azure when the vault has a private endpoint. CMK and private endpoints can be enabled simultaneously — Azure Backup accesses the encryption Key Vault via the `AzureServices` trusted service bypass even when public network access on the Key Vault is disabled.
 
-> **CMK with private Key Vaults — mutually exclusive controls:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault, so it cannot reach a Key Vault with `publicNetworkAccess: Disabled`. This creates an irreconcilable conflict between two independent controls when both `deployPrivateEndpoints = true` and `keyManagementRecoveryServicesVault = CustomerManaged` are set:
+> **Pooled host pools — FSLogix Azure Files snapshot backup:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file shares** are backed up using Azure Backup snapshot policy. The vault is deployed to the **shared operations resource group** (`rg-avd-operations-{loc}`) and is reused across pooled host pools in the same region — pass `existingFilesBackupVaultResourceId` on subsequent pooled deployments to avoid creating duplicate vaults.
 >
-> | | **Option A** | **Option B** |
-> |---|---|---|
-> | RSV encryption | Customer-Managed Keys | Platform-Managed Keys |
-> | KV public access | Enabled (`publicNetworkAccess: Disabled` removed; KV reachable from Azure public network by any authenticated principal) | Disabled (private-only enforced) |
-> | SC-28 satisfied for RSV | ✅ Yes | ❌ No |
-> | SC-7 network isolation maintained | ❌ No | ✅ Yes |
-> | Parameter | `encryptionKeyVaultForcePublicAccess: true` | `encryptionKeyVaultForcePublicAccess: false` (default) |
+> **Why CMK is not applied to this vault (SC-28 rationale):** Azure Files snapshots are stored in the storage account itself — no user data, CUI, or profile content is transmitted to or stored in the vault. This vault holds only backup scheduling metadata (policy assignments, protection container registrations, job history). SC-28 (Protection of Information at Rest) is satisfied for actual FSLogix profile data by the storage account's own encryption, controlled by `keyManagementStorage`. Applying CMK to this metadata-only vault would provide no incremental SC-28 protection for user data and is therefore not implemented. **SSP language:** *"The shared Azure Backup vault used for FSLogix Azure Files snapshot scheduling contains no user data or CUI. Snapshot data at rest is protected by the storage account encryption key (`keyManagementStorage`), satisfying SC-28 at the data-bearing resource. CMK on the scheduling vault is not required and provides no additional protection."*
 >
-> When `encryptionKeyVaultForcePublicAccess = false` (the default), the solution automatically falls back to PMK on the RSV rather than failing the deployment (Option B). Neither option satisfies both controls simultaneously — this is a **Microsoft Azure platform limitation**. The choice is a compliance risk decision for your ISSO and Authorizing Official, not a solution default. Document the selected option and formally accept the resulting gap in your SSP.
-
-> **Pooled host pools:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file shares** are backed up using Azure Backup snapshot policy. The vault for Azure Files backup is deployed to the **shared operations resource group** (`rg-avd-operations-{loc}`) and is reused across pooled host pools in the same region — pass `existingFilesBackupVaultResourceId` on subsequent pooled deployments to reuse an existing vault rather than creating a second one. FSLogix share snapshots are stored in the storage account itself and are not transmitted to the vault — the vault holds only scheduling metadata. Vault storage redundancy is therefore hardcoded to `LocallyRedundant` for the Azure Files vault, and CMK is not required. The `backupRetentionDays` parameter controls the snapshot retention period (VM backup and Azure Files backup are mutually exclusive per host pool type, so the parameter is shared). Soft-delete retention for FSLogix file shares is controlled separately by `fslogixSoftDeleteRetentionDays` (default: 14 days). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments).
+> Vault storage redundancy is hardcoded to `LocallyRedundant` (snapshot data stays in the storage account regardless). The `backupRetentionDays` parameter controls snapshot retention. Soft-delete retention for FSLogix file shares is controlled separately by `fslogixSoftDeleteRetentionDays` (default: 14 days). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments).
 
 ---
 
@@ -459,7 +453,7 @@ graph TB
 ## RTO/RPO Reference
 
 | Pattern | RTO | RPO | Action on Failure | Prerequisites |
-|---------|-----|-----|-------------------|---------------|
+| --- | --- | --- | --- | --- |
 | **Availability Zones** | 0 | 0 | None | Default — enabled by default |
 | **FSLogix Cloud Cache** | ~0 | Near-zero | None | Remote storage pre-provisioned; network path to secondary storage |
 | **Image Gallery replication** | 0 | 0 | None (pre-replicated) | Secondary imageManagement deployed; `remoteComputeGalleryResourceId` set in imageBuild |
@@ -505,7 +499,7 @@ This solution does not deploy Azure Site Recovery replication for personal host 
 For most AVD personal desktop deployments, Azure Backup with GRS + CRR provides adequate DR capability when the Contingency Plan (CP-2) documents an RPO of hours rather than minutes. The two approaches differ:
 
 | | **Azure Backup + GRS + CRR** | **Azure Site Recovery** |
-|---|---|---|
+| --- | --- | --- |
 | RPO | Hours (last backup point) | Minutes (continuous replication) |
 | RTO | Hours (restore + reconfigure) | Minutes to hours (failover) |
 | VM state on recovery | Point-in-time snapshot | Near-current replica |

@@ -1,252 +1,55 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
-    [string]$MaxIdleTime = '21600000',
-    [string]$MaxDisconnectionionTime = '21600000'
+    # Maximum time an active session can remain idle before the action defined by
+    # EndSessionOnLimit is taken (disconnect or logoff). Default: '3 Hours'.
+    # When EndSessionOnLimit = 0 (default), expiry disconnects the session.
+    # When EndSessionOnLimit = 1, expiry logs off the session.
+    # Values are the exact ADMX enum detents; the script converts to milliseconds.
+    # Maps to GP: "Set time limit for active but idle Remote Desktop Services sessions"
+    # Registry: MaxIdleTime (DWORD, milliseconds)
+    [ValidateSet('Never', '1 Minute', '5 Minutes', '10 Minutes', '15 Minutes',
+                 '30 Minutes', '1 Hour', '2 Hours', '3 Hours', '6 Hours',
+                 '8 Hours', '12 Hours', '16 Hours', '18 Hours',
+                 '1 Day', '2 Days', '3 Days', '4 Days', '5 Days')]
+    [string]$MaxIdleTime = '3 Hours',
+
+    # Maximum time a disconnected session persists before being logged off. Default: '3 Hours'.
+    # Always results in logoff regardless of EndSessionOnLimit.
+    # Values are the exact ADMX enum detents; the script converts to milliseconds.
+    # Maps to GP: "Set time limit for disconnected sessions"
+    # Registry: MaxDisconnectionTime (DWORD, milliseconds)
+    [ValidateSet('Never', '1 Minute', '5 Minutes', '10 Minutes', '15 Minutes',
+                 '30 Minutes', '1 Hour', '2 Hours', '3 Hours', '6 Hours',
+                 '8 Hours', '12 Hours', '16 Hours', '18 Hours',
+                 '1 Day', '2 Days', '3 Days', '4 Days', '5 Days')]
+    [string]$MaxDisconnectionTime = '3 Hours',
+
+    # Controls whether idle/active timeout disconnects or ends (logs off) the session.
+    # 0 - Disconnect on idle timeout; logoff only when MaxDisconnectionTime fires.
+    # 1 - Log off immediately when MaxIdleTime expires.
+    # Leave unset (default) to not write this value; OS default is 0 (disconnect on timeout).
+    # Maps to GP: "End session when time limits are reached" (registry: fResetBroken).
+    [ValidateSet('0', '1')]
+    [string]$EndSessionOnLimit,
+
+    # Controls whether locking the remote session disconnects the RDP client or shows the
+    # remote lock screen. Only applies when Entra ID SSO is enabled on the host pool.
+    # '1' = disconnect on lock (default when Not Configured -- recommended for Entra ID SSO)
+    # '0' = show remote lock screen on lock (both MaxIdleTime and MaxDisconnectionTime apply)
+    # Leave unset (default) to not write this value and preserve the OS / existing policy default.
+    # Maps to GP: "Disconnect remote session on lock for Microsoft identity platform authentication"
+    # Registry: fDisconnectOnLockMicrosoftIdentity
+    # Reference: https://learn.microsoft.com/azure/virtual-desktop/configure-session-lock-behavior
+    [ValidateSet('0', '1')]
+    [string]$DisconnectOnLockMsIdentity,
+
+    # When specified, enables the enhanced shell experience for RemoteApp sessions.
+    # Writes EnableEnhancedShellExperienceForRemoteApp = 1 to the Terminal Services policy key.
+    # Has no effect on standard Remote Desktop sessions; only set this for RemoteApp host pools.
+    [switch]$EnableRemoteApp
 )
 
 #region Functions
-
-Function Get-InternetFile {
-    [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [uri]$Url,
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$OutputDirectory,
-        [Parameter(Mandatory = $false, Position = 2)]
-        [string]$OutputFileName
-    )
-
-    Begin {
-        $ProgressPreference = 'SilentlyContinue'
-        ## Get the name of this function and write header
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Log -Message "Starting ${CmdletName} with the following parameters: $PSBoundParameters"
-    }
-    Process {
-
-        $start_time = Get-Date
-
-        If (!$OutputFileName) {
-            Write-Log -Message "${CmdletName}: No OutputFileName specified. Trying to get file name from URL."
-            If ((split-path -path $Url -leaf).Contains('.')) {
-                $OutputFileName = split-path -path $url -leaf
-                Write-Log -Message "${CmdletName}: Url contains file name - '$OutputFileName'."
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
-                $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect = $false
-                $response = $request.GetResponse()
-                $Location = $response.GetResponseHeader("Location")
-                If ($Location) {
-                    $OutputFileName = [System.IO.Path]::GetFileName($Location)
-                    Write-Log -Message "${CmdletName}: File Name from 'Location' Response Header is '$OutputFileName'."
-                }
-                Else {
-                    Write-Log -Message "${CmdletName}: No 'Location' Response Header returned. Trying 'Content-Disposition' Response Header."
-                    $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
-                    $contentDisposition = $result.Headers.'Content-Disposition'
-                    If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
-                        Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
-                    }
-                }
-            }
-        }
-
-        If ($OutputFileName) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
-            $wc = New-Object System.Net.WebClient
-            $OutputFile = Join-Path $OutputDirectory $OutputFileName
-            Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."
-            Try {
-                $wc.DownloadFile($url, $OutputFile)
-                $time = (Get-Date).Subtract($start_time).Seconds
-                
-                Write-Log -Message "${CmdletName}: Time taken: '$time' seconds."
-                if (Test-Path -Path $outputfile) {
-                    $totalSize = (Get-Item $outputfile).Length / 1MB
-                    Write-Log -Message "${CmdletName}: Download was successful. Final file size: '$totalsize' mb"
-                    Return $OutputFile
-                }
-            }
-            Catch {
-                Write-Log -Category Error -Message "${CmdletName}: Error downloading file. Please check url."
-                Return $Null
-            }
-        }
-        Else {
-            Write-Log -Category Error -Message "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Return $Null
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
-Function Update-LocalGPOTextFile {
-    [CmdletBinding(DefaultParameterSetName = 'Set')]
-    Param (
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [ValidateSet('Computer', 'User')]
-        [string]$Scope,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryKeyPath,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryValue,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [AllowEmptyString()]
-        [string]$RegistryData,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [ValidateSet('DWORD', 'String')]
-        [string]$RegistryType,
-        [Parameter(Mandatory = $false, ParameterSetName = 'Delete')]
-        [switch]$Delete,
-        [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
-        [switch]$DeleteAllValues,
-        [string]$outputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        # Convert $RegistryType to UpperCase to prevent LGPO errors.
-        $ValueType = $RegistryType.ToUpper()
-        # Change String type to SZ for text file
-        If ($ValueType -eq 'STRING') { $ValueType = 'SZ' }
-        # Replace any incorrect registry entries for the format needed by text file.
-        $modified = $false
-        $SearchStrings = 'HKLM:\', 'HKCU:\', 'HKEY_CURRENT_USER:\', 'HKEY_LOCAL_MACHINE:\'
-        ForEach ($String in $SearchStrings) {
-            If ($RegistryKeyPath.StartsWith("$String") -and $modified -ne $true) {
-                $index = $String.Length
-                $RegistryKeyPath = $RegistryKeyPath.Substring($index, $RegistryKeyPath.Length - $index)
-                $modified = $true
-            }
-        }        
-        #Create the output file if needed.
-        $OutFile = Join-Path -Path $OutputDir -ChildPath "$Scope.txt"
-        If (-not (Test-Path -LiteralPath $Outfile)) {
-            If (-not (Test-Path -LiteralPath $OutputDir -PathType 'Container')) {
-                $null = New-Item -Path $OutputDir -Type 'Directory' -Force -ErrorAction 'Stop'
-            }
-            $null = New-Item -Path $OutFile -ItemType File -ErrorAction Stop
-        }
-
-        Write-Log -Message "${CmdletName}: Adding registry information to '$outfile' for LGPO.exe"
-        # Update file with information
-        Add-Content -Path $Outfile -Value $Scope
-        Add-Content -Path $Outfile -Value $RegistryKeyPath
-        Add-Content -Path $Outfile -Value $RegistryValue
-        If ($Delete) {
-            Add-Content -Path $Outfile -Value 'DELETE'
-        }
-        ElseIf ($DeleteAllValues) {
-            Add-Content -Path $Outfile -Value 'DELETEALLVALUES'
-        }
-        Else {
-            Add-Content -Path $Outfile -Value "$($ValueType):$RegistryData"
-        }
-        Add-Content -Path $Outfile -Value ""
-    }
-    End {        
-    }
-}
-
-Function Invoke-LGPO {
-    [CmdletBinding()]
-    Param (
-        [string]$InputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Gathering Registry text files for LGPO from '$InputDir'"
-        $RegFiles = Get-ChildItem -Path $InputDir -Filter '*.txt'
-        ForEach ($RegistryFile in $RegFiles) {
-            $TxtFilePath = $RegistryFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying settings from '$txtFilePath' to Local Group Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$TxtFilePath`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Gathering Security Templates files for LGPO from '$InputDir'"
-        $ConfigFile = Get-ChildItem -Path $InputDir -Filter '*.inf'
-        If ($ConfigFile) {
-            $ConfigFile = $ConfigFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying security settings from '$ConfigFile' to Local Security Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/s `"$ConfigFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Finding Audit CSV file for LGPO from '$InputDir'"
-        $AuditFile = Get-ChildItem -Path $InputDir -Filter '*.csv'
-        If ($AuditFile) {
-            $AuditFile = $AuditFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying advanced audit settings from '$AuditFile' to Local policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/ac `"$AuditFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-    }
-    End {
-    }
-}
-
-Function Set-RegistryValue {
-    [CmdletBinding()]
-    param (
-        [Parameter()]
-        [string]
-        $Name,
-        [Parameter()]
-        [string]
-        $Path,
-        [Parameter()]
-        [string]$PropertyType,
-        [Parameter()]
-        $Value
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Setting Registry Value $Path\$Name"
-        # Create the registry Key(s) if necessary.
-        If (!(Test-Path -Path $Path)) {
-            Write-Log -Message "${CmdletName}: Creating Registry Key: $Path"
-            New-Item -Path $Path -Force | Out-Null
-        }
-        # Check for existing registry setting
-        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-        If ($RemoteValue) {
-            # Get current Value
-            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
-            Write-Log -Message "${CmdletName}: Current Value of $($Path)\$($Name) : $CurrentValue"
-            If ($Value -ne $CurrentValue) {
-                Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Value of $($Path)\$($Name) is already set to $Value"
-            }           
-        }
-        Else {
-            Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
 
 Function Write-Log {
     Param (
@@ -262,8 +65,8 @@ Function Write-Log {
         Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
     Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Info' { Write-Host $Content }
+        'Error' { Write-Error $Content -ErrorAction Continue }
         'Warning' { Write-Warning $Content }
     }
 }
@@ -347,16 +150,16 @@ function Read-PRegFile {
     param ([string]$Path)
 
     $list = [System.Collections.Generic.List[hashtable]]::new()
-    if (-not (Test-Path -LiteralPath $Path)) { return ,$list }
+    if (-not (Test-Path -LiteralPath $Path)) { return , $list }
 
     $raw = [IO.File]::ReadAllBytes($Path)
-    if ($raw.Length -lt 8) { return ,$list }
+    if ($raw.Length -lt 8) { return , $list }
 
     $sig = [System.Text.Encoding]::ASCII.GetString($raw, 0, 4)
     $ver = [BitConverter]::ToUInt32($raw, 4)
     if ($sig -ne 'PReg' -or $ver -ne 1) {
         Write-Warning "RegistryPol: '$Path' has unexpected header (sig='$sig' ver=$ver). Existing entries discarded."
-        return ,$list
+        return , $list
     }
 
     $pos = 8
@@ -393,7 +196,7 @@ function Read-PRegFile {
 
         $list.Add(@{ Key = $key; Name = $name; Type = $type; Size = $size; Data = $data })
     }
-    return ,$list
+    return , $list
 }
 
 function Write-PRegFile {
@@ -407,7 +210,7 @@ function Write-PRegFile {
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
 
     $ms = [IO.MemoryStream]::new()
-    $w  = [IO.BinaryWriter]::new($ms)
+    $w = [IO.BinaryWriter]::new($ms)
 
     $w.Write([System.Text.Encoding]::ASCII.GetBytes('PReg'))  # Signature
     $w.Write([uint32]1)                                         # Version
@@ -419,10 +222,10 @@ function Write-PRegFile {
 
     foreach ($e in $Entries) {
         $w.Write($bo)
-        $w.Write($script:_PRegEnc.GetBytes($e.Key));   $w.Write($nt); $w.Write($sc)
-        $w.Write($script:_PRegEnc.GetBytes($e.Name));  $w.Write($nt); $w.Write($sc)
-        $w.Write([uint32]$e.Type);  $w.Write($sc)
-        $w.Write([uint32]$e.Size);  $w.Write($sc)
+        $w.Write($script:_PRegEnc.GetBytes($e.Key)); $w.Write($nt); $w.Write($sc)
+        $w.Write($script:_PRegEnc.GetBytes($e.Name)); $w.Write($nt); $w.Write($sc)
+        $w.Write([uint32]$e.Type); $w.Write($sc)
+        $w.Write([uint32]$e.Size); $w.Write($sc)
         # Guard: BinaryWriter.Write([byte[]]@()) resolves to the wrong overload and throws
         if ($null -ne $e.Data -and $e.Data.Length -gt 0) { $w.Write([byte[]]$e.Data) }
         $w.Write($bc)
@@ -537,30 +340,30 @@ function Set-PolicyRegistryValue {
     $relPath = Get-RelativePolicyKeyPath $RegistryKeyPath
 
     $typeCode = switch ($RegistryType.ToUpper()) {
-        'DWORD'        { 4 }
-        'STRING'       { 1 }
-        'SZ'           { 1 }
+        'DWORD' { 4 }
+        'STRING' { 1 }
+        'SZ' { 1 }
         'EXPANDSTRING' { 2 }
-        'EXPANDSZ'     { 2 }
-        'MULTISTRING'  { 7 }
-        'MULTISZ'      { 7 }
-        default        { 1 }
+        'EXPANDSZ' { 2 }
+        'MULTISTRING' { 7 }
+        'MULTISZ' { 7 }
+        default { 1 }
     }
 
     $dataBytes = switch ($typeCode) {
-        4       { ConvertTo-PRegDWord ([uint32]$RegistryData) }
-        7       { ConvertTo-PRegMultiSZ ($RegistryData -split '\|') }
+        4 { ConvertTo-PRegDWord ([uint32]$RegistryData) }
+        7 { ConvertTo-PRegMultiSZ ($RegistryData -split '\|') }
         default { ConvertTo-PRegSZ $RegistryData }
     }
 
     $script:_PolQueue.Add(@{
-        Scope = $Scope
-        Key   = $relPath
-        Name  = $RegistryValue
-        Type  = [uint32]$typeCode
-        Size  = [uint32]$dataBytes.Length
-        Data  = $dataBytes
-    })
+            Scope = $Scope
+            Key   = $relPath
+            Name  = $RegistryValue
+            Type  = [uint32]$typeCode
+            Size  = [uint32]$dataBytes.Length
+            Data  = $dataBytes
+        })
     Write-Verbose "RegistryPol: Queued SET [$Scope] $relPath\$RegistryValue ($RegistryType = $RegistryData)"
 }
 
@@ -595,16 +398,16 @@ function Remove-PolicyRegistryValue {
         [string]$RegistryValue
     )
 
-    $relPath  = Get-RelativePolicyKeyPath $RegistryKeyPath
+    $relPath = Get-RelativePolicyKeyPath $RegistryKeyPath
     $delBytes = ConvertTo-PRegSZ ' '   # MS-GPREG: **Del. value data is a single space
     $script:_PolQueue.Add(@{
-        Scope = $Scope
-        Key   = $relPath
-        Name  = "**Del.$RegistryValue"
-        Type  = [uint32]1
-        Size  = [uint32]$delBytes.Length
-        Data  = $delBytes
-    })
+            Scope = $Scope
+            Key   = $relPath
+            Name  = "**Del.$RegistryValue"
+            Type  = [uint32]1
+            Size  = [uint32]$delBytes.Length
+            Data  = $delBytes
+        })
     Write-Verbose "RegistryPol: Queued REMOVE [$Scope] $relPath\$RegistryValue"
 }
 
@@ -633,16 +436,16 @@ function Clear-PolicyRegistryKeyValues {
         [string]$RegistryKeyPath
     )
 
-    $relPath  = Get-RelativePolicyKeyPath $RegistryKeyPath
+    $relPath = Get-RelativePolicyKeyPath $RegistryKeyPath
     $delBytes = ConvertTo-PRegSZ ' '
     $script:_PolQueue.Add(@{
-        Scope = $Scope
-        Key   = $relPath
-        Name  = '**DelVals.'
-        Type  = [uint32]1
-        Size  = [uint32]$delBytes.Length
-        Data  = $delBytes
-    })
+            Scope = $Scope
+            Key   = $relPath
+            Name  = '**DelVals.'
+            Type  = [uint32]1
+            Size  = [uint32]$delBytes.Length
+            Data  = $delBytes
+        })
     Write-Verbose "RegistryPol: Queued CLEAR ALL VALUES [$Scope] $relPath"
 }
 
@@ -671,16 +474,16 @@ function Invoke-PolicyUpdate {
         return
     }
 
-    $gpBase   = "$env:SystemRoot\System32\GroupPolicy"
+    $gpBase = "$env:SystemRoot\System32\GroupPolicy"
     $machineQ = @($script:_PolQueue | Where-Object { $_.Scope -eq 'Computer' })
-    $userQ    = @($script:_PolQueue | Where-Object { $_.Scope -eq 'User' })
+    $userQ = @($script:_PolQueue | Where-Object { $_.Scope -eq 'User' })
     $machineUpdated = $false
-    $userUpdated    = $false
+    $userUpdated = $false
 
     foreach ($scope in @(
-        @{ Queue = $machineQ; PolPath = "$gpBase\Machine\Registry.pol"; IsUser = $false },
-        @{ Queue = $userQ;    PolPath = "$gpBase\User\Registry.pol";    IsUser = $true }
-    )) {
+            @{ Queue = $machineQ; PolPath = "$gpBase\Machine\Registry.pol"; IsUser = $false },
+            @{ Queue = $userQ; PolPath = "$gpBase\User\Registry.pol"; IsUser = $true }
+        )) {
         if ($scope.Queue.Count -eq 0) { continue }
 
         $polPath = $scope.PolPath
@@ -702,48 +505,54 @@ function Invoke-PolicyUpdate {
     # Both scope lines are preserved on every call: if only one scope was updated here,
     # the other scope's existing line is read back and re-written unchanged.
     try {
-        $gptPath   = "$gpBase\gpt.ini"
-        $regCse    = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
+        $gptPath = "$gpBase\gpt.ini"
+        $regCse = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
         $machineAT = '{D02B1F72-3407-48AE-BA88-E8213C6761F1}'
-        $userAT    = '{D02B1F73-3407-48AE-BA88-E8213C6761F1}'
+        $userAT = '{D02B1F73-3407-48AE-BA88-E8213C6761F1}'
 
         $existing_ini = if (Test-Path -LiteralPath $gptPath) { Get-Content $gptPath -Raw } else { '' }
 
         $machineVer = [uint16]1
-        $userVer    = [uint16]1
+        $userVer = [uint16]1
         if ($existing_ini -match 'Version\s*=\s*(\d+)') {
             $cur = [uint32]$matches[1]
             $machineVer = [uint16]($cur -band 0xFFFF)
-            $userVer    = [uint16](($cur -shr 16) -band 0xFFFF)
+            $userVer = [uint16](($cur -shr 16) -band 0xFFFF)
         }
         if ($machineUpdated) { $machineVer++ }
-        if ($userUpdated)    { $userVer++ }
+        if ($userUpdated) { $userVer++ }
         $version = ([uint32]$userVer -shl 16) -bor [uint32]$machineVer
 
-$machineExt = "[$regCse$machineAT]"
-          $userExt   = "[$regCse$userAT]"
+        $machineExt = "[$regCse$machineAT]"
+        $userExt = "[$regCse$userAT]"
 
-          $finalMachineExt = if ($machineUpdated) {
-              if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-                  $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
-              } else { $machineExt }
-          } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-              $matches[1].Trim()
-          } else { '' }
-  
-          $finalUserExt = if ($userUpdated) {
-              if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
-                  $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
-              } else { $userExt }
-        } elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+        $finalMachineExt = if ($machineUpdated) {
+            if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
+            }
+            else { $machineExt }
+        }
+        elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()
-        } else { '' }
+        }
+        else { '' }
+  
+        $finalUserExt = if ($userUpdated) {
+            if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
+            }
+            else { $userExt }
+        }
+        elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+            $matches[1].Trim()
+        }
+        else { '' }
 
         $gptContent = "[General]`r`n"
         if ($finalMachineExt) { $gptContent += "gPCMachineExtensionNames=$finalMachineExt`r`n" }
-        if ($finalUserExt)    { $gptContent += "gPCUserExtensionNames=$finalUserExt`r`n" }
+        if ($finalUserExt) { $gptContent += "gPCUserExtensionNames=$finalUserExt`r`n" }
         $gptContent += "Version=$version`r`n"
         [IO.File]::WriteAllText($gptPath, $gptContent, [System.Text.Encoding]::ASCII)
         Write-Verbose "RegistryPol: gpt.ini written (Version=$version machine=$machineVer user=$userVer)"
@@ -761,11 +570,11 @@ function Get-RelativePolicyKeyPath {
     <#  Internal. Strips any HIVE: prefix so KeyPath is relative as required by MS-GPREG.  #>
     param ([string]$Path)
     foreach ($prefix in @(
-        'HKEY_LOCAL_MACHINE:\', 'HKEY_CURRENT_USER:\',
-        'HKEY_LOCAL_MACHINE:',  'HKEY_CURRENT_USER:',
-        'HKLM:\', 'HKCU:\',
-        'HKLM:',  'HKCU:'
-    )) {
+            'HKEY_LOCAL_MACHINE:\', 'HKEY_CURRENT_USER:\',
+            'HKEY_LOCAL_MACHINE:', 'HKEY_CURRENT_USER:',
+            'HKLM:\', 'HKCU:\',
+            'HKLM:', 'HKCU:'
+        )) {
         if ($Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
             return $Path.Substring($prefix.Length).TrimStart('\')
         }
@@ -778,19 +587,154 @@ function Get-RelativePolicyKeyPath {
 #endregion RegistryPol
 
 #region Initialization
-[int]$MaxIdleTime = $MaxIdleTime
-[int]$MaxDisconnectionTime = $MaxDisconnectionionTime
+$script:TimeoutMs = @{
+    'Never'      = 0
+    '1 Minute'   = 60000
+    '5 Minutes'  = 300000
+    '10 Minutes' = 600000
+    '15 Minutes' = 900000
+    '30 Minutes' = 1800000
+    '1 Hour'     = 3600000
+    '2 Hours'    = 7200000
+    '3 Hours'    = 10800000
+    '6 Hours'    = 21600000
+    '8 Hours'    = 28800000
+    '12 Hours'   = 43200000
+    '16 Hours'   = 57600000
+    '18 Hours'   = 64800000
+    '1 Day'      = 86400000
+    '2 Days'     = 172800000
+    '3 Days'     = 259200000
+    '4 Days'     = 345600000
+    '5 Days'     = 432000000
+}
+[int]$MaxIdleTimeMs = $script:TimeoutMs[$MaxIdleTime]
+[int]$MaxDisconnectionTimeMs = $script:TimeoutMs[$MaxDisconnectionTime]
 [string]$Script:Name = "Configure-RemoteDesktopServicesPolicy"
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime', MaxDisconnectionTime='$MaxDisconnectionTime'."
+Write-Log -Category Info -Message "Parameters: MaxIdleTime='$MaxIdleTime' ($MaxIdleTimeMs ms), MaxDisconnectionTime='$MaxDisconnectionTime' ($MaxDisconnectionTimeMs ms), EndSessionOnLimit='$EndSessionOnLimit', DisconnectOnLockMsIdentity='$DisconnectOnLockMsIdentity', EnableRemoteApp='$EnableRemoteApp'."
 #endregion
+
+# =============================================================================
+# Remote Desktop Services Session Timeout Policy
+# =============================================================================
+# References:
+#   GP path : Computer Configuration -> Administrative Templates -> Windows Components
+#             -> Remote Desktop Services -> Remote Desktop Session Host -> Session Time Limits
+#   MS docs : https://learn.microsoft.com/windows/client-management/mdm/policy-csp-remotedesktopservices
+#   ADMX    : https://admx.help/?Category=Windows_10_2016&Policy=Microsoft.Policies.TerminalServer::TS_SESSIONS_Idle_Limit_1
+#
+# Registry key: HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
+#
+# MaxIdleTime (DWORD, milliseconds)
+#   GP name : "Set time limit for active but idle Remote Desktop Services sessions"
+#   Effect  : When an active session is idle for this duration, the action depends on
+#             fResetBroken (EndSessionOnLimit). 0 = no limit.
+#
+# MaxDisconnectionTime (DWORD, milliseconds)
+#   GP name : "Set time limit for disconnected sessions"
+#   Effect  : When a session has been in the Disconnected state for this duration, it is
+#             ALWAYS ended (logged off), regardless of fResetBroken. 0 = no limit.
+#
+# fResetBroken (DWORD, 0 or 1) -- controlled by EndSessionOnLimit parameter
+#   GP name : "End session when time limits are reached"
+#   Values  :
+#     0 (default) - When MaxIdleTime expires, the session is DISCONNECTED. The FSLogix
+#                   profile VHD stays mounted. Compaction does NOT run until
+#                   MaxDisconnectionTime expires and the session is fully logged off.
+#     1           - When MaxIdleTime expires, the session is ENDED (logged off). The
+#                   FSLogix profile VHD is dismounted and compaction runs at logoff.
+#
+# Session lifecycle with defaults (EndSessionOnLimit = 0, both timeouts = 3 hours):
+#
+#   Active idle  -> MaxIdleTime (3h)         -> Disconnect  [VHD mounted, compaction: NO ]
+#   Disconnected -> MaxDisconnectionTime (3h) -> Logoff     [VHD dismounted, compaction: YES]
+#   Total worst-case time before compaction = 6 hours
+#
+# Session lifecycle with EndSessionOnLimit = 1 (both timeouts = 3 hours):
+#
+#   Active idle  -> MaxIdleTime (3h)         -> Logoff      [VHD dismounted, compaction: YES]
+#   Disconnected -> MaxDisconnectionTime (3h) -> Logoff     [VHD dismounted, compaction: YES]
+#   Total worst-case time before compaction = 3 hours (whichever fires first)
+#
+# =============================================================================
+# Entra ID SSO and MachineInactivityTimeout interaction
+# =============================================================================
+# References:
+#   Session lock behavior : https://learn.microsoft.com/azure/virtual-desktop/configure-session-lock-behavior
+#   SSO overview          : https://learn.microsoft.com/azure/virtual-desktop/configure-single-sign-on
+#
+# When Entra ID SSO (Microsoft identity platform authentication) is enabled on the host
+# pool, a separate timeout mechanism -- the Windows security policy "Interactive logon:
+# Machine inactivity limit" (MachineInactivityTimeout) -- can BYPASS MaxIdleTime entirely.
+#
+#   Registry : HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\InactivityTimeoutSecs
+#   GP path  : Computer Configuration -> Windows Settings -> Security Settings ->
+#              Local Policies -> Security Options ->
+#              "Interactive logon: Machine inactivity limit"
+#   Common value in STIG / CIS baselines: 900 seconds (15 minutes)
+#
+# MachineInactivityTimeout locks the Windows session after N seconds of no
+# keyboard/mouse input. What happens next depends on the session lock behavior:
+#
+# -----------------------------------------------------------------------------
+# DEFAULT: disconnect on lock (Entra ID SSO)
+# GP: "Disconnect remote session on lock for Microsoft identity platform authentication"
+# Registry: SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\fDisconnectOnLockMicrosoftIdentity
+# Default / Not Configured = 1 (Enabled = disconnect on lock)
+# -----------------------------------------------------------------------------
+# When the session locks (via MachineInactivityTimeout or manually), the Entra ID SSO
+# client DISCONNECTS the RDP session instead of showing a remote lock screen.
+# The session immediately enters the Disconnected state and MaxDisconnectionTime starts.
+# MaxIdleTime never fires because the session was already disconnected.
+#
+# Effective flow (Entra ID SSO, disconnect on lock, MachineInactivityTimeout = 15 min):
+#
+#   Active idle  -> MachineInactivityTimeout (15 min) -> Disconnect [VHD mounted, compaction: NO]
+#   Disconnected -> MaxDisconnectionTime (3h)         -> Logoff     [VHD dismounted, compaction: YES]
+#   Total time before compaction = MachineInactivityTimeout + MaxDisconnectionTime (~3h 15min)
+#
+# In this scenario MaxIdleTime is irrelevant -- the session disconnects via screen lock
+# before MaxIdleTime (3h) would ever fire. Only MaxDisconnectionTime governs when the
+# session is logged off and compaction runs.
+#
+# -----------------------------------------------------------------------------
+# ALTERNATE: show remote lock screen instead of disconnect
+# Set fDisconnectOnLockMicrosoftIdentity = 0 (Disabled)
+# GP: Disable "Disconnect remote session on lock for Microsoft identity platform authentication"
+# -----------------------------------------------------------------------------
+# In this mode, MachineInactivityTimeout locks the screen but keeps the session Connected.
+# The RDS idle timer (MaxIdleTime) continues accumulating from the last user input.
+# All three parameters in this script now interact:
+#
+#   Active idle  -> MachineInactivityTimeout (15 min) -> Screen locks (still Connected)
+#   Locked/idle  -> MaxIdleTime (3h from last input)  -> Disconnect or Logoff per fResetBroken
+#   Disconnected -> MaxDisconnectionTime (3h)         -> Logoff [VHD dismounted, compaction: YES]
+#
+# Note: MaxIdleTime counts from last user INPUT, not from when the screen locked. A user
+# who returns within 3h resets the idle clock; MachineInactivityTimeout re-locks again
+# after the next 15 min of inactivity. MaxDisconnectionTime only starts once the session
+# is Disconnected (by MaxIdleTime expiry or the user closing the RDP client window).
+# =============================================================================
 
 Write-Log -Category Info -Message "Now Configuring Remote Desktop Services Timeout Settings."
 $rdKey = 'Software\Policies\Microsoft\Windows NT\Terminal Services'
-Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxDisconnectionTime' -RegistryType 'DWORD' -RegistryData $MaxDisconnectionTime
-Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxIdleTime' -RegistryType 'DWORD' -RegistryData $MaxIdleTime
+Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxDisconnectionTime' -RegistryType 'DWORD' -RegistryData $MaxDisconnectionTimeMs
+Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'MaxIdleTime' -RegistryType 'DWORD' -RegistryData $MaxIdleTimeMs
+If ($PSBoundParameters.ContainsKey('EndSessionOnLimit')) {
+    Write-Log -Category Info -Message "Configuring fResetBroken = $EndSessionOnLimit."
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fResetBroken' -RegistryType 'DWORD' -RegistryData $EndSessionOnLimit
+}
+If ($PSBoundParameters.ContainsKey('DisconnectOnLockMsIdentity')) {
+    Write-Log -Category Info -Message "Configuring fDisconnectOnLockMicrosoftIdentity = $DisconnectOnLockMsIdentity."
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fDisconnectOnLockMicrosoftIdentity' -RegistryType 'DWORD' -RegistryData $DisconnectOnLockMsIdentity
+}
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fEnableTimeZoneRedirection' -RegistryType 'DWORD' -RegistryData 1
+If ($EnableRemoteApp) {
+    Write-Log -Category Info -Message "Enabling enhanced shell experience for RemoteApp."
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'EnableEnhancedShellExperienceForRemoteApp' -RegistryType 'DWORD' -RegistryData 1
+}
 Invoke-PolicyUpdate
 Write-Log -Category Info -Message "Remote Desktop Services Timeout Settings Configured."

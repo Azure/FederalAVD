@@ -732,6 +732,33 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
   ]
 }
 
+// Capture an inventory of installed applications and Windows patches before
+// sysprep. The output is written to the log blob so every gallery image version
+// has a permanent, queryable manifest of what was baked in.
+resource imageManifest 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = {
+  name: 'image-manifest'
+  location: location
+  parent: imageVm
+  properties: {
+    asyncExecution: false
+    outputBlobManagedIdentity: empty(logBlobContainerUri)
+      ? null
+      : {
+          clientId: userAssignedIdentityClientId
+        }
+    outputBlobUri: empty(logBlobContainerUri)
+      ? null
+      : '${logBlobContainerUri}${imageVmName}-Image-Manifest-${deploymentSuffix}.log'
+    source: {
+      script: loadTextContent('../../../.common/scripts/Get-ImageManifest.ps1')
+    }
+    treatFailureAsDeploymentFailure: true
+  }
+  dependsOn: [
+    cleanupImage
+  ]
+}
+
 // CBS check and conditional restart before sysprep.
 // Skipped when vdiCustomizers are present — restarts after vdiCustomizations
 // are not permitted, and vdiCustomizations should not install OS components
@@ -750,6 +777,6 @@ module conditionalRestartPostCleanup 'conditionalRestart.bicep' = if (empty(vdiC
     context: 'PostCleanup'
   }
   dependsOn: [
-    cleanupImage
+    imageManifest
   ]
 }

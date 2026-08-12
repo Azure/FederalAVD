@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Naming Convention**](naming-convention.md) | [**Parameters**](parameters.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Naming Convention**](naming-convention.md) | [**Parameters**](parameters.md)
 
 # Naming Convention — Scenario Test Results
 
@@ -17,7 +17,7 @@ verifies output names match expected patterns.
 **Description:** Default `namingConvention` value, single region deployment. Uses built-in CAF-aligned defaults (resourceType-workload-purpose-location).
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | CAF Default (built-in) |
 | Components | `resourceType` → `workload` → `purpose` → `location` |
 | Delimiter | `-` |
@@ -33,7 +33,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `rg-avd-control-plane-use` |
 | RG (Hosts) | `rg-avd-desktop-01-hosts-use` |
 | RG (Storage) | `rg-avd-desktop-01-storage-use` |
@@ -62,14 +62,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `rg-avd-global-feed` |
 | Global Feed Workspace | `vdws-avd-global-feed` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-image-management-use` |
 | Compute Gallery | `gal_avd_image_management_use` |
 | UAI | `uai-avd-image-management-use` |
@@ -86,7 +86,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `eastus`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-operations-use` |
 | KV (Secrets) | `kv-avd-sec-d527e9-use` |
 | KV (Encrypt) | `kv-avd-enc-d527e9-use` |
@@ -98,7 +98,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `vdpool-avd-desktop-01-use`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `fa-avd-avd-desktop-01-shr-5005a3-use` |
 | Storage Account | `vdpoolavddesktop01useshr` |
 | Encryption UAI | `uai-avd-avd-desktop-01-shr5005a3-encryption-use` |
@@ -113,7 +113,7 @@ verifies output names match expected patterns.
 **Description:** CP resources in East US, session hosts in West US 2. Default naming. Verifies that location tokens differ correctly.
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | CAF Default (built-in) |
 | Components | `resourceType` → `workload` → `purpose` → `location` |
 | Delimiter | `-` |
@@ -129,7 +129,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `rg-avd-control-plane-use` |
 | RG (Hosts) | `rg-avd-desktop-01-hosts-usw2` |
 | RG (Storage) | `rg-avd-desktop-01-storage-usw2` |
@@ -158,14 +158,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `rg-avd-global-feed` |
 | Global Feed Workspace | `vdws-avd-global-feed` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-image-management-usw2` |
 | Compute Gallery | `gal_avd_image_management_usw2` |
 | UAI | `uai-avd-image-management-usw2` |
@@ -182,7 +182,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `westus2`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-operations-usw2` |
 | KV (Secrets) | `kv-avd-sec-152201-usw2` |
 | KV (Encrypt) | `kv-avd-enc-152201-usw2` |
@@ -194,7 +194,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `vdpool-avd-desktop-01-use`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `fa-avd-avd-desktop-01-shr-5005a3-use` |
 | Storage Account | `vdpoolavddesktop01useshr` |
 | Encryption UAI | `uai-avd-avd-desktop-01-shr5005a3-encryption-use` |
@@ -209,7 +209,7 @@ verifies output names match expected patterns.
 **Description:** Standard CAF-style custom convention. Workload=avd, env=prod, freeform1 unused. RT is first non-none component.
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | Custom |
 | Components | `resourceType` → `workload` → `purpose` → `location` |
 | Delimiter | `-` |
@@ -225,7 +225,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `rg-avd-control-plane-use` |
 | RG (Hosts) | `rg-avd-desktop-01-hosts-use` |
 | RG (Storage) | `rg-avd-desktop-01-storage-use` |
@@ -254,14 +254,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `rg-avd-global-feed` |
 | Global Feed Workspace | `vdws-avd-global-feed` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-image-management-use` |
 | Compute Gallery | `gal_avd_image_management_use` |
 | UAI | `uai-avd-image-management-use` |
@@ -278,7 +278,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `eastus`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-operations-use` |
 | KV (Secrets) | `kv-avd-sec-d527e9-use` |
 | KV (Encrypt) | `kv-avd-enc-d527e9-use` |
@@ -290,7 +290,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `vdpool-avd-desktop-01-use`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `fa-avd-avd-desktop-01-shr-5005a3-use` |
 | Storage Account | `vdpoolavddesktop01useshr` |
 | Encryption UAI | `uai-avd-avd-desktop-01-shr5005a3-encryption-use` |
@@ -305,7 +305,7 @@ verifies output names match expected patterns.
 **Description:** RT-last convention. Workload=avd, environment=prod. Verifies that VM/disk/NIC patterns are SHNAME-vm / SHNAME-osdisk / SHNAME-nic.
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | Custom |
 | Components | `workload` → `purpose` → `location` → `resourceType` |
 | Delimiter | `-` |
@@ -321,7 +321,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `avd-control-plane-use2-rg` |
 | RG (Hosts) | `avd-prod-hosts-use2-rg` |
 | RG (Storage) | `avd-prod-storage-use2-rg` |
@@ -350,14 +350,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `avd-global-feed-rg` |
 | Global Feed Workspace | `avd-global-feed-vdws` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `avd-image-management-use2-rg` |
 | Compute Gallery | `avd_image_management_use2_gal` |
 | UAI | `avd-image-management-use2-uai` |
@@ -374,7 +374,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `eastus2`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `avd-operations-use2-rg` |
 | KV (Secrets) | `avd-sec-75d05c-use2-kv` |
 | KV (Encrypt) | `avd-enc-75d05c-use2-kv` |
@@ -386,7 +386,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `avd-prod-use2-vdpool`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `avd-avd-prod-shr-97490f-use2-fa` |
 | Storage Account | `avdproduse2vdpoolshr9749` |
 | Encryption UAI | `avd-avd-prod-shr97490f-encryption-use2-uai` |
@@ -401,7 +401,7 @@ verifies output names match expected patterns.
 **Description:** Organisation prefix "contoso" in freeform1. Component order: freeform1|workload|purpose|location|RT. Demonstrates org-branding at the front.
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | Custom |
 | Components | `freeform1` → `workload` → `purpose` → `location` → `resourceType` |
 | Delimiter | `-` |
@@ -417,7 +417,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `contoso-avd-control-plane-use-rg` |
 | RG (Hosts) | `contoso-avd-avd-hosts-use-rg` |
 | RG (Storage) | `contoso-avd-avd-storage-use-rg` |
@@ -446,14 +446,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `contoso-avd-global-feed-rg` |
 | Global Feed Workspace | `contoso-avd-global-feed-vdws` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `contoso-avd-image-management-use-rg` |
 | Compute Gallery | `contoso_avd_image_management_use_gal` |
 | UAI | `contoso-avd-image-management-use-uai` |
@@ -470,7 +470,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `eastus`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `contoso-avd-operations-use-rg` |
 | KV (Secrets) | `contoso-avd-sec-9ef5b1-u` |
 | KV (Encrypt) | `contoso-avd-enc-9ef5b1-u` |
@@ -482,7 +482,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `contoso-avd-avd-use-vdpool`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `contoso-avd-contoso-avd-avd-shr-449def-use-fa` |
 | Storage Account | `contosoavdavdusevdpoolsh` |
 | Encryption UAI | `contoso-avd-contoso-avd-avd-shr449def-encryption-use-uai` |
@@ -497,7 +497,7 @@ verifies output names match expected patterns.
 **Description:** Uses underscore as delimiter. Components: RT|workload|environment|purpose|location. Tests delimiter independence.
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | Custom |
 | Components | `resourceType` → `workload` → `environment` → `purpose` → `location` |
 | Delimiter | `_` |
@@ -513,7 +513,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `rg_avd_prod_control-plane_usw2` |
 | RG (Hosts) | `rg_avd_prod_avd-hosts_usw2` |
 | RG (Storage) | `rg_avd_prod_avd-storage_usw2` |
@@ -542,14 +542,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `rg_avd_prod_global-feed` |
 | Global Feed Workspace | `vdws_avd_prod_global-feed` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg_avd_prod_image-management_usw2` |
 | Compute Gallery | `gal_avd_prod_image_management_usw2` |
 | UAI | `uai_avd_prod_image-management_usw2` |
@@ -566,7 +566,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `westus2`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg_avd_prod_operations_usw2` |
 | KV (Secrets) | `kv-avd-prod-sec-f0485a-u` |
 | KV (Encrypt) | `kv-avd-prod-enc-f0485a-u` |
@@ -578,7 +578,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `vdpool_avd_prod_avd_usw2`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `fa_avd_prod_avd_prod_avd-shr-6adbda_usw2` |
 | Storage Account | `vdpoolavdprodavdusw2shr6` |
 | Encryption UAI | `uai_avd_prod_avd_prod_avd-shr6adbda-encryption_usw2` |
@@ -593,7 +593,7 @@ verifies output names match expected patterns.
 **Description:** Location omitted from naming. Tests that uniqueString seeds on (subId, rgName, region) in KV to prevent cross-region collisions.
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | Custom |
 | Components | `resourceType` → `workload` → `purpose` |
 | Delimiter | `-` |
@@ -609,7 +609,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `rg-avd-control-plane` |
 | RG (Hosts) | `rg-avd-avd-hosts` |
 | RG (Storage) | `rg-avd-avd-storage` |
@@ -638,14 +638,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `rg-avd-global-feed` |
 | Global Feed Workspace | `vdws-avd-global-feed` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-image-management` |
 | Compute Gallery | `gal_avd_image_management` |
 | UAI | `uai-avd-image-management` |
@@ -662,7 +662,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `eastus`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `rg-avd-operations` |
 | KV (Secrets) | `kv-avd-sec-effda5` |
 | KV (Encrypt) | `kv-avd-enc-effda5` |
@@ -674,7 +674,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `vdpool-avd-avd`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `fa-avd-avd-avd-shr-27f7c6` |
 | Storage Account | `vdpoolavdavdshr27f7c6use` |
 | Encryption UAI | `uai-avd-avd-avd-shr27f7c6-encryption` |
@@ -689,7 +689,7 @@ verifies output names match expected patterns.
 **Description:** RT in position 2: freeform1|resourceType|workload|purpose|location. RT is not LAST so convention is treated as RT-first (VM pattern = vm-SHNAME).
 
 | Setting | Value |
-|---------|-------|
+| --- | --- |
 | Convention | Custom |
 | Components | `freeform1` → `resourceType` → `workload` → `purpose` → `location` |
 | Delimiter | `-` |
@@ -705,7 +705,7 @@ verifies output names match expected patterns.
 ### Host Pool Deployment Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG (Control Plane) | `fabrikam-rg-avd-control-plane-use` |
 | RG (Hosts) | `fabrikam-rg-avd-avd-hosts-use` |
 | RG (Storage) | `fabrikam-rg-avd-avd-storage-use` |
@@ -734,14 +734,14 @@ verifies output names match expected patterns.
 *Global feed is a single shared resource — no location in the name.*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Global Feed RG | `fabrikam-rg-avd-global-feed` |
 | Global Feed Workspace | `fabrikam-vdws-avd-global-feed` |
 
 ### Image Management Resources
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `fabrikam-rg-avd-image-management-use` |
 | Compute Gallery | `fabrikam_gal_avd_image_management_use` |
 | UAI | `fabrikam-uai-avd-image-management-use` |
@@ -758,7 +758,7 @@ verifies output names match expected patterns.
 *Using identifier `operations`, region `eastus`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | RG | `fabrikam-rg-avd-operations-use` |
 | KV (Secrets) | `fabrikam-kv-avd-sec-1042` |
 | KV (Encrypt) | `fabrikam-kv-avd-enc-1042` |
@@ -770,7 +770,7 @@ verifies output names match expected patterns.
 *Derived from host pool name: `fabrikam-vdpool-avd-avd-use`*
 
 | Resource | Generated Name |
-|----------|----------------|
+| --- | --- |
 | Function App | `fabrikam-fa-avd-vdpool-avd-avd-shr-fa5e52-use` |
 | Storage Account | `fabrikamvdpoolavdavduses` |
 | Encryption UAI | `fabrikam-uai-avd-vdpool-avd-avd-shrfa5e52-encryption-use` |
@@ -783,7 +783,7 @@ verifies output names match expected patterns.
 ## Summary
 
 | # | Scenario | Convention | RT Position | KV Parity |
-|---|----------|------------|-------------|-----------|
+| --- | --- | --- | --- | --- |
 | 1 | CAF Default — RT-first, East US | CAF Default | **RT-first** (prefix) | ✅ |
 | 2 | CAF Default — split CP / VMs regions | CAF Default | **RT-first** (prefix) | ✅ |
 | 3 | Custom — RT-first, 4 components: RT|workload|purpose|location | Custom | **RT-first** (prefix) | ✅ |

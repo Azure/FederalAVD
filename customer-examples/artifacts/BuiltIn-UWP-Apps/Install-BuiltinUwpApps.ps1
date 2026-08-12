@@ -3,22 +3,33 @@
     Provisions built-in UWP apps from offline MSIX packages for all users on the system.
 
 .DESCRIPTION
-    Iterates through each app subfolder inside the builtin-uwp-apps artifact directory.
-    For each subfolder it installs dependency packages found in a Dependencies subfolder,
-    then provisions the main bundle with Add-AppxProvisionedPackage so the app is
+    Iterates through each app subfolder inside the builtin-uwp-apps artifact directory
+    and provisions the main bundle with Add-AppxProvisionedPackage so the app is
     available to every user who signs in after imaging.
 
-    Expected folder structure (populated by Update-ImageArtifacts.ps1 via winget download):
+    Expected folder structure (produced by Update-ImageArtifacts.ps1 via winget download
+    followed by Optimize-SharedDependencies, which deduplicates all per-app dependency
+    packages into a single SharedDependencies folder and removes the per-app folders):
 
         builtin-uwp-apps\
+            SharedDependencies\
+                Microsoft.VCLibs.140.00_<version>_x64__8wekyb3d8bbwe.appx
+                Microsoft.VCLibs.140.00_<version>_x86__8wekyb3d8bbwe.appx
+                Microsoft.VCLibs.140.00.UWPDesktop_<version>_x64__8wekyb3d8bbwe.appx
+                Microsoft.VCLibs.140.00.UWPDesktop_<version>_x86__8wekyb3d8bbwe.appx
+                Microsoft.UI.Xaml.2.8_<version>_x64__8wekyb3d8bbwe.appx
+                Microsoft.UI.Xaml.2.8_<version>_x86__8wekyb3d8bbwe.appx
+                Microsoft.WindowsAppRuntime.<major.minor>_<version>_x64__8wekyb3d8bbwe.appx
+                ...
             Calculator\
                 Microsoft.WindowsCalculator_<version>_neutral_~_8wekyb3d8bbwe.msixbundle
-                Dependencies\
-                    x64\
-                        Microsoft.VCLibs.140.00.UWPDesktop_<version>_x64_8wekyb3d8bbwe.appx
-                        ...
             Paint\
-                ...
+                Microsoft.Paint_<version>_neutral_~_8wekyb3d8bbwe.msixbundle
+            ...
+
+    Framework dependencies are passed to DISM via -DependencyPackagePath (not installed
+    standalone). Both x86 and x64 variants are included because an .msixbundle contains
+    sub-packages for both architectures and DISM registers them both on x64 hosts.
 
     IMPORTANT -- PROVISIONING PREREQUISITE:
     Add-AppxProvisionedPackage must be called with -Regions all. Without this parameter,
@@ -109,101 +120,30 @@ if ($AppFolders.Count -eq 0) {
 
 Write-Log "Found $($AppFolders.Count) app folder(s) to provision."
 
-# ----------------------------------------------------------------
-# Pre-provision shared framework dependencies.
-# Packages in SharedDependencies\ (VCLibs, Windows App Runtime, etc.)
-# must be staged as first-class provisioned packages BEFORE the app
-# loop. When Add-AppxProvisionedPackage succeeds without explicit
-# -DependencyPackagePath, those frameworks are NOT staged -- they are
-# only resolved from the running OS at that moment. At user logon,
-# AppX tries to register the app, cannot find the required framework
-# version in the provisioned store, and fails (e.g. Notepad requires
-# Windows App Runtime 1.7 but only 1.6 is staged).
-# Pre-provisioning them here ensures they are present for every new
-# user profile created from this image, regardless of which apps
-# subsequently depend on them.
-# ----------------------------------------------------------------
-$SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
-if (Test-Path $SharedDepDir) {
-    $PackageExtensions = @('.msixbundle', '.appxbundle', '.msix', '.appx')
-    $SharedDepFiles = Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Extension -in $PackageExtensions }
-    if ($SharedDepFiles.Count -gt 0) {
-        Write-Log ""
-        Write-Log "=== Pre-provisioning $($SharedDepFiles.Count) shared framework package(s) ==="
-        # Sort in dependency order: VCLibs must be staged before WinUI/Xaml,
-        # WinUI/Xaml before Windows App Runtime. Alphabetical order (the default)
-        # puts UI.Xaml before VCLibs, causing 'Element not found' on the first pass.
-        $SortedDepFiles = $SharedDepFiles | Sort-Object {
-            switch -Wildcard ($_.Name) {
-                'Microsoft.VCLibs*'             { 0 }
-                'Microsoft.UI.Xaml*'            { 1 }
-                'Microsoft.WindowsAppRuntime*'  { 2 }
-                default                         { 3 }
-            }
-        }, Name
-        foreach ($DepFile in $SortedDepFiles) {
-            $DepNamePrefix = [System.IO.Path]::GetFileNameWithoutExtension($DepFile.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
-            $DepVersion    = Get-PackageFileVersion $DepFile.Name
-            $AlreadyStaged = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-                Where-Object { $_.PackageName -like "*$DepNamePrefix*" } |
-                Select-Object -First 1
-            if ($null -ne $AlreadyStaged) {
-                $StagedVersion = Get-PackageFileVersion $AlreadyStaged.PackageName
-                if ($StagedVersion -ge $DepVersion) {
-                    Write-Log "SKIP (framework): $($DepFile.Name) -- provisioned version ($StagedVersion) >= staged ($DepVersion)"
-                    continue
-                }
-            }
-            try {
-                Write-Log "Provisioning framework: $($DepFile.Name)"
-                Add-AppxProvisionedPackage -Online -PackagePath $DepFile.FullName -SkipLicense -Regions 'all' | Out-Null
-                Write-Log "OK: $($DepFile.Name)"
-            }
-            catch {
-                # Single-arch framework packages (.appx, not .msixbundle) can fail with
-                # 'Element not found' (0x80070490) when DISM cannot auto-resolve their own
-                # dependencies from the running OS store. Retry with all peer shared-dep
-                # packages passed explicitly as -DependencyPackagePath.
-                Write-Log "First attempt failed for '$($DepFile.Name)': $_ -- retrying with peer shared dependencies."
-                # Bundles (.msixbundle/.appxbundle) cannot be passed as -DependencyPackagePath;
-                # DISM only accepts single-arch .appx/.msix files there. Filtering them out
-                # prevents 'parameter is incorrect' (0x80070057) on the retry.
-                $PeerDeps = @($SharedDepFiles | Where-Object {
-                    $_.FullName -ne $DepFile.FullName -and
-                    $_.Extension -notin @('.msixbundle', '.appxbundle')
-                })
-                if ($PeerDeps.Count -gt 0) {
-                    try {
-                        Add-AppxProvisionedPackage -Online -PackagePath $DepFile.FullName `
-                            -DependencyPackagePath ($PeerDeps | Select-Object -ExpandProperty FullName) `
-                            -SkipLicense -Regions 'all' | Out-Null
-                        Write-Log "OK: $($DepFile.Name) (with explicit peer dependencies)"
-                    }
-                    catch {
-                        Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
-                    }
-                }
-                else {
-                    Write-Log "WARNING: Could not pre-provision framework '$($DepFile.Name)': $_ -- apps that depend on it may fail to register at logon."
-                }
-            }
-        }
-    }
-    else {
-        Write-Log "SharedDependencies folder is empty -- skipping framework pre-provisioning."
-    }
-}
-else {
-    Write-Log "No SharedDependencies folder found -- skipping framework pre-provisioning."
-}
-
 $SuccessCount = 0
 $SkipCount    = 0
 $ErrorCount   = 0
 
 # Track per-app before/after for the change summary.
 $ChangeLog = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+# Collect shared framework dependencies once -- the same set is used for every app.
+# Log the full list here so it appears once in the output rather than repeating for
+# each app in the provisioning loop below.
+$SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
+$DepPackages  = @()
+if (Test-Path -Path $SharedDepDir) {
+    $DepPackages = @(Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in @('.appx', '.msix') })
+}
+if ($DepPackages.Count -gt 0) {
+    Write-Log ""
+    Write-Log "Shared framework deps: $($DepPackages.Count) package(s)"
+    $DepPackages | Sort-Object Name | ForEach-Object { Write-Log "  $($_.Name)" }
+}
+else {
+    Write-Log "No shared framework dependencies found in SharedDependencies\."
+}
 
 foreach ($AppFolder in $AppFolders) {
     Write-Log ""
@@ -273,62 +213,7 @@ foreach ($AppFolder in $AppFolders) {
         Write-Log "Staged package is newer ($PackageVersion > $ProvisionedVersion). Provisioning update."
     }
 
-    # ----------------------------------------------------------------
-    # Locate dependency packages.
-    # The staging pipeline deduplicates shared framework packages
-    # (VCLibs, WinAppSDK, etc.) into a sibling SharedDependencies\
-    # folder at the builtin-uwp-apps root so they are stored once
-    # instead of once per app. Per-app Dependencies\ folders may still
-    # exist for packages unique to a single app.
-    # Both locations are searched; where the same package family
-    # appears in both, the highest version wins.
-    # ----------------------------------------------------------------
-    $DepCandidates = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-
-    # Per-app dependencies
-    Get-ChildItem -Path $AppFolder.FullName -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.Extension -in $PackageExtensions -and
-            $_.FullName  -match '(?i)\\dependencies\\' -and
-            $_.Name      -match '(?i)_(x64|neutral)[._]'
-        } |
-        ForEach-Object { $DepCandidates.Add($_) }
-
-    # Shared dependencies (dedup pool at the parent root)
-    $SharedDepDir = Join-Path -Path $PSScriptRoot -ChildPath 'SharedDependencies'
-    if (Test-Path -Path $SharedDepDir) {
-        Get-ChildItem -Path $SharedDepDir -File -ErrorAction SilentlyContinue |
-            Where-Object {
-                $_.Extension -in $PackageExtensions -and
-                $_.Name      -match '(?i)_(x64|neutral)[._]'
-            } |
-            ForEach-Object { $DepCandidates.Add($_) }
-    }
-
-    # Deduplicate by base name (strip version), keep highest version
-    $DepPackages = @(
-        $DepCandidates |
-            Group-Object { $_.Name -replace '_[0-9]+(?:\.[0-9]+){1,3}(?=_)', '' } |
-            ForEach-Object {
-                $_.Group |
-                    Sort-Object { Get-PackageFileVersion $_.Name } -Descending |
-                    Select-Object -First 1
-            } |
-            Sort-Object FullName
-    )
-
-    $AppSpecificDeps = @($DepPackages | Where-Object { $_.DirectoryName -notlike '*SharedDependencies' })
-    $SharedDeps       = @($DepPackages | Where-Object { $_.DirectoryName -like  '*SharedDependencies' })
-    if ($AppSpecificDeps.Count -gt 0) {
-        Write-Log "App-specific deps: $($AppSpecificDeps.Count) package(s)"
-        $AppSpecificDeps | ForEach-Object { Write-Log "  $($_.Name)" }
-    }
-    if ($SharedDeps.Count -gt 0) {
-        Write-Log "Shared framework deps: $($SharedDeps.Count) package(s) (pre-provisioned above)"
-    }
-    if ($DepPackages.Count -eq 0) {
-        Write-Log "Dependencies : none"
-    }
+    Write-Log "Shared deps  : $($DepPackages.Count) package(s)"
 
     # ----------------------------------------------------------------
     # Provision the app for all users via DISM (online mode).
@@ -479,7 +364,127 @@ Write-Log "Skipped      : $SkipCount (already up-to-date or no package found)"
 Write-Log "Errors       : $ErrorCount"
 Write-Log "Install-BuiltinUwpApps: Complete"
 
-if ($ErrorCount -gt 0) {
+# ----------------------------------------------------------------
+# Image health check.
+# Runs after all provisioning to verify the provisioned store is in
+# the expected state. Three things are checked:
+#   1. Every app folder that was processed (and did not error) has a
+#      corresponding entry in Get-AppxProvisionedPackage.
+#   2. No provisioned app has a lingering Deprovisioned registry entry
+#      that would silently remove it at the next user logon.
+#   3. Every framework dependency package in SharedDependencies is
+#      present in the provisioned store -- either from the OS baseline
+#      or staged as a side-effect of provisioning an app that needed it.
+# ----------------------------------------------------------------
+Write-Log ""
+Write-Log "=== Image Health Check ==="
+$HealthIssues     = [System.Collections.Generic.List[string]]::new()
+$FinalPkgs        = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+$PkgExtensions2   = @('.msixbundle', '.appxbundle', '.msix', '.appx')
+
+Write-Log ""
+Write-Log "-- App packages --"
+foreach ($Row in ($ChangeLog | Sort-Object App)) {
+    if ($Row.Change -eq 'no package') { continue }
+
+    if ($Row.Change -eq 'ERROR') {
+        Write-Log ("  FAIL  {0,-30} provisioning error (see log above)" -f $Row.App)
+        continue
+    }
+
+    # Re-derive the package name prefix from the main bundle file so we can
+    # look it up in the provisioned store without storing extra state in the loop.
+    $CheckPath = Join-Path -Path $PSScriptRoot -ChildPath $Row.App
+    $CheckMain = Get-ChildItem -Path $CheckPath -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in $PkgExtensions2 } | Select-Object -First 1
+    $CheckPrefix = if ($null -ne $CheckMain) {
+        [System.IO.Path]::GetFileNameWithoutExtension($CheckMain.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+    } else { '' }
+
+    if (-not $CheckPrefix) {
+        Write-Log ("  SKIP  {0,-30} could not derive package prefix for verification" -f $Row.App)
+        continue
+    }
+
+    $CheckFound = $FinalPkgs | Where-Object { $_.PackageName -like "*$CheckPrefix*" } | Select-Object -First 1
+    if ($null -eq $CheckFound) {
+        Write-Log ("  FAIL  {0,-30} not found in provisioned store" -f $Row.App)
+        $HealthIssues.Add("$($Row.App): not found in provisioned store")
+        continue
+    }
+
+    $CheckVer = Get-PackageFileVersion $CheckFound.PackageName
+    $CheckFamily = ''
+    if ($CheckFound.PackageName -match '^(.+?)_[\d\.]+_[^_]+__([^_]+)$') {
+        $CheckFamily = "$($Matches[1])_$($Matches[2])"
+    }
+    $DeprovKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned\$CheckFamily"
+    if ($CheckFamily -and (Test-Path $DeprovKey)) {
+        Write-Log ("  WARN  {0,-30} v{1} -- Deprovisioned registry entry present; app will be removed at next user logon" -f $Row.App, $CheckVer)
+        $HealthIssues.Add("$($Row.App): Deprovisioned registry entry present. Fix: Remove-Item -Path '$DeprovKey' -Recurse -Force")
+    }
+    else {
+        Write-Log ("  OK    {0,-30} v{1}" -f $Row.App, $CheckVer)
+    }
+}
+
+Write-Log ""
+Write-Log "-- Framework dependencies --"
+if ($DepPackages.Count -gt 0) {
+    $SeenPrefixes = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($DepFileCheck in ($DepPackages | Sort-Object Name)) {
+            $DepPfx = [System.IO.Path]::GetFileNameWithoutExtension($DepFileCheck.Name) `
+                -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+            if (-not $SeenPrefixes.Add($DepPfx)) { continue }  # skip arch duplicates already reported
+            $DepPkgFound = $FinalPkgs | Where-Object { $_.PackageName -like "*$DepPfx*" } |
+                Select-Object -First 1
+            if ($null -eq $DepPkgFound) {
+                # Not in the provisioned store. Framework packages shipped with Windows or
+                # registered as side-effects of provisioning an app do not always appear in
+                # Get-AppxProvisionedPackage -- they live in the all-users AppX package store
+                # (C:\Program Files\WindowsApps\) and are found there instead. Check there
+                # before reporting a warning. This is the normal outcome when all apps succeed
+                # on the first provisioning attempt (DISM satisfied deps from the OS baseline).
+                $WinAppsDir  = Join-Path $env:ProgramFiles 'WindowsApps'
+                $DepFolder   = Get-ChildItem -Path $WinAppsDir -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like "$DepPfx*" } | Select-Object -First 1
+                if ($null -ne $DepFolder) {
+                    $DepFolderVer = Get-PackageFileVersion $DepFolder.Name
+                    Write-Log ("  OK    {0,-52} v{1} (WindowsApps)" -f $DepPfx, $DepFolderVer)
+                }
+                else {
+                    # Not registering this as a health issue: if any app that actually needed this
+                    # dependency failed to provision, the per-app check above already caught it.
+                    # A staged dep that is not registered simply means it was not needed by any app
+                    # on this OS baseline -- flagging it would be a false positive.
+                    Write-Log ("  INFO  {0,-52} not in provisioned store or WindowsApps (not needed by any provisioned app, or satisfied via OS baseline)" -f $DepPfx)
+                }
+            }
+            else {
+                $DepPkgVer = Get-PackageFileVersion $DepPkgFound.PackageName
+                Write-Log ("  OK    {0,-52} v{1}" -f $DepPfx, $DepPkgVer)
+            }
+    }
+}
+else {
+    Write-Log "  (no shared framework dependencies -- skipping dep check)"
+}
+
+Write-Log ""
+if ($HealthIssues.Count -eq 0) {
+    Write-Log "Health        : PASS -- all packages verified, no issues found"
+}
+else {
+    Write-Log "Health        : FAIL -- $($HealthIssues.Count) issue(s) detected:"
+    $HealthIssues | ForEach-Object { Write-Log "  - $_" }
+}
+
+Write-Log ""
+Write-Log "=== Final Provisioned Packages ==="
+$FinalPkgs | Sort-Object PackageName | ForEach-Object { Write-Log "  $($_.PackageName)" }
+
+if ($ErrorCount -gt 0 -or $HealthIssues.Count -gt 0) {
     exit 1
 }
 exit 0

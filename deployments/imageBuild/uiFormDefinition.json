@@ -355,15 +355,27 @@
                             "visible": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
                             "elements": [
                                 {
+                                    "name": "uaisApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[not(empty(steps('basics').scope.subscription))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
+                                    }
+                                },
+                                {
                                     "name": "userAssignedIdentity",
-                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "type": "Microsoft.Common.DropDown",
                                     "label": "User Assigned Identity",
-                                    "toolTip": "Attach a User Assigned Identity to the build VM. Required when using an existing resource group or when zero-trust artifact storage or log collection is enabled. All required roles (VM Contributor on the build resource group; storage roles if applicable) must be pre-granted before deployment - this deployment grants none. The identity from the imageManagement deployment satisfies all requirements when configured correctly.",
-                                    "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+                                    "filter": true,
+                                    "multiLine": true,
+                                    "toolTip": "Select the User Assigned Identity to attach to the build VM. Only identities in the deployment region are listed. The imageManagement identity (uai-...-image-management-blob-access-...) satisfies all requirements when pre-granted the required roles via the imageManagement deployment.",
+                                    "defaultValue": "[if(not(empty(filter(steps('prereqs').managedIdentity.uaisApi.value, (uai) => and(equals(uai.location, steps('basics').scope.location.name), contains(uai.name, 'image-management-blob-access'))))), first(map(filter(steps('prereqs').managedIdentity.uaisApi.value, (uai) => and(equals(uai.location, steps('basics').scope.location.name), contains(uai.name, 'image-management-blob-access'))), (uai) => uai.name)), '')]",
+                                    "visible": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
                                     "constraints": {
-                                        "required": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
-                                    },
-                                    "visible": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]"
+                                        "required": "[or(equals(steps('prereqs').resGroup.useExResGroup, true), steps('prereqs').storage.enableZeroTrustStorage, steps('prereqs').storage.collectLogs)]",
+                                        "allowedValues": "[map(filter(steps('prereqs').managedIdentity.uaisApi.value, (uai) => equals(uai.location, steps('basics').scope.location.name)), (uai) => parse(concat('{\"label\":\"', uai.name, '\",\"description\":\"Resource Group: ', first(skip(split(uai.id, '/'), 4)), '\",\"value\":\"', uai.id, '\"}')))]"
+                                    }
                                 }
                             ]
                         }
@@ -533,7 +545,7 @@
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Install FsLogix Agent",
                                     "toolTip": "Check to install FsLogix Agent",
-                                    "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud'))))]"
+                                    "visible": "[or(steps('prereqs').storage.enableZeroTrustStorage, steps('imageCustomizations').downloadLatestMicrosoftContent, and(not(contains(steps('basics').meApi.transformed.context, 'eaglex')), not(contains(steps('basics').meApi.transformed.context, 'scloud'))))]"
                                 }
                             ]
                         },
@@ -1248,6 +1260,7 @@
                                     "name": "installUpdates",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Install Windows Updates",
+                                    "defaultValue": false,
                                     "toolTip": "Select to install updates and specify an update source."
                                 },
                                 {
@@ -2205,7 +2218,7 @@
                 "customBuildResourceGroupName": "[if(equals(steps('prereqs').resGroup.useExResGroup, false), steps('prereqs').resGroup.customBuildResourceGroupName, '')]",
                 "computeGalleryResourceId": "[steps('prereqs').gallery.gallery.id]",
                 "artifactsContainerUri": "[if(steps('prereqs').storage.enableZeroTrustStorage, concat(steps('prereqs').storage.storageAccount.blobEndpoint, steps('prereqs').storage.container), '')]",
-                "userAssignedIdentityResourceId": "[coalesce(steps('prereqs').managedIdentity.userAssignedIdentity.id, '')]",
+                "userAssignedIdentityResourceId": "[coalesce(steps('prereqs').managedIdentity.userAssignedIdentity, '')]",
                 "subnetResourceId": "[steps('vmProps').network.subnet]",
                 "vmSize": "[steps('vmProps').vmSize]",
                 "encryptionAtHost": "[steps('vmProps').encryptionAtHost]",

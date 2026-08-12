@@ -1,4 +1,8 @@
-﻿#region Initialization
+﻿param (
+    [int[]]$SuccessExitCodes = @(0, 3010)
+)
+
+#region Initialization
 $SoftwareName = 'InstallRoot'
 $DownloadUrl = "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64.msi"
 $Script:Name = 'Install-InstallRoot'
@@ -269,9 +273,10 @@ $InstallerTimeoutMs = 600000 # 10 minutes
 $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /qn" -PassThru
 if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
     $Installer.Kill()
-    Write-Log -Category Warning -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+    Write-Log -Category Error -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
+    exit 1
 }
-elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
+elseif ($Installer.ExitCode -in $SuccessExitCodes) {
     if ($Installer.ExitCode -eq 3010) { Write-Log -message "'$SoftwareName' installed successfully. A reboot is required." }
     else { Write-Log -message "'$SoftwareName' installed successfully." }
     $i = 0
@@ -282,7 +287,8 @@ elseif ($Installer.ExitCode -eq 0 -or $Installer.ExitCode -eq 3010) {
     Get-ChildItem -Path "$env:SystemDrive\Users\Public\Desktop" -Filter 'InstallRoot*.lnk' | Remove-Item -Force
 }
 else {
-    Write-Log -Category Warning -Message "The Installer exit code is $($Installer.ExitCode)"
+    Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)."
+    exit $Installer.ExitCode
 }
 Write-Log -message "Completed '$SoftwareName' Installation."
 If (Test-Path -Path $TempDir) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }

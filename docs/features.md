@@ -85,7 +85,7 @@ This solution supports deploying Azure Virtual Desktop resources across multiple
 Use the following subscription ID parameters in your parameter files or through the deployment UI:
 
 | Parameter | Purpose | Default Behavior |
-|-----------|---------|------------------|
+| --- | --- | --- |
 | `controlPlaneSubscriptionId` | Subscription for AVD control plane resources (workspace, host pools, application groups) | Current deployment subscription if not specified |
 | `monitoringSubscriptionId` | Subscription for Log Analytics workspace and monitoring resources | Current deployment subscription if not specified |
 
@@ -319,7 +319,7 @@ This solution deploys and fully configures FSLogix profile storage, making it re
 FSLogix storage authentication and configuration depends on your identity solution:
 
 | Identity Solution | Azure Files | Azure NetApp Files | Authentication Method | Sharding Support | NTFS Permissions |
-|-------------------|:-----------:|:-------------------:|----------------------|------------------|------------------|
+| --- | --- | --- | --- | --- | --- |
 | Active Directory Domain Services | ✅ | ✅ | Kerberos (domain-joined storage) | All options | AD groups |
 | Entra Domain Services | ✅ | ❌ | Kerberos (domain-joined storage) | All options | Entra DS groups |
 | Entra Kerberos - Hybrid | ✅ | ❌ | Entra Kerberos | All options | AD groups (synced) |
@@ -337,7 +337,7 @@ FSLogix storage authentication and configuration depends on your identity soluti
 FSLogix containers can be configured in multiple ways:
 
 | Container Type | Parameter Value | Use Case |
-|----------------|-----------------|----------|
+| --- | --- | --- |
 | Profile Container | `ProfileContainer` | Standard user profile storage (recommended) |
 | Profile & Office Container | `ProfileOfficeContainer` | Separate containers for profile and Office cache data |
 | Cloud Cache Profile Container | `CloudCacheProfileContainer` | Active/active redundancy with local caching |
@@ -350,7 +350,7 @@ FSLogix containers can be configured in multiple ways:
 Sharding distributes user profiles across multiple storage accounts to overcome performance or capacity limits:
 
 | Sharding Option | Parameter Value | Description | Identity Solution Support |
-|-----------------|-----------------|-------------|---------------------------|
+| --- | --- | --- | --- |
 | None | `None` | Single storage account for all users | All identity solutions |
 | Sharding with Permissions | `ShardPerms` | Multiple storage accounts with group-based NTFS permissions | All except EntraId |
 | Sharding with Object Specific Settings | `ShardOSS` | Multiple storage accounts using FSLogix's Object Specific Settings registry configuration | ADDS, Entra DS, Entra Kerberos Hybrid only |
@@ -407,14 +407,14 @@ fslogixAdminGroups = [
 **Azure Files:**
 
 | Service Tier | Parameter Value | Performance | Features |
-|--------------|-----------------|-------------|----------|
+| --- | --- | --- | --- |
 | Premium | `AzureFiles Premium` | Up to 100,000 IOPS per share, sub-millisecond latency | SMB Multichannel automatically enabled, Zone-Redundant Storage (ZRS) support |
 | Standard | `AzureFiles Standard` | Standard performance tier | Large file share option enabled |
 
 **Azure NetApp Files:**
 
 | Service Tier | Parameter Value | Performance | Compatibility |
-|--------------|-----------------|-------------|---------------|
+| --- | --- | --- | --- |
 | Premium | `AzureNetAppFiles Premium` | Up to 450,000 IOPS | ADDS only |
 | Standard | `AzureNetAppFiles Standard` | Up to 320,000 IOPS | ADDS only |
 
@@ -507,7 +507,7 @@ When an appropriate VM size is selected, this solution will automatically deploy
 Supported GPU VM families:
 
 | Series | GPU | Driver Extension |
-|--------|-----|-----------------|
+| --- | --- | --- |
 | NVads-A10 v5 (`*_A10_v5`) | NVIDIA A10 | NvidiaGpuDriverWindows |
 | NVv4 (`*as_v4`) | AMD Radeon Instinct MI25 | AmdGpuDriverWindows |
 | NVads V710 v5 (`*_V710_v5`) | AMD Radeon Pro V710 | AmdGpuDriverWindows |
@@ -849,7 +849,7 @@ Customer-managed keys (CMK) allow your organization to hold and control the encr
 CMK is applied across the solution through four parameters, each independently controlled:
 
 | Parameter | Template | Protects |
-|---|---|---|
+| --- | --- | --- |
 | `keyManagementDisks` | `hostpool.bicep` | Session host VM managed disks (OS + data) via Disk Encryption Set |
 | `keyManagementStorage` | `hostpool.bicep` | FSLogix Azure Files storage accounts |
 | `keyManagementRecoveryServicesVault` | `hostpool.bicep` | Recovery Services Vault (personal host pool VM backup) |
@@ -879,7 +879,7 @@ For IL5 environments, CMK with HSM protection is required. See [IL5 Isolation](#
 - System-Assigned Managed Identity (for Recovery Services Vault CMK — SAI is always used; Azure also requires it when the vault has a private endpoint)
 - Disk Encryption Set (for disk and gallery image version CMK)
 
-> **Recovery Services Vault CMK with private endpoints — mutually exclusive controls:** Azure Backup has no `AzureServices` trusted service bypass for Key Vault. When `deployPrivateEndpoints = true` and the encryption Key Vault has public access disabled, two mandatory controls conflict: preserving SC-28 (CMK on RSV) requires enabling KV public access (`encryptionKeyVaultForcePublicAccess = true`), which removes the `publicNetworkAccess: Disabled` enforcement and weakens SC-7 network isolation. Preserving SC-7 (private-only KV) requires accepting PMK on the RSV, which does not satisfy SC-28 for that resource. By default (`encryptionKeyVaultForcePublicAccess = false`) the solution falls back to PMK on the RSV rather than failing the deployment. Neither option satisfies both controls simultaneously — this is a **Microsoft Azure platform limitation**. The choice is a compliance risk decision for your ISSO and AO. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for the full option comparison.
+> **Recovery Services Vault CMK with private endpoints:** CMK on the personal host pool VM backup vault is fully compatible with `deployPrivateEndpoints = true`. Azure Backup is a [trusted Microsoft service](https://learn.microsoft.com/azure/key-vault/general/overview-vnet-service-endpoints#trusted-services) and accesses the encryption Key Vault via the Key Vault firewall bypass even when `publicNetworkAccess` is `Disabled`. SC-28 (CMK on RSV) and SC-7 (private-only KV) are satisfied simultaneously — no trade-off is required. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for full details.
 
 ## SMB Multichannel
 

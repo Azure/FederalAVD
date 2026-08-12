@@ -10,7 +10,7 @@ param deploymentSuffix string
 param storageKeyNames array
 param identityName string = ''
 
-module cmk '../../../../.common/bicepModules/custom/customerManagedKeys/customerManagedKeys.bicep' = {
+module cmk '../../../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = {
   name: 'Storage-CMK-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {

@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Design
 
@@ -128,7 +128,7 @@ All resource names are assembled from an ordered array of **components** — nam
 ### Key concepts
 
 | Concept | Description |
-|---------|-------------|
+| --- | --- |
 | components array | Ordered list of component names (esourceType\, `purpose`, \location\, \workload\, \nvironment\, \reeform1\, \reeform2\, one\) |
 | purpose | Per-resource differentiator (e.g., \vd-01\, \sec\, \control-plane\) — set automatically by the engine for each resource; no direct CAF equivalent |
 | RT-first | esourceType\ is the first non-one\ component — produces \dpool-avd-use\ style names |

@@ -37,9 +37,6 @@ param encryptionKeyVaultRetentionInDays int = secretsKeyVaultRetentionInDays
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module.')
 param permittedIPs array = []
 
-@description('Optional. When true, the encryption key vault is deployed with public network access enabled and all IP-based firewall restrictions cleared, regardless of the privateEndpoint setting. Required when CMK is configured on Recovery Services Vault (RSV does not use the AzureServices trusted service bypass, and its backup IPs are regional/dynamic so IP restrictions are not feasible). Only set this when you explicitly accept the tradeoff of an internet-reachable encryption key vault without IP restrictions.')
-param encryptionKeyVaultForcePublicAccess bool = false
-
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
@@ -68,9 +65,7 @@ var deployEncryptionKvPe = deployEncryptionKeyVault && privateEndpoint && !empty
 // is disabled — the PE becomes the sole access path. IP allowances or an explicit override keep it open.
 var kvPublicAccessDisabled = privateEndpoint && empty(permittedIPs)
 var secretsKvPublicNetworkAccess = kvPublicAccessDisabled ? 'Disabled' : 'Enabled'
-// Encryption KV can be forced open (Enabled) to support RSV CMK, which requires unrestricted public access.
-// In all other PE+no-IP scenarios it is private-only, matching the secrets KV.
-var encryptionKvPublicNetworkAccess = encryptionKeyVaultForcePublicAccess ? 'Enabled' : (kvPublicAccessDisabled ? 'Disabled' : 'Enabled')
+var encryptionKvPublicNetworkAccess = kvPublicAccessDisabled ? 'Disabled' : 'Enabled'
 
 var ipRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
 var kvHasNetworkRestrictions = privateEndpoint || !empty(permittedIPs)
@@ -83,23 +78,15 @@ var secretsKvNetworkAcls = {
   ipRules: ipRules
 }
 
-// Encryption KV: when forcePublicAccess is set, open defaultAction so RSV backup (which has no AzureServices bypass)
-// can reach the vault. Otherwise apply the same restriction logic as the secrets KV.
-var encryptionKvNetworkAcls = encryptionKeyVaultForcePublicAccess
-  ? {
-      bypass: 'AzureServices'
-      defaultAction: 'Allow'
-      ipRules: []
-    }
-  : {
-      bypass: 'AzureServices'
-      defaultAction: kvHasNetworkRestrictions ? 'Deny' : 'Allow'
-      ipRules: ipRules
-    }
+var encryptionKvNetworkAcls = {
+  bypass: 'AzureServices'
+  defaultAction: kvHasNetworkRestrictions ? 'Deny' : 'Allow'
+  ipRules: ipRules
+}
 
 // ─── Secrets Key Vault ─────────────────────────────────────────────────────────
 
-module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
+module secretsKeyVault '../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
   name: 'Secrets-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -118,7 +105,7 @@ module secretsKeyVault '../../keyVault/vaults/deploy.bicep' = if (deploySecretsK
   }
 }
 
-module secretsKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
+module secretsKeyVault_pe '../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
   name: 'Secrets-KV-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -140,7 +127,7 @@ module secretsKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (de
   }
 }
 
-module secrets '../../keyVault/vaults/secrets/deploy.bicep' = [
+module secrets '../../../.common/bicepModules/keyVault/vaults/secrets/deploy.bicep' = [
   for secret in secretList: if (deploySecretsKv) {
     name: 'Secret-${secret.name}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupName)
@@ -155,7 +142,7 @@ module secrets '../../keyVault/vaults/secrets/deploy.bicep' = [
 
 // ─── Encryption Key Vault ──────────────────────────────────────────────────────
 
-module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncryptionKeyVault) {
+module encryptionKeyVault '../../../.common/bicepModules/keyVault/vaults/deploy.bicep' = if (deployEncryptionKeyVault) {
   name: 'Encryption-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -174,7 +161,7 @@ module encryptionKeyVault '../../keyVault/vaults/deploy.bicep' = if (deployEncry
   }
 }
 
-module encryptionKeyVault_pe '../../network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
+module encryptionKeyVault_pe '../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
   name: 'Encryption-KV-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {

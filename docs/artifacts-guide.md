@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical References:**
 > - [Image Management Template Documentation](../deployments/imageManagement/README.md) - Artifacts storage infrastructure
@@ -18,7 +18,7 @@ The artifacts system in this AVD solution provides a flexible, Zero Trust-compli
 ### Key Concepts
 
 | Concept | Description |
-|---------|-------------|
+| --- | --- |
 | **Artifact** | A folder containing a PowerShell script and supporting files (installers, configuration files, etc.) |
 | **Artifact Package** | The zipped version of an artifact folder, uploaded to Azure Blob Storage |
 | **Invoke-Customization.ps1** | The orchestration script (`.common/scripts/Invoke-Customization.ps1`) that downloads and executes a single artifact |
@@ -73,7 +73,7 @@ graph TD
 
 ### Workflow Diagram
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │ 1. Preparation Phase (Update-ImageArtifacts.ps1)               │
 ├────────────────────────────────────────────────────────────────┤
@@ -171,7 +171,7 @@ For a complete reference of all download methods, `downloads.json` fields, pipel
 When `Invoke-Customization.ps1` downloads and executes an artifact during deployment:
 
 | File Extension | Execution Behavior | Arguments Handling |
-|----------------|-------------------|-------------------|
+| --- | --- | --- |
 | **.ps1** | Executed directly with PowerShell | Arguments string parsed into named parameters and splatted |
 | **.exe** | Executed with `Start-Process` | Arguments string passed directly to executable |
 | **.msi** | Executed with `msiexec.exe /i` | Arguments string passed directly to msiexec |
@@ -237,7 +237,9 @@ Param(
     [string]$InstallMode = 'Full',
     
     [Parameter(Mandatory = $false)]
-    [switch]$SkipShortcuts
+    [switch]$SkipShortcuts,
+
+    [int[]]$SuccessExitCodes = @(0, 3010)
 )
 #endregion
 
@@ -314,7 +316,7 @@ try {
     $Process = Start-Process -FilePath "msiexec.exe" -ArgumentList $Arguments -Wait -PassThru
     $ExitCode = $Process.ExitCode
     
-    if ($ExitCode -eq 0 -or $ExitCode -eq 3010) {
+    if ($ExitCode -in $SuccessExitCodes) {
         Write-Log -Category Info -Message "Installation completed successfully. Exit code: $ExitCode"
         exit 0
     }
@@ -355,7 +357,7 @@ Your script receives: `$InstallMode = "Minimal"` and `$SkipShortcuts = $true`
 
 Place any required files in the same directory:
 
-```
+```text
 Chrome/
 ├── Install-Chrome.ps1
 └── GoogleChromeEnterpriseBundle64.msi
@@ -499,11 +501,12 @@ foreach ($Installer in $Installers) {
     
     $Process = Start-Process -FilePath $Installer.FullName -ArgumentList "/S" -Wait -PassThru
     
-    if ($Process.ExitCode -ne 0 -and $Process.ExitCode -ne 3010) {
-        Write-Log -Category Warning -Message "$($Installer.Name) failed with exit code: $($Process.ExitCode)"
+    if ($Process.ExitCode -in $SuccessExitCodes) {
+        Write-Log -Category Info -Message "$($Installer.Name) completed successfully"
     }
     else {
-        Write-Log -Category Info -Message "$($Installer.Name) completed successfully"
+        Write-Log -Category Error -Message "$($Installer.Name) failed with exit code: $($Process.ExitCode)"
+        exit $Process.ExitCode
     }
 }
 ```
@@ -513,7 +516,7 @@ foreach ($Installer in $Installers) {
 - [ ] Script uses standard PowerShell named parameters (NOT DynParameters)
 - [ ] Script includes logging functionality
 - [ ] Script handles errors gracefully
-- [ ] Script returns appropriate exit codes (0 = success)
+- [ ] Script exits non-zero when the installer fails (any exit code other than 0 or 3010)
 - [ ] Script uses relative paths for file access (`$PSScriptRoot` or `Split-Path`)
 - [ ] Script includes header comments explaining purpose
 - [ ] Script name follows convention: `Install-[Name].ps1` or `Configure-[Name].ps1`
@@ -535,7 +538,7 @@ The `Invoke-Customization.ps1` script (`.common/scripts/Invoke-Customization.ps1
 ### Parameters
 
 | Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
+| --- | --- | --- | --- |
 | `APIVersion` | string | No | IMDS API version for managed identity tokens (default based on cloud) |
 | `Arguments` | string | No | Arguments string passed to the artifact (default: empty) |
 | `BlobStorageSuffix` | string | Yes | Blob storage endpoint suffix (e.g., `blob.core.usgovcloudapi.net`) |
@@ -548,7 +551,7 @@ The `Invoke-Customization.ps1` script (`.common/scripts/Invoke-Customization.ps1
 
 **Execution Flow:**
 
-```
+```text
 1. START: Invoke-Customization.ps1 receives parameters from Run Command
    ↓
 2. Start transcript logging to C:\Windows\Logs\[Name].log
@@ -599,7 +602,7 @@ The `Arguments` string is parsed into named parameters using the `ConvertTo-Para
 
 **Input Format:**
 
-```
+```text
 -ParameterName Value -SwitchParameter -AnotherParam "Value with spaces"
 ```
 
@@ -655,7 +658,7 @@ Arguments are passed directly to `Start-Process` without parsing. Use appropriat
 ### File Type Handling
 
 | Extension | Handler | Arguments Usage |
-|-----------|---------|-----------------|
+| --- | --- | --- |
 | **.exe** | `Start-Process -FilePath $file -ArgumentList $args` | Direct pass-through |
 | **.msi** | `msiexec.exe /i $file $args` | Direct pass-through |
 | **.bat** | `cmd.exe $file $args` | Direct pass-through |
@@ -679,7 +682,7 @@ All activity is logged via PowerShell transcript:
 
 **Example Log:**
 
-```
+```text
 [12/22/2024 10:30:15] Starting 'MyApp' script with the following parameters.
 [12/22/2024 10:30:15] APIVersion: 2018-02-01
 [12/22/2024 10:30:15] BlobStorageSuffix: blob.core.usgovcloudapi.net
@@ -865,9 +868,18 @@ Edit your host pool parameters file:
   "sessionHostCustomizations": {
     "value": [
       {
-        "name": "Configure-OneDrive",
-        "blobNameOrUri": "Configure-OneDrive.zip",
-        "arguments": "-TenantId 12345678-1234-1234-1234-123456789012 -EnableKFM"
+        // Configure-OneDriveKFMPolicy: -TenantId is mandatory.
+        // Add -EnableRemoteApp for RemoteApp (not full-desktop) host pools.
+        "name": "Configure-OneDriveKFMPolicy",
+        "blobNameOrUri": "Configure-OneDriveKFMPolicy.zip",
+        "arguments": "-TenantId 12345678-1234-1234-1234-123456789012"
+      },
+      {
+        // Configure-RemoteDesktopPolicy: use -EnableRemoteApp for RemoteApp pools.
+        // Times are in milliseconds (21600000 = 6 hours).
+        "name": "Configure-RemoteDesktopPolicy",
+        "blobNameOrUri": "Configure-RemoteDesktopPolicy.zip",
+        "arguments": "-MaxIdleTime 21600000 -MaxDisconnectionionTime 21600000"
       },
       {
         "name": "Install-LineOfBusinessApp",
@@ -1116,6 +1128,10 @@ New-AzDeployment `
    if ($ExitCode -eq 0 -or $ExitCode -eq 3010 -or $ExitCode -eq 1641) {
        Write-Log "Installation successful (exit code: $ExitCode)"
        exit 0
+   }
+   else {
+       Write-Log -Category Error -Message "Installation failed with exit code: $ExitCode"
+       exit $ExitCode
    }
    ```
 

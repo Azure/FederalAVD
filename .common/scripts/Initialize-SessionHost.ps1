@@ -100,14 +100,8 @@ function Write-Log {
     )
 
     $DateTime = Get-Date -Format 'MM-dd-yyyy HH:mm:ss'
-    $Content = "[$DateTime]`t$Category`t`t$Message`n" 
+    $Content = "[$DateTime]`t$Category`t`t$Message" 
     Add-Content $Script:LogPath $content -ErrorAction Stop
-
-    Switch ($Category) {
-        'Info' { Write-Host $content }
-        'Error' { Write-Error $Content }
-        'Warning' { Write-Warning $Content }
-    }
 }
 
 function Invoke-MsiWithRetry {
@@ -791,6 +785,39 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\Software\Policies\Microsoft\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })
         }
 
+        # Cloud-only identity with storage keys (EntraId) requires credentials to be stored
+        # in Credential Manager via cmdkey so FSLogix can authenticate to Azure Files.
+        # "Network Access: Do not allow storage of passwords and credentials for network
+        # authentication" (DisableDomainCreds) is an older STIG control not commonly seen
+        # in current STIG releases, but may still be enforced by legacy baselines or other
+        # policy. This is a belt-and-suspenders measure: applying Disabled (0) via secedit
+        # ensures the Security Configuration Engine does not silently revert the setting on
+        # the next policy refresh, keeping cmdkey credentials intact across reboots.
+        If ($IdentitySolution -eq 'EntraId') {
+            Write-Log -message "EntraId identity with storage keys detected - setting 'DisableDomainCreds' to 0 (Disabled) via secedit so FSLogix storage key credentials can be stored in Credential Manager."
+            $seceditInf = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.inf'
+            $seceditDb  = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.sdb'
+            $seceditLog = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.log'
+            $infLines = @(
+                '[Unicode]'
+                'Unicode=yes'
+                '[Version]'
+                'signature="$CHICAGO$"'
+                'Revision=1'
+                '[Registry Values]'
+                'MACHINE\System\CurrentControlSet\Control\Lsa\DisableDomainCreds=4,0'
+            )
+            [System.IO.File]::WriteAllLines($seceditInf, $infLines, [System.Text.Encoding]::Unicode)
+            $secedit = Start-Process -FilePath 'secedit.exe' `
+                -ArgumentList "/configure /cfg `"$seceditInf`" /db `"$seceditDb`" /log `"$seceditLog`" /quiet" `
+                -Wait -PassThru -NoNewWindow
+            Write-Log -Message "secedit.exe exited with code [$($secedit.ExitCode)]."
+            If ($secedit.ExitCode -ne 0) {
+                Write-Log -Category Warning -Message "secedit returned a non-zero exit code. Review log at '$seceditLog'."
+            }
+            Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue
+        }
+
         # Windows Defender Exclusions for FSLogix
         $LocalPathExclusions = @(
             "$env:ProgramData\FSLogix",
@@ -852,35 +879,31 @@ try {
     # Resize OS Disk
     Write-Log -Message "Resizing OS Disk"
     try {
-        $driveLetter = $env:SystemDrive.Substring(0, 1)
-        $currentPartition = Get-Partition -DriveLetter $driveLetter -ErrorAction Stop
-        $currentSizeGB = [math]::Round($currentPartition.Size / 1GB, 2)
-        Write-Log -Message "Current partition size: $currentSizeGB GB (drive: $driveLetter)"
+        $DriveLetter = $env:SystemDrive.TrimEnd(':')
+        Update-HostStorageCache -ErrorAction SilentlyContinue
+        $Part = Get-Partition -DriveLetter $DriveLetter -ErrorAction Stop
+        $CurrentSizeGB = [math]::Round($Part.Size / 1GB, 2)
+        Write-Log -Message "Current partition size: $CurrentSizeGB GB (drive: $DriveLetter)"
 
-        $size = Get-PartitionSupportedSize -DriveLetter $driveLetter -ErrorAction Stop
-        $maxSizeGB = [math]::Round($size.SizeMax / 1GB, 2)
-        $minSizeGB = [math]::Round($size.SizeMin / 1GB, 2)
-        Write-Log -Message "Partition supported size range: Min=$minSizeGB GB, Max=$maxSizeGB GB"
+        # Use diskpart to extend - bypasses VDS entirely, no timing race on first boot.
+        $diskpartScript = "select disk $($Part.DiskNumber)`r`nselect partition $($Part.PartitionNumber)`r`nextend"
+        $scriptPath = Join-Path $env:TEMP 'diskpart_extend.txt'
+        [System.IO.File]::WriteAllText($scriptPath, $diskpartScript, [System.Text.Encoding]::ASCII)
+        $diskpartOutput = & diskpart /s $scriptPath 2>&1
+        Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
+        Write-Log -Message "Diskpart result: $($diskpartOutput -join ' | ')"
 
-        if ($null -eq $size -or $size.SizeMax -eq 0) {
-            Write-Log -Message "Get-PartitionSupportedSize returned null or zero SizeMax. Skipping resize." -Category 'Warning'
-        }
-        elseif ($currentPartition.Size -ge $size.SizeMax) {
-            Write-Log -Message "OS Disk partition ($currentSizeGB GB) is already at or above maximum supported size ($maxSizeGB GB). No resize needed."
-        }
-        else {
-            Resize-Partition -DriveLetter $driveLetter -Size $size.SizeMax -ErrorAction Stop
-            Write-Log -Message "OS Disk resized successfully from $currentSizeGB GB to $maxSizeGB GB"
+        $PartAfter = Get-Partition -DriveLetter $DriveLetter -ErrorAction SilentlyContinue
+        if ($PartAfter -and $PartAfter.Size -gt $Part.Size) {
+            $NewSizeGB = [math]::Round($PartAfter.Size / 1GB, 2)
+            Write-Log -Message "OS Disk resized successfully: $CurrentSizeGB GB -> $NewSizeGB GB"
+        } else {
+            Write-Log -Message "OS Disk is already at maximum size. No resize needed."
         }
     }
     catch {
-        if ($_.Exception.Message -like "*already the requested size*") {
-            Write-Log -Message "OS Disk is already at maximum size. No resize needed."
-        }
-        else {
-            Write-Log -Message "Failed to resize OS Disk: $($_.Exception.Message)" -Category 'Warning'
-            Write-Log -Message "Continuing with deployment..."
-        }
+        Write-Log -Message "Failed to resize OS Disk: $($_.Exception.Message)" -Category 'Warning'
+        Write-Log -Message "Continuing with deployment..."
     }
     
     Write-Log -Message "Phase 1: Session Host Configuration Complete"

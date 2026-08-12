@@ -1,40 +1,27 @@
-# FSLogix Storage Quota Manager Add-On
+﻿# FSLogix Storage Quota Manager Add-On
 
 ## Overview
 
-The FSLogix Storage Quota Manager is an automated Azure Function that monitors all file shares in a specified storage resource group and automatically increases quotas when capacity thresholds are reached. This add-on is designed for FSLogix profile storage using Azure Files Premium.
+The FSLogix Storage Quota Manager is an Azure Automation Account runbook that monitors all Azure Files Premium file shares in a specified storage resource group and automatically increases quotas when capacity thresholds are reached. This add-on is designed to prevent FSLogix profile containers from running out of space without requiring manual intervention.
 
 ## Features
 
 - **Automated Quota Management**: Monitors all file shares in a storage resource group and automatically increases quotas to prevent storage exhaustion
-- **Smart Tiered Scaling Logic**: 
-  - **Small shares (< 500GB)**: Increases by 100GB when less than 50GB remains (allows time for gradual AVD stamp rollout)
-  - **Large shares (≥ 500GB)**: Increases by 500GB when less than 500GB remains (ensures capacity during mass onboarding)
+- **Smart Tiered Scaling**:
+  - **Small shares (< 500 GB)**: Increases by 100 GB when fewer than 50 GB remain
+  - **Large shares (>= 500 GB)**: Increases by 500 GB when fewer than 500 GB remain
   - **Zero usage**: No action taken on unused shares
-- **Automatic Storage Discovery**: Discovers all file shares in the specified storage resource group dynamically
-- **Flexible Infrastructure**: Deploy with new or existing App Service Plan
-- **Zero Trust Networking**: Optional private endpoints for function app and supporting storage account, plus VNet integration
-- **Customer-Managed Encryption**: Optional customer-managed keys (CMK) using Azure Key Vault for function app storage
-- **RBAC-Based Security**: Uses system-assigned managed identity with Storage Account Contributor role scoped to the storage resource group
-
-## How It Works
-
-1. **Timer Trigger**: Azure Function runs on a configurable schedule (default: every 15 minutes)
-2. **Storage Discovery**: Lists all storage accounts in the specified resource group
-3. **Share Analysis**: For each storage account, enumerates all file shares and checks usage
-4. **Intelligent Scaling**: Applies tiered logic based on current quota and remaining capacity
-5. **Automatic Increase**: Issues REST API calls to increase quotas when thresholds are met
-6. **Detailed Logging**: Records all quota changes and decisions to the Azure Functions execution log
+- **Lightweight Infrastructure**: Azure Automation Account (Basic SKU) - no App Service Plan,
+  no function app storage account, no private endpoints required
+- **RBAC-Based Security**: System-assigned managed identity with Storage Account Contributor
+  scoped to the storage resource group — no stored credentials, no secrets
+- **All-cloud Support**: Works in Azure Commercial, Government, and air-gapped clouds
 
 ## Prerequisites
 
-- Azure resource group containing FSLogix storage accounts with Azure Files Premium file shares
-- Permissions to deploy resources and assign RBAC roles
-- (Optional) Existing App Service Plan for cost savings
-- (Optional) VNet with subnets if using private endpoints:
-  - Subnet delegated to `Microsoft.Web/serverFarms` for function app VNet integration
-  - Subnet for private endpoints (function app and storage)
-  - Private DNS zones for blob, file, queue, table, and function app services
+- Azure resource group where the Automation Account will be deployed
+- Resource group containing FSLogix Azure Files Premium storage accounts
+- Permissions to deploy resources and assign RBAC roles at resource group scope
 
 ## Deployment Methods
 
@@ -42,465 +29,214 @@ The FSLogix Storage Quota Manager is an automated Azure Function that monitors a
 
 Click the button for your target cloud to open the deployment UI in Azure Portal:
 
-[![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FStorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FStorageQuotaManager%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FStorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FStorageQuotaManager%2FuiFormDefinition.json)
+[![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json)
 
-**⚠️ Note:** For Air-Gapped clouds (Secret/Top Secret), create Template Specs using [`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1) with `-CreateAddOns $true` or use PowerShell/CLI deployment methods below.
-
-### Azure Portal (Manual Template)
-
-1. Navigate to **Azure Portal**
-2. Search for **Deploy a custom template**
-3. Select **Build your own template in the editor**
-4. Upload `main.bicep` from this directory
-5. Fill in the required parameters:
-   - **storageResourceGroupId**: Full resource ID of the resource group containing your FSLogix storage accounts
-   - **functionAppResourceGroupName**: Name of the resource group where the function app will be deployed
-   - **location**: Azure region for the function app
-6. Configure optional parameters as needed (host pool association, networking, encryption)
-7. Review and create
+> For air-gapped clouds (Secret / Top Secret) or internet-restricted environments, see
+> [Air-Gapped Deployment](#air-gapped-deployment) below. For Template Specs, use
+> [`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1) with `-CreateAddOns $true`.
 
 ### Azure CLI
 
 ```bash
-az deployment sub create \
-  --location eastus \
+az deployment group create \
+  --resource-group rg-avd-automation \
   --template-file main.json \
   --parameters \
-    functionAppResourceGroupName='rg-avd-sqm' \
-    storageResourceGroupId='/subscriptions/{sub-id}/resourceGroups/{storage-rg-name}' \
-    location='eastus' \
-    hostPoolResourceId='/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/{hp-name}'
+    storageResourceGroupId='/subscriptions/{sub-id}/resourceGroups/{storage-rg}' \
+    location='usgovvirginia'
 ```
 
 ### Azure PowerShell
 
 ```powershell
-New-AzSubscriptionDeployment `
-  -Location 'eastus' `
+New-AzResourceGroupDeployment `
+  -ResourceGroupName 'rg-avd-automation' `
   -TemplateFile '.\main.json' `
-  -functionAppResourceGroupName 'rg-avd-sqm' `
-  -storageResourceGroupId '/subscriptions/{sub-id}/resourceGroups/{storage-rg-name}' `
-  -location 'eastus' `
-  -hostPoolResourceId '/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.DesktopVirtualization/hostPools/{hp-name}'
+  -storageResourceGroupId '/subscriptions/{sub-id}/resourceGroups/{storage-rg}' `
+  -location 'usgovvirginia'
 ```
 
 ## Parameters
 
-### Required Parameters
+### Required
 
 | Parameter | Description |
-|-----------|-------------|
-| `functionAppResourceGroupName` | **Required.** Name of the resource group where the function app and its supporting resources are deployed. |
-| `storageResourceGroupId` | **Required.** Full resource ID of the resource group containing FSLogix storage accounts. The function will monitor ALL storage accounts and file shares in this resource group. |
+| --- | --- |
+| `storageResourceGroupId` | Full resource ID of the resource group containing FSLogix storage accounts. The runbook monitors **all** storage accounts and file shares in this group. |
 
-#### Optional — but required together
+### Optional
 
-| Parameter | Description |
-|-----------|-------------|
-| `hostPoolResourceId` | Resource ID of an AVD host pool. Used for tagging and automatic naming convention detection. Leave empty for standalone storage scenarios (e.g., App Attach); when empty, `functionAppNameOverride` and `storageAccountNameOverride` must be provided. |
-
-### Optional Parameters
-
-#### Infrastructure Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `location` | string | Resource group location | Azure region for function app deployment |
-| `tags` | object | {} | Tags to apply to all deployed resources |
-| `appServicePlanResourceId` | string | '' | Resource ID of existing App Service Plan. Leave empty to create a new PremiumV3 P1v3 plan. |
-| `zoneRedundant` | bool | false | Enable zone redundancy for new App Service Plan (requires 3 instances). Only applies if creating new plan. |
-
-#### Networking Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `privateEndpoint` | bool | false | Enable private endpoints for function app storage and function app itself. |
-| `privateEndpointSubnetResourceId` | string | '' | Subnet for private endpoints. **Required if** `privateEndpoint=true`. |
-| `functionAppDelegatedSubnetResourceId` | string | '' | Subnet delegated to `Microsoft.Web/serverFarms` for VNet integration. **Required if** `privateEndpoint=true`. |
-| `azureBlobPrivateDnsZoneResourceId` | string | '' | Private DNS Zone for blob storage. Required for private endpoint DNS resolution. |
-| `azureFunctionAppPrivateDnsZoneResourceId` | string | '' | Private DNS Zone for function app. Required for private endpoint DNS resolution. |
-| `permittedIPs` | array | [] | Array of permitted IP addresses or CIDR blocks allowed through the firewall of the storage account and function app. Use when managing from a trusted workstation outside the Azure network boundary. |
-
-#### Encryption Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `keyManagementStorageAccounts` | string | 'PlatformManaged' | Encryption key management. Options: `PlatformManaged`, `CustomerManaged`, `CustomerManagedHSM` |
-| `encryptionKeyVaultResourceId` | string | '' | Key Vault resource ID for customer-managed keys. **Required if** using `CustomerManaged` or `CustomerManagedHSM`. |
-
-#### Execution Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `timerSchedule` | string | '0 */15 * * * *' | Timer trigger CRON expression. Default runs every 15 minutes. Common values:<br>• `0 */5 * * * *` - Every 5 minutes<br>• `0 */30 * * * *` - Every 30 minutes<br>• `0 0 * * * *` - Every hour |
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `location` | Resource group location | Azure region for the Automation Account. |
+| `tags` | `{}` | Tags applied to all deployed resources. |
+| `automationAccountNameOverride` | _(derived)_ | Explicit name for the Automation Account. If empty, derived from the storage resource group using the pattern `aa-sqm-{unique}-{region}`. |
+| `scheduleFrequencyMinutes` | `15` | How often the runbook checks quotas, in minutes. Minimum 15. |
+| `runbookContentUri` | GitHub raw URL | URI of the runbook PS1 file fetched by Azure at deployment. Leave empty for air-gapped environments — see [Air-Gapped Deployment](#air-gapped-deployment). |
+| `logAnalyticsWorkspaceResourceId` | _(none)_ | Log Analytics Workspace resource ID for Automation Account diagnostic settings (job logs and metrics). |
+| `createJobSchedule` | `true` | Leave `true` for all standard deployments. Set `false` **only** if you receive a `Conflict / jobSchedule already exists` error — this occurs when the account was deleted from ARM and recreated with the same name. |
+| `deploymentTime` | _(utcNow)_ | UTC timestamp used to compute the initial schedule start time (10 minutes after deployment). |
 
 ## Architecture
 
 ### Deployed Resources
 
-1. **Azure Function App** (PowerShell 7.4)
-   - Runtime: PowerShell
-   - Function: `auto-increase-file-share-quota`
-   - Trigger: Timer (configurable schedule)
-   - Identity: System-assigned managed identity
-   - RBAC: Storage Account Contributor on storage resource group
+| Resource | Purpose |
+| --- | --- |
+| **Azure Automation Account** (Basic SKU) | Hosts the runbook, schedule, variables, and managed identity |
+| **Automation Variables** | `ResourceGroupName`, `SubscriptionId`, `ResourceManagerUri` — read by the runbook at runtime |
+| **PowerShell 7.2 Runbook** | `Set-StorageQuota` — quota monitoring and scaling logic |
+| **Schedule** | Minute-frequency recurring trigger (default every 15 min) |
+| **Job Schedule** | Links the runbook to the schedule |
+| **Role Assignment** | Storage Account Contributor on the storage resource group |
 
-2. **Function App Storage Account** (Standard_LRS)
-   - Purpose: Function app backend (code, state, logs)
-   - Encryption: Platform-managed or customer-managed keys
-   - Private endpoints: Optional (blob only; queue and table storage are disabled)
+### Why Automation Account Instead of Function App?
 
-3. **App Service Plan** (PremiumV3 P1v3, optional)
-   - Created only if `appServicePlanResourceId` is empty
-   - Default SKU: P1v3 (2 vCPU, 8 GB RAM); configurable via UI (P0v3–P3v3)
-   - Zone redundancy: Optional
+Azure Automation is a better fit for this workload because all operations are ARM control-plane
+calls to `management.azure.com` — there is no data-plane storage access and no inbound traffic.
+This eliminates the need for:
 
-4. **Private Endpoints** (optional, if `privateEndpoint=true`)
-   - Function app storage: blob, file, queue, table
-   - Function app: sites endpoint
+- App Service Plan
+- Function app storage account
+- Private endpoints and VNet integration
+- Customer-managed encryption keys
 
-### Resource Naming
+The result is a simpler, cheaper deployment with a smaller attack surface.
 
-The add-on automatically determines resource naming conventions by analyzing the provided hostpool name:
+## Air-Gapped Deployment
 
-- **Resource Type at Start**: `hp-avd-01` → Function app: `fa-quotamanagement-abc123-avd-01-eus`
-- **Resource Type at End**: `avd-01-hp` → Function app: `avd-01-fa-quotamanagement-abc123-eus`
+In Secret, Top Secret, and other internet-restricted environments, Azure's deployment
+infrastructure cannot reach the public GitHub URI used by default for the runbook.
 
-Naming includes:
+### Option 1 — Clear the URI, publish manually (recommended)
 
-- Hostpool identifier and index
-- Unique string from storage resource group ID
-- Region abbreviation
-- Resource type abbreviation
+1. Set `runbookContentUri` to an empty string `''` (or clear the field in the Portal UI).
+2. Deploy the template. The Automation Account, schedule, and job schedule are all created.
+   The runbook (`Set-StorageQuota`) is created in **New** (unpublished) state — jobs will
+   not run until it is published.
+3. Publish the runbook using one of the methods below.
 
-## Function Logic
+#### Publish via Azure Portal
 
-The PowerShell function (`auto-increase-file-share-quota`) executes the following logic:
+1. Navigate to the Automation Account in the Azure Portal.
+2. Under **Process Automation**, select **Runbooks**.
+3. Click **Import a runbook**.
+4. Browse to `runbook/run.ps1` from this add-on directory.
+5. Set **Runbook type** to **PowerShell 7.2**.
+6. Click **Create**, then open the runbook and click **Publish**.
+
+#### Publish via PowerShell (from a connected machine)
+
+```powershell
+$rg   = 'rg-avd-automation'
+$aa   = 'aa-sqm-abc123-usge'   # Automation Account name from deployment outputs
+$file = '.\runbook\run.ps1'
+
+Import-AzAutomationRunbook `
+  -ResourceGroupName $rg `
+  -AutomationAccountName $aa `
+  -Path $file `
+  -Name 'Set-StorageQuota' `
+  -Type PowerShell72 `
+  -Force
+
+Publish-AzAutomationRunbook `
+  -ResourceGroupName $rg `
+  -AutomationAccountName $aa `
+  -Name 'Set-StorageQuota'
+```
+
+### Option 2 — Host the runbook internally
+
+Upload `runbook/run.ps1` to an internal web server or Azure Blob Storage (using a SAS URL)
+and set `runbookContentUri` to that URI. Azure deployment infrastructure fetches from that
+URI during template deployment.
+
+> **Note on SAS URLs and Zero Trust**: Generating SAS tokens requires shared key access on
+> the storage account. If your environment enforces shared key disablement (ZTI policy),
+> use Option 1 (manual publish) instead.
+
+## Runbook Logic
+
+The runbook (`Set-StorageQuota`) runs on its configured schedule and applies the following
+quota scaling logic to every file share in the storage resource group:
+
+| Current Quota | Remaining Capacity | Action | New Quota |
+| --- | --- | --- | --- |
+| Any | 0 GB used | None | Unchanged |
+| < 500 GB | > 50 GB remaining | None | Unchanged |
+| < 500 GB | < 50 GB remaining | +100 GB | Quota + 100 GB |
+| >= 500 GB | > 500 GB remaining | None | Unchanged |
+| >= 500 GB | < 500 GB remaining | +500 GB | Quota + 500 GB |
 
 ### Authentication
 
-- Uses system-assigned managed identity to authenticate with Azure
-- Obtains access token for Azure Resource Manager API
-- No credentials or secrets required
+The runbook authenticates using the Automation Account system-assigned managed identity
+(`Connect-AzAccount -Identity`) and then calls the Azure Storage REST API using a bearer
+token obtained from `Get-AzAccessToken`. No credentials or secrets are stored anywhere.
 
-### Discovery and Processing
+## Monitoring
 
-1. **List Storage Accounts**: Queries all storage accounts in the specified resource group
-2. **Enumerate Shares**: For each storage account, lists all file shares
-3. **Check Usage**: Retrieves current quota (provisioned capacity) and usage (used capacity in GB)
-4. **Apply Scaling Logic**: Based on current quota and remaining capacity
+Automation Account job logs are available in the Azure Portal without any additional setup:
 
-### Scaling Logic
+- **Portal**: Automation Account > Jobs — view per-execution status, output, and errors
+- **Log Analytics**: If `logAnalyticsWorkspaceResourceId` is provided, `JobLogs` and
+  `JobStreams` are forwarded for alerting and long-term retention
 
-#### No Action Scenarios
-
-- **Zero Usage**: If `UsedCapacity = 0`, no changes are made
-- **Above Threshold**: If remaining capacity exceeds the threshold, no action taken
-
-#### Small Share Scaling (Quota < 500GB)
-
-```
-IF UsedCapacity > 0 AND (ProvisionedCapacity - UsedCapacity) < 50GB
-THEN Increase quota by 100GB
-```
-
-- **Threshold**: 50GB remaining
-- **Increase**: 100GB
-- **Purpose**: Gradual scaling for new/small AVD deployments
-
-#### Large Share Scaling (Quota ≥ 500GB)
-
-```
-IF UsedCapacity > 0 AND (ProvisionedCapacity - UsedCapacity) < 500GB
-THEN Increase quota by 500GB
-```
-
-- **Threshold**: 500GB remaining
-- **Increase**: 500GB
-- **Purpose**: Aggressive scaling for production/mass onboarding
-
-### Example Scenarios
-
-| Current Quota | Used Capacity | Remaining | Action | New Quota | Reason |
-|---------------|---------------|-----------|--------|-----------|--------|
-| 100 GB | 0 GB | 100 GB | None | 100 GB | No usage |
-| 100 GB | 55 GB | 45 GB | +100 GB | 200 GB | < 50GB remains (small share) |
-| 200 GB | 160 GB | 40 GB | +100 GB | 300 GB | < 50GB remains (small share) |
-| 450 GB | 180 GB | 270 GB | None | 450 GB | > 50GB remains (small share) |
-| 500 GB | 50 GB | 450 GB | None | 500 GB | > 500GB remains (large share) |
-| 600 GB | 150 GB | 450 GB | +500 GB | 1100 GB | < 500GB remains (large share) |
-| 1000 GB | 550 GB | 450 GB | +500 GB | 1500 GB | < 500GB remains (large share) |
-| 1500 GB | 800 GB | 700 GB | None | 1500 GB | > 500GB remains (large share) |
-
-## Monitoring and Logging
-
-Function execution history is available directly in the Azure Portal without any additional resources:
-
-- Navigate to **Function App → Functions → `auto-increase-file-share-quota` → Monitor**
-- View per-invocation logs, success/failure status, duration, and output
-- Set up Azure Monitor alerts on the Function App for failure notifications
-
-### Metrics to Monitor
-
-- **Function Executions**: Monitor execution count and duration
-- **Function Failures**: Alert on failed executions
-- **Storage Capacity**: Track file share quota and usage over time (via Azure Storage metrics)
+Set up an Azure Monitor alert on the `JobLogs` table filtering for `ResultType == Failed`
+to receive notifications on runbook failures.
 
 ## Security
 
-### Managed Identity and RBAC
-
-The function app uses a **system-assigned managed identity** with the following permissions:
-
-| Role | Scope | Purpose |
-|------|-------|---------|
-| **Storage Account Contributor** | Storage resource group | List storage accounts, enumerate file shares, read usage, update quotas |
-
-### Least Privilege Design
-
-- No subscription-level permissions required
-- Scoped to only the storage resource group
-- No access to storage data (only management plane)
-- Identity is auto-created and auto-managed
-
-### Network Security
-
-When private endpoints are enabled:
-
-- Function app storage account is isolated from public internet
-- Function app sites endpoint can be private
-- VNet integration allows function to access storage privately
-- All traffic remains on Azure backbone
-
-### Key Management
-
-**Microsoft-Managed Keys (Default)**:
-
-- No additional configuration
-- Keys managed by Azure Storage
-- Simplest option
-
-**Customer-Managed Keys**:
-
-- Keys stored in Azure Key Vault
-- Function app storage identity gets Key Vault Crypto Service Encryption User role
-- Automatic key rotation supported
-- 180-day expiry with automatic renewal at 173 days
+| Control | Implementation |
+| --- | --- |
+| **Authentication** | System-assigned managed identity — no stored credentials |
+| **Authorization** | Storage Account Contributor on storage resource group only |
+| **Scope** | ARM management plane only — no data plane access |
+| **Network** | No inbound endpoints, no VNet required |
+| **Secrets** | None — Automation Variables are not encrypted (resource group / subscription ID are not sensitive) |
 
 ## Troubleshooting
 
-### Function Not Executing
+### Runbook not executing
 
-**Symptoms**: No quota increases, no execution history in the Azure Functions Monitor tab
+- Verify the runbook status is **Published** (not New). See [Air-Gapped Deployment](#air-gapped-deployment) for publish steps.
+- Confirm the job schedule link exists: Automation Account > Schedules > click the schedule > Linked runbooks.
+- If this is a redeployment and the job schedule was not created, manually link the runbook to the schedule in the Portal.
 
-**Checks**:
+### Quota not increasing
 
-1. Verify timer trigger schedule is correct
-2. Check function app is running (not stopped)
-3. Review function app configuration in Azure Portal
+1. **Permissions** — verify the managed identity has Storage Account Contributor on the storage resource group:
 
-**Resolution**:
-
-- Navigate to Function App → Functions → `auto-increase-file-share-quota` → Monitor
-- Check execution history and logs
-
-### Quota Not Increasing
-
-**Symptoms**: Function executes but quotas remain unchanged
-
-**Checks**:
-
-1. **Permissions**: Verify managed identity has Storage Account Contributor role
-
-   ```bash
-   az role assignment list --assignee <function-app-principal-id> --scope <storage-rg-id>
+   ```powershell
+   $principalId = (Get-AzAutomationAccount -ResourceGroupName <rg> -Name <aa-name>).Identity.PrincipalId
+   Get-AzRoleAssignment -ObjectId $principalId
    ```
 
-2. **Usage Threshold**: Confirm file shares have enough usage to trigger increase
-   - Small shares (< 500GB): Need < 50GB remaining
-   - Large shares (≥ 500GB): Need < 500GB remaining
+2. **Threshold** — confirm shares have enough usage to trigger the logic (< 50 GB or < 500 GB remaining).
+3. **Automation Variables** — check that `ResourceGroupName`, `SubscriptionId`, and `ResourceManagerUri` are set correctly under the Automation Account > Shared Resources > Variables.
 
-3. **Storage Account Access**: Ensure storage accounts are not locked or have restrictive policies
+### Authentication errors in job output
 
-4. **Logs**: Review the Azure Functions Monitor tab for specific error messages
+- Confirm the system-assigned managed identity is enabled on the Automation Account.
+- Re-run the role assignment module or manually assign Storage Account Contributor.
 
-**Resolution**:
+### Storage accounts not found
 
-- Grant Storage Account Contributor role if missing
-- Wait for usage to reach threshold
-- Check for resource locks on storage accounts
-
-### Authentication Errors
-
-**Symptoms**: Logs show "Failed to authenticate Azure"
-
-**Checks**:
-
-1. Verify system-assigned managed identity is enabled on function app
-2. Confirm identity has correct RBAC assignment
-3. Check for Azure Active Directory issues
-
-**Resolution**:
-
-```powershell
-# Re-enable system-assigned identity
-$functionApp = Get-AzWebApp -ResourceGroupName <rg> -Name <function-app-name>
-Set-AzWebApp -ResourceGroupName <rg> -Name <function-app-name> -AssignIdentity $true
-
-# Assign Storage Account Contributor role
-$identity = (Get-AzWebApp -ResourceGroupName <rg> -Name <function-app-name>).Identity.PrincipalId
-New-AzRoleAssignment -ObjectId $identity -RoleDefinitionName "Storage Account Contributor" -Scope <storage-rg-id>
-```
-
-### Storage Account Not Found
-
-**Symptoms**: Function logs show "storage accounts not found" or empty results
-
-**Checks**:
-
-1. Verify `storageResourceGroupId` parameter is correct (full resource ID)
-2. Confirm storage accounts exist in the specified resource group
-3. Check subscription ID in the resource ID matches where storage accounts are located
-
-**Resolution**:
-
-- Correct the `storageResourceGroupId` parameter in deployment
-- Redeploy if necessary
-
-### Private Endpoint Issues
-
-**Symptoms**: Function cannot reach storage APIs, timeout errors
-
-**Checks**:
-
-1. Verify private DNS zones are correctly configured
-2. Confirm VNet integration subnet has connectivity to private endpoint subnet
-3. Check NSG rules on subnets
-4. Verify private DNS zone resource IDs are correct
-
-**Resolution**:
-
-- Test DNS resolution from function app
-- Review VNet peering and routing
-- Validate private DNS zone links to VNets
-
-## Cost Considerations
-
-### Monthly Cost Estimates (US East)
-
-| Component | Configuration | Estimated Cost |
-|-----------|---------------|----------------|
-| **App Service Plan** | PremiumV3_P0v3 (1 instance, new) | ~$120/month |
-| **App Service Plan** | Shared with existing functions | ~$0/month (shared cost) |
-| **Function App Storage** | Standard_LRS, minimal usage | ~$2/month |
-| **Private Endpoints** | 5 endpoints (if enabled) | ~$20/month |
-| **Total (New Plan)** | - | ~$142/month |
-| **Total (Shared Plan)** | - | ~$22/month |
-
-### Cost Optimization Tips
-
-1. **Share App Service Plan**: Use existing App Service Plan from another function to eliminate ~$75/month
-2. **Adjust Timer Schedule**: Less frequent checks reduce function execution costs (minimal impact)
-3. **Skip Private Endpoints**: If not required for compliance, save ~$20/month
-5. **Right-Size App Service Plan**: If shared with minimal workload, consider B1 tier (~$13/month)
-
-## Best Practices
-
-### Deployment
-
-- Deploy function app to the same Azure region as your storage accounts for optimal performance
-- Use an existing App Service Plan if available to reduce costs
-- Tag resources appropriately using the `tags` parameter
-
-### Monitoring
-
-- Set up Azure Monitor alerts on the Function App for failure notifications
-- Review quota increase patterns monthly to understand growth
-- Monitor storage account metrics to validate quota increases align with usage
-
-### Security
-
-- Use private endpoints for production environments handling sensitive data
-- Enable customer-managed keys for compliance requirements
-- Regularly review RBAC assignments
-- Use Azure Policy to enforce network and encryption standards
-
-### Scaling
-
-- Adjust timer schedule based on user onboarding patterns (e.g., more frequent during mass onboarding)
-- Consider multiple storage resource groups if using sharded storage architecture
-- For very large environments (100+ shares), consider increasing App Service Plan SKU
+- Verify `storageResourceGroupId` is the correct full resource ID (including subscription).
+- Confirm the storage accounts exist in that resource group.
 
 ## Limitations
 
-- **Scope**: Function monitors all storage accounts and file shares in the specified resource group; cannot selectively exclude shares
-- **Azure Files Premium Only**: Designed for Premium tier file shares (supports quotas up to 100 TiB)
-- **Single Resource Group**: Monitors one storage resource group per function deployment
-- **No Quota Decrease**: Function only increases quotas; manual intervention required to decrease
-- **Timer Granularity**: Minimum practical schedule is every 5 minutes (more frequent not recommended)
-- **REST API Only**: Uses Azure REST APIs directly (not Az PowerShell module) to minimize cold start time
-
-## Frequently Asked Questions
-
-### Can I use this with Azure Files Standard tier?
-
-Yes, the function supports any Azure Files tier. However, the scaling logic is optimized for Premium tier where performance scales with provisioned capacity.
-
-### What happens if I delete a file share?
-
-The function skips shares that no longer exist. No errors are logged for non-existent shares.
-
-### Can I monitor multiple storage resource groups?
-
-No, each function deployment monitors one resource group. Deploy multiple instances for multiple resource groups.
-
-### How do I change the timer schedule after deployment?
-
-Update the `timerSchedule` parameter and redeploy, or manually edit the function configuration in Azure Portal.
-
-### Does this work with NetApp Files?
-
-No, this add-on is specifically designed for Azure Files. NetApp Files quotas are managed differently.
-
-### Can I customize the scaling thresholds?
-
-Yes, edit the `run.ps1` script and redeploy. The thresholds (50GB, 500GB) and increase amounts (100GB, 500GB) are in the script.
-
-### What if my storage accounts are in a different subscription?
-
-The function supports cross-subscription scenarios. Ensure the managed identity has Storage Account Contributor role in the target subscription's storage resource group.
+- Monitors all storage accounts and file shares in the specified resource group — no per-share exclusions
+- Single resource group per deployment (deploy multiple instances for multiple groups)
+- Quota only increases — manual decreases are possible via Portal or PowerShell but are limited to once per 24 hours and cannot go below current used size
+- Minimum schedule interval is 15 minutes (Azure Automation constraint)
+- No data-plane access — cannot read file content, only management plane quota metadata
 
 ## Related Documentation
 
+- [Azure Automation Runbooks](https://learn.microsoft.com/azure/automation/automation-runbook-types)
 - [Azure Files Premium Tier](https://learn.microsoft.com/azure/storage/files/storage-files-planning#premium-tier)
 - [FSLogix Profile Containers](https://learn.microsoft.com/fslogix/profile-container-configuration-reference)
-- [Azure Functions Timer Trigger](https://learn.microsoft.com/azure/azure-functions/functions-bindings-timer)
-- [Azure Function PowerShell Developer Guide](https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell)
 - [Azure Managed Identities](https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/overview)
-- [Azure Storage Account Contributor Role](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#storage-account-contributor)
-
-## Support
-
-For issues, questions, or feature requests:
-
-1. Review this documentation thoroughly
-2. Check Application Insights logs for error details
-3. Consult the [Troubleshooting](#troubleshooting) section
-4. Create an issue in the GitHub repository with:
-   - Detailed description of the problem
-   - Relevant logs from Application Insights
-   - Deployment parameters (redact sensitive information)
-   - Steps to reproduce
-
-## Change Log
-
-### Version 1.0
-
-- Initial release
-- PowerShell 7.4 function app
-- Tiered scaling logic (100GB/500GB increases)
-- Automatic storage account and file share discovery
-- System-assigned managed identity with Storage Account Contributor
-- Application Insights integration
-- Private endpoint support
-- Customer-managed encryption key support

@@ -1,4 +1,4 @@
-# Configure-RemoteDesktopServicesPolicy.ps1
+﻿# Configure-RemoteDesktopServicesPolicy.ps1
 
 ## Overview
 
@@ -16,65 +16,100 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 
 ### `MaxIdleTime`
 
-- **Type:** String
-- **Default:** `'21600000'` (6 hours)
-- **Format:** Milliseconds
-- **Description:** Maximum time an active session can remain idle before being disconnected
-- **Range:** `0` (no limit) to `4294967295` (max value)
+- **Type:** String (ADMX label)
+- **Default:** `'3 Hours'`
+- **Values:** See [Common Timeout Values](#common-timeout-values) table below
+- **Description:** Maximum time an active session can remain idle before the action defined by `EndSessionOnLimit` is taken (disconnect or logoff). The script converts the label to the corresponding millisecond DWORD value before writing to `Registry.pol`.
 
-### `MaxDisconnectionionTime`
+### `MaxDisconnectionTime`
+
+- **Type:** String (ADMX label)
+- **Default:** `'3 Hours'`
+- **Values:** See [Common Timeout Values](#common-timeout-values) table below
+- **Description:** Maximum time a disconnected session can remain before being logged off. Always results in logoff regardless of `EndSessionOnLimit`. The script converts the label to the corresponding millisecond DWORD value before writing to `Registry.pol`.
+
+### `EndSessionOnLimit`
 
 - **Type:** String
-- **Default:** `'21600000'` (6 hours)
-- **Format:** Milliseconds
-- **Description:** Maximum time a disconnected session can remain before being logged off
-- **Range:** `0` (no limit) to `4294967295` (max value)
+- **Default:** *(not set — OS default of `0` applies)*
+- **Values:** `0` or `1`
+- **Description:** Controls whether session time limit expiry disconnects or ends (logs off) the session. Maps to the Group Policy setting **"End session when time limits are reached"** (registry value `fResetBroken`). When not passed, this value is not written and the OS default (`0`) is preserved.
+  - `0` — Idle timeout **disconnects** the session. The FSLogix profile VHD stays mounted. Compaction does not run until `MaxDisconnectionTime` subsequently expires and forces a logoff.
+  - `1` — Idle timeout **logs off** the session immediately. The FSLogix profile VHD is dismounted and compaction runs at logoff.
+
+### `DisconnectOnLockMsIdentity`
+
+- **Type:** String
+- **Default:** *(not set — OS default applies)*
+- **Values:** `0` or `1`
+- **Description:** Controls whether locking the remote session disconnects the RDP client or shows the remote lock screen. Only relevant when **Entra ID SSO** is enabled on the host pool. Maps to the Group Policy setting **"Disconnect remote session on lock for Microsoft identity platform authentication"** (registry value `fDisconnectOnLockMicrosoftIdentity`). When not passed, this value is not written.
+  - `1` — Session **disconnects** when locked (OS default for Entra ID SSO). `MaxDisconnectionTime` starts immediately. `MaxIdleTime` is bypassed if `MachineInactivityTimeout` fires first.
+  - `0` — Remote **lock screen** is shown instead of disconnecting. Both `MaxIdleTime` and `MaxDisconnectionTime` apply as normal.
+
+### `EnableRemoteApp`
+
+- **Type:** Switch
+- **Default:** Not set (disabled)
+- **Description:** When specified, enables the enhanced shell experience for RemoteApp sessions (registry value `EnableEnhancedShellExperienceForRemoteApp`). This supports default file associations, Run/RunOnce registry keys, and other shell features in published RemoteApp programs. Has no effect on standard Remote Desktop sessions.
 
 ## Common Timeout Values
 
-| Duration | Milliseconds | Use Case |
-|----------|--------------|----------|
-| **15 minutes** | `900000` | Aggressive resource reclamation |
-| **30 minutes** | `1800000` | Moderate timeout |
-| **1 hour** | `3600000` | Standard office environment |
-| **2 hours** | `7200000` | Extended work sessions |
-| **4 hours** | `14400000` | Long-running tasks |
-| **6 hours** | `21600000` | Default (work day half) |
-| **8 hours** | `28800000` | Full work day |
-| **12 hours** | `43200000` | Extended availability |
-| **24 hours** | `86400000` | Maximum recommended |
-| **Never** | `0` | No timeout (not recommended) |
+These are the exact labels accepted by `-MaxIdleTime` and `-MaxDisconnectionTime`. They match the
+ADMX enum detents for these policies. The script converts each label to the corresponding
+millisecond DWORD value before writing to `Registry.pol`.
+
+| Label (pass as parameter) | Milliseconds | Notes |
+| :-----------------------: | :----------: | :---- |
+| `'Never'` | `0` | No timeout — not recommended for pooled hosts |
+| `'1 Minute'` | `60000` | |
+| `'5 Minutes'` | `300000` | |
+| `'10 Minutes'` | `600000` | |
+| `'15 Minutes'` | `900000` | |
+| `'30 Minutes'` | `1800000` | |
+| `'1 Hour'` | `3600000` | |
+| `'2 Hours'` | `7200000` | |
+| `'3 Hours'` | `10800000` | **Default** for both timeouts in this script |
+| `'6 Hours'` | `21600000` | |
+| `'8 Hours'` | `28800000` | |
+| `'12 Hours'` | `43200000` | |
+| `'16 Hours'` | `57600000` | |
+| `'18 Hours'` | `64800000` | |
+| `'1 Day'` | `86400000` | |
+| `'2 Days'` | `172800000` | |
+| `'3 Days'` | `259200000` | |
+| `'4 Days'` | `345600000` | |
+| `'5 Days'` | `432000000` | Maximum recommended |
 
 ## Usage Examples
 
-### Basic Usage (Default: 6 Hours)
+### Basic Usage (Default: 3-hour idle + 3-hour disconnected, disconnect on timeout)
 
 ```powershell
 .\Configure-RemoteDesktopServicesPolicy.ps1
 ```
 
-### 2-Hour Timeouts
+### Logoff on Idle Timeout (compaction runs at idle timeout)
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '7200000' -MaxDisconnectionionTime '7200000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -EndSessionOnLimit '1'
 ```
 
-### 1-Hour Idle, 4-Hour Disconnection
+### 1-Hour Idle, 12-Hour Disconnection, Logoff on Limit
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '3600000' -MaxDisconnectionionTime '14400000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '1 Hour' -MaxDisconnectionTime '12 Hours' -EndSessionOnLimit '1'
 ```
 
 ### Full Work Day (8 Hours)
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '28800000' -MaxDisconnectionionTime '28800000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '8 Hours' -MaxDisconnectionTime '8 Hours'
 ```
 
-### Aggressive Resource Reclamation (30 Minutes)
+### Aggressive Resource Reclamation (30 Minutes, logoff immediately)
 
 ```powershell
-.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '1800000' -MaxDisconnectionionTime '1800000'
+.\Configure-RemoteDesktopServicesPolicy.ps1 -MaxIdleTime '30 Minutes' -MaxDisconnectionTime '30 Minutes' -EndSessionOnLimit '1'
 ```
 
 ## What the Script Does
@@ -103,55 +138,61 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 
 ## Policy Settings Applied
 
-```
+```text
 Computer Configuration
 └── Administrative Templates
     └── Windows Components
         └── Remote Desktop Services
             └── Remote Desktop Session Host
-                └── Session Time Limits
-                    ├── Set time limit for active but idle Remote Desktop Services sessions: [Enabled]
-                    │   └── Idle session limit: [MaxIdleTime value]
-                    └── Set time limit for disconnected sessions: [Enabled]
-                        └── Disconnected session limit: [MaxDisconnectionionTime value]
+                ├── Session Time Limits
+                │   ├── Set time limit for active but idle Remote Desktop Services sessions: [Enabled]
+                │   │   └── Idle session limit: [MaxIdleTime value]
+                │   ├── Set time limit for disconnected sessions: [Enabled]
+                │   │   └── Disconnected session limit: [MaxDisconnectionTime value]
+                │   └── End session when time limits are reached: [Enabled if EndSessionOnLimit = 1]
+                └── Security
+                    └── Disconnect remote session on lock for Microsoft identity platform
+                        authentication: [Enabled/Disabled if DisconnectOnLockMsIdentity is set]
 ```
 
 ## Registry Locations
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
-  MaxIdleTime: [Value in milliseconds]
-  MaxDisconnectionTime: [Value in milliseconds]
+  MaxIdleTime:                       [Value in milliseconds]  -- idle timeout
+  MaxDisconnectionTime:              [Value in milliseconds]  -- disconnected session timeout
+  fResetBroken:                      0 or 1                   -- written only if EndSessionOnLimit is passed
+  fDisconnectOnLockMicrosoftIdentity: 0 or 1                  -- written only if DisconnectOnLockMsIdentity is passed
+  fEnableTimeZoneRedirection:        1                        -- always written
+  EnableEnhancedShellExperienceForRemoteApp: 1               -- written only if -EnableRemoteApp is passed
 ```
 
 ## Session State Diagram
 
-```
-┌──────────────┐
-│ Active       │ ◄── User actively working
-│ Session      │
-└──────┬───────┘
-       │
-       │ (No user input for MaxIdleTime)
-       ▼
-┌──────────────┐
-│ Idle         │ ◄── Session active but user not interacting
-│ Session      │
-└──────┬───────┘
-       │
-       │ (MaxIdleTime expires)
-       ▼
-┌──────────────┐
-│ Disconnected │ ◄── Session disconnected, apps still running
-│ Session      │
-└──────┬───────┘
-       │
-       │ (MaxDisconnectionTime expires)
-       ▼
-┌──────────────┐
-│ Logged Off   │ ◄── Session terminated, apps closed
-│ Session      │
-└──────────────┘
+The behavior when `MaxIdleTime` expires depends on `EndSessionOnLimit` (`fResetBroken`):
+
+```text
+Active Session (user working)
+       |
+       | (no input for MaxIdleTime)
+       |
+       +-- EndSessionOnLimit = 0 (default) --> Disconnected
+       |                                          |  VHD still mounted, compaction: NO
+       |                                          |
+       |                                          | (disconnected for MaxDisconnectionTime)
+       |                                          |
+       |                                        Logged Off
+       |                                          |  VHD dismounted, compaction: YES
+       |
+       +-- EndSessionOnLimit = 1 ------------> Logged Off
+                                                  |  VHD dismounted, compaction: YES
+
+Disconnected Session (user closed RDP client)
+       |
+       | (disconnected for MaxDisconnectionTime, regardless of EndSessionOnLimit)
+       |
+     Logged Off
+       |  VHD dismounted, compaction: YES
 ```
 
 ## Recommendations by Environment
@@ -160,32 +201,32 @@ HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
 
 **Aggressive Timeouts:**
 
-- **MaxIdleTime:** 30-60 minutes (`1800000` - `3600000`)
-- **MaxDisconnectionTime:** 30-60 minutes (`1800000` - `3600000`)
+- **MaxIdleTime:** `'30 Minutes'` to `'1 Hour'`
+- **MaxDisconnectionTime:** `'30 Minutes'` to `'1 Hour'`
 - **Reason:** Free up resources quickly; users don't expect session persistence
 
 ### Personal (Persistent) Desktops
 
 **Moderate Timeouts:**
 
-- **MaxIdleTime:** 2-4 hours (`7200000` - `14400000`)
-- **MaxDisconnectionTime:** 4-8 hours (`14400000` - `28800000`)
+- **MaxIdleTime:** `'2 Hours'` to `'6 Hours'`
+- **MaxDisconnectionTime:** `'6 Hours'` to `'8 Hours'`
 - **Reason:** Users expect session persistence; less pressure to free resources
 
 ### Task Workers (Call Centers, Data Entry)
 
 **Balanced Timeouts:**
 
-- **MaxIdleTime:** 1-2 hours (`3600000` - `7200000`)
-- **MaxDisconnectionTime:** 2-4 hours (`7200000` - `14400000`)
+- **MaxIdleTime:** `'1 Hour'` to `'2 Hours'`
+- **MaxDisconnectionTime:** `'2 Hours'` to `'6 Hours'`
 - **Reason:** Regular breaks expected; sessions should persist during lunch
 
 ### Knowledge Workers (Development, Design)
 
 **Generous Timeouts:**
 
-- **MaxIdleTime:** 4-6 hours (`14400000` - `21600000`)
-- **MaxDisconnectionTime:** 8-12 hours (`28800000` - `43200000`)
+- **MaxIdleTime:** `'6 Hours'` to `'8 Hours'`
+- **MaxDisconnectionTime:** `'8 Hours'` to `'12 Hours'`
 - **Reason:** Long meetings and research sessions; expensive to restart applications
 
 ## Impact on User Experience
@@ -232,7 +273,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Configuration\Configure-RemoteDesktopServicesPolicy-<timestamp>.log
 ```
 
@@ -244,14 +285,13 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
-| `Get-InternetFile` | Downloads files from URLs with progress tracking |
+| --- | --- |
+| `Write-Log` | Writes formatted log entries |
 | `New-Log` | Initializes logging infrastructure |
 | `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
 | `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
+| `Clear-PolicyRegistryKeyValues` | Queues deletion of all values in a Registry.pol key |
 | `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
-| `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
-| `Write-Log` | Writes formatted log entries |
 
 ## Requirements
 

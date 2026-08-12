@@ -1,4 +1,4 @@
-# Configure-Office365.ps1
+﻿# Configure-Office365.ps1
 
 ## Overview
 
@@ -137,7 +137,7 @@ This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies 
 
 ## Policy Settings Applied
 
-```
+```text
 Computer Configuration
 └── Administrative Templates
     └── Microsoft Office 2016 (Machine)
@@ -160,14 +160,14 @@ User Configuration
 
 ### Office Updates
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate
   EnableAutomaticUpdates: 0 (Disabled) or 1 (Enabled)
 ```
 
 ### Outlook Cache Settings
 
-```
+```text
 HKCU:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Cached Mode
   SyncWindowSetting: [Value based on EmailCacheTime]
   CalendarSyncWindowSetting: [Value based on CalendarSync]
@@ -177,7 +177,7 @@ HKCU:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Cached Mode
 ## Email Cache Time Values
 
 | Setting | Registry Value | Description |
-|---------|----------------|-------------|
+| --- | :---: | --- |
 | 3 days | 3 | Cache last 3 days |
 | 1 week | 7 | Cache last week |
 | 2 weeks | 14 | Cache last 2 weeks |
@@ -223,7 +223,7 @@ HKCU:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Cached Mode
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Configuration\Configure-Office365-<timestamp>.log
 ```
 
@@ -236,7 +236,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetFile` | Downloads files from URLs |
 | `Get-InternetUrl` | Extracts download URLs from web pages |
 | `New-Log` | Initializes logging infrastructure |

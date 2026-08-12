@@ -1,4 +1,4 @@
-# customer/parameters
+﻿# customer/parameters
 
 Place your environment-specific deployment parameter files here. Each subfolder corresponds to
 one deployment template.
@@ -11,7 +11,7 @@ one deployment template.
 ## Subfolder map
 
 | Subfolder | Deployment template | Sample parameters location |
-|-----------|--------------------|-----------------------------|
+| --- | --- | --- |
 | `hostpools/` | `deployments/hostpools/hostpool.bicep` | `deployments/hostpools/parameters/` |
 | `imageBuild/` | `deployments/imageBuild/imageBuild.bicep` | `deployments/imageBuild/parameters/` |
 | `imageManagement/` | `deployments/imageManagement/imageManagement.bicep` | `deployments/imageManagement/parameters/` |

@@ -1,4 +1,4 @@
-# AVD Session Hosts Add-On
+﻿# AVD Session Hosts Add-On
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Host Pool Deployment Guide](../../../docs/hostpool-deployment.md) | [Session Host Replacer](../sessionHostReplacer/README.md)
 
@@ -73,7 +73,7 @@ This template deploys at **resource group scope** — no subscription-level role
 ### Role assignments summary
 
 | Role | Scope | Required for |
-|---|---|---|
+| ---- | ----- | ------------ |
 | `Contributor` | **Hosts resource group** | Create VMs, NICs, OS disks, availability sets, extensions, Run Commands, DCR associations |
 | `Desktop Virtualization Host Pool Contributor` | **Host pool resource group** | Read host pool properties and call `listRegistrationTokens` to obtain the registration token |
 | `Key Vault Secrets User` | **Credentials Key Vault** | Read `VirtualMachineAdminPassword`, `VirtualMachineAdminUserName`, `DomainJoinUserPassword`, `DomainJoinUserPrincipalName` secrets via `getSecret()` at deployment time |
@@ -99,7 +99,7 @@ The full `hostpool.bicep` template (`targetScope = 'subscription'`) additionally
 The portal form walks through four steps:
 
 | Step | Contents |
-|------|----------|
+| ---- | -------- |
 | **Deployment Basics** | Host pool subscription and selection; auto-reads host pool tags to pre-populate defaults |
 | **Identity** | Identity solution, domain name, OU path (ADDS/EntraDS), credentials Key Vault |
 | **Session Hosts** | Subscription/region/resource group, naming, network, image, VM size, availability, security, FSLogix, monitoring, customizations |
@@ -134,7 +134,7 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Required Parameters
 
 | Parameter | Type | Description |
-|-----------|------|-------------|
+| --------- | :--: | ----------- |
 | `hostPoolResourceId` | string | Resource ID of the AVD host pool to register session hosts with |
 | `credentialsKeyVaultResourceId` | string | Resource ID of the Key Vault containing VM and domain join credentials |
 | `identitySolution` | string | Identity join method: `ActiveDirectoryDomainServices`, `EntraDomainServices`, `EntraId`, `EntraKerberos-CloudOnly`, `EntraKerberos-Hybrid` |
@@ -144,7 +144,7 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Session Host Count and Naming
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `sessionHostCount` | int | `0` | Number of session hosts to deploy (convention mode) |
 | `sessionHostIndex` | int | `0` | Starting index for VM name generation (convention mode) |
 | `sessionHostNamePrefix` | string | `''` | Short name prefix (e.g. `avd`); ignored when `sessionHostNames` is set |
@@ -154,20 +154,16 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Image
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `imageReference` | object | `{}` | Pre-built image reference object; takes precedence over offer/SKU/gallery fields |
-| `imagePublisher` | string | `MicrosoftWindowsDesktop` | Marketplace image publisher |
-| `imageOffer` | string | `''` | Marketplace image offer (e.g. `Office-365`, `Windows-11`) |
-| `imageSku` | string | `''` | Marketplace image SKU (e.g. `win11-25h2-avd-m365`) |
-| `customImageResourceId` | string | `''` | Resource ID of an Azure Compute Gallery image version; used when `imageReference` is empty |
+| --------- | :--: | :------: | ----------- |
+| `imageReference` | object | *(required)* | Image reference for session host VMs. Use `{"publisher":"...","offer":"...","sku":"..."}` for marketplace images or `{"id":"..."}` for Compute Gallery images. |
 
 ### Availability
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `availability` | string | `None` | Availability strategy: `None`, `AvailabilityZones`, `AvailabilitySets` |
 | `availabilityZones` | array | `[]` | Availability zones to spread hosts across (when `availability` is `AvailabilityZones`) |
-| `availabilitySetNameConv` | string | `''` | Availability set naming convention override (auto-detected when empty) |
+| `availabilitySetNameConv` | string | `avset-##` | Availability set naming convention. Use `##` token for the index (e.g., `avset-01`). Pre-populated from host pool tags. |
 | `dedicatedHostGroupResourceIds` | array | `[]` | Per-VM dedicated host group resource IDs |
 | `dedicatedHostResourceIds` | array | `[]` | Per-VM dedicated host resource IDs |
 | `preferredZones` | array | `[]` | Per-VM preferred availability zones |
@@ -175,7 +171,7 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Security
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `securityType` | string | `TrustedLaunch` | VM security profile: `Standard`, `TrustedLaunch`, `ConfidentialVM` |
 | `secureBootEnabled` | bool | `true` | Enable Secure Boot |
 | `vTpmEnabled` | bool | `true` | Enable virtual TPM |
@@ -188,21 +184,21 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Disk
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `diskSku` | string | `Premium_LRS` | OS disk storage SKU: `Standard_LRS`, `StandardSSD_LRS`, `Premium_LRS` |
 | `diskSizeGB` | int | `0` | OS disk size in GB; `0` inherits the image default |
 
 ### Network
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `enableAcceleratedNetworking` | bool | `true` | Enable accelerated networking on session host NICs |
 | `enableIPv6` | bool | `false` | Enable IPv6 dual-stack on session host NICs |
 
 ### FSLogix
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `fslogixConfigureSessionHosts` | bool | `false` | Configure FSLogix profile container settings on session hosts |
 | `fslogixContainerType` | string | `ProfileContainer` | FSLogix container type: `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` | string | `AzureFiles` | Storage backend: `AzureFiles`, `AzureNetAppFiles` |
@@ -216,7 +212,7 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Monitoring
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `enableMonitoring` | bool | `false` | Enable Azure Monitor agent on session hosts |
 | `avdInsightsDataCollectionRulesResourceId` | string | `''` | Resource ID of the AVD Insights data collection rule |
 | `dataCollectionEndpointResourceId` | string | `''` | Resource ID of the Azure Monitor data collection endpoint |
@@ -224,7 +220,7 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Artifacts and Customizations
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `artifactsContainerUri` | string | `''` | URI of the blob storage container holding scripts and artifacts |
 | `artifactsUserAssignedIdentityResourceId` | string | `''` | Resource ID of the managed identity with `Storage Blob Data Reader` access |
 | `sessionHostCustomizations` | array | `[]` | Custom script extension configurations for post-provisioning customization |
@@ -232,7 +228,7 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Identity and Domain Join
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `domainName` | string | `''` | Active Directory domain name; leave empty for Entra ID join |
 | `ouPath` | string | `''` | Distinguished Name of the OU for session host computer accounts |
 | `intuneEnrollment` | bool | `false` | Enroll session hosts in Microsoft Intune (Entra ID join only) |
@@ -240,31 +236,31 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 ### Backup
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `recoveryServicesVaultResourceId` | string | `''` | Resource ID of a Recovery Services Vault for VM backup enrollment |
 | `vmBackupPolicyName` | string | `''` | Backup policy name within the vault; defaults to `AvdPolicyVm` when empty |
 
 ### Other
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --------- | :--: | :-----: | ----------- |
 | `location` | string | RG location | Azure region for session host VMs |
 | `timeZone` | string | `Eastern Standard Time` | Windows time zone for session host VMs |
 | `hibernationEnabled` | bool | `false` | Enable VM hibernation |
 | `tags` | object | `{}` | Tags applied to all deployed resources, keyed by resource type |
 | `agentBootLoaderDownloadUrl` | string | `''` | Override AVD Agent Boot Loader download URL (air-gapped clouds) |
 | `agentDownloadUrl` | string | `''` | Override AVD Agent download URL (air-gapped clouds) |
-| `virtualMachineNameConv` | string | `''` | VM naming convention override (`SHNAME` placeholder); auto-detected when empty |
-| `networkInterfaceNameConv` | string | `''` | NIC naming convention override (`SHNAME` placeholder); auto-detected when empty |
-| `osDiskNameConv` | string | `''` | OS disk naming convention override (`SHNAME` placeholder); auto-detected when empty |
+| `virtualMachineNameConv` | string | `vm-SHNAME` | VM naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
+| `virtualMachineNicNameConv` | string | `nic-SHNAME` | NIC naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
+| `virtualMachineDiskNameConv` | string | `disk-SHNAME` | OS disk naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
 
 ---
 
-## Naming Convention Auto-Detection
+## Naming Convention
 
-When naming convention override parameters are left empty, the template infers them from the existing host pool name. It detects whether the host pool follows a `<abbreviation>-<basename>-<location>` (prefix) or `<basename>-<location>-<abbreviation>` (suffix) convention and applies the same pattern to VMs, NICs, OS disks, and availability sets.
+VM, NIC, OS disk, and availability set naming patterns are passed directly via parameters (`virtualMachineNameConv`, `virtualMachineNicNameConv`, `virtualMachineDiskNameConv`, `availabilitySetNameConv`). All four default to standard CAF-aligned patterns (`vm-SHNAME`, `nic-SHNAME`, `disk-SHNAME`, `avset-##`).
 
-This ensures new session hosts are consistent with those already in the pool, which is important for the Session Host Replacer to correctly identify and replace hosts by name.
+When deploying through the Session Host Replacer, these values are pre-populated from tags on the hosts resource group (`virtualMachineNameConv`, `virtualMachineNicNameConv`, `virtualMachineDiskNameConv`, `availabilitySetNameConv`). Pass the same values here to ensure new session hosts are consistent with existing ones.
 
 ---
 
@@ -273,7 +269,7 @@ This ensures new session hosts are consistent with those already in the pool, wh
 The credentials Key Vault must contain the following secrets before deployment:
 
 | Secret Name | Required When | Description |
-|-------------|---------------|-------------|
+| ----------- | ------------- | ----------- |
 | `VirtualMachineAdminUserName` | Always | Local administrator username for the session host VMs |
 | `VirtualMachineAdminPassword` | Always | Local administrator password for the session host VMs |
 | `DomainJoinUserPrincipalName` | `identitySolution` contains `DomainServices` | UPN of the domain join service account (e.g. `domjoin@contoso.com`) |

@@ -350,13 +350,11 @@ Function Get-InternetFile {
                 }
             }
             Catch {
-                Write-Error "${CmdletName}: Error downloading file. Please check url."
-                Exit 2
+                throw "${CmdletName}: Error downloading file from '$Url'. $($_.Exception.Message)"
             }
         }
         Else {
-            Write-Error "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Exit 2
+            throw "${CmdletName}: No OutputFileName could be determined from URL or headers."
         }
     }
     End {}
@@ -569,7 +567,9 @@ function Optimize-SharedDependencies {
 
     $PkgExts = @('.msixbundle', '.appxbundle', '.msix', '.appx')
 
-    # Collect all x64/neutral dep files from every app subfolder.
+    # Collect all x86, x64, and neutral dep files from every app subfolder.
+    # DISM requires both x86 and x64 dependency packages on x64 target images.
+    # Arm/Arm64 packages are excluded as they do not apply to x64 AVD hosts.
     $AllDeps = Get-ChildItem -Path $ParentDir -Directory |
         Where-Object { $_.Name -ne 'SharedDependencies' } |
         ForEach-Object {
@@ -577,7 +577,7 @@ function Optimize-SharedDependencies {
                 Where-Object {
                     $_.Extension -in $PkgExts -and
                     $_.FullName  -match '(?i)\\dependencies\\' -and
-                    $_.Name      -match '(?i)_(x64|neutral)[._]'
+                    $_.Name      -match '(?i)_(x86|x64|neutral)[._]'
                 }
         }
 
@@ -672,7 +672,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
 
     Write-Output ""
     Write-Output "=== Phase 1: Download ==="
-    $DownloadDir = Join-Path -Path $TempArtifactsDir -ChildPath 'downloads'
+    $DownloadDir = Join-Path -Path $TempArtifactsDir -ChildPath 'sources'
     New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null
     # Track parent dirs of preserve-layout destinations for post-loop deduplication.
     $PreserveLayoutParentFolders         = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -779,20 +779,28 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $DownloadUrl = $Download.DownloadUrl
         }
         ElseIf ($null -ne $Download.APIUrl -and $Download.APIUrl -ne '') {
-            Write-Output "[$SoftwareName] Retrieving Edge Templates URL from API..."
+            Write-Output "[$SoftwareName] Retrieving URL from Edge Updates API..."
             $APIUrl = $Download.APIUrl
             $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
             $content = $EdgeUpdatesJSON.content | ConvertFrom-Json
             $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
             $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -Last 1
             $EdgeLatestStableVersion = $latestrelease.ProductVersion
-            $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
-            $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
-            If (-not($latestPolicyFile)) {
-                $latestPolicyFile = $policyfiles | Sort-Object ProductVersion | Select-Object -Last 1
+            If ($null -ne $Download.APIArtifact -and $Download.APIArtifact -ne '') {
+                # Generic artifact selector: find the named artifact from the latest Stable release
+                $DownloadUrl = ($latestrelease.artifacts | Where-Object { $_.ArtifactName -eq $Download.APIArtifact }).Location
+                Write-Verbose "[$SoftwareName] Resolved '$($Download.APIArtifact)' v$EdgeLatestStableVersion URL: $DownloadUrl"
             }
-            $DownloadUrl = $latestPolicyFile.artifacts.Location
-            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            Else {
+                # Default (legacy): fetch the policy templates CAB matching the Stable version
+                $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
+                $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
+                If (-not($latestPolicyFile)) {
+                    $latestPolicyFile = $policyfiles | Sort-Object ProductVersion | Select-Object -Last 1
+                }
+                $DownloadUrl = $latestPolicyFile.artifacts.Location
+                Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            }
         }
         ElseIf ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo
@@ -891,16 +899,17 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                             Write-Output "[$SoftwareName] Best bundle kept         : $($BestMain.Name)"
                         }
 
-                        # --- Prune non-x64/neutral dependency packages ---
-                        # winget may download deps for all architectures; drop everything
-                        # that is not x64 or neutral to avoid provisioning errors.
+                        # --- Prune Arm/Arm64 dependency packages ---
+                        # Keep x86, x64, and neutral packages. DISM requires both x86 and
+                        # x64 on x64 target images. Arm/Arm64 packages are not applicable
+                        # to x64 AVD hosts and are pruned to keep the upload size reasonable.
                         Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File |
                             Where-Object {
                                 $_.Extension -in $PruneExts -and
                                 $_.FullName  -match '(?i)\\dependencies\\' -and
-                                $_.Name      -notmatch '(?i)_(x64|neutral)[._]'
+                                $_.Name      -notmatch '(?i)_(x86|x64|neutral)[._]'
                             } | ForEach-Object {
-                                Write-Output "[$SoftwareName] Pruning non-x64 dep    : $($_.Name)"
+                                Write-Output "[$SoftwareName] Pruning non-applicable dep : $($_.Name)"
                                 Remove-Item -Path $_.FullName -Force
                             }
 
@@ -1044,14 +1053,25 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         Else {
             # No download source configured - check whether the file was pre-staged in customer/artifacts/
             $DestFileName = $Download.DestinationFileName
-            $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
-            $PreStagedPaths = $DestFolders | ForEach-Object { Join-Path -Path $ArtifactsDir -ChildPath (Join-Path -Path $_ -ChildPath $DestFileName) }
-            $PreStagedFile = $PreStagedPaths | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
-            If ($null -ne $PreStagedFile) {
-                Write-Output "[$SoftwareName] No download URL configured - using pre-staged file found in artifacts directory."
+            If ([string]::IsNullOrWhiteSpace($DestFileName)) {
+                Write-Warning "[$SoftwareName] Skipping: entry has no DownloadUrl and no DestinationFileName. Add a DestinationFileName to enable pre-staged file lookup."
             }
             Else {
-                Write-Warning "[$SoftwareName] No download URL configured and '$DestFileName' was not found in the artifacts directory. If you have enabled the corresponding feature in your image build, pre-stage this file in customer/artifacts/ before running. If you are not using this software, no action is needed."
+                $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
+                $PreStagedPaths = $DestFolders | ForEach-Object {
+                    if ([string]::IsNullOrEmpty($_)) {
+                        Join-Path -Path $ArtifactsDir -ChildPath $DestFileName
+                    } else {
+                        Join-Path -Path $ArtifactsDir -ChildPath (Join-Path -Path $_ -ChildPath $DestFileName)
+                    }
+                }
+                $PreStagedFile = $PreStagedPaths | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
+                If ($null -ne $PreStagedFile) {
+                    Write-Output "[$SoftwareName] No download URL configured - using pre-staged file found in artifacts directory."
+                }
+                Else {
+                    Write-Warning "[$SoftwareName] No download URL configured and '$DestFileName' was not found in the artifacts directory. If you have enabled the corresponding feature in your image build, pre-stage this file in customer/artifacts/ before running. If you are not using this software, no action is needed."
+                }
             }
         }
     }

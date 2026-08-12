@@ -1,4 +1,4 @@
-﻿@description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
+@description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
 
 @description('Required. Resource ID of the private DNS zone for blob endpoints (typically privatelink.blob.core.windows.net).')
@@ -154,9 +154,11 @@ resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
 }
 
 var useCmk = keyManagementStorageAccounts != 'PlatformManaged'
-// Create a dedicated storage encryption UAI when CMK is selected but no existing UAI is supplied.
-// When an existing functionAppUserAssignedIdentityResourceId is provided, reuse it for CMK instead.
-var createStorageEncryptionUai = useCmk && empty(functionAppUserAssignedIdentityResourceId)
+// Always create a dedicated storage encryption UAI when CMK is selected.
+// The function app UAI (functionAppUserAssignedIdentityResourceId) is for the function app identity
+// (Graph API permissions, etc.) and must NOT be reused for CMK — it would never receive
+// Key Vault Crypto Service Encryption User, causing KeyVaultAuthenticationFailure at deploy time.
+var createStorageEncryptionUai = useCmk
 
 // Delegate all CMK resource creation (key, UAI, role assignment) to the unified module.
 // This replaces the inline key/UAI/RA boilerplate that was previously duplicated here.
@@ -183,18 +185,16 @@ resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = if
   )
 }
 
-// Resolved CMK identity — either the provided function app UAI or the newly created storage encryption UAI.
-// The resource ID is computed from parameters (not module output) so it can be used as a userAssignedIdentities
-// property key, which ARM requires to be calculable at deployment start.
-var storageEncryptionUaiResourceId = createStorageEncryptionUai
+// Resolved CMK identity — always the dedicated storage encryption UAI when CMK is enabled.
+// This is deliberately separate from functionAppUserAssignedIdentityResourceId so the function
+// app UAI does not need Key Vault Crypto Service Encryption User (it has broader permissions).
+// The resource ID is computed from parameters (not module output) so it can be used as a
+// userAssignedIdentities property key, which ARM requires to be calculable at deployment start.
+var storageEncryptionUaiResourceId = useCmk
   ? resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', storageEncryptionIdentityName)
   : ''
 
-var cmkUaiResourceId = useCmk
-  ? !empty(functionAppUserAssignedIdentityResourceId)
-      ? functionAppUserAssignedIdentityResourceId
-      : storageEncryptionUaiResourceId
-  : ''
+var cmkUaiResourceId = useCmk ? storageEncryptionUaiResourceId : ''
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   name: storageAccountName
@@ -349,7 +349,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (en
   kind: 'web'
 }
 
-module updatePrivateLinkScope '../get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../privateLinkScope/get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
   name: 'PrivateLlinkScope-${deploymentSuffix}'
   scope: subscription()
   params: {
@@ -475,8 +475,8 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       ftpsState: 'Disabled'
       functionAppScaleLimit: 200
       minimumElasticInstanceCount: 0
-      netFrameworkVersion: 'v6.0'
-      powerShellVersion: '7.4'
+      netFrameworkVersion: 'v8.0'
+      powerShellVersion: '7.5'
       ipSecurityRestrictions: resolvedIpSecurityRestrictions
       ipSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(permittedIPs)) ? 'Deny' : null
       scmIpSecurityRestrictions: (privateEndpoint || !empty(permittedIPs)) ? [
@@ -500,6 +500,20 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           applicationTraffic: true
         }
     virtualNetworkSubnetId: !empty(functionAppDelegatedSubnetResourceId) ? functionAppDelegatedSubnetResourceId : null
+  }
+}
+
+resource functionAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceResourceId)) {
+  name: 'diag-${functionAppName}'
+  scope: functionApp
+  properties: {
+    workspaceId: logAnalyticsWorkspaceResourceId
+    logs: [
+      {
+        category: 'FunctionAppLogs'
+        enabled: true
+      }
+    ]
   }
 }
 
@@ -569,7 +583,7 @@ var storageAccountRoleDefinitions = union(
   storageAccountRoleDefinitionIds
 )
 
-module roleAssignment_storageAccount '../../storage/storageAccounts/roleAssignment.bicep' = {
+module roleAssignment_storageAccount '../../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = {
   name: 'set-role-assignments-storage-${deploymentSuffix}'
   params: {
     storageAccountName: storageAccount.name

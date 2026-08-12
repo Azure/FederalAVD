@@ -1,7 +1,8 @@
 ﻿[CmdletBinding()]
 param (
     [Parameter()]
-    [bool]$DisableUpdates = $true
+    [bool]$DisableUpdates = $true,
+    [int[]]$SuccessExitCodes = @(0, 3010)
 )
 #region Initialization
 $SoftwareName = 'Adobe Reader DC'
@@ -66,11 +67,13 @@ Else {
 $PathExe = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: '$PathExe $InstallArgs'."
 $Installer = Start-Process -FilePath $PathExe -ArgumentList $InstallArgs -Wait -PassThru
-If ($($Installer.ExitCode) -eq 0) {
-    Write-Log -Category Info -message "'$SoftwareName' installed successfully."
+If ($Installer.ExitCode -in $SuccessExitCodes) {
+    if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -message "'$SoftwareName' installed successfully. A reboot is required." }
+    else { Write-Log -Category Info -message "'$SoftwareName' installed successfully." }
 }
 Else {
-    Write-Log -Category Warning -Message "The Installer exit code is $($Installer.ExitCode)"
+    Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)."
+    exit $Installer.ExitCode
 }
 if ($DisableUpdates) {
     Write-Log -Category Info -message "Disabling '$SoftwareName' Updates."

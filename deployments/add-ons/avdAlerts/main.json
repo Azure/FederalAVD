@@ -1,0 +1,3795 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "18332939916653488919"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure region for the Automation Account and alert rule resources."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Tags applied to all resources."
+      }
+    },
+    "alertNamePrefix": {
+      "type": "string",
+      "defaultValue": "AVD",
+      "metadata": {
+        "description": "Optional. Prefix for all alert rule names (e.g. \"AVD\")."
+      }
+    },
+    "autoResolveAlert": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Whether alert rules should auto-resolve when the condition clears."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the resource group where the Automation Account and alert resources will be deployed."
+      }
+    },
+    "createResourceGroup": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Set to true to create the resource group. Set to false if it already exists."
+      }
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Resource ID of the Log Analytics Workspace where AVD diagnostic data is collected."
+      }
+    },
+    "actionGroupResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Resource ID of the existing Action Group to receive alert notifications."
+      }
+    },
+    "hostPoolInfo": {
+      "type": "array",
+      "metadata": {
+        "description": "Required. Array of host pool objects, one per host pool to monitor.\nEach object must have the following properties:\n  hostPoolResourceId:  string  - Full resource ID of the AVD host pool.\n  vmResourceGroupId:   string  - Resource ID of the resource group containing the session host VMs.\n  hostPoolType:        string  - 'Pooled' or 'Personal'. Controls which alerts are deployed.\n\nExample:\n[\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-01\", \"hostPoolType\": \"Pooled\" }\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-02\", \"hostPoolType\": \"Personal\" }\n]\n"
+      }
+    },
+    "storageAccountResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Resource IDs of Azure Files storage accounts used for FSLogix profile storage. When provided, metric and log-based storage alerts are deployed."
+      }
+    },
+    "anfVolumeResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Resource IDs of Azure NetApp Files volumes used for FSLogix profile storage. When provided, ANF volume capacity alerts are deployed."
+      }
+    },
+    "automationAccountNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Explicit name override for the Automation Account. When empty, the auto-generated name is used: aa-avd-alerts-{regionAbbr}."
+      }
+    },
+    "runbookContentUriStorage": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/avdAlerts/scripts/Get-StorAcctInfo.ps1",
+      "metadata": {
+        "description": "Optional. URI of the AvdStorageLogData runbook PS1 file.\nDefaults to the public FederalAVD GitHub repository.\n\nFor air-gapped or internet-restricted environments, set this to empty (\\'\\') to skip automatic\npublishing. The runbook will be created in an unpublished (New) state and must be published\nmanually via the Portal before the first scheduled run."
+      }
+    },
+    "deploymentTime": {
+      "type": "string",
+      "defaultValue": "[utcNow()]",
+      "metadata": {
+        "description": "Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time."
+      }
+    },
+    "createJobSchedules": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Set to true on first deployment to let ARM create the job schedule links.\nSet to false on all redeployments. Azure Automation caches job schedule associations by account name\nand raises a Conflict error if ARM tries to create a link that already exists."
+      }
+    },
+    "enableCapacityAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, host pool capacity alert rules (50%, 85%, 95%) are not deployed."
+      }
+    },
+    "enableAvailabilityAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, host availability and VM health alert rules are not deployed."
+      }
+    },
+    "enableConnectionAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, user connection failure and disconnected session alert rules are not deployed."
+      }
+    },
+    "enableLocalDiskAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, session host local disk free-space alert rules are not deployed."
+      }
+    },
+    "enableFslogixAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, FSLogix profile alert rules are not deployed."
+      }
+    },
+    "enableCpuAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, session host VM CPU alert rules are not deployed."
+      }
+    },
+    "enableMemoryAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, session host VM available memory alert rules are not deployed."
+      }
+    },
+    "memoryAlertStartupExclusionMinutes": {
+      "type": "int",
+      "defaultValue": 20,
+      "minValue": 0,
+      "maxValue": 60,
+      "metadata": {
+        "description": "Optional. Minutes of Perf data stream age required before memory alerts fire. A VM whose oldest Perf record in the 1-hour lookback window is newer than this value is treated as still starting up and excluded. Set to 0 to disable."
+      }
+    },
+    "slowLogonThresholdMinutes": {
+      "type": "int",
+      "defaultValue": 2,
+      "minValue": 1,
+      "maxValue": 30,
+      "metadata": {
+        "description": "Optional. Logon duration threshold in minutes. The slow logon alert fires when a user takes longer than this value to reach a productive desktop. Minimum 1, maximum 30."
+      }
+    },
+    "disconnectedSessionAlertThresholdHours": {
+      "type": "int",
+      "defaultValue": 8,
+      "minValue": 1,
+      "maxValue": 47,
+      "metadata": {
+        "description": "Optional. Hours after which a disconnected-but-not-logged-off session triggers an alert. Minimum 1, maximum 47."
+      }
+    },
+    "enableOsDiskAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, session host VM OS disk bandwidth alert rules are not deployed."
+      }
+    },
+    "enableStorageLatencyAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, Azure Files storage latency alert rules are not deployed."
+      }
+    },
+    "enableStorageAvailabilityAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, Azure Files storage availability alert rules are not deployed."
+      }
+    },
+    "enableStorageThrottlingAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, Azure Files file share throttling alert rules are not deployed."
+      }
+    },
+    "enableAnfCapacityAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, ANF volume capacity alert rules are not deployed."
+      }
+    },
+    "enableServiceHealthAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. When false, Azure Service Health activity log alert rules are not deployed."
+      }
+    }
+  },
+  "variables": {
+    "copy": [
+      {
+        "name": "storageRgPairs",
+        "count": "[length(parameters('storageAccountResourceIds'))]",
+        "input": "[format('{0},{1}', split(parameters('storageAccountResourceIds')[copyIndex('storageRgPairs')], '/')[2], split(parameters('storageAccountResourceIds')[copyIndex('storageRgPairs')], '/')[4])]"
+      }
+    ],
+    "$fxv#0": {
+      "AzureCloud": {
+        "australiacentral": {
+          "abbreviation": "auc",
+          "recoveryServicesGeo": "acl"
+        },
+        "australiacentral2": {
+          "abbreviation": "auc2",
+          "recoveryServicesGeo": "acl2"
+        },
+        "australiaeast": {
+          "abbreviation": "aue",
+          "recoveryServicesGeo": "ae"
+        },
+        "australiasoutheast": {
+          "abbreviation": "ause",
+          "recoveryServicesGeo": "ase"
+        },
+        "brazilsouth": {
+          "abbreviation": "brs",
+          "recoveryServicesGeo": "brs"
+        },
+        "brazilsoutheast": {
+          "abbreviation": "brse",
+          "recoveryServicesGeo": "bse"
+        },
+        "canadacentral": {
+          "abbreviation": "cac",
+          "recoveryServicesGeo": "cnc"
+        },
+        "canadaeast": {
+          "abbreviation": "cae",
+          "recoveryServicesGeo": "cne"
+        },
+        "centralindia": {
+          "abbreviation": "inc",
+          "recoveryServicesGeo": "inc"
+        },
+        "centralus": {
+          "abbreviation": "usc",
+          "recoveryServicesGeo": "cus"
+        },
+        "eastasia": {
+          "abbreviation": "ase",
+          "recoveryServicesGeo": "ea"
+        },
+        "eastus": {
+          "abbreviation": "use",
+          "recoveryServicesGeo": "eus"
+        },
+        "eastus2": {
+          "abbreviation": "use2",
+          "recoveryServicesGeo": "eus2"
+        },
+        "francecentral": {
+          "abbreviation": "frc",
+          "recoveryServicesGeo": "frc"
+        },
+        "francesouth": {
+          "abbreviation": "frs",
+          "recoveryServicesGeo": "frs"
+        },
+        "germanynorth": {
+          "abbreviation": "den",
+          "recoveryServicesGeo": "gn"
+        },
+        "germanywestcentral": {
+          "abbreviation": "dewc",
+          "recoveryServicesGeo": "gwc"
+        },
+        "israelcentral": {
+          "abbreviation": "ilc",
+          "recoveryServicesGeo": "ilc"
+        },
+        "italynorth": {
+          "abbreviation": "itn",
+          "recoveryServicesGeo": "itn"
+        },
+        "japaneast": {
+          "abbreviation": "jpe",
+          "recoveryServicesGeo": "jpe"
+        },
+        "japanwest": {
+          "abbreviation": "jpw",
+          "recoveryServicesGeo": "jpw"
+        },
+        "jioindiacentral": {
+          "abbreviation": "injc",
+          "recoveryServicesGeo": "jic"
+        },
+        "jioindiawest": {
+          "abbreviation": "injw",
+          "recoveryServicesGeo": "jiw"
+        },
+        "koreacentral": {
+          "abbreviation": "krc",
+          "recoveryServicesGeo": "krc"
+        },
+        "koreasouth": {
+          "abbreviation": "krs",
+          "recoveryServicesGeo": "krs"
+        },
+        "northcentralus": {
+          "abbreviation": "usnc",
+          "recoveryServicesGeo": "ncus"
+        },
+        "northeurope": {
+          "abbreviation": "eun",
+          "recoveryServicesGeo": "ne"
+        },
+        "norwayeast": {
+          "abbreviation": "noe",
+          "recoveryServicesGeo": "nwe"
+        },
+        "norwaywest": {
+          "abbreviation": "now",
+          "recoveryServicesGeo": "nww"
+        },
+        "polandcentral": {
+          "abbreviation": "plc",
+          "recoveryServicesGeo": "plc"
+        },
+        "qatarcentral": {
+          "abbreviation": "qac",
+          "recoveryServicesGeo": "qac"
+        },
+        "southafricanorth": {
+          "abbreviation": "zan",
+          "recoveryServicesGeo": "san"
+        },
+        "southafricawest": {
+          "abbreviation": "zaw",
+          "recoveryServicesGeo": "saw"
+        },
+        "southcentralus": {
+          "abbreviation": "ussc",
+          "recoveryServicesGeo": "scus"
+        },
+        "southeastasia": {
+          "abbreviation": "asse",
+          "recoveryServicesGeo": "sea"
+        },
+        "southindia": {
+          "abbreviation": "ins",
+          "recoveryServicesGeo": "ins"
+        },
+        "swedencentral": {
+          "abbreviation": "sec",
+          "recoveryServicesGeo": "sdc"
+        },
+        "switzerlandnorth": {
+          "abbreviation": "chn",
+          "recoveryServicesGeo": "szn"
+        },
+        "switzerlandwest": {
+          "abbreviation": "chw",
+          "recoveryServicesGeo": "szw"
+        },
+        "uaecentral": {
+          "abbreviation": "aec",
+          "recoveryServicesGeo": "uac"
+        },
+        "uaenorth": {
+          "abbreviation": "aen",
+          "recoveryServicesGeo": "uan"
+        },
+        "uksouth": {
+          "abbreviation": "uks",
+          "recoveryServicesGeo": "uks"
+        },
+        "ukwest": {
+          "abbreviation": "ukw",
+          "recoveryServicesGeo": "ukw"
+        },
+        "westcentralus": {
+          "abbreviation": "uswc",
+          "recoveryServicesGeo": "wcus"
+        },
+        "westeurope": {
+          "abbreviation": "euw",
+          "recoveryServicesGeo": "we"
+        },
+        "westindia": {
+          "abbreviation": "inw",
+          "recoveryServicesGeo": "inw"
+        },
+        "westus": {
+          "abbreviation": "usw",
+          "recoveryServicesGeo": "wus"
+        },
+        "westus2": {
+          "abbreviation": "usw2",
+          "recoveryServicesGeo": "wus2"
+        },
+        "westus3": {
+          "abbreviation": "usw3",
+          "recoveryServicesGeo": "wus3"
+        }
+      },
+      "AzureUSGovernment": {
+        "usdodcentral": {
+          "abbreviation": "dodc",
+          "recoveryServicesGeo": "udc"
+        },
+        "usdodeast": {
+          "abbreviation": "dode",
+          "recoveryServicesGeo": "ude"
+        },
+        "usgovarizona": {
+          "abbreviation": "az",
+          "recoveryServicesGeo": "uga"
+        },
+        "usgovtexas": {
+          "abbreviation": "tx",
+          "recoveryServicesGeo": "ugt"
+        },
+        "usgovvirginia": {
+          "abbreviation": "va",
+          "recoveryServicesGeo": "ugv"
+        }
+      },
+      "other": {
+        "north": {
+          "abbreviation": "no"
+        },
+        "east": {
+          "abbreviation": "ea"
+        },
+        "south": {
+          "abbreviation": "so"
+        },
+        "west": {
+          "abbreviation": "we"
+        },
+        "central": {
+          "abbreviation": "ce"
+        },
+        "northcentral": {
+          "abbreviation": "noce"
+        },
+        "eastcentral": {
+          "abbreviation": "wece"
+        },
+        "southcentral": {
+          "abbreviation": "soce"
+        },
+        "westcentral": {
+          "abbreviation": "wece"
+        }
+      }
+    },
+    "$fxv#1": {
+      "applicationInsights": "appi",
+      "appServicePlans": "asp",
+      "automationAccounts": "aa",
+      "availabilitySets": "as",
+      "computeGalleries": "gal",
+      "dataCollectionEndpoints": "dce",
+      "dataCollectionRules": "dcr",
+      "desktopApplicationGroups": "vddag",
+      "diskAccesses": "da",
+      "remoteApplicationGroups": "vdrag",
+      "diskEncryptionSets": "des",
+      "functionApps": "fa",
+      "hostPools": "vdpool",
+      "keyVaults": "kv",
+      "logAnalyticsWorkspaces": "law",
+      "natGateways": "ng",
+      "netAppAccounts": "naa",
+      "netAppCapacityPools": "nacp",
+      "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
+      "osdisks": "disk",
+      "privateEndpoints": "pe",
+      "privateLinkScopes": "pls",
+      "publicIPAddresses": "pip",
+      "recoveryServicesVaults": "rsv",
+      "resourceGroups": "rg",
+      "routeTables": "rt",
+      "scalingPlans": "vdscaling",
+      "storageAccounts": "sa",
+      "templateSpecs": "ts",
+      "userAssignedIdentities": "uai",
+      "virtualMachines": "vm",
+      "workbooks": "wb",
+      "workspaces": "vdws",
+      "imageDefinitions": "vmid"
+    },
+    "cloud": "[toLower(environment().name)]",
+    "locationsObject": "[variables('$fxv#0')]",
+    "locationsEnvProperty": "[if(startsWith(variables('cloud'), 'us'), 'other', variables('cloud'))]",
+    "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
+    "regionAbbr": "[variables('locations')[parameters('location')].abbreviation]",
+    "resourceAbbreviations": "[variables('$fxv#1')]",
+    "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), format('{0}-avd-alerts-{1}', variables('resourceAbbreviations').automationAccounts, variables('regionAbbr')))]",
+    "hasStorageAccounts": "[not(empty(parameters('storageAccountResourceIds')))]",
+    "storageAccountResourceIdsJson": "[string(parameters('storageAccountResourceIds'))]",
+    "deploymentSuffix": "[take(uniqueString(subscription().subscriptionId, parameters('resourceGroupName'), deployment().name), 8)]",
+    "lawSubscriptionId": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[2]]",
+    "lawResourceGroup": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[4]]",
+    "hostPoolInfoDeduped": "[reduce(parameters('hostPoolInfo'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').hostPoolResourceId)), lambdaVariables('item').hostPoolResourceId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]",
+    "vmRgInfoDeduped": "[reduce(variables('hostPoolInfoDeduped'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').vmResourceGroupId)), lambdaVariables('item').vmResourceGroupId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]"
+  },
+  "resources": [
+    {
+      "condition": "[parameters('createResourceGroup')]",
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2022-09-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "condition": "[variables('hasStorageAccounts')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "automationAccountName": {
+            "value": "[variables('automationAccountName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "resourceManagerUri": {
+            "value": "[environment().resourceManager]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "runbookStorageUri": {
+            "value": "[parameters('runbookContentUriStorage')]"
+          },
+          "hasStorageAccounts": {
+            "value": "[variables('hasStorageAccounts')]"
+          },
+          "storageAccountResourceIdsJson": {
+            "value": "[variables('storageAccountResourceIdsJson')]"
+          },
+          "deploymentTime": {
+            "value": "[parameters('deploymentTime')]"
+          },
+          "createJobSchedules": {
+            "value": "[parameters('createJobSchedules')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "7989689542494056490"
+            }
+          },
+          "parameters": {
+            "automationAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the Automation Account."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for all resources."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags for all resources."
+              }
+            },
+            "resourceManagerUri": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure Resource Manager URI for this cloud (e.g. https://management.azure.com/)."
+              }
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Log Analytics Workspace for diagnostic settings and runbook output."
+              }
+            },
+            "runbookStorageUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. URI of the AvdStorageLogData runbook PS1 file. Leave empty for air-gapped environments to create the runbook in an unpublished state."
+              }
+            },
+            "hasStorageAccounts": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Set to true when StorageAccountResourceIds is not empty."
+              }
+            },
+            "storageAccountResourceIdsJson": {
+              "type": "string",
+              "defaultValue": "[[]",
+              "metadata": {
+                "description": "Optional. JSON array string of storage account resource IDs for the storage runbook."
+              }
+            },
+            "deploymentTime": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. UTC timestamp used to compute the first schedule start time."
+              }
+            },
+            "createJobSchedules": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Controls whether ARM creates the job schedule links between runbooks and\nschedules. Leave true for normal deployments - ARM handles idempotent redeployment correctly when\nthe automation account already exists.\n\nSet to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.\nThis error occurs specifically when the automation account was previously deleted from ARM and is\nbeing recreated with the same name. The Azure Automation backend caches associations by account\nname through ARM deletion, causing the recreate to conflict with the cached link."
+              }
+            }
+          },
+          "variables": {
+            "runbookNameStorage": "AvdStorageLogData",
+            "scheduleStorageStart": "[dateTimeAdd(parameters('deploymentTime'), 'PT10M')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Automation/automationAccounts",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('automationAccountName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "sku": {
+                  "name": "Basic"
+                },
+                "publicNetworkAccess": false,
+                "disableLocalAuth": true
+              }
+            },
+            {
+              "type": "Microsoft.Automation/automationAccounts/variables",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', parameters('automationAccountName'), 'ResourceManagerUri')]",
+              "properties": {
+                "value": "[format('\"{0}\"', parameters('resourceManagerUri'))]",
+                "isEncrypted": false,
+                "description": "Azure Resource Manager endpoint URI for this cloud."
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('hasStorageAccounts')]",
+              "type": "Microsoft.Automation/automationAccounts/variables",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', parameters('automationAccountName'), 'StorageAccountResourceIDs')]",
+              "properties": {
+                "value": "[format('\"{0}\"', replace(parameters('storageAccountResourceIdsJson'), '\"', '\\\"'))]",
+                "isEncrypted": false,
+                "description": "JSON array of storage account resource IDs for the storage space collector."
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('hasStorageAccounts')]",
+              "type": "Microsoft.Automation/automationAccounts/runbooks",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', parameters('automationAccountName'), variables('runbookNameStorage'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "runbookType": "PowerShell72",
+                "logVerbose": false,
+                "logProgress": false,
+                "description": "Collects Azure Files share usage statistics for Log Analytics alert queries.",
+                "publishContentLink": "[if(not(empty(parameters('runbookStorageUri'))), createObject('uri', parameters('runbookStorageUri')), null())]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('hasStorageAccounts')]",
+              "type": "Microsoft.Automation/automationAccounts/schedules",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', parameters('automationAccountName'), 'AvdAlerts-Storage-15min')]",
+              "properties": {
+                "description": "Runs the AVD storage data collector every 15 minutes.",
+                "startTime": "[variables('scheduleStorageStart')]",
+                "frequency": "Minute",
+                "interval": 15,
+                "timeZone": "UTC"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+              ]
+            },
+            {
+              "condition": "[and(parameters('hasStorageAccounts'), parameters('createJobSchedules'))]",
+              "type": "Microsoft.Automation/automationAccounts/jobSchedules",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', parameters('automationAccountName'), guid(resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName')), resourceId('Microsoft.Automation/automationAccounts/runbooks', parameters('automationAccountName'), variables('runbookNameStorage')), resourceId('Microsoft.Automation/automationAccounts/schedules', parameters('automationAccountName'), 'AvdAlerts-Storage-15min')))]",
+              "properties": {
+                "runbook": {
+                  "name": "[variables('runbookNameStorage')]"
+                },
+                "schedule": {
+                  "name": "AvdAlerts-Storage-15min"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/runbooks', parameters('automationAccountName'), variables('runbookNameStorage'))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/schedules', parameters('automationAccountName'), 'AvdAlerts-Storage-15min')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
+              "name": "[format('diag-{0}', parameters('automationAccountName'))]",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
+                "logs": [
+                  {
+                    "category": "JobLogs",
+                    "enabled": true
+                  },
+                  {
+                    "category": "JobStreams",
+                    "enabled": true
+                  }
+                ],
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": false
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the Automation Account system-assigned managed identity."
+              },
+              "value": "[reference(resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName')), '2023-11-01', 'full').identity.principalId]"
+            },
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Automation Account."
+              },
+              "value": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    },
+    {
+      "condition": "[variables('hasStorageAccounts')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-RoleAssign-LAW-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('lawSubscriptionId')]",
+      "resourceGroup": "[variables('lawResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+          },
+          "resourceGroupName": {
+            "value": "[variables('lawResourceGroup')]"
+          },
+          "nameSuffix": {
+            "value": "[variables('automationAccountName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "6089610056640259539"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Principal ID (object ID) of the managed identity."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. GUID of the built-in role definition to assign."
+              }
+            },
+            "resourceGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group (used as part of the role assignment name to ensure uniqueness)."
+              }
+            },
+            "nameSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Additional suffix to disambiguate the role assignment when the same role is assigned multiple times in different resource groups."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'), parameters('resourceGroupName'), parameters('nameSuffix'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "roleAssignStorage",
+        "count": "[length(variables('storageRgPairs'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-RoleAssign-Stor{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
+      "subscriptionId": "[split(variables('storageRgPairs')[copyIndex()], ',')[0]]",
+      "resourceGroup": "[split(variables('storageRgPairs')[copyIndex()], ',')[1]]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "17d1049b-9a84-46fb-8f53-869881c3d3ab"
+          },
+          "resourceGroupName": {
+            "value": "[split(variables('storageRgPairs')[copyIndex()], ',')[1]]"
+          },
+          "nameSuffix": {
+            "value": "[format('{0}-stor{1}', variables('automationAccountName'), copyIndex())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "6089610056640259539"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Principal ID (object ID) of the managed identity."
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. GUID of the built-in role definition to assign."
+              }
+            },
+            "resourceGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group (used as part of the role assignment name to ensure uniqueness)."
+              }
+            },
+            "nameSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Additional suffix to disambiguate the role assignment when the same role is assigned multiple times in different resource groups."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'), parameters('resourceGroupName'), parameters('nameSuffix'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix')))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "hostPoolLogAlerts",
+        "count": "[length(variables('hostPoolInfoDeduped'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-HP-{0}-{1}', last(split(variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId, '/')), variables('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "hostPoolName": {
+            "value": "[last(split(variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId, '/'))]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "actionGroupResourceId": {
+            "value": "[parameters('actionGroupResourceId')]"
+          },
+          "alertNamePrefix": {
+            "value": "[parameters('alertNamePrefix')]"
+          },
+          "autoResolveAlert": {
+            "value": "[parameters('autoResolveAlert')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "enableCapacityAlerts": {
+            "value": "[parameters('enableCapacityAlerts')]"
+          },
+          "enableAvailabilityAlerts": {
+            "value": "[parameters('enableAvailabilityAlerts')]"
+          },
+          "enableConnectionAlerts": {
+            "value": "[parameters('enableConnectionAlerts')]"
+          },
+          "enableFslogixAlerts": {
+            "value": "[parameters('enableFslogixAlerts')]"
+          },
+          "hostPoolType": {
+            "value": "[coalesce(tryGet(variables('hostPoolInfoDeduped')[copyIndex()], 'hostPoolType'), 'Pooled')]"
+          },
+          "hostPoolResourceId": {
+            "value": "[variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId]"
+          },
+          "slowLogonThresholdMinutes": {
+            "value": "[parameters('slowLogonThresholdMinutes')]"
+          },
+          "disconnectedSessionAlertThresholdHours": {
+            "value": "[parameters('disconnectedSessionAlertThresholdHours')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "12188417853054168833"
+            }
+          },
+          "parameters": {
+            "hostPoolName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the host pool (not the resource ID)."
+              }
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Log Analytics Workspace."
+              }
+            },
+            "actionGroupResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Action Group for notifications."
+              }
+            },
+            "alertNamePrefix": {
+              "type": "string",
+              "defaultValue": "AVD",
+              "metadata": {
+                "description": "Optional. Prefix prepended to all alert names."
+              }
+            },
+            "autoResolveAlert": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether alert rules auto-resolve when the condition clears."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Azure region for the alert rule resources."
+              }
+            },
+            "enableCapacityAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, host pool capacity alert rules (50%, 85%, 95%) are not deployed."
+              }
+            },
+            "enableAvailabilityAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, host availability and VM health alert rules are not deployed."
+              }
+            },
+            "enableConnectionAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, user connection failure and disconnected session alert rules are not deployed."
+              }
+            },
+            "slowLogonThresholdMinutes": {
+              "type": "int",
+              "defaultValue": 2,
+              "minValue": 1,
+              "maxValue": 30,
+              "metadata": {
+                "description": "Optional. Logon duration threshold in minutes. The slow logon alert fires when a user takes longer than this value to reach a productive desktop. Minimum 1, maximum 30."
+              }
+            },
+            "disconnectedSessionAlertThresholdHours": {
+              "type": "int",
+              "defaultValue": 8,
+              "minValue": 1,
+              "maxValue": 47,
+              "metadata": {
+                "description": "Optional. Hours after which a disconnected-but-not-logged-off session triggers an alert. Minimum 1, maximum 47."
+              }
+            },
+            "enableFslogixAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, FSLogix profile alert rules are not deployed."
+              }
+            },
+            "hostPoolType": {
+              "type": "string",
+              "defaultValue": "Pooled",
+              "allowedValues": [
+                "Pooled",
+                "Personal"
+              ],
+              "metadata": {
+                "description": "Optional. Whether this is a Pooled or Personal host pool. Capacity alerts (50/85/95%) are only deployed for Pooled pools. The personal session host unhealthy alert is only deployed for Personal pools."
+              }
+            },
+            "hostPoolResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for cost management."
+              }
+            }
+          },
+          "variables": {
+            "descriptionHeader": "AVD - Automated Alert\n",
+            "hostPoolTags": {
+              "cm-resource-parent": "[parameters('hostPoolResourceId')]"
+            },
+            "actions": {
+              "actionGroups": [
+                "[parameters('actionGroupResourceId')]"
+              ]
+            }
+          },
+          "resources": [
+            {
+              "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Cap-50pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Host Pool Capacity 50% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Host pool is at 50% or more capacity for 15 or more continuous minutes. Review scaling plan and available session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 3,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "PT45M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 50\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "TotalSessions",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "TotalCapacity",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "LoadPct",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 3,
+                        "minFailingPeriodsToAlert": 3
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Cap-85pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Host Pool Capacity 85% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Host pool is at 85% or more capacity for 15 or more continuous minutes. Review scaling plan and consider adding session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "PT45M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TimeGenerated = max(TimeGenerated),\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 85\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "TotalSessions",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "TotalCapacity",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "LoadPct",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 3,
+                        "minFailingPeriodsToAlert": 3
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[and(parameters('enableCapacityAlerts'), equals(parameters('hostPoolType'), 'Pooled'))]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Cap-95pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Host Pool Capacity 95% ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Host pool is at or above 95% capacity. Immediate action required to add session hosts for {1}.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": false,
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace(replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by SessionHostName\r\n| extend MaxSessions       = iff(tolong(column_ifexists(''MaxSessions'', 0)) > 0, tolong(column_ifexists(''MaxSessions'', 0)), long(__MAX_PER_HOST__))\r\n| extend ActiveSessions    = tolong(ActiveSessions)\r\n| extend InactiveSessions  = tolong(column_ifexists(''InactiveSessions'', 0))\r\n| extend AllowNewSessions  = tobool(AllowNewSessions)\r\n| summarize\r\n    TotalSessions = sum(ActiveSessions + InactiveSessions),\r\n    TotalCapacity = sum(iff(AllowNewSessions and Status == ''Available'', MaxSessions, long(0))),\r\n    ResourceId    = any(_ResourceId)\r\n| extend LoadPct = iff(TotalCapacity > 0, round(100.0 * TotalSessions / TotalCapacity, 0), 0.0)\r\n| where TotalCapacity > 0 and LoadPct >= 95\r\n', '__POOL__', parameters('hostPoolName')), '__MAX_PER_HOST__', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('hostPoolResourceId'), '/')[2], split(parameters('hostPoolResourceId'), '/')[4]), 'Microsoft.DesktopVirtualization/hostPools', last(split(parameters('hostPoolResourceId'), '/'))), '2023-09-05').maxSessionLimit))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "TotalSessions",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "TotalCapacity",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "LoadPct",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableAvailabilityAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Host-Unhealthy-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Session Host Unhealthy ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A session host in {1} has been in a non-Available, non-Shutdown, non-Upgrading state for 15 or more continuous minutes and is not in drain mode (AllowNewSessions == true). Newly deployed hosts are excluded until they have been visible in the health status data for at least 15 minutes. Investigate WVDAgentHealthStatus and the VM directly.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "PT30M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('WVDAgentHealthStatus\r\n| where TimeGenerated > ago(20m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where AllowNewSessions == true\r\n| where Status !in (''Shutdown'', ''Upgrading'')\r\n| summarize \r\n    arg_max(TimeGenerated, Status, _ResourceId),\r\n    LastAvailable = maxif(TimeGenerated, Status == ''Available''),\r\n    FirstSeen = min(TimeGenerated)\r\n  by SessionHostName\r\n| where Status != ''Available''\r\n| where (isnull(LastAvailable) and FirstSeen <= ago(15m)) or LastAvailable <= ago(15m)\r\n| project SessionHostName, Status, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "SessionHostName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "Status",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableAvailabilityAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Host-NoResources-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - No Resources Available', parameters('alertNamePrefix'))]",
+                "description": "[format('{0}Catastrophic: no healthy session hosts available for new connections in {1}. Diagnose host pool dependencies immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT15M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('WVDConnections\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, UserName, _ResourceId) by CorrelationId\r\n| join kind=inner (\r\n    WVDErrors\r\n    | where TimeGenerated > ago(15m)\r\n    | where CodeSymbolic == \"ConnectionFailedNoHealthyRdshAvailable\"\r\n    | summarize by CorrelationId\r\n) on CorrelationId\r\n| project UserName, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableAvailabilityAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Host-HealthCheckFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Host Health Check Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A session host in {1} is available but a dependent resource (domain, FSLogix, SxS stack, URL check) is in a failed state. Only fires for hosts not in drain mode; requires 3 consecutive evaluations (15 minutes) before alerting.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT5M",
+                "overrideQueryTimeRange": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('let MapToDesc = (idx: long) {\r\n    case(idx == 0, \"DomainJoin\",\r\n    idx == 1, \"DomainTrust\",\r\n    idx == 2, \"FSLogix\",\r\n    idx == 3, \"SxSStack\",\r\n    idx == 4, \"URLCheck\",\r\n    idx == 5, \"GenevaAgent\",\r\n    idx == 6, \"DomainReachable\",\r\n    idx == 7, \"WebRTCRedirector\",\r\n    idx == 8, \"SxSStackEncryption\",\r\n    idx == 9, \"IMDSReachable\",\r\n    idx == 10, \"MSIXPackageStaging\",\r\n    \"InvalidIndex\")\r\n};\r\nWVDAgentHealthStatus\r\n| where TimeGenerated > ago(5m)\r\n| where Status != ''Available''\r\n| where AllowNewSessions == true\r\n| extend CheckFailed = parse_json(SessionHostHealthCheckResult)\r\n| mv-expand CheckFailed\r\n| where CheckFailed.AdditionalFailureDetails.ErrorCode != 0\r\n| extend HealthCheckName = tolong(CheckFailed.HealthCheckName)\r\n| extend HealthCheckResult = tolong(CheckFailed.HealthCheckResult)\r\n| extend HealthCheckDesc = MapToDesc(HealthCheckName)\r\n| where HealthCheckDesc != \"InvalidIndex\"\r\n| where _ResourceId has \"__POOL__\"\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" HostPoolResourceGroup \"/providers/microsoft.desktopvirtualization/hostpools/\" HostPool\r\n| parse SessionHostResourceId with \"/subscriptions/\" HostSubscription \"/resourceGroups/\" SessionHostRG \"/providers/Microsoft.Compute/virtualMachines/\" SessionHostName\r\n| extend ResourceId = SessionHostResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "SessionHostName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HealthCheckDesc",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "SessionHostRG",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 3,
+                        "minFailingPeriodsToAlert": 3
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableConnectionAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Conn-AuthFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - User Auth / Service Connection Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A user in {1} failed to connect 3 or more times at the gateway or broker level in the last 15 minutes (no session host was assigned). Likely causes: MFA failure, Conditional Access policy block, expired token, or no available session hosts. Review the UserName and ErrorCodes dimensions.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 3,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('WVDConnections\r\n| where TimeGenerated > ago(15m)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, *) by CorrelationId\r\n| where isempty(SessionHostName)\r\n| join kind=inner (\r\n    WVDErrors\r\n    | where TimeGenerated > ago(15m)\r\n    | summarize Errors=make_list(pack(''Code'', Code, ''CodeSymbolic'', CodeSymbolic, ''Message'', Message, ''Source'', Source), 5) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| extend ResourceGroup=tostring(split(_ResourceId, ''/'')[4])\r\n| extend HostPool=tostring(split(_ResourceId, ''/'')[8])\r\n| extend ErrorShort=tostring(Errors[0].CodeSymbolic)\r\n| summarize FailureCount=count(),\r\n            ErrorCodes=make_set(ErrorShort, 5),\r\n            ResourceGroup=take_any(ResourceGroup),\r\n            ResourceId=take_any(_ResourceId)\r\n  by HostPool, UserName\r\n| where FailureCount >= 3\r\n| project HostPool, ResourceGroup, UserName, FailureCount, ErrorCodes=tostring(ErrorCodes), ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableConnectionAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Sess-Disconnected{1}h-{2}', parameters('alertNamePrefix'), parameters('disconnectedSessionAlertThresholdHours'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Session Disconnected > {1}h ({2})', parameters('alertNamePrefix'), parameters('disconnectedSessionAlertThresholdHours'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A user in {1} has been disconnected but not logged off for more than {2} hours. Verify Remote Desktop session timeout and logoff policies are applied. This could affect scaling plans.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('disconnectedSessionAlertThresholdHours'))]",
+                "severity": 3,
+                "enabled": true,
+                "evaluationFrequency": "PT1H",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "[if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 2), 'PT3H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 3), 'PT4H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 4), 'PT5H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 5), 'PT6H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 11), 'PT12H', if(lessOrEquals(parameters('disconnectedSessionAlertThresholdHours'), 23), 'P1D', 'P2D'))))))]",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace(replace(replace('WVDConnections\r\n| where TimeGenerated > ago(__LOOKBACK__h)\r\n| where _ResourceId has \"__POOL__\"\r\n| summarize arg_max(TimeGenerated, State, SessionHostName, _ResourceId) by UserName, SessionHostName\r\n| where State == \"Disconnected\"\r\n| where TimeGenerated < ago(__THRESHOLD__h)\r\n| extend DisconnectedHours = round(datetime_diff(''minute'', now(), TimeGenerated) / 60.0, 1)\r\n| project UserName, SessionHostName, DisconnectedSince = TimeGenerated, DisconnectedHours, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName')), '__THRESHOLD__', string(parameters('disconnectedSessionAlertThresholdHours'))), '__LOOKBACK__', string(add(parameters('disconnectedSessionAlertThresholdHours'), 1)))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "SessionHostName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "DisconnectedHours",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-SpaceLow5pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Profile < 5% Free Space ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 34 in {1}: a user profile VHD has less than 5% free space. The alert includes the affected user, profile container, and storage account. Expand the VHD or clean up profile data.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('let fslogixWarnings =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 34\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;\r\nfslogixWarnings\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "StorageAccount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-SpaceLow2pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Profile < 2% Free Space ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: FSLogix Event ID 33 in {1}: a user profile VHD has less than 2% free space. The alert includes the affected user, profile container, and storage account. Expand the VHD or clean up profile data immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 33\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "StorageAccount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-NetworkIssue-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Network Issue ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 43: a session host in {1} cannot reach the FSLogix profile storage. Verify network connectivity between the session hosts and the storage account.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 43\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, ''/'')[4]),\r\n    HostPool        = \"__POOL__\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "RenderedDescription",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-AttachFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Profile Disk Attach Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 52 or 40: the profile VHD failed to attach at logon on a session host in {1}. The user received a temporary profile. Check FSLogix agent logs on the affected session host, verify the storage account is reachable from the VM, and confirm the VHD is not locked by another session or process.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID in (52, 40)\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, ''/'')[4]),\r\n    HostPool        = \"__POOL__\"\r\n| project EventTime = TimeGenerated, Computer, VMresourceGroup, HostPool, RenderedDescription, ResourceId = _ResourceId\r\n| join kind=leftouter (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = iff(isnotnull(ConnTime), abs(datetime_diff(''minute'', EventTime, ConnTime)), 9999)\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project EventTime, Computer, UserName, RenderedDescription, VMresourceGroup, HostPool, ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "RenderedDescription",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-ReattachFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix VHD Reattach Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 56: a session host in {1} failed to reattach a profile VHD during user reconnect, exhausting all retry attempts (>= 3 events in 15 minutes). The profile path in RenderedDescription identifies the affected user. Check storage account reachability and the FSLogix log on the affected session host.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 56\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, ''/'')[4]),\r\n    HostPool        = \"__POOL__\"\r\n| summarize\r\n    EventCount      = count(),\r\n    VMresourceGroup = any(VMresourceGroup),\r\n    HostPool        = any(HostPool),\r\n    ResourceId      = any(_ResourceId)\r\n  by Computer, RenderedDescription\r\n| where EventCount >= 3\r\n| project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "EventCount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "RenderedDescription",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-ServiceDisabled-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Required Service Disabled ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 60: a service required by FSLogix is disabled on a session host in {1}. Re-enable the required service immediately.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT4H",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 60\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, ''/'')[4]),\r\n    HostPool        = \"__POOL__\"\r\n| project Computer, RenderedDescription, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "RenderedDescription",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-CompactFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Profile Disk Compaction Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 62 or 63: profile disk compaction failed 3 or more times on a session host in {1}. VHD files will continue growing until compaction succeeds. Ensure the session host OS disk has sufficient free space and the profile VHD is not actively in use, then retry compaction.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Admin\"\r\n| where EventLevelName == \"Error\"\r\n| where EventID == 62 or EventID == 63\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, ''/'')[4]),\r\n    HostPool        = \"__POOL__\"\r\n| summarize\r\n    EventCount      = count(),\r\n    VMresourceGroup = any(VMresourceGroup),\r\n    HostPool        = any(HostPool),\r\n    ResourceId      = any(_ResourceId)\r\n  by Computer, RenderedDescription\r\n| where EventCount >= 3\r\n| project Computer, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "RenderedDescription",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "EventCount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-DiskInUse-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Profile Disk In Use by Another VM ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 51: a session host in {1} has detected a profile VHD locked by another VM 3 or more times in the last 15 minutes. Check for a stale .lck file on the share, or a session that did not cleanly log off.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('Event\r\n| where EventLog == \"Microsoft-FSLogix-Apps/Operational\"\r\n| where EventLevelName == \"Warning\"\r\n| where EventID == 51\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | distinct SessionHostName\r\n) on $left.Computer == $right.SessionHostName\r\n| extend\r\n    VMresourceGroup = tostring(split(_ResourceId, ''/'')[4]),\r\n    HostPool        = \"__POOL__\"\r\n| summarize\r\n    EventCount      = count(),\r\n    UserName        = any(UserName),\r\n    VMresourceGroup = any(VMresourceGroup),\r\n    HostPool        = any(HostPool),\r\n    ResourceId      = any(_ResourceId)\r\n  by Computer, RenderedDescription\r\n| where EventCount >= 3\r\n| project Computer, UserName, RenderedDescription, EventCount, VMresourceGroup, HostPool, ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "RenderedDescription",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "EventCount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-Corrupted-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Corrupted / Temp Profile ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 28 in {1}: a user profile VHD is corrupted or could not be mounted and the user was loaded into a temporary profile. Data written during this session will be lost. Investigate and repair the profile VHD.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID == 28\r\n    | extend ProfileID = tostring(extract(@\"Username:\\s*([^\\s]+)\", 1, RenderedDescription))\r\n    | project EventTime = TimeGenerated, Computer, ProfileID, EventID, RenderedDescription;\r\nlet storageLookup =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where RenderedDescription has \".file.core.\"\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | where isnotempty(StorageAccount)\r\n    | project PathTime = TimeGenerated, Computer, StorageAccount;\r\nfslogixErrors\r\n| join kind=leftouter (storageLookup) on Computer\r\n| extend PathDiff = abs(datetime_diff(''minute'', EventTime, PathTime))\r\n| where PathDiff <= 60\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    ProfileID,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "ProfileID",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "SessionHostName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "StorageAccount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableFslogixAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-VM-FSLogix-PreCheckFailed-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - FSLogix Compaction Pre-Check Failed ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}FSLogix Event ID 58 or 61 in {1}: VHD disk compaction was aborted before starting, either because the host disk lacks free space for the operation (58) or the VHD is in use (61). Profile VHDs will grow unbounded until compaction can complete.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 3,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('let fslogixErrors =\r\n    Event\r\n    | where Source == \"Microsoft-FSLogix-Apps\"\r\n    | where EventID in (58, 61)\r\n    | extend StorageAccount = extract(@\"\\\\\\\\([^\\\\]+\\.file\\.core\\.[^\\\\]+)\", 1, RenderedDescription)\r\n    | project EventTime = TimeGenerated, Computer, StorageAccount, EventID, RenderedDescription;\r\nfslogixErrors\r\n| join kind=inner (\r\n    WVDConnections\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where State == \"Connected\"\r\n    | project ConnTime = TimeGenerated, UserName, SessionHostName, ResourceId = _ResourceId\r\n) on $left.Computer == $right.SessionHostName\r\n| extend TimeDiff = abs(datetime_diff(''minute'', EventTime, ConnTime))\r\n| where TimeDiff <= 30\r\n| summarize arg_min(TimeDiff, *) by EventTime, Computer\r\n| project\r\n    EventTime,\r\n    UserName,\r\n    SessionHostName = Computer,\r\n    StorageAccount,\r\n    EventID,\r\n    RenderedDescription,\r\n    ResourceId\r\n| order by EventTime desc\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "SessionHostName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "StorageAccount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "EventID",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableConnectionAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-HP-Conn-SlowLogon-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Slow Session Logon > {1} Minutes ({2})', parameters('alertNamePrefix'), parameters('slowLogonThresholdMinutes'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A user in {1} took more than {2} minute(s) to reach a productive desktop (new sessions only; client-side credential and SSO time excluded). Common causes: FSLogix profile bloat, GPO processing delay, slow storage, or startup scripts. Review FSLogix profile sizes and storage latency.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('slowLogonThresholdMinutes'))]",
+                "severity": 3,
+                "enabled": true,
+                "evaluationFrequency": "PT15M",
+                "windowSize": "PT30M",
+                "overrideQueryTimeRange": "PT30M",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace(replace('WVDConnections\r\n| where TimeGenerated > ago(30m)\r\n| where _ResourceId has \"__POOL__\"\r\n| where State == \"Started\"\r\n| project CorrelationId, UserName, SessionHostName, StartTime = TimeGenerated, ResourceId = _ResourceId\r\n| join kind=leftsemi (\r\n    // Exclude broker-level failures that never reached the RD stack on the VM\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n) on CorrelationId\r\n| join kind=leftsemi (\r\n    // New sessions only - reconnections skip profile load and GPO, skewing the measurement\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name == \"LoadBalancedNewConnection\"\r\n    | where tostring(Parameters.LoadBalanceOutcome) == \"NewSession\"\r\n) on CorrelationId\r\n| join kind=inner (\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"ShellReady\"\r\n        or (Name =~ \"LaunchExecutable\" and tostring(Parameters.connectionStage) == \"RdpShellAppExecuted\")\r\n        or Name =~ \"RdpShellAppExecuted\"\r\n    | summarize ShellReadyTime = min(TimeGenerated) by CorrelationId\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| join kind=leftouter (\r\n    // Client-side credential acquisition time - excluded from host-side measurement\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"OnCredentialsAcquisitionCompleted\"\r\n    | project CorrelationId, CredAcquireMs = tolong(Parameters.DurationMS)\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| join kind=leftouter (\r\n    // Client-side SSO token retrieval time - excluded from host-side measurement\r\n    WVDCheckpoints\r\n    | where _ResourceId has \"__POOL__\"\r\n    | where Name =~ \"SSOTokenRetrieval\"\r\n    | project CorrelationId, SsoTokenMs = tolong(Parameters.DurationMS)\r\n) on CorrelationId\r\n| project-away CorrelationId1\r\n| extend LogonSeconds = datetime_diff(''second'', ShellReadyTime, StartTime)\r\n    - coalesce(CredAcquireMs, 0) / 1000\r\n    - coalesce(SsoTokenMs, 0) / 1000\r\n| where LogonSeconds > __THRESHOLD__\r\n| project\r\n    StartTime,\r\n    UserName,\r\n    SessionHostName,\r\n    LogonSeconds,\r\n    LogonMinutes = round(LogonSeconds / 60.0, 1),\r\n    ResourceId\r\n| order by LogonSeconds desc\r\n', '__POOL__', parameters('hostPoolName')), '__THRESHOLD__', string(mul(parameters('slowLogonThresholdMinutes'), 60)))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "UserName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "SessionHostName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "LogonMinutes",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "vmAlerts",
+        "count": "[length(variables('vmRgInfoDeduped'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-VM-{0}-{1}', last(split(variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId, '/')), variables('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "hostPoolName": {
+            "value": "[last(split(variables('vmRgInfoDeduped')[copyIndex()].hostPoolResourceId, '/'))]"
+          },
+          "vmResourceGroupId": {
+            "value": "[variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "actionGroupResourceId": {
+            "value": "[parameters('actionGroupResourceId')]"
+          },
+          "alertNamePrefix": {
+            "value": "[parameters('alertNamePrefix')]"
+          },
+          "autoResolveAlert": {
+            "value": "[parameters('autoResolveAlert')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "enableCpuAlerts": {
+            "value": "[parameters('enableCpuAlerts')]"
+          },
+          "enableOsDiskAlerts": {
+            "value": "[parameters('enableOsDiskAlerts')]"
+          },
+          "enableLocalDiskAlerts": {
+            "value": "[parameters('enableLocalDiskAlerts')]"
+          },
+          "enableMemoryAlerts": {
+            "value": "[parameters('enableMemoryAlerts')]"
+          },
+          "memoryAlertStartupExclusionMinutes": {
+            "value": "[parameters('memoryAlertStartupExclusionMinutes')]"
+          },
+          "hostPoolResourceId": {
+            "value": "[variables('vmRgInfoDeduped')[copyIndex()].hostPoolResourceId]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "5710395126310250388"
+            }
+          },
+          "parameters": {
+            "vmResourceGroupId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the resource group containing the session host VMs."
+              }
+            },
+            "actionGroupResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Action Group for notifications."
+              }
+            },
+            "alertNamePrefix": {
+              "type": "string",
+              "defaultValue": "AVD",
+              "metadata": {
+                "description": "Optional. Prefix prepended to all alert names."
+              }
+            },
+            "autoResolveAlert": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether alert rules auto-resolve when the condition clears."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region of the session host VMs (required for multi-resource metric alerts)."
+              }
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Log Analytics Workspace. Used for Scheduled Query Rule scopes."
+              }
+            },
+            "enableCpuAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, CPU alert rules are not deployed."
+              }
+            },
+            "enableOsDiskAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, OS disk bandwidth alert rules are not deployed."
+              }
+            },
+            "enableLocalDiskAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, session host local disk free-space alert rules are not deployed."
+              }
+            },
+            "enableMemoryAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, session host VM available memory alert rules are not deployed."
+              }
+            },
+            "memoryAlertStartupExclusionMinutes": {
+              "type": "int",
+              "defaultValue": 20,
+              "minValue": 0,
+              "maxValue": 60,
+              "metadata": {
+                "description": "Optional. Minutes of Perf data stream age required before memory alerts fire. A VM whose oldest Perf record in the lookback window is newer than this value is treated as still starting up and excluded. Set to 0 to disable."
+              }
+            },
+            "hostPoolName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the host pool whose VMs this module monitors. Used in alert rule names."
+              }
+            },
+            "hostPoolResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Full resource ID of the host pool. Used to set the cm-resource-parent tag on alert rules for Azure Cost Management rollup."
+              }
+            }
+          },
+          "variables": {
+            "vmRgName": "[last(split(parameters('vmResourceGroupId'), '/'))]",
+            "descriptionHeader": "AVD - Automated Alert\n",
+            "hostPoolTags": {
+              "cm-resource-parent": "[parameters('hostPoolResourceId')]"
+            },
+            "metricActions": [
+              {
+                "actionGroupId": "[parameters('actionGroupResourceId')]"
+              }
+            ],
+            "actions": {
+              "actionGroups": [
+                "[parameters('actionGroupResourceId')]"
+              ]
+            }
+          },
+          "resources": [
+            {
+              "condition": "[parameters('enableCpuAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-VM-CPU-85pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "global",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "description": "[format('{0}Session host CPU usage exceeded 85% average over 15 minutes. Host pool: {1}. VM resource group: {2}. Review high-CPU processes and consider adding more session hosts or adjusting the scaling plan.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('vmResourceGroupId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "microsoft.compute/virtualmachines",
+                "targetResourceRegion": "[parameters('location')]",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricNamespace": "microsoft.compute/virtualmachines",
+                      "metricName": "Percentage CPU",
+                      "operator": "GreaterThan",
+                      "threshold": 85,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableCpuAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-VM-CPU-95pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "global",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "description": "[format('{0}CRITICAL: Session host CPU usage exceeded 95% average over 15 minutes. Host pool: {1}. VM resource group: {2}. Users on this host are likely experiencing severe performance degradation.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('vmResourceGroupId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "microsoft.compute/virtualmachines",
+                "targetResourceRegion": "[parameters('location')]",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricNamespace": "microsoft.compute/virtualmachines",
+                      "metricName": "Percentage CPU",
+                      "operator": "GreaterThan",
+                      "threshold": 95,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableOsDiskAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-VM-OSDisk-BW85pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "global",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "description": "[format('{0}OS Disk bandwidth consumption on a session host is at or above 85%. Host pool: {1}. VM resource group: {2}. The VM is nearing its disk IOPS limit. Consider moving to a larger or premium disk SKU.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('vmResourceGroupId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "microsoft.compute/virtualmachines",
+                "targetResourceRegion": "[parameters('location')]",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricNamespace": "microsoft.compute/virtualmachines",
+                      "metricName": "OS Disk Bandwidth Consumed Percentage",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 85,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion",
+                      "dimensions": [
+                        {
+                          "name": "LUN",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableOsDiskAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-VM-OSDisk-BW95pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "global",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "description": "[format('{0}CRITICAL: OS Disk bandwidth on a session host is at or above 95%. Host pool: {1}. VM resource group: {2}. Users will experience severe I/O latency. Upgrade disk SKU immediately.', variables('descriptionHeader'), parameters('hostPoolName'), variables('vmRgName'))]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('vmResourceGroupId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "microsoft.compute/virtualmachines",
+                "targetResourceRegion": "[parameters('location')]",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricNamespace": "microsoft.compute/virtualmachines",
+                      "metricName": "OS Disk Bandwidth Consumed Percentage",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 95,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion",
+                      "dimensions": [
+                        {
+                          "name": "LUN",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableLocalDiskAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-DiskLow10pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - VM Local Disk Space Low - 10pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}A session host in {1} has 10% or less free space on the C: drive. Review disk usage and clean up temporary files or expand the OS disk.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT15M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 10.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"__POOL__\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "ComputerName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableLocalDiskAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-DiskLow5pct-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - VM Local Disk Space Low - 5pct ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: A session host in {1} has 5% or less free space on the C: drive. Immediate action required to free disk space.', variables('descriptionHeader'), parameters('hostPoolName'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT15M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace('let hostPoolVMs =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | parse SessionHostResourceId with \"/subscriptions/\" sub \"/resourceGroups/\" rg \"/providers/Microsoft.Compute/virtualMachines/\" vmName\r\n    | extend vmName = tolower(vmName)\r\n    | summarize by vmName;\r\nPerf\r\n| where TimeGenerated > ago(15m)\r\n| where ObjectName == \"LogicalDisk\" and CounterName == \"% Free Space\"\r\n| where InstanceName !contains \"D:\" and InstanceName !contains \"_Total\"\r\n| where CounterValue <= 5.00\r\n| parse _ResourceId with \"/subscriptions/\" subscription \"/resourcegroups/\" VMresourceGroup \"/providers/microsoft.compute/virtualmachines/\" ComputerName\r\n| extend ComputerName = tolower(ComputerName)\r\n| where ComputerName in (hostPoolVMs)\r\n| summarize arg_max(TimeGenerated, *) by ComputerName\r\n| extend HostPool = \"__POOL__\"\r\n| project ComputerName, CounterValue, VMresourceGroup, HostPool, ResourceId = _ResourceId\r\n', '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "ComputerName",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "VMresourceGroup",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableMemoryAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-Memory-Low2gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Available Memory < 2 GB ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}Available memory on a session host in {1} dropped below 2 GB average over 15 minutes. Users may experience application slowdowns. Review memory usage and consider adding more session hosts or adjusting the scaling plan. VMs booting within the last {2} minutes are excluded.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('memoryAlertStartupExclusionMinutes'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace(replace('let startupExclusionMins = __STARTUP__;\r\nlet hostPoolVmIds =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | summarize by vmResourceId = tolower(SessionHostResourceId);\r\nlet perfData =\r\n    Perf\r\n    | where TimeGenerated > ago(1h)\r\n    | where ObjectName == \"Memory\" and CounterName == \"Available MBytes\"\r\n    | extend vmResourceId = tolower(_ResourceId)\r\n    | where vmResourceId in (hostPoolVmIds);\r\nlet perfAge =\r\n    perfData\r\n    | summarize FirstPerf = min(TimeGenerated) by vmResourceId;\r\nperfData\r\n| where TimeGenerated > ago(15m)\r\n| summarize AvgMemMB = avg(CounterValue), ResourceId = any(_ResourceId), Computer = any(Computer) by vmResourceId\r\n| join kind=inner perfAge on vmResourceId\r\n| where FirstPerf < ago(startupExclusionMins * 1m)\r\n| where AvgMemMB <= 2048\r\n| extend HostPool = \"__POOL__\"\r\n| project Computer, AvgMemMB, HostPool, ResourceId\r\n', '__STARTUP__', string(parameters('memoryAlertStartupExclusionMinutes'))), '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "AvgMemMB",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableMemoryAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-VM-Memory-Low1gb-{1}', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('hostPoolTags')]",
+              "properties": {
+                "displayName": "[format('{0} - Available Memory < 1 GB ({1})', parameters('alertNamePrefix'), parameters('hostPoolName'))]",
+                "description": "[format('{0}CRITICAL: Available memory on a session host in {1} dropped below 1 GB average over 15 minutes. Users will likely experience application crashes and severe performance issues. Add more session hosts immediately. VMs booting within the last {2} minutes are excluded.', variables('descriptionHeader'), parameters('hostPoolName'), parameters('memoryAlertStartupExclusionMinutes'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "[replace(replace('let startupExclusionMins = __STARTUP__;\r\nlet hostPoolVmIds =\r\n    WVDAgentHealthStatus\r\n    | where TimeGenerated > ago(15m)\r\n    | where _ResourceId has \"__POOL__\"\r\n    | summarize by vmResourceId = tolower(SessionHostResourceId);\r\nlet perfData =\r\n    Perf\r\n    | where TimeGenerated > ago(1h)\r\n    | where ObjectName == \"Memory\" and CounterName == \"Available MBytes\"\r\n    | extend vmResourceId = tolower(_ResourceId)\r\n    | where vmResourceId in (hostPoolVmIds);\r\nlet perfAge =\r\n    perfData\r\n    | summarize FirstPerf = min(TimeGenerated) by vmResourceId;\r\nperfData\r\n| where TimeGenerated > ago(15m)\r\n| summarize AvgMemMB = avg(CounterValue), ResourceId = any(_ResourceId), Computer = any(Computer) by vmResourceId\r\n| join kind=inner perfAge on vmResourceId\r\n| where FirstPerf < ago(startupExclusionMins * 1m)\r\n| where AvgMemMB <= 1024\r\n| extend HostPool = \"__POOL__\"\r\n| project Computer, AvgMemMB, HostPool, ResourceId\r\n', '__STARTUP__', string(parameters('memoryAlertStartupExclusionMinutes'))), '__POOL__', parameters('hostPoolName'))]",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "Computer",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "AvgMemMB",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "HostPool",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": "[variables('actions')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "storageAlerts",
+        "count": "[length(parameters('storageAccountResourceIds'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-Stor{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "storageAccountResourceId": {
+            "value": "[parameters('storageAccountResourceIds')[copyIndex()]]"
+          },
+          "actionGroupResourceId": {
+            "value": "[parameters('actionGroupResourceId')]"
+          },
+          "alertNamePrefix": {
+            "value": "[parameters('alertNamePrefix')]"
+          },
+          "autoResolveAlert": {
+            "value": "[parameters('autoResolveAlert')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "createStorageLogAlerts": {
+            "value": "[equals(copyIndex(), 0)]"
+          },
+          "enableStorageLatencyAlerts": {
+            "value": "[parameters('enableStorageLatencyAlerts')]"
+          },
+          "enableStorageAvailabilityAlerts": {
+            "value": "[parameters('enableStorageAvailabilityAlerts')]"
+          },
+          "enableStorageThrottlingAlerts": {
+            "value": "[parameters('enableStorageThrottlingAlerts')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "2617368336243791226"
+            }
+          },
+          "parameters": {
+            "storageAccountResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the storage account to monitor."
+              }
+            },
+            "actionGroupResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Action Group for notifications."
+              }
+            },
+            "alertNamePrefix": {
+              "type": "string",
+              "defaultValue": "AVD",
+              "metadata": {
+                "description": "Optional. Prefix prepended to all alert names."
+              }
+            },
+            "autoResolveAlert": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether alert rules auto-resolve when the condition clears."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Optional. Azure region for the alert rule resources."
+              }
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Log Analytics Workspace resource ID. Required when createStorageLogAlerts is true."
+              }
+            },
+            "createStorageLogAlerts": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Set true to also create the log-based storage space alerts (driven by the AA runbook). Only set true for one storage account per deployment to avoid duplicate alert rules."
+              }
+            },
+            "enableStorageLatencyAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, storage server and end-to-end latency alert rules are not deployed."
+              }
+            },
+            "enableStorageAvailabilityAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, storage account availability alert rules are not deployed."
+              }
+            },
+            "enableStorageThrottlingAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, file share throttling alert rules are not deployed."
+              }
+            }
+          },
+          "variables": {
+            "storageAccountName": "[last(split(parameters('storageAccountResourceId'), '/'))]",
+            "fileServiceResourceId": "[format('{0}/fileServices/default', parameters('storageAccountResourceId'))]",
+            "descriptionHeader": "AVD - Automated Alert\n",
+            "metricActions": [
+              {
+                "actionGroupId": "[parameters('actionGroupResourceId')]"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "condition": "[parameters('enableStorageLatencyAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-AzFiles-Latency-ServerWarn-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}Storage account server latency exceeded its dynamically learned baseline. This may indicate performance degradation for FSLogix user profiles. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('storageAccountResourceId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "Microsoft.Storage/storageAccounts",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricName": "SuccessServerLatency",
+                      "operator": "GreaterThan",
+                      "timeAggregation": "Average",
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Medium",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 3
+                      }
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableStorageLatencyAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-AzFiles-Latency-ServerCrit-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}Storage account server latency significantly exceeded its dynamically learned baseline. Users may be experiencing slow profile loading or degraded application performance. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('storageAccountResourceId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "Microsoft.Storage/storageAccounts",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricName": "SuccessServerLatency",
+                      "operator": "GreaterThan",
+                      "timeAggregation": "Average",
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Low",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 4
+                      }
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableStorageLatencyAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-AzFiles-Latency-E2EWarn-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}End-to-end latency from session host to storage exceeded its dynamically learned baseline. This includes network latency and may indicate network path or performance issues. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('storageAccountResourceId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "Microsoft.Storage/storageAccounts",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricName": "SuccessE2ELatency",
+                      "operator": "GreaterThan",
+                      "timeAggregation": "Average",
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Medium",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 3
+                      }
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableStorageLatencyAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-AzFiles-Latency-E2ECrit-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}End-to-end latency from session host to storage significantly exceeded its dynamically learned baseline. Users are likely experiencing degraded profile performance. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('storageAccountResourceId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "Microsoft.Storage/storageAccounts",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricName": "SuccessE2ELatency",
+                      "operator": "GreaterThan",
+                      "timeAggregation": "Average",
+                      "criterionType": "DynamicThresholdCriterion",
+                      "alertSensitivity": "Low",
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 4,
+                        "minFailingPeriodsToAlert": 4
+                      }
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableStorageAvailabilityAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-AzFiles-Avail-Below99pct-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}Storage account availability dropped below 99%. FSLogix user profiles and MSIX App Attach may be unavailable. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('storageAccountResourceId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT5M",
+                "targetResourceType": "Microsoft.Storage/storageAccounts",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricName": "Availability",
+                      "operator": "LessThan",
+                      "threshold": 99,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableStorageThrottlingAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-AzFiles-Throttled-{1}', parameters('alertNamePrefix'), variables('storageAccountName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}Azure Files share is being throttled due to high IOPS. Users may experience slow profile operations. Consider upgrading to a higher tier or increasing the provisioned capacity. Storage account: {1}.', variables('descriptionHeader'), variables('storageAccountName'))]",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[variables('fileServiceResourceId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "targetResourceType": "Microsoft.Storage/storageAccounts/fileServices",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricName": "Transactions",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "timeAggregation": "Total",
+                      "criterionType": "StaticThresholdCriterion",
+                      "dimensions": [
+                        {
+                          "name": "ResponseType",
+                          "operator": "Include",
+                          "values": [
+                            "SuccessWithThrottling",
+                            "SuccessWithShareEgressThrottling",
+                            "SuccessWithShareIngressThrottling",
+                            "SuccessWithShareIopsThrottling",
+                            "ClientShareEgressThrottlingError",
+                            "ClientShareIngressThrottlingError",
+                            "ClientShareIopsThrottlingError"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('createStorageLogAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-AzFiles-Space-Low15pct', parameters('alertNamePrefix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "displayName": "[format('{0} - Azure Files Share Low Space - 15% Remaining', parameters('alertNamePrefix'))]",
+                "description": "[format('{0}An Azure Files share used for FSLogix profiles has 15% or less free space. Review share quota and used space, and increase quota to avoid profile load failures.', variables('descriptionHeader'))]",
+                "severity": 2,
+                "enabled": true,
+                "evaluationFrequency": "PT10M",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "AzureDiagnostics\r\n| where Category has \"JobStreams\" and StreamType_s == \"Output\" and RunbookName_s == \"AvdStorageLogData\"\r\n| where split(ResultDescription, ',')[1] != \"\"\r\n| extend StorageAccount=tostring(split(ResultDescription, ',')[1])\r\n| extend ResourceGroup=tostring(split(ResultDescription, ',')[2])\r\n| extend Share=tostring(split(ResultDescription, ',')[3])\r\n| extend GBShareQuota=split(ResultDescription, ',')[4]\r\n| extend GBUsed=split(ResultDescription, ',')[5]\r\n| extend PercentAvailable=round(toreal(split(ResultDescription, ',')[6]))\r\n| extend ResourceId=tostring(split(ResultDescription, ',')[7])\r\n| summarize arg_max(TimeGenerated, *) by Share\r\n| where PercentAvailable <= 15.00\r\n| project TimeGenerated, ResourceId, StorageAccount, Share, PercentAvailable\r\n",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "StorageAccount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "Share",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": {
+                  "actionGroups": [
+                    "[parameters('actionGroupResourceId')]"
+                  ]
+                }
+              }
+            },
+            {
+              "condition": "[parameters('createStorageLogAlerts')]",
+              "type": "Microsoft.Insights/scheduledQueryRules",
+              "apiVersion": "2022-06-15",
+              "name": "[format('{0}-AzFiles-Space-Low5pct', parameters('alertNamePrefix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "displayName": "[format('{0} - Azure Files Share Low Space - 5% Remaining', parameters('alertNamePrefix'))]",
+                "description": "[format('{0}CRITICAL: An Azure Files share used for FSLogix profiles has 5% or less free space. New profile loads will fail when the share fills up. Increase quota immediately.', variables('descriptionHeader'))]",
+                "severity": 1,
+                "enabled": true,
+                "evaluationFrequency": "PT10M",
+                "windowSize": "PT1H",
+                "overrideQueryTimeRange": "P2D",
+                "scopes": [
+                  "[parameters('logAnalyticsWorkspaceResourceId')]"
+                ],
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "criteria": {
+                  "allOf": [
+                    {
+                      "query": "AzureDiagnostics\r\n| where Category has \"JobStreams\" and StreamType_s == \"Output\" and RunbookName_s == \"AvdStorageLogData\"\r\n| where split(ResultDescription, ',')[1] != \"\"\r\n| extend StorageAccount=tostring(split(ResultDescription, ',')[1])\r\n| extend ResourceGroup=tostring(split(ResultDescription, ',')[2])\r\n| extend Share=tostring(split(ResultDescription, ',')[3])\r\n| extend GBShareQuota=split(ResultDescription, ',')[4]\r\n| extend GBUsed=split(ResultDescription, ',')[5]\r\n| extend PercentAvailable=round(toreal(split(ResultDescription, ',')[6]))\r\n| extend ResourceId=tostring(split(ResultDescription, ',')[7])\r\n| summarize arg_max(TimeGenerated, *) by Share\r\n| where PercentAvailable <= 5.00\r\n| project TimeGenerated, ResourceId, StorageAccount, Share, PercentAvailable\r\n",
+                      "timeAggregation": "Count",
+                      "dimensions": [
+                        {
+                          "name": "StorageAccount",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        },
+                        {
+                          "name": "Share",
+                          "operator": "Include",
+                          "values": [
+                            "*"
+                          ]
+                        }
+                      ],
+                      "resourceIdColumn": "ResourceId",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 1,
+                      "failingPeriods": {
+                        "numberOfEvaluationPeriods": 1,
+                        "minFailingPeriodsToAlert": 1
+                      }
+                    }
+                  ]
+                },
+                "actions": {
+                  "actionGroups": [
+                    "[parameters('actionGroupResourceId')]"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "anfAlerts",
+        "count": "[length(parameters('anfVolumeResourceIds'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-ANF{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "anfVolumeResourceId": {
+            "value": "[parameters('anfVolumeResourceIds')[copyIndex()]]"
+          },
+          "actionGroupResourceId": {
+            "value": "[parameters('actionGroupResourceId')]"
+          },
+          "alertNamePrefix": {
+            "value": "[parameters('alertNamePrefix')]"
+          },
+          "autoResolveAlert": {
+            "value": "[parameters('autoResolveAlert')]"
+          },
+          "enableAnfCapacityAlerts": {
+            "value": "[parameters('enableAnfCapacityAlerts')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "5657292134707359737"
+            }
+          },
+          "parameters": {
+            "anfVolumeResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Azure NetApp Files volume to monitor."
+              }
+            },
+            "actionGroupResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Action Group for notifications."
+              }
+            },
+            "alertNamePrefix": {
+              "type": "string",
+              "defaultValue": "AVD",
+              "metadata": {
+                "description": "Optional. Prefix prepended to all alert names."
+              }
+            },
+            "autoResolveAlert": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether alert rules auto-resolve when the condition clears."
+              }
+            },
+            "enableAnfCapacityAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, ANF volume capacity alert rules are not deployed."
+              }
+            }
+          },
+          "variables": {
+            "volumeName": "[last(split(parameters('anfVolumeResourceId'), '/'))]",
+            "descriptionHeader": "AVD - Automated Alert\n",
+            "metricActions": [
+              {
+                "actionGroupId": "[parameters('actionGroupResourceId')]"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "condition": "[parameters('enableAnfCapacityAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-ANF-Capacity-85pct-{1}', parameters('alertNamePrefix'), variables('volumeName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}Azure NetApp Files volume {1} has consumed 85% or more of its provisioned capacity. Expand the volume before it fills completely to prevent profile load failures.', variables('descriptionHeader'), variables('volumeName'))]",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('anfVolumeResourceId')]"
+                ],
+                "evaluationFrequency": "PT1H",
+                "windowSize": "PT1H",
+                "targetResourceType": "Microsoft.NetApp/netAppAccounts/capacityPools/volumes",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricNamespace": "microsoft.netapp/netappaccounts/capacitypools/volumes",
+                      "metricName": "VolumeConsumedSizePercentage",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 85,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableAnfCapacityAlerts')]",
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-ANF-Capacity-95pct-{1}', parameters('alertNamePrefix'), variables('volumeName'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}CRITICAL: Azure NetApp Files volume {1} has consumed 95% or more of its provisioned capacity. Expand the volume immediately - new FSLogix profile mounts will fail when the volume is full.', variables('descriptionHeader'), variables('volumeName'))]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('anfVolumeResourceId')]"
+                ],
+                "evaluationFrequency": "PT1H",
+                "windowSize": "PT1H",
+                "targetResourceType": "Microsoft.NetApp/netAppAccounts/capacityPools/volumes",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "Metric1",
+                      "metricNamespace": "microsoft.netapp/netappaccounts/capacitypools/volumes",
+                      "metricName": "VolumeConsumedSizePercentage",
+                      "operator": "GreaterThanOrEqual",
+                      "threshold": 95,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": "[parameters('autoResolveAlert')]",
+                "actions": "[variables('metricActions')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('AvdAlerts-SvcHealth-{0}', variables('deploymentSuffix'))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "actionGroupResourceId": {
+            "value": "[parameters('actionGroupResourceId')]"
+          },
+          "alertNamePrefix": {
+            "value": "[parameters('alertNamePrefix')]"
+          },
+          "enableServiceHealthAlerts": {
+            "value": "[parameters('enableServiceHealthAlerts')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "16753931454069317348"
+            }
+          },
+          "parameters": {
+            "actionGroupResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Action Group for notifications."
+              }
+            },
+            "alertNamePrefix": {
+              "type": "string",
+              "defaultValue": "AVD",
+              "metadata": {
+                "description": "Optional. Prefix prepended to all alert names."
+              }
+            },
+            "enableServiceHealthAlerts": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. When false, Azure Service Health activity log alert rules are not deployed."
+              }
+            }
+          },
+          "variables": {
+            "subscriptionResourceId": "[subscription().id]",
+            "descriptionHeader": "AVD - Automated Alert\n",
+            "alertActions": {
+              "actionGroups": [
+                {
+                  "actionGroupId": "[parameters('actionGroupResourceId')]"
+                }
+              ]
+            }
+          },
+          "resources": [
+            {
+              "condition": "[parameters('enableServiceHealthAlerts')]",
+              "type": "Microsoft.Insights/activityLogAlerts",
+              "apiVersion": "2020-10-01",
+              "name": "[format('{0}-ServiceHealth-Incident', parameters('alertNamePrefix'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}An active Azure service incident has been detected that may be affecting AVD components in this subscription.', variables('descriptionHeader'))]",
+                "enabled": true,
+                "scopes": [
+                  "[variables('subscriptionResourceId')]"
+                ],
+                "condition": {
+                  "allOf": [
+                    {
+                      "field": "category",
+                      "equals": "ServiceHealth"
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "field": "properties.incidentType",
+                          "equals": "Incident"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "actions": "[variables('alertActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableServiceHealthAlerts')]",
+              "type": "Microsoft.Insights/activityLogAlerts",
+              "apiVersion": "2020-10-01",
+              "name": "[format('{0}-ServiceHealth-Maintenance', parameters('alertNamePrefix'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}Planned Azure maintenance has been scheduled that may affect AVD components in this subscription.', variables('descriptionHeader'))]",
+                "enabled": true,
+                "scopes": [
+                  "[variables('subscriptionResourceId')]"
+                ],
+                "condition": {
+                  "allOf": [
+                    {
+                      "field": "category",
+                      "equals": "ServiceHealth"
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "field": "properties.incidentType",
+                          "equals": "Maintenance"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "actions": "[variables('alertActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableServiceHealthAlerts')]",
+              "type": "Microsoft.Insights/activityLogAlerts",
+              "apiVersion": "2020-10-01",
+              "name": "[format('{0}-ServiceHealth-Advisory', parameters('alertNamePrefix'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}An Azure Health Advisory has been issued for services in this subscription. Review to determine if action is required for your AVD environment.', variables('descriptionHeader'))]",
+                "enabled": true,
+                "scopes": [
+                  "[variables('subscriptionResourceId')]"
+                ],
+                "condition": {
+                  "allOf": [
+                    {
+                      "field": "category",
+                      "equals": "ServiceHealth"
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "field": "properties.incidentType",
+                          "equals": "Informational"
+                        },
+                        {
+                          "field": "properties.incidentType",
+                          "equals": "ActionRequired"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "actions": "[variables('alertActions')]"
+              }
+            },
+            {
+              "condition": "[parameters('enableServiceHealthAlerts')]",
+              "type": "Microsoft.Insights/activityLogAlerts",
+              "apiVersion": "2020-10-01",
+              "name": "[format('{0}-ServiceHealth-Security', parameters('alertNamePrefix'))]",
+              "location": "global",
+              "properties": {
+                "description": "[format('{0}An Azure Security Advisory has been issued for services in this subscription. Review immediately for potential security impact on your AVD environment.', variables('descriptionHeader'))]",
+                "enabled": true,
+                "scopes": [
+                  "[variables('subscriptionResourceId')]"
+                ],
+                "condition": {
+                  "allOf": [
+                    {
+                      "field": "category",
+                      "equals": "ServiceHealth"
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "field": "properties.incidentType",
+                          "equals": "Security"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "actions": "[variables('alertActions')]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    }
+  ]
+}

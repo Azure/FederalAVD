@@ -89,9 +89,6 @@ param encryptionKeyVaultUri string = ''
 @description('Optional. Name of the customer-managed key used for vault encryption.')
 param encryptionKeyName string = ''
 
-@description('Optional. Set to true when the Key Vault used for CMK is accessible only via private endpoint (no public access). When true, CMK on the Recovery Services Vault is automatically disabled because Azure does not support this combination — the vault cannot reach a private-only Key Vault while also using a private endpoint itself. Use platform-managed keys (Mode B) in fully private environments.')
-param keyVaultPrivateOnly bool = false
-
 @description('Optional. Key expiration in days. Also controls auto-rotation: the key is rotated 7 days before expiry.')
 @minValue(7)
 param keyExpirationInDays int = 180
@@ -111,12 +108,7 @@ var effectiveVaultSub = createVault ? subscription().subscriptionId : split(exis
 var effectiveVaultRG = createVault ? resourceGroupHosts : split(existingRecoveryServicesVaultResourceId, '/')[4]
 var effectiveVaultName = createVault ? vaultName : last(split(existingRecoveryServicesVaultResourceId, '/'))!
 
-// ── Constraint #3 (auto-correct / Mode B) ─────────────────────────────────────
-// When the Key Vault is private-endpoint-only, the vault cannot reach it while
-// simultaneously using its own private endpoint. CMK is silently disabled and
-// the vault falls back to platform-managed keys.
-// Reference: https://learn.microsoft.com/azure/backup/encryption-at-rest-with-cmk
-var useVaultCmk = createVault && keyManagementType != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId) && !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName) && !keyVaultPrivateOnly
+var useVaultCmk = createVault && keyManagementType != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId) && !empty(encryptionKeyVaultUri) && !empty(encryptionKeyName)
 
 var encryptionKeyVaultName = !empty(encryptionKeyVaultResourceId) ? last(split(encryptionKeyVaultResourceId, '/'))! : ''
 var encryptionKeyVaultSubscriptionId = !empty(encryptionKeyVaultResourceId) ? split(encryptionKeyVaultResourceId, '/')[2] : ''

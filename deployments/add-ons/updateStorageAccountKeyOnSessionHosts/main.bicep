@@ -30,6 +30,30 @@ param (
     [string]$StorageAccountKey
 )
 
+# Belt-and-suspenders: ensure "Network Access: Do not allow storage of passwords
+# and credentials for network authentication" (DisableDomainCreds) is Disabled so
+# cmdkey can persist the storage key credential in Credential Manager.
+# This is an older STIG control not commonly seen in current releases, but may
+# still be enforced by legacy baselines. Using secedit ensures the Security
+# Configuration Engine does not revert a raw registry write on the next refresh.
+$seceditInf = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.inf'
+$seceditDb  = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.sdb'
+$seceditLog = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.log'
+$infLines = @(
+    '[Unicode]'
+    'Unicode=yes'
+    '[Version]'
+    'signature="$CHICAGO$"'
+    'Revision=1'
+    '[Registry Values]'
+    'MACHINE\System\CurrentControlSet\Control\Lsa\DisableDomainCreds=4,0'
+)
+[System.IO.File]::WriteAllLines($seceditInf, $infLines, [System.Text.Encoding]::Unicode)
+$null = Start-Process -FilePath 'secedit.exe' `
+    -ArgumentList "/configure /cfg `"$seceditInf`" /db `"$seceditDb`" /log `"$seceditLog`" /quiet" `
+    -Wait -PassThru -NoNewWindow
+Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue
+
 Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$($StorageAccountName).file.$($StorageAccountSuffix) /user:localhost\$($StorageAccountName) /pass:$($StorageAccountKey)" -NoNewWindow -Wait
             '''
         }

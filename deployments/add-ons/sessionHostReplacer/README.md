@@ -1,4 +1,4 @@
-# AVD Session Host Replacer
+﻿# AVD Session Host Replacer
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Features Overview](../../../docs/features.md) | [Quick Start Guide](../../../docs/quick-start.md)
 
@@ -161,7 +161,7 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 ### Mode Comparison Matrix
 
 | Feature | SideBySide | DeleteFirst |
-|---------|------------|-------------|
+| --- | --- | --- |
 | **Downtime** | None | Temporary capacity reduction |
 | **Cost during replacement** | 2x (temporary) | 1x (no doubling) |
 | **Hostname reuse** | No (generates new names) | Yes (reuses deleted names) |
@@ -399,51 +399,18 @@ Click the button for your target cloud to open the deployment UI in Azure Portal
 
 #### Naming Convention Considerations
 
-The solution automatically detects naming conventions from your host pool name. However, if your host pool uses a non-standard naming pattern (e.g., `prod-avd-hostpool-01` instead of `vdpool-prod-eus`), you should provide explicit names for resources.
+Pass the same `namingConvention` and `identifier` values used in the host pool deployment. When deploying from the Portal, these are pre-populated from the `hpNamingConvention` and `hpIdentifier` tags on the host pool resource. Session host naming patterns (`virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv`) are pre-populated from tags on the hosts resource group.
 
-**Required override parameters for non-standard naming:**
+**Critical for brownfield:** Session host naming MUST match your existing VM naming. For example:
 
-```bicep
-// Function App infrastructure
-functionAppNameOverride: 'func-avdshr-prod-eus'           // 2-60 chars, globally unique
-storageAccountNameOverride: 'stavdshrprod'                // 3-24 chars, lowercase alphanumeric
-
-// Session host resources (CRITICAL - must match existing naming in host pool!)
-virtualMachineNameConvOverride: 'vm-SHNAME'               // Use SHNAME token
-diskNameConvOverride: 'disk-SHNAME'                       // Use SHNAME token
-networkInterfaceNameConvOverride: 'nic-SHNAME'            // Use SHNAME token
-availabilitySetNameConvOverride: 'avset-##'               // Use ## token for index
-```
+- If existing VMs are named `avdvm-001`, use `virtualMachineNameConv: 'SHNAME'` (no prefix/suffix)
+- If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConv: 'vm-SHNAME'`
+- If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConv: 'SHNAME-vm'`
 
 **Token Reference:**
 
-- `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001` or `avdvm-001-vm`)
+- `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001`)
 - `##` = Availability set index (e.g., `avset-01`, `avset-02`)
-
-**Critical for brownfield:** Session host naming MUST match your existing pattern. For example:
-
-- If existing VMs are named `avdvm-001`, use `virtualMachineNameConvOverride: 'SHNAME'` (no prefix/suffix)
-- If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConvOverride: 'vm-SHNAME'`
-- If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConvOverride: 'SHNAME-vm'`
-
-**Note on other resources:**
-
-- **App Service Plan**: Use existing via `appServicePlanResourceId` parameter (no naming needed)
-- **Private Endpoints & NICs**: Automatically derived from storage account and function app names
-- **Application Insights**: Uses shared naming convention (works across multiple host pools)
-
-**When to use overrides:**
-
-- Host pool name doesn't start with `vdpool-` or end with `-vdpool`
-- Host pool name contains special characters or patterns that don't follow the automatic detection logic
-- Existing session hosts use non-standard naming (VMs not following resource type prefix/suffix pattern)
-- You want explicit control over function app and session host resource naming
-
-**When overrides are NOT needed:**
-
-- Host pool follows standard patterns: `vdpool-avd-prod-eus` or `avd-prod-eus-vdpool`
-- Session hosts follow standard patterns: `vm-avdvm-001` or `avdvm-001-vm`
-- You're comfortable with automatically-derived names
 
 See the [Brownfield Example](#brownfield-deployment-example) below for a complete deployment scenario.
 
@@ -610,18 +577,16 @@ $params = @{
     storageAccountNameOverride = "stavdshrprod"
     applicationInsightsNameOverride = "appi-avdshr-prod-eus2"  # Only if monitoring enabled
     
-    # Required - session host naming overrides (MUST match existing VM naming!)
+    # Required - session host naming (MUST match existing VM naming!)
     # Existing VMs: vm-avdvm-001, vm-avdvm-002, etc.
-    virtualMachineNameConvOverride = "vm-SHNAME"
-    diskNameConvOverride = "disk-SHNAME"
-    networkInterfaceNameConvOverride = "nic-SHNAME"
-    availabilitySetNameConvOverride = "avset-##"
+    virtualMachineNameConv = "vm-SHNAME"
+    virtualMachineDiskNameConv = "disk-SHNAME"
+    virtualMachineNicNameConv = "nic-SHNAME"
+    availabilitySetNameConv = "avset-##"
     
     # Required - session host configuration
     sessionHostNamePrefix = "avdvm"
-    imagePublisher = "MicrosoftWindowsDesktop"
-    imageOffer = "windows-11"
-    imageSku = "win11-25h2-avd"
+    imageReference = @{ publisher = "MicrosoftWindowsDesktop"; offer = "windows-11"; sku = "win11-25h2-avd" }
     virtualMachineSize = "Standard_D4ads_v6"
     identitySolution = "ActiveDirectoryDomainServices"
     domainName = "corp.contoso.com"
@@ -707,7 +672,7 @@ The Session Host Replacer runs on a configurable timer schedule. **By default, i
 
 **NCRONTAB Format Reference:**
 
-```
+```text
 {second} {minute} {hour} {day} {month} {day-of-week}
 
 Examples:
@@ -795,7 +760,7 @@ Set to `0` to automatically maintain the current count when replacement cycles b
 Session hosts use these tags for automation:
 
 | Tag | Purpose | Example Value | When Set |
-|-----|---------|---------------|----------|
+| --- | --- | --- | --- |
 | `IncludeInAutoReplace` | Opt-in to automation | `true` | At deployment or manually |
 | `AutoReplaceDeployTimestamp` | Birth timestamp for tracking | `2024-12-01T10:00:00Z` | At deployment |
 | `AutoReplacePendingDrainTimestamp` | When draining started | `2024-12-15T14:30:00Z` | When placed in drain mode |
@@ -806,7 +771,7 @@ Session hosts use these tags for automation:
 
 ### SideBySide Mode Workflow
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Timer Trigger (Configurable) → Lightweight Up-to-Date Check        │
 └─────────────────────────────────────────────────────────────────────┘
@@ -897,7 +862,7 @@ Session hosts use these tags for automation:
 
 ### DeleteFirst Mode Workflow
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Timer Trigger (Configurable) → Lightweight Up-to-Date Check        │
 └─────────────────────────────────────────────────────────────────────┘
@@ -1076,7 +1041,7 @@ Session hosts use these tags for automation:
 ### Key Differences Between Modes
 
 | Aspect | SideBySide | DeleteFirst |
-|--------|------------|-------------|
+| --- | --- | --- |
 | **Order of operations** | Deploy → Drain → Delete | Drain → Delete → Wait → Deploy |
 | **Hostname handling** | Generate new sequential names | Reuse deleted hostnames |
 | **Capacity during replacement** | 2x (old + new simultaneously) | <1x (deletions before deployments) |
@@ -1142,6 +1107,7 @@ When `enableProgressiveScaleUp` is enabled, deployments start small and graduall
 **Solution: PendingHostMappings**
 
 A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
+
 - Hostnames of deleted hosts
 - Dedicated host assignments (HostId, HostGroupId)
 - Availability zones
@@ -1149,7 +1115,7 @@ A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
 
 **Lifecycle**:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ 1. Before Deletion: Save mappings to Table Storage              │
 │    PendingHostMappings = {"avd01": {...}, "avd02": {...}}      │
@@ -1190,12 +1156,14 @@ A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
 2. **Persistence Through Failures**: Mappings NOT cleared on deployment failure
 3. **Registration Verification**: Checks if deployed VMs actually appear in host pool
 4. **Block New Deletions**: If unresolved hosts exist, prevents deleting more capacity:
-   ```
+
+```text
    Run 1: Delete 01, 02 → Deploy fails → Mappings kept
    Run 2: Load mappings → 01, 02 not registered → BLOCK new deletions → Retry deployment
    Run 3: Still not registered → BLOCK new deletions → Wait/investigate
    Run N: 01, 02 now registered → Clear mappings → Resume normal operations
    ```
+
 5. **Progressive Scale-Up Integration**: Only counts as "successful deployment" when hosts register
 
 **Table Storage Schema**:
@@ -1224,7 +1192,7 @@ A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
 
 **Logging Examples**:
 
-```
+```text
 INFO: Saved 2 host property mapping(s) to deployment state before deletion
 INFO: Loaded 2 pending host mapping(s) from previous run
 WARNING: Deployment succeeded but 2 host(s) not yet registered: avddemo01, avddemo02 - keeping mappings and NOT counting as successful run
@@ -1281,6 +1249,7 @@ The function performs an **availability health check** on newly deployed hosts b
 **Status Check Details**:
 
 The check uses the AVD `Status` property (health check), **not** `AllowNewSession` (drain mode):
+
 - ✅ **Available** - Host is healthy and ready
 - ✅ **NeedsAssistance** - Minor issues but operational
 - ✅ **Upgrading** - Stack upgrade in progress
@@ -1292,12 +1261,12 @@ The check uses the AVD `Status` property (health check), **not** `AllowNewSessio
 **Configuration**:
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `minimumAvailablePercentage` | `100` | Minimum percentage of newly deployed hosts that must be Available before allowing deletions (1-100%). Set to 100 for maximum safety, or lower (e.g., 60) to allow operations if most hosts are healthy |
 
 **SideBySide Mode Behavior**:
 
-```
+```text
 Run 1: Deploy 10 new hosts → 7 Available, 3 Unavailable (70%)
        Safety check fails (70% < 100% threshold)
        → Deployment completes but NO deletions/shutdowns performed
@@ -1314,7 +1283,7 @@ Run 3: Check again → 10 Available (100%)
 
 **DeleteFirst Mode Behavior**:
 
-```
+```text
 Run 1: Drain & delete 5 old hosts → Deploy 5 replacements
        → 3 Available, 2 Unavailable (60%)
        Safety check fails (60% < 100% threshold)
@@ -1329,7 +1298,7 @@ Run 2: Check previous deployment → 5 Available (100%)
 
 **Logging Examples**:
 
-```
+```text
 INFO: Availability check: 8/10 (80%) new hosts available
 WARNING: Only 80% of new hosts are Available (threshold: 100%). Blocking deletions to preserve capacity.
 INFO: All newly deployed hosts are Available. Safe to proceed with deletions.
@@ -1356,7 +1325,7 @@ METRICS: NewHosts: 10/10 (100%) Available
 ### Replacement Mode Parameters
 
 | Setting | Default | Applies To | Description |
-|---------|---------|------------|-------------|
+| --- | --- | --- | --- |
 | `replacementMode` | `SideBySide` | All | Replacement strategy: `SideBySide` (zero-downtime) or `DeleteFirst` (cost-optimized) |
 | `targetSessionHostCount` | `0` | All | Target host pool size. Set to 0 for auto-detect mode (SideBySide only) or specific number for explicit count |
 | `drainGracePeriodHours` | `24` | All | Grace period in hours for session hosts **with active sessions** before forced deletion (1-168 hours) |
@@ -1366,7 +1335,7 @@ METRICS: NewHosts: 10/10 (100%) Available
 ### SideBySide Mode Parameters
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `maxDeploymentBatchSize` | `100` | Maximum deployments per function run (1-1000). Limits concurrent ARM deployments regardless of progressive scale-up percentage |
 | `minimumHostIndex` | `1` | Minimum starting index for hostname numbering (1-999). Gap-filling logic starts from this index. Applies to both DeleteFirst and SideBySide modes |
 | `enableShutdownRetention` | `false` | Shutdown (deallocate) old hosts instead of deleting them, enabling rollback to previous image |
@@ -1375,7 +1344,7 @@ METRICS: NewHosts: 10/10 (100%) Available
 ### DeleteFirst Mode Parameters
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `maxDeletionsPerCycle` | `5` | Maximum hosts to delete and deploy per cycle (1-50). Controls replacement pace - function deletes this many, then deploys same count |
 | `minimumCapacityPercentage` | `80` | Safety floor: minimum percentage of target capacity to maintain (50-100%). Deletions capped to prevent dropping below threshold. Higher = more conservative, lower = more aggressive. **Note**: Automatically overridden by scaling plan schedules when available (see Dynamic Capacity below) |
 
@@ -1418,7 +1387,7 @@ METRICS: NewHosts: 10/10 (100%) Available
 
 **Logging examples**:
 
-```
+```text
 Peak/RampUp phase: Using configured minimum (70%) as floor. Scaling plan: 60%, Effective: 70%
 RampDown/OffPeak phase: Using scaling plan target directly. Effective capacity: 50%
 Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> effective: 50%
@@ -1442,14 +1411,14 @@ Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> e
 ### Image Version & Rollout Parameters
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `replaceSessionHostOnNewImageVersionDelayDays` | `0` | Days to wait after new image detection before starting replacements (0-30). Enables ringed rollouts for image validation |
 | `allowImageVersionRollback` | `false` | Allow replacement even if current version is newer than latest available. Prevents accidental downgrades by default |
 
 ### Tagging & Automation Parameters
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `fixSessionHostTags` | `true` | Automatically add missing tags to session hosts during execution (IncludeInAutoReplace, AutoReplaceDeployTimestamp) |
 | `includePreExistingSessionHosts` | `true` | Include session hosts that existed before automation deployment. If false, only new hosts are managed |
 | `tagIncludeInAutomation` | `IncludeInAutoReplace` | Tag name identifying hosts included in automation. Must be set to `true` to enable automation |
@@ -1461,14 +1430,14 @@ Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> e
 ### Device Cleanup Parameters
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `removeEntraDevice` | `true` | Remove Entra ID device records when deleting session hosts. **Required for DeleteFirst mode** (hostname reuse) |
 | `removeIntuneDevice` | `true` | Remove Intune device records when deleting session hosts. **Required for DeleteFirst mode** (hostname reuse) |
 
 ### Scheduling Parameters
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `timerSchedule` | `0 0,30 * * * *` | NCrontab format: `{second} {minute} {hour} {day} {month} {day-of-week}`. Default runs every 30 minutes at :00 and :30. Stagger across deployments by varying minutes |
 
 **Timer Schedule Examples**:
@@ -1864,6 +1833,7 @@ $app.ApplicationSettings["MinimumDrainMinutes"]  # Recommended: 15-30
 ```
 
 Verify hosts have drain timestamp tag:
+
 ```powershell
 $vm = Get-AzVM -ResourceGroupName "rg-sessionhosts" -Name "vm-001"
 $vm.Tags["AutoReplacePendingDrainTimestamp"]  # Should be ISO 8601 timestamp
@@ -1882,6 +1852,7 @@ $vm.Tags["AutoReplacePendingDrainTimestamp"]  # Should be ISO 8601 timestamp
 **Explanation:**
 
 The capacity floor calculation uses **total host count** (including powered-off VMs) to maintain minimum capacity:
+
 - Peak phase: 80% capacity floor (default) = need 8 of 10 hosts minimum
 - Max deletions during Peak: 10 - 8 = 2 per cycle
 - Powered-off hosts are prioritized for deletion but still count toward floor

@@ -1,4 +1,4 @@
-# SessionHostReplacer Tabletop Scenarios - Code Walkthrough
+﻿# SessionHostReplacer Tabletop Scenarios - Code Walkthrough
 
 This document walks through three detailed scenarios tracing actual code execution paths.
 

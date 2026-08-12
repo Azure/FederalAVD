@@ -1,4 +1,4 @@
-# customer/artifacts
+﻿# customer/artifacts
 
 Place your custom artifact packages here. Each subfolder becomes a single `.zip` file that
 `Update-ImageArtifacts.ps1` uploads to the artifacts blob container for use during image builds

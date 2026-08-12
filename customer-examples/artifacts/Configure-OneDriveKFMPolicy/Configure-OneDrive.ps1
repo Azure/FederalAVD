@@ -1,253 +1,12 @@
 ﻿[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [Parameter(Mandatory = $true)]
-    [string]$TenantId
+    [string]$TenantId,
+    [switch]$EnableRemoteApp
 )
 
 
 #region Functions
-
-Function Get-InternetFile {
-    [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [uri]$Url,
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$OutputDirectory,
-        [Parameter(Mandatory = $false, Position = 2)]
-        [string]$OutputFileName
-    )
-
-    Begin {
-        $ProgressPreference = 'SilentlyContinue'
-        ## Get the name of this function and write header
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Log -Message "Starting ${CmdletName} with the following parameters: $PSBoundParameters"
-    }
-    Process {
-
-        $start_time = Get-Date
-
-        If (!$OutputFileName) {
-            Write-Log -Message "${CmdletName}: No OutputFileName specified. Trying to get file name from URL."
-            If ((split-path -path $Url -leaf).Contains('.')) {
-                $OutputFileName = split-path -path $url -leaf
-                Write-Log -Message "${CmdletName}: Url contains file name - '$OutputFileName'."
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
-                $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect = $false
-                $response = $request.GetResponse()
-                $Location = $response.GetResponseHeader("Location")
-                If ($Location) {
-                    $OutputFileName = [System.IO.Path]::GetFileName($Location)
-                    Write-Log -Message "${CmdletName}: File Name from 'Location' Response Header is '$OutputFileName'."
-                }
-                Else {
-                    Write-Log -Message "${CmdletName}: No 'Location' Response Header returned. Trying 'Content-Disposition' Response Header."
-                    $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
-                    $contentDisposition = $result.Headers.'Content-Disposition'
-                    If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
-                        Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
-                    }
-                }
-            }
-        }
-
-        If ($OutputFileName) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
-            $wc = New-Object System.Net.WebClient
-            $OutputFile = Join-Path $OutputDirectory $OutputFileName
-            Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."
-            Try {
-                $wc.DownloadFile($url, $OutputFile)
-                $time = (Get-Date).Subtract($start_time).Seconds
-                
-                Write-Log -Message "${CmdletName}: Time taken: '$time' seconds."
-                if (Test-Path -Path $outputfile) {
-                    $totalSize = (Get-Item $outputfile).Length / 1MB
-                    Write-Log -Message "${CmdletName}: Download was successful. Final file size: '$totalsize' mb"
-                    Return $OutputFile
-                }
-            }
-            Catch {
-                Write-Log -Category Error -Message "${CmdletName}: Error downloading file. Please check url."
-                Return $Null
-            }
-        }
-        Else {
-            Write-Log -Category Error -Message "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Return $Null
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
-Function Update-LocalGPOTextFile {
-    [CmdletBinding(DefaultParameterSetName = 'Set')]
-    Param (
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [ValidateSet('Computer', 'User')]
-        [string]$Scope,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryKeyPath,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryValue,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [AllowEmptyString()]
-        [string]$RegistryData,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [ValidateSet('DWORD', 'String')]
-        [string]$RegistryType,
-        [Parameter(Mandatory = $false, ParameterSetName = 'Delete')]
-        [switch]$Delete,
-        [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
-        [switch]$DeleteAllValues,
-        [string]$outputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        # Convert $RegistryType to UpperCase to prevent LGPO errors.
-        $ValueType = $RegistryType.ToUpper()
-        # Change String type to SZ for text file
-        If ($ValueType -eq 'STRING') { $ValueType = 'SZ' }
-        # Replace any incorrect registry entries for the format needed by text file.
-        $modified = $false
-        $SearchStrings = 'HKLM:\', 'HKCU:\', 'HKEY_CURRENT_USER:\', 'HKEY_LOCAL_MACHINE:\'
-        ForEach ($String in $SearchStrings) {
-            If ($RegistryKeyPath.StartsWith("$String") -and $modified -ne $true) {
-                $index = $String.Length
-                $RegistryKeyPath = $RegistryKeyPath.Substring($index, $RegistryKeyPath.Length - $index)
-                $modified = $true
-            }
-        }        
-        #Create the output file if needed.
-        $OutFile = Join-Path -Path $OutputDir -ChildPath "$Scope.txt"
-        If (-not (Test-Path -LiteralPath $Outfile)) {
-            If (-not (Test-Path -LiteralPath $OutputDir -PathType 'Container')) {
-                $null = New-Item -Path $OutputDir -Type 'Directory' -Force -ErrorAction 'Stop'
-            }
-            $null = New-Item -Path $OutFile -ItemType File -ErrorAction Stop
-        }
-
-        Write-Log -Message "${CmdletName}: Adding registry information to '$outfile' for LGPO.exe"
-        # Update file with information
-        Add-Content -Path $Outfile -Value $Scope
-        Add-Content -Path $Outfile -Value $RegistryKeyPath
-        Add-Content -Path $Outfile -Value $RegistryValue
-        If ($Delete) {
-            Add-Content -Path $Outfile -Value 'DELETE'
-        }
-        ElseIf ($DeleteAllValues) {
-            Add-Content -Path $Outfile -Value 'DELETEALLVALUES'
-        }
-        Else {
-            Add-Content -Path $Outfile -Value "$($ValueType):$RegistryData"
-        }
-        Add-Content -Path $Outfile -Value ""
-    }
-    End {        
-    }
-}
-
-Function Invoke-LGPO {
-    [CmdletBinding()]
-    Param (
-        [string]$InputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Gathering Registry text files for LGPO from '$InputDir'"
-        $RegFiles = Get-ChildItem -Path $InputDir -Filter '*.txt'
-        ForEach ($RegistryFile in $RegFiles) {
-            $TxtFilePath = $RegistryFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying settings from '$txtFilePath' to Local Group Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$TxtFilePath`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Gathering Security Templates files for LGPO from '$InputDir'"
-        $ConfigFile = Get-ChildItem -Path $InputDir -Filter '*.inf'
-        If ($ConfigFile) {
-            $ConfigFile = $ConfigFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying security settings from '$ConfigFile' to Local Security Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/s `"$ConfigFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Finding Audit CSV file for LGPO from '$InputDir'"
-        $AuditFile = Get-ChildItem -Path $InputDir -Filter '*.csv'
-        If ($AuditFile) {
-            $AuditFile = $AuditFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying advanced audit settings from '$AuditFile' to Local policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/ac `"$AuditFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-    }
-    End {
-    }
-}
-
-Function Set-RegistryValue {
-    [CmdletBinding()]
-    param (
-        [Parameter()]
-        [string]
-        $Name,
-        [Parameter()]
-        [string]
-        $Path,
-        [Parameter()]
-        [string]$PropertyType,
-        [Parameter()]
-        $Value
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Setting Registry Value $Path\$Name"
-        # Create the registry Key(s) if necessary.
-        If (!(Test-Path -Path $Path)) {
-            Write-Log -Message "${CmdletName}: Creating Registry Key: $Path"
-            New-Item -Path $Path -Force | Out-Null
-        }
-        # Check for existing registry setting
-        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-        If ($RemoteValue) {
-            # Get current Value
-            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
-            Write-Log -Message "${CmdletName}: Current Value of $($Path)\$($Name) : $CurrentValue"
-            If ($Value -ne $CurrentValue) {
-                Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Value of $($Path)\$($Name) is already set to $Value"
-            }           
-        }
-        Else {
-            Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
 
 Function Write-Log {
     Param (
@@ -263,8 +22,8 @@ Function Write-Log {
         Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
     }
     Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
+        'Info' { Write-Host $Content }
+        'Error' { Write-Error $Content -ErrorAction Continue }
         'Warning' { Write-Warning $Content }
     }
 }
@@ -348,16 +107,16 @@ function Read-PRegFile {
     param ([string]$Path)
 
     $list = [System.Collections.Generic.List[hashtable]]::new()
-    if (-not (Test-Path -LiteralPath $Path)) { return ,$list }
+    if (-not (Test-Path -LiteralPath $Path)) { return , $list }
 
     $raw = [IO.File]::ReadAllBytes($Path)
-    if ($raw.Length -lt 8) { return ,$list }
+    if ($raw.Length -lt 8) { return , $list }
 
     $sig = [System.Text.Encoding]::ASCII.GetString($raw, 0, 4)
     $ver = [BitConverter]::ToUInt32($raw, 4)
     if ($sig -ne 'PReg' -or $ver -ne 1) {
         Write-Warning "RegistryPol: '$Path' has unexpected header (sig='$sig' ver=$ver). Existing entries discarded."
-        return ,$list
+        return , $list
     }
 
     $pos = 8
@@ -394,7 +153,7 @@ function Read-PRegFile {
 
         $list.Add(@{ Key = $key; Name = $name; Type = $type; Size = $size; Data = $data })
     }
-    return ,$list
+    return , $list
 }
 
 function Write-PRegFile {
@@ -408,7 +167,7 @@ function Write-PRegFile {
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
 
     $ms = [IO.MemoryStream]::new()
-    $w  = [IO.BinaryWriter]::new($ms)
+    $w = [IO.BinaryWriter]::new($ms)
 
     $w.Write([System.Text.Encoding]::ASCII.GetBytes('PReg'))  # Signature
     $w.Write([uint32]1)                                         # Version
@@ -420,10 +179,10 @@ function Write-PRegFile {
 
     foreach ($e in $Entries) {
         $w.Write($bo)
-        $w.Write($script:_PRegEnc.GetBytes($e.Key));   $w.Write($nt); $w.Write($sc)
-        $w.Write($script:_PRegEnc.GetBytes($e.Name));  $w.Write($nt); $w.Write($sc)
-        $w.Write([uint32]$e.Type);  $w.Write($sc)
-        $w.Write([uint32]$e.Size);  $w.Write($sc)
+        $w.Write($script:_PRegEnc.GetBytes($e.Key)); $w.Write($nt); $w.Write($sc)
+        $w.Write($script:_PRegEnc.GetBytes($e.Name)); $w.Write($nt); $w.Write($sc)
+        $w.Write([uint32]$e.Type); $w.Write($sc)
+        $w.Write([uint32]$e.Size); $w.Write($sc)
         # Guard: BinaryWriter.Write([byte[]]@()) resolves to the wrong overload and throws
         if ($null -ne $e.Data -and $e.Data.Length -gt 0) { $w.Write([byte[]]$e.Data) }
         $w.Write($bc)
@@ -538,30 +297,30 @@ function Set-PolicyRegistryValue {
     $relPath = Get-RelativePolicyKeyPath $RegistryKeyPath
 
     $typeCode = switch ($RegistryType.ToUpper()) {
-        'DWORD'        { 4 }
-        'STRING'       { 1 }
-        'SZ'           { 1 }
+        'DWORD' { 4 }
+        'STRING' { 1 }
+        'SZ' { 1 }
         'EXPANDSTRING' { 2 }
-        'EXPANDSZ'     { 2 }
-        'MULTISTRING'  { 7 }
-        'MULTISZ'      { 7 }
-        default        { 1 }
+        'EXPANDSZ' { 2 }
+        'MULTISTRING' { 7 }
+        'MULTISZ' { 7 }
+        default { 1 }
     }
 
     $dataBytes = switch ($typeCode) {
-        4       { ConvertTo-PRegDWord ([uint32]$RegistryData) }
-        7       { ConvertTo-PRegMultiSZ ($RegistryData -split '\|') }
+        4 { ConvertTo-PRegDWord ([uint32]$RegistryData) }
+        7 { ConvertTo-PRegMultiSZ ($RegistryData -split '\|') }
         default { ConvertTo-PRegSZ $RegistryData }
     }
 
     $script:_PolQueue.Add(@{
-        Scope = $Scope
-        Key   = $relPath
-        Name  = $RegistryValue
-        Type  = [uint32]$typeCode
-        Size  = [uint32]$dataBytes.Length
-        Data  = $dataBytes
-    })
+            Scope = $Scope
+            Key   = $relPath
+            Name  = $RegistryValue
+            Type  = [uint32]$typeCode
+            Size  = [uint32]$dataBytes.Length
+            Data  = $dataBytes
+        })
     Write-Verbose "RegistryPol: Queued SET [$Scope] $relPath\$RegistryValue ($RegistryType = $RegistryData)"
 }
 
@@ -596,16 +355,16 @@ function Remove-PolicyRegistryValue {
         [string]$RegistryValue
     )
 
-    $relPath  = Get-RelativePolicyKeyPath $RegistryKeyPath
+    $relPath = Get-RelativePolicyKeyPath $RegistryKeyPath
     $delBytes = ConvertTo-PRegSZ ' '   # MS-GPREG: **Del. value data is a single space
     $script:_PolQueue.Add(@{
-        Scope = $Scope
-        Key   = $relPath
-        Name  = "**Del.$RegistryValue"
-        Type  = [uint32]1
-        Size  = [uint32]$delBytes.Length
-        Data  = $delBytes
-    })
+            Scope = $Scope
+            Key   = $relPath
+            Name  = "**Del.$RegistryValue"
+            Type  = [uint32]1
+            Size  = [uint32]$delBytes.Length
+            Data  = $delBytes
+        })
     Write-Verbose "RegistryPol: Queued REMOVE [$Scope] $relPath\$RegistryValue"
 }
 
@@ -634,16 +393,16 @@ function Clear-PolicyRegistryKeyValues {
         [string]$RegistryKeyPath
     )
 
-    $relPath  = Get-RelativePolicyKeyPath $RegistryKeyPath
+    $relPath = Get-RelativePolicyKeyPath $RegistryKeyPath
     $delBytes = ConvertTo-PRegSZ ' '
     $script:_PolQueue.Add(@{
-        Scope = $Scope
-        Key   = $relPath
-        Name  = '**DelVals.'
-        Type  = [uint32]1
-        Size  = [uint32]$delBytes.Length
-        Data  = $delBytes
-    })
+            Scope = $Scope
+            Key   = $relPath
+            Name  = '**DelVals.'
+            Type  = [uint32]1
+            Size  = [uint32]$delBytes.Length
+            Data  = $delBytes
+        })
     Write-Verbose "RegistryPol: Queued CLEAR ALL VALUES [$Scope] $relPath"
 }
 
@@ -672,16 +431,16 @@ function Invoke-PolicyUpdate {
         return
     }
 
-    $gpBase   = "$env:SystemRoot\System32\GroupPolicy"
+    $gpBase = "$env:SystemRoot\System32\GroupPolicy"
     $machineQ = @($script:_PolQueue | Where-Object { $_.Scope -eq 'Computer' })
-    $userQ    = @($script:_PolQueue | Where-Object { $_.Scope -eq 'User' })
+    $userQ = @($script:_PolQueue | Where-Object { $_.Scope -eq 'User' })
     $machineUpdated = $false
-    $userUpdated    = $false
+    $userUpdated = $false
 
     foreach ($scope in @(
-        @{ Queue = $machineQ; PolPath = "$gpBase\Machine\Registry.pol"; IsUser = $false },
-        @{ Queue = $userQ;    PolPath = "$gpBase\User\Registry.pol";    IsUser = $true }
-    )) {
+            @{ Queue = $machineQ; PolPath = "$gpBase\Machine\Registry.pol"; IsUser = $false },
+            @{ Queue = $userQ; PolPath = "$gpBase\User\Registry.pol"; IsUser = $true }
+        )) {
         if ($scope.Queue.Count -eq 0) { continue }
 
         $polPath = $scope.PolPath
@@ -703,48 +462,54 @@ function Invoke-PolicyUpdate {
     # Both scope lines are preserved on every call: if only one scope was updated here,
     # the other scope's existing line is read back and re-written unchanged.
     try {
-        $gptPath   = "$gpBase\gpt.ini"
-        $regCse    = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
+        $gptPath = "$gpBase\gpt.ini"
+        $regCse = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
         $machineAT = '{D02B1F72-3407-48AE-BA88-E8213C6761F1}'
-        $userAT    = '{D02B1F73-3407-48AE-BA88-E8213C6761F1}'
+        $userAT = '{D02B1F73-3407-48AE-BA88-E8213C6761F1}'
 
         $existing_ini = if (Test-Path -LiteralPath $gptPath) { Get-Content $gptPath -Raw } else { '' }
 
         $machineVer = [uint16]1
-        $userVer    = [uint16]1
+        $userVer = [uint16]1
         if ($existing_ini -match 'Version\s*=\s*(\d+)') {
             $cur = [uint32]$matches[1]
             $machineVer = [uint16]($cur -band 0xFFFF)
-            $userVer    = [uint16](($cur -shr 16) -band 0xFFFF)
+            $userVer = [uint16](($cur -shr 16) -band 0xFFFF)
         }
         if ($machineUpdated) { $machineVer++ }
-        if ($userUpdated)    { $userVer++ }
+        if ($userUpdated) { $userVer++ }
         $version = ([uint32]$userVer -shl 16) -bor [uint32]$machineVer
 
-$machineExt = "[$regCse$machineAT]"
-          $userExt   = "[$regCse$userAT]"
+        $machineExt = "[$regCse$machineAT]"
+        $userExt = "[$regCse$userAT]"
 
-          $finalMachineExt = if ($machineUpdated) {
-              if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-                  $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
-              } else { $machineExt }
-          } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-              $matches[1].Trim()
-          } else { '' }
-  
-          $finalUserExt = if ($userUpdated) {
-              if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
-                  $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
-              } else { $userExt }
-        } elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+        $finalMachineExt = if ($machineUpdated) {
+            if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
+            }
+            else { $machineExt }
+        }
+        elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()
-        } else { '' }
+        }
+        else { '' }
+  
+        $finalUserExt = if ($userUpdated) {
+            if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
+            }
+            else { $userExt }
+        }
+        elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+            $matches[1].Trim()
+        }
+        else { '' }
 
         $gptContent = "[General]`r`n"
         if ($finalMachineExt) { $gptContent += "gPCMachineExtensionNames=$finalMachineExt`r`n" }
-        if ($finalUserExt)    { $gptContent += "gPCUserExtensionNames=$finalUserExt`r`n" }
+        if ($finalUserExt) { $gptContent += "gPCUserExtensionNames=$finalUserExt`r`n" }
         $gptContent += "Version=$version`r`n"
         [IO.File]::WriteAllText($gptPath, $gptContent, [System.Text.Encoding]::ASCII)
         Write-Verbose "RegistryPol: gpt.ini written (Version=$version machine=$machineVer user=$userVer)"
@@ -762,11 +527,11 @@ function Get-RelativePolicyKeyPath {
     <#  Internal. Strips any HIVE: prefix so KeyPath is relative as required by MS-GPREG.  #>
     param ([string]$Path)
     foreach ($prefix in @(
-        'HKEY_LOCAL_MACHINE:\', 'HKEY_CURRENT_USER:\',
-        'HKEY_LOCAL_MACHINE:',  'HKEY_CURRENT_USER:',
-        'HKLM:\', 'HKCU:\',
-        'HKLM:',  'HKCU:'
-    )) {
+            'HKEY_LOCAL_MACHINE:\', 'HKEY_CURRENT_USER:\',
+            'HKEY_LOCAL_MACHINE:', 'HKEY_CURRENT_USER:',
+            'HKLM:\', 'HKCU:\',
+            'HKLM:', 'HKCU:'
+        )) {
         if ($Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
             return $Path.Substring($prefix.Length).TrimStart('\')
         }
@@ -790,7 +555,8 @@ Write-Log -Message "Starting OneDrive configuration in accordance with '$ref'."
 # Resolve install dir - enterprise per-machine installer uses Program Files (not x86)
 $InstallDir = if (Test-Path "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe") {
     "$env:ProgramFiles\Microsoft OneDrive"
-} else {
+}
+else {
     "${env:ProgramFiles(x86)}\Microsoft OneDrive"
 }
 $OnedriveVersion = (Get-ItemProperty -Path "$InstallDir\OneDrive.exe").VersionInfo.ProductVersion
@@ -799,8 +565,8 @@ If (Test-Path -Path "$InstallDir\$OnedriveVersion") {
     Write-Log -Message "Found OneDrive version folder '$OnedriveVersion' in '$InstallDir'. Copying ADMX templates to PolicyDefinitions."
     $null = Get-ChildItem -Path "$InstallDir\$OnedriveVersion" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
     $null = Get-ChildItem -Path "$InstallDir\$OnedriveVersion" -File -Recurse -Filter '*.adml' |
-        Where-Object { $_.Directory.Name -eq 'en-us' -or $_.Directory.Name -eq 'en' -or (Get-ChildItem -Path $_.DirectoryName -Filter '*.admx' -ErrorAction SilentlyContinue) } |
-        ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
+    Where-Object { $_.Directory.Name -eq 'en-us' -or $_.Directory.Name -eq 'en' -or (Get-ChildItem -Path $_.DirectoryName -Filter '*.admx' -ErrorAction SilentlyContinue) } |
+    ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
 }
 $Script:AdmxImported = Test-Path "$env:WINDIR\PolicyDefinitions\OneDrive.admx"
 
@@ -815,7 +581,8 @@ If ($TenantID -and $TenantID -ne '') {
         Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMSilentOptIn' -RegistryType String -RegistryData $TenantID
         Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1
         Invoke-PolicyUpdate
-    } Else {
+    }
+    Else {
         Write-Log -Category Warning -Message "OneDrive ADMX templates were not imported. Writing settings directly to registry."
         $oneDriveKey = 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive'
         If (-not (Test-Path $oneDriveKey)) { New-Item -Path $oneDriveKey -Force | Out-Null }
@@ -827,5 +594,10 @@ If ($TenantID -and $TenantID -ne '') {
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMSilentOptIn' -Value $TenantID -Type String -Force
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMBlockOptOut' -Value 1 -Type DWord -Force
     }
+}
+If ($EnableRemoteApp) {
+    Write-Log -Message "Enabling enhanced shell experience for RemoteApp (required for OneDrive to launch alongside RemoteApp sessions)."
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -RegistryValue 'EnableEnhancedShellExperienceForRemoteApp' -RegistryType DWORD -RegistryData 1
+    Invoke-PolicyUpdate
 }
 Write-Log -Message "OneDrive Group Policy Configuration Complete."

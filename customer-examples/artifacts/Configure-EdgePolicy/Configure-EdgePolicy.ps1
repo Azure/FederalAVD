@@ -93,44 +93,6 @@ Function Get-InternetFile {
     }
 }
 
-Function Invoke-LGPO {
-    [CmdletBinding()]
-    Param (
-        [string]$InputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Gathering Registry text files for LGPO from '$InputDir'"
-        $RegFiles = Get-ChildItem -Path $InputDir -Filter '*.txt'
-        ForEach ($RegistryFile in $RegFiles) {
-            $TxtFilePath = $RegistryFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying settings from '$txtFilePath' to Local Group Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/t `"$TxtFilePath`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Gathering Security Templates files for LGPO from '$InputDir'"
-        $ConfigFile = Get-ChildItem -Path $InputDir -Filter '*.inf'
-        If ($ConfigFile) {
-            $ConfigFile = $ConfigFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying security settings from '$ConfigFile' to Local Security Policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/s `"$ConfigFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-        Write-Log -Message "${CmdletName}: Finding Audit CSV file for LGPO from '$InputDir'"
-        $AuditFile = Get-ChildItem -Path $InputDir -Filter '*.csv'
-        If ($AuditFile) {
-            $AuditFile = $AuditFile.FullName
-            Write-Log -Message "${CmdletName}: Now applying advanced audit settings from '$AuditFile' to Local policy via LGPO.exe."
-            $lgporesult = Start-Process -FilePath 'lgpo.exe' -ArgumentList "/ac `"$AuditFile`"" -Wait -PassThru
-            Write-Log -Message "${CmdletName}: LGPO exitcode: '$($lgporesult.exitcode)'"
-        }
-    }
-    End {
-    }
-}
-
 function New-Log {
     Param (
         [Parameter(Mandatory = $true, Position = 0)]
@@ -149,187 +111,6 @@ function New-Log {
     $script:Log = Join-Path $path $logfile
 
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
-}
-
-Function Remove-RegistryValue {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$Path,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        try {
-            Write-Log -Message "${CmdletName}: Deleting registry value '$Name' from '$Path' if it exists."
-            if (Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop) {
-                Remove-ItemProperty -Path $Path -Name $Name -ErrorAction Stop
-                Write-Log -Message "${CmdletName}: Deleted registry value '$Name' from '$Path'."
-            }
-        }
-        catch {
-            # Silently continue if the value doesn't exist
-            Write-Log -Message "${CmdletName}: Registry value '$Name' not found at '$Path'. Nothing to delete."
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
-Function Remove-RegistryKey {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$KeyPath
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Attempting to delete registry key '$KeyPath'."
-        if (Test-Path -Path $KeyPath) {
-            try {
-                Remove-Item -Path $KeyPath -Recurse -Force
-                Write-Log -Message "${CmdletName}: Registry key '$KeyPath' and all its contents have been deleted."
-            }
-            catch {
-                Write-Log -Category Warning -Message "${CmdletName}: Failed to delete registry key '$KeyPath'. Error: $_"
-            }
-        }
-        else {
-            Write-Log -Message "${CmdletName}: Registry key '$KeyPath' does not exist. Nothing to delete."
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
-Function Set-RegistryValue {
-    [CmdletBinding()]
-    param (
-        [Parameter()]
-        [string]
-        $Name,
-        [Parameter()]
-        [string]
-        $Path,
-        [Parameter()]
-        [string]$PropertyType,
-        [Parameter()]
-        $Value
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        Write-Log -Message "${CmdletName}: Setting Registry Value $Path\$Name"
-        # Create the registry Key(s) if necessary.
-        If (!(Test-Path -Path $Path)) {
-            Write-Log -Message "${CmdletName}: Creating Registry Key: $Path"
-            New-Item -Path $Path -Force | Out-Null
-        }
-        # Check for existing registry setting
-        $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-        If ($RemoteValue) {
-            # Get current Value
-            $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name
-            Write-Log -Message "${CmdletName}: Current Value of $($Path)\$($Name) : $CurrentValue"
-            If ($Value -ne $CurrentValue) {
-                Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Value of $($Path)\$($Name) is already set to $Value"
-            }           
-        }
-        Else {
-            Write-Log -Message "${CmdletName}: Setting Value of $($Path)\$($Name) : $Value"
-            New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
-Function Update-LocalGPOTextFile {
-    [CmdletBinding(DefaultParameterSetName = 'Set')]
-    Param (
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [ValidateSet('Computer', 'User')]
-        [string]$Scope,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryKeyPath,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'Delete')]
-        [Parameter(Mandatory = $true, ParameterSetName = 'DeleteAllValues')]
-        [string]$RegistryValue,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [AllowEmptyString()]
-        [string]$RegistryData,
-        [Parameter(Mandatory = $true, ParameterSetName = 'Set')]
-        [ValidateSet('DWORD', 'String')]
-        [string]$RegistryType,
-        [Parameter(Mandatory = $false, ParameterSetName = 'Delete')]
-        [switch]$Delete,
-        [Parameter(Mandatory = $false, ParameterSetName = 'DeleteAllValues')]
-        [switch]$DeleteAllValues,
-        [string]$outputDir = $Script:LGPOTempDir
-    )
-    Begin {
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-    }
-    Process {
-        # Convert $RegistryType to UpperCase to prevent LGPO errors.
-        $ValueType = $RegistryType.ToUpper()
-        # Change String type to SZ for text file
-        If ($ValueType -eq 'STRING') { $ValueType = 'SZ' }
-        # Replace any incorrect registry entries for the format needed by text file.
-        $modified = $false
-        $SearchStrings = 'HKLM:\', 'HKCU:\', 'HKEY_CURRENT_USER:\', 'HKEY_LOCAL_MACHINE:\'
-        ForEach ($String in $SearchStrings) {
-            If ($RegistryKeyPath.StartsWith("$String") -and $modified -ne $true) {
-                $index = $String.Length
-                $RegistryKeyPath = $RegistryKeyPath.Substring($index, $RegistryKeyPath.Length - $index)
-                $modified = $true
-            }
-        }        
-        #Create the output file if needed.
-        $OutFile = Join-Path -Path $OutputDir -ChildPath "$Scope.txt"
-        If (-not (Test-Path -LiteralPath $Outfile)) {
-            If (-not (Test-Path -LiteralPath $OutputDir -PathType 'Container')) {
-                $null = New-Item -Path $OutputDir -Type 'Directory' -Force -ErrorAction 'Stop'
-            }
-            $null = New-Item -Path $OutFile -ItemType File -ErrorAction Stop
-        }
-
-        Write-Log -Message "${CmdletName}: Adding registry information to '$outfile' for LGPO.exe"
-        # Update file with information
-        Add-Content -Path $Outfile -Value $Scope
-        Add-Content -Path $Outfile -Value $RegistryKeyPath
-        Add-Content -Path $Outfile -Value $RegistryValue
-        If ($Delete) {
-            Add-Content -Path $Outfile -Value 'DELETE'
-        }
-        ElseIf ($DeleteAllValues) {
-            Add-Content -Path $Outfile -Value 'DELETEALLVALUES'
-        }
-        Else {
-            Add-Content -Path $Outfile -Value "$($ValueType):$RegistryData"
-        }
-        Add-Content -Path $Outfile -Value ""
-    }
-    End {        
-    }
 }
 
 Function Write-Log {
@@ -864,23 +645,27 @@ If ($null -ne $EdgeTemplatesCab) {
     Write-Log -Category Info -Message "Bundled Edge policy CAB found: '$EdgeTemplatesCab'."
 } ElseIf (-not (Test-Path $Script:EdgeAdmx)) {
     Write-Log -Category Info -Message "'msedge.admx' not found in PolicyDefinitions and no bundled CAB present. Attempting to download Edge policy templates."
-    $APIUrl = "https://edgeupdates.microsoft.com/api/products?view=enterprise"
-    $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
-    $content = $EdgeUpdatesJSON.content | ConvertFrom-Json      
-    $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
-    $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -last 1
-    $EdgeLatestStableVersion = $latestrelease.ProductVersion
-    $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
-    $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
-    If (-not($latestPolicyFile)) {   
-        $latestpolicyfile = $policyfiles | Sort-Object ProductVersion | Select-Object -last 1
-    }  
-    $EdgeTemplatesUrl = $latestpolicyfile.artifacts.Location
-    If ($null -eq $EdgeTemplatesUrl) {
-        Write-Log -Category Warning -Message "Unable to get download Url for Edge Policy Templates."
-    } Else {
-        Write-Log -Category Info -Message "Getting download Urls for latest Edge browser and policy templates from '$APIUrl'."
-        $EdgeTemplatesCab = Get-InternetFile -Url $EdgeTemplatesUrl -OutputDirectory $Script:TempDir -Verbose
+    try {
+        $APIUrl = "https://edgeupdates.microsoft.com/api/products?view=enterprise"
+        $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
+        $content = $EdgeUpdatesJSON.content | ConvertFrom-Json      
+        $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
+        $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -last 1
+        $EdgeLatestStableVersion = $latestrelease.ProductVersion
+        $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
+        $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
+        If (-not($latestPolicyFile)) {   
+            $latestpolicyfile = $policyfiles | Sort-Object ProductVersion | Select-Object -last 1
+        }  
+        $EdgeTemplatesUrl = $latestpolicyfile.artifacts.Location
+        If ($null -eq $EdgeTemplatesUrl) {
+            Write-Log -Category Warning -Message "Unable to get download Url for Edge Policy Templates."
+        } Else {
+            Write-Log -Category Info -Message "Getting download Urls for latest Edge browser and policy templates from '$APIUrl'."
+            $EdgeTemplatesCab = Get-InternetFile -Url $EdgeTemplatesUrl -OutputDirectory $Script:TempDir -Verbose
+        }
+    } catch {
+        Write-Log -Category Warning -Message "Failed to download Edge policy templates: $_. Continuing without ADMX."
     }
 } Else {
     Write-Log -Category Info -Message "'msedge.admx' already present in PolicyDefinitions and no bundled CAB to apply. Skipping template download."

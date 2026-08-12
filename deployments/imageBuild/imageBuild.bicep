@@ -194,7 +194,7 @@ param galleryImageVersionConfidentialVMEncryptionType string = ''
 param confidentialVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
-param installUpdates bool = true
+param installUpdates bool = false
 
 @allowed([
   'MU'

@@ -1,4 +1,4 @@
-# Configure-EdgePolicy.ps1
+﻿# Configure-EdgePolicy.ps1
 
 ## Overview
 
@@ -100,7 +100,7 @@ $popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
 
 ## Policy Settings Applied
 
-```
+```text
 Computer Configuration
 └── Administrative Templates
     └── Microsoft Edge
@@ -115,14 +115,14 @@ Computer Configuration
 
 ### Developer Tools
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Edge
   DeveloperToolsAvailability: 1 (Allowed) or 2 (Disallowed)
 ```
 
 ### SmartScreen Allowlist
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Edge\SmartScreenAllowListDomains
   1: portal.azure.com
   2: core.windows.net
@@ -131,7 +131,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Edge\SmartScreenAllowListDomains
 
 ### Popup Allowlist
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\Edge\PopupsAllowedForUrls
   1: [*.]mil
   2: [*.]gov
@@ -145,7 +145,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Edge\PopupsAllowedForUrls
 The `PopupsAllowedForUrls` policy supports wildcard patterns:
 
 | Pattern | Matches |
-|---------|---------|
+| --- | --- |
 | `[*.]mil` | All `.mil` domains and subdomains |
 | `[*.]gov` | All `.gov` domains and subdomains |
 | `portal.azure.us` | Exact domain match only |
@@ -160,13 +160,12 @@ The `PopupsAllowedForUrls` policy supports wildcard patterns:
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Configuration\Configure-EdgePolicy-<timestamp>.log
 ```
 
 Log entries include:
 
-- LGPO tool download status
 - Policy application details
 - Registry value creation
 - gpupdate execution results
@@ -174,7 +173,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
 | `Remove-RegistryKey` | Removes a registry key |
@@ -196,17 +195,11 @@ Log entries include:
 
 ## Offline Usage
 
-To use this script in air-gapped environments:
+This script writes directly to `Registry.pol` and has no external tool dependencies — it runs fully offline with no downloads required.
 
-1. **Download LGPO Tool:**
-   - URL: https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip
-   - Place in script directory or system32
-
-2. **Run Script:**
-
-   ```powershell
-   .\Configure-EdgePolicy.ps1
-   ```
+```powershell
+.\Configure-EdgePolicy.ps1
+```
 
 ## Default Configuration (Government Cloud)
 
@@ -244,10 +237,6 @@ The default settings are optimized for Azure Government Cloud environments:
 
 - **Solution:** Check domain spelling; ensure SmartScreen is enabled in Edge
 
-**Issue:** LGPO.exe not found
-
-- **Solution:** Ensure internet connectivity or place LGPO.zip in script directory
-
 ### Verification
 
 Check if policies were applied:
@@ -279,7 +268,6 @@ gpresult /h C:\Temp\gpresult.html
 - [Microsoft Edge Enterprise Policies](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies)
 - [SmartScreenAllowListDomains Policy](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#smartscreenallowlistdomains)
 - [PopupsAllowedForUrls Policy](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#popupsallowedforurls)
-- [LGPO Tool Documentation](https://techcommunity.microsoft.com/t5/microsoft-security-baselines/lgpo-exe-local-group-policy-object-utility-v1-0/ba-p/701045)
 
 ## Support
 

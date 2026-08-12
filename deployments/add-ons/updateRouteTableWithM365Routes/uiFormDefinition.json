@@ -233,7 +233,7 @@
                                     "type": "Microsoft.Common.InfoBox",
                                     "options": {
                                         "style": "Warning",
-                                        "text": "REDEPLOYMENT NOTICE: Azure Automation caches the runbook-to-schedule link by automation account name. This cache persists even after deleting the automation account and recreating it with the same name. If you redeploy without unchecking 'Create Job Schedule Link' below, ARM will fail with: A jobSchedule with same id already exists (Conflict). On first deployment: leave checked. On every redeployment: UNCHECK this box. The runbook will continue running on its existing schedule."
+                                        "text": "REDEPLOYMENT NOTICE\n\nAzure Automation caches the runbook-to-schedule link by automation account name. This cache persists even after deleting the automation account and recreating it with the same name. If you redeploy without unchecking 'Create Job Schedule Link' below, ARM will fail with: A jobSchedule with same id already exists (Conflict).\n\nOn first deployment: leave 'Create Job Schedule Link' checked.\n\nOn every redeployment: UNCHECK 'Create Job Schedule Link'. The runbook will continue running on its existing schedule."
                                     }
                                 },
                                 {

@@ -84,8 +84,13 @@ resource recoveryServicesVault 'Microsoft.RecoveryServices/vaults@2023-04-01' = 
                 userAssignedIdentity: cmkUserAssignedIdentityResourceId
                 useSystemAssignedIdentity: false
               }
+          infrastructureEncryption: 'Enabled'
         }
       : null
+      // Note: infrastructureEncryption on Recovery Services Vaults requires CMK to be
+      // configured first (unlike Azure Storage where it can be set independently).
+      // Sending { infrastructureEncryption: 'Enabled' } without a keyVaultUri causes
+      // an InvalidRestApiParameter error from the Azure Backup API.
   }
 }
 

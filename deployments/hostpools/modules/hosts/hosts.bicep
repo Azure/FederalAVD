@@ -48,8 +48,8 @@ param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
 param enableMonitoring bool
-param networkInterfaceNameConv string
-param osDiskNameConv string
+param virtualMachineNicNameConv string
+param virtualMachineDiskNameConv string
 param ouPath string
 param secureBootEnabled bool
 param securityType string
@@ -96,8 +96,6 @@ param encryptionKeyName string = ''
 @description('Optional. Key expiration period in days for the vault CMK encryption key. Also controls auto-rotation.')
 @minValue(7)
 param keyExpirationInDays int = 180
-@description('Optional. Set to true when the CMK Key Vault is private-only; auto-disables CMK in that scenario.')
-param keyVaultPrivateOnly bool = false
 @description('Optional. Whether to deploy a private endpoint for the vault.')
 param deployPrivateEndpoints bool = false
 @description('Optional. Resource ID of the subnet for the vault private endpoint.')
@@ -145,7 +143,6 @@ module recoveryServicesModule 'modules/recoveryServices.bicep' = if (deployRecov
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionKeyName: encryptionKeyName
-    keyVaultPrivateOnly: keyVaultPrivateOnly
     keyExpirationInDays: keyExpirationInDays
   }
 }
@@ -205,8 +202,8 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
     location: location
-    networkInterfaceNameConv: networkInterfaceNameConv
-    osDiskNameConv: osDiskNameConv
+    virtualMachineNicNameConv: virtualMachineNicNameConv
+    virtualMachineDiskNameConv: virtualMachineDiskNameConv
     ouPath: ouPath
     secureBootEnabled: secureBootEnabled
     securityType: securityType

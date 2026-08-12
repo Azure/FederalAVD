@@ -1,4 +1,4 @@
-# Configure-OneDrive.ps1
+﻿# Configure-OneDrive.ps1
 
 ## Overview
 
@@ -91,7 +91,7 @@ The script configures the following Known Folder Move policies:
 
 ## Policy Settings Applied
 
-```
+```text
 Computer Configuration
 └── Administrative Templates
     └── OneDrive
@@ -102,7 +102,7 @@ Computer Configuration
 
 ## Registry Locations
 
-```
+```text
 HKLM:\SOFTWARE\Policies\Microsoft\OneDrive
   KFMSilentOptIn: [Your Tenant ID]
   KFMBlockOptOut: 1
@@ -113,7 +113,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\OneDrive
 The following Windows known folders are automatically redirected to OneDrive:
 
 | Folder | Default Path | OneDrive Path |
-|--------|-------------|---------------|
+| --- | --- | --- |
 | **Desktop** | `C:\Users\<username>\Desktop` | `C:\Users\<username>\OneDrive - <Organization>\Desktop` |
 | **Documents** | `C:\Users\<username>\Documents` | `C:\Users\<username>\OneDrive - <Organization>\Documents` |
 | **Pictures** | `C:\Users\<username>\Pictures` | `C:\Users\<username>\OneDrive - <Organization>\Pictures` |
@@ -176,7 +176,7 @@ The following Windows known folders are automatically redirected to OneDrive:
 
 Logs are created in:
 
-```
+```text
 C:\Windows\Logs\Configuration\Configure-OneDrive-<timestamp>.log
 ```
 
@@ -189,8 +189,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
-| `Get-InternetFile` | Downloads files from URLs with progress tracking |
+| --- | --- |
 | `New-Log` | Initializes logging infrastructure |
 | `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
 | `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |

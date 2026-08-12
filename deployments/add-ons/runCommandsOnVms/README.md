@@ -1,4 +1,4 @@
-# Run Commands on Virtual Machines
+﻿# Run Commands on Virtual Machines
 
 This solution will allow you to run one or multiple scripts on selected virtual machines from a resource group.
 

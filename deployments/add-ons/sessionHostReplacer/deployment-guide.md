@@ -1,4 +1,4 @@
-# Deploying Session Host Replacer Updates
+﻿# Deploying Session Host Replacer Updates
 
 > **Note:** For comprehensive deployment instructions, prerequisites, permissions setup, and troubleshooting, see [README.md](README.md).
 
@@ -9,12 +9,14 @@ This document provides quick reference for deploying updates to an existing Sess
 Before deploying, understand the two replacement strategies:
 
 ### SideBySide Mode (Recommended for Most)
+
 - **Zero downtime** - new hosts added before old ones removed
 - **Higher temporary cost** - host pool temporarily doubles
 - **Shutdown retention option** - keep old hosts for rollback
 - **Best for**: Production environments, large pools, SLA requirements
 
 ### DeleteFirst Mode (For Resource-Constrained Environments)
+
 - **Cost optimized** - no host pool doubling
 - **Temporary capacity reduction** - some hosts unavailable during replacement
 - **Hostname reuse** - requires device cleanup (Graph API permissions mandatory)
@@ -36,6 +38,7 @@ maxDeploymentBatchSize: 100
 ```
 
 **With Progressive Scale-Up (Large Pools)**:
+
 ```bicep
 enableProgressiveScaleUp: true
 initialDeploymentPercentage: 10  // Start with 10%
@@ -44,12 +47,14 @@ successfulRunsBeforeScaleUp: 1   // Scale up after each success
 ```
 
 **With Shutdown Retention (Rollback Capability)**:
+
 ```bicep
 enableShutdownRetention: true
 shutdownRetentionDays: 3  // Keep old hosts shutdown for 3 days
 ```
 
 **With Ringed Rollout (Validate Before Fleet-Wide)**:
+
 ```bicep
 replaceSessionHostOnNewImageVersionDelayDays: 7  // Wait 7 days to validate new image
 ```
@@ -72,16 +77,19 @@ removeIntuneDevice: true    // REQUIRED for hostname reuse
 ### Timer Schedule Guidance
 
 **Default** (Every 30 minutes):
+
 ```bicep
 timerSchedule: '0 0,30 * * * *'  // Runs at :00 and :30
 ```
 
 **Hourly** (Lower overhead):
+
 ```bicep
 timerSchedule: '0 0 * * * *'  // Every hour on the hour
 ```
 
 **Business Hours Only** (Cost optimization):
+
 ```bicep
 timerSchedule: '0 0 8-17 * * 1-5'  // 8 AM - 5 PM, Mon-Fri
 ```
@@ -94,6 +102,7 @@ timerSchedule: '0 0 8-17 * * 1-5'  // 8 AM - 5 PM, Mon-Fri
 ## Quick Deployment Steps
 
 ### Option 1: Update via Azure Portal (Fastest)
+
 1. Navigate to your Function App in Azure Portal
 2. Go to **Development Tools** → **App Service Editor**
 3. Navigate to `Modules\SessionHostReplacer\SessionHostReplacer.psm1`
@@ -122,6 +131,7 @@ Restart-AzFunctionApp -ResourceGroupName $resourceGroup -Name $functionAppName -
 ```
 
 ### Option 3: Deploy via Azure CLI
+
 ```bash
 # Zip the function folder
 cd deployments/add-ons/sessionHostReplacer
@@ -142,6 +152,7 @@ az functionapp restart \
 ## Important: Restart Function App
 
 After deploying, **always restart the Function App** to:
+
 1. Clear any cached modules
 2. Reload updated PowerShell modules
 3. Clear token caches (if token acquisition logic changed)
@@ -159,6 +170,7 @@ traces
 ```
 
 Look for:
+
 - ✅ Function execution started
 - ✅ No module load errors
 - ✅ Expected configuration values loaded
@@ -167,6 +179,7 @@ Look for:
 ## For Complete Documentation
 
 See [README.md](README.md) for:
+
 - Prerequisites and permissions setup
 - Full configuration reference
 - Troubleshooting guide
@@ -174,6 +187,7 @@ See [README.md](README.md) for:
 
 
 ### Module not reloading?
+
 - Azure Functions cache PowerShell modules
 - Restart is required to reload
 - Consider adding version number to module manifest for tracking

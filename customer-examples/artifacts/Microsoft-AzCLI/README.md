@@ -1,4 +1,4 @@
-# Install-AzCLI.ps1
+﻿# Install-AzCLI.ps1
 
 ## Overview
 
@@ -15,6 +15,7 @@ This PowerShell script automates the installation or uninstallation of the Azure
 ## Parameters
 
 ### `DeploymentType`
+
 - **Type:** String
 - **Default:** `'Install'`
 - **Options:** `'Install'` or `'Uninstall'`
@@ -23,16 +24,19 @@ This PowerShell script automates the installation or uninstallation of the Azure
 ## Usage Examples
 
 ### Install Azure CLI (Default)
+
 ```powershell
 .\Install-AzCLI.ps1
 ```
 
 ### Explicit Installation
+
 ```powershell
 .\Install-AzCLI.ps1 -DeploymentType 'Install'
 ```
 
 ### Uninstall Azure CLI
+
 ```powershell
 .\Install-AzCLI.ps1 -DeploymentType 'Uninstall'
 ```
@@ -76,7 +80,7 @@ This PowerShell script automates the installation or uninstallation of the Azure
 ## Exit Codes
 
 | Exit Code | Meaning |
-|-----------|---------|
+| --- | --- |
 | **0** | Success |
 | **3010** | Success - Reboot required |
 | **Other** | Error occurred (see logs for details) |
@@ -92,13 +96,14 @@ This PowerShell script automates the installation or uninstallation of the Azure
 
 ### Installation Location
 
-```
+```text
 C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\
 ```
 
 ### Command-Line Access
 
 After installation, Azure CLI is accessible via:
+
 ```powershell
 az --version
 az login
@@ -114,12 +119,14 @@ To use this script in air-gapped environments:
    - Or direct: https://azcliprod.blob.core.windows.net/msi/azure-cli-latest.msi
 
 2. **Place MSI in Script Directory:**
-   ```
+
+```text
    Install-AzCLI.ps1
    azure-cli-<version>.msi
    ```
 
 3. **Run Script:**
+
    ```powershell
    .\Install-AzCLI.ps1
    ```
@@ -127,16 +134,19 @@ To use this script in air-gapped environments:
 ## Use Cases
 
 ### Image Customization
+
 - Install Azure CLI in AVD master images
 - Enable administrators to manage Azure resources from session hosts
 - Support automation and scripting scenarios
 
 ### Developer Workstations
+
 - Provide Azure CLI for development and testing
 - Enable CI/CD pipeline integration
 - Support infrastructure-as-code workflows
 
 ### Administrative Tools
+
 - Install on jump boxes or management VMs
 - Enable Azure resource management
 - Support troubleshooting and diagnostics
@@ -144,11 +154,13 @@ To use this script in air-gapped environments:
 ## Logging
 
 Logs are created in:
-```
+
+```text
 C:\Windows\Logs\Install-AzCLI-<timestamp>.log
 ```
 
 Log entries include:
+
 - Existing installation detection
 - Download progress
 - Installation execution
@@ -158,7 +170,7 @@ Log entries include:
 ## Functions
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `Get-InstalledApplication` | Queries registry for installed applications |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
 | `New-Log` | Initializes logging infrastructure |
@@ -191,6 +203,7 @@ Log entries include:
 ### Verification
 
 Check if Azure CLI is installed:
+
 ```powershell
 # Check installed applications
 Get-Command az -ErrorAction SilentlyContinue
