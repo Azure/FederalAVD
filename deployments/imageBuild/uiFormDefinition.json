@@ -1981,6 +1981,43 @@
                             ]
                         },
                         {
+                            "name": "wim",
+                            "type": "Microsoft.Common.Section",
+                            "label": "WIM Distribution",
+                            "elements": [
+                                {
+                                    "name": "infoWim",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "WIM capture runs after sysprep (with /quit) while the VM is still online but fully generalized. DISM captures C:\\ with maximum compression and uploads the WIM to the same blob container used for build logs. The WIM can be used to deploy the same hardened golden image to MDT, SCCM, or Azure Local infrastructure. Requires 'Collect customization logs' to be enabled on the Prerequisites page so the WIM has a destination storage account. The WIM staging directory (C:\\WimCapture) is always deleted before the VM is deallocated, so it is never present in the Compute Gallery image."
+                                    }
+                                },
+                                {
+                                    "name": "captureWim",
+                                    "type": "Microsoft.Common.OptionsGroup",
+                                    "label": "Capture image as a WIM file for on-premises deployment.",
+                                    "defaultValue": "No",
+                                    "constraints": {
+                                        "allowedValues": [
+                                            { "label": "Yes", "value": true },
+                                            { "label": "No",  "value": false }
+                                        ],
+                                        "required": false
+                                    }
+                                },
+                                {
+                                    "name": "warnNoLogs",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[and(steps('imageDest').wim.captureWim, not(steps('prereqs').storage.collectLogs))]",
+                                    "options": {
+                                        "style": "Warning",
+                                        "text": "'Collect customization logs' is not enabled. The WIM will be captured but cannot be uploaded to blob storage. Enable log collection on the Prerequisites page to upload the WIM automatically."
+                                    }
+                                }
+                            ]
+                        },
+                        {
                             "name": "encryption",
                             "type": "Microsoft.Common.Section",
                             "label": "Disk Encryption",
@@ -2273,6 +2310,7 @@
                 "azureLocalCustomLocationResourceId": "[if(steps('imageDest').azureLocal.replicateToAzureLocal, steps('imageDest').azureLocal.azureLocalCustomLocationResourceId, '')]",
                 "azureLocalResourceGroupId": "[if(steps('imageDest').azureLocal.replicateToAzureLocal, steps('imageDest').azureLocal.azureLocalResourceGroupId, '')]",
                 "azureLocalImageName": "[if(steps('imageDest').azureLocal.replicateToAzureLocal, steps('imageDest').azureLocal.azureLocalImageName, '')]",
+                "captureWim": "[steps('imageDest').wim.captureWim]",
                 "tags": "[steps('tags').tags]"
             }
         }

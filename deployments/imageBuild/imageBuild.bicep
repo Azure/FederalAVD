@@ -178,6 +178,9 @@ param logStorageAccountResourceId string = ''
 @description('Optional. Name of the blob container in the logs storage account to write customization logs to.')
 param logContainerName string = 'image-customization-logs'
 
+@description('Optional. When true, captures the customized image as a WIM file using DISM before sysprep and uploads it to the log storage container. Use to produce a single golden image deployable to both Azure (via Compute Gallery) and on-premises infrastructure (via MDT, SCCM, or Azure Local).')
+param captureWim bool = false
+
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its diskEncryptionSetResourceId output here to share the same DES across all image builds.')
 param diskEncryptionSetResourceId string = ''
 
@@ -488,6 +491,9 @@ var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
 
 var imageVmName = take('${depPrefix}vmimg-${uniqueString(deploymentSuffix)}', 15)
 var orchestrationVmName = take('${depPrefix}vmorc-${uniqueString(deploymentSuffix)}', 15)
+var wimBlobUri = captureWim && !empty(logContainerUri)
+  ? '${logContainerUri}${imageVmName}-Image-${deploymentSuffix}.wim'
+  : ''
 
 var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
@@ -801,6 +807,8 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
     userAssignedIdentityClientId: empty(imageBuildResourceGroupId)
       ? ''
       : existingUserAssignedIdentity!.properties.clientId
+    captureWim: captureWim
+    wimBlobUri: wimBlobUri
   }
   dependsOn: [
     customizeImage
