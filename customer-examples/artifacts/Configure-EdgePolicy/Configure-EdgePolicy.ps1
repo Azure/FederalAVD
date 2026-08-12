@@ -3,15 +3,13 @@ param (
     [Parameter(Mandatory = $false)]
     [bool]$AllowDeveloperTools = $true,
 
-    #JSON String of the SmartScreenAllowListDomains
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#smartscreenallowlistdomains
     [Parameter(Mandatory = $false)]
-    [string]$SmartScreenAllowListDomains = '["portal.azure.com", "core.windows.net", "portal.azure.us", "usgovcloudapi.net"]',
+    [string[]]$SmartScreenAllowListDomains = @('portal.azure.com','core.windows.net','portal.azure.us','usgovcloudapi.net'),
 
-    #JSON String of the PopupsAllowedForUrls
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#popupsallowedforurls
     [Parameter(Mandatory = $false)]
-    [string]$PopupsAllowedForUrls = '["[*.]mil","[*.]gov","[*.]portal.azure.us","[*.]usgovcloudapi.net","[*.]azure.com","[*.]azure.net"]'
+    [string[]]$PopupsAllowedForUrls = @('[*.]mil','[*.]gov','[*.]portal.azure.us','[*.]usgovcloudapi.net','[*.]azure.com','[*.]azure.net')
 )
 
 #region Functions
@@ -626,8 +624,6 @@ function Get-RelativePolicyKeyPath {
 [string]$Script:Name = "Configure-EdgePolicy"
 [string]$Script:TempDir = Join-Path -Path $env:Temp -ChildPath $Script:Name
 
-[array]$SmartScreenAllowListDomains = $SmartScreenAllowListDomains.Replace('\"', '"').Replace('\[', '[').Replace('\]', ']') | ConvertFrom-Json
-[array]$PopupsAllowedForUrls = $PopupsAllowedForUrls.Replace('\"', '"').Replace('\[', '[').Replace('\]', ']') | ConvertFrom-Json
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."

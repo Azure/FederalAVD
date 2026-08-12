@@ -67,8 +67,11 @@
         //    Each entry:
         //      name          - Unique label (used in logs and Run Command name)
         //      blobNameOrUri - Blob name relative to artifactsContainerUri, OR full HTTPS URI
-        //      arguments     - (Optional) For .ps1/.zip: "-ParamName Value -SwitchParam"
-        //                      For .exe/.msi: "/quiet /norestart"
+        //      arguments     - (Optional) Strings: "-ParamName Value"
+        //                                Booleans: "-Enable $true"
+        //                                Switches: "-SearchForApplications"  (no value = $true)
+        //                                Arrays:   "-Domains @('a.com', 'b.com')"  (single quotes, no JSON escaping)
+        //                                EXE/MSI:  "/quiet /norestart"
         //      restart       - (Optional, default false) Restart the build VM after this step
         //
         //    Switch parameters (no value) become $true in your script.
@@ -100,6 +103,8 @@
                 },
                 {
                     // Configure-EdgePolicy: defaults cover standard Azure Government portal URLs.
+                    // Override arrays using @() syntax - no JSON escaping needed for single quotes.
+                    // Example: "-SmartScreenAllowListDomains @('portal.azure.us','agency.gov') -AllowDeveloperTools $true"
                     "name": "Configure-EdgePolicy",
                     "blobNameOrUri": "Configure-EdgePolicy.zip",
                     "arguments": ""

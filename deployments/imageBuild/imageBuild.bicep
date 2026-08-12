@@ -128,6 +128,9 @@ Each object contains the following properties:
 -name: Required. The name of the script or application that is running minus extension
 -blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.
 -arguments: Optional. Arguments required by the installer or script being ran.
+  For .ps1/.zip: "-ParamName Value -SwitchParam"
+  For arrays: use @() syntax with single quotes - e.g. "-Domains @('a.com','b.com')" or "@('a.com', 'b.com')" (spaces after commas are fine).
+  Single quotes need no JSON escaping. Double quotes within arguments require \".
 -restart: Optional. Boolean. When true, the image VM restarts after this customization completes.
 
 JSON example:
@@ -153,6 +156,9 @@ Each object contains the following properties:
 -name: Required. The name of the script or application that is running minus extension
 -blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.
 -arguments: Optional. Arguments required by the installer or script being ran.
+  For .ps1/.zip: "-ParamName Value -SwitchParam"
+  For arrays: use @() syntax with single quotes - e.g. "-Domains @('a.com','b.com')" or "@('a.com', 'b.com')" (spaces after commas are fine).
+  Single quotes need no JSON escaping. Double quotes within arguments require \".
 
 
 JSON example:

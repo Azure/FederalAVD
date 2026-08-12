@@ -27,6 +27,7 @@ function Split-ArgumentString {
   $currentArg = ''
   $inQuotes = $false
   $quoteChar = $null
+  $parenDepth = 0  # tracks @(...) nesting; spaces inside are not token separators
 
   for ($i = 0; $i -lt $ArgumentString.Length; $i++) {
     $char = $ArgumentString[$i]
@@ -40,7 +41,15 @@ function Split-ArgumentString {
       $quoteChar = $null
       $currentArg += $char
     }
-    elseif ($char -eq ' ' -and !$inQuotes) {
+    elseif (!$inQuotes -and $char -eq '(' -and $currentArg -match '@$') {
+      $parenDepth++
+      $currentArg += $char
+    }
+    elseif (!$inQuotes -and $char -eq ')' -and $parenDepth -gt 0) {
+      $parenDepth--
+      $currentArg += $char
+    }
+    elseif ($char -eq ' ' -and !$inQuotes -and $parenDepth -eq 0) {
       if ($currentArg.Length -gt 0) {
         $value = $currentArg.Trim('"').Trim("'")
         if ($value -eq 'true') { $arguments += '$true' }
@@ -79,6 +88,25 @@ function ConvertTo-ParametersSplat {
         $value = $tokens[$i]
         if ($value -eq '$true') { $parameters[$paramName] = $true }
         elseif ($value -eq '$false') { $parameters[$paramName] = $false }
+        elseif ($value -match '^@\((.+)\)$') {
+          # @('val1', 'val2') or @("val1", "val2") array literal.
+          # Split-ArgumentString keeps the whole @(...) as one token via paren-depth tracking.
+          $parameters[$paramName] = [string[]]($matches[1] -split ',' |
+            ForEach-Object { $_.Trim().Trim("'").Trim('"') } |
+            Where-Object { $_ -ne '' })
+        }
+        elseif ($value.EndsWith(',')) {
+          # "val1", "val2" style: first token ended with a comma; collect the rest.
+          $items = [System.Collections.Generic.List[string]]::new()
+          $items.Add($value.TrimEnd(',').Trim('"').Trim("'"))
+          while (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\w+$') {
+            $i++
+            $nextVal = $tokens[$i]
+            $items.Add($nextVal.TrimEnd(',').Trim('"').Trim("'"))
+            if (-not $nextVal.EndsWith(',')) { break }
+          }
+          $parameters[$paramName] = [string[]]$items
+        }
         else { $parameters[$paramName] = $value.Trim('"') }
       }
       else {

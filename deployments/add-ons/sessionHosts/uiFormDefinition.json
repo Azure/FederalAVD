@@ -1152,7 +1152,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('hosts').customizations.addCustomScripts]",
                   "options": {
-                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments."
+                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments. For array parameters, use @() syntax - e.g. -Domains @('site1.gov','site2.com')."
                   }
                 },
                 {

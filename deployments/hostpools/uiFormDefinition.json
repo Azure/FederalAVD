@@ -2005,7 +2005,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('hosts').customizations.addCustomScripts]",
                   "options": {
-                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments. These will be executed before the session host is registered with the host pool."
+                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments. These will be executed before the session host is registered with the host pool. For array parameters, use @() syntax - e.g. -Domains @('site1.gov','site2.com')."
                   }
                 },
                 {

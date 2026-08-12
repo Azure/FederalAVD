@@ -116,8 +116,11 @@
         //      name            - Unique label for this Run Command (used in logs)
         //      blobNameOrUri   - Blob name relative to artifactsContainerUri, OR a full HTTPS URI
         //      arguments       - (Optional) Arguments passed to your script.
-        //                        For PowerShell scripts: "-ParamName Value -SwitchParam"
-        //                        For EXE/MSI:            "/quiet /norestart"
+        //                        Strings:  "-ParamName Value"
+        //                        Booleans: "-Enable $true"
+        //                        Switches: "-SkipShortcuts"  (no value = $true)
+        //                        Arrays:   "-Domains @('a.com', 'b.com')"  (single quotes, no JSON escaping)
+        //                        EXE/MSI:  "/quiet /norestart"
         //      runAfterHostPoolJoin - (Optional, default false) Set true to run AFTER the VM
         //                            joins the AVD host pool (required for policies that need
         //                            the AVD agent registered first)

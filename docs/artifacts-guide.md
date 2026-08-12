@@ -145,10 +145,20 @@ graph TD
 
 **Parameters support:**
 
-- Arguments are passed as a single string to `Invoke-Customization.ps1`
-- For PowerShell scripts, arguments are parsed into named parameters
-- Format: `-ParameterName Value -SwitchParameter`
-- Example: `-InstallMode Full -SkipShortcuts`
+Arguments are passed as a single string to `Invoke-Customization.ps1`, which parses them into typed named parameters before calling your script. All four PowerShell parameter types are supported:
+
+| Type | Script declaration | Arguments string syntax |
+| --- | --- | --- |
+| **String** | `[string]$Mode = 'Full'` | `-Mode Minimal` or `-Mode "my value"` |
+| **Bool** | `[bool]$Enable = $true` | `-Enable $true` or `-Enable $false` |
+| **Switch** | `[switch]$SkipShortcuts` | `-SkipShortcuts` (no value = `$true`) |
+| **String array** | `[string[]]$Domains` | `-Domains @('a.com','b.com')` |
+
+**Array syntax rules (JSON parameter files):**
+- Use `@()` with single quotes — no JSON escaping needed: `"arguments": "-Domains @('a.com','b.com')"`
+- Spaces after commas are fine: `@('a.com', 'b.com')` works
+- Comma-separated quoted values also work: `"a.com", "b.com"` (requires `\"` escaping in JSON)
+- Values with internal spaces must be quoted in the array: `@('Adobe Acrobat Pro','Google Chrome')`
 
 ## Artifacts Directory Structure
 
@@ -352,6 +362,25 @@ The `Invoke-Customization.ps1` script will:
 4. Call the script: `& Install-MyApp.ps1 -InstallMode Minimal -SkipShortcuts`
 
 Your script receives: `$InstallMode = "Minimal"` and `$SkipShortcuts = $true`
+
+**More argument examples:**
+
+```json
+// Boolean — explicit $true / $false
+"arguments": "-AllowDeveloperTools $true"
+
+// Switch — no value means $true; omitting the parameter uses the script default
+"arguments": "-SearchForApplications -Upgrade"
+
+// String array — @() with single quotes, spaces after commas are fine
+"arguments": "-Domains @('portal.azure.com', 'core.windows.net')"
+
+// String array — values with internal spaces
+"arguments": "-Apps @('Adobe Acrobat Pro', 'Google Chrome')"
+
+// Mixed
+"arguments": "-Domains @('portal.azure.us','agency.gov') -AllowDeveloperTools $true -SearchForApplications"
+```
 
 #### Step 3: Add Supporting Files
 

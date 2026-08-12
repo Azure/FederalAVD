@@ -1085,7 +1085,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addCustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments, and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments (for arrays use @() syntax - e.g. -Param @('val1','val2')), and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
                                     }
                                 },
                                 {
@@ -1188,7 +1188,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addVDICustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments."
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments; for arrays use @() syntax - e.g. -Param @('val1','val2')."
                                     }
                                 },
                                 {

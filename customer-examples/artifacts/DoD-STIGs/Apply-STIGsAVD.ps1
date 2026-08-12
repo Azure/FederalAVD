@@ -4,7 +4,7 @@
     the files are contained with this script in the root of a folder.
 
 .PARAMETER ApplicationsToSTIG
-    This parameter defines the third party applications that should be STIGd by this script. This needs to be defined as a JSON string to support Run Commands.
+    This parameter defines the third party applications that should be STIGd by this script.
 
 .PARAMETER SearchForApplications
     This parameter defines whether or not the script verifies the applications defined in 'ApplicationsToSTIG' are installed before applying the settings.
@@ -31,7 +31,7 @@
 #>
 [CmdletBinding()]
 param (
-    [string]$ApplicationsToSTIG = '["Adobe Acrobat Pro", "Adobe Acrobat Reader", "Google Chrome", "Mozilla Firefox"]',
+    [string[]]$ApplicationsToSTIG = @('Adobe Acrobat Pro','Adobe Acrobat Reader','Google Chrome','Mozilla Firefox'),
     
     [switch]$SearchForApplications,
 
@@ -52,9 +52,6 @@ If ($osCaption -match 'Windows 11') { $osVersion = 11 } Else { $osVersion = 10 }
 [string]$Script:LGPOTempDir = Join-Path -Path $Script:TempDir -ChildPath 'LGPO'
 If (-not(Test-Path -Path $Script:LGPOTempDir)) { New-Item -Path $Script:LGPOTempDir -ItemType Directory -Force | Out-Null }
 
-If ($ApplicationsToSTIG -ne $null) { 
-    [array]$ApplicationsToSTIG = $ApplicationsToSTIG.replace('\', '') | ConvertFrom-Json
-}
 [bool]$IsDomainJoined = (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
 #endregion
 
