@@ -142,7 +142,6 @@ The following artifacts have empty `DownloadUrl` entries in the secret and top s
 | **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
 | **Visual Studio Redistributables** | `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
 | **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
-| **Microsoft Edge Enterprise** | `MicrosoftEdgeEnterpriseX64.msi` | `customer/artifacts/Microsoft-Edge-Enterprise/` | Optional. Download the Stable x64 MSI from [microsoft.com/en-us/edge/business/download](https://www.microsoft.com/en-us/edge/business/download) on an internet-connected system. On connected builds, `Install-MicrosoftEdgeEnterprise.ps1` downloads this automatically at image build time if no MSI is pre-staged — no manual step needed when internet access is available. |
 
 > **Transfer tip:** Download all of the above on an internet-connected system, copy them to the air-gapped network, then drop them into the `customer/artifacts/` directory before running the upload script.
 
