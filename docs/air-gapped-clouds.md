@@ -42,6 +42,8 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 ## Custom Image Build
 
+> **A custom image is required for air-gapped deployments.** Software cannot be downloaded from the internet at session host runtime in air-gapped clouds. Microsoft 365 Apps, Teams, OneDrive, and all other software must be pre-installed in the golden image. The sections below cover how to prepare the required artifacts and configure the image build. For details on M365-specific requirements, see [Microsoft 365 Apps, Teams, and OneDrive](#microsoft-365-apps-teams-and-onedrive-air-gapped) below.
+
 ### How the Downloads Configuration Works
 
 The `Update-ImageArtifacts.ps1` script automatically selects the correct downloads configuration file from `.common/data/` based on the connected Azure environment:
@@ -58,78 +60,11 @@ To add software not in the base file, place `downloads.json` in `customer/parame
 
 > **⚠️ WingetId entries are not supported in air-gapped environments.** Winget requires outbound internet access to the Microsoft Store CDN, which is unavailable in air-gapped clouds. The base `secret` and `topsecret` downloads files do not use winget, so a standard run of `Update-ImageArtifacts.ps1` is unaffected.
 >
-> **Keep your air-gapped `customer/parameters/imageManagement/downloads.json` free of `WingetId` entries.** Only include `DownloadUrl` entries pointing to URLs reachable from your management system. For built-in UWP apps (which require `WingetId` on the connected side), use the workflow below: build the artifact zip on a connected machine, transfer only the zip file to the air-gapped side, and upload it directly — no winget access needed on the air-gapped machine.
+> **Keep your air-gapped `customer/parameters/imageManagement/downloads.json` free of `WingetId` entries.** Only include `DownloadUrl` entries pointing to URLs reachable from your management system. For built-in UWP apps and codec extensions, see [Built-in UWP apps and codec extensions](#built-in-uwp-apps-and-codec-extensions) in the Windows Updates section below.
 >
 > For other software that uses `WingetId`, alternatives include:
 > - Replacing `WingetId` with a `DownloadUrl` pointing to an internally hosted copy.
 > - Pre-staging the installer in `customer/artifacts/<FolderName>/` and omitting the entry from `downloads.json` — the script packages and uploads it without attempting a download.
-
-#### Built-in UWP apps and codec extensions (air-gapped)
-
-The `BuiltIn-UWP-Apps` artifact (Calculator, Paint, Snipping Tool, Notepad, Clipchamp, Photos,
-Sticky Notes, Windows Terminal, and codec extensions) uses `WingetId` entries that require
-internet access. The recommended approach for air-gapped environments is to build the artifact
-zip on a connected machine, transfer only the zip to the air-gapped side, and upload it directly.
-
-**Step 1 — Build the zip on a connected machine**
-
-1. Ensure `customer-examples/parameters/imageManagement/downloads.json` is used as (or merged
-   into) your connected-side `customer/parameters/imageManagement/downloads.json`. This file
-   contains the `WingetId` entries for all built-in UWP apps and codec extensions.
-
-2. Run `Update-ImageArtifacts.ps1` against any internet-accessible storage account:
-
-   ```powershell
-   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<connectedStorageAccountResourceId>"
-   ```
-
-   The script downloads all winget packages, deduplicates shared dependencies, packages the
-   `BuiltIn-UWP-Apps\` folder into `BuiltIn-UWP-Apps.zip`, and uploads it to that storage account.
-
-3. Download `BuiltIn-UWP-Apps.zip` from the `artifacts` blob container of that storage account
-   (Azure Portal → Storage browser → Blob containers → artifacts → `BuiltIn-UWP-Apps.zip`).
-
-**Step 2 — Transfer to the air-gapped network**
-
-DTA (low-to-high) `BuiltIn-UWP-Apps.zip` to the air-gapped network. Only the single zip file
-needs to be transferred — the full folder structure with all MSIX packages and shared
-dependencies is already inside it.
-
-**Step 3 — Upload to the air-gapped storage account**
-
-*Option A — Script upload (recommended)*
-
-Place `BuiltIn-UWP-Apps.zip` in the **root** of `customer/artifacts/` on the air-gapped machine
-(not inside a sub-folder):
-
-```text
-customer\artifacts\
-    BuiltIn-UWP-Apps.zip    <- transferred zip, placed at root level
-    Windows-Catalog-Updates\
-    Microsoft-VCRedistributable\
-    ...other folders...
-```
-
-Then run `Update-ImageArtifacts.ps1` normally — no extra flags needed:
-
-```powershell
-.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
-```
-
-Because `BuiltIn-UWP-Apps.zip` is a root-level file (not a sub-folder), the script copies it
-directly to the upload staging area without re-zipping and uploads it to the air-gapped storage
-account. No winget access is attempted and `-SkipDownloadingNewSources` is not needed, as long
-as your air-gapped `customer/parameters/imageManagement/downloads.json` contains only
-`DownloadUrl` entries pointing to air-gapped-reachable URLs.
-
-*Option B — Manual portal upload*
-
-In the Azure Portal, navigate to the air-gapped artifacts storage account →
-**Storage browser → Blob containers → artifacts** and upload `BuiltIn-UWP-Apps.zip` directly.
-
-> **Refresh cadence:** MSIX packages include the app version in the filename. Repeat steps 1-3
-> whenever updated app versions are needed. The connected-side script run always pulls the
-> latest versions available from the Store at the time it runs.
 
 ---
 
@@ -209,6 +144,8 @@ The image build template has native WSUS support. Set the following parameters i
 During the build, the image VM will contact your WSUS server and install all approved updates for its hardware group — no pre-staging or manual file handling required. This is the preferred path for organizations that already operate a WSUS server in the air-gapped enclave.
 
 > **Note:** `installUpdates` defaults to `true`. Set it to `false` only if you want to skip the Windows Update step entirely (e.g., the image is already fully patched).
+
+> **Note:** WSUS patches OS components and Win32 applications but does **not** update built-in UWP apps (Calculator, Notepad, Snipping Tool, etc.). See [Built-in UWP apps and codec extensions](#built-in-uwp-apps-and-codec-extensions) below for the separate update workflow required regardless of which patching option you use.
 
 **Option 2 — Offline artifacts (no WSUS)**
 
@@ -326,6 +263,79 @@ re-download before every image build.
 > **Refresh cadence:** Re-download before every image build. If the image already has a newer
 > release installed, the installer exits with code `1638` (already current) and no change is
 > made — re-downloading every build is safe and ensures you are never behind.
+
+#### Built-in UWP apps and codec extensions
+
+> **WSUS does not update built-in UWP apps.** Windows Update and WSUS patch OS components and
+> Win32 applications but do not update Store-distributed UWP apps such as Calculator, Notepad,
+> Snipping Tool, Clipchamp, or codec extensions. Keeping these apps current — for new
+> functionality or to mitigate Store-app vulnerabilities — requires the workflow below,
+> regardless of which patching option above you use.
+
+The `BuiltIn-UWP-Apps` artifact (Calculator, Paint, Snipping Tool, Notepad, Clipchamp, Photos,
+Sticky Notes, Windows Terminal, and codec extensions) uses `WingetId` entries that require
+internet access. The recommended approach is to build the artifact zip on a connected machine,
+transfer only the zip to the air-gapped side, and upload it directly.
+
+**Step 1 — Build the zip on a connected machine**
+
+1. Ensure `customer-examples/parameters/imageManagement/downloads.json` is used as (or merged
+   into) your connected-side `customer/parameters/imageManagement/downloads.json`. This file
+   contains the `WingetId` entries for all built-in UWP apps and codec extensions.
+
+2. Run `Update-ImageArtifacts.ps1` against any internet-accessible storage account:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<connectedStorageAccountResourceId>"
+   ```
+
+   The script downloads all winget packages, deduplicates shared dependencies, packages the
+   `BuiltIn-UWP-Apps\` folder into `BuiltIn-UWP-Apps.zip`, and uploads it to that storage account.
+
+3. Download `BuiltIn-UWP-Apps.zip` from the `artifacts` blob container of that storage account
+   (Azure Portal → Storage browser → Blob containers → artifacts → `BuiltIn-UWP-Apps.zip`).
+
+**Step 2 — Transfer to the air-gapped network**
+
+DTA (low-to-high) `BuiltIn-UWP-Apps.zip` to the air-gapped network. Only the single zip file
+needs to be transferred — the full folder structure with all MSIX packages and shared
+dependencies is already inside it.
+
+**Step 3 — Upload to the air-gapped storage account**
+
+*Option A — Script upload (recommended)*
+
+Place `BuiltIn-UWP-Apps.zip` in the **root** of `customer/artifacts/` on the air-gapped machine
+(not inside a sub-folder):
+
+```text
+customer\artifacts\
+    BuiltIn-UWP-Apps.zip    <- transferred zip, placed at root level
+    Windows-Catalog-Updates\
+    Microsoft-VCRedistributable\
+    ...other folders...
+```
+
+Then run `Update-ImageArtifacts.ps1` normally — no extra flags needed:
+
+```powershell
+.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+```
+
+Because `BuiltIn-UWP-Apps.zip` is a root-level file (not a sub-folder), the script copies it
+directly to the upload staging area without re-zipping and uploads it to the air-gapped storage
+account. No winget access is attempted and `-SkipDownloadingNewSources` is not needed, as long
+as your air-gapped `customer/parameters/imageManagement/downloads.json` contains only
+`DownloadUrl` entries pointing to air-gapped-reachable URLs.
+
+*Option B — Manual portal upload*
+
+In the Azure Portal, navigate to the air-gapped artifacts storage account →
+**Storage browser → Blob containers → artifacts** and upload `BuiltIn-UWP-Apps.zip` directly.
+
+> **Refresh cadence:** Repeat steps 1-3 periodically to pick up updated app versions. The
+> connected-side script run always pulls the latest versions available from the Store at the
+> time it runs. MSIX packages include the app version in the filename.
 
 ---
 
