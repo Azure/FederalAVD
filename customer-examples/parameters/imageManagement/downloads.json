@@ -246,5 +246,21 @@
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\AV1VideoExtension"
         ]
+    },
+    "VCRedistributableX64": {
+        "Description": "Microsoft Visual C++ Redistributable (latest) x64 installer. Install-MicrosoftVCRedistributable.ps1 also downloads this at image build time if not pre-staged (connected builds only).",
+        "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+        "DestinationFileName": "vc_redist.x64.exe",
+        "DestinationFolders": [
+            "Microsoft-VCRedistributable"
+        ]
+    },
+    "VCRedistributableX86": {
+        "Description": "Optional: Microsoft Visual C++ Redistributable (latest) x86 installer. Only needed if 32-bit applications on the image depend on the VC++ runtime. Pass -Architecture x86 or Both to Install-MicrosoftVCRedistributable.ps1.",
+        "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x86.exe",
+        "DestinationFileName": "vc_redist.x86.exe",
+        "DestinationFolders": [
+            "Microsoft-VCRedistributable"
+        ]
     }
 }

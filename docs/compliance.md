@@ -554,7 +554,7 @@ Use `-CloudOnly 'False'` for hybrid (domain-joined) session hosts. See [`custome
 }
 ```
 
-**Offline / air-gapped environments:** Pre-download the LGPO tool and STIG GPO package and place them in the `customer/artifacts/DoD-STIGs/` folder before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for the exact file names expected.
+**Offline / air-gapped environments:** Pre-download the LGPO tool and STIG GPO package and place them in the `customer/artifacts/DoD-STIGs/` folder before running `Update-ImageArtifacts.ps1`. The script will package the pre-staged files without attempting to download them (LGPO and STIG packages are not in the air-gapped base downloads files). See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for the exact file names expected.
 
 #### Option 2 — DISA STIG GPOs and Intune Policies (Group Policy / MDM)
 

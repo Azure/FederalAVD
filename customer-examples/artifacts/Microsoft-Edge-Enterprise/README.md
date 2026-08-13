@@ -74,13 +74,13 @@ and uploads it to your artifacts storage account alongside the script.
 3. Transfer the folder to the air-gapped network, then upload to blob storage:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 `
-       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
-       -SkipDownloadingNewSources
+   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
    ```
 
-   When a `.msi` file is present in the folder, the install script uses it directly and skips
-   the API call entirely — no internet access is required during the image build.
+   The script auto-detects the environment and selects the correct base downloads file. Add
+   `-SkipDownloadingNewSources` only if network downloads are not reachable from your management
+   system. When a `.msi` file is present in the folder, the install script uses it directly and
+   skips the API call entirely — no internet access is required during the image build.
 
 ## What the script does
 

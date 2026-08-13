@@ -103,7 +103,8 @@ To check whether your build requires a separate SSU:
 | --- | --- | --- |
 | 1 (if needed) | Servicing Stack Update (SSU) | "Servicing stack updates" section on the release health page — only required if listed separately for your build |
 | 2 | Cumulative Update (CU) | Latest `B`-channel row in the release history table |
-| 3 (optional) | .NET Framework CU | Search catalog for ".NET Framework" + your OS version |
+| 3 (optional) | .NET Framework CU | Open any recent KB article for your OS version — e.g., [KB5101001 for Windows 11 24H2 (July 2026)](https://support.microsoft.com/en-us/servicing/dotnetframework/windows-11/24h2/2026/07/july-14-2026-kb5101001-cumulative-update-for-net-framework-3-5-and-4-8-1-for-windows-11-version-24h2) — then use the left-hand navigation to select the latest non-preview month. Search the Catalog for that KB number. |
+| 4 (optional) | .NET 8 / .NET 9 / .NET 10 runtime security update | Search the Catalog for `YYYY-MM .net` (e.g., `2026-08 .net`). Only include if that runtime version is installed on the image — run `dotnet --list-runtimes` on the current image to confirm. |
 
 > **Note:** Windows 11 and Windows 10 21H2+ ship a **combined SSU+LCU** — the servicing stack
 > is bundled inside the monthly CU. Unless the release health page lists a separate SSU with a
@@ -132,16 +133,14 @@ Copy the relevant `.msu` files from the download cache to this folder.
 After placing patch files in the folder:
 
 ```powershell
-# Connected environment
 .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
-
-# Air-gapped environment (skip downloading new sources)
-.\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
-    -SkipDownloadingNewSources
 ```
 
 There is no `downloads.json` entry for this artifact — patches must always be staged manually.
+The standard upload command works in both connected and air-gapped environments; the script
+auto-detects the environment and selects the correct base downloads file. Add
+`-SkipDownloadingNewSources` only if network downloads are not reachable from your management
+system.
 
 ## What the script does
 

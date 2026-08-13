@@ -164,14 +164,12 @@ Connect-AzAccount -Environment <YourAirGappedEnvironment>
 Set-AzContext -Subscription "<subscription-id>"
 cd C:\repos\FederalAVD\deployments
 
-# If air-gapped URLs are reachable — download auto-downloadable items and upload everything:
 .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
-
-# If no internet/network downloads are possible — skip downloading, just package and upload:
-.\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
-    -SkipDownloadingNewSources
 ```
+
+The script automatically detects the connected environment and selects the correct base downloads file (`secret` or `topsecret`). Items with working air-gapped cloud URLs (AVD Agent, FSLogix, Teams, OneDrive, Office ODT) are downloaded automatically. Items with empty `DownloadUrl` (WebView2, vc_redist, MsRdcWebRTCSvc) and manually staged files in `customer/artifacts/` are packaged and uploaded as-is without a download attempt.
+
+> **If air-gapped network URLs are not reachable** from your management system, add `-SkipDownloadingNewSources` to skip all downloads and only package and upload what is already staged locally.
 
 > The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quick-start.md#step-2-deploy-image-management-resources).
 
@@ -200,38 +198,122 @@ During the build, the image VM will contact your WSUS server and install all app
 
 > **Note:** `installUpdates` defaults to `true`. Set it to `false` only if you want to skip the Windows Update step entirely (e.g., the image is already fully patched).
 
-**Option 2 — Windows Update Catalog (no WSUS)**
+**Option 2 — Offline artifacts (no WSUS)**
 
-When a WSUS server is not available, use the `Windows-Catalog-Updates` example artifact to install patches downloaded manually from the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). It is fully self-contained and requires no internet access at image build time.
+When a WSUS server is not available, each security component is pre-staged manually on a machine
+with internet access, transferred to the air-gapped network, and installed via its artifact during
+the image build. No internet access is needed at image build time.
 
-📖 **Artifact reference:** [Windows-Catalog-Updates README](../customer-examples/artifacts/Windows-Catalog-Updates/README.md)
+**Monthly update checklist — no WSUS**
 
-**To use in an air-gapped image build:**
+On or after Patch Tuesday (second Tuesday of each month), refresh each of the following
+components. Detailed steps for each are in the sub-sections below.
 
-1. On any system with access to the Microsoft Update Catalog (or your organization's WSUS/SCCM/patch management server), download the required `.msu` or `.cab` patch files.
+| Component | Artifact | Source |
+| --- | --- | --- |
+| **Windows Cumulative Update** | `Windows-Catalog-Updates` | [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/) |
+| **.NET Framework Cumulative Update** | `Windows-Catalog-Updates` | Microsoft Update Catalog |
+| **.NET 8 / .NET 9 / .NET 10** *(if installed on image)* | `Windows-Catalog-Updates` | Microsoft Update Catalog |
+| **Visual C++ Redistributable** | `Microsoft-VCRedistributable` | [`aka.ms` permalink](https://aka.ms/vs/17/release/vc_redist.x64.exe) — no KB, always re-download |
+| **Microsoft Edge Enterprise** | `Microsoft-Edge-Enterprise` | [Edge Enterprise download page](https://www.microsoft.com/en-us/edge/business/download) — see [Microsoft Edge section](#microsoft-edge-air-gapped) below |
 
-2. If installation order matters (for example, a Servicing Stack Update must precede a Cumulative Update), prefix each filename with a sequence number:
+> **Office, Teams, OneDrive, FSLogix** are not part of this monthly rotation — they are installed
+> from pre-staged installers and updated on their own schedules. See the sections below.
 
-   ```text
-   customer\artifacts\Windows-Catalog-Updates\
-       Install-WindowsCatalogUpdates.ps1
-       01-SSU-KB5012170-x64.msu
-       02-CU-KB5040442-x64.msu
-   ```
+#### Windows, .NET Framework, and .NET runtime patches
 
-   Files without a numeric prefix are sorted alphabetically, so mixed prefixed and unprefixed files work as long as the prefixed ones sort before the unprefixed ones.
+Use the `Windows-Catalog-Updates` example artifact to install `.msu` patch files downloaded from
+the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/). No internet access is
+required at image build time.
 
-3. Copy the entire folder to the air-gapped network and place it under `customer/artifacts/`.
+📖 **Artifact reference:** [Windows-Catalog-Updates README](../customer-examples/artifacts/Windows-Catalog-Updates/README.md) — includes full instructions for finding KB numbers and downloading from the Catalog.
 
-4. Upload to the artifacts storage account using `-SkipDownloadingNewSources`:
+Download the following from a system with internet access and stage them in
+`customer/artifacts/Windows-Catalog-Updates/` using numeric prefixes to control installation
+order:
+
+| Prefix | What to download | How to find it |
+| --- | --- | --- |
+| `01-CU-KB#####-x64.msu` | **Cumulative Update** for your Windows version | Search the Catalog for your OS (e.g., `windows 11, version 24H2 for x64`). Pick the current-month `B`-channel row from the [Windows 11 release health page](https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information). |
+| `02-dotNETFW-KB#####-x64.msu` | **.NET Framework Cumulative Update** | Open any recent KB article for your OS — e.g., [KB5101001 for Windows 11 24H2 (July 2026)](https://support.microsoft.com/en-us/servicing/dotnetframework/windows-11/24h2/2026/07/july-14-2026-kb5101001-cumulative-update-for-net-framework-3-5-and-4-8-1-for-windows-11-version-24h2) — then use the left-hand navigation to select the latest non-preview month. Search the Catalog for that KB number. |
+| `03-dotNET8-KB#####-x64.msu` *(if applicable)* | **.NET 8 / .NET 9 / .NET 10 runtime security update** | Search the Catalog for `YYYY-MM .net` (e.g., `2026-08 .net`). Only include if that runtime version is installed on the image — run `dotnet --list-runtimes` on the current image to check. |
+
+> **Servicing Stack Update (SSU):** Windows 11 24H2 and Windows 10 21H2+ bundle the SSU inside
+> the monthly CU — a separate SSU file is not required unless the Windows release health page
+> lists a standalone SSU with a release date newer than the CU. See the
+> [Windows-Catalog-Updates README](../customer-examples/artifacts/Windows-Catalog-Updates/README.md)
+> for full SSU guidance.
+
+**Folder layout example:**
+
+```text
+customer\artifacts\Windows-Catalog-Updates\
+    Install-WindowsCatalogUpdates.ps1
+    01-CU-KB5058411-x64.msu
+    02-dotNETFW-KB5058413-x64.msu
+    03-dotNET8-KB5058414-x64.msu        <- only if .NET 8 is installed on the image
+```
+
+**To stage and upload each month:**
+
+1. Download the required `.msu` files from the Catalog (see table above).
+2. Copy the `Windows-Catalog-Updates` folder to the air-gapped network under `customer/artifacts/`.
+3. Upload to the artifacts storage account:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 `
-       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
-       -SkipDownloadingNewSources
+   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
    ```
 
-> **Refresh cadence:** Replace or add patch files each month as new Cumulative Updates are released, then repeat steps 3-4. Only the files in the folder at upload time are installed — there is no version tracking; the script installs all files it finds on each run and skips already-installed patches via exit code.
+   > **If network downloads are not reachable,** add `-SkipDownloadingNewSources` to skip the download step and only package and upload what is already staged locally.
+
+> **Refresh cadence:** Replace patch files each month. The script installs all files present in the
+> folder and skips already-installed patches via exit code — including a superseded patch is harmless.
+
+#### Visual C++ Redistributable
+
+<a id="visual-c-redistributable-air-gapped"></a>
+
+The `Microsoft-VCRedistributable` example artifact installs the Visual C++ Redistributable during
+an image build. Unlike Windows patches, there is no KB number or fixed Patch Tuesday cadence —
+Microsoft does not publish a version number or changelog on the
+[download page](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170).
+The `aka.ms` permalink always serves the latest release, so the correct approach is to
+re-download before every image build.
+
+📖 **Artifact reference:** [Microsoft-VCRedistributable README](../customer-examples/artifacts/Microsoft-VCRedistributable/README.md)
+
+**To pre-stage and upload before each image build:**
+
+1. On a machine with internet access, download the latest installer:
+
+   ```text
+   https://aka.ms/vs/17/release/vc_redist.x64.exe
+   ```
+
+   Also download `https://aka.ms/vs/17/release/vc_redist.x86.exe` if 32-bit applications on
+   the image require it.
+
+2. Place the file(s) in the artifact folder:
+
+   ```text
+   customer\artifacts\Microsoft-VCRedistributable\
+       Install-MicrosoftVCRedistributable.ps1
+       vc_redist.x64.exe
+   ```
+
+3. Copy the folder to the air-gapped network under `customer/artifacts/`.
+
+4. Upload to the artifacts storage account:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+   ```
+
+   > **If network downloads are not reachable,** add `-SkipDownloadingNewSources` to skip the download step.
+
+> **Refresh cadence:** Re-download before every image build. If the image already has a newer
+> release installed, the installer exits with code `1638` (already current) and no change is
+> made — re-downloading every build is safe and ensures you are never behind.
 
 ---
 
@@ -260,13 +342,13 @@ The `Microsoft-Edge-Enterprise` example artifact installs the Edge Enterprise MS
 
 3. Copy the folder to the air-gapped network and place it under `customer/artifacts/`.
 
-4. Upload to the artifacts storage account using `-SkipDownloadingNewSources`:
+4. Upload to the artifacts storage account:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 `
-       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
-       -SkipDownloadingNewSources
+   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
    ```
+
+   > **If network downloads are not reachable,** add `-SkipDownloadingNewSources` to skip the download step.
 
 > **Refresh cadence:** Replace the MSI with the latest stable release monthly, then repeat steps 3-4. The script detects the installed version and skips installation if Edge is already up to date.
 
@@ -317,7 +399,7 @@ The following are **required by Teams** and must be staged manually:
 | `vc_redist.x64.exe` | `customer/artifacts/` | [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
 | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) |
 
-Download all three on an internet-connected system, copy them to the air-gapped network, and place them in `customer/artifacts/` before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.
+Download all three on an internet-connected system, copy them to the air-gapped network, and place them in `customer/artifacts/` before running `Update-ImageArtifacts.ps1`.
 
 #### Image build parameter notes
 

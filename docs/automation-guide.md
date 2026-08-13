@@ -154,7 +154,7 @@ This step has **no Azure deployment outputs** — it only writes blobs to storag
 
 ### Notes
 
-- For air-gapped environments, use `-SkipDownloadingNewSources` and pre-stage customer-managed files in `customer/artifacts/` before running.
+- For air-gapped environments, the script auto-detects the environment and uses the correct base downloads file (`secret` or `topsecret`). Items with working air-gapped URLs are downloaded automatically. Only add `-SkipDownloadingNewSources` if network downloads are not reachable from your management system. See the [Air-Gapped Cloud Guide](air-gapped-clouds.md).
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
 - To merge customer-owned optional downloads, place `downloads.json` in `customer/parameters/imageManagement/`; the script discovers it automatically.
 - To keep customer content outside a freshly extracted repo zip, pass `-CustomerRootPath <path>` to `Update-ImageArtifacts.ps1`.
