@@ -561,7 +561,6 @@ Switch ($ScheduledInstallTime) {
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: DeferQualityUpdatesPeriodInDays='$DeferQualityUpdatesPeriodInDays', ScheduledInstallDay='$ScheduledInstallDay', ScheduledInstallTime='$ScheduledInstallTime'."
 #endregion
 
 Write-Log -category info -message "Now Configuring Windows Update Settings."

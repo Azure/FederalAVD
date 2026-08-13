@@ -86,29 +86,31 @@ try {
         }
     }
 
-    Write-Log "*********************************"
-    Write-Log "Removing Built-in Capabilities"
-    Write-Log "*********************************"
-    $capabilityList = "App.Support.ContactSupport", "App.Support.QuickAssist"
+    # If new Outlook was in the removal list, block the Windows Update Orchestrator from
+    # reinstalling it. Two mechanisms exist depending on OS version:
+    #
+    # Windows 11 23H2+: Windows Update uses an Orchestrator subkey to schedule the push-install.
+    #   Removing that subkey prevents reinstallation. On devices with the March 2024 non-security
+    #   preview CU (or later) for Windows 11 23H2, Remove-AppxProvisionedPackage alone is enough;
+    #   the key deletion is belt-and-suspenders for older 23H2 builds.
+    #   Ref: https://learn.microsoft.com/en-us/microsoft-365-apps/outlook/get-started/control-install
+    #
+    # Windows 10: A REG_SZ value BlockedOobeUpdaters in the parent Orchestrator key prevents the
+    #   January/February 2025 Windows 10 update from installing the app.
+    if ($apps -contains 'Microsoft.OutlookForWindows') {
+        Write-Log "Microsoft.OutlookForWindows in removal list -- blocking Windows Update Orchestrator reinstall."
+        $oobeKey = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe'
 
-    Write-Log "Enumerating installed Windows capabilities..."
-    $InstalledCapabilities = Get-WindowsCapability -Online
-
-    foreach ($capability in $capabilityList) {
-        $match = $InstalledCapabilities | Where-Object { $_.Name -like "$capability*" -and $_.State -ne 'NotPresent' }
-        if ($match) {
-            Write-Log "Removing capability [$capability]"
-            try {
-                $match | Remove-WindowsCapability -Online -ErrorAction Stop
-                Write-Log "Successfully removed capability [$capability]."
-            }
-            catch {
-                Write-Log "WARNING: Failed to remove capability [$capability]: $($_.Exception.Message)"
-            }
+        # Windows 11: remove the OutlookUpdate orchestrator subkey
+        $outlookOrchestratorKey = Join-Path $oobeKey 'OutlookUpdate'
+        if (Test-Path $outlookOrchestratorKey) {
+            Remove-Item -Path $outlookOrchestratorKey -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Log "Removed Orchestrator subkey: $outlookOrchestratorKey"
         }
         else {
-            Write-Log "Capability [$capability] not present -- skipping."
+            Write-Log "Orchestrator subkey not present (already clean or not applicable): $outlookOrchestratorKey"
         }
+
     }
 }
 catch {

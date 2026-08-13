@@ -151,7 +151,6 @@ Function Enable-SchannelHash {
 
 #region Main
 Write-Log -Message "Starting '$Script:Name'."
-Write-Log -Message "Parameters: EnableFipsMode=$EnableFipsMode, ConfigureCipherSuites=$ConfigureCipherSuites"
 
 # -- Protocols ----------------------------------------------------------------
 # SC-8(1) / NIST SP 800-52 Rev 2: Disable all deprecated SSL/TLS versions.

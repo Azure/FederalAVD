@@ -627,7 +627,6 @@ function Get-RelativePolicyKeyPath {
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: AllowDeveloperTools='$AllowDeveloperTools', SmartScreenAllowListDomains='$($SmartScreenAllowListDomains -join ',')', PopupsAllowedForUrls='$($PopupsAllowedForUrls -join ',')'."
 #endregion
 
 Write-Log -Category Info -Message "Running Script to Configure Microsoft Edge Policies."

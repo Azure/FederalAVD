@@ -35,11 +35,11 @@ param (
     
     [switch]$SearchForApplications,
 
-    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2026.zip',
+    [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2026.zip',
 
     [switch]$Upgrade,
 
-    [string]$Version = '2026.04',
+    [string]$Version = '2026.07',
 
     [switch]$AllowLocalUserLogon
 )
@@ -458,7 +458,6 @@ Function Write-Log {
 
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 Write-Log -Message "Starting '$PSCommandPath'."
-Write-Log -Category Info -Message "Parameters: ApplicationsToSTIG: $($ApplicationsToSTIG -join ','), AllowLocalUserLogon: $AllowLocalUserLogon, Upgrade: $Upgrade, Version: $Version"
 
 # Use provided version parameter
 [version]$stigVersion = $Version
