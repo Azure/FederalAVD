@@ -1,4 +1,51 @@
-﻿[CmdletBinding(SupportsShouldProcess = $true)]
+﻿<#
+.SYNOPSIS
+    Configures OneDrive Known Folder Move (KFM) and related per-machine group policy
+    settings for AVD session hosts.
+
+.DESCRIPTION
+    Applies the OneDrive policies recommended for AVD deployments using local machine
+    group policy (Registry.pol / ADMX) so that settings take effect for all users on
+    the image without requiring Intune or AD Group Policy:
+
+      SilentAccountConfig      - Silently sign in users with their Windows credentials.
+      FilesOnDemandEnabled     - Enable Files On Demand so only metadata is synced to disk
+                                 at sign-in; file content is fetched on first open.
+                                 Critical on VDI to avoid filling the OS disk.
+      KFMSilentOptIn           - Silently redirect Desktop, Documents, and Pictures to
+                                 OneDrive without user interaction.
+      KFMBlockOptOut           - Prevent users from redirecting known folders back to
+                                 local paths after KFM has been applied.
+
+    When -EnableRemoteApp is specified, also sets:
+      EnableEnhancedShellExperienceForRemoteApp - Required for OneDrive to launch and
+                                 remain active alongside RemoteApp (published app) sessions.
+
+    The script first copies the OneDrive ADMX/ADML templates from the installed OneDrive
+    build into %WINDIR%\PolicyDefinitions so that policy keys are written under the correct
+    ADMX-backed paths. If ADMX import fails (e.g., OneDrive not yet installed), settings
+    are written directly to the registry as a fallback.
+
+.PARAMETER TenantId
+    Azure Active Directory tenant ID (GUID) for the organization. Used as the value for
+    KFMSilentOptIn and SilentAccountConfig to scope KFM and auto sign-in to the correct
+    tenant. Required.
+
+.PARAMETER EnableRemoteApp
+    When specified, enables the enhanced shell experience required for OneDrive to launch
+    alongside published RemoteApp sessions. Omit for full desktop AVD deployments.
+
+.NOTES
+    Must be run during image build (as SYSTEM or local administrator) after OneDrive has
+    been installed per-machine.
+
+    FSLogix interaction: KFM (KFMSilentOptIn) should only be used when FSLogix Profile
+    Containers are in place. On non-persistent VDI without FSLogix the local profile is
+    discarded on sign-out -- enabling KFM in that scenario would cause data loss because
+    the redirected Desktop/Documents/Pictures folder paths are stored in the local profile.
+    With FSLogix the profile is persisted in a VHD, so KFM works correctly.
+#>
+[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [Parameter(Mandatory = $true)]
     [string]$TenantId,

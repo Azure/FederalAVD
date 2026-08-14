@@ -3,14 +3,27 @@
     Applies the Windows 11 STIG Intune Delta security configuration.
 
 .DESCRIPTION
-    Processes the GptTmpl.inf security template located alongside this script,
-    substitutes or strips domain group placeholder tokens, applies the template
-    via secedit.exe, sets additional required registry values, disables PowerShell
-    version 2.0, and removes the "Run as different user" context menu entries.
+    This script is designed for Entra ID-joined (non-domain-joined) AVD session hosts
+    that must meet the DISA Windows 11 STIG and are managed via Microsoft Intune. Intune
+    configuration profiles can enforce many STIG controls, but a subset of settings --
+    particularly local user rights assignments, security options, and restricted group
+    memberships -- cannot be fully delivered through Intune policy alone. This script
+    closes that gap by applying the remaining controls that Intune cannot reach.
+
+    Specifically, the script:
+      - Dynamically generates a GptTmpl.inf security template in memory covering the
+        STIG controls not addressable through Intune configuration profiles.
+      - Substitutes or strips domain group placeholder tokens depending on whether
+        the machine is domain-joined (hybrid) or Entra ID-only.
+      - Writes the template to a temp file and applies it via secedit.exe.
+      - Sets additional required registry values not covered by the template.
+      - Disables PowerShell version 2.0.
+      - Removes the "Run as different user" context menu entries.
 
 .NOTES
     Must be run as a local administrator or SYSTEM.
     Designed for Entra ID-joined (non-domain-joined) AVD session hosts managed via Intune.
+    Deploy as an Intune Win32 app or as an image build artifact alongside the STIGs artifact.
 #>
 [CmdletBinding()]
 

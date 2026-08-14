@@ -215,6 +215,19 @@ customer\artifacts\Windows-Catalog-Updates\
 
    > **If network downloads are not reachable,** add `-SkipDownloadingNewSources` to skip the download step and only package and upload what is already staged locally.
 
+> **Reboot required after patch installation:** Windows cumulative updates almost always
+> require a reboot to finish applying. Set **`"restart": true`** on the
+> `Windows-Catalog-Updates` entry in your image build `customizations` parameter so the
+> build VM reboots before subsequent steps run:
+>
+> ```json
+> {
+>   "name": "Windows-Catalog-Updates",
+>   "blobNameOrUri": "Windows-Catalog-Updates.zip",
+>   "restart": true
+> }
+> ```
+
 > **Refresh cadence:** Replace patch files each month. The script installs all files present in the
 > folder and skips already-installed patches via exit code — including a superseded patch is harmless.
 

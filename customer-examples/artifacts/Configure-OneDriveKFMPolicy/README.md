@@ -199,17 +199,16 @@ Log entries include:
 
 ## Offline Usage
 
+This script has no external tool dependencies. It writes Registry.pol directly using an
+embedded PReg-format writer — LGPO.exe is not required and does not need to be present.
+
 To use this script in air-gapped environments:
 
-1. **Download LGPO Tool:**
-   - URL: https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip
-   - Place in script directory
-
-2. **Ensure OneDrive Client Installed:**
+1. **Ensure OneDrive Client Installed:**
    - Windows 10/11 have OneDrive pre-installed
-   - Or download: https://www.microsoft.com/en-us/microsoft-365/onedrive/download
+   - Or include the OneDrive per-machine installer in your image build artifacts
 
-3. **Run Script:**
+2. **Run Script:**
 
    ```powershell
    .\Configure-OneDrive.ps1 -TenantId "your-tenant-id"

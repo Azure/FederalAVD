@@ -1,4 +1,73 @@
-﻿[CmdletBinding(SupportsShouldProcess = $true)]
+﻿<#
+.SYNOPSIS
+    Configures Microsoft 365 / Office 365 group policy settings on AVD session host images.
+
+.DESCRIPTION
+    Applies Office 365 / Microsoft 365 machine and user policy settings during image build
+    using a built-in Registry.pol (PReg format) direct writer -- no LGPO.exe required.
+
+    The following Computer-scope policies are always applied:
+
+      HideUpdateNotifications    - Hides the in-app "Updates available" notification bar
+                                   so users are not prompted to update Office manually.
+      HideEnableDisableUpdates   - Removes the Enable/Disable Updates menu option from
+                                   Office apps, preventing users from changing update state.
+
+    When -DisableUpdates is $true, also sets:
+
+      EnableAutomaticUpdates = 0 - Disables background Office update downloads and
+                                   installs. Recommended when Office is baked into the
+                                   image and updated via image refresh rather than
+                                   click-to-run self-update.
+
+    The following User-scope policies are applied via Registry.pol (applied to all users
+    who log on to the session host):
+
+      InsiderSlabBehavior = 2    - Suppresses insider program prompts in Office apps.
+      Cached Exchange Mode       - Enables Outlook Cached Exchange Mode and sets the
+                                   email sync window (SyncWindowSetting / SyncWindowSettingDays)
+                                   based on the -EmailCacheTime parameter.
+
+    Calendar sync settings are written directly to the Default User hive because
+    CalendarSyncWindowSetting and CalendarSyncWindowSettingMonths are NOT ADMX-backed
+    (Outlook reads them from Software\Microsoft\Office\16.0\Outlook\Cached Mode, not the
+    Policies path). Writing to the Default User hive ensures every new user profile on the
+    session host picks up the values at first logon.
+
+    ADMX source priority:
+      1. Bundled .exe installer in the script directory ($PSScriptRoot)
+      2. Already-present office16.admx / outlk16.admx in PolicyDefinitions (no-op)
+      3. Download from Microsoft (https://www.microsoft.com/en-us/download/details.aspx?id=49030)
+    If no ADMX templates are available, all settings are written directly to the registry
+    as a fallback (User-scope values go to the Default User hive).
+
+.PARAMETER DisableUpdates
+    When $true, sets EnableAutomaticUpdates=0 under the OfficeUpdate policy key to prevent
+    Office from self-updating. Omit or pass $false to leave automatic updates enabled.
+    HideUpdateNotifications and HideEnableDisableUpdates are applied regardless of this
+    parameter.
+
+.PARAMETER EmailCacheTime
+    Amount of email Outlook caches locally in Cached Exchange Mode. Smaller values reduce
+    OST file size, resulting in smaller FSLogix profile containers and faster logon times.
+    Default: "1 month". Use "Not Configured" to leave this policy unconfigured.
+
+.PARAMETER CalendarSync
+    Controls which calendar folders Outlook synchronizes. Microsoft recommends
+    "Primary Calendar Only" for optimal performance in Cached Exchange Mode.
+    Default: "Primary Calendar Only". See https://support.microsoft.com/en-us/help/2768656
+
+.PARAMETER CalendarSyncMonths
+    Number of months of calendar data to synchronize. Smaller values reduce profile size.
+    Default: "1". See https://support.microsoft.com/en-us/help/2768656
+
+.NOTES
+    Must be run during image build as SYSTEM or a local administrator.
+    Microsoft 365 Apps for Enterprise must be installed on the image before this script runs.
+    For air-gapped images, place the Office Administrative Templates installer EXE
+    (admintemplates_x64*.exe) in the same directory as this script to avoid internet access.
+#>
+[CmdletBinding(SupportsShouldProcess = $true)]
 param (
 
     [Parameter(Mandatory = $false)]

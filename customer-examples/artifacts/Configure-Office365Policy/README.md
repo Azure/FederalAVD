@@ -101,11 +101,15 @@ This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies 
 
 ### 1. Office Administrative Templates
 
-- Downloads latest Office Administrative Template files (ADMX/ADML)
-- Extracts and copies to `C:\Windows\PolicyDefinitions`
-- Ensures Group Policy can manage Office 365 settings
+Locates Office ADMX/ADML templates using the following priority order:
 
-### 3. Policy Configuration
+1. A bundled `admintemplates_x64*.exe` installer in the script directory (air-gapped friendly)
+2. Already-present `office16.admx` / `outlk16.admx` in `C:\Windows\PolicyDefinitions` (no-op)
+3. Download from Microsoft if the ADMX files are missing and no bundled installer is found
+
+Once resolved, extracts and copies templates to `C:\Windows\PolicyDefinitions`.
+
+### 2. Policy Configuration
 
 #### Update Management
 
@@ -124,10 +128,10 @@ This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies 
 - Reduces sync time and cache size
 - Prevents performance issues with large calendars
 
-### 4. Registry Configuration
+### 3. Registry Configuration
 
-- Sets Outlook registry values directly for policies without ADMX support
-- Configures Exchange account settings
+- Calendar sync settings (`CalendarSyncWindowSetting`, `CalendarSyncWindowSettingMonths`) are written directly to the Default User hive because they are **not ADMX-backed** — Outlook reads them from a non-policy registry path
+- All other policy values are written via Registry.pol (PReg) when ADMX templates are available
 
 ### 4. Policy Application
 
@@ -142,37 +146,65 @@ Computer Configuration
 └── Administrative Templates
     └── Microsoft Office 2016 (Machine)
         └── Updates
-            └── Enable Automatic Updates: [Disabled] (if DisableUpdates = $true)
+            ├── Hide Update Notifications: [Enabled]          (always)
+            ├── Hide Enable/Disable Updates: [Enabled]        (always)
+            └── Enable Automatic Updates: [Disabled]          (if -DisableUpdates $true)
 
 User Configuration
 └── Administrative Templates
-    └── Microsoft Outlook 2016
-        └── Account Settings
-            └── Exchange
-                ├── Cached Exchange Mode
-                │   ├── Use Cached Exchange Mode: [Enabled]
-                │   ├── Download email for the past: [Configured]
-                │   ├── Calendar sync mode: [Configured]
-                │   └── Calendar sync slider: [Configured]
+    └── Microsoft Office 2016
+        ├── Miscellaneous
+        │   └── Insider Slab Behavior: [2 = do not show insider prompts]  (always)
+        └── Microsoft Outlook 2016
+            └── Account Settings > Exchange > Cached Exchange Mode
+                ├── Use Cached Exchange Mode: [Enabled]
+                └── Download email for the past: [Per -EmailCacheTime]
+
+Default User hive  (not ADMX-backed; written directly to Default\NTUSER.dat)
+└── Software\Microsoft\Office\16.0\Outlook\Cached Mode
+    ├── CalendarSyncWindowSetting: [Per -CalendarSync]
+    └── CalendarSyncWindowSettingMonths: [Per -CalendarSyncMonths]
 ```
 
 ## Registry Locations
 
-### Office Updates
+### Office Updates (Computer — policy path)
 
 ```text
 HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate
-  EnableAutomaticUpdates: 0 (Disabled) or 1 (Enabled)
+  HideUpdateNotifications:  1  (always)
+  HideEnableDisableUpdates: 1  (always)
+  EnableAutomaticUpdates:   0  (only when -DisableUpdates $true)
 ```
 
-### Outlook Cache Settings
+### Insider prompts (User — policy path, written to User Registry.pol)
 
 ```text
-HKCU:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Cached Mode
-  SyncWindowSetting: [Value based on EmailCacheTime]
-  CalendarSyncWindowSetting: [Value based on CalendarSync]
-  CalendarSyncWindowSettingMonths: [Value based on CalendarSyncMonths]
+HKCU:\Software\Policies\Microsoft\Office\16.0\Common
+  InsiderSlabBehavior: 2  (always)
 ```
+
+### Outlook email cache (User — policy path, written to User Registry.pol)
+
+```text
+HKCU:\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode
+  Enable:                1  (when any cache setting is configured)
+  SyncWindowSetting:     [Value based on -EmailCacheTime]
+  SyncWindowSettingDays: [Set only for sub-month values: 3, 7, or 14 days]
+```
+
+### Outlook calendar sync (NOT policy path — written to Default User hive)
+
+```text
+HKCU:\Software\Microsoft\Office\16.0\Outlook\Cached Mode
+  CalendarSyncWindowSetting:       [Value based on -CalendarSync]
+  CalendarSyncWindowSettingMonths: [Value based on -CalendarSyncMonths]
+```
+
+> **Note:** CalendarSyncWindowSetting and CalendarSyncWindowSettingMonths are read by
+> Outlook from the non-policy registry path (`Microsoft\Office`, not `Policies\Microsoft\Office`).
+> The script writes them to the Default User hive (`C:\Users\Default\NTUSER.dat`) during
+> image build so every new user profile inherits the values at first logon.
 
 ## Email Cache Time Values
 
@@ -257,11 +289,22 @@ Log entries include:
 
 ## Offline Usage
 
-To use this script in air-gapped environments, pre-download the Office Administrative Templates and place them in the script directory or in `C:\Windows\PolicyDefinitions` before running:
-
-- Office Administrative Templates: https://www.microsoft.com/en-us/download/details.aspx?id=49030
-
 The Registry.pol write step requires no internet access.
+
+For air-gapped environments, one of the following is sufficient to avoid download attempts:
+
+**Option A — Bundled installer (recommended):** Download the Office Administrative Templates
+package (`admintemplates_x64*.exe`) on a connected machine and place it in the same directory
+as this script. The script auto-detects any `.exe` in `$PSScriptRoot` and extracts it.
+
+- Download page: https://www.microsoft.com/en-us/download/details.aspx?id=49030
+
+**Option B — Pre-staged ADMX files:** Copy `office16.admx`, `outlk16.admx`, and their
+corresponding `.adml` files into `C:\Windows\PolicyDefinitions` (and `en-us\` subdirectory)
+before running the script. The script detects the files and skips the download.
+
+**Option C — No ADMX available:** If neither option is feasible, the script falls back to
+writing all settings directly to the registry (User-scope values go to the Default User hive).
 
 ## Troubleshooting
 

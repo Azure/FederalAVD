@@ -164,6 +164,22 @@ system.
 
 Log file: `C:\Windows\Logs\Install-WindowsCatalogUpdates-<timestamp>.log`
 
+> **Reboot required:** Windows cumulative updates almost always return exit code `3010`
+> (success — reboot required). The script exits cleanly in this case, but a reboot must
+> occur before the update is fully applied. Set **`"restart": true`** on the
+> Windows-Catalog-Updates entry in your image build `customizations` parameter:
+>
+> ```json
+> {
+>   "name": "Windows-Catalog-Updates",
+>   "blobNameOrUri": "Windows-Catalog-Updates.zip",
+>   "restart": true
+> }
+> ```
+>
+> Skipping the reboot can cause downstream customization steps to fail if Windows
+> Component-Based Servicing (CBS) has pending operations outstanding.
+
 ## Refresh cadence
 
 Replace or add patch files each month as new Cumulative Updates are released, then re-upload
