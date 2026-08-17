@@ -582,6 +582,12 @@ ForEach ($folder in $ApplicableFolders.FullName) {
     $gpoFolderPath = (Get-ChildItem -Path $folder -Filter 'GPOs' -Directory).FullName
     $GPOFolders += $gpoFolderPath
 }
+
+# Capture any pre-existing Edge/Chrome proxy config before the STIG GPO import below
+# overwrites it, so it can be restored afterward instead of unconditionally deleted.
+$Script:PreExistingEdgeProxySettings = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'ProxySettings' -ErrorAction SilentlyContinue
+$Script:PreExistingChromeProxySettings = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Policies\Google\Chrome' -Name 'ProxySettings' -ErrorAction SilentlyContinue
+
 ForEach ($gpoFolder in $GPOFolders) {
     If ($gpoFolder -match "DoD Windows $osVersion") {
         <# Remove the policies that disable and rename the administrator account.
@@ -681,8 +687,21 @@ Write-Log -Message "Applying AVD Administrative Template-based Exceptions"
 # (-OutputFile) AND to lgpo.exe /t below - one variable, no convention mismatch.
 $LgpoTxtFile = Join-Path -Path $Script:LGPOTempDir -ChildPath 'AVD-Exceptions.txt'
 
-Write-Log -Message "[AdminTemplate] Deleting 'ProxySettings' from HKLM\SOFTWARE\Policies\Microsoft\Edge - the STIG GPO configures an Edge proxy that blocks AVD gateway and broker connectivity. Deleting allows Edge to use system proxy settings or direct connections."
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -Delete -OutputFile $LgpoTxtFile
+if ($null -ne $Script:PreExistingEdgeProxySettings) {
+    Write-Log -Message "[AdminTemplate] Restoring pre-existing 'ProxySettings' under HKLM\SOFTWARE\Policies\Microsoft\Edge - the STIG GPO import overwrote it with its own placeholder proxy that blocks AVD gateway and broker connectivity, but a value was already present before the STIG ran, so it is restored rather than deleted."
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -RegistryType 'String' -RegistryData $Script:PreExistingEdgeProxySettings -OutputFile $LgpoTxtFile
+} else {
+    Write-Log -Message "[AdminTemplate] Deleting 'ProxySettings' from HKLM\SOFTWARE\Policies\Microsoft\Edge - the STIG GPO configures an Edge proxy that blocks AVD gateway and broker connectivity. No pre-existing value was present before the STIG GPO import, so deleting allows Edge to use system proxy settings or direct connections."
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings' -Delete -OutputFile $LgpoTxtFile
+}
+
+if ($null -ne $Script:PreExistingChromeProxySettings) {
+    Write-Log -Message "[AdminTemplate] Restoring pre-existing 'ProxySettings' under HKLM\SOFTWARE\Policies\Google\Chrome - the DISA Google Chrome STIG configures a proxy that blocks AVD gateway and broker connectivity, but a value was already present before the STIG ran, so it is restored rather than deleted."
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Google\Chrome' -RegistryValue 'ProxySettings' -RegistryType 'String' -RegistryData $Script:PreExistingChromeProxySettings -OutputFile $LgpoTxtFile
+} else {
+    Write-Log -Message "[AdminTemplate] Deleting 'ProxySettings' from HKLM\SOFTWARE\Policies\Google\Chrome - the DISA Google Chrome STIG configures a proxy that blocks AVD gateway and broker connectivity. No pre-existing value was present before the STIG GPO import, so deleting allows Chrome to use system proxy settings or direct connections."
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Google\Chrome' -RegistryValue 'ProxySettings' -Delete -OutputFile $LgpoTxtFile
+}
 
 # V-253260 - BitLocker startup PIN requirement (UseAdvancedStartup, UseTPMPIN, UseTPMKeyPIN)
 # The STIG mandates BitLocker startup authentication with a PIN or PIN+key.
