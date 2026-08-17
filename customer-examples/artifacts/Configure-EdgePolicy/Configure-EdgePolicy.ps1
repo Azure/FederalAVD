@@ -720,8 +720,6 @@ If ($Script:AdmxImported) {
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'HideFirstRunExperience' -RegistryType 'DWORD' -RegistryData 1
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#nonremovableprofileenabled
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'NonRemovableProfileEnabled' -RegistryType 'DWORD' -RegistryData 1
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#proxysettings
-    Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings'
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#automatichttpsdefault
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'AutomaticHttpsDefault' -RegistryData 0 -RegistryType DWORD
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#downloadrestrictions
@@ -776,8 +774,6 @@ If ($Script:AdmxImported) {
     Set-ItemProperty -Path $edgeKey -Name 'HideFirstRunExperience' -Value 1 -Type DWord -Force
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#nonremovableprofileenabled
     Set-ItemProperty -Path $edgeKey -Name 'NonRemovableProfileEnabled' -Value 1 -Type DWord -Force
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#proxysettings
-    Remove-ItemProperty -Path $edgeKey -Name 'ProxySettings' -ErrorAction SilentlyContinue
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#automatichttpsdefault
     Set-ItemProperty -Path $edgeKey -Name 'AutomaticHttpsDefault' -Value 0 -Type DWord -Force
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#downloadrestrictions

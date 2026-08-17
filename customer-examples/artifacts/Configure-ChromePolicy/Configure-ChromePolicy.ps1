@@ -677,8 +677,6 @@ If ($Script:AdmxImported) {
     }
     # https://chromeenterprise.google/policies/?policy=DownloadRestrictions
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DownloadRestrictions' -RegistryType 'DWORD' -RegistryData 4
-    # https://chromeenterprise.google/policies/?policy=ProxySettings
-    Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'ProxySettings'
     if ($null -ne $SafeBrowsingAllowlistDomains -and $SafeBrowsingAllowlistDomains.Count -gt 0) {
         Clear-PolicyRegistryKeyValues -Scope 'Computer' -RegistryKeyPath "$chromeKeyPath\SafeBrowsingAllowlistDomains"
         $i = 1
@@ -724,8 +722,6 @@ If ($Script:AdmxImported) {
     }
     # https://chromeenterprise.google/policies/?policy=DownloadRestrictions
     Set-ItemProperty -Path $chromeKey -Name 'DownloadRestrictions' -Value 4 -Type DWord -Force
-    # https://chromeenterprise.google/policies/?policy=ProxySettings
-    Remove-ItemProperty -Path $chromeKey -Name 'ProxySettings' -ErrorAction SilentlyContinue
     if ($null -ne $SafeBrowsingAllowlistDomains -and $SafeBrowsingAllowlistDomains.Count -gt 0) {
         Remove-Item -Path "$chromeKey\SafeBrowsingAllowlistDomains" -Recurse -Force -ErrorAction SilentlyContinue
         New-Item -Path "$chromeKey\SafeBrowsingAllowlistDomains" -Force | Out-Null
