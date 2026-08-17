@@ -23,6 +23,14 @@
             "Microsoft-AzCLI"
         ]
     },
+    "ChromeEnterpriseAdministrativeTemplates": {
+        "Description": "Google Chrome Enterprise Administrative Templates (ADMX/ADML). Used for Chrome policy configuration via LGPO.",
+        "DownloadUrl": "https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip",
+        "DestinationFileName": "policy_templates.zip",
+        "DestinationFolders": [
+            "Configure-ChromePolicy"
+        ]
+    },
     "DoDInstallRoot": {
         "Description": "DoD InstallRoot Application",
         "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64.msi",

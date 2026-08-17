@@ -12,6 +12,40 @@ This PowerShell script configures Microsoft Edge browser policies for Azure Virt
 - Allow popups for specific trusted URLs
 - Optimize Edge for AVD environments
 
+## Where to get the Edge Administrative Templates
+
+Microsoft publishes ADMX/ADML templates as a CAB file discovered through an API, not a static
+URL:
+
+- API endpoint: `https://edgeupdates.microsoft.com/api/products?view=enterprise` (the script
+  queries this for the latest `Policy` release and downloads the returned CAB)
+- Manual download page: [Configure Microsoft Edge policy settings](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies)
+- Full policy reference: [Microsoft Edge Browser Policy Documentation](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies)
+
+This script looks for the templates in this order:
+
+1. A bundled `*.cab` file next to this script in the artifact folder (staged automatically via
+   the `EdgeEnterpriseAdministrativeTemplates` entry in
+   [downloads.json](../../parameters/imageManagement/downloads.json) - copy that file to
+   `customer/parameters/imageManagement/downloads.json` and run `Update-ImageArtifacts.ps1` to
+   pre-stage it in blob storage before an image build).
+2. An already-installed `msedge.admx` in `PolicyDefinitions`.
+3. A live query to `edgeupdates.microsoft.com` at run time.
+
+If none of the three are available, the script falls back to writing settings directly to the
+registry (no ADMX-backed Group Policy).
+
+> **Air-gapped clouds (Azure Government Secret / Top Secret):** `edgeupdates.microsoft.com` is
+> not reachable from these networks. Download the CAB on an internet-connected system
+> ([API endpoint](https://edgeupdates.microsoft.com/api/products?view=enterprise) → find the
+> latest `Policy` release → `artifacts[0].Location`), transfer it to the air-gapped network,
+> and place it in `customer/artifacts/Configure-EdgePolicy/` before running
+> `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. See
+> [Air-Gapped Cloud Guide](../../../docs/air-gapped-clouds.md) for the general pre-staging
+> pattern. If you skip pre-staging, the script does not fail - it silently takes the
+> [Registry-Write Fallback](#3-registry-write-fallback-no-admx-available) instead, which
+> applies the same settings without ADMX-backed Group Policy.
+
 ## Parameters
 
 ### `AllowDeveloperTools`
@@ -33,6 +67,28 @@ This PowerShell script configures Microsoft Edge browser policies for Azure Virt
 - **Default:** `'["[*.]mil","[*.]gov","[*.]portal.azure.us","[*.]usgovcloudapi.net","[*.]azure.com","[*.]azure.net"]'`
 - **Description:** URL patterns allowed to display popup windows
 - **Policy Reference:** [PopupsAllowedForUrls](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#popupsallowedforurls)
+
+### `DefaultSearchProviderEnabled`
+
+- **Type:** Nullable bool
+- **Default:** `$null` (policy left unconfigured - not written to the registry at all)
+- **Description:** Explicitly enables or disables address-bar search. Pass `$true` to force it on (locking out any future override) or `$false` to disable address-bar search entirely. Leave unset to skip this policy - Edge's normal unmanaged behavior already allows address-bar search.
+- **Policy Reference:** [DefaultSearchProviderEnabled](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchproviderenabled)
+
+### `ManagedSearchEngines`
+
+- **Type:** String (JSON array), optional
+- **Default:** `''` (not applied)
+- **Description:** A JSON array of up to 100 search engine objects, one marked `"is_default": true`. When set as a mandatory policy, users cannot add, remove, or edit entries but can pick which listed engine is the default. Each engine can also carry its own `keyword` - typing that keyword followed by a space in the address bar searches with that engine directly, without changing the default.
+- **Policy Reference:** [ManagedSearchEngines](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/managedsearchengines)
+- **Important:** This is the more capable of the two search-provider options (up to 100 engines, per-engine keywords). Use the simpler `DefaultSearchProviderName`/`DefaultSearchProviderSearchURL`/etc. parameters below instead if you only need to enforce a single provider. If `DefaultSearchProviderSearchURL` is set, this script applies the legacy fields and skips `ManagedSearchEngines` entirely - Edge ignores `ManagedSearchEngines` whenever the legacy policy is also present.
+
+### `DefaultSearchProviderName`, `DefaultSearchProviderKeyword`, `DefaultSearchProviderSearchURL`, `DefaultSearchProviderSuggestURL`
+
+- **Type:** String, optional
+- **Default:** `''` (not applied)
+- **Description:** Simpler alternative to `ManagedSearchEngines` - enforces a single default search provider. Only written when `DefaultSearchProviderSearchURL` is non-empty. Do not set both this group and `ManagedSearchEngines` - see the note above.
+- **Policy Reference:** [DefaultSearchProviderSearchURL](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchprovidersearchurl), [DefaultSearchProviderName](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchprovidername), [DefaultSearchProviderKeyword](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchproviderkeyword), [DefaultSearchProviderSuggestURL](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchprovidersuggesturl)
 
 ## Usage Examples
 
@@ -71,6 +127,63 @@ $popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
     -PopupsAllowedForUrls '["[*.]mil", "[*.]gov"]'
 ```
 
+### Enforce a Single Managed Search Engine
+
+```powershell
+$searchEngines = '[{"is_default": true, "keyword": "bing.com", "name": "Bing", "search_url": "https://www.bing.com/search?q={searchTerms}", "suggest_url": "https://www.bing.com/osjson.aspx?query={searchTerms}"}]'
+
+.\Configure-EdgePolicy.ps1 -ManagedSearchEngines $searchEngines
+```
+
+### Enforce a Single Default Search Provider (Legacy, Simpler Alternative)
+
+Use this instead of `ManagedSearchEngines` when you only need to enforce one provider:
+
+```powershell
+.\Configure-EdgePolicy.ps1 `
+    -DefaultSearchProviderName 'Bing' `
+    -DefaultSearchProviderKeyword 'bing.com' `
+    -DefaultSearchProviderSearchURL 'https://www.bing.com/search?q={searchTerms}' `
+    -DefaultSearchProviderSuggestURL 'https://www.bing.com/osjson.aspx?query={searchTerms}'
+```
+
+### Air-Gapped Environment: Default Engine Plus a Keyword-Triggered Secondary Engine
+
+A customer in an air-gapped network needs an internal search portal as the default, plus a
+quick "go" keyword shortcut to jump straight to an internal knowledge base without changing
+the default. Typing `go <query>` (keyword, then space, then search terms) in the address bar
+searches with that specific engine, bypassing the default:
+
+```powershell
+$searchEngines = @'
+[
+  {
+    "is_default": true,
+    "keyword": "search.contoso.mil",
+    "name": "Contoso Enterprise Search",
+    "search_url": "https://search.contoso.mil/search?q={searchTerms}",
+    "suggest_url": "https://search.contoso.mil/suggest?q={searchTerms}"
+  },
+  {
+    "keyword": "go",
+    "name": "Contoso Quick Search",
+    "search_url": "https://go.contoso.mil/search?q={searchTerms}"
+  }
+]
+'@
+
+.\Configure-EdgePolicy.ps1 -ManagedSearchEngines $searchEngines
+```
+
+**Note:** JSON whitespace (including newlines) between tokens is valid and does not need to
+be collapsed - the multi-line here-string above can be passed directly.
+
+### Disable Address Bar Search
+
+```powershell
+.\Configure-EdgePolicy.ps1 -DefaultSearchProviderEnabled $false
+```
+
 ## What the Script Does
 
 ### 1. Policy Configuration
@@ -97,6 +210,28 @@ $popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
 - Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required
 - Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
 - `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
+
+### 3. Registry-Write Fallback (No ADMX Available)
+
+This is the path taken whenever no ADMX can be located - most commonly in **offline or
+air-gapped builds** where `customer/artifacts/Configure-EdgePolicy/` has no pre-staged `*.cab`
+and `edgeupdates.microsoft.com` is unreachable, but also whenever a bundled CAB is simply
+missing and `msedge.admx` isn't already installed. If no `msedge.admx` can be found or
+obtained (see [Where to get the Edge Administrative
+Templates](#where-to-get-the-edge-administrative-templates)), the script skips
+`Registry.pol` entirely and writes every setting with `Set-ItemProperty` directly to
+`HKLM:\SOFTWARE\Policies\Microsoft\Edge`. This path behaves differently from the ADMX path:
+
+- **Takes effect immediately** — no `gpupdate`, logon, or reboot needed. Edge reads its policy
+  values straight from that registry key on every launch, whether they got there via the GP
+  client processing `Registry.pol` or via a direct write.
+- **Not visible as a "Group Policy"** — `gpedit.msc`, `rsop.msc`, and `gpresult` won't show
+  these as configured policies, since `gpt.ini`/`Registry.pol` were never touched. The settings
+  are still enforced by Edge, just not through the GP client.
+- **No automatic cleanup** — if you later manage Edge with a real GPO/Intune policy targeting
+  the same values, the GPO's next refresh overwrites these registry values (no conflict). But
+  if that GPO/Intune policy is later removed, these directly-written values are **not** cleared
+  automatically the way GP-tattooed values would be, since they were never GP-managed to begin with.
 
 ## Policy Settings Applied
 
@@ -136,6 +271,22 @@ HKLM:\SOFTWARE\Policies\Microsoft\Edge\PopupsAllowedForUrls
   1: [*.]mil
   2: [*.]gov
   ...
+```
+
+### Search Provider
+
+```text
+HKLM:\SOFTWARE\Policies\Microsoft\Edge
+  DefaultSearchProviderEnabled: only written when the parameter is explicitly set to $true or $false; 1 (Enabled) or 0 (Disabled)
+
+  # Legacy single-provider fields - written only when DefaultSearchProviderSearchURL is set;
+  # takes priority over ManagedSearchEngines when both parameters are supplied.
+  DefaultSearchProviderSearchURL, DefaultSearchProviderName, DefaultSearchProviderKeyword,
+  DefaultSearchProviderSuggestURL
+
+  # Multi-engine JSON list - written only when ManagedSearchEngines is non-empty AND
+  # DefaultSearchProviderSearchURL is not set.
+  ManagedSearchEngines: <JSON array string>
 ```
 
 ## Domain Pattern Matching
@@ -195,7 +346,15 @@ Log entries include:
 
 ## Offline Usage
 
-This script writes directly to `Registry.pol` and has no external tool dependencies — it runs fully offline with no downloads required.
+Once `msedge.admx`/`.adml` are present in `PolicyDefinitions` (or a bundled `*.cab` is staged
+next to this script), the script needs no network access at all - it writes directly to
+`Registry.pol`. If neither is present and there's no network access to
+`edgeupdates.microsoft.com` (the normal state in an air-gapped cloud without pre-staging),
+the script does not fail - it automatically takes the [Registry-Write
+Fallback](#3-registry-write-fallback-no-admx-available) and writes the same settings straight
+to the registry instead. See [Where to get the Edge Administrative
+Templates](#where-to-get-the-edge-administrative-templates) for the air-gapped pre-staging
+steps if you want the ADMX-backed path instead of the fallback.
 
 ```powershell
 .\Configure-EdgePolicy.ps1

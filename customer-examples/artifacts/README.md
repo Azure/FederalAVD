@@ -59,8 +59,9 @@ configuration only) or require manually staged files (such as patch files for
 | [Adobe-Acrobat-Reader-DC](Adobe-Acrobat-Reader-DC/) | Adobe Acrobat Reader DC | `AdobeAcrobatReaderDC` |
 | [Amazon-Workspaces-Client](Amazon-Workspaces-Client/) | Amazon WorkSpaces client | `AmazonWorkSpacesClient` |
 | [BuiltIn-UWP-Apps](BuiltIn-UWP-Apps/) | Provision built-in Windows UWP apps for all users | `WindowsCalculator`, `MicrosoftPaint`, `SnippingTool`, `Notepad`, `MicrosoftClipchamp`, `MicrosoftPhotos` |
+| [Configure-ChromePolicy](Configure-ChromePolicy/) | Apply Google Chrome Group Policy settings, including search provider enforcement | `ChromeEnterpriseAdministrativeTemplates` |
 | [Configure-DesktopBackground](Configure-DesktopBackground/) | Set a custom desktop wallpaper | — |
-| [Configure-EdgePolicy](Configure-EdgePolicy/) | Apply Edge Group Policy settings via LGPO | `EdgeEnterpriseAdministrativeTemplates` |
+| [Configure-EdgePolicy](Configure-EdgePolicy/) | Apply Edge Group Policy settings via LGPO, including search provider enforcement | `EdgeEnterpriseAdministrativeTemplates` |
 | [Configure-Office365Policy](Configure-Office365Policy/) | Apply Microsoft 365 Group Policy settings via LGPO | `Office365AdministrativeTemplates` |
 | [Configure-OneDriveKFMPolicy](Configure-OneDriveKFMPolicy/) | Configure OneDrive Known Folder Move | — |
 | [Configure-RemoteDesktopPolicy](Configure-RemoteDesktopPolicy/) | Configure Remote Desktop session policies | — |
@@ -81,4 +82,5 @@ configuration only) or require manually staged files (such as patch files for
 | [Microsoft-VSCode](Microsoft-VSCode/) | Visual Studio Code | `VSCode` |
 | [Notepad-PlusPlus](Notepad-PlusPlus/) | Notepad++ | `NotepadPlusPlus` |
 | [PuTTY](PuTTY/) | PuTTY SSH client | `PuTTY` |
+| [Use-KeyVault-Secret](Use-KeyVault-Secret/) | Retrieve an Azure Key Vault secret from a Run Command using a user-assigned managed identity | — |
 | [Windows-Catalog-Updates](Windows-Catalog-Updates/) | Windows patches from Microsoft Update Catalog (air-gapped) | — (manually staged) |

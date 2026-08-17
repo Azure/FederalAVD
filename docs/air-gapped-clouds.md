@@ -68,6 +68,34 @@ To add software not in the base file, place `downloads.json` in `customer/parame
 
 ---
 
+### Customer-Example Artifacts With Public Download Sources
+
+`customer-examples/parameters/imageManagement/downloads.json` (a separate, optional overlay
+file — distinct from the repo's built-in `secret`/`topsecret` base files above) contains
+`DownloadUrl`/`GitHubRepo` entries pointing at public internet endpoints (GitHub, vendor CDNs,
+Microsoft/Google update services, etc.). None of these are reachable from air-gapped
+management systems. This affects every example artifact you copy from
+`customer-examples/artifacts/`, including the browser policy configuration scripts:
+
+| Artifact | What to pre-stage | Public source (download on a connected system) |
+| --- | --- | --- |
+| [Configure-EdgePolicy](../customer-examples/artifacts/Configure-EdgePolicy/README.md) | Edge Enterprise ADMX/ADML CAB | `https://edgeupdates.microsoft.com/api/products?view=enterprise` (find the latest `Policy` release, use its `artifacts[0].Location`) |
+| [Configure-ChromePolicy](../customer-examples/artifacts/Configure-ChromePolicy/README.md) | Chrome Enterprise ADMX/ADML ZIP | `https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip` |
+
+For these two artifacts specifically, no `downloads.json` merge or `-SkipDownloadingNewSources`
+flag is even required: both scripts prefer a bundled `*.cab`/`*.zip` file placed directly
+next to the script over anything else, so simply downloading the file on a connected system
+and copying it into `customer/artifacts/Configure-EdgePolicy/` or
+`customer/artifacts/Configure-ChromePolicy/` is enough — no network access is needed at
+image-build time.
+
+For any other customer-example artifact, follow the general pattern: download the file on an
+internet-connected system, place it in `customer/artifacts/<FolderName>/`, and run
+`Update-ImageArtifacts.ps1 -SkipDownloadingNewSources` so the script packages and uploads what
+is already staged without attempting a download.
+
+---
+
 ### Items That Must Be Placed Manually
 
 The following artifacts have empty `DownloadUrl` entries in the secret and top secret downloads files — no automated download source is configured. If you wish, you can obtain these files from a reachable source (internet-connected system, Azure Toolbox, vendor portal, etc.) and place them at the paths shown before running `Update-ImageArtifacts.ps1`.

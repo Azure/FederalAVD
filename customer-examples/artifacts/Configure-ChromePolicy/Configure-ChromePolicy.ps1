@@ -1,49 +1,45 @@
-﻿[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [Parameter(Mandatory = $false)]
     [bool]$AllowDeveloperTools = $true,
 
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#smartscreenallowlistdomains
+    # https://chromeenterprise.google/policies/?policy=SafeBrowsingAllowlistDomains
     [Parameter(Mandatory = $false)]
-    [string[]]$SmartScreenAllowListDomains = @('portal.azure.com','core.windows.net','portal.azure.us','usgovcloudapi.net'),
+    [string[]]$SafeBrowsingAllowlistDomains = @('portal.azure.com','core.windows.net','portal.azure.us','usgovcloudapi.net'),
 
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#popupsallowedforurls
+    # https://chromeenterprise.google/policies/?policy=PopupsAllowedForUrls
     [Parameter(Mandatory = $false)]
     [string[]]$PopupsAllowedForUrls = @('[*.]mil','[*.]gov','[*.]portal.azure.us','[*.]usgovcloudapi.net','[*.]azure.com','[*.]azure.net'),
 
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchproviderenabled
+    # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderEnabled
     # $null (default) leaves this policy unconfigured - address-bar search stays on and the
-    # user can still pick their own provider unless ManagedSearchEngines/legacy fields force one.
+    # user can still pick their own provider unless the DefaultSearchProviderSearchURL fields below force one.
     [Parameter(Mandatory = $false)]
     [Nullable[bool]]$DefaultSearchProviderEnabled = $null,
 
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/managedsearchengines
-    # JSON array of search engine objects, one marked "is_default": true. Leave empty to skip.
-    # NOTE: do not also set DefaultSearchProviderSearchURL - Edge ignores ManagedSearchEngines if that policy is set.
-    [Parameter(Mandatory = $false)]
-    [string]$ManagedSearchEngines = '',
-
-    # Simpler alternative to ManagedSearchEngines - enforces a single default provider.
-    # Only written when DefaultSearchProviderSearchURL is non-empty. Do not set both this and
-    # ManagedSearchEngines - see the NOTE above.
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchprovidername
+    # Chrome has no multi-engine equivalent to Edge's ManagedSearchEngines - only a single
+    # enforced default provider. Leave DefaultSearchProviderSearchURL empty to skip enforcing
+    # a specific provider and let DefaultSearchProviderEnabled control search-from-address-bar only.
+    # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderName
     [Parameter(Mandatory = $false)]
     [string]$DefaultSearchProviderName = '',
 
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchproviderkeyword
+    # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderKeyword
     [Parameter(Mandatory = $false)]
     [string]$DefaultSearchProviderKeyword = '',
 
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchprovidersearchurl
+    # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderSearchURL
     [Parameter(Mandatory = $false)]
     [string]$DefaultSearchProviderSearchURL = '',
 
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchprovidersuggesturl
+    # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderSuggestURL
     [Parameter(Mandatory = $false)]
     [string]$DefaultSearchProviderSuggestURL = ''
 )
 
-#region Functions
+# ============================================================
+# Functions
+# ============================================================
 
 Function Get-InternetFile {
     [CmdletBinding()]
@@ -58,7 +54,6 @@ Function Get-InternetFile {
 
     Begin {
         $ProgressPreference = 'SilentlyContinue'
-        ## Get the name of this function and write header
         [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
         Write-Log -Message "Starting ${CmdletName} with the following parameters: $PSBoundParameters"
     }
@@ -92,14 +87,14 @@ Function Get-InternetFile {
             }
         }
         If ($OutputFileName) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             $wc = New-Object System.Net.WebClient
             $OutputFile = Join-Path $OutputDirectory -ChildPath $OutputFileName
             Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."
             Try {
                 $wc.DownloadFile($url, $OutputFile)
                 $time = (Get-Date).Subtract($start_time).Seconds
-                
+
                 Write-Log -Message "${CmdletName}: Time taken: '$time' seconds."
                 if (Test-Path -Path $outputfile) {
                     $totalSize = (Get-Item $outputfile).Length / 1MB
@@ -174,25 +169,9 @@ Function Write-Log {
     directly into the local machine Registry.pol files (Machine and/or User scope).
     Conforms to MS-GPREG (Group Policy: Registry Extension Encoding) v30.0.
 
-    Dot-source this file in your artifact script, queue entries with
-    Set-PolicyRegistryValue / Remove-PolicyRegistryValue / Clear-PolicyRegistryKeyValues,
-    then call Invoke-PolicyUpdate to flush the queue to Registry.pol and run gpupdate.
-
-    Usage:
-        . "$PSScriptRoot\..\RegistryPol\RegistryPol.ps1"
-
-        Set-PolicyRegistryValue -Scope Computer `
-            -RegistryKeyPath 'Software\Policies\MyApp' `
-            -RegistryValue 'EnableFeature' -RegistryType DWORD -RegistryData 1
-
-        Remove-PolicyRegistryValue -Scope Computer `
-            -RegistryKeyPath 'Software\Policies\MyApp' `
-            -RegistryValue 'ObsoleteValue'
-
-        Clear-PolicyRegistryKeyValues -Scope Computer `
-            -RegistryKeyPath 'Software\Policies\MyApp\List'
-
-        Invoke-PolicyUpdate
+    Queue entries with Set-PolicyRegistryValue / Remove-PolicyRegistryValue /
+    Clear-PolicyRegistryKeyValues, then call Invoke-PolicyUpdate to flush the queue to
+    Registry.pol.
 
 .NOTES
     MS-GPREG binary format:
@@ -271,7 +250,7 @@ function Read-PRegFile {
 }
 
 function Write-PRegFile {
-    <#  Internal. Writes a Registry.pol using safe tmp -> verify -> bak -> promote.  #>
+    <#  Internal. Writes a Registry.pol using safe tmp -> verify -> promote.  #>
     param (
         [string]$Path,
         [System.Collections.Generic.List[hashtable]]$Entries
@@ -365,10 +344,6 @@ function Set-PolicyRegistryValue {
     .SYNOPSIS
         Queues a registry value to be written to the local machine's Registry.pol file.
 
-    .DESCRIPTION
-        Accumulates entries in an internal queue. Call Invoke-PolicyUpdate to flush the
-        queue to Registry.pol and apply the settings via gpupdate.
-
     .PARAMETER Scope
         Computer  -  writes to Machine\Registry.pol (applied at system startup/refresh).
         User     -  writes to User\Registry.pol (applied at user logon/refresh).
@@ -443,10 +418,6 @@ function Remove-PolicyRegistryValue {
     .SYNOPSIS
         Queues deletion of a specific registry value from policy.
 
-    .DESCRIPTION
-        Writes a **Del.<valuename> marker entry to Registry.pol. When the Windows Group
-        Policy client processes the pol file, it removes that value from the live registry.
-
     .PARAMETER Scope
         Computer or User.
 
@@ -487,10 +458,6 @@ function Clear-PolicyRegistryKeyValues {
     .SYNOPSIS
         Queues deletion of all registry values in a key (equivalent to LGPO's DELETEALLVALUES).
 
-    .DESCRIPTION
-        Writes a **DelVals. marker entry to Registry.pol. When the Windows Group Policy client
-        processes the pol file, it removes every value from the live registry key.
-
     .PARAMETER Scope
         Computer or User.
 
@@ -529,7 +496,7 @@ function Invoke-PolicyUpdate {
         For each scope that has queued entries: reads the existing Registry.pol,
         merges all queued changes (later entries overwrite earlier ones for the same
         key\valueName), and writes the result using a safe tmp->verify->promote pattern.
-        Updates gpt.ini so the Group Policy client on deployed machines knows to
+        Updates gpt.ini so the Group Policy client on deployed session hosts knows to
         invoke the Registry CSE. Both scope extension-name lines are preserved on
         every call  -  a call that only updates one scope will not drop the other
         scope's line from a prior call.
@@ -594,23 +561,23 @@ function Invoke-PolicyUpdate {
         if ($userUpdated)    { $userVer++ }
         $version = ([uint32]$userVer -shl 16) -bor [uint32]$machineVer
 
-$machineExt = "[$regCse$machineAT]"
-          $userExt   = "[$regCse$userAT]"
+        $machineExt = "[$regCse$machineAT]"
+        $userExt    = "[$regCse$userAT]"
 
-          $finalMachineExt = if ($machineUpdated) {
-              if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-                  $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
-              } else { $machineExt }
-          } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
-              $matches[1].Trim()
-          } else { '' }
-  
-          $finalUserExt = if ($userUpdated) {
-              if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
-                  $ev = $matches[1].Trim()
-                  if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
-              } else { $userExt }
+        $finalMachineExt = if ($machineUpdated) {
+            if ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                if ($ev -notlike "*$regCse*") { $ev + $machineExt } else { $ev }
+            } else { $machineExt }
+        } elseif ($existing_ini -match 'gPCMachineExtensionNames\s*=\s*(.+)') {
+            $matches[1].Trim()
+        } else { '' }
+
+        $finalUserExt = if ($userUpdated) {
+            if ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
+                $ev = $matches[1].Trim()
+                if ($ev -notlike "*$regCse*") { $ev + $userExt } else { $ev }
+            } else { $userExt }
         } elseif ($existing_ini -match 'gPCUserExtensionNames\s*=\s*(.+)') {
             $matches[1].Trim()
         } else { '' }
@@ -652,7 +619,7 @@ function Get-RelativePolicyKeyPath {
 #endregion RegistryPol
 
 #region Initialization
-[string]$Script:Name = "Configure-EdgePolicy"
+[string]$Script:Name = "Configure-ChromePolicy"
 [string]$Script:TempDir = Join-Path -Path $env:Temp -ChildPath $Script:Name
 
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
@@ -660,170 +627,139 @@ $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 #endregion
 
-Write-Log -Category Info -Message "Running Script to Configure Microsoft Edge Policies."
-$Script:EdgeAdmx = "$env:WINDIR\PolicyDefinitions\msedge.admx"
-$edgeCabs = @(Get-ChildItem -Path $PSScriptRoot -Filter '*.cab' | Sort-Object LastWriteTime -Descending)
-If ($edgeCabs.Count -gt 1) {
-    Write-Log -Category Warning -Message "Multiple CAB files found in '$PSScriptRoot'. Using newest: '$($edgeCabs[0].Name)'. Remove older files to avoid ambiguity."
+Write-Log -Category Info -Message "Running Script to Configure Google Chrome Policies."
+$Script:ChromeAdmx = "$env:WINDIR\PolicyDefinitions\chrome.admx"
+# Google publishes a single zip (not a cab) containing ADMX/ADML for all platforms.
+# https://support.google.com/chrome/a/answer/187202
+$Script:ChromeTemplatesUrl = 'https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip'
+# Lookup order: 1) bundled next to this script (staged via downloads.json), 2) already
+# installed in PolicyDefinitions, 3) download from Google. If none are available, policies
+# fall back to direct registry writes further below.
+$chromeZips = @(Get-ChildItem -Path $PSScriptRoot -Filter '*.zip' | Sort-Object LastWriteTime -Descending)
+If ($chromeZips.Count -gt 1) {
+    Write-Log -Category Warning -Message "Multiple ZIP files found in '$PSScriptRoot'. Using newest: '$($chromeZips[0].Name)'. Remove older files to avoid ambiguity."
 }
-$EdgeTemplatesCab = ($edgeCabs | Select-Object -First 1).FullName
-If ($null -ne $EdgeTemplatesCab) {
-    Write-Log -Category Info -Message "Bundled Edge policy CAB found: '$EdgeTemplatesCab'."
-} ElseIf (-not (Test-Path $Script:EdgeAdmx)) {
-    Write-Log -Category Info -Message "'msedge.admx' not found in PolicyDefinitions and no bundled CAB present. Attempting to download Edge policy templates."
-    try {
-        $APIUrl = "https://edgeupdates.microsoft.com/api/products?view=enterprise"
-        $EdgeUpdatesJSON = Invoke-WebRequest -Uri $APIUrl -UseBasicParsing
-        $content = $EdgeUpdatesJSON.content | ConvertFrom-Json      
-        $Edgereleases = ($content | Where-Object { $_.Product -eq 'Stable' }).releases
-        $latestrelease = $Edgereleases | Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } | Sort-Object ProductVersion | Select-Object -last 1
-        $EdgeLatestStableVersion = $latestrelease.ProductVersion
-        $policyfiles = ($content | Where-Object { $_.Product -eq 'Policy' }).releases
-        $latestPolicyFile = $policyfiles | Where-Object { $_.ProductVersion -eq $EdgeLatestStableVersion }
-        If (-not($latestPolicyFile)) {   
-            $latestpolicyfile = $policyfiles | Sort-Object ProductVersion | Select-Object -last 1
-        }  
-        $EdgeTemplatesUrl = $latestpolicyfile.artifacts.Location
-        If ($null -eq $EdgeTemplatesUrl) {
-            Write-Log -Category Warning -Message "Unable to get download Url for Edge Policy Templates."
-        } Else {
-            Write-Log -Category Info -Message "Getting download Urls for latest Edge browser and policy templates from '$APIUrl'."
-            $EdgeTemplatesCab = Get-InternetFile -Url $EdgeTemplatesUrl -OutputDirectory $Script:TempDir -Verbose
-        }
-    } catch {
-        Write-Log -Category Warning -Message "Failed to download Edge policy templates: $_. Continuing without ADMX."
-    }
+$ChromeTemplatesZip = ($chromeZips | Select-Object -First 1).FullName
+If ($null -ne $ChromeTemplatesZip) {
+    Write-Log -Category Info -Message "Bundled Chrome policy template ZIP found: '$ChromeTemplatesZip'."
+} ElseIf (Test-Path $Script:ChromeAdmx) {
+    Write-Log -Category Info -Message "'chrome.admx' already present in PolicyDefinitions and no bundled ZIP to apply. Skipping template download."
 } Else {
-    Write-Log -Category Info -Message "'msedge.admx' already present in PolicyDefinitions and no bundled CAB to apply. Skipping template download."
-}
-If ($null -ne $EdgeTemplatesCab) {
-    $TemplatesDir = Join-Path -Path $Script:TempDir -ChildPath 'Templates'
-    New-Item -Path $TemplatesDir -ItemType Directory -Force | out-null
-    Write-Log -Category Info -Message "Expanding `"$EdgeTemplatesCab`" into `"$TemplatesDir`"."
-    & cmd /c extrac32 /Y /E $EdgeTemplatesCab /L "$TemplatesDir"
-    $EdgeTemplatesZip = Get-ChildItem -Path "$TemplatesDir" -Filter '*.zip' -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    If ($null -eq $EdgeTemplatesZip) {
-        Write-Log -Category Warning -Message "No ZIP file found in '$TemplatesDir' after extracting '$EdgeTemplatesCab'. Edge policy templates will not be installed."
-    } Else {
-        $EdgeTemplatesZip = $EdgeTemplatesZip.FullName
-        Expand-Archive -Path $EdgeTemplatesZip -DestinationPath "$TemplatesDir" -force
-        Write-Log -Category Info -Message "Copy ADMX and ADML files to PolicyDefinition Folders."
-        $null = Get-ChildItem -Path "$TemplatesDir" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
-        $null = Get-ChildItem -Path "$TemplatesDir" -Directory -Recurse | Where-Object { $_.Name -eq 'en-us' } | Get-ChildItem -File -recurse -filter '*.adml' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
+    Write-Log -Category Info -Message "'chrome.admx' not found in PolicyDefinitions and no bundled ZIP present in '$PSScriptRoot'. Attempting to download Chrome policy templates from '$Script:ChromeTemplatesUrl'."
+    try {
+        $ChromeTemplatesZip = Get-InternetFile -Url $Script:ChromeTemplatesUrl -OutputDirectory $Script:TempDir -OutputFileName 'policy_templates.zip' -Verbose
+    } catch {
+        Write-Log -Category Warning -Message "Failed to download Chrome policy templates: $_. Continuing without ADMX."
     }
 }
-$Script:AdmxImported = Test-Path $Script:EdgeAdmx
+If ($null -ne $ChromeTemplatesZip) {
+    $TemplatesDir = Join-Path -Path $Script:TempDir -ChildPath 'Templates'
+    New-Item -Path $TemplatesDir -ItemType Directory -Force | Out-Null
+    Write-Log -Category Info -Message "Expanding `"$ChromeTemplatesZip`" into `"$TemplatesDir`"."
+    Expand-Archive -Path $ChromeTemplatesZip -DestinationPath $TemplatesDir -Force
+    $admxSourceDir = Get-ChildItem -Path $TemplatesDir -Directory -Recurse -Filter 'admx' | Select-Object -First 1
+    If ($null -eq $admxSourceDir) {
+        Write-Log -Category Warning -Message "No 'admx' folder found under '$TemplatesDir' after extracting '$ChromeTemplatesZip'. Chrome policy templates will not be installed."
+    } Else {
+        Write-Log -Category Info -Message "Copy ADMX and ADML files to PolicyDefinition Folders."
+        $null = Get-ChildItem -Path $admxSourceDir.FullName -File -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
+        $null = Get-ChildItem -Path $admxSourceDir.FullName -Directory | Where-Object { $_.Name -eq 'en-US' } | Get-ChildItem -File -Filter '*.adml' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-US\" -Force }
+    }
+}
+$Script:AdmxImported = Test-Path $Script:ChromeAdmx
 
-Write-Log -Category Info -Message "Now Configuring Edge Group Policy."
+Write-Log -Category Info -Message "Now Configuring Chrome Group Policy."
+$chromeKeyPath = 'Software\Policies\Google\Chrome'
 If ($Script:AdmxImported) {
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#hidefirstrunexperience
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'HideFirstRunExperience' -RegistryType 'DWORD' -RegistryData 1
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#nonremovableprofileenabled
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'NonRemovableProfileEnabled' -RegistryType 'DWORD' -RegistryData 1
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#proxysettings
-    Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'ProxySettings'
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#automatichttpsdefault
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'AutomaticHttpsDefault' -RegistryData 0 -RegistryType DWORD
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#downloadrestrictions
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DownloadRestrictions' -RegistryType 'DWORD' -RegistryData 4
-    if ($null -ne $SmartScreenAllowListDomains -and $SmartScreenAllowListDomains.Count -gt 0) {
-        Clear-PolicyRegistryKeyValues -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge\SmartScreenAllowListDomains'
+    if ($AllowDeveloperTools) {
+        # https://chromeenterprise.google/policies/?policy=DeveloperToolsAvailability
+        Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DeveloperToolsAvailability' -RegistryType 'DWORD' -RegistryData 1
+    }
+    # https://chromeenterprise.google/policies/?policy=DownloadRestrictions
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DownloadRestrictions' -RegistryType 'DWORD' -RegistryData 4
+    # https://chromeenterprise.google/policies/?policy=ProxySettings
+    Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'ProxySettings'
+    if ($null -ne $SafeBrowsingAllowlistDomains -and $SafeBrowsingAllowlistDomains.Count -gt 0) {
+        Clear-PolicyRegistryKeyValues -Scope 'Computer' -RegistryKeyPath "$chromeKeyPath\SafeBrowsingAllowlistDomains"
         $i = 1
-        ForEach ($domain in $SmartScreenAllowListDomains) {
-            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge\SmartScreenAllowListDomains' -RegistryValue $i -RegistryType 'STRING' -RegistryData $domain
+        ForEach ($domain in $SafeBrowsingAllowlistDomains) {
+            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath "$chromeKeyPath\SafeBrowsingAllowlistDomains" -RegistryValue $i -RegistryType 'STRING' -RegistryData $domain
             $i++
         }
     }
     if ($null -ne $PopupsAllowedForUrls -and $PopupsAllowedForUrls.Count -gt 0) {
-        Clear-PolicyRegistryKeyValues -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge\PopupsAllowedForUrls'
+        Clear-PolicyRegistryKeyValues -Scope 'Computer' -RegistryKeyPath "$chromeKeyPath\PopupsAllowedForUrls"
         $i = 1
         ForEach ($url in $PopupsAllowedForUrls) {
-            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge\PopupsAllowedForUrls' -RegistryValue $i -RegistryType 'STRING' -RegistryData $url
+            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath "$chromeKeyPath\PopupsAllowedForUrls" -RegistryValue $i -RegistryType 'STRING' -RegistryData $url
             $i++
         }
     }
-    if ($AllowDeveloperTools) {
-        # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-browser-policies/developertoolsavailability
-        Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DeveloperToolsAvailability' -RegistryType 'DWORD' -RegistryData 1
-    }
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchproviderenabled
+    # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderEnabled
     if ($null -ne $DefaultSearchProviderEnabled) {
-        Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DefaultSearchProviderEnabled' -RegistryType 'DWORD' -RegistryData ([int]$DefaultSearchProviderEnabled)
+        Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DefaultSearchProviderEnabled' -RegistryType 'DWORD' -RegistryData ([int]$DefaultSearchProviderEnabled)
     }
     if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderSearchURL)) {
-        # Legacy single-provider fields - only written when DefaultSearchProviderSearchURL is set.
-        # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchprovidersearchurl
-        Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DefaultSearchProviderSearchURL' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderSearchURL
+        # Chrome has no ManagedSearchEngines equivalent - only a single enforced default provider.
+        # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderSearchURL
+        Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DefaultSearchProviderSearchURL' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderSearchURL
         if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderName)) {
-            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DefaultSearchProviderName' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderName
+            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DefaultSearchProviderName' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderName
         }
         if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderKeyword)) {
-            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DefaultSearchProviderKeyword' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderKeyword
+            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DefaultSearchProviderKeyword' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderKeyword
         }
         if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderSuggestURL)) {
-            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DefaultSearchProviderSuggestURL' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderSuggestURL
+            Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $chromeKeyPath -RegistryValue 'DefaultSearchProviderSuggestURL' -RegistryType 'STRING' -RegistryData $DefaultSearchProviderSuggestURL
         }
-    } elseif (-not [string]::IsNullOrWhiteSpace($ManagedSearchEngines)) {
-        # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/managedsearchengines
-        Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'ManagedSearchEngines' -RegistryType 'STRING' -RegistryData $ManagedSearchEngines
     }
     Invoke-PolicyUpdate
 } Else {
-    Write-Log -Category Warning -Message "Edge ADMX templates were not imported. Writing settings directly to registry."
-    $edgeKey = 'HKLM:\Software\Policies\Microsoft\Edge'
-    If (-not (Test-Path $edgeKey)) { New-Item -Path $edgeKey -Force | Out-Null }
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#hidefirstrunexperience
-    Set-ItemProperty -Path $edgeKey -Name 'HideFirstRunExperience' -Value 1 -Type DWord -Force
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#nonremovableprofileenabled
-    Set-ItemProperty -Path $edgeKey -Name 'NonRemovableProfileEnabled' -Value 1 -Type DWord -Force
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#proxysettings
-    Remove-ItemProperty -Path $edgeKey -Name 'ProxySettings' -ErrorAction SilentlyContinue
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#automatichttpsdefault
-    Set-ItemProperty -Path $edgeKey -Name 'AutomaticHttpsDefault' -Value 0 -Type DWord -Force
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#downloadrestrictions
-    Set-ItemProperty -Path $edgeKey -Name 'DownloadRestrictions' -Value 4 -Type DWord -Force
-    if ($null -ne $SmartScreenAllowListDomains -and $SmartScreenAllowListDomains.Count -gt 0) {
-        Remove-Item -Path "$edgeKey\SmartScreenAllowListDomains" -Recurse -Force -ErrorAction SilentlyContinue
-        New-Item -Path "$edgeKey\SmartScreenAllowListDomains" -Force | Out-Null
+    Write-Log -Category Warning -Message "Chrome ADMX templates were not imported. Writing settings directly to registry."
+    $chromeKey = "HKLM:\$chromeKeyPath"
+    If (-not (Test-Path $chromeKey)) { New-Item -Path $chromeKey -Force | Out-Null }
+    if ($AllowDeveloperTools) {
+        # https://chromeenterprise.google/policies/?policy=DeveloperToolsAvailability
+        Set-ItemProperty -Path $chromeKey -Name 'DeveloperToolsAvailability' -Value 1 -Type DWord -Force
+    }
+    # https://chromeenterprise.google/policies/?policy=DownloadRestrictions
+    Set-ItemProperty -Path $chromeKey -Name 'DownloadRestrictions' -Value 4 -Type DWord -Force
+    # https://chromeenterprise.google/policies/?policy=ProxySettings
+    Remove-ItemProperty -Path $chromeKey -Name 'ProxySettings' -ErrorAction SilentlyContinue
+    if ($null -ne $SafeBrowsingAllowlistDomains -and $SafeBrowsingAllowlistDomains.Count -gt 0) {
+        Remove-Item -Path "$chromeKey\SafeBrowsingAllowlistDomains" -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -Path "$chromeKey\SafeBrowsingAllowlistDomains" -Force | Out-Null
         $i = 1
-        ForEach ($domain in $SmartScreenAllowListDomains) {
-            Set-ItemProperty -Path "$edgeKey\SmartScreenAllowListDomains" -Name $i -Value $domain -Type String -Force
+        ForEach ($domain in $SafeBrowsingAllowlistDomains) {
+            Set-ItemProperty -Path "$chromeKey\SafeBrowsingAllowlistDomains" -Name $i -Value $domain -Type String -Force
             $i++
         }
     }
     if ($null -ne $PopupsAllowedForUrls -and $PopupsAllowedForUrls.Count -gt 0) {
-        Remove-Item -Path "$edgeKey\PopupsAllowedForUrls" -Recurse -Force -ErrorAction SilentlyContinue
-        New-Item -Path "$edgeKey\PopupsAllowedForUrls" -Force | Out-Null
+        Remove-Item -Path "$chromeKey\PopupsAllowedForUrls" -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -Path "$chromeKey\PopupsAllowedForUrls" -Force | Out-Null
         $i = 1
         ForEach ($url in $PopupsAllowedForUrls) {
-            Set-ItemProperty -Path "$edgeKey\PopupsAllowedForUrls" -Name $i -Value $url -Type String -Force
+            Set-ItemProperty -Path "$chromeKey\PopupsAllowedForUrls" -Name $i -Value $url -Type String -Force
             $i++
         }
     }
-    if ($AllowDeveloperTools) {
-        # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-browser-policies/developertoolsavailability
-        Set-ItemProperty -Path $edgeKey -Name 'DeveloperToolsAvailability' -Value 1 -Type DWord -Force
-    }
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/defaultsearchproviderenabled
+    # https://chromeenterprise.google/policies/?policy=DefaultSearchProviderEnabled
     if ($null -ne $DefaultSearchProviderEnabled) {
-        Set-ItemProperty -Path $edgeKey -Name 'DefaultSearchProviderEnabled' -Value ([int]$DefaultSearchProviderEnabled) -Type DWord -Force
+        Set-ItemProperty -Path $chromeKey -Name 'DefaultSearchProviderEnabled' -Value ([int]$DefaultSearchProviderEnabled) -Type DWord -Force
     }
     if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderSearchURL)) {
-        # Legacy single-provider fields - only written when DefaultSearchProviderSearchURL is set.
-        Set-ItemProperty -Path $edgeKey -Name 'DefaultSearchProviderSearchURL' -Value $DefaultSearchProviderSearchURL -Type String -Force
+        Set-ItemProperty -Path $chromeKey -Name 'DefaultSearchProviderSearchURL' -Value $DefaultSearchProviderSearchURL -Type String -Force
         if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderName)) {
-            Set-ItemProperty -Path $edgeKey -Name 'DefaultSearchProviderName' -Value $DefaultSearchProviderName -Type String -Force
+            Set-ItemProperty -Path $chromeKey -Name 'DefaultSearchProviderName' -Value $DefaultSearchProviderName -Type String -Force
         }
         if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderKeyword)) {
-            Set-ItemProperty -Path $edgeKey -Name 'DefaultSearchProviderKeyword' -Value $DefaultSearchProviderKeyword -Type String -Force
+            Set-ItemProperty -Path $chromeKey -Name 'DefaultSearchProviderKeyword' -Value $DefaultSearchProviderKeyword -Type String -Force
         }
         if (-not [string]::IsNullOrWhiteSpace($DefaultSearchProviderSuggestURL)) {
-            Set-ItemProperty -Path $edgeKey -Name 'DefaultSearchProviderSuggestURL' -Value $DefaultSearchProviderSuggestURL -Type String -Force
+            Set-ItemProperty -Path $chromeKey -Name 'DefaultSearchProviderSuggestURL' -Value $DefaultSearchProviderSuggestURL -Type String -Force
         }
-    } elseif (-not [string]::IsNullOrWhiteSpace($ManagedSearchEngines)) {
-        # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/managedsearchengines
-        Set-ItemProperty -Path $edgeKey -Name 'ManagedSearchEngines' -Value $ManagedSearchEngines -Type String -Force
     }
 }
-Write-Log -Category Info -Message "Edge Group Policy Configuration Complete."
+Write-Log -Category Info -Message "Chrome Group Policy Configuration Complete."
 Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue
