@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "14583535747529858144"
+      "templateHash": "11170097460570199756"
     }
   },
   "functions": [
@@ -197,6 +197,13 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. Resource ID of the Key Vault for CMK encryption. Required when keyManagementStorageAccounts or keyManagementGalleryImageVersions is not PlatformManaged."
+      }
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of an existing Log Analytics Workspace for storage account diagnostic logs. Leave empty to skip diagnostic settings. See the Security & Monitoring deployment for an option to deploy a new workspace."
       }
     },
     "keyExpirationInDays": {
@@ -5089,6 +5096,7 @@
           },
           "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference('encryptionKeyVault').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
           "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference('storageCmk').outputs.identityResourceId.value), createObject('value', ''))]",
+          "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }
@@ -6108,6 +6116,7 @@
           },
           "cmkKeyUri": "[if(and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), not(empty(parameters('encryptionKeyVaultResourceId')))), createObject('value', format('{0}keys/{1}', reference('encryptionKeyVault').vaultUri, variables('storageEncryptionKeyName'))), createObject('value', ''))]",
           "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', reference('storageCmk').outputs.identityResourceId.value), createObject('value', ''))]",
+          "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject())]"
           }

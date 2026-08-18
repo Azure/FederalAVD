@@ -15,7 +15,7 @@ one deployment template.
 | `hostpools/` | `deployments/hostpools/hostpool.bicep` | `deployments/hostpools/parameters/` |
 | `imageBuild/` | `deployments/imageBuild/imageBuild.bicep` | `deployments/imageBuild/parameters/` |
 | `imageManagement/` | `deployments/imageManagement/imageManagement.bicep` | `deployments/imageManagement/parameters/` |
-| `keyVaults/` | `deployments/keyVaults/keyVaults.bicep` | (no samples; use template defaults as a guide) |
+| `securityAndMonitoring/` | `deployments/securityAndMonitoring/securityAndMonitoring.bicep` | (no samples; use template defaults as a guide) |
 | `networking/` | `deployments/networking/networking.bicep` | `deployments/networking/parameters/` |
 
 ## Getting started

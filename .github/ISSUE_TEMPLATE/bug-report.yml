@@ -29,7 +29,7 @@ body:
       description: Which step failed or is behaving incorrectly?
       options:
         - Step 0 — Networking
-        - Step 1 — Key Vaults
+        - Step 1 — Security & Monitoring (Key Vaults / Log Analytics)
         - Step 2 — Image Management
         - Step 3 — Image Build
         - Step 4 — Host Pool

@@ -556,7 +556,11 @@ module imageDefinition '../../.common/bicepModules/compute/galleries/images/depl
     publisher: effectiveGalleryImageDefinitionPublisher
     offer: effectiveGalleryImageDefinitionOffer
     sku: effectiveGalleryImageDefinitionSku
-    tags: tags[?'Microsoft.Compute/galleries/images'] ?? {}
+    tags: union(tags[?'Microsoft.Compute/galleries/images'] ?? {}, {
+      sourceImagePublisher: mpPublisher
+      sourceImageOffer: mpOffer
+      sourceImageSku: mpSku
+    })
   }
 }
 
@@ -587,7 +591,11 @@ module remoteImageDefinition '../../.common/bicepModules/compute/galleries/image
     sku: empty(imageDefinitionResourceId)
       ? effectiveGalleryImageDefinitionSku
       : existingImageDefinition!.properties.identifier.sku
-    tags: tags[?'Microsoft.Compute/galleries/images'] ?? {}
+    tags: union(tags[?'Microsoft.Compute/galleries/images'] ?? {}, {
+      sourceImagePublisher: mpPublisher
+      sourceImageOffer: mpOffer
+      sourceImageSku: mpSku
+    })
   }
 }
 

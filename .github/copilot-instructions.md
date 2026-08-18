@@ -9,7 +9,7 @@ repo-aware answers in VS Code, github.com chat, and any other Copilot surface.
 
 FederalAVD provides enterprise-grade Azure Virtual Desktop (AVD) deployment automation for
 **Azure Commercial, Azure Government, Azure Government Secret, and Azure Government Top Secret**
-clouds. It handles the full lifecycle: networking → security prerequisites → image management →
+clouds. It handles the full lifecycle: networking → prerequisites → image management →
 custom image builds → host pool deployment → ongoing image refresh.
 
 ---
@@ -20,7 +20,10 @@ The components must be deployed in this order on first deployment:
 
 ```text
 Step 0 (optional): Networking      — VNet, subnets, NSGs, route tables, private DNS zones
-Step 1 (optional): Key Vaults      — Required only when using Customer-Managed Keys (CMK) with custom images
+Step 1 (optional): Security & Monitoring — Key Vaults (required only for Customer-Managed Keys (CMK) or
+                                     Key Vault-sourced credentials) and/or a Log Analytics Workspace
+                                     (optional, for diagnostic settings on Key Vaults, Image
+                                     Management storage accounts, and host pool monitoring)
 Step 2 (optional): Image Management — Storage account, compute gallery, managed identity for artifacts
 Step 3 (optional): Image Build      — Azure Image Builder job that produces a custom image version
 Step 4 (required): Host Pool        — AVD host pool, session hosts, FSLogix storage, monitoring
@@ -31,6 +34,13 @@ Steps 0-3 are optional depending on your scenario:
 - **PoC / marketplace images**: Skip to Step 4 only. A VNet and subnet are the only hard prerequisites.
 - **Custom software, no CMK**: Steps 2 → (3 optional) → 4
 - **Custom software + CMK**: Steps 1 → 2 → (3 optional) → 4
+- **Centralized diagnostics/monitoring**: Deploy Step 1 with `deployMonitoring: true`
+  first, then pass its output resource ID as `logAnalyticsWorkspaceResourceId` (Image Management)
+  and `existingLogAnalyticsWorkspaceResourceId` (Host Pool) so every step shares one workspace.
+- **Policy-governed subscriptions (FedRAMP High, DoD IL4/IL5, CMMC)**: Check whether Azure Policy
+  initiatives with `DeployIfNotExists` diagnostic-settings policies are assigned before Step 2/4 —
+  these need a target Log Analytics Workspace to exist first. Treat Step 1 (`deployMonitoring: true`)
+  as a compliance prerequisite, not just a CMK prerequisite. See `docs/compliance.md`.
 - **Full production with automation**: All steps + CI/CD. See `docs/automation-guide.md`.
 
 ---
@@ -48,7 +58,7 @@ customer/
     hostpools/
     imageBuild/
     imageManagement/
-    keyVaults/
+    securityAndMonitoring/
     networking/
   artifacts/          ← your custom software packages (scripts, installers, configs)
 ```
@@ -105,7 +115,7 @@ deployments/
   hostpools/          ← host pool Bicep template + parameters
   imageBuild/         ← image build Bicep template + parameters
   imageManagement/    ← image management Bicep template + parameters
-  keyVaults/          ← key vault Bicep template + parameters
+  securityAndMonitoring/ ← Key Vaults + Log Analytics Workspace Bicep template + parameters
   networking/         ← networking Bicep template + parameters
   add-ons/            ← optional lifecycle automation (sessionHostReplacer, storageQuotaManager, etc.)
   Update-ImageArtifacts.ps1   ← downloads and uploads software artifacts to blob storage
@@ -233,3 +243,7 @@ Key workbooks and their raw URLs:
 Alert queries that cover the same condition as a workbook query should use the workbook as the
 authoritative source. Deviations are intentional and documented in
 `deployments/add-ons/avdAlerts/README.md` under "Query Design and Validation".
+
+## Notes about UIFormDefinition files
+
+- the default value you specify for Drop Downs must reference the label not the value.

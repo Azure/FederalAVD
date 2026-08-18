@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "2050381091622093673"
+      "version": "0.39.26.7824",
+      "templateHash": "17196408192597784400"
     }
   },
   "parameters": {
@@ -1078,8 +1078,8 @@
       "metadata": {
         "_generator": {
           "name": "bicep",
-          "version": "0.45.15.27210",
-          "templateHash": "4092522613174635761"
+          "version": "0.39.26.7824",
+          "templateHash": "8812248788681617314"
         }
       },
       "parameters": {
@@ -1366,6 +1366,17 @@
           "type": "object",
           "metadata": {
             "description": "Required. Image reference for session host VMs. Use {\"publisher\":\"...\",\"offer\":\"...\",\"sku\":\"...\"} for marketplace images or {\"id\":\"...\"} for Compute Gallery images."
+          }
+        },
+        "customImageLicenseType": {
+          "type": "string",
+          "defaultValue": "Windows_Client",
+          "allowedValues": [
+            "Windows_Client",
+            "Windows_Server"
+          ],
+          "metadata": {
+            "description": "Optional. License type applied to VMs when imageReference uses a custom/gallery image (\"id\"). Ignored for marketplace images."
           }
         },
         "integrityMonitoring": {
@@ -1682,6 +1693,9 @@
               "imageReference": {
                 "value": "[[parameters('imageReference')]"
               },
+              "customImageLicenseType": {
+                "value": "[[parameters('customImageLicenseType')]"
+              },
               "imageOffer": {
                 "value": ""
               },
@@ -1774,8 +1788,8 @@
               "metadata": {
                 "_generator": {
                   "name": "bicep",
-                  "version": "0.45.15.27210",
-                  "templateHash": "10002726654435281407"
+                  "version": "0.39.26.7824",
+                  "templateHash": "16664848795253629162"
                 }
               },
               "parameters": {
@@ -1817,6 +1831,13 @@
                 "customImageResourceId": {
                   "type": "string",
                   "defaultValue": ""
+                },
+                "customImageLicenseType": {
+                  "type": "string",
+                  "defaultValue": "Windows_Client",
+                  "metadata": {
+                    "description": "Optional. License type applied to VMs deployed from a custom/gallery image. Ignored for marketplace images."
+                  }
                 },
                 "dataCollectionEndpointResourceId": {
                   "type": "string"
@@ -2070,8 +2091,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.45.15.27210",
-                          "templateHash": "3591806012304049961"
+                          "version": "0.39.26.7824",
+                          "templateHash": "13106094525246318298"
                         }
                       },
                       "parameters": {
@@ -2168,8 +2189,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.45.15.27210",
-                          "templateHash": "4022744618912193610"
+                          "version": "0.39.26.7824",
+                          "templateHash": "11609031045672993663"
                         }
                       },
                       "parameters": {
@@ -2344,6 +2365,9 @@
                       "imageReference": {
                         "value": "[[variables('effectiveImageReference')]"
                       },
+                      "customImageLicenseType": {
+                        "value": "[[parameters('customImageLicenseType')]"
+                      },
                       "integrityMonitoring": {
                         "value": "[[parameters('integrityMonitoring')]"
                       },
@@ -2429,8 +2453,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.45.15.27210",
-                          "templateHash": "6387519201881111950"
+                          "version": "0.39.26.7824",
+                          "templateHash": "11214460991784541718"
                         }
                       },
                       "parameters": {
@@ -2552,6 +2576,17 @@
                         },
                         "imageReference": {
                           "type": "object"
+                        },
+                        "customImageLicenseType": {
+                          "type": "string",
+                          "defaultValue": "Windows_Client",
+                          "allowedValues": [
+                            "Windows_Client",
+                            "Windows_Server"
+                          ],
+                          "metadata": {
+                            "description": "Optional. License type applied to VMs deployed from a custom/gallery image. Ignored for marketplace images, where license type is determined from imageReference.publisher."
+                          }
                         },
                         "integrityMonitoring": {
                           "type": "bool"
@@ -2748,7 +2783,7 @@
                               "securityType": "[[if(not(equals(parameters('securityType'), 'Standard')), parameters('securityType'), null())]",
                               "uefiSettings": "[[if(not(equals(parameters('securityType'), 'Standard')), createObject('secureBootEnabled', parameters('secureBootEnabled'), 'vTpmEnabled', parameters('vTpmEnabled')), null())]"
                             },
-                            "licenseType": "[[if(or(not(empty(tryGet(parameters('imageReference'), 'id'))), equals(tryGet(parameters('imageReference'), 'publisher'), 'MicrosoftWindowsDesktop')), 'Windows_Client', 'Windows_Server')]"
+                            "licenseType": "[[if(not(empty(tryGet(parameters('imageReference'), 'id'))), parameters('customImageLicenseType'), if(equals(tryGet(parameters('imageReference'), 'publisher'), 'MicrosoftWindowsDesktop'), 'Windows_Client', 'Windows_Server'))]"
                           },
                           "dependsOn": [
                             "networkInterface"
@@ -2823,7 +2858,9 @@
                         {
                           "[string('copy')]": {
                             "name": "extension_AADLoginForWindows",
-                            "count": "[[length(range(0, variables('sessionHostCount')))]"
+                            "count": "[[length(range(0, variables('sessionHostCount')))]",
+                            "mode": "serial",
+                            "batchSize": 1
                           },
                           "condition": "[[or(startsWith(parameters('identitySolution'), 'EntraKerberos'), equals(parameters('identitySolution'), 'EntraId'))]",
                           "type": "Microsoft.Compute/virtualMachines/extensions",
@@ -2874,7 +2911,7 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
+                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "name": "configurationAccessEndpoint",
                           "properties": {
                             "dataCollectionEndpointId": "[[parameters('dataCollectionEndpointResourceId')]",
@@ -2893,7 +2930,7 @@
                           "condition": "[[and(parameters('enableMonitoring'), not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))))]",
                           "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                           "apiVersion": "2022-06-01",
-                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
+                          "scope": "[[format('Microsoft.Compute/virtualMachines/{0}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "name": "[[format('{0}-avdInsights-data-coll-rule-assoc', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                           "properties": {
                             "dataCollectionRuleId": "[[parameters('avdInsightsDataCollectionRulesResourceId')]",
@@ -3103,8 +3140,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.45.15.27210",
-                                  "templateHash": "359406211582799995"
+                                  "version": "0.39.26.7824",
+                                  "templateHash": "2405333860778897872"
                                 }
                               },
                               "parameters": {
@@ -3233,8 +3270,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.45.15.27210",
-                                  "templateHash": "4421185313861014725"
+                                  "version": "0.39.26.7824",
+                                  "templateHash": "14739742046096058044"
                                 }
                               },
                               "parameters": {
@@ -3284,8 +3321,8 @@
                                       "metadata": {
                                         "_generator": {
                                           "name": "bicep",
-                                          "version": "0.45.15.27210",
-                                          "templateHash": "13198152914363378685"
+                                          "version": "0.39.26.7824",
+                                          "templateHash": "17290095301135652436"
                                         }
                                       },
                                       "parameters": {
@@ -3367,8 +3404,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.45.15.27210",
-                                  "templateHash": "6380852801717604135"
+                                  "version": "0.39.26.7824",
+                                  "templateHash": "15665053953368527054"
                                 }
                               },
                               "parameters": {
@@ -3457,8 +3494,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.45.15.27210",
-                          "templateHash": "8237946334697730753"
+                          "version": "0.39.26.7824",
+                          "templateHash": "11447244983080427176"
                         }
                       },
                       "parameters": {
@@ -4005,13 +4042,37 @@
                       }
                     },
                     {
+                      "name": "publisher",
+                      "type": "Microsoft.Common.DropDown",
+                      "label": "Publisher",
+                      "multiLine": true,
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.vmImagePublisher, 'MicrosoftWindowsDesktop')]",
+                      "toolTip": "Select the marketplace image publisher. Defaults to the publisher already used by this host pool's existing session hosts (from the 'vmImagePublisher' tag on the hosts resource group) when available.",
+                      "constraints": {
+                        "required": true,
+                        "allowedValues": [
+                          {
+                            "label": "MicrosoftWindowsDesktop",
+                            "description": "Windows 10/11 desktop images (single- or multi-session), including AVD-specific offers such as 'office-365'. Session hosts are licensed as Windows_Client.",
+                            "value": "MicrosoftWindowsDesktop"
+                          },
+                          {
+                            "label": "MicrosoftWindowsServer",
+                            "description": "Windows Server images. Session hosts are licensed as Windows_Server.",
+                            "value": "MicrosoftWindowsServer"
+                          }
+                        ]
+                      },
+                      "visible": "[[equals(steps('hosts').image.source, 'marketplace')]"
+                    },
+                    {
                       "name": "offer",
                       "type": "Microsoft.Common.DropDown",
                       "label": "Offer",
-                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer)]",
+                      "defaultValue": "[[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), 'WindowsServer', if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer))]",
                       "toolTip": "Select the desired marketplace image offer.",
                       "constraints": {
-                        "allowedValues": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]'))]",
+                        "allowedValues": "[[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), parse('[{\"label\":\"WindowsServer\",\"value\":\"WindowsServer\"}]'), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]')))]",
                         "required": true
                       },
                       "visible": "[[equals(steps('hosts').image.source, 'marketplace')]"
@@ -4022,10 +4083,11 @@
                       "condition": "[[and(not(empty(steps('hosts').scope.subscription.id)), not(empty(steps('hosts').scope.location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
                       "request": {
                         "method": "GET",
-                        "path": "[[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+                        "path": "[[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/', steps('hosts').image.publisher, '/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
                         "transforms": {
                           "personal": "[?starts_with(name, `win`) && contains(name, `ent`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
-                          "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}"
+                          "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
+                          "server": "[*].{label: name, value: name}"
                         }
                       }
                     },
@@ -4033,10 +4095,10 @@
                       "name": "sku",
                       "type": "Microsoft.Common.DropDown",
                       "label": "SKU",
-                      "defaultValue": "[[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku)]",
+                      "defaultValue": "[[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), '2025-datacenter-azure-edition', if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku))]",
                       "toolTip": "Select the desired marketplace image SKU.",
                       "constraints": {
-                        "allowedValues": "[[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled)]",
+                        "allowedValues": "[[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), steps('hosts').image.skuApi.transformed.server, if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled))]",
                         "required": true
                       },
                       "visible": "[[equals(steps('hosts').image.source, 'marketplace')]"
@@ -4106,9 +4168,31 @@
                         "transforms": {
                           "IsHibernateSupported": "properties.features[?name=='IsHibernateSupported'].value | [0]",
                           "IsAcceleratedNetworkSupported": "properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0]",
-                          "SecurityType": "properties.features[?name=='SecurityType'].value | [0]"
+                          "SecurityType": "properties.features[?name=='SecurityType'].value | [0]",
+                          "SourceImagePublisher": "tags.sourceImagePublisher"
                         }
                       }
+                    },
+                    {
+                      "name": "licenseType",
+                      "type": "Microsoft.Common.DropDown",
+                      "label": "Session Host Operating System Type",
+                      "toolTip": "Select whether this custom image is based on a Windows desktop (10/11) or Windows Server operating system. This determines the correct licensing (Azure Hybrid Benefit / AVD per-user entitlement) applied to session hosts. Defaults automatically from the image definition's 'sourceImagePublisher' tag (set by the Image Build deployment) when available. Not applicable to marketplace images, which are detected automatically.",
+                      "defaultValue": "[[if(equals(steps('hosts').image.imageDefinitionApi.transformed.SourceImagePublisher, 'MicrosoftWindowsServer'), 'Windows Server', 'Windows Client')]",
+                      "constraints": {
+                        "required": "[[equals(steps('hosts').image.source, 'gallery')]",
+                        "allowedValues": [
+                          {
+                            "label": "Windows Client",
+                            "value": "Windows_Client"
+                          },
+                          {
+                            "label": "Windows Server",
+                            "value": "Windows_Server"
+                          }
+                        ]
+                      },
+                      "visible": "[[equals(steps('hosts').image.source, 'gallery')]"
                     }
                   ]
                 },
@@ -5529,7 +5613,8 @@
             "sessionHostCount": "[[steps('hosts').specs.count]",
             "sessionHostNameIndexLength": "[[steps('hosts').naming.indexPadding]",
             "enableIPv6": "[[steps('hosts').network.enableIPv6]",
-            "imageReference": "[[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"MicrosoftWindowsDesktop\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
+            "imageReference": "[[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"', steps('hosts').image.publisher, '\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\",\"version\":\"latest\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
+            "customImageLicenseType": "[[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.licenseType, 'Windows_Client')]",
             "securityType": "[[steps('hosts').security.securityType]",
             "secureBootEnabled": "[[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
             "vTpmEnabled": "[[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
@@ -5665,8 +5750,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "7484515960387994716"
+              "version": "0.39.26.7824",
+              "templateHash": "2458038463918039152"
             }
           },
           "functions": [
@@ -5973,8 +6058,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "1890398182605346796"
+              "version": "0.39.26.7824",
+              "templateHash": "10540414874423970871"
             }
           },
           "parameters": {
@@ -6109,8 +6194,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "15792462937281646271"
+              "version": "0.39.26.7824",
+              "templateHash": "5611607689301204181"
             }
           },
           "parameters": {
@@ -6202,8 +6287,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "8147196888807946547"
+              "version": "0.39.26.7824",
+              "templateHash": "10861582231171382063"
             }
           },
           "definitions": {
@@ -6293,7 +6378,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('keyVaultName'))]",
               "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -6346,8 +6431,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "15453626423593738474"
+              "version": "0.39.26.7824",
+              "templateHash": "15647520222733292506"
             }
           },
           "parameters": {
@@ -6442,8 +6527,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "15453626423593738474"
+              "version": "0.39.26.7824",
+              "templateHash": "15647520222733292506"
             }
           },
           "parameters": {
@@ -6542,8 +6627,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3585155273898172375"
+              "version": "0.39.26.7824",
+              "templateHash": "6703123689452334995"
             }
           },
           "parameters": {
@@ -6640,8 +6725,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "4546018558261926101"
+              "version": "0.39.26.7824",
+              "templateHash": "5403796250629971852"
             }
           },
           "definitions": {
@@ -6728,7 +6813,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.Resources/templateSpecs', parameters('templateSpecName'))]",
+              "scope": "[format('Microsoft.Resources/templateSpecs/{0}', parameters('templateSpecName'))]",
               "name": "[guid(resourceId('Microsoft.Resources/templateSpecs', parameters('templateSpecName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -6785,8 +6870,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "10372190194927991190"
+              "version": "0.39.26.7824",
+              "templateHash": "18348983487760297408"
             }
           },
           "definitions": {
@@ -6876,7 +6961,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.Compute/galleries', parameters('galleryName'))]",
+              "scope": "[format('Microsoft.Compute/galleries/{0}', parameters('galleryName'))]",
               "name": "[guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -6932,8 +7017,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3157911347554477505"
+              "version": "0.39.26.7824",
+              "templateHash": "1025380025253398934"
             }
           },
           "definitions": {
@@ -7020,7 +7105,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+              "scope": "[format('Microsoft.ManagedIdentity/userAssignedIdentities/{0}', parameters('identityName'))]",
               "name": "[guid(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
               "properties": {
                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -7142,8 +7227,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "7197707674177414895"
+              "version": "0.39.26.7824",
+              "templateHash": "1674504802453117561"
             }
           },
           "parameters": {
@@ -7567,7 +7652,7 @@
               "condition": "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]",
               "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2021-05-01-preview",
-              "scope": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+              "scope": "[format('Microsoft.Web/sites/{0}', parameters('functionAppName'))]",
               "name": "[format('diag-{0}', parameters('functionAppName'))]",
               "properties": {
                 "workspaceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
@@ -7672,8 +7757,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "12933534060515147751"
+                      "version": "0.39.26.7824",
+                      "templateHash": "1756415306364654400"
                     }
                   },
                   "definitions": {
@@ -7891,8 +7976,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "15814763353458744660"
+                              "version": "0.39.26.7824",
+                              "templateHash": "2124421625946796921"
                             }
                           },
                           "parameters": {
@@ -8030,8 +8115,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "8883362177636156190"
+                              "version": "0.39.26.7824",
+                              "templateHash": "13041727118718956438"
                             }
                           },
                           "parameters": {
@@ -8116,8 +8201,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "14733611597515188353"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -8213,7 +8298,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8287,8 +8372,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "15814763353458744660"
+                              "version": "0.39.26.7824",
+                              "templateHash": "2124421625946796921"
                             }
                           },
                           "parameters": {
@@ -8440,8 +8525,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "10613292749142597083"
+                              "version": "0.39.26.7824",
+                              "templateHash": "9232813763512653612"
                             }
                           },
                           "parameters": {
@@ -8586,8 +8671,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "14733611597515188353"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -8683,7 +8768,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8748,8 +8833,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "14733611597515188353"
+                              "version": "0.39.26.7824",
+                              "templateHash": "7374398187158342276"
                             }
                           },
                           "definitions": {
@@ -8845,7 +8930,7 @@
                               },
                               "type": "Microsoft.Authorization/roleAssignments",
                               "apiVersion": "2022-04-01",
-                              "scope": "[resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName'))]",
+                              "scope": "[format('Microsoft.KeyVault/vaults/{0}/keys/{1}', parameters('keyVaultName'), parameters('keyName'))]",
                               "name": "[guid(resourceId('Microsoft.KeyVault/vaults/keys', parameters('keyVaultName'), parameters('keyName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                               "properties": {
                                 "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -8933,8 +9018,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "11143995444245234492"
+                      "version": "0.39.26.7824",
+                      "templateHash": "10261237149566402125"
                     }
                   },
                   "parameters": {
@@ -8983,8 +9068,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "2257598999830276116"
+                              "version": "0.39.26.7824",
+                              "templateHash": "5758136482480486201"
                             }
                           },
                           "parameters": {
@@ -9049,8 +9134,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "11108988540400323268"
+                      "version": "0.39.26.7824",
+                      "templateHash": "2027363032243475202"
                     }
                   },
                   "definitions": {
@@ -9137,7 +9222,7 @@
                       },
                       "type": "Microsoft.Authorization/roleAssignments",
                       "apiVersion": "2022-04-01",
-                      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', parameters('storageAccountName'))]",
                       "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
                       "properties": {
                         "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
@@ -9238,8 +9323,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3654666457746408827"
+              "version": "0.39.26.7824",
+              "templateHash": "5366415417088853"
             }
           },
           "parameters": {
@@ -9314,8 +9399,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "5495376996360269117"
+              "version": "0.39.26.7824",
+              "templateHash": "13100126661660511540"
             }
           },
           "parameters": {

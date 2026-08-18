@@ -39,6 +39,9 @@ param hibernationEnabled bool = false
 param hostPoolResourceId string
 param identitySolution string
 param imageReference object
+@description('Optional. License type applied to VMs deployed from a custom/gallery image. Ignored for marketplace images, where license type is determined from imageReference.publisher.')
+@allowed(['Windows_Client', 'Windows_Server'])
+param customImageLicenseType string = 'Windows_Client'
 param integrityMonitoring bool
 param intuneEnrollment bool
 param location string
@@ -259,9 +262,9 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' = [
             }
           : null
       }
-      licenseType: (!empty(imageReference.?id) || imageReference.?publisher == 'MicrosoftWindowsDesktop')
-        ? 'Windows_Client'
-        : 'Windows_Server'
+      licenseType: !empty(imageReference.?id)
+        ? customImageLicenseType
+        : (imageReference.?publisher == 'MicrosoftWindowsDesktop' ? 'Windows_Client' : 'Windows_Server')
     }
     dependsOn: [
       networkInterface
@@ -325,6 +328,9 @@ resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/exte
   }
 ]
 
+// Serialized: concurrent Entra ID device registration requests from multiple VMs can
+// intermittently collide/throttle, causing some joins to fail while others succeed.
+@batchSize(1)
 resource extension_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = [
   for i in range(0, sessionHostCount): if (startsWith(identitySolution, 'EntraKerberos') || identitySolution == 'EntraId') {
     parent: virtualMachine[i]

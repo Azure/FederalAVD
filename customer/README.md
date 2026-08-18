@@ -17,8 +17,8 @@ customer/
       win11-m365.imageBuild.parameters.json
     imageManagement/
       prod.imageManagement.parameters.json
-    keyVaults/
-      prod.keyVaults.parameters.json
+    securityAndMonitoring/
+      prod.securityAndMonitoring.parameters.json
     networking/
       prod.networking.parameters.json
   artifacts/
@@ -33,7 +33,7 @@ into the matching child folder under `customer/parameters/` before customizing t
 - `deployments/hostpools/parameters/`
 - `deployments/imageBuild/parameters/`
 - `deployments/imageManagement/parameters/`
-- `deployments/keyVaults/parameters/`
+- `deployments/securityAndMonitoring/parameters/`
 - `deployments/networking/parameters/`
 
 Put your artifact packages in `customer/artifacts/`. `deployments/Update-ImageArtifacts.ps1`

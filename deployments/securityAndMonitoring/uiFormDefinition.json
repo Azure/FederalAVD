@@ -14,7 +14,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "Deploy shared AVD security infrastructure: a Secrets Key Vault for storing AVD credentials, and an Encryption Key Vault for Customer-Managed Key (CMK) encryption. Run this deployment before deploying host pools, image management, or add-ons that use CMK. The resource IDs output by this deployment are used as inputs to downstream solutions."
+                "text": "Deploy shared AVD security infrastructure: a Secrets Key Vault for storing AVD credentials, an Encryption Key Vault for Customer-Managed Key (CMK) encryption, and an optional shared Log Analytics Workspace. Run this deployment before deploying host pools, image management, or add-ons that use CMK. The resource IDs output by this deployment are used as inputs to downstream solutions."
               }
             },
             {
@@ -24,17 +24,189 @@
                 "method": "GET",
                 "path": "/subscriptions?api-version=2022-12-01"
               }
+            }
+          ]
+        },
+        {
+          "name": "monitoring",
+          "label": "Log Analytics Workspace",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Optionally deploy a shared Log Analytics Workspace, AVD Insights Data Collection Rule (DCR), and Data Collection Endpoint (DCE) here. Every AVD host pool, image management, and add-on deployment can then reference this same workspace/DCR/DCE instead of each creating its own. Choose the subscription here first \u2014 the Key Vaults step later in this form defaults to the same subscription, so pick this location carefully if your monitoring and security resources are typically centralized in a different subscription than your Key Vaults."
+              }
+            },
+            {
+              "name": "deployMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Log Analytics Workspace, DCR, and DCE",
+              "defaultValue": false,
+              "toolTip": "Deploy a new Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Pass the resulting resource IDs to the host pool deployment (existingLogAnalyticsWorkspaceResourceId, existingAVDInsightsDataCollectionRuleResourceId, existingDataCollectionEndpointResourceId) and to the Image Management deployment (logAnalyticsWorkspaceResourceId)."
             },
             {
               "name": "scope",
-              "type": "Microsoft.Common.ResourceScope",
-              "instanceDetailsLabel": "Security Resources Location",
-              "location": {
-                "label": "Region",
-                "resourceTypes": [
-                  "Microsoft.KeyVault/vaults"
-                ]
+              "type": "Microsoft.Common.Section",
+              "label": "Subscription and Location",
+              "visible": "[steps('monitoring').deployMonitoring]",
+              "elements": [
+                {
+                  "name": "subscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Monitoring Subscription",
+                  "toolTip": "Select the subscription where the Log Analytics Workspace, DCR, and DCE will be deployed. The Key Vaults step later in this form defaults to this same subscription.",
+                  "constraints": {
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+                    "required": true
+                  }
+                },
+                {
+                  "name": "locationNote",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Region is chosen later, in the Key Vaults Location step \u2014 Key Vaults and the Log Analytics Workspace share one region in this deployment."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "settings",
+              "type": "Microsoft.Common.Section",
+              "label": "Workspace Settings",
+              "visible": "[steps('monitoring').deployMonitoring]",
+              "elements": [
+                {
+                  "name": "sku",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Pricing Tier",
+                  "defaultValue": "Pay-as-you-go (Per-GB)",
+                  "toolTip": "Log Analytics Workspace pricing tier. Pay-as-you-go (PerGB2018) is recommended for most deployments.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Pay-as-you-go (Per-GB)",
+                        "value": "PerGB2018"
+                      },
+                      {
+                        "label": "Commitment Tier - 100 GB/day",
+                        "value": "CapacityReservation"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "retentionDays",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Data Retention (Days)",
+                  "toolTip": "Number of days to retain Log Analytics data.",
+                  "min": 30,
+                  "max": 730,
+                  "defaultValue": 30,
+                  "showStepMarkers": false
+                },
+                {
+                  "name": "azureMonitorPrivateLinkScopeResourceId",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Azure Monitor Private Link Scope Resource ID",
+                  "placeholder": "/subscriptions/.../resourceGroups/.../providers/microsoft.insights/privateLinkScopes/...",
+                  "toolTip": "Optional. Resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate the workspace and Data Collection Endpoint with, and to disable public network access on the DCE. Leave empty to allow public network access to the DCE.",
+                  "constraints": {
+                    "required": false
+                  }
+                }
+              ]
+            },
+            {
+              "name": "existingWorkspaceInfoBox",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[not(steps('monitoring').deployMonitoring)]",
+              "options": {
+                "text": "Not deploying a new workspace here? You can still send Key Vault audit and diagnostic logs to an existing Log Analytics Workspace."
               }
+            },
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Send Key Vault Diagnostic Logs to an Existing Log Analytics Workspace",
+              "visible": "[not(steps('monitoring').deployMonitoring)]"
+            },
+            {
+              "name": "monitoringSubscription",
+              "type": "Microsoft.Common.DropDown",
+              "visible": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
+              "label": "Log Analytics Workspace Subscription",
+              "toolTip": "Select the subscription containing the target Log Analytics Workspace.",
+              "constraints": {
+                "required": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
+                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspacesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspace",
+              "type": "Microsoft.Common.DropDown",
+              "visible": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
+              "label": "Existing Log Analytics Workspace",
+              "multiLine": true,
+              "toolTip": "Select the Log Analytics Workspace for Key Vault diagnostic logs.",
+              "constraints": {
+                "required": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
+                "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
+              }
+            }
+          ]
+        },
+        {
+          "name": "keyVaultsScope",
+          "label": "Key Vaults Location",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Choose where the Secrets and Encryption Key Vaults are deployed."
+              }
+            },
+            {
+              "name": "scope",
+              "type": "Microsoft.Common.Section",
+              "label": "Subscription and Location",
+              "elements": [
+                {
+                  "name": "subscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Subscription",
+                  "defaultValue": "[if(steps('monitoring').deployMonitoring, steps('monitoring').scope.subscription.displayName, '')]",
+                  "toolTip": "Select the subscription for the Key Vaults. Defaults to the Log Analytics Workspace subscription when one is being deployed.",
+                  "constraints": {
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Microsoft.Common.LocationSelector",
+                  "name": "location",
+                  "label": "Region",
+                  "resourceTypes": [
+                    "Microsoft.KeyVault/vaults"
+                  ],
+                  "scope": {
+                    "subscriptionId": "[steps('keyVaultsScope').scope.subscription.subscriptionId]"
+                  }
+                }
+              ]
             }
           ]
         },
@@ -221,10 +393,10 @@
                 {
                   "name": "virtualNetworksApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('networking').privateEndpoint, not(empty(steps('basics').scope.subscription)))]",
+                  "condition": "[and(steps('networking').privateEndpoint, not(empty(steps('keyVaultsScope').scope.subscription)))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+                    "path": "[concat(steps('keyVaultsScope').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
                   }
                 },
                 {
@@ -235,7 +407,7 @@
                   "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('networking').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                    "allowedValues": "[map(filter(steps('networking').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('keyVaultsScope').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
                   }
                 },
                 {
@@ -277,7 +449,7 @@
                   "type": "Microsoft.Common.DropDown",
                   "visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
                   "label": "Private DNS Zone Subscription",
-                  "defaultValue": "[steps('basics').scope.subscription.displayName]",
+                  "defaultValue": "[steps('keyVaultsScope').scope.subscription.displayName]",
                   "toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
                   "constraints": {
                     "required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
@@ -353,57 +525,6 @@
                   }
                 }
               ]
-            }
-          ]
-        },
-        {
-          "name": "monitoring",
-          "label": "Monitoring",
-          "elements": [
-            {
-              "name": "infoBox",
-              "type": "Microsoft.Common.TextBlock",
-              "options": {
-                "text": "Optionally send Key Vault audit and diagnostic logs to an existing Log Analytics Workspace. Key Vault logs capture secret access, key operations, and access control changes — security and compliance telemetry best suited for a security-team-owned workspace or SIEM."
-              }
-            },
-            {
-              "name": "enableMonitoring",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Send Key Vault Diagnostic Logs to Log Analytics"
-            },
-            {
-              "name": "monitoringSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "visible": "[steps('monitoring').enableMonitoring]",
-              "label": "Log Analytics Workspace Subscription",
-              "defaultValue": "[steps('basics').scope.subscription.displayName]",
-              "toolTip": "Select the subscription containing the target Log Analytics Workspace.",
-              "constraints": {
-                "required": "[steps('monitoring').enableMonitoring]",
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-              }
-            },
-            {
-              "name": "logAnalyticsWorkspacesApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
-              }
-            },
-            {
-              "name": "logAnalyticsWorkspace",
-              "type": "Microsoft.Common.DropDown",
-              "visible": "[steps('monitoring').enableMonitoring]",
-              "label": "Log Analytics Workspace",
-              "multiLine": true,
-              "toolTip": "Select the Log Analytics Workspace for Key Vault diagnostic logs.",
-              "constraints": {
-                "required": "[steps('monitoring').enableMonitoring]",
-                "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
-              }
             }
           ]
         },
@@ -1027,10 +1148,10 @@
     },
     "outputs": {
       "kind": "Subscription",
-      "location": "[steps('basics').scope.location.name]",
-      "subscriptionId": "[steps('basics').scope.subscription.id]",
+      "location": "[steps('keyVaultsScope').scope.location.name]",
+      "subscriptionId": "[steps('keyVaultsScope').scope.subscription.id]",
       "parameters": {
-        "location": "[steps('basics').scope.location.name]",
+        "location": "[steps('keyVaultsScope').scope.location.name]",
         "deploySecretsKeyVault": "[steps('secretsKeyVault').deploySecretsKeyVault]",
         "secretsKeyVaultEnableSoftDelete": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enableSoftDelete, true)]",
         "secretsKeyVaultEnablePurgeProtection": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enablePurgeProtection, true)]",
@@ -1045,7 +1166,12 @@
         "privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
         "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
         "permittedIPs": "[filter(map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
-        "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
+        "deployMonitoring": "[steps('monitoring').deployMonitoring]",
+        "logAnalyticsWorkspaceSubscriptionId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').scope.subscription.subscriptionId, '')]",
+        "logAnalyticsWorkspaceSku": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.sku, 'PerGB2018')]",
+        "logAnalyticsWorkspaceRetentionInDays": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.retentionDays, 30)]",
+        "azureMonitorPrivateLinkScopeResourceId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.azureMonitorPrivateLinkScopeResourceId, '')]",
+        "existingLogAnalyticsWorkspaceResourceId": "[if(steps('monitoring').deployMonitoring, '', if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, ''))]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"
       }

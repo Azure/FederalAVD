@@ -4,7 +4,7 @@ param (
     [Parameter(Mandatory=$true)]
     [string]$Location,
     [bool]$createResourceGroup = $true,
-    [bool]$createKeyVault = $false,
+    [bool]$createSecurityAndMonitoring = $false,
     [bool]$createNetwork = $false,
     [bool]$createCustomImage = $true,
     [bool]$createImageManagement = $false,
@@ -64,13 +64,13 @@ if ($createResourceGroup) {
 # Build collection of template specs to create
 $templateSpecs = @()
 
-if ($createKeyVault) {
+if ($createSecurityAndMonitoring) {
     $templateSpecs += @{
-        Name = 'avd-keyvaults'
-        DisplayName = 'AVD Key Vaults'
-        Description = 'Deploys key vaults to support Azure Virtual Desktop'
-        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\keyVaults\keyVaults.json'
-        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\keyVaults\uiFormDefinition.json'
+        Name = 'avd-security-monitoring'
+        DisplayName = 'AVD Security & Monitoring'
+        Description = 'Deploys optional AVD prerequisites: Key Vaults (credentials/CMK) and a Log Analytics Workspace, DCR, and DCE for diagnostics/monitoring'
+        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\securityAndMonitoring\securityAndMonitoring.json'
+        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\securityAndMonitoring\uiFormDefinition.json'
     }
 }
 

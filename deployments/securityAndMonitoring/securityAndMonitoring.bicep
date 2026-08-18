@@ -86,8 +86,25 @@ param permittedIPs array = []
 
 // ── Monitoring ─────────────────────────────────────────────────────────────────
 
-@description('Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs.')
-param logAnalyticsWorkspaceResourceId string = ''
+@description('Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as "logAnalyticsWorkspaceResourceId", "avdInsightsDataCollectionRuleResourceId", and "dataCollectionEndpointResourceId" - pass those to "existingLogAnalyticsWorkspaceResourceId", "existingAVDInsightsDataCollectionRuleResourceId", and "existingDataCollectionEndpointResourceId" on the host pool deployment (and "logAnalyticsWorkspaceResourceId" to the Image Management deployment) so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment creating its own.')
+param deployMonitoring bool = false
+
+@description('Optional. The subscription ID where the Log Analytics Workspace (and its monitoring resource group) will be deployed. If not provided, the deployment subscription is used. Use this when a centralized monitoring/security team owns a separate subscription from the one hosting the Key Vaults.')
+param logAnalyticsWorkspaceSubscriptionId string = ''
+
+@description('Optional. The pricing tier for the deployed Log Analytics Workspace.')
+param logAnalyticsWorkspaceSku string = 'PerGB2018'
+
+@description('Optional. The data retention period in days for the deployed Log Analytics Workspace.')
+@minValue(30)
+@maxValue(730)
+param logAnalyticsWorkspaceRetentionInDays int = 30
+
+@description('Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs. Ignored when "deployMonitoring" is true - the newly deployed workspace is used instead.')
+param existingLogAnalyticsWorkspaceResourceId string = ''
+
+@description('Optional. The resource ID of the Azure Monitor Private Link Scope (AMPLS) to associate the deployed Log Analytics Workspace and Data Collection Endpoint with. Ignored when "deployMonitoring" is false. There should only be one AMPLS per network that shares the same DNS.')
+param azureMonitorPrivateLinkScopeResourceId string = ''
 
 // ── Tags ───────────────────────────────────────────────────────────────────────
 
@@ -114,7 +131,7 @@ Key properties:
   freeform1, environment, freeform2 — optional static/context tokens
   locationAbbreviation — override for the region abbreviation
   resourceTypeCodes   — object with per-resource-type abbreviation overrides
-    { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }
+    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, privateEndpoints, networkInterfaces }
 This object is produced automatically when deploying via the Azure Portal UI.
 When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
 param namingConvention object = {
@@ -140,6 +157,10 @@ var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbrevia
 var deploymentSuffix = timeStamp
 var identifier = 'operations'
 
+var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)
+  ? subscription().subscriptionId
+  : logAnalyticsWorkspaceSubscriptionId
+
 #disable-next-line BCP329
 var locationAbbreviation = locations[varLocation].abbreviation
 
@@ -154,6 +175,8 @@ var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
 var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
   resourceGroups: resourceAbbreviations.resourceGroups
   keyVaults: resourceAbbreviations.keyVaults
+  logAnalyticsWorkspaces: resourceAbbreviations.logAnalyticsWorkspaces
+  dataCollectionEndpoints: resourceAbbreviations.dataCollectionEndpoints
   privateEndpoints: resourceAbbreviations.privateEndpoints
   networkInterfaces: resourceAbbreviations.networkInterfaces
 }
@@ -209,6 +232,46 @@ var privateEndpointNICNameConv = cnv_rtFirst
 
 var operationsResourceGroupName = customRgName
 
+// Monitoring resource group and Log Analytics Workspace name - only used when deployMonitoring is true.
+var monitoringResourceGroupName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  'monitoring',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+// No purpose component - matches the single-workspace naming the host pool deployment's inline
+// monitoring module produces, so both paths agree on the same Log Analytics Workspace name.
+var logAnalyticsWorkspaceName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.?logAnalyticsWorkspaces ?? resourceAbbreviations.logAnalyticsWorkspaces,
+  '',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+// No purpose component - matches the host pool deployment's inline monitoring module naming.
+var dataCollectionEndpointName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.?dataCollectionEndpoints ?? resourceAbbreviations.dataCollectionEndpoints,
+  '',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
 // Stable 6-char unique string seeded on subscription + resource group name.
 // Add location to the seed when the convention has no location component,
 // so deployments to different regions don't produce identical Key Vault names.
@@ -239,6 +302,75 @@ module operationsResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
+// ── Log Analytics Workspace ─────────────────────────────────────────────────────
+
+module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring) {
+  name: 'Monitoring-ResourceGroup-${deploymentSuffix}'
+  scope: subscription(effectiveLogAnalyticsWorkspaceSubscription)
+  params: {
+    location: location
+    name: monitoringResourceGroupName
+    tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
+  }
+}
+
+module logAnalyticsWorkspace '../../.common/bicepModules/operationalInsights/workspaces/deploy.bicep' = if (deployMonitoring) {
+  name: 'Monitoring-LogAnalytics-${deploymentSuffix}'
+  scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
+  params: {
+    name: logAnalyticsWorkspaceName
+    location: location
+    tags: tags[?'Microsoft.OperationalInsights/workspaces'] ?? {}
+    sku: logAnalyticsWorkspaceSku
+    retentionInDays: logAnalyticsWorkspaceRetentionInDays
+  }
+  dependsOn: [monitoringResourceGroup]
+}
+
+// DCE + DCR are generic per region/workspace (not tied to any host pool) - creating them once here
+// lets every host pool that reuses this workspace share the same DCE/DCR via "existingAVDInsightsDataCollectionRuleResourceId"
+// and "existingDataCollectionEndpointResourceId", instead of the first host pool deployment creating them.
+module dataCollectionEndpoint '../../.common/bicepModules/insights/dataCollectionEndpoints/deploy.bicep' = if (deployMonitoring) {
+  name: 'Monitoring-DataCollectionEndpoint-${deploymentSuffix}'
+  scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
+  params: {
+    name: dataCollectionEndpointName
+    location: location
+    tags: tags[?'Microsoft.Insights/dataCollectionEndpoints'] ?? {}
+    publicNetworkAccess: empty(azureMonitorPrivateLinkScopeResourceId) ? 'Enabled' : 'Disabled'
+  }
+  dependsOn: [monitoringResourceGroup]
+}
+
+module avdInsightsDataCollectionRule '../sharedModules/monitoring/avdInsightsDataCollectionRule.bicep' = if (deployMonitoring) {
+  name: 'Monitoring-AVDInsightsDCR-${deploymentSuffix}'
+  scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
+  params: {
+    location: location
+    tags: tags[?'Microsoft.Insights/dataCollectionRules'] ?? {}
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspace!.outputs.resourceId
+    dataCollectionEndpointId: dataCollectionEndpoint!.outputs.resourceId
+  }
+}
+
+module updatePrivateLinkScope '../sharedModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (deployMonitoring && !empty(azureMonitorPrivateLinkScopeResourceId)) {
+  name: 'Monitoring-PrivateLinkScope-${deploymentSuffix}'
+  params: {
+    deploymentSuffix: deploymentSuffix
+    privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
+    scopedResourceIds: [
+      logAnalyticsWorkspace!.outputs.resourceId
+      dataCollectionEndpoint!.outputs.resourceId
+    ]
+  }
+}
+
+// Resolves to the newly deployed workspace when requested, otherwise falls back to whatever
+// existing workspace resource ID (if any) was passed in for Key Vault diagnostic settings.
+var effectiveLogAnalyticsWorkspaceResourceId = deployMonitoring
+  ? logAnalyticsWorkspace!.outputs.resourceId
+  : existingLogAnalyticsWorkspaceResourceId
+
 // ── Key Vaults ─────────────────────────────────────────────────────────────────
 
 module keyVaults '../sharedModules/keyVaults/keyVaults.bicep' = {
@@ -264,7 +396,7 @@ module keyVaults '../sharedModules/keyVaults/keyVaults.bicep' = {
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     permittedIPs: permittedIPs
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     tags: tags
     deploymentSuffix: deploymentSuffix
   }
@@ -290,3 +422,18 @@ output encryptionKeyVaultResourceId string = deployEncryptionKeyVault ? keyVault
 
 @description('The URI of the Encryption Key Vault.')
 output encryptionKeyVaultUri string = deployEncryptionKeyVault ? keyVaults.outputs.encryptionKeyVaultUri : ''
+
+@description('The name of the monitoring resource group. Empty if the Log Analytics Workspace is not deployed.')
+output monitoringResourceGroupName string = deployMonitoring ? monitoringResourceGroupName : ''
+
+@description('The name of the Log Analytics Workspace. Empty if not deployed.')
+output logAnalyticsWorkspaceName string = deployMonitoring ? logAnalyticsWorkspaceName : ''
+
+@description('The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as "existingLogAnalyticsWorkspaceResourceId" to the host pool deployment and "logAnalyticsWorkspaceResourceId" to the Image Management deployment.')
+output logAnalyticsWorkspaceResourceId string = deployMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
+
+@description('The resource ID of the AVD Insights Data Collection Rule. Empty if the Log Analytics Workspace is not deployed. Pass as "existingAVDInsightsDataCollectionRuleResourceId" to the host pool deployment.')
+output avdInsightsDataCollectionRuleResourceId string = deployMonitoring ? avdInsightsDataCollectionRule!.outputs.resourceId : ''
+
+@description('The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as "existingDataCollectionEndpointResourceId" to the host pool deployment.')
+output dataCollectionEndpointResourceId string = deployMonitoring ? dataCollectionEndpoint!.outputs.resourceId : ''

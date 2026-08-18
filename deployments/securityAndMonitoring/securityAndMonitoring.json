@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "3589990049674762103"
+      "templateHash": "15138039365474125988"
     }
   },
   "functions": [
@@ -222,11 +222,48 @@
         "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module. Use when managing from a trusted workstation outside the Azure network boundary."
       }
     },
-    "logAnalyticsWorkspaceResourceId": {
+    "deployMonitoring": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as \"logAnalyticsWorkspaceResourceId\", \"avdInsightsDataCollectionRuleResourceId\", and \"dataCollectionEndpointResourceId\" - pass those to \"existingLogAnalyticsWorkspaceResourceId\", \"existingAVDInsightsDataCollectionRuleResourceId\", and \"existingDataCollectionEndpointResourceId\" on the host pool deployment (and \"logAnalyticsWorkspaceResourceId\" to the Image Management deployment) so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment creating its own."
+      }
+    },
+    "logAnalyticsWorkspaceSubscriptionId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs."
+        "description": "Optional. The subscription ID where the Log Analytics Workspace (and its monitoring resource group) will be deployed. If not provided, the deployment subscription is used. Use this when a centralized monitoring/security team owns a separate subscription from the one hosting the Key Vaults."
+      }
+    },
+    "logAnalyticsWorkspaceSku": {
+      "type": "string",
+      "defaultValue": "PerGB2018",
+      "metadata": {
+        "description": "Optional. The pricing tier for the deployed Log Analytics Workspace."
+      }
+    },
+    "logAnalyticsWorkspaceRetentionInDays": {
+      "type": "int",
+      "defaultValue": 30,
+      "minValue": 30,
+      "maxValue": 730,
+      "metadata": {
+        "description": "Optional. The data retention period in days for the deployed Log Analytics Workspace."
+      }
+    },
+    "existingLogAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs. Ignored when \"deployMonitoring\" is true - the newly deployed workspace is used instead."
+      }
+    },
+    "azureMonitorPrivateLinkScopeResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. The resource ID of the Azure Monitor Private Link Scope (AMPLS) to associate the deployed Log Analytics Workspace and Data Collection Endpoint with. Ignored when \"deployMonitoring\" is false. There should only be one AMPLS per network that shares the same DNS."
       }
     },
     "tags": {
@@ -249,7 +286,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
       }
     },
     "timeStamp": {
@@ -806,16 +843,20 @@
     "resourceAbbreviations": "[variables('$fxv#2')]",
     "deploymentSuffix": "[parameters('timeStamp')]",
     "identifier": "operations",
+    "effectiveLogAnalyticsWorkspaceSubscription": "[if(empty(parameters('logAnalyticsWorkspaceSubscriptionId')), subscription().subscriptionId, parameters('logAnalyticsWorkspaceSubscriptionId'))]",
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
     "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
     "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
-    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
+    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'logAnalyticsWorkspaces', variables('resourceAbbreviations').logAnalyticsWorkspaces, 'dataCollectionEndpoints', variables('resourceAbbreviations').dataCollectionEndpoints, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
     "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
     "cnv_rtFirst": "[if(not(empty(variables('cnv_components'))), not(equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
     "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "privateEndpointNameConv": "[if(variables('cnv_rtFirst'), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('cnv_rtCodes').privateEndpoints))]",
     "privateEndpointNICNameConv": "[if(variables('cnv_rtFirst'), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('cnv_rtCodes').privateEndpoints, coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
     "operationsResourceGroupName": "[variables('customRgName')]",
+    "monitoringResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "logAnalyticsWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'logAnalyticsWorkspaces'), variables('resourceAbbreviations').logAnalyticsWorkspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "dataCollectionEndpointName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'dataCollectionEndpoints'), variables('resourceAbbreviations').dataCollectionEndpoints), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
     "secretsKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]",
     "encryptionKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]"
@@ -886,6 +927,663 @@
         }
       }
     },
+    "monitoringResourceGroup": {
+      "condition": "[parameters('deployMonitoring')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Monitoring-ResourceGroup-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('effectiveLogAnalyticsWorkspaceSubscription')]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "name": {
+            "value": "[variables('monitoringResourceGroupName')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "14007601673793281063"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/resourceGroups",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      }
+    },
+    "logAnalyticsWorkspace": {
+      "condition": "[parameters('deployMonitoring')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Monitoring-LogAnalytics-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('effectiveLogAnalyticsWorkspaceSubscription')]",
+      "resourceGroup": "[variables('monitoringResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[variables('logAnalyticsWorkspaceName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.OperationalInsights/workspaces'), createObject())]"
+          },
+          "sku": {
+            "value": "[parameters('logAnalyticsWorkspaceSku')]"
+          },
+          "retentionInDays": {
+            "value": "[parameters('logAnalyticsWorkspaceRetentionInDays')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "9879412644563530438"
+            }
+          },
+          "definitions": {
+            "_1.logCategoryType": {
+              "type": "object",
+              "properties": {
+                "categoryGroup": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
+                  }
+                },
+                "category": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Individual log category name. Use either categoryGroup or category, not both."
+                  }
+                },
+                "enabled": {
+                  "type": "bool"
+                },
+                "retentionPolicy": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "int"
+                    },
+                    "enabled": {
+                      "type": "bool"
+                    }
+                  },
+                  "nullable": true
+                }
+              },
+              "metadata": {
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                }
+              }
+            },
+            "diagnosticSettingsType": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                  }
+                },
+                "workspaceId": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Resource ID of the Log Analytics workspace to send logs to."
+                  }
+                },
+                "storageAccountId": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Resource ID of the storage account to archive logs to."
+                  }
+                },
+                "eventHubAuthorizationRuleId": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Resource ID of the Event Hub authorization rule."
+                  }
+                },
+                "eventHubName": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
+                  }
+                },
+                "logCategories": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/_1.logCategoryType"
+                  },
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Log categories to stream. Defaults to allLogs when omitted."
+                  }
+                }
+              },
+              "metadata": {
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                }
+              }
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "sku": {
+              "type": "string",
+              "defaultValue": "PerGB2018",
+              "allowedValues": [
+                "PerGB2018",
+                "CapacityReservation",
+                "Free",
+                "LACluster",
+                "PerNode",
+                "Premium",
+                "Standalone",
+                "Standard"
+              ]
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 30,
+              "metadata": {
+                "description": "Data retention in days (30–730)."
+              }
+            },
+            "diagnosticSettings": {
+              "$ref": "#/definitions/diagnosticSettingsType",
+              "nullable": true
+            }
+          },
+          "variables": {
+            "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
+            "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
+          },
+          "resources": {
+            "logAnalyticsWorkspace": {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2022-10-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "[parameters('sku')]"
+                },
+                "retentionInDays": "[parameters('retentionInDays')]"
+              }
+            },
+            "diagnosticSetting": {
+              "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('name'))]",
+              "name": "[variables('diagnosticSettingName')]",
+              "properties": {
+                "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
+                "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
+                "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
+                "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
+                "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]",
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "logAnalyticsWorkspace"
+              ]
+            }
+          },
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "monitoringResourceGroup"
+      ]
+    },
+    "dataCollectionEndpoint": {
+      "condition": "[parameters('deployMonitoring')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Monitoring-DataCollectionEndpoint-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('effectiveLogAnalyticsWorkspaceSubscription')]",
+      "resourceGroup": "[variables('monitoringResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[variables('dataCollectionEndpointName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionEndpoints'), createObject())]"
+          },
+          "publicNetworkAccess": "[if(empty(parameters('azureMonitorPrivateLinkScopeResourceId')), createObject('value', 'Enabled'), createObject('value', 'Disabled'))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "204638307669867238"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "publicNetworkAccess": {
+              "type": "string",
+              "defaultValue": "Enabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ]
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/dataCollectionEndpoints",
+              "apiVersion": "2022-06-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "networkAcls": {
+                  "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "monitoringResourceGroup"
+      ]
+    },
+    "avdInsightsDataCollectionRule": {
+      "condition": "[parameters('deployMonitoring')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Monitoring-AVDInsightsDCR-{0}', variables('deploymentSuffix'))]",
+      "subscriptionId": "[variables('effectiveLogAnalyticsWorkspaceSubscription')]",
+      "resourceGroup": "[variables('monitoringResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionRules'), createObject())]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[reference('logAnalyticsWorkspace').outputs.resourceId.value]"
+          },
+          "dataCollectionEndpointId": {
+            "value": "[reference('dataCollectionEndpoint').outputs.resourceId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "15717642609942332810"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string"
+            },
+            "dataCollectionEndpointId": {
+              "type": "string",
+              "defaultValue": ""
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2022-06-01",
+              "name": "[format('microsoft-avdi-{0}', toLower(parameters('location')))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "Windows",
+              "properties": {
+                "dataCollectionEndpointId": "[if(not(empty(parameters('dataCollectionEndpointId'))), parameters('dataCollectionEndpointId'), null())]",
+                "dataSources": {
+                  "performanceCounters": [
+                    {
+                      "streams": [
+                        "Microsoft-Perf"
+                      ],
+                      "samplingFrequencyInSeconds": 30,
+                      "counterSpecifiers": [
+                        "\\LogicalDisk(C:)\\Avg. Disk Queue Length",
+                        "\\LogicalDisk(C:)\\Current Disk Queue Length",
+                        "\\Memory\\Available Mbytes",
+                        "\\Memory\\Page Faults/sec",
+                        "\\Memory\\Pages/sec",
+                        "\\Memory\\% Committed Bytes In Use",
+                        "\\PhysicalDisk(*)\\Avg. Disk Queue Length",
+                        "\\PhysicalDisk(*)\\Avg. Disk sec/Read",
+                        "\\PhysicalDisk(*)\\Avg. Disk sec/Transfer",
+                        "\\PhysicalDisk(*)\\Avg. Disk sec/Write",
+                        "\\Processor Information(_Total)\\% Processor Time",
+                        "\\User Input Delay per Process(*)\\Max Input Delay",
+                        "\\User Input Delay per Session(*)\\Max Input Delay"
+                      ],
+                      "name": "perfCounterDataSource30"
+                    },
+                    {
+                      "streams": [
+                        "Microsoft-Perf"
+                      ],
+                      "samplingFrequencyInSeconds": 60,
+                      "counterSpecifiers": [
+                        "\\LogicalDisk(C:)\\% Free Space",
+                        "\\LogicalDisk(C:)\\Avg. Disk sec/Transfer"
+                      ],
+                      "name": "perfCounterDataSource60"
+                    }
+                  ],
+                  "windowsEventLogs": [
+                    {
+                      "streams": [
+                        "Microsoft-Event"
+                      ],
+                      "xPathQueries": [
+                        "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
+                        "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
+                        "System!*",
+                        "Microsoft-FSLogix-Apps/Operational!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]",
+                        "Application!*[System[(Level=2 or Level=3)]]",
+                        "Microsoft-FSLogix-Apps/Admin!*[System[(Level=2 or Level=3 or Level=4 or Level=0)]]"
+                      ],
+                      "name": "eventLogsDataSource"
+                    }
+                  ]
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
+                      "name": "la-workspace"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-Perf",
+                      "Microsoft-Event"
+                    ],
+                    "destinations": [
+                      "la-workspace"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('microsoft-avdi-{0}', toLower(parameters('location'))))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[format('microsoft-avdi-{0}', toLower(parameters('location')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "dataCollectionEndpoint",
+        "logAnalyticsWorkspace"
+      ]
+    },
+    "updatePrivateLinkScope": {
+      "condition": "[and(parameters('deployMonitoring'), not(empty(parameters('azureMonitorPrivateLinkScopeResourceId'))))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Monitoring-PrivateLinkScope-{0}', variables('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "deploymentSuffix": {
+            "value": "[variables('deploymentSuffix')]"
+          },
+          "privateLinkScopeResourceId": {
+            "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
+          },
+          "scopedResourceIds": {
+            "value": [
+              "[reference('logAnalyticsWorkspace').outputs.resourceId.value]",
+              "[reference('dataCollectionEndpoint').outputs.resourceId.value]"
+            ]
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "10261237149566402125"
+            }
+          },
+          "parameters": {
+            "privateLinkScopeResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the Azure Monitor Private Link Scope (AMPLS) to update."
+              }
+            },
+            "scopedResourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Required. Array of resource IDs to associate as scoped resources on the AMPLS."
+              }
+            },
+            "deploymentSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Unique suffix used for deterministic deployment naming and idempotency."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('addScopedResources-{0}', parameters('deploymentSuffix'))]",
+              "subscriptionId": "[split(parameters('privateLinkScopeResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('privateLinkScopeResourceId'), '/')[4]]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "privateLinkScopeResourceId": {
+                    "value": "[parameters('privateLinkScopeResourceId')]"
+                  },
+                  "scopedResourceIds": {
+                    "value": "[parameters('scopedResourceIds')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.39.26.7824",
+                      "templateHash": "5758136482480486201"
+                    }
+                  },
+                  "parameters": {
+                    "scopedResourceIds": {
+                      "type": "array"
+                    },
+                    "privateLinkScopeResourceId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "copy": {
+                        "name": "scopedResources",
+                        "count": "[length(parameters('scopedResourceIds'))]"
+                      },
+                      "type": "Microsoft.Insights/privateLinkScopes/scopedResources",
+                      "apiVersion": "2021-07-01-preview",
+                      "name": "[format('{0}/{1}', last(split(parameters('privateLinkScopeResourceId'), '/')), uniqueString(parameters('scopedResourceIds')[copyIndex()]))]",
+                      "properties": {
+                        "linkedResourceId": "[parameters('scopedResourceIds')[copyIndex()]]"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "dataCollectionEndpoint",
+        "logAnalyticsWorkspace"
+      ]
+    },
     "keyVaults": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -954,9 +1652,7 @@
           "permittedIPs": {
             "value": "[parameters('permittedIPs')]"
           },
-          "logAnalyticsWorkspaceResourceId": {
-            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
-          },
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('logAnalyticsWorkspace').outputs.resourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
           "tags": {
             "value": "[parameters('tags')]"
           },
@@ -2109,6 +2805,7 @@
         }
       },
       "dependsOn": [
+        "logAnalyticsWorkspace",
         "operationsResourceGroup"
       ]
     }
@@ -2155,6 +2852,41 @@
         "description": "The URI of the Encryption Key Vault."
       },
       "value": "[if(parameters('deployEncryptionKeyVault'), reference('keyVaults').outputs.encryptionKeyVaultUri.value, '')]"
+    },
+    "monitoringResourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the monitoring resource group. Empty if the Log Analytics Workspace is not deployed."
+      },
+      "value": "[if(parameters('deployMonitoring'), variables('monitoringResourceGroupName'), '')]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Log Analytics Workspace. Empty if not deployed."
+      },
+      "value": "[if(parameters('deployMonitoring'), variables('logAnalyticsWorkspaceName'), '')]"
+    },
+    "logAnalyticsWorkspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as \"existingLogAnalyticsWorkspaceResourceId\" to the host pool deployment and \"logAnalyticsWorkspaceResourceId\" to the Image Management deployment."
+      },
+      "value": "[if(parameters('deployMonitoring'), reference('logAnalyticsWorkspace').outputs.resourceId.value, '')]"
+    },
+    "avdInsightsDataCollectionRuleResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the AVD Insights Data Collection Rule. Empty if the Log Analytics Workspace is not deployed. Pass as \"existingAVDInsightsDataCollectionRuleResourceId\" to the host pool deployment."
+      },
+      "value": "[if(parameters('deployMonitoring'), reference('avdInsightsDataCollectionRule').outputs.resourceId.value, '')]"
+    },
+    "dataCollectionEndpointResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as \"existingDataCollectionEndpointResourceId\" to the host pool deployment."
+      },
+      "value": "[if(parameters('deployMonitoring'), reference('dataCollectionEndpoint').outputs.resourceId.value, '')]"
     }
   }
 }

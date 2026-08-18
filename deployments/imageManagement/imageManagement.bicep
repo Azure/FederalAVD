@@ -59,6 +59,9 @@ param keyManagementGalleryImageVersions string = 'PlatformManaged'
 @description('Optional. Resource ID of the Key Vault for CMK encryption. Required when keyManagementStorageAccounts or keyManagementGalleryImageVersions is not PlatformManaged.')
 param encryptionKeyVaultResourceId string = ''
 
+@description('Optional. The resource ID of an existing Log Analytics Workspace for storage account diagnostic logs. Leave empty to skip diagnostic settings. See the Security & Monitoring deployment for an option to deploy a new workspace.')
+param logAnalyticsWorkspaceResourceId string = ''
+
 @description('Optional. Number of days before the CMK expires and auto-rotates.')
 @minValue(7)
 param keyExpirationInDays int = 180
@@ -497,6 +500,9 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
     cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
       ? storageCmk!.outputs.identityResourceId
       : ''
+    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
+      ? { workspaceId: logAnalyticsWorkspaceResourceId }
+      : null
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
   dependsOn: [resourceGroup]
@@ -581,6 +587,9 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
     cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
       ? storageCmk!.outputs.identityResourceId
       : ''
+    diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId)
+      ? { workspaceId: logAnalyticsWorkspaceResourceId }
+      : null
     tags: tags[?'Microsoft.Storage/storageAccounts'] ?? {}
   }
   dependsOn: [resourceGroup]

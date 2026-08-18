@@ -156,6 +156,10 @@ param identitySolution string
 @description('Required. Image reference for session host VMs. Use {"publisher":"...","offer":"...","sku":"..."} for marketplace images or {"id":"..."} for Compute Gallery images.')
 param imageReference object
 
+@description('Optional. License type applied to VMs when imageReference uses a custom/gallery image ("id"). Ignored for marketplace images.')
+@allowed(['Windows_Client', 'Windows_Server'])
+param customImageLicenseType string = 'Windows_Client'
+
 @description('Optional. Enable Guest Attestation extension for boot integrity monitoring.')
 param integrityMonitoring bool = false
 
@@ -318,6 +322,7 @@ module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' =
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     imageReference: imageReference
+    customImageLicenseType: customImageLicenseType
     imageOffer: ''
     imagePublisher: ''
     imageSku: ''
