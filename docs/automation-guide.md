@@ -14,11 +14,12 @@ Each subgraph shows a deployment step and its outputs (rounded nodes). Arrows be
 
 ```mermaid
 flowchart TD
-    subgraph KV["🔒 Step 1 · Key Vaults  (optional — CMK / credentials)"]
-        KV_RUN["keyVaults.json"]
+    subgraph KV["🔒 Step 1 · Security & Monitoring  (optional — CMK / credentials / Log Analytics)"]
+        KV_RUN["securityAndMonitoring.json"]
         KV_O1(["secretsKeyVaultResourceId"])
         KV_O2(["encryptionKeyVaultResourceId"])
-        KV_RUN --> KV_O1 & KV_O2
+        KV_O3(["logAnalyticsWorkspaceResourceId"])
+        KV_RUN --> KV_O1 & KV_O2 & KV_O3
     end
 
     subgraph IM["📦 Step 2 · Image Management"]
@@ -53,12 +54,14 @@ flowchart TD
         HP_RUN --> HP_O1 & HP_O2
     end
 
-    %% Key Vaults → Image Management (CMK)
+    %% Security & Monitoring → Image Management (CMK / diagnostics)
     KV_O2 -->|"→ encryptionKeyVaultResourceId"| IM_RUN
+    KV_O3 -->|"→ logAnalyticsWorkspaceResourceId"| IM_RUN
 
-    %% Key Vaults → Host Pool
+    %% Security & Monitoring → Host Pool
     KV_O1 -->|"→ existingCredentialsKeyVaultResourceId"| HP_RUN
     KV_O2 -->|"→ existingEncryptionKeyVaultResourceId"| HP_RUN
+    KV_O3 -->|"→ existingLogAnalyticsWorkspaceResourceId"| HP_RUN
 
     %% Image Management → Upload Artifacts
     IM_O2 -->|"→ StorageAccountResourceId"| UA_RUN
@@ -81,10 +84,10 @@ flowchart TD
 
 ---
 
-## Step 1: Deploy Key Vaults
+## Step 1: Deploy Security & Monitoring
 
-**Script/template:** `deployments/keyVaults/keyVaults.json`  
-**When required:** Only if using Customer Managed Keys (CMK) or a pre-provisioned credentials Key Vault.
+**Script/template:** `deployments/securityAndMonitoring/securityAndMonitoring.json`  
+**When required:** Only if using Customer Managed Keys (CMK), a pre-provisioned credentials Key Vault, or a shared Log Analytics Workspace for Key Vault/Image Management diagnostics and host pool monitoring.
 
 ### Key outputs
 
@@ -93,11 +96,16 @@ flowchart TD
 | `secretsKeyVaultResourceId` | Host pool — `existingCredentialsKeyVaultResourceId`; Session Host Replacer / Session Hosts add-on — `credentialsKeyVaultResourceId` |
 | `encryptionKeyVaultResourceId` | Image Management — `encryptionKeyVaultResourceId`; Host Pool — `existingEncryptionKeyVaultResourceId` |
 | `encryptionKeyVaultUri` | Available if needed for manual key references |
+| `logAnalyticsWorkspaceResourceId` | Image Management — `logAnalyticsWorkspaceResourceId`; Host Pool — `existingLogAnalyticsWorkspaceResourceId`. Only present when `deployMonitoring` was `true`. |
+| `avdInsightsDataCollectionRuleResourceId` | Host Pool — `existingAVDInsightsDataCollectionRuleResourceId`. Only present when `deployMonitoring` was `true`. |
+| `dataCollectionEndpointResourceId` | Host Pool — `existingDataCollectionEndpointResourceId`. Only present when `deployMonitoring` was `true`. |
 
 ### Notes
 
 - The deploying identity needs **Key Vault Crypto Officer** on the encryption key vault before running any downstream step that creates CMK keys.
-- Key Vaults are intentionally deployed separately so the same vault can be shared across multiple host pool deployments and image builds.
+- Key Vaults and the Log Analytics Workspace are intentionally deployed separately from other steps so the same vault/workspace can be shared across multiple host pool deployments and image builds.
+- The AVD Insights DCR and DCE are region/workspace-scoped, not host-pool-specific — deploying them once here lets every host pool that reuses this workspace share the same DCR/DCE instead of the first host pool deployment creating its own.
+- Use `logAnalyticsWorkspaceSubscriptionId` to deploy the Log Analytics Workspace, DCR, and DCE to a different subscription than the Key Vaults — useful when a centralized monitoring/security team owns a separate subscription.
 
 ---
 
@@ -287,8 +295,8 @@ Keep one parameter file per component per environment. Update only the fields th
 ```text
 customer/
   parameters/
-    keyVaults/
-      prod.keyVaults.parameters.json
+    securityAndMonitoring/
+      prod.securityAndMonitoring.parameters.json
 
     imageManagement/
       prod.imageManagement.parameters.json
@@ -373,7 +381,7 @@ A typical image refresh pipeline stage (after initial setup) runs only Steps 3�
 # Monitor replacement progress via the Azure Monitor Workbook deployed with the add-on.
 ```
 
-Key Vaults (Step 1), Image Management infrastructure (Step 2), and Host Pool (Step 5) are deployed once and not part of the recurring pipeline unless infrastructure is changing.
+Security & Monitoring (Step 1), Image Management infrastructure (Step 2), and Host Pool (Step 5) are deployed once and not part of the recurring pipeline unless infrastructure is changing.
 
 ---
 

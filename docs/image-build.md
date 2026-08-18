@@ -199,13 +199,15 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | Parameter | Description | Example |
 | --- | --- | --- |
 | **imageDefinitionName** | Name for the image in Compute Gallery | `avd-win11-23h2` |
-| **sourceImagePublisher** | Base image publisher (marketplace) | `MicrosoftWindowsDesktop` |
-| **sourceImageOffer** | Base image offer | `office-365` |
-| **sourceImageSku** | Base image SKU | `win11-23h2-avd-m365` |
+| **mpPublisher** | Base marketplace image publisher | `MicrosoftWindowsDesktop` |
+| **mpOffer** | Base marketplace image offer | `office-365` |
+| **mpSku** | Base marketplace image SKU | `win11-23h2-avd-m365` |
 | **imageVersionName** | Version number for the image | Leave blank for automatic timestamp-based versioning (e.g., `2026.0210.1435`), or specify custom version (e.g., `1.0.0`) |
 | **excludeFromLatest** | Exclude this version from 'latest' | `false` |
 | **replicaCount** | Number of replicas per region | `1` |
 | **replicationRegions** | Regions to replicate image to | `["usgovvirginia", "usgovarizona"]` |
+
+> `mpPublisher`/`mpOffer`/`mpSku` are also stamped as `sourceImagePublisher`/`sourceImageOffer`/`sourceImageSku` tags on the resulting Compute Gallery image definition, regardless of any `imageDefinitionPublisher`/`imageDefinitionOffer`/`imageDefinitionSku` override used to customize the definition's `identifier` fields. Downstream tooling (host pool and session host add-on portal forms) reads these tags to default session host licensing (`customImageLicenseType`) and the marketplace image publisher.
 
 **Built-in Microsoft content:**
 

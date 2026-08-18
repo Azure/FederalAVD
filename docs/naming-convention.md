@@ -282,7 +282,7 @@ The `uniqueString()` seed is:
 - With a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName)`
 - Without a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
 
-> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `keyVaults.bicep` deployment. Deploy `keyVaults.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
+> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `securityAndMonitoring.bicep` deployment. Deploy `securityAndMonitoring.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
 
 ### Storage Account — alphanumeric only, max 24
 
@@ -316,7 +316,7 @@ To produce a **consistent naming convention** across all solutions, pass the **s
 | Solution | Parameter name | Notes |
 | --- | --- | --- |
 | `hostpools/hostpool.bicep` | `namingConvention` | Full object; naming resolved in `modules/naming.bicep` |
-| `keyVaults/keyVaults.bicep` | `namingConvention` | Inline naming; fixed identifier `operations` |
+| `securityAndMonitoring/securityAndMonitoring.bicep` | `namingConvention` | Inline naming; fixed identifiers `operations` (Key Vaults) and `monitoring` (Log Analytics Workspace) |
 | `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
 | `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
 | `add-ons/sessionHostReplacer/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
@@ -517,7 +517,7 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ## Scenario test results
 
-See **[naming-convention-test-results.md](naming-convention-test-results.md)** for a full matrix of 8 scenarios run against the naming engine simulation. All scenarios pass KV name parity between the hostpool inline deployment and the standalone `keyVaults.bicep` deployment.
+See **[naming-convention-test-results.md](naming-convention-test-results.md)** for a full matrix of 8 scenarios run against the naming engine simulation. All scenarios pass KV name parity between the hostpool inline deployment and the standalone `securityAndMonitoring.bicep` deployment.
 
 The 8 scenarios cover:
 

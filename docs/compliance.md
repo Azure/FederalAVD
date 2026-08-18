@@ -38,6 +38,12 @@ The following security capabilities are active in every deployment regardless of
 
 ---
 
+> **⚠️ Log Analytics Workspace may be a compliance prerequisite, not just a CMK prerequisite.** Government/commercial subscriptions under FedRAMP High, DoD IL4/IL5, or CMMC governance frequently have management-group-level Azure Policy initiatives assigned that include **`DeployIfNotExists`** diagnostic-settings policies — for example, the built-in [*Deploy Diagnostic Settings for Key Vault to Log Analytics workspace*](https://portal.azure.com/#blade/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2Fbef3f64c-5290-43b7-85b0-9b254eef4c47) policy (ID `bef3f64c-5290-43b7-85b0-9b254eef4c47`) and its newer replacement, [*Enable logging by category group for Key vaults ... to Log Analytics*](https://portal.azure.com/#blade/Microsoft_Azure_Policy/PolicyDetailBlade/definitionId/%2Fproviders%2FMicrosoft.Authorization%2FpolicyDefinitions%2F6b359d8f-f88d-4052-aa7c-32015963ecc1) (ID `6b359d8f-f88d-4052-aa7c-32015963ecc1`). These policies require a **target Log Analytics Workspace resource ID** to be specified as a policy assignment parameter before they can remediate (auto-configure diagnostic settings on) newly created Key Vaults, storage accounts, and other resources. If no workspace exists yet when this solution's Key Vaults or storage accounts are created, policy remediation either fails or leaves the resource flagged non-compliant until someone manually re-runs remediation against the correct workspace.
+>
+> **Recommendation:** In any subscription with these policy initiatives assigned, deploy the [Security & Monitoring](quick-start.md#step-1-deploy-security-and-monitoring-key-vaults-and-log-analytics) template with `deployMonitoring: true` **first**, then supply its `logAnalyticsWorkspaceResourceId` output to your policy assignment parameters (or use `logAnalyticsWorkspaceSubscriptionId` if your policy's target workspace lives in a centralized monitoring subscription). This turns Step 1 from an optional CMK-only step into an effective compliance prerequisite for policy-governed environments.
+
+---
+
 ## NIST SP 800-53 Rev 5 / FedRAMP High
 
 **Reference:** [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) | [FedRAMP High Baseline](https://www.fedramp.gov/assets/resources/documents/FedRAMP_High_Security_Controls.xlsx)

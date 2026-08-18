@@ -338,6 +338,10 @@ param imageSku string = 'win11-25h2-avd-m365'
 @description('Required. The resource ID for the Compute Gallery Image Version. Do not set this value if using a marketplace image.')
 param customImageResourceId string = ''
 
+@description('Conditional. License type applied to session hosts when using a custom/gallery image (customImageResourceId). Ignored for marketplace images, where license type is determined automatically from the image publisher.')
+@allowed(['Windows_Client', 'Windows_Server'])
+param customImageLicenseType string = 'Windows_Client'
+
 @description('''Optional.
 The Uri of the container hosting the scripts or installers that are used to customize the session host Virtual Machines.
 Do not include the trailing slash.
@@ -981,6 +985,7 @@ var vmIntuneEnrollment = contains(identitySolution, 'DomainServices') ? {} : { v
 var vmDomain = contains(identitySolution, 'DomainServices') && !empty(domainName) ? { vmDomain: domainName } : {}
 var vmOU = contains(identitySolution, 'DomainServices') && !empty(vmOUPath) ? { vmOUPath: vmOUPath } : {}
 var vmCustomImageId = empty(customImageResourceId) ? {} : { vmCustomImageId: customImageResourceId }
+var vmImagePublisher = !empty(customImageResourceId) || empty(imagePublisher) ? {} : { vmImagePublisher: imagePublisher }
 var vmImageOffer = !empty(customImageResourceId) || empty(imageOffer) ? {} : { vmImageOffer: imageOffer }
 var vmImageSku = !empty(customImageResourceId) || empty(imageSku) ? {} : { vmImageSku: imageSku }
 var vmDiskEncryptionSetName = empty(diskEncryptionSetName) ? {} : { vmDiskEncryptionSetName: diskEncryptionSetName }
@@ -1014,6 +1019,7 @@ var vmConfigurationTags = union(
   vmDomain,
   vmOU,
   vmCustomImageId,
+  vmImagePublisher,
   vmImageOffer,
   vmImageSku,
   vmIntuneEnrollment,
@@ -1554,6 +1560,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     availabilityZones: availabilityZones
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     customImageResourceId: customImageResourceId
+    customImageLicenseType: customImageLicenseType
     dataCollectionEndpointResourceId: enableMonitoring
       ? (empty(existingDataCollectionEndpointResourceId)
           ? monitoring!.outputs.dataCollectionEndpointResourceId

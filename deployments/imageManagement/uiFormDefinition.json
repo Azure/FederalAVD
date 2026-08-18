@@ -485,6 +485,60 @@
           ]
         },
         {
+          "name": "monitoring",
+          "label": "Monitoring",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Optionally send storage account diagnostic logs to a Log Analytics Workspace. If you deployed the Security & Monitoring template with 'Deploy Log Analytics Workspace, DCR, and DCE' enabled, use its logAnalyticsWorkspaceResourceId output here to share one workspace across solutions. The workspace can live in a different subscription than this deployment — useful when a centralized monitoring/security team owns a separate subscription."
+              }
+            },
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Send Diagnostic Logs to Log Analytics",
+              "defaultValue": false,
+              "toolTip": "Enable diagnostic settings on the artifacts and build logs storage accounts, streaming resource logs and metrics to a Log Analytics Workspace."
+            },
+            {
+              "name": "monitoringSubscription",
+              "type": "Microsoft.Common.DropDown",
+              "visible": "[steps('monitoring').enableMonitoring]",
+              "label": "Log Analytics Workspace Subscription",
+              "defaultValue": "[steps('basics').scope.subscription.displayName]",
+              "toolTip": "Select the subscription containing the target Log Analytics Workspace. Defaults to this deployment's subscription but can be changed to a centralized monitoring subscription.",
+              "constraints": {
+                "required": "[steps('monitoring').enableMonitoring]",
+                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspacesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspace",
+              "type": "Microsoft.Common.DropDown",
+              "visible": "[steps('monitoring').enableMonitoring]",
+              "label": "Log Analytics Workspace",
+              "multiLine": true,
+              "toolTip": "Select the Log Analytics Workspace to receive storage account diagnostic logs. Workspaces from any resource group in the selected subscription are listed.",
+              "constraints": {
+                "required": "[steps('monitoring').enableMonitoring]",
+                "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
+              }
+            }
+          ]
+        },
+        {
           "name": "imageBuildRg",
           "label": "Image Build Resource Group",
           "elements": [
@@ -1159,6 +1213,7 @@
         "keyExpirationInDays": "[if(or(not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged')), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.keyExpirationInDays, 180)]",
         "createConfidentialVmGalleryDes": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
         "confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
+        "logAnalyticsWorkspaceResourceId": "[if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, '')]",
         "deployImageBuildResourceGroup": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":', if(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), concat('{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"computeGalleries\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\",\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes), '\"}'), 'null'), '}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"

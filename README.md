@@ -19,7 +19,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 | Component | Description | Documentation |
 | --------- | ----------- | ------------- |
 | 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield) |
-| 🔒 **Security Prereqs** | Secrets Key Vault (credentials) and Encryption Key Vault (CMK keys). Required before image management when using CMK with custom images. Otherwise, Key Vaults are deployed inline during host pool deployment and are idempotent — subsequent host pool deployments referencing the same resource group will reuse them. | [Quick Start - Key Vaults](docs/quick-start.md#step-1-deploy-key-vaults-cmk-with-custom-images) |
+| 🔒 **Security & Monitoring** | Secrets Key Vault (credentials), Encryption Key Vault (CMK keys), and an optional shared Log Analytics Workspace (with AVD Insights DCR/DCE). Required before image management when using CMK with custom images, and often required for policy-governed subscriptions (FedRAMP High, DoD IL4/IL5, CMMC) whose Azure Policy initiatives auto-remediate diagnostic settings against a target workspace. Otherwise, Key Vaults are deployed inline during host pool deployment and are idempotent — subsequent host pool deployments referencing the same resource group will reuse them. | [Quick Start - Security & Monitoring](docs/quick-start.md#step-1-deploy-security-and-monitoring-key-vaults-and-log-analytics) |
 | 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpool-deployment.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifacts-guide.md) |
 | 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/image-build.md) |
@@ -87,7 +87,7 @@ Complete AVD environment deployment with enterprise features.
 - Session host virtual machines (pooled or personal)
 - FSLogix profile storage (Azure Files or NetApp Files)
 - Monitoring with Log Analytics and Application Insights
-- Key Vault for secrets management (inline or pre-deployed via Security Prereqs)
+- Key Vault for secrets management (inline or pre-deployed via Security & Monitoring)
 - Private endpoints and network security (Zero Trust)
 - Backup and recovery configuration
 - Customer Managed Keys: disk encryption sets and storage encryption UAIs deployed early in the deployment chain, giving RBAC propagation time before VMs are created

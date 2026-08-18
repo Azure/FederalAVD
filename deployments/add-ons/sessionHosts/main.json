@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "4092522613174635761"
+      "version": "0.39.26.7824",
+      "templateHash": "8812248788681617314"
     }
   },
   "parameters": {
@@ -292,6 +292,17 @@
       "type": "object",
       "metadata": {
         "description": "Required. Image reference for session host VMs. Use {\"publisher\":\"...\",\"offer\":\"...\",\"sku\":\"...\"} for marketplace images or {\"id\":\"...\"} for Compute Gallery images."
+      }
+    },
+    "customImageLicenseType": {
+      "type": "string",
+      "defaultValue": "Windows_Client",
+      "allowedValues": [
+        "Windows_Client",
+        "Windows_Server"
+      ],
+      "metadata": {
+        "description": "Optional. License type applied to VMs when imageReference uses a custom/gallery image (\"id\"). Ignored for marketplace images."
       }
     },
     "integrityMonitoring": {
@@ -608,6 +619,9 @@
           "imageReference": {
             "value": "[parameters('imageReference')]"
           },
+          "customImageLicenseType": {
+            "value": "[parameters('customImageLicenseType')]"
+          },
           "imageOffer": {
             "value": ""
           },
@@ -700,8 +714,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "10002726654435281407"
+              "version": "0.39.26.7824",
+              "templateHash": "16664848795253629162"
             }
           },
           "parameters": {
@@ -743,6 +757,13 @@
             "customImageResourceId": {
               "type": "string",
               "defaultValue": ""
+            },
+            "customImageLicenseType": {
+              "type": "string",
+              "defaultValue": "Windows_Client",
+              "metadata": {
+                "description": "Optional. License type applied to VMs deployed from a custom/gallery image. Ignored for marketplace images."
+              }
             },
             "dataCollectionEndpointResourceId": {
               "type": "string"
@@ -996,8 +1017,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "3591806012304049961"
+                      "version": "0.39.26.7824",
+                      "templateHash": "13106094525246318298"
                     }
                   },
                   "parameters": {
@@ -1094,8 +1115,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "4022744618912193610"
+                      "version": "0.39.26.7824",
+                      "templateHash": "11609031045672993663"
                     }
                   },
                   "parameters": {
@@ -1270,6 +1291,9 @@
                   "imageReference": {
                     "value": "[variables('effectiveImageReference')]"
                   },
+                  "customImageLicenseType": {
+                    "value": "[parameters('customImageLicenseType')]"
+                  },
                   "integrityMonitoring": {
                     "value": "[parameters('integrityMonitoring')]"
                   },
@@ -1355,8 +1379,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "6387519201881111950"
+                      "version": "0.39.26.7824",
+                      "templateHash": "11214460991784541718"
                     }
                   },
                   "parameters": {
@@ -1478,6 +1502,17 @@
                     },
                     "imageReference": {
                       "type": "object"
+                    },
+                    "customImageLicenseType": {
+                      "type": "string",
+                      "defaultValue": "Windows_Client",
+                      "allowedValues": [
+                        "Windows_Client",
+                        "Windows_Server"
+                      ],
+                      "metadata": {
+                        "description": "Optional. License type applied to VMs deployed from a custom/gallery image. Ignored for marketplace images, where license type is determined from imageReference.publisher."
+                      }
                     },
                     "integrityMonitoring": {
                       "type": "bool"
@@ -1674,7 +1709,7 @@
                           "securityType": "[if(not(equals(parameters('securityType'), 'Standard')), parameters('securityType'), null())]",
                           "uefiSettings": "[if(not(equals(parameters('securityType'), 'Standard')), createObject('secureBootEnabled', parameters('secureBootEnabled'), 'vTpmEnabled', parameters('vTpmEnabled')), null())]"
                         },
-                        "licenseType": "[if(or(not(empty(tryGet(parameters('imageReference'), 'id'))), equals(tryGet(parameters('imageReference'), 'publisher'), 'MicrosoftWindowsDesktop')), 'Windows_Client', 'Windows_Server')]"
+                        "licenseType": "[if(not(empty(tryGet(parameters('imageReference'), 'id'))), parameters('customImageLicenseType'), if(equals(tryGet(parameters('imageReference'), 'publisher'), 'MicrosoftWindowsDesktop'), 'Windows_Client', 'Windows_Server'))]"
                       },
                       "dependsOn": [
                         "networkInterface"
@@ -1749,7 +1784,9 @@
                     {
                       "copy": {
                         "name": "extension_AADLoginForWindows",
-                        "count": "[length(range(0, variables('sessionHostCount')))]"
+                        "count": "[length(range(0, variables('sessionHostCount')))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "condition": "[or(startsWith(parameters('identitySolution'), 'EntraKerberos'), equals(parameters('identitySolution'), 'EntraId'))]",
                       "type": "Microsoft.Compute/virtualMachines/extensions",
@@ -1800,7 +1837,7 @@
                       "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
                       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                       "apiVersion": "2022-06-01",
-                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
+                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                       "name": "configurationAccessEndpoint",
                       "properties": {
                         "dataCollectionEndpointId": "[parameters('dataCollectionEndpointResourceId')]",
@@ -1819,7 +1856,7 @@
                       "condition": "[and(parameters('enableMonitoring'), not(empty(parameters('avdInsightsDataCollectionRulesResourceId'))))]",
                       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
                       "apiVersion": "2022-06-01",
-                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
+                      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                       "name": "[format('{0}-avdInsights-data-coll-rule-assoc', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[range(0, variables('sessionHostCount'))[copyIndex()]]])]",
                       "properties": {
                         "dataCollectionRuleId": "[parameters('avdInsightsDataCollectionRulesResourceId')]",
@@ -2029,8 +2066,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "359406211582799995"
+                              "version": "0.39.26.7824",
+                              "templateHash": "2405333860778897872"
                             }
                           },
                           "parameters": {
@@ -2159,8 +2196,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "4421185313861014725"
+                              "version": "0.39.26.7824",
+                              "templateHash": "14739742046096058044"
                             }
                           },
                           "parameters": {
@@ -2210,8 +2247,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.45.15.27210",
-                                      "templateHash": "13198152914363378685"
+                                      "version": "0.39.26.7824",
+                                      "templateHash": "17290095301135652436"
                                     }
                                   },
                                   "parameters": {
@@ -2293,8 +2330,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.45.15.27210",
-                              "templateHash": "6380852801717604135"
+                              "version": "0.39.26.7824",
+                              "templateHash": "15665053953368527054"
                             }
                           },
                           "parameters": {
@@ -2383,8 +2420,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "8237946334697730753"
+                      "version": "0.39.26.7824",
+                      "templateHash": "11447244983080427176"
                     }
                   },
                   "parameters": {

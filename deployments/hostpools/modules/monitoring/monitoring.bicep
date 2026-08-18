@@ -36,7 +36,7 @@ module dataCollectionEndpoint '../../../../.common/bicepModules/insights/dataCol
 }
 
 // ─── AVD Insights Data Collection Rule ────────────────────────────────────────
-module avdInsightsDataCollectionRule 'modules/avdInsightsDataCollectionRule.bicep' = {
+module avdInsightsDataCollectionRule '../../../sharedModules/monitoring/avdInsightsDataCollectionRule.bicep' = {
   name: 'AVDInsights-DataCollectionRule-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {

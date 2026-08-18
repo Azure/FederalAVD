@@ -10,6 +10,8 @@ param availabilityZones array
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryption bool
 param customImageResourceId string = ''
+@description('Optional. License type applied to VMs deployed from a custom/gallery image. Ignored for marketplace images.')
+param customImageLicenseType string = 'Windows_Client'
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string = ''
 param dedicatedHostGroupResourceIds array = []
@@ -191,6 +193,7 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     imageReference: effectiveImageReference
+    customImageLicenseType: customImageLicenseType
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
     location: location

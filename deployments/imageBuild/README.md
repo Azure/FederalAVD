@@ -242,6 +242,8 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 - **Default:** `win11-24h2-avd`
 - **Examples:** `win11-24h2-avd`, `win10-22h2-avd`, `2022-datacenter-g2`
 
+> **Note:** `mpPublisher`/`mpOffer`/`mpSku` are also written as `sourceImagePublisher`/`sourceImageOffer`/`sourceImageSku` tags on the new (or remote-replicated) Compute Gallery image definition, independent of any `imageDefinitionPublisher`/`imageDefinitionOffer`/`imageDefinitionSku` override. This keeps a reliable record of the true base OS on the definition even when its `identifier` fields are customized, and is used by the host pool and session host add-on portal forms to default session host licensing.
+
 ### Image Customizations - Microsoft Content
 
 #### `downloadLatestMicrosoftContent`

@@ -11,7 +11,7 @@ Parameter documentation lives alongside each deployment template. Find the secti
 | Solution | Parameters | Examples |
 | --- | --- | --- |
 | 🌐 **Networking** | [networking/README.md](../deployments/networking/README.md) | [parameter files](../deployments/networking/README.md) |
-| 🔒 **Key Vaults** | [keyVaults/uiFormDefinition.json](../deployments/keyVaults/uiFormDefinition.json) *(see Quick Start Step 1)* | — |
+| 🔒 **Security & Monitoring (Key Vaults & Log Analytics)** | [securityAndMonitoring/uiFormDefinition.json](../deployments/securityAndMonitoring/uiFormDefinition.json) *(see Quick Start Step 1)* | — |
 | 📦 **Image Management** | [imageManagement/README.md — Parameters](../deployments/imageManagement/README.md#parameters) | [imageManagement/README.md — Examples](../deployments/imageManagement/README.md#examples) |
 | 🎨 **Image Build** | [imageBuild/README.md — Parameters](../deployments/imageBuild/README.md#parameters) | [imageBuild/README.md — Examples](../deployments/imageBuild/README.md#examples) |
 | 🏢 **Host Pool** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
@@ -27,7 +27,7 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 - Full `namingConvention` parameter schema and property descriptions
 - How the built-in CAF default works
 - The eight naming segments and how `purpose` drives per-resource uniqueness
-- How to align naming across hostpool, keyVaults, imageManagement, and add-ons
+- How to align naming across hostpool, securityAndMonitoring, imageManagement, and add-ons
 - Named examples for six common conventions
 - [Scenario test results](naming-convention-test-results.md) for 8 scenarios across all solutions
 
@@ -51,9 +51,13 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 
 | Source | Output | Destination | Parameter |
 | --- | --- | --- | --- |
-| **keyVaults** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
-| **keyVaults** | `encryptionKeyVaultResourceId` | **imageManagement** | `encryptionKeyVaultResourceId` |
-| **keyVaults** | `encryptionKeyVaultResourceId` | **hostpool** | `existingEncryptionKeyVaultResourceId` |
+| **securityAndMonitoring** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
+| **securityAndMonitoring** | `encryptionKeyVaultResourceId` | **imageManagement** | `encryptionKeyVaultResourceId` |
+| **securityAndMonitoring** | `encryptionKeyVaultResourceId` | **hostpool** | `existingEncryptionKeyVaultResourceId` |
+| **securityAndMonitoring** | `logAnalyticsWorkspaceResourceId` | **imageManagement** | `logAnalyticsWorkspaceResourceId` |
+| **securityAndMonitoring** | `logAnalyticsWorkspaceResourceId` | **hostpool** | `existingLogAnalyticsWorkspaceResourceId` |
+| **securityAndMonitoring** | `avdInsightsDataCollectionRuleResourceId` | **hostpool** | `existingAVDInsightsDataCollectionRuleResourceId` |
+| **securityAndMonitoring** | `dataCollectionEndpointResourceId` | **hostpool** | `existingDataCollectionEndpointResourceId` |
 | **imageManagement** | `computeGalleryResourceId` | **imageBuild** | `computeGalleryResourceId` |
 | **imageManagement** | `artifactsBlobContainerUrl` | **imageBuild** | `artifactsContainerUri` |
 | **imageManagement** | `managedIdentityResourceId` | **imageBuild** | `userAssignedIdentityResourceId` |

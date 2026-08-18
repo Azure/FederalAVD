@@ -163,7 +163,7 @@ Subscription
 
 - **Type:** Object
 - **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
-- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (keyVaults, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (securityAndMonitoring, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
 
 ### Identity & Authentication
 
@@ -293,6 +293,13 @@ Subscription
 - **Required:** Yes
 - **Description:** Subnet resource ID for session hosts
 
+#### `customImageLicenseType`
+
+- **Type:** String
+- **Allowed:** `Windows_Client`, `Windows_Server`
+- **Default:** `Windows_Client`
+- **Description:** License type applied to session hosts when deploying from a custom/gallery image (`customImageResourceId`). Ignored for marketplace images, where license type is determined automatically from `imagePublisher`. In the portal UI, this defaults dynamically from the selected image definition's `sourceImagePublisher` tag (set by the Image Build deployment) when available.
+
 ### Storage
 
 #### `fslogixStorageService`
@@ -416,7 +423,7 @@ Subscription
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed Key Vaults foundation deployment.
+- **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed Security & Monitoring deployment.
 
 #### `secretsKeyVaultEnableSoftDelete`
 
