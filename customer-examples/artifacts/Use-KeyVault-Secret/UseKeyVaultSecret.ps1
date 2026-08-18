@@ -56,7 +56,7 @@ if (-not $accessToken) {
 # Build Key Vault REST URL
 # ============================================================
 
-$kvUri = "$VaultBaseUrl/secrets/$SecretName?api-version=7.3"
+$kvUri = $VaultBaseUrl + '/secrets/' + $SecretName + '?api-version=2025-07-01'
 
 # ============================================================
 # Retrieve secret
