@@ -6,6 +6,21 @@
 
 The air-gapped clouds, Azure Government Secret and Azure Government Top Secret, offer unique challenges because not all software is available for download via http and where it is it may not be available to all enclaves on the networks these clouds service.
 
+## Configure and Connect With Azure PowerShell
+
+Before publishing Template Specs, configure Azure PowerShell for the target cloud and connect to the
+deployment subscription. The cloud-specific Microsoft Learn articles provide the authorized values
+and commands required to register the environment with `Add-AzEnvironment`, connect with
+`Connect-AzAccount`, and select the subscription:
+
+- **[Connect to Azure Government Secret using PowerShell](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/quick-starts/documentation-government-secret-get-started-azure-powershell-connect?branch=live)**
+- **[Connect to Azure Government Top Secret using PowerShell](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/quickstarts/documentation-government-top-secret-get-started-powershell-connect?branch=live)**
+
+> **Access note:** These PowerShell connection references are available only to authorized Microsoft
+> employees. This public repository intentionally does not reproduce environment names, endpoints,
+> or locations. If you cannot access the links, use the Microsoft Learn content available inside the
+> target environment or contact the environment support team.
+
 ## First Deployment Checklist
 
 Use this sequence for the first deployment. The sections later in this guide provide the package
@@ -15,9 +30,11 @@ inventories and parameter details for each step.
    workstation that can reach the target Azure environment. Separately transfer required installers
    and policy templates from an approved connected system into the matching
    `customer/artifacts/<FolderName>/` directories. Do not edit files under `customer-examples/`.
-2. **Identify the registered Az environment name.** Environment names vary by enclave and Az
-   configuration. List the environments registered on the workstation, then use the exact `Name`
-   value for the target cloud:
+2. **Configure and connect with Azure PowerShell.** Follow the applicable
+   [PowerShell connection article](#configure-and-connect-with-azure-powershell) to register the
+   target cloud with `Add-AzEnvironment` and connect with `Connect-AzAccount`. Select the deployment
+   subscription and verify the context before continuing. The placeholders below intentionally do
+   not reproduce restricted environment values:
 
    ```powershell
    Get-AzEnvironment | Select-Object Name, ResourceManagerUrl
@@ -26,8 +43,10 @@ inventories and parameter details for each step.
    Get-AzContext | Select-Object Name, Subscription, Environment
    ```
 
-3. **Publish the guided portal forms.** From the repository root, publish the core Template Specs
-   into the target subscription. Publishing creates the forms; it does not deploy the workloads:
+3. **Publish the guided portal forms.** After the PowerShell context shows the intended environment
+   and subscription, run the publishing script from the repository root. It uses that active context
+   to publish the core Template Specs into the target subscription. Publishing creates the forms; it
+   does not deploy the workloads:
 
    ```powershell
    .\tools\New-TemplateSpecs.ps1 `
@@ -99,12 +118,39 @@ first deployment and the saved parameter files for later PowerShell or CI/CD dep
 
 ## Network Requirements & Documentation
 
-Session hosts in air-gapped clouds require network access to specific Azure Virtual Desktop service endpoints, including AVD Agent installer download URLs and service FQDNs. Complete network requirements, required URLs, and AVD Agent installer permalinks are documented in the following cloud-specific resources:
+Use the references below when designing routing, firewall rules, private endpoints, DNS, and service
+connectivity. They are grouped by purpose so the PowerShell connection articles above remain focused
+on configuring the Az environment and publishing Template Specs.
+
+### General Cloud Environment Differences
+
+These cloud-wide references document service availability and differences from global Azure,
+including cloud-specific portals, endpoints, and service behavior:
+
+- **[Azure Government Secret differences from global Azure](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/overview/azure-government-secret-differences-from-global-azure?branch=live)**
+- **[Azure Government Top Secret differences from global Azure](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/overview/azure-government-top-secret-differences-from-global-azure?branch=live)**
+
+### Azure Virtual Desktop Service Requirements
+
+Session hosts require access to Azure Virtual Desktop service endpoints, including the AVD Agent
+installer sources and service FQDNs. Use the cloud-specific AVD references for the authoritative
+network requirements, required URLs, and installer permalinks:
 
 - **[Azure Government Secret AVD Service Documentation](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/services/virtual-desktop-infrastructure/virtual-desktop?branch=live)** - Includes required endpoints and AVD Agent installer download URLs
 - **[Azure Government Top Secret AVD Service Documentation](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/services/virtual-desktop-infrastructure/virtual-desktop?branch=live)** - Includes required endpoints and AVD Agent installer download URLs
 
-> **📋 Access Note:** These documentation links are only accessible to Microsoft Full-Time Employees (FTEs). If you cannot access these resources, refer to the Azure Virtual Desktop documentation available on your air-gapped cloud's internal Microsoft Docs site for network requirements, required URLs, and AVD Agent installer download links specific to your environment.
+### Private Endpoint DNS
+
+Use the cloud-specific Private Link references for the authoritative private DNS zone values. Do not
+reuse Azure Commercial or Azure Government zone names in Secret or Top Secret:
+
+- **[Azure Government Secret private endpoint DNS](https://review.learn.microsoft.com/microsoft-government-secret/azure/azure-government-secret/services/networking/private-link/private-endpoint-dns)**
+- **[Azure Government Top Secret private endpoint DNS](https://review.learn.microsoft.com/microsoft-government-topsecret/azure/azure-government-top-secret/services/networking/private-link/private-endpoint-dns)**
+
+> **Access note:** These references are available only to authorized Microsoft employees. This
+> repository intentionally does not reproduce restricted endpoints, required URL lists, private DNS
+> zone values, or locations. If you cannot access the links, use Microsoft Learn inside the target
+> environment or contact the environment support team.
 
 ## Session Host Deployment
 
