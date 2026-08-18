@@ -63,6 +63,7 @@ To add software not in the base file, place `downloads.json` in `customer/parame
 > **Keep your air-gapped `customer/parameters/imageManagement/downloads.json` free of `WingetId` entries.** Only include `DownloadUrl` entries pointing to URLs reachable from your management system. For built-in UWP apps and codec extensions, see [Built-in UWP apps and codec extensions](#built-in-uwp-apps-and-codec-extensions) in the Windows Updates section below.
 >
 > For other software that uses `WingetId`, alternatives include:
+>
 > - Replacing `WingetId` with a `DownloadUrl` pointing to an internally hosted copy.
 > - Pre-staging the installer in `customer/artifacts/<FolderName>/` and omitting the entry from `downloads.json` — the script packages and uploads it without attempting a download.
 
@@ -79,15 +80,25 @@ management systems. This affects every example artifact you copy from
 
 | Artifact | What to pre-stage | Public source (download on a connected system) |
 | --- | --- | --- |
-| [Configure-EdgePolicy](../customer-examples/artifacts/Configure-EdgePolicy/README.md) | Edge Enterprise ADMX/ADML CAB | `https://edgeupdates.microsoft.com/api/products?view=enterprise` (find the latest `Policy` release, use its `artifacts[0].Location`) |
+| [Configure-EdgePolicy](../customer-examples/artifacts/Configure-EdgePolicy/README.md) | `MicrosoftEdgePolicyTemplates.cab` | Edge Updates API; use the README's PowerShell resolver because the API endpoint is not the CAB URL |
 | [Configure-ChromePolicy](../customer-examples/artifacts/Configure-ChromePolicy/README.md) | Chrome Enterprise ADMX/ADML ZIP | `https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip` |
+| [Configure-Office365Policy](../customer-examples/artifacts/Configure-Office365Policy/README.md) | `AdminTemplates_x64.exe` | Microsoft Download Center; use the current direct URL and PowerShell command in the README |
 
-For these two artifacts specifically, no `downloads.json` merge or `-SkipDownloadingNewSources`
-flag is even required: both scripts prefer a bundled `*.cab`/`*.zip` file placed directly
-next to the script over anything else, so simply downloading the file on a connected system
-and copying it into `customer/artifacts/Configure-EdgePolicy/` or
-`customer/artifacts/Configure-ChromePolicy/` is enough — no network access is needed at
-image-build time.
+The example `downloads.json` is the maintained inventory of public sources and destination
+filenames. On a connected management system, it can download and package all three items
+automatically. Do not run those public download entries from an air-gapped management system.
+Instead, use each artifact README to download the package on a connected workstation, transfer
+it into the matching `customer/artifacts/Configure-*Policy/` folder, and run
+`Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. Each policy script prefers its bundled
+package, so no public network access is needed during the image build.
+
+The other Configure policy examples do not require a separately downloaded template package:
+
+| Artifact | Template source |
+| --- | --- |
+| [Configure-OneDriveKFMPolicy](../customer-examples/artifacts/Configure-OneDriveKFMPolicy/README.md) | Copies `OneDrive.admx` and its ADML files from the installed OneDrive client |
+| [Configure-RemoteDesktopPolicy](../customer-examples/artifacts/Configure-RemoteDesktopPolicy/README.md) | Uses Remote Desktop policy definitions included with Windows |
+| [Configure-WindowsUpdatePolicy](../customer-examples/artifacts/Configure-WindowsUpdatePolicy/README.md) | Uses Windows Update policy definitions included with Windows |
 
 For any other customer-example artifact, follow the general pattern: download the file on an
 internet-connected system, place it in `customer/artifacts/<FolderName>/`, and run

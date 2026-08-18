@@ -12,6 +12,35 @@ This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies 
 - Configure Outlook calendar synchronization settings
 - Improve Outlook performance in AVD environments
 
+## Where to get the Office Administrative Templates
+
+Microsoft publishes the Office ADMX/ADML templates as a self-extracting EXE:
+
+- Download page: [Administrative Template files (ADMX/ADML) for Microsoft 365 Apps](https://www.microsoft.com/en-us/download/details.aspx?id=49030)
+- Current x64 package used by this repository: `https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe`
+- Maintained download definition: the `Office365AdministrativeTemplates` entry in
+  [downloads.json](../../parameters/imageManagement/downloads.json)
+
+For connected environments, copy the example `downloads.json` to
+`customer/parameters/imageManagement/downloads.json` and run `Update-ImageArtifacts.ps1`.
+The script downloads the package as `AdminTemplates_x64.exe` and adds it to the
+`Configure-Office365Policy` artifact automatically.
+
+To prepare the package manually on an internet-connected Windows system, open PowerShell in
+the folder containing this README and `Configure-Office365.ps1`, then run:
+
+```powershell
+$url = 'https://download.microsoft.com/download/2/e/e/2eeec938-c014-419d-bb4b-d184871450f1/admintemplates_x64_5486-1000_en-us.exe'
+Invoke-WebRequest -Uri $url -OutFile '.\AdminTemplates_x64.exe'
+```
+
+The `-OutFile` value writes `AdminTemplates_x64.exe` into the current folder. Keep that
+filename and location: the policy script searches its own folder for
+`admintemplates_x64*.exe`, and the example `downloads.json` uses the same destination filename.
+
+Microsoft can replace the version-specific package URL. If the direct URL no longer works,
+use the download page and update the `Office365AdministrativeTemplates` manifest entry.
+
 ## Parameters
 
 ### `DisableUpdates`
@@ -25,7 +54,7 @@ This PowerShell script configures Microsoft Office 365 (Microsoft 365) policies 
 
 - **Type:** String
 - **Default:** `"1 month"`
-- **Options:** 
+- **Options:**
   - `"Not Configured"`
   - `"3 days"`
   - `"1 week"`
@@ -294,10 +323,14 @@ The Registry.pol write step requires no internet access.
 For air-gapped environments, one of the following is sufficient to avoid download attempts:
 
 **Option A — Bundled installer (recommended):** Download the Office Administrative Templates
-package (`admintemplates_x64*.exe`) on a connected machine and place it in the same directory
-as this script. The script auto-detects any `.exe` in `$PSScriptRoot` and extracts it.
+package on a connected machine using the instructions in
+[Where to get the Office Administrative Templates](#where-to-get-the-office-administrative-templates).
+Transfer `AdminTemplates_x64.exe` to the air-gapped network, place it in
+`customer/artifacts/Configure-Office365Policy/`, and run
+`Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. The policy script detects and extracts
+the bundled installer during the image build.
 
-- Download page: https://www.microsoft.com/en-us/download/details.aspx?id=49030
+- Expected filename: `AdminTemplates_x64.exe` (the script accepts `admintemplates_x64*.exe`)
 
 **Option B — Pre-staged ADMX files:** Copy `office16.admx`, `outlk16.admx`, and their
 corresponding `.adml` files into `C:\Windows\PolicyDefinitions` (and `en-us\` subdirectory)

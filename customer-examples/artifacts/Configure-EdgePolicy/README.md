@@ -22,6 +22,33 @@ URL:
 - Manual download page: [Configure Microsoft Edge policy settings](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies)
 - Full policy reference: [Microsoft Edge Browser Policy Documentation](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies)
 
+The API endpoint returns metadata rather than the CAB itself. On an internet-connected
+Windows system, open PowerShell in the folder containing this README and
+`Configure-EdgePolicy.ps1`, then run:
+
+```powershell
+$apiUrl = 'https://edgeupdates.microsoft.com/api/products?view=enterprise'
+$products = Invoke-RestMethod -Uri $apiUrl
+$stableVersion = ($products | Where-Object Product -eq 'Stable').releases |
+  Where-Object { $_.Platform -eq 'Windows' -and $_.Architecture -eq 'x64' } |
+  Sort-Object { [version]$_.ProductVersion } |
+  Select-Object -Last 1 -ExpandProperty ProductVersion
+$policyRelease = ($products | Where-Object Product -eq 'Policy').releases |
+  Where-Object ProductVersion -eq $stableVersion |
+  Select-Object -First 1
+if (-not $policyRelease) {
+  $policyRelease = ($products | Where-Object Product -eq 'Policy').releases |
+    Sort-Object { [version]$_.ProductVersion } |
+    Select-Object -Last 1
+}
+$downloadUrl = $policyRelease.artifacts[0].Location
+Invoke-WebRequest -Uri $downloadUrl -OutFile '.\MicrosoftEdgePolicyTemplates.cab'
+```
+
+The `-OutFile` value writes `MicrosoftEdgePolicyTemplates.cab` into the current folder. Keep
+that filename and location: the policy script searches its own folder for a `*.cab` file, and
+the example `downloads.json` uses the same destination filename.
+
 This script looks for the templates in this order:
 
 1. A bundled `*.cab` file next to this script in the artifact folder (staged automatically via
@@ -36,10 +63,9 @@ If none of the three are available, the script falls back to writing settings di
 registry (no ADMX-backed Group Policy).
 
 > **Air-gapped clouds (Azure Government Secret / Top Secret):** `edgeupdates.microsoft.com` is
-> not reachable from these networks. Download the CAB on an internet-connected system
-> ([API endpoint](https://edgeupdates.microsoft.com/api/products?view=enterprise) → find the
-> latest `Policy` release → `artifacts[0].Location`), transfer it to the air-gapped network,
-> and place it in `customer/artifacts/Configure-EdgePolicy/` before running
+> not reachable from these networks. Use the PowerShell example above to download the CAB on
+> an internet-connected system, transfer `MicrosoftEdgePolicyTemplates.cab` to the air-gapped
+> network, and place it in `customer/artifacts/Configure-EdgePolicy/` before running
 > `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. See
 > [Air-Gapped Cloud Guide](../../../docs/air-gapped-clouds.md) for the general pre-staging
 > pattern. If you skip pre-staging, the script does not fail - it silently takes the

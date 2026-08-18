@@ -23,6 +23,18 @@ Google publishes ADMX/ADML templates as a single ZIP (not a CAB like Edge):
 - Direct download: `https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip`
 - Full policy reference: [Chrome Enterprise policy list](https://chromeenterprise.google/policies/)
 
+On an internet-connected Windows system, open PowerShell in the folder containing this README
+and `Configure-ChromePolicy.ps1`, then run:
+
+```powershell
+$url = 'https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip'
+Invoke-WebRequest -Uri $url -OutFile '.\policy_templates.zip'
+```
+
+The `-OutFile` value writes `policy_templates.zip` into the current folder. Keep that filename
+and location: the policy script searches its own folder for a `*.zip` file, and the example
+`downloads.json` uses the same destination filename.
+
 The ZIP contains a `windows/admx/chrome.admx` and `windows/admx/google.admx` (the parent
 category Chrome's ADMX depends on) plus per-language `.adml` files under
 `windows/admx/<lang>/`. This script looks for the templates in this order:
