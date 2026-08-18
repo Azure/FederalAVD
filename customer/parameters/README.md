@@ -20,7 +20,33 @@ one deployment template.
 
 ## Getting started
 
-Copy a sample parameter file into the matching subfolder and edit it for your environment:
+For the first deployment, use the Template Spec portal form for each required component. The form's
+dynamic fields, supported-value lookups, and validation make the parameter relationships easier to
+understand than hand-editing JSON.
+
+At **Review + create**, select **Download template and parameters**, then rename and save the
+generated parameter file in the matching folder:
+
+| Template Spec | Save the generated parameters under |
+| --- | --- |
+| AVD Network Spoke | `networking/<environment>.networking.parameters.json` |
+| AVD Security & Monitoring | `securityAndMonitoring/<environment>.securityAndMonitoring.parameters.json` |
+| AVD Image Management | `imageManagement/<environment>.imageManagement.parameters.json` |
+| AVD Custom Image | `imageBuild/<image>.imageBuild.parameters.json` |
+| AVD Host Pool | `hostpools/<hostpool>.hostpool.parameters.json` |
+
+Remove `timeStamp` from every generated file so the template creates a fresh value on each
+deployment. Do not add passwords, secrets, tokens, or other credentials to these files. After the
+first successful UI deployment, use the saved files for repeat PowerShell, Azure CLI, or CI/CD
+deployments.
+
+See the [Quick Start first-deployment workflow](../../docs/quick-start.md#recommended-first-deployment-workflow)
+for Template Spec publishing and deployment order.
+
+### Alternative: Start From a Sample Parameter File
+
+When the Template Spec UI is unavailable, copy a sample into the matching customer folder and edit
+it for the environment:
 
 ```powershell
 # Image management (storage account, compute gallery, managed identity)

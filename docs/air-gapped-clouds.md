@@ -6,6 +6,97 @@
 
 The air-gapped clouds, Azure Government Secret and Azure Government Top Secret, offer unique challenges because not all software is available for download via http and where it is it may not be available to all enclaves on the networks these clouds service.
 
+## First Deployment Checklist
+
+Use this sequence for the first deployment. The sections later in this guide provide the package
+inventories and parameter details for each step.
+
+1. **Prepare the deployment workstation.** Transfer this repository to an approved management
+   workstation that can reach the target Azure environment. Separately transfer required installers
+   and policy templates from an approved connected system into the matching
+   `customer/artifacts/<FolderName>/` directories. Do not edit files under `customer-examples/`.
+2. **Identify the registered Az environment name.** Environment names vary by enclave and Az
+   configuration. List the environments registered on the workstation, then use the exact `Name`
+   value for the target cloud:
+
+   ```powershell
+   Get-AzEnvironment | Select-Object Name, ResourceManagerUrl
+   Connect-AzAccount -Environment '<environment-name>'
+   Set-AzContext -Subscription '<subscription-id>'
+   Get-AzContext | Select-Object Name, Subscription, Environment
+   ```
+
+3. **Publish the guided portal forms.** From the repository root, publish the core Template Specs
+   into the target subscription. Publishing creates the forms; it does not deploy the workloads:
+
+   ```powershell
+   .\tools\New-TemplateSpecs.ps1 `
+       -Location '<region>' `
+       -createNetwork $true `
+       -createSecurityAndMonitoring $true `
+       -createImageManagement $true `
+       -createCustomImage $true `
+       -createHostPool $true `
+       -CreateAddOns $false
+   ```
+
+4. **Deploy prerequisites through Template Specs.** Deploy Networking only when an existing VNet
+   and subnet are unavailable. For IL6 and IL7, deploy Security and Monitoring by default to
+   establish centralized audit collection, operational monitoring, secrets protection, and key
+   management before workload resources are created. Omit it only when the approved architecture
+   already provides equivalent Key Vault, Log Analytics Workspace, DCR, DCE, diagnostic-settings,
+   and key-management capabilities, and the control owners have documented how those shared
+   services satisfy the applicable requirements. Security and Monitoring is a hard sequencing
+   dependency before Image Management when using CMK or a policy-required Log Analytics Workspace.
+   At **Review + create**, download each generated parameter file and save it under the matching
+   `customer/parameters/` folder as described in the
+   [Quick Start workflow](quick-start.md#recommended-first-deployment-workflow).
+5. **Deploy Image Management.** Retain its `artifactsStorageAccountResourceId` output along with
+   these output-to-input values required by Image Build:
+
+   | Image Management output | Image Build parameter |
+   | --- | --- |
+   | `computeGalleryResourceId` | `computeGalleryResourceId` |
+   | `artifactsBlobContainerUrl` | `artifactsContainerUri` |
+   | `managedIdentityResourceId` | `userAssignedIdentityResourceId` |
+   | `buildLogsStorageAccountResourceId` | `logStorageAccountResourceId` |
+   | `imageBuildResourceGroupResourceId` | `imageBuildResourceGroupId` |
+
+6. **Complete the artifact inventory and upload.** Review the
+   [manual items](#items-that-must-be-placed-manually), the
+   [air-gapped URL items](#items-downloaded-automatically-from-air-gapped-network-urls), and any
+   copied customer-example artifacts. Upload the staged content:
+
+   ```powershell
+   .\deployments\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId '<artifactsStorageAccountResourceId>'
+   ```
+
+   Add `-SkipDownloadingNewSources` when the management workstation cannot reach the approved
+   air-gapped software distribution endpoints.
+7. **Build the custom image.** In the Custom Image Template Spec form, use the outputs from Image
+   Management. On **Image Customizations**, set **Download Microsoft Sources from Web** to **No**
+   (`downloadLatestMicrosoftContent = false`). Under **VDI Optimizations**, select **Air-gapped /
+   restricted network** (`vdiOptimizationAirGapped = true`). Install all software from the uploaded
+   artifacts, save the generated parameters under `customer/parameters/imageBuild/`, and retain
+   `customImageResourceId`.
+8. **Deploy the host pool.** Select the custom gallery image, provide internally hosted
+   `agentDownloadUrl` and `agentBootLoaderDownloadUrl` values when the default cloud endpoints are
+   unavailable as described under [Session Host Deployment](#session-host-deployment), save the
+   generated parameters under `customer/parameters/hostpools/`, and deploy.
+9. **Verify without public dependencies.** Confirm session hosts report **Available**, users can
+   launch the required applications, and no image-build or session-host step attempted to reach a
+   public internet endpoint.
+
+Blue Button links are not available in Secret or Top Secret. Use Template Specs for the guided
+first deployment and the saved parameter files for later PowerShell or CI/CD deployments.
+
+> **Compliance posture:** The templates do not grant an authorization or certification. Step 1 is
+> the recommended IL6/IL7 baseline because its logging, monitoring, secrets, and key-management
+> capabilities provide implementation evidence for controls including AU-2, AU-3, AU-12, SI-4,
+> IA-5, and SC-12. An authorizing official or control owner must validate any equivalent shared
+> services and residual gaps. See [Compliance](compliance.md).
+
 ## Network Requirements & Documentation
 
 Session hosts in air-gapped clouds require network access to specific Azure Virtual Desktop service endpoints, including AVD Agent installer download URLs and service FQDNs. Complete network requirements, required URLs, and AVD Agent installer permalinks are documented in the following cloud-specific resources:
@@ -36,7 +127,8 @@ During session host deployment (host pool creation and Session Host Replacer ope
 | **AVD Agent &</br>Boot Loader** | Yes | Running `Update-ImageArtifacts.ps1` automatically downloads the AVD Agent and Bootloader from the air-gapped cloud URLs and uploads them to the artifacts storage account — no manual steps required. After running the script, set `agentBootLoaderDownloadUrl` and `agentDownloadUrl` to the corresponding blob storage URLs (e.g., `https://<storageAccount>.blob.<env-suffix>/artifacts/Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi`) to override the default permalinks.<br/><br/>If the air-gapped URLs are not reachable from the management system, download both MSI files manually, place them in `customer/artifacts/`, and run `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.<br/><br/>**Note:** The Agent download always tries the host pool API endpoint first for the latest version, then falls back to the URL you configure. See [Parameters](parameters.md) for details. |
 | **AVD Agent &</br>Boot Loader** | No | The deployment uses the default cloud-specific permalinks (see network requirements above) for both components. For the Agent, the deployment always attempts the host pool API endpoint first for the latest version before falling back to the permalink. |
 
-📖 **Parameter Reference:** See the `agentDownloadUrl` and `agentBootLoaderDownloadUrl` parameters in [Parameters](parameters.md).
+📖 **Parameter Reference:** See
+[Host Pool Deployment - Air-Gapped Cloud Support](hostpool-deployment.md#air-gapped-cloud-support).
 
 ---
 
@@ -146,7 +238,7 @@ If these URLs are not reachable from your management system, download the files 
 After placing manual files and (optionally) allowing the script to download air-gapped-URL items:
 
 ```powershell
-Connect-AzAccount -Environment <YourAirGappedEnvironment>
+Connect-AzAccount -Environment '<environment-name>'
 Set-AzContext -Subscription "<subscription-id>"
 cd C:\repos\FederalAVD\deployments
 
@@ -157,7 +249,7 @@ The script automatically detects the connected environment and selects the corre
 
 > **If air-gapped network URLs are not reachable** from your management system, add `-SkipDownloadingNewSources` to skip all downloads and only package and upload what is already staged locally.
 
-> The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quick-start.md#step-2-deploy-image-management-resources).
+The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quick-start.md#step-2-deploy-image-management-resources).
 
 ---
 
@@ -171,7 +263,7 @@ In air-gapped environments, set `downloadLatestMicrosoftContent = false` (defaul
 
 Air-gapped environments have two options for patching the golden image during an image build:
 
-**Option 1 — WSUS (recommended when available)**
+#### Option 1 - WSUS (Recommended When Available)
 
 The image build template has native WSUS support. Set the following parameters in your image build parameter file:
 
@@ -184,15 +276,15 @@ During the build, the image VM will contact your WSUS server and install all app
 
 > **Note:** `installUpdates` defaults to `true`. Set it to `false` only if you want to skip the Windows Update step entirely (e.g., the image is already fully patched).
 
-> **Note:** WSUS patches OS components and Win32 applications but does **not** update built-in UWP apps (Calculator, Notepad, Snipping Tool, etc.). See [Built-in UWP apps and codec extensions](#built-in-uwp-apps-and-codec-extensions) below for the separate update workflow required regardless of which patching option you use.
+**Note:** WSUS patches OS components and Win32 applications but does **not** update built-in UWP apps (Calculator, Notepad, Snipping Tool, etc.). See [Built-in UWP apps and codec extensions](#built-in-uwp-apps-and-codec-extensions) below for the separate update workflow required regardless of which patching option you use.
 
-**Option 2 — Offline artifacts (no WSUS)**
+#### Option 2 - Offline Artifacts (No WSUS)
 
 When a WSUS server is not available, each security component is pre-staged manually on a machine
 with internet access, transferred to the air-gapped network, and installed via its artifact during
 the image build. No internet access is needed at image build time.
 
-**Monthly update checklist — no WSUS**
+##### Monthly Update Checklist - No WSUS
 
 On or after Patch Tuesday (second Tuesday of each month), refresh each of the following
 components. Detailed steps for each are in the sub-sections below.
@@ -267,8 +359,8 @@ customer\artifacts\Windows-Catalog-Updates\
 > }
 > ```
 
-> **Refresh cadence:** Replace patch files each month. The script installs all files present in the
-> folder and skips already-installed patches via exit code — including a superseded patch is harmless.
+**Refresh cadence:** Replace patch files each month. The script installs all files present in the
+folder and skips already-installed patches via exit code — including a superseded patch is harmless.
 
 #### Visual C++ Redistributable
 
@@ -329,7 +421,7 @@ Sticky Notes, Windows Terminal, and codec extensions) uses `WingetId` entries th
 internet access. The recommended approach is to build the artifact zip on a connected machine,
 transfer only the zip to the air-gapped side, and upload it directly.
 
-**Step 1 — Build the zip on a connected machine**
+##### Step 1 - Build the Zip on a Connected Machine
 
 1. Ensure `customer-examples/parameters/imageManagement/downloads.json` is used as (or merged
    into) your connected-side `customer/parameters/imageManagement/downloads.json`. This file
@@ -347,15 +439,15 @@ transfer only the zip to the air-gapped side, and upload it directly.
 3. Download `BuiltIn-UWP-Apps.zip` from the `artifacts` blob container of that storage account
    (Azure Portal → Storage browser → Blob containers → artifacts → `BuiltIn-UWP-Apps.zip`).
 
-**Step 2 — Transfer to the air-gapped network**
+##### Step 2 - Transfer to the Air-Gapped Network
 
 DTA (low-to-high) `BuiltIn-UWP-Apps.zip` to the air-gapped network. Only the single zip file
 needs to be transferred — the full folder structure with all MSIX packages and shared
 dependencies is already inside it.
 
-**Step 3 — Upload to the air-gapped storage account**
+##### Step 3 - Upload to the Air-Gapped Storage Account
 
-*Option A — Script upload (recommended)*
+###### Option A - Script Upload (Recommended)
 
 Place `BuiltIn-UWP-Apps.zip` in the **root** of `customer/artifacts/` on the air-gapped machine
 (not inside a sub-folder):
@@ -380,7 +472,7 @@ account. No winget access is attempted and `-SkipDownloadingNewSources` is not n
 as your air-gapped `customer/parameters/imageManagement/downloads.json` contains only
 `DownloadUrl` entries pointing to air-gapped-reachable URLs.
 
-*Option B — Manual portal upload*
+###### Option B - Manual Portal Upload
 
 In the Azure Portal, navigate to the air-gapped artifacts storage account →
 **Storage browser → Blob containers → artifacts** and upload `BuiltIn-UWP-Apps.zip` directly.

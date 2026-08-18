@@ -16,9 +16,81 @@ Get your Azure Virtual Desktop environment deployed. Pick your path below.
 | ✈️ | **[Air-Gapped (Secret / Top Secret)](#-air-gapped-start-here)** — no Blue Button, bring-your-own artifacts, M365/Teams/OneDrive via custom image | Steps 1 → 2 → 3 → 4 | Setup day + deployment |
 | 🌐 | **No existing VNet?** — add [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first to any path above | + Step 0 | +30 min |
 
-> **🏛️ Enterprise / compliance path:** CMK is the only reason Step 1 must precede Step 2. Key Vaults must exist before Image Management can encrypt its storage account and compute gallery at creation time. Get that sequence right and the rest is identical to the custom-software path.
+> **🏛️ Enterprise / compliance path:** CMK is a hard reason Step 1 must precede Step 2 because the
+> Key Vaults must exist before Image Management can encrypt its storage account and compute gallery.
+> A policy-required or centralized Log Analytics Workspace is another sequencing reason. For IL6
+> and IL7, Step 1 is the recommended baseline even when an individual template could deploy without
+> it; omit it only when approved shared services provide equivalent control coverage.
 >
 > **🔒 Compliance is parameter choices, not a separate path:** FedRAMP High, DoD IL4/IL5, CMMC, and similar frameworks are enabled by setting the right parameter values at each step — the deployment structure is the same. See [Compliance Configuration](parameters.md#compliance-configuration-reference). The portal form flags non-compliant defaults in a Zero Trust tab.
+
+## Recommended First Deployment Workflow
+
+Use the **Template Spec portal forms for the first deployment in every Azure cloud**. The forms
+show only the fields relevant to earlier choices, populate supported values from Azure, and validate
+dependencies that are difficult to understand by hand-editing JSON. The parameter files generated
+from these forms then become the repeatable PowerShell or CI/CD inputs for the environment.
+
+### 1. Publish the Core Template Specs
+
+From the repository root, connect to the target subscription and publish the five core forms:
+
+```powershell
+Connect-AzAccount -Environment '<environment>'
+Set-AzContext -Subscription '<subscription-id>'
+
+.\tools\New-TemplateSpecs.ps1 `
+    -Location '<region>' `
+    -createNetwork $true `
+    -createSecurityAndMonitoring $true `
+    -createImageManagement $true `
+    -createCustomImage $true `
+    -createHostPool $true `
+    -CreateAddOns $false
+```
+
+All switches are explicit because the script defaults do not publish Networking, Security and
+Monitoring, or Image Management. Publishing a Template Spec does not deploy the workload; it makes
+the guided form available in the Azure portal. Add-ons can be published later when needed.
+
+### 2. Deploy Only the Components Your Path Requires
+
+In the Azure portal, open **Template Specs**, select the first required component, and choose
+**Deploy**. Follow the order shown in [Choose Your Path](#choose-your-path). Skip optional components
+rather than filling out forms for resources the environment does not need.
+
+### 3. Save Each Generated Parameter File
+
+After completing a form, go to **Review + create** and select **Download template and parameters**
+before submitting the deployment. Rename the downloaded parameter file and save it in the matching
+customer folder:
+
+| Template Spec | Save the generated parameters under |
+| --- | --- |
+| AVD Network Spoke | `customer\parameters\networking\<environment>.networking.parameters.json` |
+| AVD Security & Monitoring | `customer\parameters\securityAndMonitoring\<environment>.securityAndMonitoring.parameters.json` |
+| AVD Image Management | `customer\parameters\imageManagement\<environment>.imageManagement.parameters.json` |
+| AVD Custom Image | `customer\parameters\imageBuild\<image>.imageBuild.parameters.json` |
+| AVD Host Pool | `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` |
+
+Remove `timeStamp` from every downloaded file so the template generates a fresh value on each
+deployment. Secure values are supplied at deployment time and must not be stored in parameter files.
+The `customer\` folder is git-ignored so customer configuration survives repository updates without
+being committed upstream.
+
+### 4. Carry Outputs Forward
+
+After each deployment, copy only the documented outputs required by the next form. For example,
+Security and Monitoring supplies the encryption Key Vault and shared monitoring resource IDs to
+Image Management and Host Pool; Image Management supplies gallery, storage, identity, and build
+resource IDs to Image Build; Image Build supplies `customImageResourceId` to Host Pool. Use the
+[cross-team output mapping](#cross-team-output-passing) as the field-by-field reference.
+
+### 5. Automate the Known-Good Deployment
+
+After the first successful UI deployment, use the saved parameter files for PowerShell, Azure CLI,
+or CI/CD. The component sections below link to those repeat-deployment commands and technical
+references; they are not required to understand the initial form-driven deployment.
 
 <details>
 <summary><b>Full deployment decision diagram</b></summary>
@@ -124,7 +196,8 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Add-Ons** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 
-> **Air-gapped clouds (Azure Secret/Top Secret):** Blue Button is not available. Use Template Spec + Portal UI or PowerShell/CLI. See [Template Spec setup ↓](#-air-gapped-clouds-template-specs-optional-but-recommended).
+> **Air-gapped clouds (Azure Secret/Top Secret):** Blue Button is not available. Use the
+> [Template Spec first-deployment workflow](#recommended-first-deployment-workflow) or PowerShell/CLI.
 
 </details>
 
@@ -135,143 +208,53 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 ## ✈️ Air-Gapped Clouds (Azure Secret / Top Secret) — Start Here
 
 > **This section is for Azure Government Secret (IL6) and Azure Government Top Secret (IL7) deployments.**
-> If you are deploying to Azure Commercial or Azure Government (IL2/IL4/IL5), skip to [Prerequisites](#prerequisites).
+> If you are deploying to Azure Commercial or Azure Government (IL2/IL4/IL5), continue to the
+> component deployment steps below.
 
 Air-gapped cloud deployments differ from connected deployments in three ways:
 
-1. **Blue Button is unavailable.** Use Template Specs + Portal UI or PowerShell. See [Template Spec setup below](#-air-gapped-clouds-template-specs-optional-but-recommended).
-2. **Software cannot be downloaded at build time.** All artifacts must be staged in the artifacts storage account before running an image build. `downloadLatestMicrosoftContent` defaults to `false` — do not change this.
-3. **Microsoft 365 Apps, Teams, and OneDrive must be installed via a custom image.** AGC has specific offline installation requirements for these products; they cannot be reliably installed at session host runtime. Custom image builds using this solution handle the offline installation automatically once artifacts are staged. See [Microsoft 365 Apps, Teams, and OneDrive](#microsoft-365-apps-teams-and-onedrive-air-gapped) in the air-gapped reference for details.
+1. **Blue Button is unavailable.** Use the same Template Spec portal forms recommended for every
+    first deployment.
+2. **Software cannot be downloaded from public endpoints during the build.** Stage required
+    artifacts from a connected system or approved cloud software distribution endpoints and keep
+    `downloadLatestMicrosoftContent` set to `false`.
+3. **Microsoft 365 Apps, Teams, and OneDrive require a custom image.** Prepare the complete offline
+    artifact set before Image Build.
 
-### What to Bring Over — Master Checklist
-
-Before you transfer the repo to the air-gapped network, collect the following on an internet-connected system. All files are staged in `customer/artifacts/` and uploaded via `Update-ImageArtifacts.ps1`.
-
-**Auto-downloaded from air-gapped cloud endpoints** (run `Update-ImageArtifacts.ps1` and the script fetches these if the endpoints are reachable from your management system):
-
-| File | Purpose |
-| --- | --- |
-| `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | AVD Agent |
-| `Microsoft.RDInfra.RDAgentBootloader.Installer-x64.msi` | AVD Agent Bootloader |
-| `Office365DeploymentTool.exe` | M365 Apps installation |
-| `OneDriveSetup.exe` | OneDrive per-machine install |
-| `teamsbootstrapper.exe` + `MSTeams-x64.msix` | New Teams for VDI |
-| `FSLogix.zip` | FSLogix Apps agent |
-
-**Must be staged manually** (download on an internet-connected system and copy into `customer/artifacts/`):
-
-| File | Place In | Purpose |
-| --- | --- | --- |
-| `WebView2.exe` | `customer/artifacts/` | Required by Teams |
-| `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams |
-| `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Teams media optimizations |
-| `MicrosoftEdgeEnterpriseX64.msi` | `customer/artifacts/Microsoft-Edge-Enterprise/` | Edge Enterprise (optional) |
-
-**BuiltIn UWP apps** (Calculator, Snipping Tool, Notepad, etc.) require a one-time staged download using winget on an internet-connected system. See [BuiltIn-UWP-Apps (air-gapped)](air-gapped-clouds.md#built-in-uwp-apps-and-codec-extensions-air-gapped).
-
-**Windows Updates** — use WSUS (preferred) or pre-stage `.msu`/`.cab` files via the [Windows-Catalog-Updates](air-gapped-clouds.md#windows-updates-air-gapped) artifact.
-
-> **Transfer tip:** Run `Update-ImageArtifacts.ps1` once on the internet-connected system to auto-download everything it can, then manually add the items above. Copy the entire `customer/` folder to the air-gapped network.
+The transfer inventory changes as vendor packages and air-gapped cloud endpoints change. Use the
+[Air-Gapped Cloud Guide](air-gapped-clouds.md) as the authoritative checklist for agents, Office,
+Teams, OneDrive, browser policy templates, UWP apps, and Windows updates.
 
 ### Your Deployment Path
 
-Air-gapped deployments always follow the full steps — custom images are required to deliver M365 Apps, Teams, and OneDrive:
+Air-gapped deployments always include Steps 2 through 4 because custom images are required to
+deliver M365 Apps, Teams, and OneDrive. Step 1 is the recommended IL6/IL7 baseline; omit it only
+when approved shared services provide equivalent security and monitoring controls. Step 0 remains
+conditional on whether networking already exists:
 
 ```text
 Step 0 (optional): Networking
-Step 1 (if using CMK or centralized diagnostics):  Security & Monitoring (Key Vaults / Log Analytics)
+Step 1 (strongly recommended; required for CMK or policy prerequisites): Security & Monitoring
 Step 2: Image Management  — deploy infrastructure + upload artifacts
 Step 3: Image Build       — bake M365, Teams, OneDrive, and other software into the image
 Step 4: Host Pool         — deploy session hosts from the custom gallery image
 ```
 
-📖 **[Full air-gapped reference](air-gapped-clouds.md)** — network requirements, agent handling, Office installation, UWP apps, Windows Updates, and more.
+Before starting Step 2, complete the staging checklist in the
+[full air-gapped reference](air-gapped-clouds.md).
 
 ---
 
-## 🔒 Air-Gapped Clouds: Template Specs (Optional but Recommended)
+## Template Spec Setup Notes
 
-> **Blue Button deployments are not available in air-gapped clouds.** You have two options:
->
-> **Option A: Template Spec + Portal UI (Recommended for first deployment)**
-> — Provides guided form with built-in validation; easy parameter selection; generates parameter files for future use.
->
-> **Option B: PowerShell/CLI with parameter files**
-> — Direct deployment without Template Specs; best for automation and CI/CD.
+The [recommended first-deployment workflow](#recommended-first-deployment-workflow) applies to
+Commercial, Government, Secret, and Top Secret clouds. In Secret and Top Secret, Template Specs are
+the only guided portal form because Blue Button links are unavailable.
 
-### Option A: Template Spec Setup (For UI-Guided Deployment)
-
-**One-time setup:**
-
-```powershell
-# Connect to your Azure environment
-Connect-AzAccount -Environment <YourEnvironment>  # AzureUSGovernment, etc.
-
-# Set your subscription
-Set-AzContext -Subscription "<subscription-id>"
-
-# Create all template specs
-cd C:\repos\FederalAVD\tools
-.\New-TemplateSpecs.ps1 -Location "<region>"
-```
-
-**This creates Template Specs for:**
-
-- ✅ Custom Image Build
-- ✅ Host Pool Deployment
-- ✅ Networking Infrastructure
-- ✅ All Add-Ons (Session Host Replacer, Storage Quota Manager, etc.)
-
-**Deploy using Template Spec UI:**
-
-1. Navigate to **Template Specs** in Azure Portal
-2. Select the desired template spec
-3. Click **Deploy** and fill out the form
-4. **Before deploying**, click **Download template and parameters** to save the parameter file for future use
-5. Complete the deployment
-
-### 💡 Best Practice: Generate Parameter Files from Template Spec UI
-
-**The easiest way to create parameter files for PowerShell deployments:**
-
-1. Deploy using Template Spec UI (one time)
-2. Fill out all parameters in the form
-3. Click **Review + Create**, then **Download template and parameters**
-4. Save the `parameters.json` file
-5. Edit the file to **remove the `timeStamp` parameter** (if present)
-6. Use this parameter file for all future PowerShell/CLI deployments
-
-**Example:**
-
-```powershell
-# Use parameter file name as deployment name (recommended)
-$paramFile = "prod.hostpool.parameters.json"
-$deploymentName = [System.IO.Path]::GetFileNameWithoutExtension($paramFile)
-
-New-AzDeployment `
-    -Location "usgovvirginia" `
-    -TemplateFile ".\deployments\hostpools\hostpool.json" `
-    -TemplateParameterFile ".\customer\parameters\hostpools\$paramFile" `
-    -Name $deploymentName
-```
-
-**💡 Deployment Naming Tips:**
-
-- Use descriptive, consistent names (e.g., `"prod-hostpool"`, `"dev-finance-pool"`)
-- Base names on parameter file names for easy correlation
-- Avoid timestamps - Azure tracks deployment history automatically
-- Example: `prod.hostpool.parameters.json` → deployment name: `"prod.hostpool.parameters"`
-
-**📝 Note about `timeStamp` parameter:**
-
-- The Bicep templates include a `timeStamp` parameter with default value `utcNow()`
-- This auto-generates unique suffixes for deployment names and resource names
-- **Always remove it from saved parameter files** - it should be auto-generated on each deployment
-- For image builds, generates automatic version numbers (e.g., `2026.0210.1435`) based on build time
-- Including it in parameter files would reuse old timestamps, defeating the purpose of automatic versioning
-- Used for automatic image version numbers (e.g., `2026.0210.1435`) based on build time
-
-📖 **[Complete Template Spec Instructions](hostpool-deployment.md#b-template-spec-creation)**
+`New-TemplateSpecs.ps1` publishes a new major Template Spec version when one already exists. Publish
+only after reviewing repository changes, then use the new version for subsequent form deployments.
+For advanced publishing options and RBAC, see
+[Template Spec creation](hostpool-deployment.md#b-template-spec-creation).
 
 ---
 
@@ -283,8 +266,17 @@ New-AzDeployment `
 
 > **🔧 Technical Reference:** [Networking Template Documentation](../deployments/networking/README.md) - Complete parameter reference and advanced configuration
 
+### First Deployment: Template Spec UI
+
+1. In the Azure portal, open **Template Specs** and deploy **AVD Network Spoke**.
+2. Use the form's routing and private DNS choices to expose only the networking fields needed for
+    the environment.
+3. At **Review + create**, download the generated parameters and save them as
+    `customer\parameters\networking\<environment>.networking.parameters.json`.
+4. Deploy, then retain the VNet, subnet, and private DNS zone resource IDs needed by later forms.
+
 <details>
-<summary><b>What Gets Deployed</b></summary>
+<summary><b>Resources and alternative deployment methods</b></summary>
 
 The networking deployment provides a complete foundation for AVD, including:
 
@@ -302,7 +294,7 @@ The networking deployment provides a complete foundation for AVD, including:
 
 **Option 1: Azure Portal (Blue Button)** - Commercial & Government clouds only
 
-[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json) 
+[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json)
 
 **Option 2: PowerShell** - All clouds
@@ -321,19 +313,6 @@ New-AzDeployment `
     -Verbose
 ```
 
-**Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
-
-1. Create networking template spec:
-
-   ```powershell
-   cd C:\repos\FederalAVD\tools
-   .\New-TemplateSpecs.ps1 -Location "usgovvirginia" -createNetwork $true -createCustomImage $false -createHostPool $false -CreateAddOns $false
-   ```
-
-2. Navigate to **Template Specs** in Azure Portal
-3. Select **AVD Network Spoke**
-4. Click **Deploy** and fill out the form
-
 ### Key Configuration Options
 
 | Feature | Description | When to Use |
@@ -346,14 +325,14 @@ New-AzDeployment `
 
 ### Typical Deployment Scenarios
 
-**Scenario 1: Simple Greenfield (Development/Test)**
+#### Scenario 1: Simple Greenfield (Development/Test)
 
 - VNet with session host subnet only
 - Public routing
 - No hub peering
 - Minimal configuration
 
-**Scenario 2: Production with Hub (Zero Trust)**
+#### Scenario 2: Production With Hub (Zero Trust)
 
 - VNet with multiple subnets (hosts, private endpoints)
 - Hub peering for hybrid connectivity
@@ -361,7 +340,7 @@ New-AzDeployment `
 - Private DNS zones for all Azure services
 - DDoS protection enabled
 
-**Scenario 3: Air-Gapped Cloud**
+#### Scenario 3: Air-Gapped Cloud
 
 - VNet with segmented subnets
 - Private DNS zones for cloud-specific service endpoints
@@ -378,9 +357,27 @@ New-AzDeployment `
 
 **⏭️ Skip this step if:** You don't need custom images with CMK, your subscription has no Azure Policy diagnostic-settings requirements, and you don't need a shared Log Analytics Workspace before Step 2/Step 4. Key Vaults deployed inline during host pool deployment are idempotent — subsequent deployments to the same resource group reuse them, so you don't need to pre-deploy for sharing across host pools.
 
+> **IL6/IL7 recommendation:** Do not skip Step 1 by default in Secret or Top Secret. Its centralized
+> logging, monitoring, secrets, and key-management resources support the expected high-impact
+> compliance posture. Skip it only when approved shared services provide equivalent capabilities
+> and the control owners have documented that coverage.
+
 **Required when:** Using Customer Managed Keys with custom image management — the key vault must exist before deploying image management so the storage account and compute gallery can be encrypted. Also required whenever your subscription has Azure Policy initiatives assigned (common under FedRAMP High, DoD IL4/IL5, and CMMC) that include `DeployIfNotExists` diagnostic-settings policies — those policies need a target Log Analytics Workspace resource ID *before* Key Vaults or storage accounts are created, or remediation fails/leaves resources flagged non-compliant. See [Compliance — Log Analytics Workspace prerequisite](compliance.md#always-on-controls-no-configuration-required) for details. Also useful whenever you want Image Management's storage account diagnostics and the host pool's monitoring to share a single Log Analytics Workspace, since that workspace does not otherwise exist until the host pool deployment (Step 4) creates one.
 
 > **⚠️ Common mistake — sequence matters with CMK:** Deploy Security & Monitoring (this step) **before** Image Management (Step 2). Image Management needs the Key Vault resource ID at creation time to configure encryption on the compute gallery and storage account. Deploying out of order either fails outright or creates unencrypted resources. See [troubleshooting](troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults).
+
+### First Deployment: Template Spec UI
+
+1. In the Azure portal, open **Template Specs** and deploy **AVD Security & Monitoring**.
+2. Use the form to choose credential and encryption Key Vaults, centralized monitoring, and private
+    connectivity. Fields that do not apply remain hidden.
+3. At **Review + create**, download the generated parameters and save them as
+    `customer\parameters\securityAndMonitoring\<environment>.securityAndMonitoring.parameters.json`.
+4. Deploy, then retain the Key Vault, Log Analytics Workspace, DCR, and DCE outputs required by
+    downstream forms.
+
+<details>
+<summary><b>Resources and alternative deployment methods</b></summary>
 
 The Security & Monitoring deployment creates a **dedicated operations resource group** (`rg-avd-operations-{loc}`) containing the Key Vaults, and — only when `deployMonitoring` is `true` — a separate **monitoring resource group** (`rg-avd-monitoring-{loc}`) containing the Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint. The monitoring resource group can be deployed to a different subscription than the Key Vaults via `logAnalyticsWorkspaceSubscriptionId` — useful when a centralized monitoring/security team owns a separate subscription.
 
@@ -392,9 +389,10 @@ The Security & Monitoring deployment creates a **dedicated operations resource g
 | **AVD Insights Data Collection Rule** *(optional)* | `microsoft-avdi-{loc}` | Shared DCR that every host pool referencing this workspace can reuse via `existingAVDInsightsDataCollectionRuleResourceId`, instead of the first host pool creating its own |
 | **Data Collection Endpoint** *(optional)* | `dce-avd-{loc}` | Shared DCE that every host pool referencing this workspace can reuse via `existingDataCollectionEndpointResourceId` |
 
-> **Custom naming:** These patterns reflect the CAF default. To use a consistent naming convention across all solutions, see the **[Naming Convention guide](naming-convention.md)**.
+**Custom naming:** These patterns reflect the CAF default. To use a consistent naming convention across all solutions, see the **[Naming Convention guide](naming-convention.md)**.
 
 > **Why deploy this separately?** Deploying Security & Monitoring before image management lets you:
+>
 > - Encrypt the compute gallery and artifacts storage account with CMK from the start
 > - Pre-populate credential secrets so the portal form can reference them
 > - Give your security team time to review KV access policies before deployment begins
@@ -424,21 +422,13 @@ New-AzDeployment `
     -TemplateFile $templateFile `
     -Location $location `
     -virtualMachineAdminPassword $virtualMachineAdminPassword `
-    -virtualMachineAdminUserName $virtualMachineUserPrincipalName `
+    -virtualMachineAdminUserName $virtualMachineAdminUserName `
     -domainJoinUserPassword $domainJoinUserPassword `
     -domainJoinUserPrincipalName $domainJoinUserPrincipalName `
     -deployMonitoring $true
 ```
 
-**Option 3: Template Spec + Portal UI** — All clouds including air-gapped
-
-```powershell
-# Create the Template Spec (one-time)
-cd C:\repos\FederalAVD\tools
-.\New-TemplateSpecs.ps1 -Location "usgovvirginia" -createSecurityAndMonitoring $true
-```
-
-Then navigate to **Template Specs** → **AVD Security & Monitoring** → **Deploy**.
+</details>
 
 ### Pass Outputs to Image Management & Host Pool
 
@@ -462,6 +452,19 @@ After deployment, note the resource IDs from the deployment outputs:
 **⏭️ Skip this step if:** You're using marketplace images without customization.
 
 **Required for:** Custom image builds or session host runtime customizations with software packages.
+
+### First Deployment: Template Spec UI
+
+1. In the Azure portal, open **Template Specs** and deploy **AVD Image Management**.
+2. Use the form to select storage, gallery, build infrastructure, networking, monitoring, and CMK
+    options. Supply Step 1 outputs only when those features are enabled.
+3. At **Review + create**, download the generated parameters and save them as
+    `customer\parameters\imageManagement\<environment>.imageManagement.parameters.json`.
+4. Deploy, then retain the gallery, artifact storage, managed identity, build resource group, log
+    storage, and encryption outputs needed by artifact upload and Image Build.
+
+<details>
+<summary><b>Infrastructure details and alternative deployment methods</b></summary>
 
 This step has two parts: deploying the Azure infrastructure once, then uploading artifacts whenever your software changes.
 
@@ -491,9 +494,11 @@ cd deployments
 .\Deploy-ImageManagement.ps1 -Location "usgovvirginia" -ParameterFilePrefix basic -UpdateArtifacts
 ```
 
-Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Copy and rename one into `customer\parameters\imageManagement\` for your environment.
+Example parameter files are in `deployments\imageManagement\parameters\` (`basic`, `privateEndpoint`, `serviceEndpoint`, `production`). Use these as references when reviewing a generated file; copying and hand-editing an example is the alternative when the Template Spec UI is unavailable.
 
-If you did **not** use `-UpdateArtifacts`, note the `artifactsStorageAccountResourceId` output — you'll need it in Part B.
+</details>
+
+After deployment, note the `artifactsStorageAccountResourceId` output - you need it in Part B.
 
 **Key imageManagement outputs to pass to imageBuild:**
 
@@ -517,7 +522,7 @@ cd deployments
 
 > **⚠️ Common mistake — Storage 403 when uploading artifacts:** If `Update-ImageArtifacts.ps1` fails with `403 AuthorizationFailure`, the storage account has shared key access disabled (the default in this solution). `Owner` and `Contributor` grant control-plane access only — they do not cover blob read/write. Add **Storage Blob Data Contributor** on the artifacts storage account to the identity running the script. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
 
-> **⚠️ Common mistake — edits to `customer-examples/` disappear on git pull:** The `customer-examples/` folder is tracked by git and gets overwritten when you pull updates. Always copy example files to `customer/parameters/` (or `customer/artifacts/`) before editing — `customer/` is git-ignored by design and your changes there are preserved. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+**⚠️ Common mistake — edits to `customer-examples/` disappear on git pull:** The `customer-examples/` folder is tracked by git and gets overwritten when you pull updates. Always copy example files to `customer/parameters/` (or `customer/artifacts/`) before editing — `customer/` is git-ignored by design and your changes there are preserved. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
 **✈️ Air-gapped environments:** The script auto-detects the connected environment and uses the correct base downloads file (`secret` or `topsecret`) — most installers are available via air-gapped cloud URLs and download automatically. Manually stage any items with empty `DownloadUrl` in `customer/artifacts/` before running. Only add `-SkipDownloadingNewSources` if network downloads are not reachable. See the [Air-Gapped Cloud Guide](air-gapped-clouds.md).
 
@@ -529,6 +534,9 @@ cd deployments
 - **[Air-Gapped Cloud Instructions](air-gapped-clouds.md)** — Secret/Top Secret cloud considerations
 
 ### Part C: Pass imageManagement Outputs to imageBuild
+
+<details>
+<summary><b>Production image-build identity and resource group model</b></summary>
 
 > **This is the standard recommended workflow for production.** imageManagement pre-stages all infrastructure and grants all required roles. imageBuild deployments never assign roles — they simply consume pre-staged resources.
 
@@ -548,6 +556,8 @@ This enables least-privilege: the person running imageBuild needs no rights to c
 
 > **Temporary RG alternative:** Leave `imageBuildResourceGroupId` empty and do not pre-stage the RG in imageManagement. Each run creates a new uniquely-named temporary resource group (timestamp-suffixed) and **deletes the entire resource group** on completion. The `userAssignedIdentityResourceId` is only needed when using storage features on this path.
 
+</details>
+
 ---
 
 ## Step 3: Build Custom Image (Optional)
@@ -556,11 +566,23 @@ This enables least-privilege: the person running imageBuild needs no rights to c
 
 **Benefits:** Faster session host deployment, consistent configuration, pre-installed software.
 
-### Quick Deploy Options
+### First Deployment: Template Spec UI
+
+1. In the Azure portal, open **Template Specs** and deploy **AVD Custom Image**.
+2. Use the form to select the source image, gallery definition, customizations, update source, and
+    build infrastructure. Supply the outputs retained from Image Management.
+3. At **Review + create**, download the generated parameters and save them as
+    `customer\parameters\imageBuild\<image>.imageBuild.parameters.json`.
+4. Remove `timeStamp`, deploy the image, and retain `customImageResourceId` for the Host Pool form.
+
+<details>
+<summary><b>Blue Button and PowerShell alternatives</b></summary>
+
+### Alternative Deployment Methods
 
 **Option 1: Azure Portal (Blue Button)** - Commercial & Government clouds only
 
-[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FuiFormDefinition.json) 
+[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FuiFormDefinition.json)
 
 **Option 2: PowerShell Helper Script** - All clouds
@@ -570,12 +592,7 @@ cd deployments
 .\Invoke-ImageBuilds.ps1 -Location "usgovvirginia" -ParameterFilePrefixes @('demo')
 ```
 
-**Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
-
-1. Navigate to **Template Specs** in Azure Portal
-2. Select **Azure Virtual Desktop Custom Image**
-3. Click **Deploy** and fill out the form
-4. *Optional:* Download parameters for future PowerShell deployments
+</details>
 
 **📖 Complete Image Build Guide:**
 
@@ -589,22 +606,31 @@ cd deployments
 
 Deploy your complete AVD environment including host pool, session hosts, storage, monitoring, and security resources.
 
+### First Deployment: Template Spec UI
+
+1. In the Azure portal, open **Template Specs** and deploy **AVD Host Pool**.
+2. Use the form to select identity, image, session hosts, FSLogix, monitoring, backup, security, and
+    private connectivity. Supply outputs from earlier steps only when those components were deployed.
+3. At **Review + create**, download the generated parameters and save them as
+    `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json`.
+4. Remove `timeStamp`, deploy, and verify that the session hosts report **Available**.
+
 <a id="poc-fast-path"></a>
 <details>
-<summary><b>New to FederalAVD? Deploy a PoC host pool in ~20 minutes (start here)</b></summary>
+<summary><b>PowerShell-only PoC alternative using the starter parameter file</b></summary>
 
 If you want a working AVD host pool to evaluate — existing VNet, marketplace images, no CMK, no custom software — you can skip Steps 0–3 entirely. This is all you need.
 
 > **Before you start:** Run the [60-second preflight](#preflight-checklist) above, and make sure the Az module is installed (`Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`) and you're connected (`Connect-AzAccount`).
 
-**1 — Get the repo**
+#### 1 - Get the Repo
 
 ```powershell
 git clone https://github.com/Azure/FederalAVD.git
 Set-Location FederalAVD
 ```
 
-**2 — Copy the PoC parameter file**
+#### 2 - Copy the PoC Parameter File
 
 ```powershell
 New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
@@ -614,7 +640,9 @@ Copy-Item customer-examples\parameters\hostpools\poc.hostpool.parameters.json `
 
 > `customer\parameters\` is git-ignored — your files stay local and won't be overwritten on `git pull`. Never edit `customer-examples\` directly.
 
-**3 — Set the four required values** in `customer\parameters\hostpools\myfirstpool.parameters.json`
+#### 3 - Set the Four Required Values
+
+Edit `customer\parameters\hostpools\myfirstpool.parameters.json`:
 
 | Parameter | What to set |
 | --- | --- |
@@ -625,7 +653,7 @@ Copy-Item customer-examples\parameters\hostpools\poc.hostpool.parameters.json `
 
 The file already sets `sessionHostCount: 3`, `deployFSLogixStorage: true`, and `identitySolution: "EntraId"`. Credentials are collected interactively at deploy time — never put them in the JSON file.
 
-**4 — Check VM size availability and quota**
+#### 4 - Check VM Size Availability and Quota
 
 ```powershell
 .\tools\Test-AvdVmSize.ps1 -Location '<azure-region>'
@@ -633,7 +661,7 @@ The file already sets `sessionHostCount: 3`, `deployFSLogixStorage: true`, and `
 
 All three checks `[PASS]` means you're clear. If any fail the script prints exactly what to fix.
 
-**5 — Deploy**
+#### 5 - Deploy
 
 ```powershell
 $adminUser = Read-Host 'Session host local admin username' -AsSecureString
@@ -651,7 +679,7 @@ New-AzDeployment `
 
 Track progress in **Azure Portal → Subscriptions → [your subscription] → Deployments**. Expect ~15–20 minutes.
 
-**6 — Verify session hosts**
+#### 6 - Verify Session Hosts
 
 ```powershell
 Get-AzWvdSessionHost `
@@ -674,16 +702,17 @@ All session hosts should show `Status: Available`. Then sign in at [https://clie
 
 </details>
 
-### Quick Deploy Options
+<details>
+<summary><b>Blue Button and PowerShell alternatives</b></summary>
+
+### Alternative Deployment Methods
 
 **Option 1: Azure Portal (Blue Button)** - Commercial & Government clouds only
 
-[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2Fhostpool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2FuiFormDefinition.json) 
+[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2Fhostpool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2Fhostpool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2FuiFormDefinition.json)
 
 **Option 2: PowerShell** - All clouds
-
-> **💡 Recommended first-time approach:** Use **Option 3 (Template Spec + Portal UI)** below to fill out the form, then click **Download template and parameters** before submitting. Remove `timeStamp` from the downloaded file and use it for all future PowerShell deployments. The UI provides validation and guided field discovery that is much easier than hand-editing JSON. See the [Template Spec setup section above](#-air-gapped-clouds-template-specs-optional-but-recommended) for one-time setup instructions.
 
 ```powershell
 # Use parameter file name as deployment name
@@ -700,12 +729,7 @@ New-AzDeployment `
 
 > **⚠️ Common mistake — `timeStamp` in a saved parameter file:** If you exported the parameter file from the Template Spec UI or ARM deployment history, delete the `timeStamp` entry before saving the file for reuse. Leaving it causes every subsequent deployment to reuse the same timestamp, resulting in stale image version numbers and potential resource naming conflicts. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
 
-**Option 3: Template Spec + Portal UI** - Recommended for air-gapped clouds
-
-1. Navigate to **Template Specs** in Azure Portal
-2. Select **Azure Virtual Desktop HostPool**
-3. Click **Deploy** and fill out the form
-4. *Optional:* Download parameters for future PowerShell deployments
+</details>
 
 **📖 Complete Host Pool Guide:**
 
@@ -754,7 +778,7 @@ Assign these roles so each team can deploy their components without subscription
 | **Session Hosts add-on** | `Contributor` on hosts RG + `Desktop Virtualization Host Pool Contributor` on control plane RG | Resource group scoped — no subscription-level rights needed |
 | **hostpool — Complete** | `Owner` or `Contributor + User Access Administrator` at subscription scope | Creates RGs and assigns roles at subscription scope |
 
-> **Generating parameter files for each team:** The easiest way to create a parameter file is to deploy once using the Template Spec portal form, then **download the generated parameter file** before submitting. Remove the `timeStamp` parameter before saving for reuse. See the [air-gapped section](#-air-gapped-clouds-template-specs-optional-but-recommended) for details.
+> **Generating parameter files for each team:** The easiest way to create a parameter file is to deploy once using the Template Spec portal form, then **download the generated parameter file** before submitting. Remove the `timeStamp` parameter before saving for reuse. See the [recommended first-deployment workflow](#recommended-first-deployment-workflow) for details.
 
 </details>
 

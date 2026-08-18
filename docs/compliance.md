@@ -42,6 +42,13 @@ The following security capabilities are active in every deployment regardless of
 >
 > **Recommendation:** In any subscription with these policy initiatives assigned, deploy the [Security & Monitoring](quick-start.md#step-1-deploy-security-and-monitoring-key-vaults-and-log-analytics) template with `deployMonitoring: true` **first**, then supply its `logAnalyticsWorkspaceResourceId` output to your policy assignment parameters (or use `logAnalyticsWorkspaceSubscriptionId` if your policy's target workspace lives in a centralized monitoring subscription). This turns Step 1 from an optional CMK-only step into an effective compliance prerequisite for policy-governed environments.
 
+**IL6/IL7 posture:** For Azure Government Secret and Top Secret, deploy Security & Monitoring as
+the default baseline even when it is not a hard template dependency. Its centralized logging,
+monitoring, secrets, and key-management capabilities support implementation evidence for AU-2,
+AU-3, AU-12, SI-4, IA-5, and SC-12. Omit the deployment only when approved shared services provide
+equivalent capabilities and the responsible control owners have documented that coverage. This
+recommendation is implementation guidance, not an authorization or certification determination.
+
 ---
 
 ## NIST SP 800-53 Rev 5 / FedRAMP High
@@ -397,7 +404,7 @@ The CJIS Security Policy governs access to Criminal Justice Information (CJI) an
 
 > **CJIS audit gap:** CJIS §5.9 requires logging of CJI access events. The AVD Insights DCR captures session connect/disconnect events but **not** the Windows Security event log (logon events 4624/4634, privilege use 4672). For CJIS compliance, a supplemental DCR or SIEM agent targeting the Security event log is required.
 
-> **CJIS channel partner / CJIS Systems Agency (CSA):** Deploying organizations must obtain a signed CJIS Security Addendum with their state CSA. The Azure Government CJIS compliance package and [FBI CJIS audit documentation](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-cjis) cover the platform layer.
+**CJIS channel partner / CJIS Systems Agency (CSA):** Deploying organizations must obtain a signed CJIS Security Addendum with their state CSA. The Azure Government CJIS compliance package and [FBI CJIS audit documentation](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-cjis) cover the platform layer.
 
 ---
 
@@ -518,9 +525,11 @@ cd C:\repos\FederalAVD\deployments
 ```
 
 > **Keep the STIG GPO package URL current.** The `DoDSTIGGPOPackage` entry in `customer/parameters/imageManagement/downloads.json` contains a direct link to the quarterly STIG GPO release from DISA — for example:
-> ```
+>
+> ```json
 > "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip"
 > ```
+>
 > DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and rebuild your image (or re-apply via `sessionHostCustomizations`). The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). Also update the `-Version` argument in your customizations entry to match (e.g., `'2026.04'` for the April 2026 release) so the version-tracking registry key stays current and upgrade detection works correctly.
 
 **Step 3 — Add to the `customizations` parameter in your image build parameter file:**
