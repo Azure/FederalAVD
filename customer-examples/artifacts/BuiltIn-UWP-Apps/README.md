@@ -83,37 +83,44 @@ Copy-Item -Recurse -Path "customer-examples\artifacts\BuiltIn-UWP-Apps" `
           -Destination "customer\artifacts\"
 ```
 
-### 2. Add the downloads entries to your downloads.json
+### 2. Copy the example downloads file
+
+If you do not already have a customer downloads file, copy the complete example into the
+auto-discovered location:
+
+```powershell
+New-Item -Path "customer\parameters\imageManagement" -ItemType Directory -Force | Out-Null
+Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
+          -Destination "customer\parameters\imageManagement\downloads.json"
+```
 
 The downloads entries for each app use the `WingetPreserveLayout` flag, which tells
 `Update-ImageArtifacts.ps1` to preserve the native folder layout produced by
 `winget download` instead of renaming the file. This is required for MSIX/MSIXBUNDLE packages
 that must keep their original filenames for `Add-AppxProvisionedPackage` to work correctly.
 
-If you have already copied
-`customer-examples/parameters/imageManagement/downloads.json` to
-`customer/parameters/imageManagement/downloads.json`, the UWP entries are already included.
-Otherwise, add the entries from the examples file manually. The relevant entries are the ones
-with `"WingetPreserveLayout": true` and `DestinationFolders` beginning with `BuiltIn-UWP-Apps\`.
+If `customer/parameters/imageManagement/downloads.json` already contains customized entries,
+do not overwrite it. Merge the entries with `"WingetPreserveLayout": true` and
+`DestinationFolders` beginning with `BuiltIn-UWP-Apps\` from the example file into your existing
+file.
 
-```json
-"WindowsCalculator": {
-    "Description": "Windows Calculator - built-in UWP app provisioned for all users",
-    "WingetId": "9WZDNCRFHVN5",
-    "WingetPreserveLayout": true,
-    "DestinationFolders": [ "BuiltIn-UWP-Apps\\Calculator" ]
-},
-"MicrosoftPaint": {
-    "Description": "Microsoft Paint - built-in UWP app provisioned for all users",
-    "WingetId": "9PCFS5B6T72H",
-    "WingetPreserveLayout": true,
-    "DestinationFolders": [ "BuiltIn-UWP-Apps\\Paint" ]
-}
+### 3. Download and package the artifact
+
+To create `BuiltIn-UWP-Apps.zip` locally without an Azure subscription or storage account:
+
+```powershell
+cd C:\repos\FederalAVD\deployments
+
+.\Update-ImageArtifacts.ps1 `
+    -PackageOnly `
+    -OutputPath "C:\AirGapTransfer"
 ```
 
-See `customer-examples/parameters/imageManagement/downloads.json` for the full set.
+This downloads each app package via `winget download`, deduplicates shared dependency packages
+into `SharedDependencies\`, then writes `C:\AirGapTransfer\BuiltIn-UWP-Apps.zip`. This is the
+recommended workflow when preparing the zip for transfer to an air-gapped network.
 
-### 3. Download and upload the artifacts
+To package and upload directly to an existing artifacts storage account instead:
 
 ```powershell
 cd C:\repos\FederalAVD\deployments
@@ -123,9 +130,8 @@ cd C:\repos\FederalAVD\deployments
     -ResourceGroupName "<your-resource-group>"
 ```
 
-This downloads each app package via `winget download`, deduplicates shared dependency packages
-into `SharedDependencies\`, then zips and uploads the entire `BuiltIn-UWP-Apps` folder as a
-single `BuiltIn-UWP-Apps.zip` artifact.
+The storage-backed command runs the same packaging pipeline, then uploads the zip to the
+`artifacts` blob container.
 
 ### 4. Add the artifact to your image build customizations
 
@@ -135,7 +141,7 @@ No special arguments are needed — the script handles prerequisites automatical
 ```json
 {
     "name": "BuiltIn-UWP-Apps",
-    "uri": "[parameters('artifactsContainerUri')]BuiltIn-UWP-Apps.zip"
+    "uri": "BuiltIn-UWP-Apps.zip"
 }
 ```
 

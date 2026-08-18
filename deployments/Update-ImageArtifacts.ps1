@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
 Downloads the latest software sources, stages repository and customer artifacts, packages them as
-zip files, and uploads them to the image management artifacts storage account blob container.
+zip files, and uploads them to the image management artifacts storage account blob container or
+writes them to a local folder.
 
 .DESCRIPTION
 Run this script whenever you want to refresh the artifacts in the image management storage account -
@@ -32,6 +33,14 @@ Mutually exclusive with -StorageAccountResourceId.
 The resource group containing the artifacts storage account.
 Must be used together with -StorageAccountName.
 Mutually exclusive with -StorageAccountResourceId.
+
+.PARAMETER PackageOnly
+Packages artifacts into a local folder without requiring an Azure login, subscription, or storage
+account. Must be used together with -OutputPath.
+
+.PARAMETER OutputPath
+Destination folder for artifacts produced in -PackageOnly mode. Existing files with the same names
+are overwritten. Must be used together with -PackageOnly.
 
 .PARAMETER DeleteExistingBlobs
 When specified, removes all existing blobs in the artifacts container before uploading.
@@ -95,6 +104,12 @@ Use a path on a high-performance drive when processing large artifact sets.
 .\Update-ImageArtifacts.ps1 `
     -StorageAccountName "saimgassetsuse2abc123" `
     -ResourceGroupName "rg-avd-image-management-use2"
+
+.EXAMPLE
+# Build artifacts locally for transfer to an air-gapped environment without using Azure
+.\Update-ImageArtifacts.ps1 `
+    -PackageOnly `
+    -OutputPath "C:\AirGapTransfer"
 #>
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'ByResourceId')]
@@ -107,6 +122,12 @@ param(
 
     [Parameter(Mandatory = $true, ParameterSetName = 'ByName')]
     [string]$ResourceGroupName,
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'LocalPackage')]
+    [switch]$PackageOnly,
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'LocalPackage')]
+    [string]$OutputPath,
 
     [Parameter(Mandatory = $false)]
     [switch]$DeleteExistingBlobs,
@@ -135,24 +156,31 @@ param(
 #region Variables
 $ErrorActionPreference = 'Stop'
 $ScriptStartTime = Get-Date
+$LocalPackageMode = $PSCmdlet.ParameterSetName -eq 'LocalPackage'
 
-$Context = Get-AzContext
-If ($null -eq $Context) {
-    Throw 'You are not logged in to Azure. Please run Connect-AzAccount before continuing.'
-}
-
-$Environment = $Context.Environment.Name
-$StorageEndpointSuffix = $Context.Environment.StorageEndpointSuffix
-$EnvSuffix = $StorageEndpointSuffix.Substring(5, ($StorageEndpointSuffix.Length - 5))
-
-If ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment') {
+If ($LocalPackageMode) {
     $downloadsParametersPrefix = 'public'
-}
-ElseIf ($Environment -match 'USN') {
-    $downloadsParametersPrefix = 'topsecret'
+    $EnvSuffix = 'core.windows.net'
 }
 Else {
-    $downloadsParametersPrefix = 'secret'
+    $Context = Get-AzContext
+    If ($null -eq $Context) {
+        Throw 'You are not logged in to Azure. Please run Connect-AzAccount before continuing.'
+    }
+
+    $Environment = $Context.Environment.Name
+    $StorageEndpointSuffix = $Context.Environment.StorageEndpointSuffix
+    $EnvSuffix = $StorageEndpointSuffix.Substring(5, ($StorageEndpointSuffix.Length - 5))
+
+    If ($Environment -eq 'AzureCloud' -or $Environment -eq 'AzureUSGovernment') {
+        $downloadsParametersPrefix = 'public'
+    }
+    ElseIf ($Environment -match 'USN') {
+        $downloadsParametersPrefix = 'topsecret'
+    }
+    Else {
+        $downloadsParametersPrefix = 'secret'
+    }
 }
 
 $ArtifactsContainerName = 'artifacts'
@@ -174,25 +202,35 @@ If (Test-Path -Path $TempArtifactsDir) {
 New-Item -Path $TempArtifactsDir -ItemType Directory -Force | Out-Null
 New-Item -Path $ArtifactsDir -ItemType Directory -Force | Out-Null
 
-# Resolve storage account name and resource group from whichever parameter set was used
-If ($PSCmdlet.ParameterSetName -eq 'ByResourceId') {
-    $SubscriptionId = ($StorageAccountResourceId -Split '/')[2]
-    If ((Get-AzContext).Subscription.Id -ne $SubscriptionId) {
-        Write-Output "Switching to subscription '$SubscriptionId'."
-        Set-AzContext -Subscription $SubscriptionId
-    }
-    $StorageAccountResourceGroup = ($StorageAccountResourceId -Split '/')[4]
-    $StorageAccountName = ($StorageAccountResourceId -Split '/')[-1]
+# Resolve the local output folder or storage account details for the selected mode.
+If ($LocalPackageMode) {
+    $ResolvedOutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
 }
 Else {
-    $StorageAccountResourceGroup = $ResourceGroupName
+    If ($PSCmdlet.ParameterSetName -eq 'ByResourceId') {
+        $SubscriptionId = ($StorageAccountResourceId -Split '/')[2]
+        If ((Get-AzContext).Subscription.Id -ne $SubscriptionId) {
+            Write-Output "Switching to subscription '$SubscriptionId'."
+            Set-AzContext -Subscription $SubscriptionId
+        }
+        $StorageAccountResourceGroup = ($StorageAccountResourceId -Split '/')[4]
+        $StorageAccountName = ($StorageAccountResourceId -Split '/')[-1]
+    }
+    Else {
+        $StorageAccountResourceGroup = $ResourceGroupName
+    }
+    $BlobEndpoint = (Get-AzStorageAccount -ResourceGroupName $StorageAccountResourceGroup -StorageAccountName $StorageAccountName).PrimaryEndpoints.Blob
+    $ArtifactsContainerUrl = $BlobEndpoint + $ArtifactsContainerName + '/'
 }
-$BlobEndpoint = (Get-AzStorageAccount -ResourceGroupName $StorageAccountResourceGroup -StorageAccountName $StorageAccountName).PrimaryEndpoints.Blob
-$ArtifactsContainerUrl = $BlobEndpoint + $ArtifactsContainerName + '/'
 
-Write-Output "Storage account : $StorageAccountName"
-Write-Output "Resource group  : $StorageAccountResourceGroup"
-Write-Output "Container URL   : $ArtifactsContainerUrl"
+If ($LocalPackageMode) {
+    Write-Output "Package output  : $ResolvedOutputPath"
+}
+Else {
+    Write-Output "Storage account : $StorageAccountName"
+    Write-Output "Resource group  : $StorageAccountResourceGroup"
+    Write-Output "Container URL   : $ArtifactsContainerUrl"
+}
 Write-Output "Repo artifacts  : $RepoArtifactsDir"
 Write-Output "Customer assets : $CustomerArtifactsDir"
 Write-Output "Customer root   : $ResolvedCustomerRootPath"
@@ -1124,17 +1162,30 @@ if ($rootFiles) {
 #region Upload Blobs
 
 Write-Output ""
-Write-Output "=== Phase 3: Upload ==="
-
-if ($DeleteExistingBlobs) {
-    Write-Output "Deleting existing blobs in '$StorageAccountName/$ArtifactsContainerName'."
-    $ctx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
-    Get-AzStorageBlob -Container $ArtifactsContainerName -Context $ctx | Remove-AzStorageBlob -Force
+If ($LocalPackageMode) {
+    Write-Output "=== Phase 3: Export ==="
+    If ($PSCmdlet.ShouldProcess($ResolvedOutputPath, "Copy packaged artifacts to local folder")) {
+        If (-not (Test-Path -Path $ResolvedOutputPath)) {
+            New-Item -Path $ResolvedOutputPath -ItemType Directory -Force | Out-Null
+        }
+        $PackagedArtifacts = Get-ChildItem -Path $TempArtifactsDir -File
+        $PackagedArtifacts | Copy-Item -Destination $ResolvedOutputPath -Force
+        Write-Output "Export complete: $($PackagedArtifacts.Count) artifact file(s) written to '$ResolvedOutputPath'."
+    }
 }
+Else {
+    Write-Output "=== Phase 3: Upload ==="
 
-if ($PSCmdlet.ShouldProcess("storage account '$StorageAccountName'", "Uploading blobs to")) {
-    Add-ContentToBlobContainer -ResourceGroupName $StorageAccountResourceGroup -StorageAccountName $StorageAccountName -contentDirectories $TempArtifactsDir -TargetContainer $ArtifactsContainerName
-    Write-Output "Upload complete."
+    if ($DeleteExistingBlobs) {
+        Write-Output "Deleting existing blobs in '$StorageAccountName/$ArtifactsContainerName'."
+        $ctx = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
+        Get-AzStorageBlob -Container $ArtifactsContainerName -Context $ctx | Remove-AzStorageBlob -Force
+    }
+
+    if ($PSCmdlet.ShouldProcess("storage account '$StorageAccountName'", "Uploading blobs to")) {
+        Add-ContentToBlobContainer -ResourceGroupName $StorageAccountResourceGroup -StorageAccountName $StorageAccountName -contentDirectories $TempArtifactsDir -TargetContainer $ArtifactsContainerName
+        Write-Output "Upload complete."
+    }
 }
 
 Write-Output "Cleaning up temp artifacts directory in background..."
@@ -1149,5 +1200,10 @@ $elapsed = (Get-Date) - $ScriptStartTime
 Write-Output ""
 Write-Output "=== Complete ==="
 Write-Output "Elapsed time    : $([math]::Floor($elapsed.TotalMinutes))m $($elapsed.Seconds)s"
-Write-Output "Artifacts URL   : $ArtifactsContainerUrl"
+If ($LocalPackageMode) {
+    Write-Output "Artifacts path  : $ResolvedOutputPath"
+}
+Else {
+    Write-Output "Artifacts URL   : $ArtifactsContainerUrl"
+}
 Write-Verbose ("[{0} exited]" -f $MyInvocation.MyCommand)

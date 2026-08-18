@@ -469,21 +469,36 @@ transfer only the zip to the air-gapped side, and upload it directly.
 
 ##### Step 1 - Build the Zip on a Connected Machine
 
-1. Ensure `customer-examples/parameters/imageManagement/downloads.json` is used as (or merged
-   into) your connected-side `customer/parameters/imageManagement/downloads.json`. This file
-   contains the `WingetId` entries for all built-in UWP apps and codec extensions.
-
-2. Run `Update-ImageArtifacts.ps1` against any internet-accessible storage account:
+1. Copy the artifact folder and example downloads file into the connected-side customer folder:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<connectedStorageAccountResourceId>"
+   Copy-Item -Recurse -Path "customer-examples\artifacts\BuiltIn-UWP-Apps" `
+       -Destination "customer\artifacts\" -Force
+
+   Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
+       -Destination "customer\parameters\imageManagement\" -Force
+   ```
+
+   The artifact folder supplies `Install-BuiltinUwpApps.ps1`. The downloads file supplies the
+   `WingetId` and `WingetPreserveLayout` entries for the apps and codec extensions. If you already
+   maintain a customer downloads file, merge the preserve-layout entries into it instead of
+   replacing it.
+
+2. Run `Update-ImageArtifacts.ps1` in local package mode. This does not require an Azure login,
+   subscription, or storage account:
+
+   ```powershell
+   .\Update-ImageArtifacts.ps1 `
+       -PackageOnly `
+       -OutputPath "C:\AirGapTransfer"
    ```
 
    The script downloads all winget packages, deduplicates shared dependencies, packages the
-   `BuiltIn-UWP-Apps\` folder into `BuiltIn-UWP-Apps.zip`, and uploads it to that storage account.
+   `BuiltIn-UWP-Apps\` folder, and writes `C:\AirGapTransfer\BuiltIn-UWP-Apps.zip`.
 
-3. Download `BuiltIn-UWP-Apps.zip` from the `artifacts` blob container of that storage account
-   (Azure Portal → Storage browser → Blob containers → artifacts → `BuiltIn-UWP-Apps.zip`).
+   To use a connected Azure storage account instead, run the script with
+   `-StorageAccountResourceId "<connectedStorageAccountResourceId>"`, then download
+   `BuiltIn-UWP-Apps.zip` from its `artifacts` blob container.
 
 ##### Step 2 - Transfer to the Air-Gapped Network
 

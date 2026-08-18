@@ -6,9 +6,9 @@
 
 ## Overview
 
-`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from `customer/artifacts/` (overlaid on any repo-provided artifacts in `.common/artifacts/`), packages them as zip files, and uploads them to the image management artifacts storage account. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
+`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from `customer/artifacts/` (overlaid on any repo-provided artifacts in `.common/artifacts/`), packages them as zip files, and either uploads them to the image management artifacts storage account or writes them to a local folder. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
 
-> **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. Deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step.
+> **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. To upload artifacts, deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step. To create packages locally without an Azure subscription or storage account, use `-PackageOnly -OutputPath <folder>`.
 
 ## Notes
 
@@ -61,7 +61,7 @@ A minimal reference file with only the repo-required entries is also available a
 
 ## Parameters
 
-The storage account can be identified by **either** its full resource ID **or** its name and resource group — these are mutually exclusive parameter sets.
+Choose one of three parameter sets. The two upload modes identify a storage account by either its full resource ID or its name and resource group. The local package mode requires no Azure resources or login.
 
 ### Parameter Set 1: By Resource ID (default)
 
@@ -76,7 +76,18 @@ The storage account can be identified by **either** its full resource ID **or** 
 | **StorageAccountName** | String | **Yes** | Name of the artifacts storage account. |
 | **ResourceGroupName** | String | **Yes** | Resource group containing the storage account. |
 
-### Common Parameters (both sets)
+### Parameter Set 3: Local Package
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| **PackageOnly** | Switch | **Yes** | Package artifacts locally and skip all Azure context, storage account, and upload operations. |
+| **OutputPath** | String | **Yes** | Folder that receives the generated artifact files. Existing files with the same names are overwritten. |
+
+Local package mode uses the public downloads manifest because it runs on an internet-connected
+system without an Azure cloud context. The download, preserve-layout, dependency deduplication,
+and compression behavior is otherwise identical to the upload modes.
+
+### Common Parameters (all sets)
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -85,6 +96,23 @@ The storage account can be identified by **either** its full resource ID **or** 
 | **TempDir** | String | `$Env:Temp` | Temporary directory for packaging. Use a path on a high-performance drive for large artifact sets. |
 
 ## Usage Examples
+
+### Create Packages Locally Without Azure
+
+Download the latest sources and write the generated artifact files to a local transfer folder.
+No Azure PowerShell login, subscription, or storage account is required:
+
+```powershell
+cd C:\repos\FederalAVD\deployments
+
+.\Update-ImageArtifacts.ps1 `
+    -PackageOnly `
+    -OutputPath "C:\AirGapTransfer"
+```
+
+For preserve-layout UWP/MSIX entries, this runs the same package selection, architecture pruning,
+and shared dependency deduplication used by storage upload mode. For example, the
+`BuiltIn-UWP-Apps` artifact is written as `C:\AirGapTransfer\BuiltIn-UWP-Apps.zip`.
 
 ### Standard Update (by Resource ID)
 
