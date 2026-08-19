@@ -74,6 +74,7 @@ configuration only) or require manually staged files (such as patch files for
 | [Git-for-Windows](Git-for-Windows/) | Git for Windows | `GitForWindows` |
 | [Google-Chrome-Enterprise](Google-Chrome-Enterprise/) | Google Chrome Enterprise MSI | `GoogleChromeEnterprise` |
 | [LGPO](LGPO/) | Microsoft LGPO tool (Local Group Policy Object) | `LGPO` |
+| [Microsoft-AVD-Multimedia-Redirection](Microsoft-AVD-Multimedia-Redirection/) | AVD multimedia redirection service and browser extensions (Azure Commercial only) | `AVDMultimediaRedirection` |
 | [Microsoft-AzCLI](Microsoft-AzCLI/) | Azure CLI | `AzCli` |
 | [Microsoft-Edge-Enterprise](Microsoft-Edge-Enterprise/) | Microsoft Edge Enterprise MSI | `MicrosoftEdgeEnterprise` |
 | [Microsoft-FSLogix](Microsoft-FSLogix/) | FSLogix Apps | `FSLogix` |
