@@ -255,6 +255,14 @@
             "BuiltIn-UWP-Apps\\AV1VideoExtension"
         ]
     },
+    "AVDMultimediaRedirection": {
+        "Description": "Microsoft AVD Multimedia Redirection Service x64 MSI. Azure Commercial only. The install script also downloads this at image build time if not pre-staged.",
+        "DownloadUrl": "https://aka.ms/avdmmr/msi",
+        "DestinationFileName": "MsMMRHostInstaller_x64.msi",
+        "DestinationFolders": [
+            "Microsoft-AVD-Multimedia-Redirection"
+        ]
+    },
     "VCRedistributableX64": {
         "Description": "Microsoft Visual C++ Redistributable (latest) x64 installer. Install-MicrosoftVCRedistributable.ps1 also downloads this at image build time if not pre-staged (connected builds only).",
         "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
