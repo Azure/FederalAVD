@@ -98,7 +98,7 @@ Else {
     $Content += '  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise">'
 }
 
-If ($AppsToInstall -contains 'Access' -or $AppsToInstall -contains 'Excel' -or $AppsToInstall -contains 'OneNote' -or $AppsToInstall -contains 'Outlook' -or $AppsToInstall -contains 'PowerPoint' -or $AppsToInstall -contains 'Publisher' -or $AppsToInstall -contains 'Word') {
+If ($AppsToInstall -contains 'Access' -or $AppsToInstall -contains 'Excel' -or $AppsToInstall -contains 'OneNote' -or $AppsToInstall -contains 'Outlook' -or $AppsToInstall -contains 'PowerPoint' -or $AppsToInstall -contains 'Publisher' -or $AppsToInstall -contains 'SkypeForBusiness' -or $AppsToInstall -contains 'Word') {
     $Content += '    <Product ID="O365ProPlusRetail">'
     $Content += '      <Language ID="en-us" />'
     $Content += $ExcludedApps
