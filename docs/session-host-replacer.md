@@ -128,25 +128,11 @@ The information below documents the previous integration approach and is retaine
 3. **Application Insights** - Monitors function app performance and execution
 4. **App Service Plan** - Shared hosting plan in the management resource group
 
-### Module Structure (Legacy)
+### Module Structure
 
-```text
-deployments/hostpools/
-├── hostpool.bicep (main deployment - updated)
-├── modules/
-│   ├── sessionHostReplacer/
-│   │   └── sessionHostReplacer.bicep (function app deployment)
-│   ├── common/
-│   │   └── functionApp/
-│   │       ├── functionApp.bicep (reusable function app infrastructure)
-│   │       └── function.bicep (function deployment)
-│   └── management/
-│       └── management.bicep (shared app service plan)
-.common/scripts/session-host-replacer/
-├── profile.ps1 (all replacement functions)
-├── run.ps1 (timer trigger entry point)
-└── requirements.psd1 (PowerShell module dependencies)
-```
+The Session Host Replacer owns its deployment templates, permission utility, function entry point,
+and PowerShell modules under `deployments/add-ons/sessionHostReplacer/`. Its scripts are not shared
+deployment scripts and therefore remain with the add-on.
 
 ## Deployment
 

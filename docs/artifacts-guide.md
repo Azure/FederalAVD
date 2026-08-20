@@ -21,7 +21,7 @@ The artifacts system in this AVD solution provides a flexible, Zero Trust-compli
 | --- | --- |
 | **Artifact** | A folder containing a PowerShell script and supporting files (installers, configuration files, etc.) |
 | **Artifact Package** | The zipped version of an artifact folder, uploaded to Azure Blob Storage |
-| **Invoke-Customization.ps1** | The orchestration script (`.common/scripts/Invoke-Customization.ps1`) that downloads and executes a single artifact |
+| **Invoke-Customization.ps1** | The orchestration script (`deployments/shared/scripts/Invoke-Customization.ps1`) that downloads and executes a single artifact |
 | **Customization** | A reference to an artifact package with optional arguments, defined in deployment parameters |
 | **Run Command** | Azure VM Run Command that executes `Invoke-Customization.ps1` for each artifact |
 
@@ -166,7 +166,7 @@ Repo-provided artifacts live at `.common/artifacts/` (currently empty, reserved 
 
 > **Ready-to-use examples:** `customer-examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer-examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
 
-**Note:** The orchestration script `Invoke-Customization.ps1` is at `.common/scripts/Invoke-Customization.ps1`, not in the artifacts directory. It is embedded into ARM/Bicep deployments using `loadTextContent()`.
+**Note:** The orchestration script `Invoke-Customization.ps1` is at `deployments/shared/scripts/Invoke-Customization.ps1`, not in the artifacts directory. It is embedded into ARM/Bicep deployments using `loadTextContent()`.
 
 ### Getting Software Into Artifact Folders
 
@@ -554,11 +554,11 @@ foreach ($Installer in $Installers) {
 
 ### Overview
 
-The `Invoke-Customization.ps1` script (`.common/scripts/Invoke-Customization.ps1`) is the core orchestration script used by both image builds and session host deployments. It handles **one** customization at a time.
+The `Invoke-Customization.ps1` script (`deployments/shared/scripts/Invoke-Customization.ps1`) is the core orchestration script used by both image builds and session host deployments. It handles **one** customization at a time.
 
 **Key Points:**
 
-- **Location:** `.common/scripts/Invoke-Customization.ps1`
+- **Location:** `deployments/shared/scripts/Invoke-Customization.ps1`
 - **Usage:** Embedded into Bicep/ARM via `loadTextContent()` function
 - **Execution:** One instance per customization via VM Run Commands
 - **Looping:** Handled by Bicep/ARM deployment, NOT by the script
@@ -749,7 +749,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' =
       { name: 'BuildDir', value: buildDir }
     ]
     source: {
-      script: loadTextContent('../../../../.common/scripts/Invoke-Customization.ps1')
+      script: loadTextContent('../../../shared/scripts/Invoke-Customization.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -775,7 +775,7 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
       { name: 'Arguments', value: customizer.arguments }
     ]
     source: {
-      script: loadTextContent('../../../../../.common/scripts/Invoke-Customization.ps1')
+      script: loadTextContent('../../../../shared/scripts/Invoke-Customization.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

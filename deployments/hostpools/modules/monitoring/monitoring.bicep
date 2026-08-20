@@ -11,7 +11,7 @@ param resourceGroupMonitoring string
 param tags object
 
 // ─── Log Analytics Workspace ───────────────────────────────────────────────────
-module logAnalyticsWorkspace '../../../../.common/bicepModules/operationalInsights/workspaces/deploy.bicep' = {
+module logAnalyticsWorkspace '../../../shared/modules/operationalInsights/workspaces/deploy.bicep' = {
   name: 'LogAnalytics-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
@@ -24,7 +24,7 @@ module logAnalyticsWorkspace '../../../../.common/bicepModules/operationalInsigh
 }
 
 // ─── Data Collection Endpoint ──────────────────────────────────────────────────
-module dataCollectionEndpoint '../../../../.common/bicepModules/insights/dataCollectionEndpoints/deploy.bicep' = {
+module dataCollectionEndpoint '../../../shared/modules/insights/dataCollectionEndpoints/deploy.bicep' = {
   name: 'DataCollectionEndpoint-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
@@ -36,7 +36,7 @@ module dataCollectionEndpoint '../../../../.common/bicepModules/insights/dataCol
 }
 
 // ─── AVD Insights Data Collection Rule ────────────────────────────────────────
-module avdInsightsDataCollectionRule '../../../sharedModules/monitoring/avdInsightsDataCollectionRule.bicep' = {
+module avdInsightsDataCollectionRule '../../../shared/modules/monitoring/avdInsightsDataCollectionRule.bicep' = {
   name: 'AVDInsights-DataCollectionRule-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
@@ -48,7 +48,7 @@ module avdInsightsDataCollectionRule '../../../sharedModules/monitoring/avdInsig
 }
 
 // ─── Azure Monitor Private Link Scope ─────────────────────────────────────────
-module updatePrivateLinkScope '../../../sharedModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../../../shared/modules/privateLinkScope/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
   name: 'PrivateLinkScope-${deploymentSuffix}'
   params: {
     deploymentSuffix: deploymentSuffix

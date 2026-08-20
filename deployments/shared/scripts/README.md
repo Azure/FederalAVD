@@ -1,6 +1,9 @@
-﻿# Common PowerShell Scripts
+﻿# Shared Deployment PowerShell Scripts
 
-This directory contains reusable PowerShell scripts used by both the image management and host pool deployment solutions. These scripts are loaded dynamically into Bicep templates using `loadTextContent()` and executed via Azure Run Command or Custom Script Extension.
+This directory contains PowerShell implementation scripts embedded by deployment and policy Bicep
+templates with `loadTextContent()`. They execute through Azure VM Run Command or from inside an
+embedded runner. Interactive operator utilities belong under `tools/`; add-on-specific scripts
+belong with their add-on.
 
 ## Script Categories
 
@@ -344,13 +347,6 @@ Removes built-in Windows AppX packages during image build.
   - Supports multi-cloud environments
 - **Purpose:** Clean up deployment artifacts and sensitive command data
 
-#### [Remove-CustomScriptExtension.ps1](Remove-CustomScriptExtension.ps1)
-
-Removes Custom Script Extension from VMs.
-
-- **Used by:** Image Management
-- **Purpose:** Clean up CSE artifacts before image capture
-
 #### [Remove-ImageBuildResources.ps1](Remove-ImageBuildResources.ps1)
 
 Deletes temporary image build resources after successful image capture.
@@ -408,28 +404,6 @@ Updates the friendly name of the AVD session desktop in an application group.
 - **Parameters:** ApplicationGroupResourceId, FriendlyName, ResourceManagerUri, UserAssignedIdentityClientId
 - **Purpose:** Customize desktop display name for better user experience
 
-#### [Update-ImageCaptureSource.ps1](Update-ImageCaptureSource.ps1)
-
-Updates image capture source references.
-
-- **Used by:** Image Management
-- **Purpose:** Maintain image versioning and source tracking
-
-#### [Set-AvdDrainMode.ps1](Set-AvdDrainMode.ps1)
-
-Sets or removes drain mode on AVD session hosts.
-
-- **Used by:** Host Pool Deployment
-- **Purpose:** Gracefully prepare session hosts for maintenance or removal
-- **Features:** Prevents new sessions while allowing existing sessions to complete
-
-#### [Get-RoleAssignments.ps1](Get-RoleAssignments.ps1)
-
-Retrieves Azure RBAC role assignments for auditing.
-
-- **Used by:** Host Pool Deployment
-- **Purpose:** Audit and document role assignments created during deployment
-
 ## Usage Patterns
 
 ### Script Execution Methods
@@ -439,12 +413,7 @@ Retrieves Azure RBAC role assignments for auditing.
    - Supports managed identity authentication
    - Automatic cleanup with `Remove-RunCommands.ps1`
 
-2. **Custom Script Extension**
-   - Scripts downloaded and executed via CSE
-   - Used for initial VM configuration
-   - Removed before image capture with `Remove-CustomScriptExtension.ps1`
-
-3. **Direct Execution**
+2. **Direct Execution**
    - Some scripts run locally within VMs during customization
 
 ### Common Parameter Patterns

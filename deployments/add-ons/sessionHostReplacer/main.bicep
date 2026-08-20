@@ -642,7 +642,7 @@ var sessionHostParameters = union(
 )
 
 // Conditional Template Spec for Session Host Deployment
-module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
+module templateSpec '../../shared/modules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   name: 'SessionHostTemplateSpec-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
@@ -658,7 +658,7 @@ module templateSpec '../../../.common/bicepModules/resources/templateSpecs/deplo
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../sharedModules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
+module hostingPlan '../../shared/modules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
   name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(aspResourceGroupName)
   params: {
@@ -708,7 +708,7 @@ var roleAssignmentsResourceGroups = union(
     : []
 )
 
-module roleAssignmentsKeyVault '../../../.common/bicepModules/keyVault/vaults/roleAssignment.bicep' = {
+module roleAssignmentsKeyVault '../../shared/modules/keyVault/vaults/roleAssignment.bicep' = {
   name: 'RoleAssign-KeyVault-KVCont-${deploymentSuffix}'
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
@@ -723,7 +723,7 @@ module roleAssignmentsKeyVault '../../../.common/bicepModules/keyVault/vaults/ro
   }
 }
 
-module roleAssignmentVirtualMachinesSubscription '../../../.common/bicepModules/authorization/roleAssignments/subscription/deploy.bicep' = {
+module roleAssignmentVirtualMachinesSubscription '../../shared/modules/authorization/roleAssignments/subscription/deploy.bicep' = {
   name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
@@ -733,7 +733,7 @@ module roleAssignmentVirtualMachinesSubscription '../../../.common/bicepModules/
   }
 }
 
-module roleAssignmentHostPoolSubscription '../../../.common/bicepModules/authorization/roleAssignments/subscription/deploy.bicep' = {
+module roleAssignmentHostPoolSubscription '../../shared/modules/authorization/roleAssignments/subscription/deploy.bicep' = {
   name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
   scope: subscription(hostPoolSubscriptionId)
   params: {
@@ -743,7 +743,7 @@ module roleAssignmentHostPoolSubscription '../../../.common/bicepModules/authori
   }
 }
 
-module roleAssignmentsRGs '../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+module roleAssignmentsRGs '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
     name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
@@ -755,7 +755,7 @@ module roleAssignmentsRGs '../../../.common/bicepModules/authorization/roleAssig
   }
 ]
 
-module roleAssignmentTemplateSpec '../../../.common/bicepModules/resources/templateSpecs/roleAssignment.bicep' = {
+module roleAssignmentTemplateSpec '../../shared/modules/resources/templateSpecs/roleAssignment.bicep' = {
   name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
   scope: resourceGroup(templateSpecSubscriptionId, templateSpecResourceGroupName)
   params: {
@@ -772,7 +772,7 @@ module roleAssignmentTemplateSpec '../../../.common/bicepModules/resources/templ
   }
 }
 
-module roleAssignmentComputeGallery '../../../.common/bicepModules/compute/galleries/roleAssignment.bicep' = if (contains(imageReference, 'id')) {
+module roleAssignmentComputeGallery '../../shared/modules/compute/galleries/roleAssignment.bicep' = if (contains(imageReference, 'id')) {
   name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
@@ -787,7 +787,7 @@ module roleAssignmentComputeGallery '../../../.common/bicepModules/compute/galle
   }
 }
 
-module roleAssignmentUaiArtifacts '../../../.common/bicepModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+module roleAssignmentUaiArtifacts '../../shared/modules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   name: 'RoleAssign-UAI-Artifacts-MngdIdOperator-${deploymentSuffix}'
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
@@ -807,7 +807,7 @@ module roleAssignmentUaiArtifacts '../../../.common/bicepModules/managedIdentity
   }
 }
 
-module functionApp '../../sharedModules/functionApp/functionApp.bicep' = {
+module functionApp '../../shared/modules/functionApp/functionApp.bicep' = {
   name: 'SessionHostReplacerFunctionApp-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
@@ -1024,7 +1024,7 @@ module functionApp '../../sharedModules/functionApp/functionApp.bicep' = {
   }
 }
 
-module functionCode '../../sharedModules/functionApp/function.bicep' = {
+module functionCode '../../shared/modules/functionApp/function.bicep' = {
   name: 'SessionHostReplacerFunction-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {

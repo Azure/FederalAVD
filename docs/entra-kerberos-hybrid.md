@@ -44,6 +44,11 @@ The User Assigned Managed Identity requires the following **Application** permis
 
 You can use the following PowerShell script to create the User Assigned Managed Identity and assign the required Graph permissions.
 
+After assignment, run `tools/Test-EntraKerberosManagedIdentityPermissions.ps1 -ManagedIdentityName <name>`
+to verify the two required application permissions. This verification tool is separate from
+`deployments/add-ons/sessionHostReplacer/Set-GraphPermissions.ps1`, which grants different device
+cleanup permissions to the Session Host Replacer identity.
+
 > [!IMPORTANT]
 > To run this script successfully, you need permissions in two scopes:
 >

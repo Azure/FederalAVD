@@ -127,7 +127,7 @@ resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-
   name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
 }
 
-module availabilitySets '../../../../../.common/bicepModules/compute/availabilitySets/deploy.bicep' = [for i in range(0, availabilitySetsCount): if (availability == 'AvailabilitySets') {
+module availabilitySets '../../../../shared/modules/compute/availabilitySets/deploy.bicep' = [for i in range(0, availabilitySetsCount): if (availability == 'AvailabilitySets') {
   name: 'AvailabilitySet-${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
   params: {
     name: replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))

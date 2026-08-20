@@ -35,8 +35,8 @@ var apiVersion = startsWith(cloud, 'usn') ? '2017-08-01' : '2018-02-01'
 var envSuffix = substring(environment().suffixes.storage, 5, length(environment().suffixes.storage) - 5)
 
 var buildDir = 'c:\\BuildDir'
-var restartVmScript = loadTextContent('../../../.common/scripts/Restart-Vm.ps1')
-var customizationScript = loadTextContent('../../../.common/scripts/Invoke-Customization.ps1')
+var restartVmScript = loadTextContent('../../shared/scripts/Restart-Vm.ps1')
+var customizationScript = loadTextContent('../../shared/scripts/Invoke-Customization.ps1')
 
 var customizers = [
   for customization in customizations: {
@@ -221,7 +221,7 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Remove-AppXPackages.ps1')
+      script: loadTextContent('../../shared/scripts/Remove-AppXPackages.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -257,7 +257,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
       }
     ])
     source: {
-      script: loadTextContent('../../../.common/scripts/Install-FSLogix.ps1')
+      script: loadTextContent('../../shared/scripts/Install-FSLogix.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -303,7 +303,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
       }
     ])
     source: {
-      script: loadTextContent('../../../.common/scripts/Install-M365Applications.ps1')
+      script: loadTextContent('../../shared/scripts/Install-M365Applications.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -341,7 +341,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
       }
     ])
     source: {
-      script: loadTextContent('../../../.common/scripts/Install-OneDrive.ps1')
+      script: loadTextContent('../../shared/scripts/Install-OneDrive.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -386,7 +386,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
       }
     ])
     source: {
-      script: loadTextContent('../../../.common/scripts/Install-Teams.ps1')
+      script: loadTextContent('../../shared/scripts/Install-Teams.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -428,7 +428,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Remove-RunCommands.ps1')
+      script: loadTextContent('../../shared/scripts/Remove-RunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -548,7 +548,7 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
           }
         ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-WindowsUpdate.ps1')
+      script: loadTextContent('../../shared/scripts/Invoke-WindowsUpdate.ps1')
     }
     timeoutInSeconds: 3600
     treatFailureAsDeploymentFailure: false
@@ -683,7 +683,7 @@ resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Optimize-AVDImage.ps1')
+      script: loadTextContent('../../shared/scripts/Optimize-AVDImage.ps1')
     }
     timeoutInSeconds: 1800
     treatFailureAsDeploymentFailure: true
@@ -718,7 +718,7 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-DiskCleanup.ps1')
+      script: loadTextContent('../../shared/scripts/Invoke-DiskCleanup.ps1')
     }
     treatFailureAsDeploymentFailure: false
   }
@@ -750,7 +750,7 @@ resource imageManifest 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01
       ? null
       : '${logBlobContainerUri}${imageVmName}-Image-Manifest-${deploymentSuffix}.log'
     source: {
-      script: loadTextContent('../../../.common/scripts/Get-ImageManifest.ps1')
+      script: loadTextContent('../../shared/scripts/Get-ImageManifest.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

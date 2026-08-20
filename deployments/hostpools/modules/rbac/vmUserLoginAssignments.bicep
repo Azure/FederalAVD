@@ -4,7 +4,7 @@ param resourceGroupHosts string
 param appGroupSecurityGroups array
 param deploymentSuffix string
 
-module roleAssignment '../../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+module roleAssignment '../../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(appGroupSecurityGroups)): {
     name: 'RA-Hosts-VMLoginUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupHosts)

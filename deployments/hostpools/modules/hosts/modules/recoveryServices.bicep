@@ -1,4 +1,4 @@
-﻿targetScope = 'subscription'
+targetScope = 'subscription'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Recovery Services — per-hostpool VM-backup vault in the Hosts resource group.
@@ -147,7 +147,7 @@ var rotationPolicy = {
 //     Single vault deployment with no CMK configuration.
 
 // ── Path A, Stage A-0: create the CMK key in Key Vault ────────────────────────
-module recoveryServicesEncryptionKey '../../../../../.common/bicepModules/keyVault/vaults/keys/deploy.bicep' = if (useVaultCmk) {
+module recoveryServicesEncryptionKey '../../../../shared/modules/keyVault/vaults/keys/deploy.bicep' = if (useVaultCmk) {
   name: 'RSV-CMK-Key-${deploymentSuffix}'
   scope: resourceGroup(encryptionKeyVaultSubscriptionId, encryptionKeyVaultResourceGroup)
   params: {
@@ -163,7 +163,7 @@ module recoveryServicesEncryptionKey '../../../../../.common/bicepModules/keyVau
 }
 
 // ── Path A, Stage A-1: establish SAI identity, no CMK yet ─────────────────────
-module recoveryServicesVaultInit '../../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault && useVaultCmk) {
+module recoveryServicesVaultInit '../../../../shared/modules/recoveryServices/vaults/deploy.bicep' = if (createVault && useVaultCmk) {
   name: 'RecoveryServicesVault-Init-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
@@ -181,7 +181,7 @@ module recoveryServicesVaultInit '../../../../../.common/bicepModules/recoverySe
 }
 
 // ── Path A, Stage A-2: grant vault SAI access to the encryption key ───────────
-module recoveryServicesVaultSaiKvRoleAssignment '../../../../../.common/bicepModules/keyVault/vaults/keys/roleAssignment.bicep' = if (createVault && useVaultCmk) {
+module recoveryServicesVaultSaiKvRoleAssignment '../../../../shared/modules/keyVault/vaults/keys/roleAssignment.bicep' = if (createVault && useVaultCmk) {
   name: 'RSV-SAI-KvKeyRA-${deploymentSuffix}'
   scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
   params: {
@@ -200,7 +200,7 @@ module recoveryServicesVaultSaiKvRoleAssignment '../../../../../.common/bicepMod
 }
 
 // ── Path A, Stage A-3: enable CMK now that SAI has key access ─────────────────
-module recoveryServicesVaultCmk '../../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault && useVaultCmk) {
+module recoveryServicesVaultCmk '../../../../shared/modules/recoveryServices/vaults/deploy.bicep' = if (createVault && useVaultCmk) {
   name: 'RecoveryServicesVault-CMK-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
@@ -219,7 +219,7 @@ module recoveryServicesVaultCmk '../../../../../.common/bicepModules/recoverySer
 }
 
 // ── Path B: platform-managed keys only ───────────────────────────────────────
-module recoveryServicesVault '../../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault && !useVaultCmk) {
+module recoveryServicesVault '../../../../shared/modules/recoveryServices/vaults/deploy.bicep' = if (createVault && !useVaultCmk) {
   name: 'RecoveryServicesVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
@@ -237,7 +237,7 @@ module recoveryServicesVault '../../../../../.common/bicepModules/recoveryServic
 }
 
 // ─── VM Backup Policy ────────────────────────────────────────────────────────
-module vmBackupPolicy '../../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = {
+module vmBackupPolicy '../../../../shared/modules/recoveryServices/vaults/backupPolicies/deploy.bicep' = {
   name: 'RSV-BackupPolicy-VirtualMachines-${deploymentSuffix}'
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
@@ -273,7 +273,7 @@ module vmBackupPolicy '../../../../../.common/bicepModules/recoveryServices/vaul
 
 // ─── Vault Private Endpoint ───────────────────────────────────────────────────
 // Only created alongside a new vault (Complete). Existing vaults already have their PE.
-module vaultPrivateEndpoint '../../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
+module vaultPrivateEndpoint '../../../../shared/modules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
   name: 'PE-RecoveryServicesVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {

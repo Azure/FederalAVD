@@ -56,12 +56,12 @@ The correct deployment sequence is now:
 
 ### PowerShell Scripts
 
-- **`.common/scripts/Update-StorageAccountApplicationManifest.ps1`**
+- **`deployments/shared/scripts/Update-StorageAccountApplicationManifest.ps1`**
   - Extracted manifest update logic from original script
   - Updates tags and identifier URIs only
   - Logs to: `C:\Windows\Logs\Update-StorageAccountApplicationManifest-{timestamp}.log`
 
-- **`.common/scripts/Grant-StorageAccountApplicationConsent.ps1`**
+- **`deployments/shared/scripts/Grant-StorageAccountApplicationConsent.ps1`**
   - Extracted admin consent logic from original script
   - Grants oauth2PermissionGrants only
   - Logs to: `C:\Windows\Logs\Grant-StorageAccountApplicationConsent-{timestamp}.log`

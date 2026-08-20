@@ -10,14 +10,14 @@ param roleAssignmentIds array
 param virtualMachineNames array
 
 // Remove run commands left on session host VMs from earlier deployment stages
-module removeRunCommands '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module removeRunCommands '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Remove-RunCommands-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Remove-RunCommands-${deploymentSuffix}'
     location: location
-    script: loadTextContent('../../../../.common/scripts/Remove-RunCommands.ps1')
+    script: loadTextContent('../../../shared/scripts/Remove-RunCommands.ps1')
     asyncExecution: true
     parameters: [
       { name: 'ResourceManagerUri', value: environment().resourceManager }
@@ -30,14 +30,14 @@ module removeRunCommands '../../../../.common/bicepModules/compute/virtualMachin
 }
 
 // Remove role assignments on other resource groups so the deployment resource group can be deleted
-module removeRoleAssignments '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module removeRoleAssignments '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Remove-RoleAssignments-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Remove-RoleAssignments-${deploymentSuffix}'
     location: location
-    script: loadTextContent('../../../../.common/scripts/Remove-RoleAssignments.ps1')
+    script: loadTextContent('../../../shared/scripts/Remove-RoleAssignments.ps1')
     asyncExecution: true
     parameters: [
       { name: 'ResourceManagerUri', value: environment().resourceManager }
@@ -49,14 +49,14 @@ module removeRoleAssignments '../../../../.common/bicepModules/compute/virtualMa
 }
 
 // Self-delete the deployment resource group (VM deletes itself and the RG via script)
-module removeDeploymentResourceGroup '../../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module removeDeploymentResourceGroup '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
     location: location
-    script: loadTextContent('../../../../.common/scripts/Remove-ResourceGroup.ps1')
+    script: loadTextContent('../../../shared/scripts/Remove-ResourceGroup.ps1')
     asyncExecution: true
     parameters: [
       {

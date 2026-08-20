@@ -292,7 +292,7 @@ var encryptionKeyVaultName = take(kvSanitize(buildCustomName(filter(cnv_componen
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
-module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = {
+module operationsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = {
   name: 'Operations-ResourceGroup-${deploymentSuffix}'
   scope: subscription()
   params: {
@@ -304,7 +304,7 @@ module operationsResourceGroup '../../.common/bicepModules/resources/resourceGro
 
 // ── Log Analytics Workspace ─────────────────────────────────────────────────────
 
-module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring) {
+module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring) {
   name: 'Monitoring-ResourceGroup-${deploymentSuffix}'
   scope: subscription(effectiveLogAnalyticsWorkspaceSubscription)
   params: {
@@ -314,7 +314,7 @@ module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
-module logAnalyticsWorkspace '../../.common/bicepModules/operationalInsights/workspaces/deploy.bicep' = if (deployMonitoring) {
+module logAnalyticsWorkspace '../shared/modules/operationalInsights/workspaces/deploy.bicep' = if (deployMonitoring) {
   name: 'Monitoring-LogAnalytics-${deploymentSuffix}'
   scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
   params: {
@@ -330,7 +330,7 @@ module logAnalyticsWorkspace '../../.common/bicepModules/operationalInsights/wor
 // DCE + DCR are generic per region/workspace (not tied to any host pool) - creating them once here
 // lets every host pool that reuses this workspace share the same DCE/DCR via "existingAVDInsightsDataCollectionRuleResourceId"
 // and "existingDataCollectionEndpointResourceId", instead of the first host pool deployment creating them.
-module dataCollectionEndpoint '../../.common/bicepModules/insights/dataCollectionEndpoints/deploy.bicep' = if (deployMonitoring) {
+module dataCollectionEndpoint '../shared/modules/insights/dataCollectionEndpoints/deploy.bicep' = if (deployMonitoring) {
   name: 'Monitoring-DataCollectionEndpoint-${deploymentSuffix}'
   scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
   params: {
@@ -342,7 +342,7 @@ module dataCollectionEndpoint '../../.common/bicepModules/insights/dataCollectio
   dependsOn: [monitoringResourceGroup]
 }
 
-module avdInsightsDataCollectionRule '../sharedModules/monitoring/avdInsightsDataCollectionRule.bicep' = if (deployMonitoring) {
+module avdInsightsDataCollectionRule '../shared/modules/monitoring/avdInsightsDataCollectionRule.bicep' = if (deployMonitoring) {
   name: 'Monitoring-AVDInsightsDCR-${deploymentSuffix}'
   scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
   params: {
@@ -353,7 +353,7 @@ module avdInsightsDataCollectionRule '../sharedModules/monitoring/avdInsightsDat
   }
 }
 
-module updatePrivateLinkScope '../sharedModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (deployMonitoring && !empty(azureMonitorPrivateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../shared/modules/privateLinkScope/get-PrivateLinkScope.bicep' = if (deployMonitoring && !empty(azureMonitorPrivateLinkScopeResourceId)) {
   name: 'Monitoring-PrivateLinkScope-${deploymentSuffix}'
   params: {
     deploymentSuffix: deploymentSuffix
@@ -373,7 +373,7 @@ var effectiveLogAnalyticsWorkspaceResourceId = deployMonitoring
 
 // ── Key Vaults ─────────────────────────────────────────────────────────────────
 
-module keyVaults '../sharedModules/keyVaults/keyVaults.bicep' = {
+module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = {
   name: 'Operations-KeyVaults-${deploymentSuffix}'
   scope: subscription()
   params: {

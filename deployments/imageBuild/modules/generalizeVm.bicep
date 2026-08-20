@@ -36,7 +36,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-Sysprep.ps1')
+      script: loadTextContent('../../shared/scripts/Invoke-Sysprep.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -63,7 +63,7 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Generalize-Vm.ps1')
+      script: loadTextContent('../../shared/scripts/Generalize-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

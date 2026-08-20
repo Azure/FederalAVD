@@ -499,7 +499,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
             { name: 'RegistrationToken', value: last(hostPool.listRegistrationTokens().value).token }
           ]
       source: {
-        script: loadTextContent('../../../../../.common/scripts/Initialize-SessionHost.ps1')
+        script: loadTextContent('../../../../shared/scripts/Initialize-SessionHost.ps1')
       }
       treatFailureAsDeploymentFailure: true
       timeoutInSeconds: 900

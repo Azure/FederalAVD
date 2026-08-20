@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "15629065168470465676"
+      "version": "0.46.1.21595",
+      "templateHash": "10052846206641231821"
     }
   },
   "parameters": {
@@ -440,8 +440,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "10617145389218849904"
+              "version": "0.46.1.21595",
+              "templateHash": "8009687079202357254"
             }
           },
           "parameters": {
@@ -546,7 +546,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'ResourceGroupName')]",
               "properties": {
                 "value": "[format('\"{0}\"', parameters('storageResourceGroupName'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "Name of the resource group containing the FSLogix storage accounts."
               },
               "dependsOn": [
@@ -559,7 +559,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'SubscriptionId')]",
               "properties": {
                 "value": "[format('\"{0}\"', parameters('storageSubscriptionId'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "Subscription ID containing the FSLogix storage resource group."
               },
               "dependsOn": [
@@ -572,7 +572,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'ResourceManagerUri')]",
               "properties": {
                 "value": "[format('\"{0}\"', parameters('resourceManagerUri'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "Azure Resource Manager endpoint URI for this cloud."
               },
               "dependsOn": [
@@ -707,8 +707,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3585155273898172375"
+              "version": "0.46.1.21595",
+              "templateHash": "4327984477459593833"
             }
           },
           "parameters": {

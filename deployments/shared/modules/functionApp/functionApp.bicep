@@ -583,7 +583,7 @@ var storageAccountRoleDefinitions = union(
   storageAccountRoleDefinitionIds
 )
 
-module roleAssignment_storageAccount '../../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = {
+module roleAssignment_storageAccount '../storage/storageAccounts/roleAssignment.bicep' = {
   name: 'set-role-assignments-storage-${deploymentSuffix}'
   params: {
     storageAccountName: storageAccount.name

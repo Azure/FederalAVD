@@ -1025,7 +1025,7 @@ var vmConfigurationTags = union(
 )
 
 // Resource Groups
-module deploymentResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
+module deploymentResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
   name: 'Resource-Group-Deployment-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1036,7 +1036,7 @@ module deploymentResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
-module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
+module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
   name: 'Resource-Group-Monitoring-${deploymentSuffix}'
   scope: subscription(effectiveMonitoringSubscription)
   params: {
@@ -1046,7 +1046,7 @@ module monitoringResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
-module controlPlaneResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (empty(existingFeedWorkspaceResourceId)) {
+module controlPlaneResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (empty(existingFeedWorkspaceResourceId)) {
   name: 'Resource-Group-Control-Plane-${deploymentSuffix}'
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
@@ -1056,7 +1056,7 @@ module controlPlaneResourceGroup '../../.common/bicepModules/resources/resourceG
   }
 }
 
-module globalFeedResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
+module globalFeedResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
   name: 'Resource-Group-Global-Feed-${deploymentSuffix}'
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
@@ -1066,7 +1066,7 @@ module globalFeedResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
-module hostsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = {
+module hostsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1077,7 +1077,7 @@ module hostsResourceGroup '../../.common/bicepModules/resources/resourceGroups/d
   }
 }
 
-module operationsResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || deployRecoveryServicesAzureFiles) {
+module operationsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || deployRecoveryServicesAzureFiles) {
   name: 'Resource-Group-Operations-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1086,7 +1086,7 @@ module operationsResourceGroup '../../.common/bicepModules/resources/resourceGro
   }
 }
 
-module storageResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
+module storageResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   name: 'Resource-Group-FSLogix-Storage-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1187,7 +1187,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
 // KeyVaults: Inline Key Vault creation — only runs when Security KVs were not provided.
 // For all-in-one portal deployments: deploys encryption KV when CMK is requested, secrets KV when deploySecretsKeyVault=true.
 // For Security-first deployments: skipped entirely because encryptionKeyVaultResourceId will be non-empty.
-module keyVaults '../sharedModules/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
+module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
   name: 'KeyVaults-${deploymentSuffix}'
   params: {
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId

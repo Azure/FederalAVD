@@ -1,4 +1,4 @@
-﻿targetScope = 'subscription'
+targetScope = 'subscription'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Recovery Services — shared Azure Files snapshot-backup vault.
@@ -88,7 +88,7 @@ var effectiveVaultName = createVault ? vaultName : last(split(existingRecoverySe
 // ─── Recovery Services Vault ──────────────────────────────────────────────────
 // Note: storageType is irrelevant for Azure Files snapshot backup — snapshots stay
 // in the storage account. LocallyRedundant is used to minimise cost and complexity.
-module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
+module recoveryServicesVault '../../../shared/modules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
   name: 'RecoveryServicesVault-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {
@@ -105,7 +105,7 @@ module recoveryServicesVault '../../../../.common/bicepModules/recoveryServices/
 }
 
 // ─── Azure Files Snapshot Backup Policy ──────────────────────────────────────
-module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = {
+module fileShareBackupPolicy '../../../shared/modules/recoveryServices/vaults/backupPolicies/deploy.bicep' = {
   name: 'RSV-BackupPolicy-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
@@ -138,7 +138,7 @@ module fileShareBackupPolicy '../../../../.common/bicepModules/recoveryServices/
 
 // ─── Vault Private Endpoint ───────────────────────────────────────────────────
 // Only created alongside a new vault (Complete). Existing vaults already have their PE.
-module vaultPrivateEndpoint '../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
+module vaultPrivateEndpoint '../../../shared/modules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
   name: 'PE-RecoveryServicesVault-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {

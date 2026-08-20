@@ -140,7 +140,7 @@ module runCommands 'modules/runCommands.bicep' = [
   }
 ]
 
-module runCommand '../../../.common/bicepModules/compute/virtualMachines/runCommands/deploy.bicep' = [
+module runCommand '../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for (vmName, i) in resolvedVmNames: if (empty(scripts)) {
     name: 'RunCommand-${vmName}-${timeStamp}'
     params: {

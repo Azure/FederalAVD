@@ -10,7 +10,7 @@ param deploymentSuffix string
 param keyName string
 param diskEncryptionSetName string
 
-module cmk '../../../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = {
+module cmk '../../../shared/modules/customerManagedKeys/customerManagedKeys.bicep' = {
   name: 'Disk-CMK-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {

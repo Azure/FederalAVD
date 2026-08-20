@@ -155,7 +155,7 @@ var roleAssignments = union(
 )
 
 // ─── Deployment user-assigned identity ────────────────────────────────────────
-module deploymentUserAssignedIdentity '../../../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
+module deploymentUserAssignedIdentity '../../../shared/modules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
   name: 'UserAssignedIdentity-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
@@ -169,7 +169,7 @@ module deploymentUserAssignedIdentity '../../../../.common/bicepModules/managedI
 }
 
 // ─── Role assignments (RG-scoped, one module call per entry) ──────────────────
-module roleAssignments_deployment '../../../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+module roleAssignments_deployment '../../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(roleAssignments)): {
     scope: resourceGroup(roleAssignments[i].resourceGroup)
     name: 'RA-${roleAssignments[i].depName}-${deploymentSuffix}'
@@ -182,7 +182,7 @@ module roleAssignments_deployment '../../../../.common/bicepModules/authorizatio
 ]
 
 // ─── Deployment VM ─────────────────────────────────────────────────────────────
-module virtualMachine '../../../../.common/bicepModules/compute/virtualMachines/deploy.bicep' = {
+module virtualMachine '../../../shared/modules/compute/virtualMachines/deploy.bicep' = {
   name: 'VirtualMachine-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {

@@ -96,7 +96,7 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Set-FSLogixSessionHostConfiguration.ps1')
+      script: loadTextContent('../../../deployments/shared/scripts/Set-FSLogixSessionHostConfiguration.ps1')
     }
     timeoutInSeconds: 180
     treatFailureAsDeploymentFailure: true    

@@ -345,7 +345,7 @@ resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if
   scope: az.resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
 }
 
-module imageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' = {
+module imageGallery '../shared/modules/compute/galleries/deploy.bicep' = {
   name: 'Image-Gallery-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -358,7 +358,7 @@ module imageGallery '../../.common/bicepModules/compute/galleries/deploy.bicep' 
 
 // Image Build Resource Group: pre-created so imageBuild deployments can reference it via
 // imageBuildResourceGroupId without waiting for RG creation during the build.
-module imageBuildResourceGroup '../../.common/bicepModules/resources/resourceGroups/deploy.bicep' = if (deployImageBuildResourceGroup) {
+module imageBuildResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployImageBuildResourceGroup) {
   name: 'Image-Build-ResourceGroup-${timeStamp}'
   params: {
     name: imageBuildRgName
@@ -371,7 +371,7 @@ module imageBuildResourceGroup '../../.common/bicepModules/resources/resourceGro
 // build VMs, managed images, and all other resources without needing elevated subscription-level
 // permissions. Contributor is required (over VM Contributor) because the cleanup script must also
 // delete managed images (Microsoft.Compute/images/delete) which VM Contributor does not include.
-module imageBuildRgContributorAssignment '../../.common/bicepModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (deployImageBuildResourceGroup) {
+module imageBuildRgContributorAssignment '../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (deployImageBuildResourceGroup) {
   name: 'RA-MI-Contributor-ImageBuildRG-${timeStamp}'
   scope: az.resourceGroup(imageBuildRgName)
   params: {
@@ -382,7 +382,7 @@ module imageBuildRgContributorAssignment '../../.common/bicepModules/authorizati
   dependsOn: [imageBuildResourceGroup]
 }
 
-module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployArtifactsStorageAccount || deployBuildLogsStorageAccount || deployImageBuildResourceGroup) {
+module managedIdentity '../shared/modules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployArtifactsStorageAccount || deployBuildLogsStorageAccount || deployImageBuildResourceGroup) {
   name: 'Managed-Identity-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -396,7 +396,7 @@ module managedIdentity '../../.common/bicepModules/managedIdentity/userAssignedI
 // Single CMK module covering both storage accounts with a shared encryption UAI.
 // CMK must complete before any storage account deployment so the role assignment
 // propagates before the storage PUT includes the CMK reference.
-module storageCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
+module storageCmk '../shared/modules/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
   name: 'Storage-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -415,7 +415,7 @@ module storageCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bice
 // DES for gallery image version encryption — created once here so imageBuild deployments
 // can pass `diskEncryptionSetResourceId` as `existingDiskEncryptionSetResourceId`,
 // suppressing per-build DES creation and KV dependency during image builds.
-module diskCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
+module diskCmk '../shared/modules/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
   name: 'Disk-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -446,7 +446,7 @@ module diskCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bicep' 
 // Requires RSA-HSM key with key release policy — created via ARM on first deploy only.
 // WARNING: The key release policy is immutable. Re-deploying with createConfidentialVmGalleryDes=true
 // will fail if the key already exists. Disable this option on subsequent deployments.
-module confidentialVmCmk '../sharedModules/customerManagedKeys/customerManagedKeys.bicep' = if (createConfidentialVmGalleryDes) {
+module confidentialVmCmk '../shared/modules/customerManagedKeys/customerManagedKeys.bicep' = if (createConfidentialVmGalleryDes) {
   name: 'ConfidentialVM-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -480,7 +480,7 @@ var storageNetworkAcls = {
   virtualNetworkRules: storageVnetRules
 }
 
-module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (deployArtifactsStorageAccount) {
+module assetsStorageAccount '../shared/modules/storage/storageAccounts/deploy.bicep' = if (deployArtifactsStorageAccount) {
   name: 'Assets-Storage-Account-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -508,7 +508,7 @@ module assetsStorageAccount '../../.common/bicepModules/storage/storageAccounts/
   dependsOn: [resourceGroup]
 }
 
-module assetsBlobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployArtifactsStorageAccount) {
+module assetsBlobService '../shared/modules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployArtifactsStorageAccount) {
   name: 'Assets-Blob-Service-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -523,7 +523,7 @@ module assetsBlobService '../../.common/bicepModules/storage/storageAccounts/blo
   dependsOn: [assetsStorageAccount]
 }
 
-module assetsBlobContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployArtifactsStorageAccount) {
+module assetsBlobContainer '../shared/modules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployArtifactsStorageAccount) {
   name: 'Assets-Blob-Container-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -534,7 +534,7 @@ module assetsBlobContainer '../../.common/bicepModules/storage/storageAccounts/b
   dependsOn: [assetsBlobService]
 }
 
-module assetsStoragePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployArtifactsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
+module assetsStoragePrivateEndpoint '../shared/modules/network/privateEndpoints/deploy.bicep' = if (deployArtifactsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
   name: 'Assets-Storage-PE-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -549,7 +549,7 @@ module assetsStoragePrivateEndpoint '../../.common/bicepModules/network/privateE
   }
 }
 
-module assetsStorageBlobReaderAssignment '../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
+module assetsStorageBlobReaderAssignment '../shared/modules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
   name: 'RA-MI-BlobReader-SA-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -567,7 +567,7 @@ module assetsStorageBlobReaderAssignment '../../.common/bicepModules/storage/sto
 
 // ── Build Logs Storage Account ────────────────────────────────────────────────
 
-module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+module logsStorageAccount '../shared/modules/storage/storageAccounts/deploy.bicep' = if (deployBuildLogsStorageAccount) {
   name: 'Logs-Storage-Account-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -595,7 +595,7 @@ module logsStorageAccount '../../.common/bicepModules/storage/storageAccounts/de
   dependsOn: [resourceGroup]
 }
 
-module logsBlobService '../../.common/bicepModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+module logsBlobService '../shared/modules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployBuildLogsStorageAccount) {
   name: 'Logs-Blob-Service-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -606,7 +606,7 @@ module logsBlobService '../../.common/bicepModules/storage/storageAccounts/blobS
   dependsOn: [logsStorageAccount]
 }
 
-module logsStorageBlobContainer '../../.common/bicepModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+module logsStorageBlobContainer '../shared/modules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployBuildLogsStorageAccount) {
   name: 'Logs-Blob-Container-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -617,7 +617,7 @@ module logsStorageBlobContainer '../../.common/bicepModules/storage/storageAccou
   dependsOn: [logsBlobService]
 }
 
-module logsStorageLifecyclePolicy '../../.common/bicepModules/storage/storageAccounts/managementPolicies/deploy.bicep' = if (deployBuildLogsStorageAccount) {
+module logsStorageLifecyclePolicy '../shared/modules/storage/storageAccounts/managementPolicies/deploy.bicep' = if (deployBuildLogsStorageAccount) {
   name: 'Logs-Storage-LifecyclePolicy-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -645,7 +645,7 @@ module logsStorageLifecyclePolicy '../../.common/bicepModules/storage/storageAcc
   dependsOn: [logsStorageAccount]
 }
 
-module logsStoragePrivateEndpoint '../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployBuildLogsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
+module logsStoragePrivateEndpoint '../shared/modules/network/privateEndpoints/deploy.bicep' = if (deployBuildLogsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
   name: 'Logs-Storage-PE-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
@@ -660,7 +660,7 @@ module logsStoragePrivateEndpoint '../../.common/bicepModules/network/privateEnd
   }
 }
 
-module logsStorageBlobContributorAssignment '../../.common/bicepModules/storage/storageAccounts/roleAssignment.bicep' = if (deployBuildLogsStorageAccount) {
+module logsStorageBlobContributorAssignment '../shared/modules/storage/storageAccounts/roleAssignment.bicep' = if (deployBuildLogsStorageAccount) {
   name: 'RA-MI-BlobContrib-LogsSA-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {

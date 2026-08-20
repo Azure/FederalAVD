@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "9737508710482997808"
+      "version": "0.46.1.21595",
+      "templateHash": "17764513556500510434"
     }
   },
   "parameters": {
@@ -439,8 +439,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "13535660819004615752"
+              "version": "0.46.1.21595",
+              "templateHash": "2269805279567144409"
             }
           },
           "parameters": {
@@ -543,7 +543,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'RouteTableResourceId')]",
               "properties": {
                 "value": "[format('\"{0}\"', parameters('routeTableResourceId'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "Resource ID of the Azure Route Table to manage."
               },
               "dependsOn": [
@@ -556,7 +556,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'M365EndpointInstance')]",
               "properties": {
                 "value": "[format('\"{0}\"', parameters('m365EndpointInstance'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "Microsoft 365 endpoint instance (worldwide, usgovdod, usgovgcchigh, china)."
               },
               "dependsOn": [
@@ -569,7 +569,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'ResourceManagerUri')]",
               "properties": {
                 "value": "[format('\"{0}\"', parameters('resourceManagerUri'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "Azure Resource Manager endpoint URI for this cloud."
               },
               "dependsOn": [
@@ -705,8 +705,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "3585155273898172375"
+              "version": "0.46.1.21595",
+              "templateHash": "4327984477459593833"
             }
           },
           "parameters": {

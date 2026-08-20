@@ -23,7 +23,7 @@ param secureVMDiskEncryptionSetId string = ''
 // Image Definitions with Security Type = 'TrustedLaunchSupported', 'ConfidentialVMSupported', or TrustedLaunchConfidentialVMSupported' do not
 // support capture directly from a VM. Must create a legacy managed image first.
 
-module managedImage '../../../.common/bicepModules/compute/images/deploy.bicep' = if(contains(imageDefinitionSecurityType, 'Supported')) {
+module managedImage '../../shared/modules/compute/images/deploy.bicep' = if(contains(imageDefinitionSecurityType, 'Supported')) {
   name: '${depPrefix}Image-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -35,7 +35,7 @@ module managedImage '../../../.common/bicepModules/compute/images/deploy.bicep' 
   }
 }
 
-module imageVersion '../../../.common/bicepModules/compute/galleries/images/versions/deploy.bicep' = {
+module imageVersion '../../shared/modules/compute/galleries/images/versions/deploy.bicep' = {
   name: '${depPrefix}ImageVersion-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {

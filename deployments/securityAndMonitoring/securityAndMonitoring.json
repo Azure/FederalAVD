@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "15138039365474125988"
+      "version": "0.46.1.21595",
+      "templateHash": "14877288910462189983"
     }
   },
   "functions": [
@@ -889,8 +889,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "14007601673793281063"
+              "version": "0.46.1.21595",
+              "templateHash": "9672734252890707801"
             }
           },
           "parameters": {
@@ -956,8 +956,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "14007601673793281063"
+              "version": "0.46.1.21595",
+              "templateHash": "9672734252890707801"
             }
           },
           "parameters": {
@@ -1030,8 +1030,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "9879412644563530438"
+              "version": "0.46.1.21595",
+              "templateHash": "3962095343118907667"
             }
           },
           "definitions": {
@@ -1190,7 +1190,7 @@
               "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
               "type": "Microsoft.Insights/diagnosticSettings",
               "apiVersion": "2021-05-01-preview",
-              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('name'))]",
+              "scope": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]",
               "name": "[variables('diagnosticSettingName')]",
               "properties": {
                 "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
@@ -1256,8 +1256,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "204638307669867238"
+              "version": "0.46.1.21595",
+              "templateHash": "9359631614617751401"
             }
           },
           "parameters": {
@@ -1343,8 +1343,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "15717642609942332810"
+              "version": "0.46.1.21595",
+              "templateHash": "7647843259591025734"
             }
           },
           "parameters": {
@@ -1497,8 +1497,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "10261237149566402125"
+              "version": "0.46.1.21595",
+              "templateHash": "6554509103004020044"
             }
           },
           "parameters": {
@@ -1547,8 +1547,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "5758136482480486201"
+                      "version": "0.46.1.21595",
+                      "templateHash": "14912754638864567597"
                     }
                   },
                   "parameters": {
@@ -1666,8 +1666,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "10670619022516450495"
+              "version": "0.46.1.21595",
+              "templateHash": "5092051267056047508"
             }
           },
           "parameters": {
@@ -1845,8 +1845,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "6253469375299128108"
+                      "version": "0.46.1.21595",
+                      "templateHash": "6550368044514526912"
                     }
                   },
                   "definitions": {
@@ -2058,7 +2058,7 @@
                       "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
                       "type": "Microsoft.Insights/diagnosticSettings",
                       "apiVersion": "2021-05-01-preview",
-                      "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('name'))]",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
                       "name": "[variables('diagnosticSettingName')]",
                       "properties": {
                         "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
@@ -2133,8 +2133,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "12282446341944178485"
+                      "version": "0.46.1.21595",
+                      "templateHash": "12034810620394266512"
                     }
                   },
                   "parameters": {
@@ -2281,8 +2281,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "8201434864237247731"
+                      "version": "0.46.1.21595",
+                      "templateHash": "13656703662318782126"
                     }
                   },
                   "parameters": {
@@ -2383,8 +2383,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "6253469375299128108"
+                      "version": "0.46.1.21595",
+                      "templateHash": "6550368044514526912"
                     }
                   },
                   "definitions": {
@@ -2596,7 +2596,7 @@
                       "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
                       "type": "Microsoft.Insights/diagnosticSettings",
                       "apiVersion": "2021-05-01-preview",
-                      "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('name'))]",
+                      "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]",
                       "name": "[variables('diagnosticSettingName')]",
                       "properties": {
                         "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
@@ -2671,8 +2671,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.39.26.7824",
-                      "templateHash": "12282446341944178485"
+                      "version": "0.46.1.21595",
+                      "templateHash": "12034810620394266512"
                     }
                   },
                   "parameters": {

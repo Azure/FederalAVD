@@ -143,7 +143,7 @@ var cvmKeyReleasePolicy = base64('{"version":"1.0.0","anyOf":[{"authority":"http
 
 // ─── PaaS: Keys ──────────────────────────────────────────────────────────────
 
-module paasKeys '../../../.common/bicepModules/keyVault/vaults/keys/deploy.bicep' = [
+module paasKeys '../keyVault/vaults/keys/deploy.bicep' = [
   for (keyName, i) in keyNames: {
     name: 'CMK-PaaSKey-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
@@ -164,7 +164,7 @@ module paasKeys '../../../.common/bicepModules/keyVault/vaults/keys/deploy.bicep
 // Deployed whenever keyNames is non-empty. Callers on the SAI path (e.g. RSV)
 // do not invoke this module at all — they manage their own identity and RBAC.
 
-module paasIdentity '../../../.common/bicepModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(keyNames)) {
+module paasIdentity '../managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(keyNames)) {
   name: 'CMK-PaaSUAI-${deploymentSuffix}'
   params: {
     name: identityName
@@ -176,7 +176,7 @@ module paasIdentity '../../../.common/bicepModules/managedIdentity/userAssignedI
 // ─── PaaS: Role Assignments (Key Vault Crypto Service Encryption User) ──────
 // One role assignment per key, all scoped to the same shared UAI.
 
-module paasKeyRoleAssignments '../../../.common/bicepModules/keyVault/vaults/keys/roleAssignment.bicep' = [
+module paasKeyRoleAssignments '../keyVault/vaults/keys/roleAssignment.bicep' = [
   for (keyName, i) in keyNames: {
     name: 'CMK-PaaSKeyRA-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
@@ -205,7 +205,7 @@ module paasKeyRoleAssignments '../../../.common/bicepModules/keyVault/vaults/key
 // key already exists. This is a one-time operation; use skipKeyCreation on
 // subsequent deploys or document this as a first-deploy-only step.
 
-module diskKeys '../../../.common/bicepModules/keyVault/vaults/keys/deploy.bicep' = [
+module diskKeys '../keyVault/vaults/keys/deploy.bicep' = [
   for (config, i) in diskEncryptionConfigs: if (!(config.?skipKeyCreation ?? false)) {
     name: 'CMK-DiskKey-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
@@ -230,7 +230,7 @@ module diskKeys '../../../.common/bicepModules/keyVault/vaults/keys/deploy.bicep
 
 // ─── Disk: DiskEncryptionSets ─────────────────────────────────────────────────
 
-module diskEncryptionSets '../../../.common/bicepModules/compute/diskEncryptionSets/deploy.bicep' = [
+module diskEncryptionSets '../compute/diskEncryptionSets/deploy.bicep' = [
   for (config, i) in diskEncryptionConfigs: {
     name: 'CMK-DiskEncryptionSet-${i}-${deploymentSuffix}'
     params: {
@@ -255,7 +255,7 @@ module diskEncryptionSets '../../../.common/bicepModules/compute/diskEncryptionS
 
 // ─── Disk: Role Assignments (Key Vault Crypto Service Encryption User on DES) ─
 
-module diskKeyRoleAssignments '../../../.common/bicepModules/keyVault/vaults/keys/roleAssignment.bicep' = [
+module diskKeyRoleAssignments '../keyVault/vaults/keys/roleAssignment.bicep' = [
   for (config, i) in diskEncryptionConfigs: {
     name: 'CMK-DiskKeyRA-EncryptUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
@@ -275,7 +275,7 @@ module diskKeyRoleAssignments '../../../.common/bicepModules/keyVault/vaults/key
 
 // ─── Disk: Confidential VM Release User role (CVMOrchestrator) ───────────────
 
-module diskKeyReleaseUserRoleAssignments '../../../.common/bicepModules/keyVault/vaults/keys/roleAssignment.bicep' = [
+module diskKeyReleaseUserRoleAssignments '../keyVault/vaults/keys/roleAssignment.bicep' = [
   for (config, i) in diskEncryptionConfigs: if (config.?confidentialVMOSDiskEncryption ?? false) {
     name: 'CMK-DiskKeyRA-ReleaseUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)

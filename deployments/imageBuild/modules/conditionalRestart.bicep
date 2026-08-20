@@ -36,7 +36,7 @@ resource cbsCheck 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
       ? null
       : '${logBlobContainerUri}${imageVmName}-CbsCheck-${context}-${deploymentSuffix}.log'
     source: {
-      script: loadTextContent('../../../.common/scripts/Check-CbsState.ps1')
+      script: loadTextContent('../../shared/scripts/Check-CbsState.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -82,7 +82,7 @@ resource conditionalRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-
       }
     ]
     source: {
-      script: loadTextContent('../../../.common/scripts/Invoke-ConditionalRestart.ps1')
+      script: loadTextContent('../../shared/scripts/Invoke-ConditionalRestart.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

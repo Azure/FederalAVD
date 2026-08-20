@@ -12,7 +12,7 @@ param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param azureBlobPrivateDnsZoneResourceId string = ''
 
-module diskAccessResource '../../../../../.common/bicepModules/compute/diskAccesses/deploy.bicep' = {
+module diskAccessResource '../../../../shared/modules/compute/diskAccesses/deploy.bicep' = {
   scope: resourceGroup(resourceGroupHosts)
   name: 'DiskAccess-${deploymentSuffix}'
   params: {
@@ -22,7 +22,7 @@ module diskAccessResource '../../../../../.common/bicepModules/compute/diskAcces
   }
 }
 
-module diskAccessPrivateEndpoint '../../../../../.common/bicepModules/network/privateEndpoints/deploy.bicep' = if (deployPrivateEndpoint && !empty(privateEndpointSubnetResourceId)) {
+module diskAccessPrivateEndpoint '../../../../shared/modules/network/privateEndpoints/deploy.bicep' = if (deployPrivateEndpoint && !empty(privateEndpointSubnetResourceId)) {
   scope: resourceGroup(resourceGroupHosts)
   name: 'PE-DiskAccess-${deploymentSuffix}'
   params: {
