@@ -256,15 +256,19 @@ Function Set-RegistryValue {
     }
 }
 
-Function Set-LocalMachinePolicyDword {
+Function Set-LocalMachinePolicyValue {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
         [string]$Key,
         [Parameter(Mandatory = $true)]
-        [string]$Name,
+        [string[]]$Name,
         [Parameter(Mandatory = $true)]
-        [uint32]$Value,
+        [AllowEmptyString()]
+        [object]$Value,
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('DWord', 'String')]
+        [string]$Type = 'DWord',
         [Parameter(Mandatory = $false)]
         [string]$GroupPolicyRoot = "$env:SystemRoot\System32\GroupPolicy"
     )
@@ -304,8 +308,17 @@ Function Set-LocalMachinePolicyDword {
         }
     }
 
-    @($Entries | Where-Object { $_.Key -eq $Key -and $_.Name -eq $Name }) | ForEach-Object { $Entries.Remove($_) | Out-Null }
-    $Entries.Add(@{ Key = $Key; Name = $Name; Type = [uint32]4; Data = [BitConverter]::GetBytes($Value) })
+    $EntryType = If ($Type -eq 'DWord') { [uint32]4 } Else { [uint32]1 }
+    $EntryData = If ($Type -eq 'DWord') {
+        [BitConverter]::GetBytes([uint32]$Value)
+    }
+    Else {
+        $Utf16.GetBytes("$Value`0")
+    }
+    ForEach ($ValueName in $Name) {
+        @($Entries | Where-Object { $_.Key -ieq $Key -and $_.Name -ieq $ValueName }) | ForEach-Object { $Entries.Remove($_) | Out-Null }
+        $Entries.Add(@{ Key = $Key; Name = $ValueName; Type = $EntryType; Data = $EntryData })
+    }
 
     $Stream = [System.IO.MemoryStream]::new()
     $Writer = [System.IO.BinaryWriter]::new($Stream)
@@ -364,7 +377,7 @@ Function Set-LocalMachinePolicyDword {
     If ($UserExtensions) { $GptContent += "gPCUserExtensionNames=$UserExtensions`r`n" }
     $GptContent += "Version=$CombinedVersion`r`n"
     [System.IO.File]::WriteAllText($GptPath, $GptContent, [System.Text.Encoding]::ASCII)
-    Write-Log -Message "Local Group Policy update: $Key\$Name = $Value"
+    Write-Log -Message "Local Group Policy update: $($Name.Count) $Type value(s) under $Key"
 }
 
 #endregion Functions
@@ -429,10 +442,10 @@ Write-Log -message "*** Building Array of Registry Settings ***"
 $RegSettings = New-Object System.Collections.ArrayList
 If ($DisableUpdates -eq 'true') {
     # Disable Automatic Updates: https://learn.microsoft.com/azure/virtual-desktop/set-up-customize-master-image#disable-automatic-updates
-    Set-LocalMachinePolicyDword -Key 'Software\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'NoAutoUpdate' -Value 1
+    Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'NoAutoUpdate' -Value 1
 }
 # Enable Time Zone Redirection: https://learn.microsoft.com/azure/virtual-desktop/set-up-customize-master-image#set-up-time-zone-redirection
-Set-LocalMachinePolicyDword -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fEnableTimeZoneRedirection' -Value 1
+Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fEnableTimeZoneRedirection' -Value 1
 
 ##############################################################
 #  Add GPU Settings
@@ -440,17 +453,11 @@ Set-LocalMachinePolicyDword -Key 'Software\Policies\Microsoft\Windows NT\Termina
 # This setting applies to the VM Size's recommended for AVD with a GPU
 if ($AmdVmSize -eq 'true' -or $NvidiaVmSize -eq 'true') {
     Write-Log -message "Adding GPU Settings"
-    # Configure GPU-accelerated app rendering: https://learn.microsoft.com/azure/virtual-desktop/configure-vm-gpu#configure-gpu-accelerated-app-rendering
-    Set-LocalMachinePolicyDword -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'bEnumerateHWBeforeSW' -Value 1
-    # Configure fullscreen video encoding: https://learn.microsoft.com/azure/virtual-desktop/configure-vm-gpu#configure-fullscreen-video-encoding
-    Set-LocalMachinePolicyDword -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'AVC444ModePreferred' -Value 1
-}
-
-# This setting applies only to VM Size's recommended for AVD with a Nvidia GPU
-if ($NvidiaVmSize -eq 'true') {
-    Write-Log -message "Adding Nvidia GPU Settings"
-    # Configure GPU-accelerated frame encoding: https://learn.microsoft.com/azure/virtual-desktop/configure-vm-gpu#configure-gpu-accelerated-frame-encoding
-    Set-LocalMachinePolicyDword -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'AVChardwareEncodePreferred' -Value 1
+    # Configure GPU-accelerated app rendering: https://learn.microsoft.com/azure/virtual-desktop/graphics-enable-gpu-acceleration
+    Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'bEnumerateHWBeforeSW' -Value 1
+    # Configure full-screen video and GPU-accelerated AVC encoding.
+    Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'AVC444ModePreferred' -Value 1
+    Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'AVChardwareEncodePreferred' -Value 1
 }
 
 If ($ConfigureFSLogix) {
@@ -515,7 +522,7 @@ If ($ConfigureFSLogix) {
                         $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)")
                         Write-Log -message "RemoteCloudCacheOfficeContainerPath: 'type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)"
                     }
-                    $RemoteProfileContainerPaths.Add("\\$(SAFQDN)\$(ProfileShareName)")
+                    $RemoteProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)")
                     Write-Log -message "RemoteProfileContainerPath: '\\$($SAFQDN)\$(ProfileShareName)'"
                     $RemoteCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)")
                     Write-Log -message "RemoteCloudCacheProfileContainerPath: 'type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)'"
@@ -763,60 +770,47 @@ If ($ConfigureFSLogix) {
     }
     If ($IdentitySolution -match 'EntraKerberos') {
         Write-Log -message "Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Local Group Policy"
-        Set-LocalMachinePolicyDword -Key 'Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters' -Name 'CloudKerberosTicketRetrievalEnabled' -Value 1
-        Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters' -Name 'CloudKerberosTicketRetrievalEnabled' -ErrorAction SilentlyContinue
+        Set-LocalMachinePolicyValue -Key 'Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters' -Name 'CloudKerberosTicketRetrievalEnabled' -Value 1
         $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\Software\Policies\Microsoft\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })   
     }
 
-    # Windows Defender Exclusions for FSLogix https://learn.microsoft.com/en-us/fslogix/overview-prerequisites#configure-antivirus-file-and-folder-exclusions
-    Write-Log -message "Adding Windows Defender Exclusions for FSLogix"
+    # Microsoft Defender Antivirus Local Group Policy exclusions for FSLogix
+    # https://learn.microsoft.com/en-us/fslogix/overview-prerequisites#configure-antivirus-file-and-folder-exclusions
+    Write-Log -message "Configuring Defender exclusions for FSLogix in Local Group Policy"
 
     $LocalPathExclusions = @(
         "$env:ProgramData\FSLogix",
-        "$env:ProgramData\FSLogix\Cache",
-        "$env:ProgramData\FSLogix\Proxy",
         "$env:ProgramFiles\FSLogix\Apps",
         "$env:SystemDrive\Users\*\AppData\Local\FSLogix",
         "$env:SystemRoot\Temp\*\*.vhdx",
-        "$env:SystemDrive\users\*\AppData\Local\Temp\*.vhdx"
+        "$env:SystemDrive\Users\*\AppData\Local\Temp\*\*.vhdx"
     )
     
-    # Build UNC Path Exclusions from storage account paths
+    # Build UNC path exclusions for containers and their companion files.
     $UncPathExclusions = @()
-    $UncPathExclusions += $LocalProfileContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-    $UncPathExclusions += $LocalOfficeContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-    $UncPathExclusions += $RemoteProfileContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-    $UncPathExclusions += $RemoteOfficeContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-    $UncPathExclusions = $UncPathExclusions | Where-Object { $_ }
+    $ContainerPaths = @($LocalProfileContainerPaths) + @($LocalOfficeContainerPaths) + @($RemoteProfileContainerPaths) + @($RemoteOfficeContainerPaths)
+    $ContainerPatterns = '*.vhdx', '*.vhdx.lock', '*.vhdx.meta', '*.vhdx.metadata'
+    ForEach ($ContainerPath in ($ContainerPaths | Where-Object { $_ } | Select-Object -Unique)) {
+        $UncPathExclusions += $ContainerPatterns | ForEach-Object { "$ContainerPath\*\$_" }
+    }
 
-    $PathExclusions = $LocalPathExclusions + $UncPathExclusions
+    [string[]]$PathExclusions = @($LocalPathExclusions + $UncPathExclusions | Select-Object -Unique)
 
     $ProcessExclusions = @(
         "$env:ProgramFiles\FSLogix\Apps\frxsvc.exe",
-        "$env:ProgramFiles\FSLogix\Apps\frxccds.exe",
-        "$env:ProgramFiles\FSLogix\Apps\frxdrv.sys",
-        "$env:ProgramFiles\FSLogix\Apps\frxdrvvt.sys",
-        "$env:ProgramFiles\FSLogix\Apps\frxccd.sys"
+        "$env:ProgramFiles\FSLogix\Apps\frxccds.exe"
     )
 
-    # Use Add-MpPreference cmdlet instead of registry (registry is protected by Tamper Protection)
     Try {
-        Write-Log -message "Adding path exclusions using Add-MpPreference"
-        ForEach ($Path in $PathExclusions) {
-            Write-Log -message "Adding path exclusion: $Path"
-            Add-MpPreference -ExclusionPath $Path -ErrorAction SilentlyContinue
-        }
-        
-        Write-Log -message "Adding process exclusions using Add-MpPreference"
-        ForEach ($Process in $ProcessExclusions) {
-            Write-Log -message "Adding process exclusion: $Process"
-            Add-MpPreference -ExclusionProcess $Process -ErrorAction SilentlyContinue
-        }
-        
-        Write-Log -message "Windows Defender exclusions added successfully"
+        $DefenderExclusionsKey = 'Software\Policies\Microsoft\Windows Defender\Exclusions'
+        Set-LocalMachinePolicyValue -Key $DefenderExclusionsKey -Name 'Exclusions_Paths' -Value 1
+        Set-LocalMachinePolicyValue -Key $DefenderExclusionsKey -Name 'Exclusions_Processes' -Value 1
+        Set-LocalMachinePolicyValue -Key "$DefenderExclusionsKey\Paths" -Name $PathExclusions -Value '' -Type String
+        Set-LocalMachinePolicyValue -Key "$DefenderExclusionsKey\Processes" -Name $ProcessExclusions -Value '' -Type String
+        Write-Log -message "Configured $($PathExclusions.Count) Defender path exclusions and $($ProcessExclusions.Count) process exclusions in Local Group Policy"
     }
     Catch {
-        Write-Log -message "Warning: Failed to add Windows Defender exclusions via Add-MpPreference: $_" -Level Warning
+        Write-Log -message "Failed to configure Defender exclusions in Local Group Policy: $_" -Category Warning
     }
 
     $LocalAdministrator = (Get-LocalUser | Where-Object { $_.SID -like '*-500' }).Name
@@ -826,6 +820,17 @@ If ($ConfigureFSLogix) {
             Add-LocalGroupMember -Group $Group -Member $LocalAdministrator
         }
     }
+}
+
+Try {
+    $GroupPolicyUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/target:computer /force /wait:60' -Wait -PassThru -NoNewWindow
+    If ($GroupPolicyUpdate.ExitCode -ne 0) {
+        Throw "gpupdate.exe exited with code $($GroupPolicyUpdate.ExitCode)"
+    }
+    Write-Log -message "Computer Group Policy refreshed successfully"
+}
+Catch {
+    Write-Log -message "Failed to refresh computer Group Policy: $_" -Category Warning
 }
 
 Write-Log -message "*** Setting Registry Values ***"

@@ -328,9 +328,6 @@ resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/exte
   }
 ]
 
-// Serialized: concurrent Entra ID device registration requests from multiple VMs can
-// intermittently collide/throttle, causing some joins to fail while others succeed.
-@batchSize(1)
 resource extension_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = [
   for i in range(0, sessionHostCount): if (startsWith(identitySolution, 'EntraKerberos') || identitySolution == 'EntraId') {
     parent: virtualMachine[i]
@@ -409,7 +406,7 @@ resource extension_AmdGpuDriverWindows 'Microsoft.Compute/virtualMachines/extens
     properties: {
       publisher: 'Microsoft.HpcCompute'
       type: 'AmdGpuDriverWindows'
-      typeHandlerVersion: '1.0'
+      typeHandlerVersion: '1.1'
       autoUpgradeMinorVersion: true
       settings: {}
     }

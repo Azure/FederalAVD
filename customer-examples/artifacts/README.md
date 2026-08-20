@@ -59,6 +59,7 @@ configuration only) or require manually staged files (such as patch files for
 | [Adobe-Acrobat-Reader-DC](Adobe-Acrobat-Reader-DC/) | Adobe Acrobat Reader DC | `AdobeAcrobatReaderDC` |
 | [Amazon-Workspaces-Client](Amazon-Workspaces-Client/) | Amazon WorkSpaces client | `AmazonWorkSpacesClient` |
 | [BuiltIn-UWP-Apps](BuiltIn-UWP-Apps/) | Provision built-in Windows UWP apps for all users | `WindowsCalculator`, `MicrosoftPaint`, `SnippingTool`, `Notepad`, `MicrosoftClipchamp`, `MicrosoftPhotos` |
+| [Configure-AVDSessionHostPolicy](Configure-AVDSessionHostPolicy/) | Configure AVD security, graphics, Shortpath, and directional clipboard policies | `AVDAdministrativeTemplates` |
 | [Configure-ChromePolicy](Configure-ChromePolicy/) | Apply Google Chrome Group Policy settings, including search provider enforcement | `ChromeEnterpriseAdministrativeTemplates` |
 | [Configure-DesktopBackground](Configure-DesktopBackground/) | Set a custom desktop wallpaper | — |
 | [Configure-EdgePolicy](Configure-EdgePolicy/) | Apply Edge Group Policy settings via LGPO, including search provider enforcement | `EdgeEnterpriseAdministrativeTemplates` |
@@ -76,6 +77,7 @@ configuration only) or require manually staged files (such as patch files for
 | [LGPO](LGPO/) | Microsoft LGPO tool (Local Group Policy Object) | `LGPO` |
 | [Microsoft-AVD-Multimedia-Redirection](Microsoft-AVD-Multimedia-Redirection/) | AVD multimedia redirection service and browser extensions (Azure Commercial only) | `AVDMultimediaRedirection` |
 | [Microsoft-AzCLI](Microsoft-AzCLI/) | Azure CLI | `AzCli` |
+| [Microsoft-Defender-VDI-Onboarding](Microsoft-Defender-VDI-Onboarding/) | Stage one-time Microsoft Defender for Endpoint non-persistent VDI onboarding | - (tenant package is manually staged) |
 | [Microsoft-Edge-Enterprise](Microsoft-Edge-Enterprise/) | Microsoft Edge Enterprise MSI | `MicrosoftEdgeEnterprise` |
 | [Microsoft-FSLogix](Microsoft-FSLogix/) | FSLogix Apps | `FSLogix` |
 | [Microsoft-Power-BI-Desktop](Microsoft-Power-BI-Desktop/) | Power BI Desktop | `PowerBIDesktop` |
