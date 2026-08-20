@@ -1,6 +1,5 @@
 param artifactUri string
 param arguments string
-param configurationVersion string
 param location string
 param runCommandName string
 param userAssignedIdentityResourceId string
@@ -37,10 +36,6 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' =
       {
         name: 'BlobStorageSuffix'
         value: 'blob.${environment().suffixes.storage}'
-      }
-      {
-        name: 'ConfigurationVersion'
-        value: configurationVersion
       }
       {
         name: 'Name'

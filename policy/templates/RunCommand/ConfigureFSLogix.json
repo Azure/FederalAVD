@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "12618256166038907385"
+      "templateHash": "11415284942992536750"
     }
   },
   "parameters": {
@@ -42,9 +42,6 @@
     "runCommandName": {
       "type": "string"
     },
-    "configurationVersion": {
-      "type": "string"
-    },
     "profileSizeInMBs": {
       "type": "int"
     },
@@ -75,10 +72,6 @@
       "location": "[parameters('location')]",
       "properties": {
         "parameters": [
-          {
-            "name": "ConfigurationVersion",
-            "value": "[parameters('configurationVersion')]"
-          },
           {
             "name": "ConfigureFSLogix",
             "value": "true"

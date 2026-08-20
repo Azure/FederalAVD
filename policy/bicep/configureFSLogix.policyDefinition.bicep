@@ -2,7 +2,7 @@ targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostConfigureFSLogix-DeployIfNotExists'
 param policyDefinitionDisplayName string = 'Configure FSLogix on AVD session host virtual machines'
-param policyDefinitionDescription string = 'Deploys a versioned VM Run Command that configures FSLogix with identity-based or key-based SMB storage locations.'
+param policyDefinitionDescription string = 'Deploys a VM Run Command that configures FSLogix when the named command has not succeeded.'
 
 var configureFSLogixTemplate = loadJsonContent('../templates/RunCommand/ConfigureFSLogix.json')
 
@@ -27,14 +27,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
         metadata: {
           displayName: 'Effect'
           description: 'Enable or disable FSLogix Run Command deployment.'
-        }
-      }
-      configurationVersion: {
-        type: 'String'
-        defaultValue: '1.0.0'
-        metadata: {
-          displayName: 'Configuration version'
-          description: 'Change this value to make existing session hosts noncompliant and eligible for remediation.'
         }
       }
       runCommandName: {
@@ -159,38 +151,13 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
             '/providers/Microsoft.Authorization/roleDefinitions/81a9662b-bebf-436f-a333-f67b29880f12'
           ]
           existenceCondition: {
-            allOf: [
-              {
-                field: 'Microsoft.Compute/virtualMachines/runCommands/provisioningState'
-                equals: 'Succeeded'
-              }
-              {
-                count: {
-                  field: 'Microsoft.Compute/virtualMachines/runCommands/parameters[*]'
-                  where: {
-                    allOf: [
-                      {
-                        field: 'Microsoft.Compute/virtualMachines/runCommands/parameters[*].name'
-                        equals: 'ConfigurationVersion'
-                      }
-                      {
-                        field: 'Microsoft.Compute/virtualMachines/runCommands/parameters[*].value'
-                        equals: '[parameters(\'configurationVersion\')]'
-                      }
-                    ]
-                  }
-                }
-                equals: 1
-              }
-            ]
+            field: 'Microsoft.Compute/virtualMachines/runCommands/provisioningState'
+            equals: 'Succeeded'
           }
           deployment: {
             properties: {
               mode: 'Incremental'
               parameters: {
-                configurationVersion: {
-                  value: '[parameters(\'configurationVersion\')]'
-                }
                 fslogixContainerType: {
                   value: '[parameters(\'fslogixContainerType\')]'
                 }

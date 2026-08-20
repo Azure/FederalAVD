@@ -2,7 +2,7 @@ targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostPrivateCustomization-DeployIfNotExists'
 param policyDefinitionDisplayName string = 'Run a private customization on AVD session host virtual machines'
-param policyDefinitionDescription string = 'Preserves existing VM identities, attaches a private artifact identity, and deploys a versioned customization Run Command.'
+param policyDefinitionDescription string = 'Preserves existing VM identities, attaches a private artifact identity, and deploys a customization Run Command when the named command has not succeeded.'
 
 var customizationTemplate = loadJsonContent('../templates/RunCommand/PrivateCustomization.json')
 
@@ -44,14 +44,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           description: 'Arguments passed to the customization artifact.'
         }
       }
-      configurationVersion: {
-        type: 'String'
-        defaultValue: '1.0.0'
-        metadata: {
-          displayName: 'Configuration version'
-          description: 'Change this value to make existing session hosts noncompliant and eligible for remediation.'
-        }
-      }
       runCommandName: {
         type: 'String'
         metadata: {
@@ -91,30 +83,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
             '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
           ]
           existenceCondition: {
-            allOf: [
-              {
-                field: 'Microsoft.Compute/virtualMachines/runCommands/provisioningState'
-                equals: 'Succeeded'
-              }
-              {
-                count: {
-                  field: 'Microsoft.Compute/virtualMachines/runCommands/parameters[*]'
-                  where: {
-                    allOf: [
-                      {
-                        field: 'Microsoft.Compute/virtualMachines/runCommands/parameters[*].name'
-                        equals: 'ConfigurationVersion'
-                      }
-                      {
-                        field: 'Microsoft.Compute/virtualMachines/runCommands/parameters[*].value'
-                        equals: '[parameters(\'configurationVersion\')]'
-                      }
-                    ]
-                  }
-                }
-                equals: 1
-              }
-            ]
+            field: 'Microsoft.Compute/virtualMachines/runCommands/provisioningState'
+            equals: 'Succeeded'
           }
           deployment: {
             properties: {
@@ -125,9 +95,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                 }
                 arguments: {
                   value: '[parameters(\'arguments\')]'
-                }
-                configurationVersion: {
-                  value: '[parameters(\'configurationVersion\')]'
                 }
                 location: {
                   value: '[field(\'location\')]'

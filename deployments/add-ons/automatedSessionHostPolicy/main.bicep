@@ -1,7 +1,6 @@
 targetScope = 'subscription'
 
 type fslogixConfigurationType = {
-  configurationVersion: string
   identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid' | 'EntraId'
   storageService: 'AzureFiles' | 'AzureNetAppFiles'
   containerType: 'CloudCacheProfileContainer' | 'CloudCacheProfileOfficeContainer' | 'ProfileContainer' | 'ProfileOfficeContainer'
@@ -14,15 +13,13 @@ type fslogixConfigurationType = {
   profileSizeInMBs: int
 }
 
-type privateCustomizationType = {
+type sessionHostCustomizationType = {
   @description('Unique Run Command name for the customization.')
   name: string
-  @description('Artifact blob path relative to artifactsContainerUri.')
-  blobName: string
-  @description('Arguments passed to the customization artifact.')
-  arguments: string
-  @description('Version marker used by the policy compliance check.')
-  configurationVersion: string
+  @description('Artifact blob path relative to artifactsContainerUri, or a full HTTPS URI.')
+  blobNameOrUri: string
+  @description('Optional. Arguments passed to the customization artifact.')
+  arguments: string?
 }
 
 @description('Required. Azure region for the policy assignment managed identity.')
@@ -76,8 +73,8 @@ param artifactsContainerUri string = ''
 @description('Optional. Resource ID of the user-assigned identity with read access to the private artifact container.')
 param artifactsUserAssignedIdentityResourceId string = ''
 
-@description('Optional. Independent, idempotent, versioned private customizations applied to automated session hosts. Execution order is not guaranteed.')
-param privateCustomizations privateCustomizationType[] = []
+@description('Optional. Independent, idempotent customizations applied to automated session hosts. Uses the same object shape as the host pool and session hosts add-on. Execution order is not guaranteed.')
+param sessionHostCustomizations sessionHostCustomizationType[] = []
 
 @description('Optional. Tags applied to resources created by this add-on.')
 param tags object = {}
@@ -102,9 +99,10 @@ var fslogixStorageAccountResourceIds = concat(
   fslogixConfiguration.localStorageAccountResourceIds,
   fslogixConfiguration.remoteStorageAccountResourceIds
 )
-var privateCustomizationConfigurationIsValid = empty(privateCustomizations) || (!empty(artifactsContainerUri) && !empty(artifactsUserAssignedIdentityResourceId))
+var relativeSessionHostCustomizations = filter(sessionHostCustomizations, customization => !startsWith(customization.blobNameOrUri, 'https://'))
+var sessionHostCustomizationConfigurationIsValid = empty(sessionHostCustomizations) || (!empty(artifactsUserAssignedIdentityResourceId) && (empty(relativeSessionHostCustomizations) || !empty(artifactsContainerUri)))
   ? true
-  : bool('artifactsContainerUri and artifactsUserAssignedIdentityResourceId are required when privateCustomizations is not empty.')
+  : bool('artifactsUserAssignedIdentityResourceId is required for sessionHostCustomizations, and artifactsContainerUri is required when any blobNameOrUri is relative.')
 var normalizedArtifactsContainerUri = endsWith(artifactsContainerUri, '/')
   ? take(artifactsContainerUri, max(length(artifactsContainerUri) - 1, 0))
   : artifactsContainerUri
@@ -297,13 +295,10 @@ module fslogixPolicyAssignment 'modules/policyAssignment.bicep' = {
     policyIdentityResourceId: policyIdentity.outputs.resourceId
     policyDefinitionResourceId: fslogixPolicyDefinition.outputs.policyDefinitionResourceId
     displayName: 'Configure FSLogix on automated AVD session hosts'
-    description: 'Deploys a versioned Run Command that configures identity-based FSLogix storage locations.'
+    description: 'Deploys a Run Command that configures identity-based FSLogix storage locations.'
     parameters: {
       effect: {
         value: 'DeployIfNotExists'
-      }
-      configurationVersion: {
-        value: fslogixConfiguration.configurationVersion
       }
       identitySolution: {
         value: fslogixConfiguration.identitySolution
@@ -348,7 +343,7 @@ module fslogixPolicyAssignment 'modules/policyAssignment.bicep' = {
 }
 
 module privateCustomizationPolicyAssignments 'modules/policyAssignment.bicep' = [
-  for (customization, i) in privateCustomizations: {
+  for (customization, i) in sessionHostCustomizations: {
     scope: resourceGroup(sessionHostResourceGroupName)
     params: {
       name: 'avd-sh-cust-${substring(uniqueString(customization.name), 0, 8)}'
@@ -362,13 +357,12 @@ module privateCustomizationPolicyAssignments 'modules/policyAssignment.bicep' = 
           value: 'DeployIfNotExists'
         }
         artifactUri: {
-          value: '${normalizedArtifactsContainerUri}/${privateCustomizationConfigurationIsValid ? customization.blobName : customization.blobName}'
+          value: startsWith(customization.blobNameOrUri, 'https://')
+            ? customization.blobNameOrUri
+            : '${normalizedArtifactsContainerUri}/${sessionHostCustomizationConfigurationIsValid ? customization.blobNameOrUri : customization.blobNameOrUri}'
         }
         arguments: {
-          value: customization.arguments
-        }
-        configurationVersion: {
-          value: customization.configurationVersion
+          value: customization.?arguments ?? ''
         }
         runCommandName: {
           value: replace(customization.name, ' ', '-')
@@ -377,7 +371,7 @@ module privateCustomizationPolicyAssignments 'modules/policyAssignment.bicep' = 
           value: artifactsUserAssignedIdentityResourceId
         }
       }
-      nonComplianceMessage: 'The session host must have version ${customization.configurationVersion} of private customization ${customization.name}.'
+      nonComplianceMessage: 'The session host must have successfully completed private customization ${customization.name}.'
     }
     dependsOn: [
       policyIdentityVirtualMachineContributor
@@ -393,6 +387,6 @@ output fslogixPolicyAssignmentResourceId string = fslogixPolicyAssignment.output
 output monitoringIdentityResourceId string = monitoringIdentity.outputs.resourceId
 output monitoringPolicyAssignmentResourceId string = monitoringPolicyAssignment.outputs.resourceId
 output policyIdentityResourceId string = policyIdentity.outputs.resourceId
-output privateCustomizationPolicyAssignmentResourceIds array = [
-  for (customization, i) in privateCustomizations: privateCustomizationPolicyAssignments[i].outputs.resourceId
+output sessionHostCustomizationPolicyAssignmentResourceIds array = [
+  for (customization, i) in sessionHostCustomizations: privateCustomizationPolicyAssignments[i].outputs.resourceId
 ]

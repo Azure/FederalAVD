@@ -189,9 +189,6 @@ param remoteStorageAccountResourceIds string[] = []
 @description('Optional. Existing remote Azure NetApp Files SMB server FQDNs included in the session-host configuration output.')
 param remoteNetAppServerFqdns string[] = []
 
-@description('Optional. Version marker used by the FSLogix policy compliance check.')
-param configurationVersion string = '1.0.0'
-
 @description('Optional. Tags keyed by Azure resource type, matching the host pool deployment tag contract.')
 param tags object = {}
 
@@ -271,7 +268,6 @@ module fslogix '../../hostpools/modules/fslogix-storage/fslogix.bicep' = {
 }
 
 output fslogixConfiguration object = {
-  configurationVersion: configurationVersion
   identitySolution: identitySolution
   storageService: storageSolution
   containerType: fslogixContainerType

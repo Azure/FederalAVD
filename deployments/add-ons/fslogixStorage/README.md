@@ -11,6 +11,17 @@ The add-on owns profile storage configuration. It does not create a host pool, s
 deployment VM, policy assignment, Key Vault, Log Analytics workspace, or Recovery Services vault.
 Those shared resources are supplied by resource ID or name.
 
+## Portal Deployment
+
+Use `uiFormDefinition.json` with the subscription-scoped `main.bicep` template. The form follows the
+same identity, storage, permissions, networking, encryption, monitoring, backup, and Azure NetApp
+Files choices as the host-pool FSLogix experience. It selects an existing deployment VM and accepts
+the client ID of the user-assigned identity attached to that VM.
+
+Deploy this add-on before the automated session-host policy. After deployment, copy the
+`fslogixConfiguration` output into the corresponding policy form fields, then deploy the automated
+host pool with zero hosts, assign policy, and increase the desired host count.
+
 ## Capabilities
 
 | Capability | Azure Files | Azure NetApp Files |
@@ -58,7 +69,6 @@ The add-on outputs a `fslogixConfiguration` object accepted directly by
 
 ```bicep
 output fslogixConfiguration object = {
-  configurationVersion: '1.0.0'
   identitySolution: identitySolution
   storageService: storageService
   containerType: containerType

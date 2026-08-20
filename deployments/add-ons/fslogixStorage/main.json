@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "9971409174066544308"
+      "templateHash": "12274679277018187845"
     }
   },
   "definitions": {
@@ -394,13 +394,6 @@
       "defaultValue": [],
       "metadata": {
         "description": "Optional. Existing remote Azure NetApp Files SMB server FQDNs included in the session-host configuration output."
-      }
-    },
-    "configurationVersion": {
-      "type": "string",
-      "defaultValue": "1.0.0",
-      "metadata": {
-        "description": "Optional. Version marker used by the FSLogix policy compliance check."
       }
     },
     "tags": {
@@ -4013,7 +4006,6 @@
     "fslogixConfiguration": {
       "type": "object",
       "value": {
-        "configurationVersion": "[parameters('configurationVersion')]",
         "identitySolution": "[parameters('identitySolution')]",
         "storageService": "[variables('storageSolution')]",
         "containerType": "[parameters('fslogixContainerType')]",

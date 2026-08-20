@@ -9,7 +9,6 @@ param fslogixStorageService string
 param identitySolution string
 param location string
 param runCommandName string
-param configurationVersion string
 param profileSizeInMBs int
 param virtualMachineName string
 
@@ -46,10 +45,6 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
   location: location
   properties: {
     parameters: [
-      {
-        name: 'ConfigurationVersion'
-        value: configurationVersion
-      }
       {
         name: 'ConfigureFSLogix'
         value: 'true'

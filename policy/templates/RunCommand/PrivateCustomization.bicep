@@ -1,6 +1,5 @@
 param artifactUri string
 param arguments string
-param configurationVersion string
 param location string
 param runCommandName string
 param userAssignedIdentityResourceId string
@@ -18,7 +17,6 @@ module customization 'PrivateCustomizationRunCommand.bicep' = {
   params: {
     artifactUri: artifactUri
     arguments: arguments
-    configurationVersion: configurationVersion
     location: location
     runCommandName: runCommandName
     userAssignedIdentityResourceId: userAssignedIdentityResourceId
