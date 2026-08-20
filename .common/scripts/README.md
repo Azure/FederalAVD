@@ -92,7 +92,7 @@ Unified session host initialization script that combines configuration and AVD a
   - Cloud Cache support
   - FSLogix Redirections XML for Teams and Azure CLI profile exclusions
   - Entra Kerberos `CloudKerberosTicketRetrievalEnabled` registry value
-  - Windows Defender path and process exclusions for FSLogix
+  - Microsoft Defender Antivirus path and process exclusions for FSLogix, dynamically written to Local Group Policy; centrally managed Defender policy can supersede local exclusions
   - Local administrator added to FSLogix exclude lists
 - Applies all registry settings via `Set-RegistryValue`
 - Resizes the OS disk partition to its maximum supported size
@@ -135,25 +135,6 @@ Configures OS disk encryption keys for confidential VMs.
 
 - **Used by:** Host Pool Deployment
 - **Purpose:** Secure boot and encryption key management for confidential compute
-
-#### [Disable-PrivacyExperience.ps1](Disable-PrivacyExperience.ps1)
-
-Disables Windows privacy experience prompts for AVD multi-user scenarios.
-
-- **Used by:** Image Management
-- **Purpose:** Suppress privacy setup screens on first logon
-- **Features:** Configures registry keys to skip OOBE privacy screens
-
-#### [Enable-RDPShortPathListener.ps1](Enable-RDPShortPathListener.ps1)
-
-Configures RDP Shortpath for direct UDP transport.
-
-- **Used by:** Image Management, Host Pool Deployment
-- **Purpose:** Enable low-latency RDP connections via UDP
-- **Features:** 
-  - Creates registry keys for UDP port redirector
-  - Configures firewall rules for port 3390
-- **Reference:** [RDP Shortpath Documentation](https://docs.microsoft.com/en-us/azure/virtual-desktop/shortpath)
 
 ### 🗄️ Storage Configuration
 
@@ -327,14 +308,14 @@ Executes sysprep to generalize Windows images, then captures the Panther logs in
 - **Features:**
   - Waits for required services (RdAgent, WindowsAzureGuestAgent) to be running
   - Removes cached unattend files that would interfere with OOBE
-  - Enables the built-in local administrator account (required by the scheduled task)
+  - Enables the built-in local administrator account used to launch Sysprep
   - Waits for CBS (Component Based Servicing) to settle; exits with an error if a reboot is still pending
-  - Registers a scheduled task to run sysprep `/oobe /generalize /quit /mode:vm` under the local admin account
-  - Starts the task immediately with `Start-ScheduledTask` and confirms it enters **Running** state within 2 minutes — fails fast if sysprep never launches
-  - Waits up to 30 minutes for sysprep to complete, then checks the scheduled task exit code
+  - Logs a warning, without blocking capture, if Microsoft Defender for Endpoint appears onboarded or retains device identity
+  - Uses `LogonUser`, `LoadUserProfile`, and `CreateProcessAsUser` to run Sysprep `/oobe /generalize /quit /mode:vm` under the local administrator account
+  - Waits up to 30 minutes for the Sysprep process to complete and checks its exit code
   - Emits `setupact.log` and `setuperr.log` from `C:\Windows\System32\Sysprep\Panther\` to stdout so they are captured by the Run Command `outputBlobUri`
   - Fails the Run Command (and the deployment) if sysprep returns a non-zero exit code, with the Panther log already in the output blob
-  - Deregisters the scheduled task on success
+  - Unloads the local administrator profile and closes native process handles
   - Exits cleanly — `Generalize-Vm.ps1` handles deallocate and generalize
 - **Output:** Panther logs in the Run Command output blob; VM left running and generalized (ready for deallocate)
 

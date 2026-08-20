@@ -268,7 +268,7 @@ $secedit = Start-Process -FilePath 'secedit.exe' `
     -Wait -PassThru -NoNewWindow
 Write-Log -Message "secedit.exe exited with code [$($secedit.ExitCode)]."
 if ($secedit.ExitCode -ne 0) {
-    Write-Log -Category Warning -Message "secedit returned a non-zero exit code. Review log at '$seceditLog'."
+    throw "secedit.exe failed with exit code [$($secedit.ExitCode)]. Review log at '$seceditLog'."
 }
 
 # -- Step 3: Registry values ----------------------------------------------------

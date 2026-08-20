@@ -792,6 +792,36 @@ function Get-RelativePolicyKeyPath {
 
 #endregion RegistryPol
 
+Function Invoke-WithDefaultUserHive {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [string] $HivePath,
+
+        [Parameter(Mandatory = $true)]
+        [scriptblock] $ScriptBlock
+    )
+
+    Write-Log -Message "Loading default user hive from '$HivePath'."
+    $null = reg load 'HKLM\DefaultUser' $HivePath 2>&1
+    If ($LASTEXITCODE -ne 0) {
+        throw "Failed to load default user hive from '$HivePath' (exit code [$LASTEXITCODE])."
+    }
+
+    Try {
+        & $ScriptBlock
+    }
+    Finally {
+        Write-Log -Message 'Unloading default user hive.'
+        [GC]::Collect()
+        [GC]::WaitForPendingFinalizers()
+        $null = reg unload 'HKLM\DefaultUser' 2>&1
+        If ($LASTEXITCODE -ne 0) {
+            throw "Default user hive unload failed with exit code [$LASTEXITCODE]."
+        }
+    }
+}
+
 #region Initialization
 [string]$Script:Name = "Configure-Office365Policy"
 [string]$Script:TempDir = Join-Path -Path $env:Temp -ChildPath $Script:Name
@@ -884,9 +914,7 @@ Else {
     Write-Log -Category Warning -Message "Office 365 ADMX templates were not imported. Writing settings directly to registry."
     # User scope policies  -  write to default user hive at the policy path
     $DefaultUserHive = "$env:SystemDrive\Users\Default\NTUSER.dat"
-    Write-Log -Message "Loading default user hive from '$DefaultUserHive'."
-    $null = reg load 'HKLM\DefaultUser' $DefaultUserHive 2>&1
-    If ($LASTEXITCODE -eq 0) {
+    Invoke-WithDefaultUserHive -HivePath $DefaultUserHive -ScriptBlock {
         $o365UserBase = 'HKLM:\DefaultUser\Software\Policies\Microsoft\Office\16.0'
         $commonKey = "$o365UserBase\Common"
         $cachedModeKey = "$o365UserBase\Outlook\Cached Mode"
@@ -904,14 +932,6 @@ Else {
             If (-not (Test-Path $cachedModeKey)) { New-Item -Path $cachedModeKey -Force | Out-Null }
             Set-ItemProperty -Path $cachedModeKey -Name 'SyncWindowSettingDays' -Value $SyncWindowSettingDays -Type DWord -Force
         }
-        [GC]::Collect(); [GC]::WaitForPendingFinalizers()
-        $null = reg unload 'HKLM\DefaultUser' 2>&1
-        If ($LASTEXITCODE -ne 0) {
-            Write-Log -Category Error -Message "Default user hive unload failed with exit code [$LASTEXITCODE]."
-        }
-    }
-    Else {
-        Write-Log -Category Error -Message "Failed to load default user hive from '$DefaultUserHive' (exit code [$LASTEXITCODE])."
     }
     # Computer scope policies  -  write directly to registry
     $o365UpdateKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate'
@@ -930,23 +950,12 @@ Else {
 If ($null -ne $CalendarSyncWindowSetting) {
     $DefaultUserHive = "$env:SystemDrive\Users\Default\NTUSER.dat"
     $DefaultUserKeyPath = 'HKLM:\DefaultUser\Software\Microsoft\Office\16.0\Outlook\Cached Mode'
-    Write-Log -Message "Loading default user hive from '$DefaultUserHive'."
-    $null = reg load 'HKLM\DefaultUser' $DefaultUserHive 2>&1
-    If ($LASTEXITCODE -eq 0) {
+    Invoke-WithDefaultUserHive -HivePath $DefaultUserHive -ScriptBlock {
         If (-not (Test-Path $DefaultUserKeyPath)) { $null = New-Item -Path $DefaultUserKeyPath -Force }
         Set-ItemProperty -Path $DefaultUserKeyPath -Name 'CalendarSyncWindowSetting' -Value $CalendarSyncWindowSetting -Type DWord -Force
         If ($CalendarSyncMonths -ne 'Not Configured') {
             Set-ItemProperty -Path $DefaultUserKeyPath -Name 'CalendarSyncWindowSettingMonths' -Value ([int]$CalendarSyncMonths) -Type DWord -Force
         }
-        Write-Log -Message "Unloading default user hive."
-        [GC]::Collect(); [GC]::WaitForPendingFinalizers()
-        $null = reg unload 'HKLM\DefaultUser' 2>&1
-        If ($LASTEXITCODE -ne 0) {
-            Write-Log -Category Error -Message "Default user hive unload failed with exit code [$LASTEXITCODE]."
-        }
-    }
-    Else {
-        Write-Log -Category Error -Message "Failed to load default user hive from '$DefaultUserHive' (exit code [$LASTEXITCODE])."
     }
 }
 Write-Log -category Info -message "Completed Configuring Office 365 Group Policy."

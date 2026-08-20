@@ -22,10 +22,10 @@ if (-not (Test-Path -LiteralPath $ArmPath -PathType Leaf)) {
 
 $temporaryArmPath = Join-Path ([System.IO.Path]::GetTempPath()) ("federalavd-{0}.json" -f [guid]::NewGuid())
 try {
-    if (Get-Command -Name 'bicep' -ErrorAction SilentlyContinue) {
-        & bicep build $bicepFile.FullName --outfile $temporaryArmPath
-    } elseif (Get-Command -Name 'az' -ErrorAction SilentlyContinue) {
+    if (Get-Command -Name 'az' -ErrorAction SilentlyContinue) {
         & az bicep build --file $bicepFile.FullName --outfile $temporaryArmPath
+    } elseif (Get-Command -Name 'bicep' -ErrorAction SilentlyContinue) {
+        & bicep build $bicepFile.FullName --outfile $temporaryArmPath
     } else {
         throw "Neither the Bicep CLI nor Azure CLI is available."
     }

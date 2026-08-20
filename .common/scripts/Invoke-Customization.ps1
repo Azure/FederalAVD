@@ -71,6 +71,91 @@ function Split-ArgumentString {
   return $arguments
 }
 
+function Split-MsiArgumentString {
+  param([string]$ArgumentString)
+
+  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @() }
+
+  $arguments = @()
+  $currentArgument = [System.Text.StringBuilder]::new()
+  $inQuotes = $false
+
+  for ($index = 0; $index -lt $ArgumentString.Length; $index++) {
+    $character = $ArgumentString[$index]
+    if ($character -eq '"') {
+      $inQuotes = -not $inQuotes
+    }
+    elseif ([char]::IsWhiteSpace($character) -and -not $inQuotes) {
+      if ($currentArgument.Length -gt 0) {
+        $arguments += $currentArgument.ToString()
+        $null = $currentArgument.Clear()
+      }
+    }
+    else {
+      $null = $currentArgument.Append($character)
+    }
+  }
+
+  if ($inQuotes) { throw 'MSI arguments contain an unterminated double quote.' }
+  if ($currentArgument.Length -gt 0) { $arguments += $currentArgument.ToString() }
+  return $arguments
+}
+
+function ConvertTo-WindowsCommandLineArgument {
+  param([AllowEmptyString()][string]$Argument)
+
+  if ($Argument.Length -gt 0 -and $Argument -notmatch '[\s"]') { return $Argument }
+
+  $quotedArgument = [System.Text.StringBuilder]::new()
+  $null = $quotedArgument.Append('"')
+  $backslashCount = 0
+  foreach ($character in $Argument.ToCharArray()) {
+    if ($character -eq '\') {
+      $backslashCount++
+    }
+    elseif ($character -eq '"') {
+      $null = $quotedArgument.Append(('\' * (($backslashCount * 2) + 1)))
+      $null = $quotedArgument.Append('"')
+      $backslashCount = 0
+    }
+    else {
+      $null = $quotedArgument.Append(('\' * $backslashCount))
+      $null = $quotedArgument.Append($character)
+      $backslashCount = 0
+    }
+  }
+  $null = $quotedArgument.Append(('\' * ($backslashCount * 2)))
+  $null = $quotedArgument.Append('"')
+  return $quotedArgument.ToString()
+}
+
+function Get-MsiArgumentList {
+  param(
+    [string]$InstallerPath,
+    [string]$ArgumentString
+  )
+
+  [string[]]$msiArguments = @(
+    Split-MsiArgumentString -ArgumentString $ArgumentString |
+      Where-Object { -not [string]::IsNullOrEmpty($_) }
+  )
+  if ($msiArguments | Where-Object { $_ -match '^/(i|package|x|uninstall)$' }) {
+    throw 'Do not specify an MSI package operation or path. The downloaded MSI is installed automatically.'
+  }
+  if ($msiArguments | Where-Object { $_ -match '^/(forcerestart|promptrestart)$' }) {
+    throw 'MSI arguments cannot request or prompt for a restart.'
+  }
+
+  $msiArguments = @('/i', $InstallerPath) + $msiArguments
+  if (-not ($msiArguments | Where-Object { $_ -match '^/(qn|quiet)$' })) {
+    $msiArguments += '/quiet'
+  }
+  if (-not ($msiArguments | Where-Object { $_ -ieq '/norestart' })) {
+    $msiArguments += '/norestart'
+  }
+  return $msiArguments
+}
+
 function ConvertTo-ParametersSplat {
   param([string]$ArgumentString)
 
@@ -175,19 +260,13 @@ try {
         }
       }
       'msi' {
-        If ($Arguments) {
-          $Arguments = Split-ArgumentString -ArgumentString $Arguments
-          If ($Arguments -notcontains $DestFile) {
-            $Arguments = @("/i $DestFile") + $Arguments
-          }
-          Write-Log "Executing 'msiexec.exe $Arguments'"
-          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $Arguments -Wait -PassThru
-          Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
-        }
-        Else {
-          Write-Log "Executing 'msiexec.exe /i $DestFile /qn'"
-          $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList "/i $DestFile /qn" -Wait -PassThru
-          Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
+        $MsiArguments = Get-MsiArgumentList -InstallerPath $DestFile -ArgumentString $Arguments
+        $MsiCommandLine = ($MsiArguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Argument $_ }) -join ' '
+        Write-Log "Executing 'msiexec.exe $MsiCommandLine'"
+        $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $MsiCommandLine -Wait -PassThru
+        Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
+        if ($MsiExec.ExitCode -notin @(0, 3010)) {
+          throw "MSI installation failed with exit code $($MsiExec.ExitCode)."
         }
       }
       'bat' {
@@ -214,8 +293,9 @@ try {
           $LASTEXITCODE = 0
           & $DestFile *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
-        if ($LASTEXITCODE) {
-          throw "Script '$DestFile' exited with code $LASTEXITCODE."
+        $ScriptSucceeded = $?
+        if (-not $ScriptSucceeded) {
+          throw "Script '$DestFile' failed with exit code $LASTEXITCODE."
         }
       }
       'zip' {
@@ -236,8 +316,9 @@ try {
           $LASTEXITCODE = 0
           & $PSScript *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
-        if ($LASTEXITCODE) {
-          throw "Script '$PSScript' exited with code $LASTEXITCODE."
+        $ScriptSucceeded = $?
+        if (-not $ScriptSucceeded) {
+          throw "Script '$PSScript' failed with exit code $LASTEXITCODE."
         }
       }
     }

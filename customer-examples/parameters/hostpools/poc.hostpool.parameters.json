@@ -121,9 +121,6 @@
         //                        Switches: "-SkipShortcuts"  (no value = $true)
         //                        Arrays:   "-Domains @('a.com', 'b.com')"  (single quotes, no JSON escaping)
         //                        EXE/MSI:  "/quiet /norestart"
-        //      runAfterHostPoolJoin - (Optional, default false) Set true to run AFTER the VM
-        //                            joins the AVD host pool (required for policies that need
-        //                            the AVD agent registered first)
         //
         //    Switch parameters (no value) are automatically converted to $true.
         //    Example: "-EnableRemoteApp" passes $EnableRemoteApp = $true to your script.
@@ -149,14 +146,6 @@
         //             "name": "Configure-RemoteDesktopPolicy",
         //             "blobNameOrUri": "Configure-RemoteDesktopPolicy.zip",
         //             "arguments": "-MaxIdleTime 14400000 -MaxDisconnectionionTime 14400000"
-        //         },
-        //         {
-        //             // Example: post-join customization (runs after VM joins the host pool).
-        //             // Use runAfterHostPoolJoin: true for scripts that require the AVD agent.
-        //             "name": "Configure-PostJoin",
-        //             "blobNameOrUri": "Configure-PostJoin.zip",
-        //             "arguments": "-Environment Production",
-        //             "runAfterHostPoolJoin": true
         //         }
         //     ]
         // }

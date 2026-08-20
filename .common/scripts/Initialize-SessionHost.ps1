@@ -85,9 +85,6 @@ $ErrorActionPreference = 'Stop'
 $Script:Name = 'Initialize-SessionHost'
 $Script:LogPath = Join-Path -Path $env:SystemRoot -ChildPath "Logs\$Script:Name.log"
 
-# Convert string parameters to boolean for internal use
-$AADJoinBool = if ([string]::IsNullOrEmpty($AADJoin)) { $false } else { [System.Convert]::ToBoolean($AADJoin) }
-
 #region Helper Functions
 
 function Write-Log {
@@ -421,6 +418,130 @@ Function Set-RegistryValue {
     }
 }
 
+Function Set-LocalMachinePolicyValue {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Key,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Name,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [object]$Value,
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('DWord', 'String')]
+        [string]$Type = 'DWord',
+        [Parameter(Mandatory = $false)]
+        [string]$GroupPolicyRoot = "$env:SystemRoot\System32\GroupPolicy"
+    )
+
+    $Utf16 = [System.Text.Encoding]::Unicode
+    $PolicyPath = Join-Path -Path $GroupPolicyRoot -ChildPath 'Machine\Registry.pol'
+    $Entries = [System.Collections.Generic.List[hashtable]]::new()
+
+    If (Test-Path -Path $PolicyPath) {
+        $Raw = [System.IO.File]::ReadAllBytes($PolicyPath)
+        If ($Raw.Length -lt 8 -or [System.Text.Encoding]::ASCII.GetString($Raw, 0, 4) -ne 'PReg') {
+            Throw "Invalid Registry.pol header: $PolicyPath"
+        }
+        $Position = 8
+        While ($Position -lt $Raw.Length) {
+            If ($Position + 1 -ge $Raw.Length) { Break }
+            If ($Raw[$Position] -ne 0x5B -or $Raw[$Position + 1] -ne 0x00) {
+                $Position++
+                Continue
+            }
+            $Position += 2
+            $Start = $Position
+            While ($Position + 1 -lt $Raw.Length -and -not ($Raw[$Position] -eq 0 -and $Raw[$Position + 1] -eq 0)) { $Position += 2 }
+            $EntryKey = $Utf16.GetString($Raw, $Start, $Position - $Start)
+            $Position += 4
+            $Start = $Position
+            While ($Position + 1 -lt $Raw.Length -and -not ($Raw[$Position] -eq 0 -and $Raw[$Position + 1] -eq 0)) { $Position += 2 }
+            $EntryName = $Utf16.GetString($Raw, $Start, $Position - $Start)
+            $Position += 4
+            $EntryType = [BitConverter]::ToUInt32($Raw, $Position)
+            $Position += 6
+            $EntrySize = [BitConverter]::ToUInt32($Raw, $Position)
+            $Position += 6
+            $EntryData = If ($EntrySize -gt 0) { [byte[]]$Raw[$Position..($Position + $EntrySize - 1)] } Else { [byte[]]@() }
+            $Position += $EntrySize + 2
+            $Entries.Add(@{ Key = $EntryKey; Name = $EntryName; Type = $EntryType; Data = $EntryData })
+        }
+    }
+
+    $EntryType = If ($Type -eq 'DWord') { [uint32]4 } Else { [uint32]1 }
+    $EntryData = If ($Type -eq 'DWord') {
+        [BitConverter]::GetBytes([uint32]$Value)
+    }
+    Else {
+        $Utf16.GetBytes("$Value`0")
+    }
+    ForEach ($ValueName in $Name) {
+        @($Entries | Where-Object { $_.Key -ieq $Key -and $_.Name -ieq $ValueName }) | ForEach-Object { $Entries.Remove($_) | Out-Null }
+        $Entries.Add(@{ Key = $Key; Name = $ValueName; Type = $EntryType; Data = $EntryData })
+    }
+
+    $Stream = [System.IO.MemoryStream]::new()
+    $Writer = [System.IO.BinaryWriter]::new($Stream)
+    Try {
+        $Writer.Write([System.Text.Encoding]::ASCII.GetBytes('PReg'))
+        $Writer.Write([uint32]1)
+        ForEach ($Entry in $Entries) {
+            $Writer.Write([byte[]](0x5B, 0x00))
+            $Writer.Write($Utf16.GetBytes($Entry.Key))
+            $Writer.Write([byte[]](0x00, 0x00, 0x3B, 0x00))
+            $Writer.Write($Utf16.GetBytes($Entry.Name))
+            $Writer.Write([byte[]](0x00, 0x00, 0x3B, 0x00))
+            $Writer.Write([uint32]$Entry.Type)
+            $Writer.Write([byte[]](0x3B, 0x00))
+            $Writer.Write([uint32]$Entry.Data.Length)
+            $Writer.Write([byte[]](0x3B, 0x00))
+            If ($Entry.Data.Length -gt 0) { $Writer.Write([byte[]]$Entry.Data) }
+            $Writer.Write([byte[]](0x5D, 0x00))
+        }
+        $Writer.Flush()
+        $Bytes = $Stream.ToArray()
+    }
+    Finally {
+        $Writer.Dispose()
+        $Stream.Dispose()
+    }
+
+    $PolicyDirectory = Split-Path -Path $PolicyPath -Parent
+    If (-not (Test-Path -Path $PolicyDirectory)) { New-Item -Path $PolicyDirectory -ItemType Directory -Force | Out-Null }
+    $TemporaryPath = "$PolicyPath.tmp"
+    [System.IO.File]::WriteAllBytes($TemporaryPath, $Bytes)
+    If ((Get-Item -Path $TemporaryPath).Length -ne $Bytes.Length) {
+        Remove-Item -Path $TemporaryPath -Force -ErrorAction SilentlyContinue
+        Throw "Registry.pol verification failed: $TemporaryPath"
+    }
+    Move-Item -Path $TemporaryPath -Destination $PolicyPath -Force
+
+    $GptPath = Join-Path -Path $GroupPolicyRoot -ChildPath 'gpt.ini'
+    $ExistingGpt = If (Test-Path -Path $GptPath) { Get-Content -Path $GptPath -Raw } Else { '' }
+    $MachineVersion = [uint16]1
+    $UserVersion = [uint16]0
+    If ($ExistingGpt -match 'Version\s*=\s*(\d+)') {
+        $CurrentVersion = [uint32]$Matches[1]
+        $MachineVersion = [uint16]($CurrentVersion -band 0xFFFF)
+        $UserVersion = [uint16](($CurrentVersion -shr 16) -band 0xFFFF)
+    }
+    $MachineVersion++
+    $CombinedVersion = ([uint32]$UserVersion -shl 16) -bor [uint32]$MachineVersion
+    $RegistryCse = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'
+    $MachineAdministrativeTemplates = '{D02B1F72-3407-48AE-BA88-E8213C6761F1}'
+    $MachineExtensions = If ($ExistingGpt -match 'gPCMachineExtensionNames\s*=\s*(.+)') { $Matches[1].Trim() } Else { '' }
+    If ($MachineExtensions -notlike "*$RegistryCse*") { $MachineExtensions += "[$RegistryCse$MachineAdministrativeTemplates]" }
+    $UserExtensions = If ($ExistingGpt -match 'gPCUserExtensionNames\s*=\s*(.+)') { $Matches[1].Trim() } Else { '' }
+    $GptContent = "[General]`r`n"
+    If ($MachineExtensions) { $GptContent += "gPCMachineExtensionNames=$MachineExtensions`r`n" }
+    If ($UserExtensions) { $GptContent += "gPCUserExtensionNames=$UserExtensions`r`n" }
+    $GptContent += "Version=$CombinedVersion`r`n"
+    [System.IO.File]::WriteAllText($GptPath, $GptContent, [System.Text.Encoding]::ASCII)
+    Write-Log -Message "Local Group Policy update: $($Name.Count) $Type value(s) under $Key"
+}
+
 #endregion Helper Functions
 
 #region FSLogix Redirections XML Templates
@@ -479,18 +600,14 @@ try {
     [bool]$ConfigureFSLogixBool = [System.Convert]::ToBoolean($ConfigureFSLogix)
     
     # Enable Time Zone Redirection
-    $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'; Name = 'fEnableTimeZoneRedirection'; PropertyType = 'DWORD'; Value = 1 })
+    Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fEnableTimeZoneRedirection' -Value 1
     
     # Add GPU Settings if applicable
     if ($AmdVmSize -eq 'true' -or $NvidiaVmSize -eq 'true') {
         Write-Log -Message "Adding GPU Settings"
-        $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'; Name = 'bEnumerateHWBeforeSW'; PropertyType = 'DWORD'; Value = 1 })
-        $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'; Name = 'AVC444ModePreferred'; PropertyType = 'DWORD'; Value = 1 })
-    }
-    
-    if ($NvidiaVmSize -eq 'true') {
-        Write-Log -Message "Adding Nvidia GPU Settings"
-        $RegSettings.Add(@{Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'; Name = 'AVChardwareEncodePreferred'; PropertyType = 'DWORD'; Value = 1 })
+        Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'bEnumerateHWBeforeSW' -Value 1
+        Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'AVC444ModePreferred' -Value 1
+        Set-LocalMachinePolicyValue -Key 'Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'AVChardwareEncodePreferred' -Value 1
     }
     
     # Configure FSLogix if specified
@@ -779,8 +896,8 @@ try {
         
         # Entra Kerberos Cloud Kerberos Ticket Retrieval
         If ($IdentitySolution -match 'EntraKerberos') {
-            Write-Log -message "Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Setting"
-            $RegSettings.Add([PSCustomObject]@{ Name = 'CloudKerberosTicketRetrievalEnabled'; Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters'; PropertyType = 'DWord'; Value = 1 })
+            Write-Log -message "Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Local Group Policy"
+            Set-LocalMachinePolicyValue -Key 'Software\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters' -Name 'CloudKerberosTicketRetrievalEnabled' -Value 1
             Write-Log -message "Adding Entra Kerberos Load Cred Key From Profile Setting"
             $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\Software\Policies\Microsoft\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })
         }
@@ -818,46 +935,40 @@ try {
             Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue
         }
 
-        # Windows Defender Exclusions for FSLogix
+        # Microsoft Defender Antivirus Local Group Policy exclusions for FSLogix
         $LocalPathExclusions = @(
             "$env:ProgramData\FSLogix",
-            "$env:ProgramData\FSLogix\Cache",
-            "$env:ProgramData\FSLogix\Proxy",
             "$env:ProgramFiles\FSLogix\Apps",
             "$env:SystemDrive\Users\*\AppData\Local\FSLogix",
             "$env:SystemRoot\Temp\*\*.vhdx",
-            "$env:SystemDrive\users\*\AppData\Local\Temp\*.vhdx"
+            "$env:SystemDrive\Users\*\AppData\Local\Temp\*\*.vhdx"
         )
         
-        # Build UNC Path Exclusions from storage account paths
+        # Build UNC path exclusions for containers and their companion files.
         $UncPathExclusions = @()
-        $UncPathExclusions += $LocalProfileContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-        $UncPathExclusions += $LocalOfficeContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-        $UncPathExclusions += $RemoteProfileContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-        $UncPathExclusions += $RemoteOfficeContainerPaths | ForEach-Object { "$_\*\*.vhdx" }
-        $UncPathExclusions = $UncPathExclusions | Where-Object { $_ }
+        $ContainerPaths = @($LocalProfileContainerPaths) + @($LocalOfficeContainerPaths) + @($RemoteProfileContainerPaths) + @($RemoteOfficeContainerPaths)
+        $ContainerPatterns = '*.vhdx', '*.vhdx.lock', '*.vhdx.meta', '*.vhdx.metadata'
+        ForEach ($ContainerPath in ($ContainerPaths | Where-Object { $_ } | Select-Object -Unique)) {
+            $UncPathExclusions += $ContainerPatterns | ForEach-Object { "$ContainerPath\*\$_" }
+        }
 
-        $PathExclusions = $LocalPathExclusions + $UncPathExclusions
+        [string[]]$PathExclusions = @($LocalPathExclusions + $UncPathExclusions | Select-Object -Unique)
 
         $ProcessExclusions = @(
             "$env:ProgramFiles\FSLogix\Apps\frxsvc.exe",
-            "$env:ProgramFiles\FSLogix\Apps\frxccds.exe",
-            "$env:ProgramFiles\FSLogix\Apps\frxdrv.sys",
-            "$env:ProgramFiles\FSLogix\Apps\frxdrvvt.sys",
-            "$env:ProgramFiles\FSLogix\Apps\frxccd.sys"
+            "$env:ProgramFiles\FSLogix\Apps\frxccds.exe"
         )
 
         Try {
-            ForEach ($Path in $PathExclusions) {
-                Add-MpPreference -ExclusionPath $Path -ErrorAction SilentlyContinue
-            }
-            ForEach ($Process in $ProcessExclusions) {
-                Add-MpPreference -ExclusionProcess $Process -ErrorAction SilentlyContinue
-            }
-            Write-Log -message "Added $($PathExclusions.Count) Defender path exclusions and $($ProcessExclusions.Count) process exclusions"
+            $DefenderExclusionsKey = 'Software\Policies\Microsoft\Windows Defender\Exclusions'
+            Set-LocalMachinePolicyValue -Key $DefenderExclusionsKey -Name 'Exclusions_Paths' -Value 1
+            Set-LocalMachinePolicyValue -Key $DefenderExclusionsKey -Name 'Exclusions_Processes' -Value 1
+            Set-LocalMachinePolicyValue -Key "$DefenderExclusionsKey\Paths" -Name $PathExclusions -Value '' -Type String
+            Set-LocalMachinePolicyValue -Key "$DefenderExclusionsKey\Processes" -Name $ProcessExclusions -Value '' -Type String
+            Write-Log -Message "Configured $($PathExclusions.Count) Defender path exclusions and $($ProcessExclusions.Count) process exclusions in Local Group Policy"
         }
         Catch {
-            Write-Log -Category Warning -Message "Failed to add Windows Defender exclusions: $_"
+            Write-Log -Category Warning -Message "Failed to configure Defender exclusions in Local Group Policy: $_"
         }
 
         # Add local administrator to FSLogix exclude lists
@@ -869,6 +980,17 @@ try {
                 Add-LocalGroupMember -Group $Group -Member $LocalAdministrator -ErrorAction SilentlyContinue
             }
         }
+    }
+
+    Try {
+        $GroupPolicyUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/target:computer /force /wait:60' -Wait -PassThru -NoNewWindow
+        If ($GroupPolicyUpdate.ExitCode -ne 0) {
+            Throw "gpupdate.exe exited with code $($GroupPolicyUpdate.ExitCode)"
+        }
+        Write-Log -Message "Computer Group Policy refreshed successfully"
+    }
+    Catch {
+        Write-Log -Category Warning -Message "Failed to refresh computer Group Policy: $_"
     }
     
     # Apply all registry settings

@@ -512,7 +512,7 @@ If ($Upgrade) {
             Write-Log -Message "Local Group Policy reset completed successfully."
         }
         Catch {
-            Write-Log -Category Error -Message "Error resetting Local Group Policy: $_"
+            throw "Error resetting Local Group Policy: $($_.Exception.Message)"
         }
     }
 }
@@ -675,7 +675,7 @@ ForEach ($gpoFolder in $GPOFolders) {
     Write-Log -Message "Running 'LGPO.exe /g `"$gpoFolder`"'"
     $lgpo = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/g `"$gpoFolder`"" -Wait -PassThru
     if ($lgpo.ExitCode -ne 0) {
-        Write-Log -Category Warning -Message "'lgpo.exe /g' exited with non-zero code [$($lgpo.ExitCode)] for folder '$gpoFolder'. Policy may be partially applied."
+        throw "lgpo.exe /g failed with exit code [$($lgpo.ExitCode)] for folder '$gpoFolder'."
     }
     else {
         Write-Log -Message "'lgpo.exe' exited with code [$($lgpo.ExitCode)]."
@@ -734,20 +734,26 @@ If (-not $IsDomainJoined) {
 # not be applied are cleared out regardless of which package version was downloaded.
 Write-Log -Message "[AdminTemplate] Deleting 'disconnectedstate' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of connected experiences in Office' so it reverts to Not Configured."
 Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'disconnectedstate' -Delete -OutputFile $LgpoTxtFile
-Write-Log -Message "[AdminTemplate] Deleting 'useroptintoserviceexperiences' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of additional optional connected experiences in Office' so it reverts to Not Configured."
-Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'useroptintoserviceexperiences' -Delete -OutputFile $LgpoTxtFile
-Write-Log -Message "[AdminTemplate] Deleting 'usercontenteval' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of connected experiences in Office that analyze content' so it reverts to Not Configured."
-Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'usercontenteval' -Delete -OutputFile $LgpoTxtFile
+Write-Log -Message "[AdminTemplate] Deleting 'usercontentdisabled' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of connected experiences in Office that analyze content' so it reverts to Not Configured."
+Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'usercontentdisabled' -Delete -OutputFile $LgpoTxtFile
 Write-Log -Message "[AdminTemplate] Deleting 'downloadcontentdisabled' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of connected experiences in Office that download online content' so it reverts to Not Configured."
 Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'downloadcontentdisabled' -Delete -OutputFile $LgpoTxtFile
+Write-Log -Message "[AdminTemplate] Deleting 'controllerconnectedservicesenabled' from User\Software\Policies\Microsoft\Office\16.0\Common\Privacy - removes the M365 STIG setting for 'Allow the use of additional optional connected experiences in Office' so it reverts to Not Configured."
+Update-LocalGPOTextFile -Scope 'User' -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Common\Privacy' -RegistryValue 'controllerconnectedservicesenabled' -Delete -OutputFile $LgpoTxtFile
 
 # Apply registry policy overrides built above
 Write-Log -Message "Applying AVD Exceptions registry overrides via lgpo.exe /t"
 $r = Start-Process -FilePath "$env:SystemRoot\System32\lgpo.exe" -ArgumentList "/t `"$LgpoTxtFile`"" -Wait -PassThru
 Write-Log -Message "lgpo.exe /t exited with code [$($r.ExitCode)]"
+if ($r.ExitCode -ne 0) {
+    throw "lgpo.exe /t failed with exit code [$($r.ExitCode)]."
+}
 # /target:computer - same reasoning as above: no real user session during image build.
 $GPUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/force /target:computer' -Wait -PassThru
 Write-Log -Message "'gpupdate.exe' exited with code [$($GPUpdate.ExitCode)])."
+if ($GPUpdate.ExitCode -ne 0) {
+    Write-Log -Category Warning -Message "gpupdate.exe failed with exit code [$($GPUpdate.ExitCode)]. Policy will be reapplied at startup."
+}
 
 # V-253289 MEDIUM: The Secondary Logon service must be disabled on Windows 11.
 Write-Log -Message "V-253289: Disabling the Secondary Logon Service."
@@ -771,7 +777,10 @@ If ($Serviceobject) {
 $output = cmd /c netsh interface portproxy show all '2>&1'
 If ($output) {
     Write-Log -Message "V-257592: Disabling PortProxy rules."
-    Start-Process -FilePath 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -NoNewWindow
+    $netsh = Start-Process -FilePath 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -PassThru -NoNewWindow
+    if ($netsh.ExitCode -ne 0) {
+        throw "netsh.exe failed to delete PortProxy rules with exit code [$($netsh.ExitCode)]."
+    }
 }
 
 # V-253396 MEDIUM: Explorer Data Execution Prevention must be enabled.

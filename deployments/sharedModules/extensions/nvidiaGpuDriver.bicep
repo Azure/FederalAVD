@@ -14,7 +14,7 @@ resource nvidiaGpuDriver 'Microsoft.Compute/virtualMachines/extensions@2023-09-0
   properties: {
     publisher: 'Microsoft.HpcCompute'
     type: 'NvidiaGpuDriverWindows'
-    typeHandlerVersion: '1.4'
+    typeHandlerVersion: '1.10'
     autoUpgradeMinorVersion: true
     enableAutomaticUpgrade: false
   }

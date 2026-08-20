@@ -131,6 +131,56 @@ The image build VMs make direct calls to the **Azure Resource Manager (ARM) API*
 
 📖 **[Azure service tags overview](https://learn.microsoft.com/azure/virtual-network/service-tags-overview)** — explains how to use service tags in NSG rules and Azure Firewall policies.
 
+### Prevent image-builder MDE onboarding
+
+Microsoft recommends that template VMs used for non-persistent VDI cloning are not onboarded to
+Microsoft Defender for Endpoint (MDE). An onboarded image can cause deployed session hosts to
+inherit the template's `senseGuid` instead of creating the intended non-persistent VDI identity.
+
+First confirm whether the image VM is actually onboarded. Defender for Cloud can discover an Azure
+VM and show it in Defender inventory with **Can be onboarded** status before the MDE sensor is
+installed or reporting. That discovery record is not proof of onboarding. On the image VM, active
+onboarding is indicated by both of these conditions:
+
+```powershell
+Get-ItemPropertyValue `
+  -Path 'HKLM:\SOFTWARE\Microsoft\Windows Advanced Threat Protection\Status' `
+  -Name OnboardingState `
+  -ErrorAction SilentlyContinue
+
+Get-Service -Name Sense -ErrorAction SilentlyContinue
+```
+
+`OnboardingState` value `1` with a running `Sense` service indicates active MDE onboarding.
+
+Choose the exclusion method that owns onboarding in your environment:
+
+- **Native Defender for Cloud Endpoint protection:** This integration is configured at subscription
+  scope and Microsoft does not document a resource-group exclusion for it. For strict separation,
+  place the image-build resource group in a dedicated build subscription where **Defender for
+  Cloud** > **Environment settings** > **Settings and monitoring** > **Endpoint protection** is
+  disabled. Keep workload subscriptions protected.
+- **Azure Policy-deployed MDE configuration or extensions:** Exclude the persistent image-build
+  resource group from the policy assignment with `notScopes`, or create a documented policy
+  exemption on that resource group for only the definitions that deploy MDE. Do not exempt the
+  resource group from unrelated security controls in a broader initiative.
+- **Intune, Group Policy, Configuration Manager, or another onboarding tool:** Exclude the temporary
+  image-builder naming pattern, device group, organizational unit, collection, or equivalent
+  targeting rule. Ensure onboarding is targeted to deployed session hosts instead.
+
+The FederalAVD Sysprep script records a warning in `C:\Windows\Logs\Invoke-Sysprep.log` when it
+detects active MDE onboarding or retained device identity, but it does not block capture or attempt
+tenant-specific offboarding. Review this log after image builds and correct the responsible
+onboarding scope before using the image in production.
+
+References:
+
+- [Enable Defender for Endpoint integration in Defender for Cloud](https://learn.microsoft.com/azure/defender-for-cloud/enable-defender-for-endpoint)
+- [Defender for Endpoint integration architecture](https://learn.microsoft.com/azure/defender-for-cloud/integration-defender-for-endpoint)
+- [Azure Policy excluded scopes](https://learn.microsoft.com/azure/governance/policy/concepts/assignment-structure#excluded-scopes)
+- [Azure Policy exemptions](https://learn.microsoft.com/azure/governance/policy/concepts/exemption-structure)
+- [Onboard non-persistent VDI devices](https://learn.microsoft.com/defender-endpoint/configure-endpoints-vdi)
+
 ---
 
 ## Image Build Architecture

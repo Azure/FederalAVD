@@ -12,8 +12,71 @@ function Write-Log {
     Write-Output $Entry
 }
 
+function Get-RegistryValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    try {
+        Get-ItemPropertyValue -LiteralPath $Path -Name $Name -ErrorAction Stop
+    }
+    catch {
+        $null
+    }
+}
+
+function Write-MdeImageState {
+    $MdePath = 'HKLM:\SOFTWARE\Microsoft\Windows Advanced Threat Protection'
+    $MdeStatusPath = "$MdePath\Status"
+    $MdeOnboardingState = Get-RegistryValue -Path $MdeStatusPath -Name OnboardingState
+    $MdeSenseService = Get-Service -Name Sense -ErrorAction SilentlyContinue
+    $MdeIdentityPresent = $false
+    foreach ($MdeValueName in @(
+        'senseGuid',
+        'senseId',
+        '2567E824-34AB-4A74-90E9-BC0F8BDFAA4A',
+        '7DC0B629-D7F6-4DB3-9BF7-64D5AAF50F1A',
+        'C9D38BBB-E9DD-4B27-8E6F-7DE97E68DAB9'
+    )) {
+        $MdeValue = Get-RegistryValue -Path $MdePath -Name $MdeValueName
+        if ($null -ne $MdeValue) {
+            $MdeIdentityPresent = $true
+            break
+        }
+    }
+
+    $MdeIdentitySubkey = "$MdePath\48A68F11-7A16-4180-B32C-7F974C7BD783"
+    $MdeCyberPath = Join-Path $env:ProgramData 'Microsoft\Windows Defender Advanced Threat Protection\Cyber'
+    $MdeCyberFiles = @(Get-ChildItem -LiteralPath $MdeCyberPath -Force -ErrorAction SilentlyContinue)
+    $MdePolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection'
+    $MdeOnboardingPolicy = Get-RegistryValue -Path $MdePolicyPath -Name OnboardingInfo
+    $MdeOffboardingPolicy = Get-RegistryValue `
+        -Path $MdePolicyPath `
+        -Name '696C1FA1-4030-4FA4-8713-FAF9B2EA7C0A'
+
+    if (
+        $MdeOnboardingState -eq 1 -or
+        ($null -ne $MdeSenseService -and $MdeSenseService.Status -eq 'Running') -or
+        $MdeIdentityPresent -or
+        (Test-Path -LiteralPath $MdeIdentitySubkey) -or
+        $MdeCyberFiles.Count -gt 0 -or
+        $null -ne $MdeOnboardingPolicy -or
+        $null -ne $MdeOffboardingPolicy
+    ) {
+        Write-Log 'WARNING: Microsoft Defender for Endpoint appears onboarded or retains device identity. Sysprep will continue; review image-build MDE exclusion guidance.'
+        return
+    }
+
+    Write-Log 'Verified that the image VM has no active Microsoft Defender for Endpoint registration or device identity.'
+}
+
 try {
     Write-Log "Starting sysprep script"
+
     $Services = 'RdAgent', 'WindowsTelemetryService', 'WindowsAzureGuestAgent'
     ForEach ($Service in $Services) {
         Write-Log "Checking for service '$Service' and waiting for it to start if it exists."
@@ -252,6 +315,11 @@ public static class SysprepLauncher {
     Write-Log "Sysprep path: $SysprepExe"
     # StringBuilder ensures a writable native buffer as required by CreateProcessAsUserW.
     $CmdLine = New-Object System.Text.StringBuilder("$SysprepExe /oobe /generalize /quit /mode:vm")
+
+    # Log MDE state immediately before process creation. Image-builder onboarding should be
+    # prevented by the environment's Defender for Cloud or other onboarding configuration.
+    Write-MdeImageState
+
     $CreateOk = [SysprepLauncher]::CreateProcessAsUser(
         $UserToken, $SysprepExe, $CmdLine,
         [IntPtr]::Zero, [IntPtr]::Zero, $false, 0x400,
