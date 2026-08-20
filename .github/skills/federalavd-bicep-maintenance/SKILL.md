@@ -19,9 +19,15 @@ Use this workflow for templates under `deployments/` and `policy/bicep/`.
 4. Make the smallest source change in `.bicep`. Do not hand-edit generated ARM JSON.
 5. Build the changed Bicep immediately and resolve new errors. Known repository warnings must be
    distinguished from warnings introduced by the change.
-6. When a same-name `.json` exists beside the entry Bicep, regenerate it and run:
+6. When a same-name `.json` exists beside the entry Bicep, always regenerate the tracked ARM JSON
+    with Azure CLI before running the sync test. The sync test only builds a temporary comparison
+    file; it does not update the tracked JSON.
 
    ```powershell
+    az bicep build `
+       --file deployments/<component>/<component>.bicep `
+       --outfile deployments/<component>/<component>.json
+
    & .github/skills/federalavd-bicep-maintenance/scripts/Test-BicepArmSync.ps1 `
      -BicepPath deployments/<component>/<component>.bicep
    ```
