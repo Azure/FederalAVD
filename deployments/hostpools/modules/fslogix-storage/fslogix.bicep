@@ -18,7 +18,7 @@ param fslogixEncryptionKeyNameConv string
 param fslogixFileShares array
 param fslogixShardOptions string
 param fslogixUserGroups array
-param hostPoolResourceId string
+param hostPoolResourceId string = ''
 param kerberosEncryptionType string
 param keyManagementStorageAccounts string
 param location string
@@ -74,7 +74,7 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     smbServerLocation: smbServerLocation
     storageSku: storageSku
     tagsNetAppAccount: union(
-      { 'cm-resource-parent': hostPoolResourceId },
+      !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {},
       tags[?'Microsoft.NetApp/netAppAccounts'] ?? {}
     )
     deploymentSuffix: deploymentSuffix
@@ -147,6 +147,9 @@ module fslogixBackupRegistration '../operations/fslogixBackupItems.bicep' = if (
 output encryptionUserAssignedIdentityResourceId string = encryptionUserAssignedIdentityResourceId
 output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles'
   ? azureNetAppFiles!.outputs.volumeResourceIds
+  : []
+output netAppServerFqdns array = storageSolution == 'AzureNetAppFiles'
+  ? azureNetAppFiles!.outputs.smbServerFqdns
   : []
 output storageAccountResourceIds array = storageSolution == 'AzureFiles'
   ? azureFiles!.outputs.storageAccountResourceIds

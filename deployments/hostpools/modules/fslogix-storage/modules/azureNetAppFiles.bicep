@@ -110,3 +110,4 @@ module setNTFSPermissions '../../../../shared/modules/compute/virtualMachines/ru
 }
 
 output volumeResourceIds array = [for i in range(0, length(shares)): netAppVolumes[i].outputs.resourceId]
+output smbServerFqdns array = netappServerFqdns

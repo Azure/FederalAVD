@@ -9,6 +9,8 @@ param fslogixStorageService string
 param identitySolution string
 param location string
 param runCommandName string
+param configurationVersion string
+param profileSizeInMBs int
 param virtualMachineName string
 
 // Storage Accounts
@@ -45,8 +47,20 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
   properties: {
     parameters: [
       {
+        name: 'ConfigurationVersion'
+        value: configurationVersion
+      }
+      {
+        name: 'ConfigureFSLogix'
+        value: 'true'
+      }
+      {
         name: 'CloudCache'
         value: contains(fslogixContainerType, 'CloudCache') ? 'true' : 'false'
+      }
+      {
+        name: 'IdentitySolution'
+        value: identitySolution
       }
       {
         name: 'LocalNetAppServers'
@@ -75,6 +89,10 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
       {
         name: 'Shares'
         value: string(fslogixFileShareNames)
+      }
+      {
+        name: 'SizeInMBs'
+        value: string(profileSizeInMBs)
       }
       {
         name: 'StorageAccountDNSSuffix'

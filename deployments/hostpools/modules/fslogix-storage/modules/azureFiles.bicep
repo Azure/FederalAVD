@@ -12,7 +12,7 @@ param fslogixEncryptionKeyNameConv string
 param encryptionKeyVaultUri string
 param encryptionUserAssignedIdentityResourceId string
 param fileShares array
-param hostPoolResourceId string
+param hostPoolResourceId string = ''
 param identitySolution string
 param kerberosEncryptionType string
 param keyManagementStorageAccounts string
@@ -77,6 +77,8 @@ var storageNetworkAcls = {
   virtualNetworkRules: []
 }
 
+var parentResourceTags = !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {}
+
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(environment().name, 'us')
@@ -100,7 +102,7 @@ module storageAccounts '../../../../shared/modules/storage/storageAccounts/deplo
       location: location
       kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
       skuName: '${storageSku}${storageRedundancySuffix}'
-      tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
+      tags: union(parentResourceTags, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
       largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
@@ -183,7 +185,7 @@ module storageAccountPes '../../../../shared/modules/network/privateEndpoints/de
         'VNETID',
         privateEndpointVnetId
       )
-      tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
+      tags: union(parentResourceTags, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
       subnetResourceId: privateEndpointSubnetResourceId
       privateLinkServiceId: storageAccounts[i].outputs.resourceId
       groupId: 'file'
@@ -218,7 +220,7 @@ module configureADDSAuth '../../../../shared/modules/compute/virtualMachines/run
     location: location
     script: loadTextContent('../../../../shared/scripts/Configure-StorageAccountforADDS.ps1')
     parameters: [
-      { name: 'HostPoolName', value: last(split(hostPoolResourceId, '/'))! }
+      { name: 'HostPoolName', value: !empty(hostPoolResourceId) ? last(split(hostPoolResourceId, '/'))! : storageAccountNamePrefix }
       { name: 'KerberosEncryptionType', value: kerberosEncryptionType }
       { name: 'OuPath', value: ouPath }
       { name: 'ResourceManagerUri', value: environment().resourceManager }

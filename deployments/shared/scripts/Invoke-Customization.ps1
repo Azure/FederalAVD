@@ -3,6 +3,7 @@
   [string]$Arguments = '',
   [string]$BlobStorageSuffix,
   [string]$BuildDir = '',
+  [string]$ConfigurationVersion = '',
   [string]$Name,
   [string]$Uri,
   [string]$UserAssignedIdentityClientId

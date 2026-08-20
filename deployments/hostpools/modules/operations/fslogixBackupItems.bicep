@@ -11,7 +11,9 @@ param fileShares array
 param storageAccountResourceIds array
 param fileSharePolicyName string = 'filesharepolicy'
 param tags object = {}
-param hostPoolResourceId string
+param hostPoolResourceId string = ''
+
+var parentResourceTags = !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {}
 
 // ─── Protection Containers ─────────────────────────────────────────────────────
 @batchSize(1)
@@ -24,7 +26,7 @@ resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/p
       backupManagementType: 'AzureStorage'
       containerType: 'StorageContainer'
     }
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers'] ?? {})
+    tags: union(parentResourceTags, tags[?'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers'] ?? {})
   }
 ]
 
@@ -47,7 +49,7 @@ resource protectedItems 'Microsoft.RecoveryServices/vaults/backupFabrics/protect
       policyId: '${resourceGroup().id}/providers/Microsoft.RecoveryServices/vaults/${vaultName}/backupPolicies/${fileSharePolicyName}'
       sourceResourceId: combo.saId
     }
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems'] ?? {})
+    tags: union(parentResourceTags, tags[?'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers/protectedItems'] ?? {})
     dependsOn: [protectionContainers]
   }
 ]

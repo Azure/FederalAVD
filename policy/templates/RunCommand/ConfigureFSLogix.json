@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "4250972051399805233"
+      "templateHash": "12618256166038907385"
     }
   },
   "parameters": {
@@ -42,6 +42,12 @@
     "runCommandName": {
       "type": "string"
     },
+    "configurationVersion": {
+      "type": "string"
+    },
+    "profileSizeInMBs": {
+      "type": "int"
+    },
     "virtualMachineName": {
       "type": "string"
     }
@@ -70,8 +76,20 @@
       "properties": {
         "parameters": [
           {
+            "name": "ConfigurationVersion",
+            "value": "[parameters('configurationVersion')]"
+          },
+          {
+            "name": "ConfigureFSLogix",
+            "value": "true"
+          },
+          {
             "name": "CloudCache",
             "value": "[if(contains(parameters('fslogixContainerType'), 'CloudCache'), 'true', 'false')]"
+          },
+          {
+            "name": "IdentitySolution",
+            "value": "[parameters('identitySolution')]"
           },
           {
             "name": "LocalNetAppServers",
@@ -100,6 +118,10 @@
           {
             "name": "Shares",
             "value": "[string(parameters('fslogixFileShareNames'))]"
+          },
+          {
+            "name": "SizeInMBs",
+            "value": "[string(parameters('profileSizeInMBs'))]"
           },
           {
             "name": "StorageAccountDNSSuffix",
