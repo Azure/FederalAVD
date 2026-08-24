@@ -128,7 +128,7 @@ customer-examples/
   artifacts/          ← reference artifact packages; copy to customer/artifacts/ before use
   parameters/         ← reference parameter files; copy to customer/parameters/ before use
 docs/                 ← all documentation
-deployments/add-ons/automatedSessionHostPolicy/modules/policy/ ← Policy definitions used by the automated host add-on
+deployments/automatedHostPools/policy/modules/policy/ ← Policy definitions used by automated host pools
 tools/                ← utility scripts
 ```
 

@@ -31,9 +31,16 @@ show only the fields relevant to earlier choices, populate supported values from
 dependencies that are difficult to understand by hand-editing JSON. The parameter files generated
 from these forms then become the repeatable PowerShell or CI/CD inputs for the environment.
 
+Before publishing the Step 4 form, [choose a host pool management approach](host-pool-management.md).
+The standard and automated deployments create host pools with different, immutable session-host
+lifecycle ownership. Standard management is the default and supports every cloud, pooled and
+personal desktops, existing VM automation, and Session Host Replacer. Automated management is a
+Commercial-only pooled preview where Azure Virtual Desktop owns the VM lifecycle.
+
 ### 1. Publish the Core Template Specs
 
-From the repository root, connect to the target subscription and publish the five core forms:
+From the repository root, connect to the target subscription and publish the core forms. The
+example below publishes the standard host-pool form:
 
 ```powershell
 Connect-AzAccount -Environment '<environment>'
@@ -46,12 +53,23 @@ Set-AzContext -Subscription '<subscription-id>'
     -createImageManagement $true `
     -createCustomImage $true `
     -createHostPool $true `
+    -createAutomatedHostPool $false `
     -CreateAddOns $false
 ```
 
 All switches are explicit because the script defaults do not publish Networking, Security and
 Monitoring, or Image Management. Publishing a Template Spec does not deploy the workload; it makes
 the guided form available in the Azure portal. Add-ons can be published later when needed.
+
+For an automated host pool, reverse the two host-pool switches:
+
+```powershell
+-createHostPool $false `
+-createAutomatedHostPool $true
+```
+
+Publish only the Step 4 form that matches your selected management approach. The automated form is
+available only in Azure Commercial.
 
 ### 2. Deploy Only the Components Your Path Requires
 
@@ -71,7 +89,8 @@ customer folder:
 | AVD Shared Services | `customer\parameters\sharedServices\<environment>.sharedServices.parameters.json` |
 | AVD Image Management | `customer\parameters\imageManagement\<environment>.imageManagement.parameters.json` |
 | AVD Custom Image | `customer\parameters\imageBuild\<image>.imageBuild.parameters.json` |
-| AVD Host Pool | `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` |
+| AVD Host Pool (standard) | `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` |
+| AVD Automated Host Pool | `customer\parameters\automatedHostPools\<hostpool>.automatedHostPool.parameters.json` |
 
 Remove `timeStamp` from every downloaded file so the template generates a fresh value on each
 deployment. Secure values are supplied at deployment time and must not be stored in parameter files.
@@ -616,20 +635,41 @@ cd deployments
 
 Deploy your complete AVD environment including host pool, session hosts, storage, monitoring, and security resources.
 
+### Choose Standard or Automated Management
+
+This choice can't be changed after the host pool is created. Read the full
+[host pool management decision guide](host-pool-management.md) before deploying.
+
+| Choose | Use when | Image lifecycle |
+| --- | --- | --- |
+| **AVD Host Pool** | Any cloud; pooled or personal; direct VM control; existing pipelines or scripts | Your process, or Session Host Replacer for standard pooled hosts |
+| **AVD Automated Host Pool** | Azure Commercial; pooled only; preview accepted; AVD should own VM creation, updates, and deletion | Native Session Host Configuration and Session Host Update |
+
+Don't use Session Host Replacer, the Session Hosts add-on, or another VM lifecycle tool with an
+automated host pool. For a standard pool, AVD autoscale can start and stop VMs while Session Host
+Replacer independently handles image-driven replacement.
+
 ### First Deployment: Template Spec UI
 
-1. In the Azure portal, open **Template Specs** and deploy **AVD Host Pool**.
+1. In the Azure portal, open **Template Specs** and deploy **AVD Host Pool** or
+    **AVD Automated Host Pool**, according to the decision above.
 2. Use the form to select identity, image, session hosts, FSLogix, monitoring, backup, security, and
     private connectivity. Supply outputs from earlier steps only when those components were deployed.
 3. At **Review + create**, download the generated parameters and save them as
-    `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json`.
-4. Remove `timeStamp`, deploy, and verify that the session hosts report **Available**.
+    `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` for standard management or
+    `customer\parameters\automatedHostPools\<hostpool>.automatedHostPool.parameters.json` for
+    automated management.
+4. Remove generated timestamp or deployment-suffix values documented by the selected template,
+    deploy, and verify that the session hosts report **Available**.
 
 <a id="poc-fast-path"></a>
 <details>
 <summary><b>PowerShell-only PoC alternative using the starter parameter file</b></summary>
 
-If you want a working AVD host pool to evaluate — existing VNet, marketplace images, no CMK, no custom software — you can skip Steps 0–3 entirely. This is all you need.
+If you want a working **standard-management** AVD host pool to evaluate - existing VNet,
+marketplace images, no CMK, no custom software - you can skip Steps 0-3 entirely. This is all you
+need. For an automated-pool evaluation, use the starter file and deployment command in the
+[automated host-pool guide](../deployments/automatedHostPools/README.md#deploy).
 
 > **Before you start:** Run the [60-second preflight](#preflight-checklist) above, and make sure the Az module is installed (`Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`) and you're connected (`Connect-AzAccount`).
 

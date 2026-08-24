@@ -14,7 +14,8 @@ Parameter documentation lives alongside each deployment template. Find the secti
 | 🔒 **AVD Shared Services (Key Vaults, Monitoring, and FSLogix Backup)** | [sharedServices/uiFormDefinition.json](../deployments/sharedServices/uiFormDefinition.json) *(see Quick Start Step 1)* | — |
 | 📦 **Image Management** | [imageManagement/README.md — Parameters](../deployments/imageManagement/README.md#parameters) | [imageManagement/README.md — Examples](../deployments/imageManagement/README.md#examples) |
 | 🎨 **Image Build** | [imageBuild/README.md — Parameters](../deployments/imageBuild/README.md#parameters) | [imageBuild/README.md — Examples](../deployments/imageBuild/README.md#examples) |
-| 🏢 **Host Pool** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
+| 🏢 **Host Pool (standard management)** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
+| 🏢 **Automated Host Pool (Session Host Configuration)** | [automatedHostPools/README.md](../deployments/automatedHostPools/README.md) | [PoC parameters](../customer-examples/parameters/automatedHostPools/poc.automatedHostPool.parameters.json) |
 
 ---
 

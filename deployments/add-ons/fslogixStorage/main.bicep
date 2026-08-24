@@ -385,7 +385,7 @@ module storageCmk '../../hostpools/modules/cmk/storageCmk.bicep' = if (deploySto
   dependsOn: [storageResourceGroup]
 }
 
-module fslogix '../../hostpools/modules/fslogix-storage/fslogix.bicep' = {
+module fslogix '../../shared/modules/fslogix/fslogix.bicep' = {
   params: {
     activeDirectoryConnection: storageIdentityConfigurationIsValid && netAppResourceGroupConfigurationIsValid
       ? netAppDeploymentMode == 'CreateAll' || existingSharedActiveDirectoryConnection

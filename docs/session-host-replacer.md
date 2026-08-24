@@ -2,6 +2,10 @@
 
 # Session Host Replacer Add-On The Session Host Replacer is now available as a standalone add-on. For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/sessionHostReplacer/README.md)**.
 
+> **Standard host pools only.** Session Host Replacer creates and registers replacement VMs, so it
+> must not target an automated host pool that uses Session Host Configuration. Automated pools use
+> native Session Host Update. See [Choose a Host Pool Management Approach](host-pool-management.md).
+
 ## Overview
 
 The Session Host Replacer is an automated Azure Function that manages the lifecycle of Azure Virtual Desktop session hosts. It monitors session host image versions and automatically drains and replaces outdated VMs to maintain fleet health, security compliance, and image currency.

@@ -72,7 +72,7 @@ recommendation is implementation guidance, not an authorization or certification
 | AU-2 | Event Logging | AVD Insights DCR collects TerminalServices session events (connect/disconnect via `TerminalServices-RemoteConnectionManager/Admin` and `TerminalServices-LocalSessionManager/Operational`), all System events, FSLogix operational/admin events, and Application errors/warnings. Key Vault AuditEvent logs and RSV diagnostic logs flow to Log Analytics. Windows Security event log is **not** collected — see gap note above. | Automatic (partial) | `enableMonitoring: true` (default) |
 | AU-3 | Content of Audit Records | DCR records include timestamp, source channel, event ID, level, and message. TerminalServices events include user session context (session ID, user name). Key Vault audit records include caller identity, operation name, result, and client IP. Gap: Security event log records with full user-identity-and-outcome fields (required for AU-3 privileged-access coverage) are not collected at the VM layer. | Automatic (partial) | `enableMonitoring: true` (default) |
 | AU-9 | Protection of Audit Information | Log Analytics workspace data is protected by Azure RBAC. Session hosts hold only the `Monitoring Metrics Publisher` role on the DCR — write-only access to their own log stream, no read access to the workspace. | Automatic | Built-in |
-| AU-12 | Audit Record Generation | Standard session hosts receive the AMA extension (`AzureMonitorWindowsAgent`) and DCR association (`Microsoft.Insights/dataCollectionRuleAssociations`) directly from `virtualMachines.bicep`. For service-managed hosts, the Automated Session Host Policy add-on enables the VM system-assigned identity and assigns built-in AMA and DCR/DCE policies to the dedicated session-host resource group. | Automatic | `enableMonitoring: true` (default) |
+| AU-12 | Audit Record Generation | Standard session hosts receive the AMA extension (`AzureMonitorWindowsAgent`) and DCR association (`Microsoft.Insights/dataCollectionRuleAssociations`) directly from `virtualMachines.bicep`. For service-managed hosts, the automated host-pool policy stage enables the VM system-assigned identity and assigns built-in AMA and DCR/DCE policies to the dedicated session-host resource group. | Automatic | `enableMonitoring: true` (default) |
 
 ### Identification and Authentication (IA)
 
@@ -300,7 +300,7 @@ For DoD components, the [DoD ZT Strategy](https://dodcio.defense.gov/Portals/0/D
 | **Device** | Dedicated physical compute isolation for IL5 | Azure Dedicated Hosts (`deployToDedicatedHosts: true`) — mandatory in US Gov AZ/TX/VA for IL5 |
 | **Data** | HSM-backed CMK for all sensitive data | `CustomerManagedHSM` on all key management parameters |
 | **Visibility & Analytics** | Continuous monitoring with automated response | SIEM integration with Log Analytics workspace (Microsoft Sentinel or third-party — outside template scope) |
-| **Automation & Orchestration** | Policy-driven remediation for non-compliant resources | The Automated Session Host Policy add-on assigns VM identity, AMA, DCR/DCE, configuration, encryption, and tagging policies to the dedicated service-managed session-host resource group |
+| **Automation & Orchestration** | Policy-driven remediation for non-compliant resources | The automated host-pool policy stage assigns VM identity, AMA, DCR/DCE, configuration, encryption, and tagging policies to the dedicated service-managed session-host resource group |
 
 ---
 

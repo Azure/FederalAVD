@@ -11,6 +11,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 | Page | Description |
 | --- | --- |
 | [Quick Start Guide](quick-start.md) | Step-by-step walkthrough of the full deployment sequence — AVD Shared Services → Image Management → Image Build → Host Pool. Start here for a first deployment. New to FederalAVD? See the [PoC callout in Step 4](quick-start.md#step-4-deploy-host-pool). [Top 5 first-deployment mistakes](troubleshooting.md#top-5-first-deployment-mistakes). |
+| [Choose a Host Pool Management Approach](host-pool-management.md) | Decision guide for standard versus automated host pools, including lifecycle ownership, cloud and workload support, autoscale, image updates, and where Session Host Replacer fits. |
 | [Design](design.md) | Architecture overview — resource organization, naming conventions, resource group layout, and CAF alignment. |
 | [Features](features.md) | Capability overview — Zero Trust architecture, multi-subscription support, encryption options, and key solution characteristics. Intro to federal ZT mandates. |
 | [Solution Limitations](limitations.md) | Known constraints and unsupported scenarios — identity solution limitations, feature gaps, and workarounds. Read before designing a deployment. |
@@ -22,7 +23,8 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 
 | Page | Description |
 | --- | --- |
-| [Host Pool Deployment Guide](hostpool-deployment.md) | Deploying AVD host pools — prerequisites, deployment methods, parameter walkthrough, post-deployment tasks, scaling, and add-ons. |
+| [Host Pool Deployment Guide](hostpool-deployment.md) | Deploying standard-management AVD host pools — prerequisites, deployment methods, parameter walkthrough, post-deployment tasks, scaling, and add-ons. |
+| [Automated Host Pool Deployment](../deployments/automatedHostPools/README.md) | Deploying pooled Commercial host pools where Azure Virtual Desktop manages session-host creation, updates, scaling, and deletion. |
 | [Custom Image Build Guide](image-build.md) | Building custom session host images with Azure Image Builder — prerequisites, build process, deployment methods, and monitoring. |
 | [Artifacts and Image Management Guide](artifacts-guide.md) | Artifact packaging and image management infrastructure — how artifacts are uploaded, referenced, and executed in image builds and session host deployments. |
 | [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md) | Reference for the script that downloads, packages, and uploads software artifacts to the artifacts storage account. Covers all download methods including winget, GitHub Releases, and UWP/MSIX preserve-layout. |
@@ -57,7 +59,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 | --- | --- |
 | [**Add-Ons Overview**](add-ons.md) | Index of all available add-ons with selection guidance, Zero Trust alignment summary, and deployment methods. Start here. |
 | [AVD Alerts](avd-alerts.md) | 40 Azure Monitor alert rules covering host pool capacity, session host health, FSLogix profiles, VM performance, storage, and Service Health. |
-| [Session Host Replacer](session-host-replacer.md) | Automated Azure Function that drains and replaces session hosts when a new gallery image version is published. |
+| [Session Host Replacer](session-host-replacer.md) | Automated Azure Function that drains and replaces session hosts in standard-management pools when a new gallery image version is published. |
 | [Storage Quota Manager](storage-quota-manager.md) | Automated Azure Automation runbook that expands Azure Files Premium share quotas before they fill. Prevents FSLogix profile outages. |
 | [M365 Route Table Updater](m365-route-table-updater.md) | Automated Azure Automation runbook that keeps an Azure Route Table current with M365 IP ranges. For force-tunneled environments. |
 

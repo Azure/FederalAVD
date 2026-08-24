@@ -20,7 +20,7 @@ The Federal AVD solution provides comprehensive automation for deploying and man
 | --------- | ----------- | ------------- |
 | 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield) |
 | 🔒 **AVD Shared Services** | Secrets and Encryption Key Vaults, optional shared Log Analytics and AVD Insights resources, and an optional shared FSLogix Recovery Services vault and Azure Files backup policy. | [Quick Start - AVD Shared Services](docs/quick-start.md#step-1-deploy-avd-shared-services) |
-| 🏢 **Host Pools** | Complete AVD host pool deployments with networking, storage, monitoring, and security | [Host Pool Deployment Guide](docs/hostpool-deployment.md) |
+| 🏢 **Host Pools** | Standard or AVD-managed pooled host pools with networking, storage, monitoring, and security | [Choose a Management Approach](docs/host-pool-management.md) |
 | 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifacts-guide.md) |
 | 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/image-build.md) |
 | 🔧 **Add-Ons** | Lifecycle automation and operational tools | [Add-Ons](#-add-ons) |
@@ -81,6 +81,16 @@ Automated custom image build pipeline with artifact-based customizations.
 
 Complete AVD environment deployment with enterprise features.
 
+FederalAVD provides two host-pool deployments. Choose the management approach before deployment:
+
+- **Standard Host Pool** supports pooled and personal desktops in every supported Azure cloud. You
+  own the session-host VM lifecycle and can automate image replacement with Session Host Replacer.
+- **Automated Host Pool** is a Commercial-only preview for pooled desktops. Azure Virtual Desktop
+  owns VM creation, update, scaling, and deletion through Session Host Configuration.
+
+The choice can't be changed on an existing host pool. See
+[Choose a Host Pool Management Approach](docs/host-pool-management.md) before deploying Step 4.
+
 **What's Included:**
 
 - AVD host pool, workspace, and application groups
@@ -94,7 +104,9 @@ Complete AVD environment deployment with enterprise features.
 
 **Learn More:**
 
+- [Choose a Host Pool Management Approach](docs/host-pool-management.md)
 - [Host Pool Deployment Guide](docs/hostpool-deployment.md)
+- [Automated Host Pool Deployment](deployments/automatedHostPools/README.md)
 - [Features](docs/features.md)
 - [Design](docs/design.md)
 
@@ -106,11 +118,11 @@ Optional add-ons extend the base AVD deployment with advanced lifecycle manageme
 
 | Add-On | Purpose | Documentation |
 | --- | --- | --- |
-| 🔄 **Session Host Replacer** | Automates rolling replacement of session hosts when new images are available with zero-downtime updates | [Session Host Replacer](deployments/add-ons/sessionHostReplacer/README.md) |
+| 🔄 **Session Host Replacer** | Automates rolling image replacement for standard-management host pools; don't use with automated host pools | [Session Host Replacer](deployments/add-ons/sessionHostReplacer/README.md) |
 | 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/storageQuotaManager/README.md) |
 | 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md) |
 | 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/runCommandsOnVms/README.md) |
-| 🖥️ **Session Hosts** | Deploy session hosts into an existing host pool without touching host pool infrastructure | [Session Hosts](deployments/add-ons/sessionHosts/README.md) |
+| 🖥️ **Session Hosts** | Deploy session hosts into an existing standard-management host pool without touching control-plane infrastructure | [Session Hosts](deployments/add-ons/sessionHosts/README.md) |
 
 ---
 

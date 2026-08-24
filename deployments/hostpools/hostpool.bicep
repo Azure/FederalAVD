@@ -1457,7 +1457,7 @@ var effectiveFilesBackupVaultResourceId = deployRecoveryServicesAzureFiles
   : ''
 
 // FSLogix Storage
-module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
+module fslogix '../shared/modules/fslogix/fslogix.bicep' = if (deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
   name: 'FSLogix-${deploymentSuffix}'
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection

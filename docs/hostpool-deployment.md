@@ -2,11 +2,21 @@
 
 > **🔧 Technical Reference:** [Host Pool Template Documentation](../deployments/hostpools/README.md) - Complete parameter catalog and advanced scenarios
 
+**Management approach:** This guide covers the **standard management** deployment, where you own
+the session-host VM lifecycle. Before creating a host pool, compare it with the Commercial-only
+[automated host pool](../deployments/automatedHostPools/README.md), where Azure Virtual Desktop
+owns VM creation, updates, scaling, and deletion. The management approach can't be changed after
+creation. See [Choose a Host Pool Management Approach](host-pool-management.md).
+
 # 🏢 Host Pool Deployment Guide
 
 ## Overview
 
-This guide covers deploying complete Azure Virtual Desktop (AVD) host pool environments including session hosts, storage, networking, monitoring, and security resources. The solution supports both pooled and personal host pools with enterprise-grade features and Zero Trust security controls.
+This guide covers deploying complete standard-management Azure Virtual Desktop (AVD) host pool
+environments including session hosts, storage, networking, monitoring, and security resources. The
+solution supports both pooled and personal host pools with enterprise-grade features and Zero Trust
+security controls. FederalAVD or your own tooling creates and registers the VMs; for pooled custom
+image fleets, the optional Session Host Replacer can automate recurring drain-and-replace updates.
 
 ### What Gets Deployed
 

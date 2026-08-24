@@ -2,6 +2,11 @@
 
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 
+This template uses Azure Virtual Desktop **standard management**. You own session-host creation,
+registration, update, and replacement. Compare it with the Commercial-only
+[automated host pool](../automatedHostPools/README.md) before deployment; the management approach
+can't be changed later. See the [management decision guide](../../docs/host-pool-management.md).
+
 ## Overview
 
 This comprehensive Azure Bicep template deploys a complete Azure Virtual Desktop (AVD) environment including host pools, session hosts, storage, monitoring, security, and operational automation. It supports multiple identity scenarios, Zero Trust architecture, and air-gapped cloud environments.

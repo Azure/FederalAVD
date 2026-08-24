@@ -52,6 +52,10 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         value: configureFSLogix ? 'true' : 'false'
       }
       {
+        name: 'ConfigurationOnly'
+        value: 'true'
+      }
+      {
         name: 'CloudCache'
         value: contains(fslogixContainerType, 'CloudCache') ? 'true' : 'false'
       }
@@ -80,10 +84,6 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         value: string(fslogixRemoteStorageAccountNames)
       }
       {
-        name: 'RunCommandName'
-        value: runCommandName
-      }
-      {
         name: 'Shares'
         value: string(fslogixFileShareNames)
       }
@@ -92,7 +92,7 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         value: string(profileSizeInMBs)
       }
       {
-        name: 'StorageAccountDNSSuffix'
+        name: 'StorageSuffix'
         value: environment().suffixes.storage
       }
       {
@@ -117,9 +117,9 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         ]
       : []
     source: {
-      script: loadTextContent('../../../../../../shared/scripts/Set-AutomatedSessionHostConfiguration.ps1')
+      script: loadTextContent('../../../../../../shared/scripts/Initialize-SessionHost.ps1')
     }
-    timeoutInSeconds: 180
+    timeoutInSeconds: 900
     treatFailureAsDeploymentFailure: true    
   }
 }

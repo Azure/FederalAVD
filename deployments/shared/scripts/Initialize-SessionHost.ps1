@@ -7,12 +7,10 @@ param (
     [Parameter(Mandatory = $false)]
     [string]$StorageSuffix,
 
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory = $false)]
     [string]$RegistrationToken,
     
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory = $false)]
     [string]$AgentBootLoaderUrl,
     
     [Parameter(Mandatory = $false)]
@@ -27,6 +25,10 @@ param (
     
     [Parameter(Mandatory = $false)]
     [string]$UserAssignedIdentityClientId,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('true', 'false')]
+    [string]$ConfigurationOnly = 'false',
 
     # Session Host Configuration Parameters
     [Parameter(Mandatory = $true)]
@@ -1031,6 +1033,19 @@ try {
     Write-Log -Message "Phase 1: Session Host Configuration Complete"
     
     #endregion Phase 1: Session Host Configuration
+
+    If ([System.Convert]::ToBoolean($ConfigurationOnly)) {
+        Write-Log -Message 'Configuration-only mode requested. Skipping AVD Agent installation and registration.'
+        exit 0
+    }
+
+    If ([string]::IsNullOrWhiteSpace($RegistrationToken)) {
+        Throw 'RegistrationToken is required when ConfigurationOnly is false.'
+    }
+
+    If ([string]::IsNullOrWhiteSpace($AgentBootLoaderUrl)) {
+        Throw 'AgentBootLoaderUrl is required when ConfigurationOnly is false.'
+    }
     
     #region Phase 2: AVD Agent Installation and Registration
     

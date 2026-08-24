@@ -7,7 +7,7 @@ argument-hint: "[deployment folder or Bicep file]"
 # FederalAVD Bicep Maintenance
 
 Use this workflow for templates under `deployments/`, including policy definitions under
-`deployments/add-ons/automatedSessionHostPolicy/modules/policy/bicep/`.
+`deployments/automatedHostPools/policy/modules/policy/bicep/`.
 
 ## Procedure
 

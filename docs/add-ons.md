@@ -11,9 +11,8 @@ Add-ons extend the core FederalAVD deployment with operational automation, monit
 | Add-On | Purpose | When to Deploy |
 | --- | --- | --- |
 | [**AVD Alerts**](avd-alerts.md) | Azure Monitor alert rules for host pools, session hosts, FSLogix, VM performance, storage, and Service Health | Any production AVD environment |
-| [**Automated Session Host Policy**](../deployments/add-ons/automatedSessionHostPolicy/README.md) | Applies FederalAVD customization, monitoring, FSLogix, encryption, attestation, and disk-network controls to pooled hosts managed by Session Host Configuration | Host pools using `managementType: Automated` |
-| [**FSLogix Storage**](../deployments/add-ons/fslogixStorage/README.md) | Provisions standalone Azure Files or Azure NetApp Files profile storage for automated host pools | Before Automated Session Host Policy when FSLogix configuration is enabled |
-| [**Session Host Replacer**](session-host-replacer.md) | Automatically drains and replaces session hosts when a new gallery image version is published | Environments using custom images with recurring image builds |
+| [**FSLogix Storage**](../deployments/add-ons/fslogixStorage/README.md) | Provisions standalone Azure Files or Azure NetApp Files profile storage | When profile storage must be deployed independently of a host pool |
+| [**Session Host Replacer**](session-host-replacer.md) | Automatically drains and replaces session hosts when a new gallery image version is published | Standard-management host pools using custom images with recurring image builds; not automated host pools |
 | [**Storage Quota Manager**](storage-quota-manager.md) | Automatically expands Azure Files Premium share quotas before they fill up | Environments using Azure Files for FSLogix profile containers |
 | [**M365 Route Table Updater**](m365-route-table-updater.md) | Keeps an Azure Route Table current with the latest Microsoft 365 IP ranges | Force-tunneled environments where M365 traffic must bypass the NVA |
 | [**Deploy Additional Session Hosts**](../deployments/add-ons/sessionHosts/README.md) | Deploys additional VMs into an existing host pool without modifying host pool infrastructure | Scaling up capacity in an existing host pool |
@@ -51,9 +50,13 @@ This publishes all add-on templates as Template Specs in the specified resource 
 
 - **AVD Alerts** — Every production AVD environment benefits from alerting.
 
-### Deploy when using custom images
+### Deploy when using custom images in a standard host pool
 
 - **Session Host Replacer** — Automates the drain-and-replace cycle triggered by new image versions. Without it, you must drain and replace manually using `TagAndDrainSessionHosts.ps1`.
+
+Automated host pools use native Session Host Configuration and Session Host Update. Don't attach
+Session Host Replacer or the Session Hosts add-on because Azure Virtual Desktop exclusively owns
+their VM lifecycle. See [Choose a Host Pool Management Approach](host-pool-management.md).
 
 ### Deploy when using Azure Files for FSLogix
 

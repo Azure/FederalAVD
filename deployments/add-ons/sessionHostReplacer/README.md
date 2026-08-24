@@ -4,6 +4,12 @@
 
 Automated Azure Function for managing Azure Virtual Desktop session host lifecycle through continuous image updates with flexible replacement strategies.
 
+> **Supported host pools:** Use this add-on only with Azure Virtual Desktop **standard management**
+> host pools. It creates, registers, drains, and deletes VMs directly. Don't use it with an
+> automated host pool that has Session Host Configuration; Azure Virtual Desktop exclusively owns
+> that pool's VM lifecycle and provides native Session Host Update. See
+> [Choose a Host Pool Management Approach](../../../docs/host-pool-management.md).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -388,7 +394,9 @@ Click the button for your target cloud to open the deployment UI in Azure Portal
 
 ### Brownfield Deployments
 
-**The Session Host Replacer is fully brownfield-compatible** and can be deployed to manage any existing AVD host pool, regardless of how it was originally deployed (Azure Portal, Terraform, ARM/Bicep, etc.).
+**The Session Host Replacer is brownfield-compatible with standard-management host pools**,
+regardless of whether they were originally deployed through the Azure portal, Terraform, ARM,
+Bicep, or another tool. It doesn't support automated host pools with Session Host Configuration.
 
 #### Prerequisites for Brownfield
 

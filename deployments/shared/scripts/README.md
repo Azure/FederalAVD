@@ -47,18 +47,19 @@ Installs Microsoft Teams optimized for Azure Virtual Desktop.
 
 #### [Initialize-SessionHost.ps1](Initialize-SessionHost.ps1)
 
-Unified session host initialization script that combines configuration and AVD agent installation into a single Run Command execution. This is the primary script executed on each session host after VM provisioning.
+Unified session host initialization script that combines configuration and optional AVD agent installation into a single Run Command execution. This is the primary script executed on each session host after VM provisioning.
 
-- **Used by:** Host Pool Deployment
+- **Used by:** Host Pool Deployment and Automated Host Pool policy
 - **Log:** `C:\Windows\Logs\Initialize-SessionHost.log`
 
 **Parameters:**
 
 | Parameter | Required | Description |
 | --- | --- | --- |
-| `RegistrationToken` | Yes | Host pool registration token for joining the session host |
-| `AgentBootLoaderUrl` | Yes | Direct URL to download the RDAgentBootLoader MSI |
+| `RegistrationToken` | Conditional | Host pool registration token. Required unless `ConfigurationOnly` is `'true'` |
+| `AgentBootLoaderUrl` | Conditional | Direct URL to the RDAgentBootLoader MSI. Required unless `ConfigurationOnly` is `'true'` |
 | `TimeZone` | Yes | Windows time zone ID to configure (e.g. `Eastern Standard Time`) |
+| `ConfigurationOnly` | No | `'true'` to run session-host configuration and skip AVD agent installation and registration; default `'false'` |
 | `AgentUrl` | No | Direct URL to the RDAgent MSI — used if the Azure broker endpoint is unreachable |
 | `AADJoin` | No | `'true'` if the VM is Entra ID (Azure AD) joined; default `'false'` |
 | `MdmId` | No | MDM enrollment ID for Intune auto-enrollment with Entra ID join |
@@ -126,14 +127,6 @@ Comprehensive session host configuration including FSLogix, GPU drivers, time zo
   - Windows Update management
   - Storage account configuration for profiles
 - **Output:** Session host configuration logs
-
-#### [Set-AutomatedSessionHostConfiguration.ps1](Set-AutomatedSessionHostConfiguration.ps1)
-
-Unified post-provisioning configuration for service-managed session hosts.
-
-- **Used by:** Automated Session Host Policy add-on
-- **Purpose:** Set the Windows time zone, enable time zone redirection, optionally configure
-  FSLogix registry settings, and expand the guest OS partition
 
 #### [Set-ConfidentialVMOSDiskEncryptionKey.ps1](Set-ConfidentialVMOSDiskEncryptionKey.ps1)
 

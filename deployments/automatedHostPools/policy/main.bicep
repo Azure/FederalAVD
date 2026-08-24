@@ -28,7 +28,7 @@ param location string
 @description('Required. Resource group containing the automated session host virtual machines.')
 param sessionHostResourceGroupName string
 
-@description('Optional. Resource ID of the automated AVD host pool associated with resources created by this add-on.')
+@description('Optional. Resource ID of the automated AVD host pool associated with resources created by this policy stage.')
 @metadata({
   strongType: 'Microsoft.DesktopVirtualization/hostPools'
 })
@@ -143,7 +143,7 @@ param artifactsUserAssignedIdentityResourceId string = ''
 @description('Optional. Ordered, idempotent customizations applied to automated session hosts. Uses the same object shape and execution order as the host pool and session hosts add-on.')
 param sessionHostCustomizations sessionHostCustomizationType[] = []
 
-@description('Optional. Tags applied to resources created by this add-on.')
+@description('Optional. Tags applied to resources created by this policy stage.')
 param tags object = {}
 
 var virtualMachineContributorRoleDefinitionId = '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'

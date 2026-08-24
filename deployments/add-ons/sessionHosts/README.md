@@ -2,7 +2,13 @@
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Host Pool Deployment Guide](../../../docs/hostpool-deployment.md) | [Session Host Replacer](../sessionHostReplacer/README.md)
 
-Deploy additional session hosts into an existing Azure Virtual Desktop host pool without modifying any host pool infrastructure.
+Deploy additional session hosts into an existing standard-management Azure Virtual Desktop host
+pool without modifying any host pool infrastructure.
+
+> **Standard host pools only.** This add-on creates VMs and registers them with a host-pool token.
+> Don't use it with an automated host pool that has Session Host Configuration, where Azure Virtual
+> Desktop exclusively owns session-host creation and lifecycle. See
+> [Choose a Host Pool Management Approach](../../../docs/host-pool-management.md).
 
 ## Table of Contents
 
@@ -11,7 +17,7 @@ Deploy additional session hosts into an existing Azure Virtual Desktop host pool
 - [Prerequisites](#prerequisites)
 - [Deployment](#deployment)
 - [Parameters](#parameters)
-- [Naming Convention Auto-Detection](#naming-convention-auto-detection)
+- [Naming Convention](#naming-convention)
 - [Key Vault Secrets](#key-vault-secrets)
 - [Session Host Replacer Integration](#session-host-replacer-integration)
 

@@ -1,9 +1,8 @@
 # FSLogix Storage Add-On
 
 This add-on provisions FSLogix storage independently of a FederalAVD host pool deployment. It uses
-the same `deployments/hostpools/modules/fslogix-storage/fslogix.bicep` module as the host pool and is
-the storage prerequisite for automated host pools configured by the `automatedSessionHostPolicy`
-add-on.
+the same `deployments/shared/modules/fslogix/fslogix.bicep` module as the host pool and is
+also composed by the automated host-pool deployment before policy and session-host provisioning.
 
 ## Boundary
 
@@ -70,11 +69,9 @@ deletes the temporary resource group after configuration.
 Create the dedicated session-host VM resource group first because Session Host Configuration can
 only target an existing resource group. Then create the pooled automated host pool and Session Host
 Configuration, select that resource group for its VMs, and keep the desired session host count at
-zero. Deploy this add-on before the automated session-host policy, select the existing host pool so
-its resource ID is applied as the parent tag, and copy the `fslogixConfiguration` output into the
-corresponding policy form fields. Deploy the policy against the same host pool and dedicated
-session-host resource group, confirm policy and role-assignment propagation, and only then increase
-the desired session host count.
+zero. The automated host-pool deployment composes this template, passes its
+`fslogixConfiguration` output to the internal policy stage, and requests the final session-host
+count only after storage, policy, and role assignments complete.
 
 ## Capabilities
 
@@ -228,7 +225,7 @@ Entra Domain Services also support FSLogix Object Specific Settings.
 ## Required Outputs
 
 The add-on outputs a `fslogixConfiguration` object accepted directly by
-`deployments/add-ons/automatedSessionHostPolicy/main.bicep`:
+`deployments/automatedHostPools/policy/main.bicep`:
 
 ```bicep
 output fslogixConfiguration object = {

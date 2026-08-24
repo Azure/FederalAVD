@@ -4,6 +4,24 @@
 
 This document outlines the known limitations and considerations when deploying the Azure Virtual Desktop (AVD) solution in this repository.
 
+## Automated Host Pool Limitations
+
+FederalAVD automated host pools use Azure Virtual Desktop Session Host Configuration and the
+`Microsoft.DesktopVirtualization/hostPools@2025-11-01-preview` API.
+
+- Automated host pools are available only for pooled deployments in Azure Commercial.
+- The management approach is selected when the host pool is created and can't be changed later.
+    Moving between standard and automated management requires a new host pool and migration.
+- Azure Virtual Desktop exclusively owns VM creation, update, scaling, and deletion. Session Host
+    Replacer, the Session Hosts add-on, registration-token deployments, and other external VM
+    lifecycle automation aren't supported with automated pools.
+- Dynamic create/delete autoscale requires the Azure Virtual Desktop service principal roles and
+    outbound access to the service's current session-host agent download endpoint.
+- Preview APIs can change and might not meet an organization's production support requirements.
+
+See [Choose a Host Pool Management Approach](host-pool-management.md) for the full comparison and
+[Automated Host Pool Deployment](../deployments/automatedHostPools/README.md) for prerequisites.
+
 ## Identity Solution Limitations
 
 ### Active Directory Domain Services and Entra Kerberos

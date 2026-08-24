@@ -1,0 +1,1763 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "Azure Virtual Desktop Automated Host Pool Deployment",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "Deployment Basics",
+          "elements": [
+            {
+              "name": "subscriptionsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "GET",
+                "path": "/subscriptions?api-version=2022-12-01"
+              }
+            },
+            {
+              "name": "previewNotice",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Automated host pools use a preview Azure Virtual Desktop API and are currently supported only in Azure Commercial. Azure Virtual Desktop creates, updates, and replaces the session-host virtual machines."
+              }
+            },
+            {
+              "name": "prerequisites",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Before deployment, create the session-host subnet and an RBAC-enabled Key Vault containing the required VM administrator secrets. Domain-joined hosts also require domain-join credential secrets.",
+                "uri": "https://github.com/Azure/FederalAVD/tree/main/deployments/automatedHostPools"
+              }
+            },
+            {
+              "name": "identifier",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Host Pool Persona",
+              "toolTip": "A short identifier for the user persona served by this host pool, such as finance, dev, or kiosk.",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "regex": "^[a-zA-Z0-9]([a-zA-Z0-9_.-]*[a-zA-Z0-9])?$",
+                    "message": "The identifier must begin and end with an alphanumeric character and can contain letters, numbers, underscores, dashes, and dots."
+                  },
+                  {
+                    "isValid": "[lessOrEquals(length(steps('basics').identifier), 16)]",
+                    "message": "The identifier cannot exceed 16 characters."
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "controlPlane",
+          "label": "Control Plane",
+          "elements": [
+            {
+              "name": "scope",
+              "type": "Microsoft.Common.Section",
+              "label": "Subscription and Locations",
+              "elements": [
+                {
+                  "name": "subscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Subscription",
+                  "constraints": {
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+                    "required": true
+                  }
+                },
+                {
+                  "name": "location",
+                  "type": "Microsoft.Common.LocationSelector",
+                  "label": "Session Host Region",
+                  "resourceTypes": [
+                    "Microsoft.Compute/virtualMachines",
+                    "Microsoft.DesktopVirtualization/hostPools"
+                  ],
+                  "scope": {
+                    "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
+                  }
+                },
+                {
+                  "name": "controlPlaneLocation",
+                  "type": "Microsoft.Common.LocationSelector",
+                  "label": "AVD Control Plane Region",
+                  "defaultValue": "[steps('controlPlane').scope.location.name]",
+                  "resourceTypes": [
+                    "Microsoft.DesktopVirtualization/workspaces",
+                    "Microsoft.DesktopVirtualization/hostPools"
+                  ],
+                  "scope": {
+                    "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
+                  }
+                },
+                {
+                  "name": "desktopVirtualizationProviderApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('controlPlane').scope.subscription.id))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('controlPlane').scope.subscription.id, '/providers/Microsoft.DesktopVirtualization?api-version=2021-04-01')]"
+                  }
+                },
+                {
+                  "name": "providerNotRegistered",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(not(empty(steps('controlPlane').scope.subscription.id)), not(equals(steps('controlPlane').scope.desktopVirtualizationProviderApi.registrationState, 'Registered')))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "The Microsoft.DesktopVirtualization resource provider is not registered in this subscription.",
+                    "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/prerequisites?tabs=portal"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "workspacesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('controlPlane').scope.subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('controlPlane').scope.subscription.id, '/providers/Microsoft.DesktopVirtualization/workspaces?api-version=2024-04-03')]"
+              }
+            },
+            {
+              "name": "workspace",
+              "type": "Microsoft.Common.Section",
+              "label": "Workspace",
+              "elements": [
+                {
+                  "name": "createOption",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Workspace Option",
+                  "defaultValue": "Create a new workspace",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Create a new workspace",
+                        "value": "new"
+                      },
+                      {
+                        "label": "Use an existing workspace",
+                        "value": "existing"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "existingWorkspace",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Existing AVD Workspace",
+                  "multiLine": true,
+                  "visible": "[equals(steps('controlPlane').workspace.createOption, 'existing')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('controlPlane').workspacesApi.value, (workspace) => parse(concat('{\"label\":\"', workspace.name, '\",\"description\":\"Location: ', workspace.location, ', Resource Group: ', first(skip(split(workspace.id, '/'), 4)), '\",\"value\":\"', workspace.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "workspaceFriendlyName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Workspace Friendly Name",
+                  "defaultValue": "",
+                  "visible": "[equals(steps('controlPlane').workspace.createOption, 'new')]",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "isValid": "[lessOrEquals(length(steps('controlPlane').workspace.workspaceFriendlyName), 64)]",
+                        "message": "The friendly name cannot exceed 64 characters."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "desktopFriendlyName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Session Desktop Friendly Name",
+                  "defaultValue": "",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "isValid": "[lessOrEquals(length(steps('controlPlane').workspace.desktopFriendlyName), 20)]",
+                        "message": "The friendly name cannot exceed 20 characters."
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "hostPool",
+              "type": "Microsoft.Common.Section",
+              "label": "Host Pool",
+              "elements": [
+                {
+                  "name": "loadBalancerType",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Load Balancing Algorithm",
+                  "defaultValue": "Depth-first",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Depth-first",
+                        "value": "DepthFirst",
+                        "description": "Fills a session host to its session limit before using the next available host."
+                      },
+                      {
+                        "label": "Breadth-first",
+                        "value": "BreadthFirst",
+                        "description": "Distributes new sessions across all available session hosts."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "maxSessionLimit",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Maximum Sessions per Host",
+                  "defaultValue": 4,
+                  "min": 1,
+                  "max": 100,
+                  "showStepMarkers": false,
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                  "name": "startVMOnConnect",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Start VM on Connect",
+                  "defaultValue": true
+                },
+                {
+                  "name": "validationEnvironment",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Validation Environment",
+                  "defaultValue": false
+                },
+                {
+                  "name": "rdpProperties",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Custom RDP Properties",
+                  "defaultValue": "",
+                  "constraints": {
+                    "required": false
+                  }
+                }
+              ]
+            },
+            {
+              "name": "dynamicScaling",
+              "type": "Microsoft.Common.Section",
+              "label": "Dynamic Autoscaling",
+              "elements": [
+                {
+                  "name": "deploy",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Dynamic Create/Delete Autoscaling",
+                  "defaultValue": false
+                },
+                {
+                  "name": "prerequisites",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Dynamic autoscaling is preview functionality. The deployment assigns Desktop Virtualization Power On Off Contributor and Desktop Virtualization Virtual Machine Contributor to the Azure Virtual Desktop service principal at subscription scope. Session hosts must reach wvdhpustgr0prod.blob.core.windows.net."
+                  }
+                },
+                {
+                  "name": "servicePrincipalObjectId",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Azure Virtual Desktop Service Principal Object ID",
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                        "message": "Enter the object ID as a GUID."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "exclusionTag",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Scaling Exclusion Tag",
+                  "defaultValue": "ScalingPlanExclusion",
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                  "name": "rampUpStartTime",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Ramp-up Start Time",
+                  "defaultValue": "06:30",
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                        "message": "Use 24-hour HH:mm format."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "peakStartTime",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Peak Start Time",
+                  "defaultValue": "08:30",
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                        "message": "Use 24-hour HH:mm format."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "rampDownStartTime",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Ramp-down Start Time",
+                  "defaultValue": "17:00",
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                        "message": "Use 24-hour HH:mm format."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "offPeakStartTime",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Off-peak Start Time",
+                  "defaultValue": "20:00",
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                        "message": "Use 24-hour HH:mm format."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "rampUpMinimumHostPoolSize",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Ramp-up Minimum Host Pool Size",
+                  "defaultValue": 2,
+                  "min": 0,
+                  "max": 59,
+                  "showStepMarkers": false,
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]"
+                },
+                {
+                  "name": "rampUpMaximumHostPoolSize",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Ramp-up Maximum Host Pool Size",
+                  "defaultValue": 10,
+                  "min": 1,
+                  "max": 100,
+                  "showStepMarkers": false,
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "validations": [
+                      {
+                        "isValid": "[lessOrEquals(steps('controlPlane').dynamicScaling.rampUpMinimumHostPoolSize, steps('controlPlane').dynamicScaling.rampUpMaximumHostPoolSize)]",
+                        "message": "The ramp-up maximum must be at least the ramp-up minimum."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "rampDownMinimumHostPoolSize",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Ramp-down Minimum Host Pool Size",
+                  "defaultValue": 1,
+                  "min": 0,
+                  "max": 59,
+                  "showStepMarkers": false,
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]"
+                },
+                {
+                  "name": "rampDownMaximumHostPoolSize",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Ramp-down Maximum Host Pool Size",
+                  "defaultValue": 5,
+                  "min": 1,
+                  "max": 100,
+                  "showStepMarkers": false,
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]",
+                  "constraints": {
+                    "validations": [
+                      {
+                        "isValid": "[lessOrEquals(steps('controlPlane').dynamicScaling.rampDownMinimumHostPoolSize, steps('controlPlane').dynamicScaling.rampDownMaximumHostPoolSize)]",
+                        "message": "The ramp-down maximum must be at least the ramp-down minimum."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "rampUpCapacityThresholdPct",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Ramp-up Capacity Threshold (%)",
+                  "defaultValue": 60,
+                  "min": 1,
+                  "max": 100,
+                  "showStepMarkers": false,
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]"
+                },
+                {
+                  "name": "rampDownCapacityThresholdPct",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Ramp-down Capacity Threshold (%)",
+                  "defaultValue": 90,
+                  "min": 1,
+                  "max": 100,
+                  "showStepMarkers": false,
+                  "visible": "[steps('controlPlane').dynamicScaling.deploy]"
+                }
+              ]
+            },
+            {
+              "name": "assignments",
+              "type": "Microsoft.Common.Section",
+              "label": "Assignments",
+              "elements": [
+                {
+                  "name": "groupPickerBlade",
+                  "type": "Microsoft.Solutions.BladeInvokeControl",
+                  "openBladeStatus": "[steps('controlPlane').assignments.groupSelector.changing]",
+                  "bladeReference": {
+                    "name": "ObjectPickerBlade",
+                    "extension": "Microsoft_AAD_IAM",
+                    "parameters": {
+                      "queries": 32,
+                      "disablers": 4,
+                      "bladeSubtitle": "Select groups for desktop access",
+                      "additionalQueriesOnSearch": 0,
+                      "advancedQueryOptions": {
+                        "suggestedObjectsOptions": {}
+                      },
+                      "selectionMaximum": 20,
+                      "selectionMinimum": 0,
+                      "bladeTitle": "Select Groups",
+                      "searchBoxLabel": "Search for a group",
+                      "searchBoxPlaceHolderText": "Enter a group name",
+                      "searchGridNoRowsMessage": "No groups found",
+                      "selectButtonText": "Select Groups",
+                      "selectedGridLabel": "Selected Groups",
+                      "selectedGridNoRowsMessage": "No groups selected"
+                    },
+                    "inFullScreen": false
+                  },
+                  "transforms": {
+                    "groups": "selectedObjects|[*].{id:id, name:displayName}",
+                    "ids": "selectedObjects|[*].id"
+                  }
+                },
+                {
+                  "name": "groupSelector",
+                  "type": "Microsoft.Common.Selector",
+                  "label": "Desktop Access Groups",
+                  "keyPath": "name",
+                  "descriptionKeyPath": "id",
+                  "value": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
+                  "barColor": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.groups), '#0078D4', '#7FBA00')]",
+                  "constraints": {
+                    "required": false
+                  },
+                  "link": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.groups), 'Select groups', 'Update selected groups')]"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "hosts",
+          "label": "Session Hosts",
+          "elements": [
+            {
+              "name": "resourceSkusApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(empty(steps('controlPlane').scope.subscription.id)), not(empty(steps('controlPlane').scope.location.name)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('controlPlane').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('controlPlane').scope.location.name, decodeUriComponent('%27'))]",
+                "transforms": {
+                  "vmSizes": "value[?resourceType == 'virtualMachines'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}"
+                }
+              }
+            },
+            {
+              "name": "identity",
+              "type": "Microsoft.Common.Section",
+              "label": "Identity and Domain Join",
+              "elements": [
+                {
+                  "name": "identitySolution",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Identity Solution",
+                  "multiLine": true,
+                  "defaultValue": "Microsoft Entra joined with storage account keys",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Active Directory Domain Services",
+                        "value": "ActiveDirectoryDomainServices"
+                      },
+                      {
+                        "label": "Microsoft Entra Domain Services",
+                        "value": "EntraDomainServices"
+                      },
+                      {
+                        "label": "Microsoft Entra joined with hybrid Entra Kerberos",
+                        "value": "EntraKerberos-Hybrid"
+                      },
+                      {
+                        "label": "Microsoft Entra joined with cloud-only Entra Kerberos",
+                        "value": "EntraKerberos-CloudOnly"
+                      },
+                      {
+                        "label": "Microsoft Entra joined with storage account keys",
+                        "value": "EntraId"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "domainName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Domain Name",
+                  "placeholder": "contoso.com",
+                  "visible": "[contains(steps('hosts').identity.identitySolution, 'DomainServices')]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
+                    "validationMessage": "Provide a valid fully qualified domain name."
+                  }
+                },
+                {
+                  "name": "organizationalUnitPath",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Organizational Unit Path",
+                  "placeholder": "OU=pooled,OU=avd,DC=contoso,DC=com",
+                  "visible": "[contains(steps('hosts').identity.identitySolution, 'DomainServices')]",
+                  "constraints": {
+                    "required": false
+                  }
+                },
+                {
+                  "name": "intuneEnrollment",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enroll Session Hosts in Microsoft Intune",
+                  "defaultValue": false,
+                  "visible": "[not(contains(steps('hosts').identity.identitySolution, 'DomainServices'))]"
+                }
+              ]
+            },
+            {
+              "name": "credentials",
+              "type": "Microsoft.Common.Section",
+              "label": "Credentials",
+              "elements": [
+                {
+                  "name": "credentialsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(contains(steps('hosts').identity.identitySolution, 'DomainServices'))]",
+                  "options": {
+                    "style": "Info",
+                    "text": "Select an RBAC-enabled Key Vault containing these secrets: VirtualMachineAdminUserName and VirtualMachineAdminPassword. Secret values are never submitted through this form."
+                  }
+                },
+                {
+                  "name": "domainCredentialsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[contains(steps('hosts').identity.identitySolution, 'DomainServices')]",
+                  "options": {
+                    "style": "Info",
+                    "text": "Select an RBAC-enabled Key Vault containing these secrets: VirtualMachineAdminUserName, VirtualMachineAdminPassword, DomainJoinUserPrincipalName, and DomainJoinUserPassword. Secret values are never submitted through this form."
+                  }
+                },
+                {
+                  "name": "keyVault",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Credentials Key Vault",
+                  "resourceType": "Microsoft.KeyVault/vaults",
+                  "scope": {
+                    "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
+                  },
+                  "constraints": {
+                    "required": true
+                  }
+                }
+              ]
+            },
+            {
+              "name": "network",
+              "type": "Microsoft.Common.Section",
+              "label": "Network",
+              "elements": [
+                {
+                  "name": "virtualNetworksApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('controlPlane').scope.subscription.id))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('controlPlane').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "virtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Virtual Network",
+                  "multiLine": true,
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('hosts').network.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('controlPlane').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "subnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('hosts').network.virtualNetwork.id))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('hosts').network.virtualNetwork.id, '/subnets?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "subnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Session Host Subnet",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('hosts').network.subnetsApi.value, (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":{\"name\":\"', subnet.name, '\",\"id\":\"', subnet.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "networkSecurityGroup",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Session Host Network Security Group",
+                  "resourceType": "Microsoft.Network/networkSecurityGroups",
+                  "toolTip": "Optional. Select the network security group that Azure Virtual Desktop should attach to session-host NICs.",
+                  "scope": {
+                    "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
+                  },
+                  "constraints": {
+                    "required": false
+                  }
+                }
+              ]
+            },
+            {
+              "name": "capacity",
+              "type": "Microsoft.Common.Section",
+              "label": "Capacity and VM Configuration",
+              "elements": [
+                {
+                  "name": "virtualMachineNamePrefix",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Virtual Machine Name Prefix",
+                  "defaultValue": "[toLower(concat('avd', steps('basics').identifier))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^(?!-)(?![0-9]+$)[A-Za-z0-9-]+$",
+                        "message": "Use letters, numbers, and dashes; do not begin with a dash or use only numbers."
+                      },
+                      {
+                        "isValid": "[lessOrEquals(length(steps('hosts').capacity.virtualMachineNamePrefix), 11)]",
+                        "message": "The prefix cannot exceed 11 characters."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "sessionHostCount",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Desired Session Host Count",
+                  "defaultValue": 1,
+                  "min": 1,
+                  "max": 100,
+                  "showStepMarkers": false,
+                  "toolTip": "The final number of session hosts to provision. The deployment internally creates the host pool with zero hosts, deploys storage and policy, and then provisions this requested capacity."
+                },
+                {
+                  "name": "virtualMachineSize",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Virtual Machine Size",
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "Standard_D4ads_v5",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[steps('hosts').resourceSkusApi.transformed.vmSizes]"
+                  }
+                },
+                {
+                  "name": "diskSku",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "OS Disk SKU",
+                  "defaultValue": "Premium SSD",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Premium SSD",
+                        "value": "Premium_LRS"
+                      },
+                      {
+                        "label": "Standard SSD",
+                        "value": "StandardSSD_LRS"
+                      },
+                      {
+                        "label": "Standard HDD",
+                        "value": "Standard_LRS"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "useEphemeralOsDisk",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Use Ephemeral OS Disk",
+                  "defaultValue": false
+                },
+                {
+                  "name": "ephemeralOsDiskPlacement",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Ephemeral OS Disk Placement",
+                  "defaultValue": "Resource disk",
+                  "visible": "[steps('hosts').capacity.useEphemeralOsDisk]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Resource disk",
+                        "value": "ResourceDisk",
+                        "description": "Places the OS disk on the VM size's local resource disk."
+                      },
+                      {
+                        "label": "Cache disk",
+                        "value": "CacheDisk",
+                        "description": "Places the OS disk on the VM size's local cache disk."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "timeZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Session Host Time Zone",
+                  "defaultValue": "(UTC-05:00) Eastern Time (US & Canada)",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "(UTC-10:00) Hawaii",
+                        "value": "Hawaiian Standard Time"
+                      },
+                      {
+                        "label": "(UTC-09:00) Alaska",
+                        "value": "Alaskan Standard Time"
+                      },
+                      {
+                        "label": "(UTC-08:00) Pacific Time (US & Canada)",
+                        "value": "Pacific Standard Time"
+                      },
+                      {
+                        "label": "(UTC-07:00) Mountain Time (US & Canada)",
+                        "value": "Mountain Standard Time"
+                      },
+                      {
+                        "label": "(UTC-06:00) Central Time (US & Canada)",
+                        "value": "Central Standard Time"
+                      },
+                      {
+                        "label": "(UTC-05:00) Eastern Time (US & Canada)",
+                        "value": "Eastern Standard Time"
+                      },
+                      {
+                        "label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London",
+                        "value": "GMT Standard Time"
+                      },
+                      {
+                        "label": "(UTC+01:00) Amsterdam, Berlin, Rome, Stockholm, Vienna",
+                        "value": "W. Europe Standard Time"
+                      },
+                      {
+                        "label": "(UTC+09:00) Osaka, Sapporo, Tokyo",
+                        "value": "Tokyo Standard Time"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "image",
+              "type": "Microsoft.Common.Section",
+              "label": "Image",
+              "elements": [
+                {
+                  "name": "source",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Image Source",
+                  "defaultValue": "Marketplace",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Marketplace",
+                        "value": "marketplace"
+                      },
+                      {
+                        "label": "Azure Compute Gallery",
+                        "value": "gallery"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "publisher",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Publisher",
+                  "defaultValue": "MicrosoftWindowsDesktop",
+                  "visible": "[equals(steps('hosts').image.source, 'marketplace')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "MicrosoftWindowsDesktop",
+                        "value": "MicrosoftWindowsDesktop"
+                      },
+                      {
+                        "label": "MicrosoftWindowsServer",
+                        "value": "MicrosoftWindowsServer"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "offer",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Offer",
+                  "defaultValue": "Office 365",
+                  "visible": "[equals(steps('hosts').image.source, 'marketplace')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Office 365",
+                        "value": "office-365"
+                      },
+                      {
+                        "label": "Windows 11",
+                        "value": "windows-11"
+                      },
+                      {
+                        "label": "Windows 10",
+                        "value": "windows-10"
+                      },
+                      {
+                        "label": "Windows Server",
+                        "value": "WindowsServer"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "skuApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('hosts').image.source, 'marketplace'), not(empty(steps('hosts').image.publisher)), not(empty(steps('hosts').image.offer)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('controlPlane').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('controlPlane').scope.location.name, '/publishers/', steps('hosts').image.publisher, '/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+                    "transforms": {
+                      "list": "[*].{label:name, value:name}"
+                    }
+                  }
+                },
+                {
+                  "name": "sku",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "SKU",
+                  "filter": true,
+                  "defaultValue": "win11-25h2-avd-m365",
+                  "visible": "[equals(steps('hosts').image.source, 'marketplace')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[steps('hosts').image.skuApi.transformed.list]"
+                  }
+                },
+                {
+                  "name": "version",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Image Version",
+                  "defaultValue": "latest",
+                  "visible": "[equals(steps('hosts').image.source, 'marketplace')]",
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                  "name": "gallerySubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Compute Gallery Subscription",
+                  "defaultValue": "[steps('controlPlane').scope.subscription.displayName]",
+                  "visible": "[equals(steps('hosts').image.source, 'gallery')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "galleriesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.gallerySubscription.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('hosts').image.gallerySubscription.id, '/providers/Microsoft.Compute/galleries?api-version=2024-03-03')]"
+                  }
+                },
+                {
+                  "name": "gallery",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Compute Gallery",
+                  "multiLine": true,
+                  "visible": "[equals(steps('hosts').image.source, 'gallery')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('hosts').image.galleriesApi.value, (gallery) => parse(concat('{\"label\":\"', gallery.name, '\",\"description\":\"Resource Group: ', first(skip(split(gallery.id, '/'), 4)), '\",\"value\":\"', gallery.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "imageDefinitionsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('hosts').image.gallery))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('hosts').image.gallery, '/images?api-version=2024-03-03')]",
+                    "transforms": {
+                      "list": "value|[*].{label:name, value:id}"
+                    }
+                  }
+                },
+                {
+                  "name": "imageDefinition",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Image Definition",
+                  "visible": "[equals(steps('hosts').image.source, 'gallery')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[steps('hosts').image.imageDefinitionsApi.transformed.list]"
+                  }
+                },
+                {
+                  "name": "imageVersionsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('hosts').image.imageDefinition))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('hosts').image.imageDefinition, '/versions?api-version=2024-03-03')]",
+                    "transforms": {
+                      "list": "value|sort_by(@, &name)|reverse(@)|[*].{label:name, value:id}"
+                    }
+                  }
+                },
+                {
+                  "name": "imageVersion",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Image Version",
+                  "visible": "[equals(steps('hosts').image.source, 'gallery')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[steps('hosts').image.imageVersionsApi.transformed.list]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "security",
+              "type": "Microsoft.Common.Section",
+              "label": "Security and Availability",
+              "elements": [
+                {
+                  "name": "securityType",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Security Type",
+                  "defaultValue": "Trusted Launch",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Trusted Launch",
+                        "value": "TrustedLaunch"
+                      },
+                      {
+                        "label": "Confidential VM",
+                        "value": "ConfidentialVM"
+                      },
+                      {
+                        "label": "Standard",
+                        "value": "Standard"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "secureBootEnabled",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Secure Boot",
+                  "defaultValue": true,
+                  "visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
+                },
+                {
+                  "name": "vTpmEnabled",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable vTPM",
+                  "defaultValue": true,
+                  "visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
+                },
+                {
+                  "name": "integrityMonitoring",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Guest Attestation Integrity Monitoring",
+                  "defaultValue": true,
+                  "visible": "[not(equals(steps('hosts').security.securityType, 'Standard'))]"
+                },
+                {
+                  "name": "encryptionAtHost",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Encryption at Host",
+                  "defaultValue": true
+                },
+                {
+                  "name": "acceleratedNetworking",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Accelerated Networking",
+                  "defaultValue": true
+                },
+                {
+                  "name": "availabilityZones",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Availability Zones",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "defaultValue": [],
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": [
+                      {
+                        "label": "Zone 1",
+                        "value": 1
+                      },
+                      {
+                        "label": "Zone 2",
+                        "value": 2
+                      },
+                      {
+                        "label": "Zone 3",
+                        "value": 3
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "profiles",
+          "label": "User Profiles",
+          "elements": [
+            {
+              "name": "deployStorage",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy and Configure FSLogix Storage",
+              "defaultValue": true
+            },
+            {
+              "name": "storage",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage",
+              "visible": "[steps('profiles').deployStorage]",
+              "elements": [
+                {
+                  "name": "service",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Storage Service and SKU",
+                  "defaultValue": "Azure Files Standard",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Azure Files Standard",
+                        "value": "AzureFiles Standard"
+                      },
+                      {
+                        "label": "Azure Files Premium",
+                        "value": "AzureFiles Premium"
+                      },
+                      {
+                        "label": "Azure NetApp Files Standard",
+                        "value": "AzureNetAppFiles Standard"
+                      },
+                      {
+                        "label": "Azure NetApp Files Premium",
+                        "value": "AzureNetAppFiles Premium"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "containerType",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Container Layout",
+                  "defaultValue": "Profile container",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Profile container",
+                        "value": "ProfileContainer"
+                      },
+                      {
+                        "label": "Profile and Office containers",
+                        "value": "ProfileOfficeContainer"
+                      },
+                      {
+                        "label": "Cloud Cache profile container",
+                        "value": "CloudCacheProfileContainer"
+                      },
+                      {
+                        "label": "Cloud Cache profile and Office containers",
+                        "value": "CloudCacheProfileOfficeContainer"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "shareSizeInGB",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Share or Volume Size (GB)",
+                  "defaultValue": "100",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[1-9][0-9]*$",
+                    "validationMessage": "Enter a positive whole number."
+                  }
+                },
+                {
+                  "name": "profileSizeInMBs",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Maximum Profile Size (MB)",
+                  "defaultValue": "30000",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[1-9][0-9]*$",
+                    "validationMessage": "Enter a positive whole number."
+                  }
+                },
+                {
+                  "name": "shardOptions",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Sharding and Permissions",
+                  "defaultValue": "None",
+                  "visible": "[contains(steps('profiles').storage.service, 'AzureFiles')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "None",
+                        "value": "None"
+                      },
+                      {
+                        "label": "Shard by operating system",
+                        "value": "ShardOSS"
+                      },
+                      {
+                        "label": "Shard by user group permissions",
+                        "value": "ShardPerms"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "network",
+              "type": "Microsoft.Common.Section",
+              "label": "Private Access",
+              "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'))]",
+              "elements": [
+                {
+                  "name": "privateEndpoint",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Deploy an Azure Files Private Endpoint",
+                  "defaultValue": true
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Private Endpoint Subnet",
+                  "resourceType": "Microsoft.Network/virtualNetworks/subnets",
+                  "visible": "[steps('profiles').network.privateEndpoint]",
+                  "scope": {
+                    "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
+                  },
+                  "constraints": {
+                    "required": false
+                  }
+                },
+                {
+                  "name": "azureFilePrivateDnsZone",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Azure Files Private DNS Zone",
+                  "resourceType": "Microsoft.Network/privateDnsZones",
+                  "visible": "[steps('profiles').network.privateEndpoint]",
+                  "scope": {
+                    "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
+                  },
+                  "constraints": {
+                    "required": true
+                  }
+                }
+              ]
+            },
+            {
+              "name": "access",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage Access Groups",
+              "visible": "[steps('profiles').deployStorage]",
+              "elements": [
+                {
+                  "name": "adminGroupPickerBlade",
+                  "type": "Microsoft.Solutions.BladeInvokeControl",
+                  "openBladeStatus": "[steps('profiles').access.adminGroupSelector.changing]",
+                  "bladeReference": {
+                    "name": "ObjectPickerBlade",
+                    "extension": "Microsoft_AAD_IAM",
+                    "parameters": {
+                      "queries": 32,
+                      "disablers": 4,
+                      "selectionMaximum": 20,
+                      "selectionMinimum": 0,
+                      "bladeTitle": "Select FSLogix Administrator Groups",
+                      "searchBoxLabel": "Search for a group",
+                      "selectButtonText": "Select Groups",
+                      "selectedGridLabel": "Selected Groups"
+                    }
+                  },
+                  "transforms": {
+                    "groups": "selectedObjects|[*].{id:id, name:displayName}"
+                  }
+                },
+                {
+                  "name": "adminGroupSelector",
+                  "type": "Microsoft.Common.Selector",
+                  "label": "FSLogix Administrator Groups",
+                  "keyPath": "name",
+                  "descriptionKeyPath": "id",
+                  "value": "[steps('profiles').access.adminGroupPickerBlade.transformed.groups]",
+                  "constraints": {
+                    "required": false
+                  },
+                  "link": "[if(empty(steps('profiles').access.adminGroupPickerBlade.transformed.groups), 'Select groups', 'Update selected groups')]"
+                },
+                {
+                  "name": "userGroupPickerBlade",
+                  "type": "Microsoft.Solutions.BladeInvokeControl",
+                  "openBladeStatus": "[steps('profiles').access.userGroupSelector.changing]",
+                  "bladeReference": {
+                    "name": "ObjectPickerBlade",
+                    "extension": "Microsoft_AAD_IAM",
+                    "parameters": {
+                      "queries": 32,
+                      "disablers": 4,
+                      "selectionMaximum": 50,
+                      "selectionMinimum": 0,
+                      "bladeTitle": "Select FSLogix User Groups",
+                      "searchBoxLabel": "Search for a group",
+                      "selectButtonText": "Select Groups",
+                      "selectedGridLabel": "Selected Groups"
+                    }
+                  },
+                  "transforms": {
+                    "groups": "selectedObjects|[*].{id:id, name:displayName}"
+                  }
+                },
+                {
+                  "name": "userGroupSelector",
+                  "type": "Microsoft.Common.Selector",
+                  "label": "FSLogix User Groups",
+                  "keyPath": "name",
+                  "descriptionKeyPath": "id",
+                  "value": "[steps('profiles').access.userGroupPickerBlade.transformed.groups]",
+                  "constraints": {
+                    "required": false
+                  },
+                  "link": "[if(empty(steps('profiles').access.userGroupPickerBlade.transformed.groups), 'Select groups', 'Update selected groups')]"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "policy",
+          "label": "Policy and Operations",
+          "elements": [
+            {
+              "name": "monitoring",
+              "type": "Microsoft.Common.Section",
+              "label": "Monitoring",
+              "elements": [
+                {
+                  "name": "enableMonitoring",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable AVD Insights Monitoring",
+                  "defaultValue": false
+                },
+                {
+                  "name": "logAnalyticsWorkspace",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Log Analytics Workspace",
+                  "resourceType": "Microsoft.OperationalInsights/workspaces",
+                  "visible": "[steps('policy').monitoring.enableMonitoring]",
+                  "constraints": {
+                    "required": false
+                  }
+                },
+                {
+                  "name": "dataCollectionRule",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "AVD Insights Data Collection Rule",
+                  "resourceType": "Microsoft.Insights/dataCollectionRules",
+                  "visible": "[steps('policy').monitoring.enableMonitoring]",
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                  "name": "dataCollectionEndpoint",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Data Collection Endpoint",
+                  "resourceType": "Microsoft.Insights/dataCollectionEndpoints",
+                  "visible": "[steps('policy').monitoring.enableMonitoring]",
+                  "constraints": {
+                    "required": false
+                  }
+                }
+              ]
+            },
+            {
+              "name": "diskEncryption",
+              "type": "Microsoft.Common.Section",
+              "label": "Disk Encryption Set",
+              "elements": [
+                {
+                  "name": "mode",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Disk Encryption Set Option",
+                  "defaultValue": "Do not use a disk encryption set",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Do not use a disk encryption set",
+                        "value": "none"
+                      },
+                      {
+                        "label": "Create a disk encryption set",
+                        "value": "create"
+                      },
+                      {
+                        "label": "Use an existing disk encryption set",
+                        "value": "existing"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "encryptionKeyVault",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Encryption Key Vault",
+                  "resourceType": "Microsoft.KeyVault/vaults",
+                  "visible": "[equals(steps('policy').diskEncryption.mode, 'create')]",
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                  "name": "diskEncryptionSet",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Existing Disk Encryption Set",
+                  "resourceType": "Microsoft.Compute/diskEncryptionSets",
+                  "visible": "[equals(steps('policy').diskEncryption.mode, 'existing')]",
+                  "constraints": {
+                    "required": true
+                  }
+                }
+              ]
+            },
+            {
+              "name": "customizations",
+              "type": "Microsoft.Common.Section",
+              "label": "Session Host Customizations",
+              "elements": [
+                {
+                  "name": "enableCustomizations",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Apply Policy-Based Customizations",
+                  "defaultValue": false
+                },
+                {
+                  "name": "artifactsContainerUri",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Artifacts Container URI",
+                  "placeholder": "https://storage.blob.core.windows.net/artifacts",
+                  "visible": "[steps('policy').customizations.enableCustomizations]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^https://.+$",
+                    "validationMessage": "Enter an HTTPS container URI."
+                  }
+                },
+                {
+                  "name": "artifactsIdentity",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Artifacts Reader Managed Identity",
+                  "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+                  "visible": "[steps('policy').customizations.enableCustomizations]",
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                  "name": "customizations",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Ordered Customizations",
+                  "ariaLabel": "Ordered session host customizations",
+                  "visible": "[steps('policy').customizations.enableCustomizations]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 1,
+                        "max": 20
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "name",
+                        "header": "Name",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?![_.-])[A-Za-z0-9_.-]{1,40}(?<![_.-])$",
+                            "validationMessage": "Use 1-40 letters, numbers, periods, underscores, or dashes."
+                          }
+                        }
+                      },
+                      {
+                        "id": "blobNameOrUri",
+                        "header": "Blob Name or URI",
+                        "width": "2fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "constraints": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "id": "arguments",
+                        "header": "Arguments",
+                        "width": "2fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "constraints": {
+                            "required": false
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "updates",
+              "type": "Microsoft.Common.Section",
+              "label": "Automated Updates and Cleanup",
+              "elements": [
+                {
+                  "name": "maxVmsRemoved",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Maximum Concurrent VM Replacements",
+                  "defaultValue": 1,
+                  "min": 1,
+                  "max": 20,
+                  "showStepMarkers": false
+                },
+                {
+                  "name": "logOffDelayMinutes",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "User Logoff Delay (Minutes)",
+                  "defaultValue": 30,
+                  "min": 0,
+                  "max": 240,
+                  "showStepMarkers": false
+                },
+                {
+                  "name": "logOffMessage",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "User Logoff Message",
+                  "defaultValue": "This session host is being updated. Save your work and sign out.",
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                  "name": "deleteOriginalVm",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Delete the Original VM after a Successful Update",
+                  "defaultValue": true
+                },
+                {
+                  "name": "failedSessionHostCleanupPolicy",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Failed Session Host Cleanup",
+                  "defaultValue": "Keep one failed host",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Keep one failed host",
+                        "value": "KeepOne"
+                      },
+                      {
+                        "label": "Keep all failed hosts",
+                        "value": "KeepAll"
+                      },
+                      {
+                        "label": "Keep no failed hosts",
+                        "value": "KeepNone"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "naming",
+              "type": "Microsoft.Common.Section",
+              "label": "Naming Convention",
+              "elements": [
+                {
+                  "name": "description",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Resource names follow the Cloud Adoption Framework pattern: {resource-type}-{workload}-{purpose}-{location}. Purpose and resource type are resolved automatically for each resource."
+                  }
+                },
+                {
+                  "name": "delimiter",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Delimiter",
+                  "defaultValue": "-",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[-_]$",
+                    "validationMessage": "Enter a hyphen or underscore."
+                  }
+                },
+                {
+                  "name": "workload",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Workload",
+                  "defaultValue": "avd",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9-]{1,20}$",
+                    "validationMessage": "Use 1-20 lowercase letters, numbers, or hyphens."
+                  }
+                },
+                {
+                  "name": "vmsLocationAbbreviation",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Custom Session Host Region Abbreviation",
+                  "defaultValue": "",
+                  "toolTip": "Leave empty to use the repository location abbreviation.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9]{0,10}$",
+                    "validationMessage": "Use up to 10 lowercase letters or numbers."
+                  }
+                },
+                {
+                  "name": "controlPlaneLocationAbbreviation",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Custom Control Plane Region Abbreviation",
+                  "defaultValue": "",
+                  "toolTip": "Leave empty to use the repository location abbreviation.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9]{0,10}$",
+                    "validationMessage": "Use up to 10 lowercase letters or numbers."
+                  }
+                },
+                {
+                  "name": "fslogixStoragePrefix",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Custom FSLogix Storage Account Prefix",
+                  "defaultValue": "",
+                  "visible": "[steps('profiles').deployStorage]",
+                  "toolTip": "Optional. Use up to 13 lowercase alphanumeric characters. A two-digit index is appended.",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^[a-z0-9]{0,13}$",
+                    "validationMessage": "Use up to 13 lowercase letters or numbers."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "tags",
+              "type": "Microsoft.Common.Section",
+              "label": "Resource Tags",
+              "elements": [
+                {
+                  "name": "tags",
+                  "type": "Microsoft.Common.TagsByResource",
+                  "resources": [
+                    "Microsoft.Compute/diskEncryptionSets",
+                    "Microsoft.Compute/virtualMachines",
+                    "Microsoft.DesktopVirtualization/applicationGroups",
+                    "Microsoft.DesktopVirtualization/hostPools",
+                    "Microsoft.DesktopVirtualization/scalingPlans",
+                    "Microsoft.DesktopVirtualization/workspaces",
+                    "Microsoft.ManagedIdentity/userAssignedIdentities",
+                    "Microsoft.NetApp/netAppAccounts",
+                    "Microsoft.Network/networkInterfaces",
+                    "Microsoft.Network/privateEndpoints",
+                    "Microsoft.Resources/resourceGroups",
+                    "Microsoft.Storage/storageAccounts"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "parameters": {
+        "identifier": "[steps('basics').identifier]",
+        "location": "[steps('controlPlane').scope.location.name]",
+        "controlPlaneLocation": "[steps('controlPlane').scope.controlPlaneLocation.name]",
+        "existingWorkspaceResourceId": "[if(equals(steps('controlPlane').workspace.createOption, 'existing'), steps('controlPlane').workspace.existingWorkspace, '')]",
+        "workspaceFriendlyName": "[if(equals(steps('controlPlane').workspace.createOption, 'new'), steps('controlPlane').workspace.workspaceFriendlyName, '')]",
+        "desktopFriendlyName": "[steps('controlPlane').workspace.desktopFriendlyName]",
+        "hostPoolMaxSessionLimit": "[steps('controlPlane').hostPool.maxSessionLimit]",
+        "loadBalancerType": "[steps('controlPlane').hostPool.loadBalancerType]",
+        "hostPoolRDPProperties": "[steps('controlPlane').hostPool.rdpProperties]",
+        "hostPoolValidationEnvironment": "[steps('controlPlane').hostPool.validationEnvironment]",
+        "startVMOnConnect": "[steps('controlPlane').hostPool.startVMOnConnect]",
+        "deployDynamicScalingPlan": "[steps('controlPlane').dynamicScaling.deploy]",
+        "avdServicePrincipalObjectId": "[if(steps('controlPlane').dynamicScaling.deploy, steps('controlPlane').dynamicScaling.servicePrincipalObjectId, '')]",
+        "scalingPlanExclusionTag": "[steps('controlPlane').dynamicScaling.exclusionTag]",
+        "scalingPlanTimeZone": "[steps('hosts').capacity.timeZone]",
+        "dynamicScalingSchedule": "[parse(concat('{\"daysOfWeek\":[\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\"],\"rampUpStartTime\":{\"hour\":', int(first(split(steps('controlPlane').dynamicScaling.rampUpStartTime, ':'))), ',\"minute\":', int(last(split(steps('controlPlane').dynamicScaling.rampUpStartTime, ':'))), '},\"rampUpLoadBalancingAlgorithm\":\"BreadthFirst\",\"rampUpMinimumHostsPct\":20,\"rampUpCapacityThresholdPct\":', steps('controlPlane').dynamicScaling.rampUpCapacityThresholdPct, ',\"rampUpMinimumHostPoolSize\":', steps('controlPlane').dynamicScaling.rampUpMinimumHostPoolSize, ',\"rampUpMaximumHostPoolSize\":', steps('controlPlane').dynamicScaling.rampUpMaximumHostPoolSize, ',\"peakStartTime\":{\"hour\":', int(first(split(steps('controlPlane').dynamicScaling.peakStartTime, ':'))), ',\"minute\":', int(last(split(steps('controlPlane').dynamicScaling.peakStartTime, ':'))), '},\"peakLoadBalancingAlgorithm\":\"BreadthFirst\",\"rampDownStartTime\":{\"hour\":', int(first(split(steps('controlPlane').dynamicScaling.rampDownStartTime, ':'))), ',\"minute\":', int(last(split(steps('controlPlane').dynamicScaling.rampDownStartTime, ':'))), '},\"rampDownLoadBalancingAlgorithm\":\"DepthFirst\",\"rampDownMinimumHostsPct\":10,\"rampDownCapacityThresholdPct\":', steps('controlPlane').dynamicScaling.rampDownCapacityThresholdPct, ',\"rampDownMinimumHostPoolSize\":', steps('controlPlane').dynamicScaling.rampDownMinimumHostPoolSize, ',\"rampDownMaximumHostPoolSize\":', steps('controlPlane').dynamicScaling.rampDownMaximumHostPoolSize, ',\"rampDownForceLogoffUsers\":false,\"rampDownWaitTimeMinutes\":30,\"rampDownNotificationMessage\":\"Save your work and sign out. This session host is being removed by autoscale.\",\"rampDownStopHostsWhen\":\"ZeroSessions\",\"offPeakStartTime\":{\"hour\":', int(first(split(steps('controlPlane').dynamicScaling.offPeakStartTime, ':'))), ',\"minute\":', int(last(split(steps('controlPlane').dynamicScaling.offPeakStartTime, ':'))), '},\"offPeakLoadBalancingAlgorithm\":\"DepthFirst\"}'))]",
+        "appGroupSecurityGroupIds": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.ids), parse('[]'), steps('controlPlane').assignments.groupPickerBlade.transformed.ids)]",
+        "identitySolution": "[steps('hosts').identity.identitySolution]",
+        "domainName": "[if(contains(steps('hosts').identity.identitySolution, 'DomainServices'), steps('hosts').identity.domainName, '')]",
+        "organizationalUnitPath": "[if(contains(steps('hosts').identity.identitySolution, 'DomainServices'), steps('hosts').identity.organizationalUnitPath, '')]",
+        "intuneEnrollment": "[if(contains(steps('hosts').identity.identitySolution, 'DomainServices'), false, steps('hosts').identity.intuneEnrollment)]",
+        "credentialsKeyVaultResourceId": "[steps('hosts').credentials.keyVault.id]",
+        "virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
+        "networkSecurityGroupResourceId": "[if(empty(steps('hosts').network.networkSecurityGroup), '', steps('hosts').network.networkSecurityGroup.id)]",
+        "virtualMachineNamePrefix": "[steps('hosts').capacity.virtualMachineNamePrefix]",
+        "sessionHostCount": "[steps('hosts').capacity.sessionHostCount]",
+        "virtualMachineSize": "[steps('hosts').capacity.virtualMachineSize]",
+        "diskSku": "[steps('hosts').capacity.diskSku]",
+        "useEphemeralOsDisk": "[steps('hosts').capacity.useEphemeralOsDisk]",
+        "ephemeralOsDiskPlacement": "[steps('hosts').capacity.ephemeralOsDiskPlacement]",
+        "virtualMachinesTimeZone": "[steps('hosts').capacity.timeZone]",
+        "imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.publisher, '')]",
+        "imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
+        "imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",
+        "imageVersion": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.version, 'latest')]",
+        "customImageResourceId": "[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.imageVersion, '')]",
+        "securityType": "[steps('hosts').security.securityType]",
+        "secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
+        "vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
+        "integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
+        "encryptionAtHost": "[steps('hosts').security.encryptionAtHost]",
+        "enableAcceleratedNetworking": "[steps('hosts').security.acceleratedNetworking]",
+        "availabilityZones": "[steps('hosts').security.availabilityZones]",
+        "deployFSLogixStorage": "[steps('profiles').deployStorage]",
+        "fslogixStorageService": "[if(steps('profiles').deployStorage, steps('profiles').storage.service, 'AzureFiles Standard')]",
+        "fslogixContainerType": "[if(steps('profiles').deployStorage, steps('profiles').storage.containerType, 'ProfileContainer')]",
+        "fslogixShareSizeInGB": "[if(steps('profiles').deployStorage, int(steps('profiles').storage.shareSizeInGB), 100)]",
+        "fslogixProfileSizeInMBs": "[if(steps('profiles').deployStorage, int(steps('profiles').storage.profileSizeInMBs), 30000)]",
+        "fslogixShardOptions": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.shardOptions, 'None')]",
+        "fslogixAdminGroups": "[if(and(steps('profiles').deployStorage, not(empty(steps('profiles').access.adminGroupPickerBlade.transformed.groups))), steps('profiles').access.adminGroupPickerBlade.transformed.groups, parse('[]'))]",
+        "fslogixUserGroups": "[if(and(steps('profiles').deployStorage, not(empty(steps('profiles').access.userGroupPickerBlade.transformed.groups))), steps('profiles').access.userGroupPickerBlade.transformed.groups, parse('[]'))]",
+        "fslogixPrivateEndpoint": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').network.privateEndpoint)]",
+        "fslogixPrivateEndpointSubnetResourceId": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').network.privateEndpoint, not(empty(steps('profiles').network.privateEndpointSubnet))), steps('profiles').network.privateEndpointSubnet.id, steps('hosts').network.subnet.id)]",
+        "azureFilePrivateDnsZoneResourceId": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').network.privateEndpoint), steps('profiles').network.azureFilePrivateDnsZone.id, '')]",
+        "enableMonitoring": "[steps('policy').monitoring.enableMonitoring]",
+        "logAnalyticsWorkspaceResourceId": "[if(and(steps('policy').monitoring.enableMonitoring, not(empty(steps('policy').monitoring.logAnalyticsWorkspace))), steps('policy').monitoring.logAnalyticsWorkspace.id, '')]",
+        "dataCollectionRuleResourceId": "[if(steps('policy').monitoring.enableMonitoring, steps('policy').monitoring.dataCollectionRule.id, '')]",
+        "dataCollectionEndpointResourceId": "[if(and(steps('policy').monitoring.enableMonitoring, not(empty(steps('policy').monitoring.dataCollectionEndpoint))), steps('policy').monitoring.dataCollectionEndpoint.id, '')]",
+        "deployDiskEncryptionSet": "[equals(steps('policy').diskEncryption.mode, 'create')]",
+        "diskEncryptionSetResourceId": "[if(equals(steps('policy').diskEncryption.mode, 'existing'), steps('policy').diskEncryption.diskEncryptionSet.id, '')]",
+        "encryptionKeyVaultResourceId": "[if(equals(steps('policy').diskEncryption.mode, 'create'), steps('policy').diskEncryption.encryptionKeyVault.id, '')]",
+        "artifactsContainerUri": "[if(steps('policy').customizations.enableCustomizations, steps('policy').customizations.artifactsContainerUri, '')]",
+        "artifactsUserAssignedIdentityResourceId": "[if(steps('policy').customizations.enableCustomizations, steps('policy').customizations.artifactsIdentity.id, '')]",
+        "sessionHostCustomizations": "[if(steps('policy').customizations.enableCustomizations, steps('policy').customizations.customizations, parse('[]'))]",
+        "updateMaxVmsRemoved": "[steps('policy').updates.maxVmsRemoved]",
+        "updateLogOffDelayMinutes": "[steps('policy').updates.logOffDelayMinutes]",
+        "updateLogOffMessage": "[steps('policy').updates.logOffMessage]",
+        "deleteOriginalVm": "[steps('policy').updates.deleteOriginalVm]",
+        "failedSessionHostCleanupPolicy": "[steps('policy').updates.failedSessionHostCleanupPolicy]",
+        "namingConvention": "[parse(concat('{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"', steps('policy').naming.delimiter, '\",\"workload\":\"', steps('policy').naming.workload, '\",\"vmsLocationAbbreviation\":\"', steps('policy').naming.vmsLocationAbbreviation, '\",\"cpLocationAbbreviation\":\"', steps('policy').naming.controlPlaneLocationAbbreviation, '\",\"fslogixStoragePrefix\":\"', if(steps('profiles').deployStorage, steps('policy').naming.fslogixStoragePrefix, ''), '\"}'))]",
+        "tags": "[steps('policy').tags.tags]"
+      },
+      "kind": "Subscription",
+      "location": "[steps('controlPlane').scope.location.name]",
+      "subscriptionId": "[steps('controlPlane').scope.subscription.id]"
+    }
+  }
+}

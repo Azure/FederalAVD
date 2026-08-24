@@ -34,7 +34,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' existing = {
 }
 
 // ─── NetApp Account ────────────────────────────────────────────────────────────
-module netAppAccount '../../../../shared/modules/netApp/netAppAccounts/deploy.bicep' = if (createNetAppAccount) {
+module netAppAccount '../../netApp/netAppAccounts/deploy.bicep' = if (createNetAppAccount) {
   name: 'NetAppAccount-${deploymentSuffix}'
   params: {
     name: netAppAccountName
@@ -55,7 +55,7 @@ module netAppAccount '../../../../shared/modules/netApp/netAppAccounts/deploy.bi
 }
 
 // ─── Capacity Pool ─────────────────────────────────────────────────────────────
-module capacityPool '../../../../shared/modules/netApp/netAppAccounts/capacityPools/deploy.bicep' = if (createNetAppCapacityPool) {
+module capacityPool '../../netApp/netAppAccounts/capacityPools/deploy.bicep' = if (createNetAppCapacityPool) {
   name: 'CapacityPool-${deploymentSuffix}'
   params: {
     netAppAccountName: netAppAccountName
@@ -68,7 +68,7 @@ module capacityPool '../../../../shared/modules/netApp/netAppAccounts/capacityPo
 }
 
 // ─── Volumes ───────────────────────────────────────────────────────────────────
-module netAppVolumes '../../../../shared/modules/netApp/netAppAccounts/capacityPools/volumes/deploy.bicep' = [
+module netAppVolumes '../../netApp/netAppAccounts/capacityPools/volumes/deploy.bicep' = [
   for i in range(0, length(shares)): {
     name: 'Volume-${shares[i]}-${deploymentSuffix}'
     params: {
@@ -90,14 +90,14 @@ var netappServerFqdns = length(shares) > 1
   : [netAppVolumes[0].outputs.smbServerFqdn]
 
 // ─── Set NTFS Permissions ──────────────────────────────────────────────────────
-module setNTFSPermissions '../../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module setNTFSPermissions '../../compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Set-NTFSPermissions-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Set-NTFS-Permissions'
     location: location
-    script: loadTextContent('../../../../shared/scripts/Set-NtfsPermissionsNetApp.ps1')
+    script: loadTextContent('../../../scripts/Set-NtfsPermissionsNetApp.ps1')
     parameters: [
       { name: 'AdminGroupNames', value: string(map(shareAdminGroups, group => group.name)) }
       { name: 'NetAppServers', value: string(netappServerFqdns) }

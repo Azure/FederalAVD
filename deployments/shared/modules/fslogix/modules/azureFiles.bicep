@@ -95,7 +95,7 @@ resource appUpdateUai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-
 }
 
 // ─── Storage Accounts ──────────────────────────────────────────────────────────
-module storageAccounts '../../../../shared/modules/storage/storageAccounts/deploy.bicep' = [
+module storageAccounts '../../storage/storageAccounts/deploy.bicep' = [
   for i in range(0, storageCount): {
     name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-${deploymentSuffix}'
     params: {
@@ -130,7 +130,7 @@ module storageAccounts '../../../../shared/modules/storage/storageAccounts/deplo
 ]
 
 // ─── File Services ─────────────────────────────────────────────────────────────
-module fileServices '../../../../shared/modules/storage/storageAccounts/fileServices/deploy.bicep' = [
+module fileServices '../../storage/storageAccounts/fileServices/deploy.bicep' = [
   for i in range(0, storageCount): {
     name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-fileService-${deploymentSuffix}'
     params: {
@@ -164,7 +164,7 @@ module shares 'shares.bicep' = [
 ]
 
 // ─── Private Endpoints ─────────────────────────────────────────────────────────
-module storageAccountPes '../../../../shared/modules/network/privateEndpoints/deploy.bicep' = [
+module storageAccountPes '../../network/privateEndpoints/deploy.bicep' = [
   for i in range(0, storageCount): if (privateEndpoint) {
     name: 'StorageAccount-PE-${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-${deploymentSuffix}'
     params: {
@@ -200,7 +200,7 @@ module storageAccountPes '../../../../shared/modules/network/privateEndpoints/de
 ]
 
 // ─── Admin Role Assignments ────────────────────────────────────────────────────
-module roleAssignmentsAdmins '../../../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+module roleAssignmentsAdmins '../../authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for (group, i) in shareAdminGroups: {
     name: 'RoleAssignment-Admin-${i}-${deploymentSuffix}'
     params: {
@@ -212,14 +212,14 @@ module roleAssignmentsAdmins '../../../../shared/modules/authorization/roleAssig
 ]
 
 // ─── ADDS Domain Join ──────────────────────────────────────────────────────────
-module configureADDSAuth '../../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
+module configureADDSAuth '../../compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
   name: 'Join-Domain-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Domain-Join'
     location: location
-    script: loadTextContent('../../../../shared/scripts/Configure-StorageAccountforADDS.ps1')
+    script: loadTextContent('../../../scripts/Configure-StorageAccountforADDS.ps1')
     parameters: [
       { name: 'DomainName', value: domainName }
       { name: 'HostPoolName', value: !empty(hostPoolResourceId) ? last(split(hostPoolResourceId, '/'))! : storageAccountNamePrefix }
@@ -246,14 +246,14 @@ module configureADDSAuth '../../../../shared/modules/compute/virtualMachines/run
 // ─── EntraKerberos Hybrid (with domain info) ───────────────────────────────────
 // Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided.
 // The workgroup deployment helper VM uses these credentials for explicit ADWS operations; it is not domain joined.
-module configureEntraKerberosWithDomainInfo '../../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+module configureEntraKerberosWithDomainInfo '../../compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
   name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Configure-StorageAccountsforEntraHybrid'
     location: location
-    script: loadTextContent('../../../../shared/scripts/Configure-StorageAccountforEntraHybrid.ps1')
+    script: loadTextContent('../../../scripts/Configure-StorageAccountforEntraHybrid.ps1')
     parameters: [
       { name: 'DefaultSharePermission', value: defaultSharePermission }
       { name: 'DomainName', value: domainName }
@@ -277,14 +277,14 @@ module configureEntraKerberosWithDomainInfo '../../../../shared/modules/compute/
 
 // PHASE 1: Update application manifest with privatelink FQDNs and tags
 // This must happen BEFORE NTFS permissions are set so authentication works through private endpoints
-module updateStorageApplicationsManifest '../../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+module updateStorageApplicationsManifest '../../compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
   name: 'Update-Storage-App-Manifest-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Update-Storage-Account-Application-Manifest'
     location: location
-    script: loadTextContent('../../../../shared/scripts/Update-StorageAccountApplicationManifest.ps1')
+    script: loadTextContent('../../../scripts/Update-StorageAccountApplicationManifest.ps1')
     parameters: [
       { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${storageAccountNamePrefix}' }
       { name: 'ClientId', value: appUpdateUai!.properties.clientId }
@@ -302,14 +302,14 @@ module updateStorageApplicationsManifest '../../../../shared/modules/compute/vir
 }
 
 // ─── Set NTFS Permissions ──────────────────────────────────────────────────────
-module SetNTFSPermissions '../../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module SetNTFSPermissions '../../compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Set-NTFS-Permissions-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Set-NTFS-Permissions'
     location: location
-    script: loadTextContent('../../../../shared/scripts/Set-NtfsPermissionsAzureFiles.ps1')
+    script: loadTextContent('../../../scripts/Set-NtfsPermissionsAzureFiles.ps1')
     parameters: [
       { name: 'DomainName', value: domainName }
       { name: 'Shares', value: string(fileShares) }
@@ -345,14 +345,14 @@ module SetNTFSPermissions '../../../../shared/modules/compute/virtualMachines/ru
 
 // PHASE 2: Grant admin consent to storage account applications
 // This must happen AFTER NTFS permissions are set
-module grantStorageApplicationsConsent '../../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+module grantStorageApplicationsConsent '../../compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
   name: 'Grant-Storage-App-Consent-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
     name: 'Grant-Storage-Account-Application-Consent'
     location: location
-    script: loadTextContent('../../../../shared/scripts/Grant-StorageAccountApplicationConsent.ps1')
+    script: loadTextContent('../../../scripts/Grant-StorageAccountApplicationConsent.ps1')
     parameters: [
       { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${storageAccountNamePrefix}' }
       { name: 'ClientId', value: appUpdateUai!.properties.clientId }
