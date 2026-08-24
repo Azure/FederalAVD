@@ -2,7 +2,7 @@
 
 # Add-Ons
 
-Add-ons extend the core FederalAVD deployment with operational automation, monitoring, and maintenance capabilities. Each add-on is independently deployed and has no hard dependency on any other add-on.
+Add-ons extend the core FederalAVD deployment with operational automation, monitoring, and maintenance capabilities. Each add-on is deployed independently; its page identifies any required existing resources or deployment-order dependencies.
 
 ---
 
@@ -11,6 +11,8 @@ Add-ons extend the core FederalAVD deployment with operational automation, monit
 | Add-On | Purpose | When to Deploy |
 | --- | --- | --- |
 | [**AVD Alerts**](avd-alerts.md) | Azure Monitor alert rules for host pools, session hosts, FSLogix, VM performance, storage, and Service Health | Any production AVD environment |
+| [**Automated Session Host Policy**](../deployments/add-ons/automatedSessionHostPolicy/README.md) | Applies FederalAVD customization, monitoring, FSLogix, encryption, attestation, and disk-network controls to pooled hosts managed by Session Host Configuration | Host pools using `managementType: Automated` |
+| [**FSLogix Storage**](../deployments/add-ons/fslogixStorage/README.md) | Provisions standalone Azure Files or Azure NetApp Files profile storage for automated host pools | Before Automated Session Host Policy when FSLogix configuration is enabled |
 | [**Session Host Replacer**](session-host-replacer.md) | Automatically drains and replaces session hosts when a new gallery image version is published | Environments using custom images with recurring image builds |
 | [**Storage Quota Manager**](storage-quota-manager.md) | Automatically expands Azure Files Premium share quotas before they fill up | Environments using Azure Files for FSLogix profile containers |
 | [**M365 Route Table Updater**](m365-route-table-updater.md) | Keeps an Azure Route Table current with the latest Microsoft 365 IP ranges | Force-tunneled environments where M365 traffic must bypass the NVA |

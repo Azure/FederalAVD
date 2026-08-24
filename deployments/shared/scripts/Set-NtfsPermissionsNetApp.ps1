@@ -56,10 +56,17 @@ Function Update-ACL {
             $ACL.SetAccessRule($ACE)
         }
     }
-    ForEach ($Group in $UserGroups) {
-        Write-Output "[Update-ACL]: Adding ACE '$($Group):Modify (This Folder Only)' to ACL."
-        $Ntaccount = [System.Security.Principal.Ntaccount]("$Group")
-        $ACE = ([System.Security.AccessControl.FileSystemAccessRule]::new("$Ntaccount", "Modify", "None", "None", "Allow"))
+    If ($UserGroups.Count -gt 0) {
+        ForEach ($Group in $UserGroups) {
+            Write-Output "[Update-ACL]: Adding ACE '$($Group):Modify (This Folder Only)' to ACL."
+            $Ntaccount = [System.Security.Principal.Ntaccount]("$Group")
+            $ACE = ([System.Security.AccessControl.FileSystemAccessRule]::new("$Ntaccount", "Modify", "None", "None", "Allow"))
+            $ACL.SetAccessRule($ACE)
+        }
+    }
+    Else {
+        Write-Output "[Update-ACL]: Adding standard ACE 'Authenticated Users:Modify (This Folder Only)' to ACL."
+        $ACE = ([System.Security.AccessControl.FileSystemAccessRule]::new("$AuthenticatedUsers", "Modify", "None", "None", "Allow"))
         $ACL.SetAccessRule($ACE)
     }
     Write-Output "[Update-ACL]: Adding ACE 'Creator Owner:Modify (Subfolder and Files Only)' to ACL."
@@ -81,6 +88,8 @@ Function Update-ACL {
 try {   
 
     # Convert Parameters passed as a JSON String to an array and remove any backslashes
+    [array]$AdminGroups = @()
+    [array]$UserGroups = @()
     if ($AdminGroupNames -and $AdminGroupNames.Trim() -and $AdminGroupNames.Trim() -ne '[]') {
         $AdminGroups = $AdminGroupNames.replace('\"', '"') | ConvertFrom-Json
     }   
@@ -97,25 +106,25 @@ try {
   
     $ProfileShare = "\\$($NetAppServers[0])\$($Shares[0])"
     Write-Output "Processing Profile Share: $ProfileShare"
-    if ($AdminGroupNames.Count -gt 0) {
+    if ($AdminGroups.Count -gt 0) {
         Write-Output "Admin Groups and UserGroups provided, executing Update-ACL with Admin Groups and UserGroups"
-        Update-ACL -AdminGroups $AdminGroupNames -Credential $DomainCredential -FileShare $ProfileShare -UserGroups $UserGroupNames
+        Update-ACL -AdminGroups $AdminGroups -Credential $DomainCredential -FileShare $ProfileShare -UserGroups $UserGroups
     }
     Else {
         Write-Output "UserGroups provided, executing Update-ACL with UserGroups only"
-        Update-ACL -Credential $DomainCredential -FileShare $ProfileShare -UserGroups $UserGroupNames
+        Update-ACL -Credential $DomainCredential -FileShare $ProfileShare -UserGroups $UserGroups
     }
             
     If ($NetAppServers.Count -gt 1 -and $Shares.Count -gt 1) {
         $OfficeShare = "\\" + $NetAppServers[1] + "\" + $Shares[1]
         Write-Output "Processing Office Share: $OfficeShare"
-        If ($AdminGroupNames.Count -gt 0) {
+        If ($AdminGroups.Count -gt 0) {
             Write-Output "Admin Groups and UserGroups provided, executing Update-ACL with Admin Groups and UserGroups"
-            Update-ACL -AdminGroups $AdminGroupNames -Credential $DomainCredential -FileShare $OfficeShare -UserGroups $UserGroupNames
+            Update-ACL -AdminGroups $AdminGroups -Credential $DomainCredential -FileShare $OfficeShare -UserGroups $UserGroups
         }
         Else {
             Write-Output "UserGroups provided, executing Update-ACL with UserGroups only"
-            Update-ACL -Credential $DomainCredential -FileShare $OfficeShare -UserGroups $UserGroupNames
+            Update-ACL -Credential $DomainCredential -FileShare $OfficeShare -UserGroups $UserGroups
         }
     }
 }

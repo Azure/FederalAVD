@@ -14,12 +14,15 @@ Each subgraph shows a deployment step and its outputs (rounded nodes). Arrows be
 
 ```mermaid
 flowchart TD
-    subgraph KV["🔒 Step 1 · Security & Monitoring  (optional — CMK / credentials / Log Analytics)"]
-        KV_RUN["securityAndMonitoring.json"]
+    subgraph KV["🔒 Step 1 · AVD Shared Services  (optional — security / monitoring / FSLogix backup)"]
+        KV_RUN["sharedServices.json"]
         KV_O1(["secretsKeyVaultResourceId"])
         KV_O2(["encryptionKeyVaultResourceId"])
         KV_O3(["logAnalyticsWorkspaceResourceId"])
-        KV_RUN --> KV_O1 & KV_O2 & KV_O3
+        KV_O4(["fslogixBackupVaultResourceId"])
+        KV_O5(["fslogixBackupPolicyName"])
+        KV_O6(["azureMonitorPrivateLinkScopeResourceId"])
+        KV_RUN --> KV_O1 & KV_O2 & KV_O3 & KV_O4 & KV_O5 & KV_O6
     end
 
     subgraph IM["📦 Step 2 · Image Management"]
@@ -54,14 +57,16 @@ flowchart TD
         HP_RUN --> HP_O1 & HP_O2
     end
 
-    %% Security & Monitoring → Image Management (CMK / diagnostics)
+    %% AVD Shared Services → Image Management (CMK / diagnostics)
     KV_O2 -->|"→ encryptionKeyVaultResourceId"| IM_RUN
     KV_O3 -->|"→ logAnalyticsWorkspaceResourceId"| IM_RUN
 
-    %% Security & Monitoring → Host Pool
+    %% AVD Shared Services → Host Pool
     KV_O1 -->|"→ existingCredentialsKeyVaultResourceId"| HP_RUN
     KV_O2 -->|"→ existingEncryptionKeyVaultResourceId"| HP_RUN
     KV_O3 -->|"→ existingLogAnalyticsWorkspaceResourceId"| HP_RUN
+    KV_O4 -->|"→ existingFilesBackupVaultResourceId"| HP_RUN
+    KV_O5 -->|"→ existingFilesBackupPolicyName"| HP_RUN
 
     %% Image Management → Upload Artifacts
     IM_O2 -->|"→ StorageAccountResourceId"| UA_RUN
@@ -84,10 +89,12 @@ flowchart TD
 
 ---
 
-## Step 1: Deploy Security & Monitoring
+## Step 1: Deploy AVD Shared Services
 
-**Script/template:** `deployments/securityAndMonitoring/securityAndMonitoring.json`  
-**When required:** Only if using Customer Managed Keys (CMK), a pre-provisioned credentials Key Vault, or a shared Log Analytics Workspace for Key Vault/Image Management diagnostics and host pool monitoring.
+**Script/template:** `deployments/sharedServices/sharedServices.json`
+**When required:** When using Customer Managed Keys (CMK), a pre-provisioned credentials Key Vault,
+a shared Log Analytics Workspace, or a centrally managed FSLogix Azure Files backup vault and policy.
+The deployment uses the `sharedServices` path and parameter-file name.
 
 ### Key outputs
 
@@ -99,13 +106,27 @@ flowchart TD
 | `logAnalyticsWorkspaceResourceId` | Image Management — `logAnalyticsWorkspaceResourceId`; Host Pool — `existingLogAnalyticsWorkspaceResourceId`. Only present when `deployMonitoring` was `true`. |
 | `avdInsightsDataCollectionRuleResourceId` | Host Pool — `existingAVDInsightsDataCollectionRuleResourceId`. Only present when `deployMonitoring` was `true`. |
 | `dataCollectionEndpointResourceId` | Host Pool — `existingDataCollectionEndpointResourceId`. Only present when `deployMonitoring` was `true`. |
+| `azureMonitorPrivateLinkScopeResourceId` | Host Pool — `azureMonitorPrivateLinkScopeResourceId`; centralized monitoring/DNS automation. Empty when AMPLS integration is disabled. |
+| `fslogixBackupVaultResourceId` | Pooled Host Pool — `existingFilesBackupVaultResourceId`; FSLogix Storage add-on — `recoveryServicesVaultResourceId`. Only present when `deployFSLogixBackupVault` was `true`. |
+| `fslogixBackupPolicyName` | Pooled Host Pool — `existingFilesBackupPolicyName`; FSLogix Storage add-on — `fileSharePolicyName`. Only present when `deployFSLogixBackupVault` was `true`. |
+| `fslogixBackupPolicyResourceId` | Available for validation and automation that needs the complete policy resource ID. |
 
 ### Notes
 
 - The deploying identity needs **Key Vault Crypto Officer** on the encryption key vault before running any downstream step that creates CMK keys.
-- Key Vaults and the Log Analytics Workspace are intentionally deployed separately from other steps so the same vault/workspace can be shared across multiple host pool deployments and image builds.
+- Key Vaults, monitoring resources, and the FSLogix backup vault and policy are intentionally
+  deployed separately so they can be shared across multiple host pools and storage deployments.
+- Shared Services owns the FSLogix vault and policy settings. Each host pool or FSLogix Storage
+  add-on owns registration of its storage accounts and shares as protected items.
 - The AVD Insights DCR and DCE are region/workspace-scoped, not host-pool-specific — deploying them once here lets every host pool that reuses this workspace share the same DCR/DCE instead of the first host pool deployment creating its own.
 - Use `logAnalyticsWorkspaceSubscriptionId` to deploy the Log Analytics Workspace, DCR, and DCE to a different subscription than the Key Vaults — useful when a centralized monitoring/security team owns a separate subscription.
+- `deployAzureMonitorPrivateLinkScope` creates AMPLS and its private endpoint when shared monitoring
+  is deployed. It requires the Shared Services private-endpoint option and subnet. Azure Monitor's
+  cloud-specific private DNS records remain centrally managed and must resolve before production
+  ingestion is restricted to the private path.
+- The AVD Alerts add-on requires an existing same-subscription Action Group in the `global`
+  location. AVD Shared Services intentionally does not create Action Groups because notification
+  receivers, webhooks, and incident-routing ownership belong to the operations team.
 
 ---
 
@@ -295,8 +316,8 @@ Keep one parameter file per component per environment. Update only the fields th
 ```text
 customer/
   parameters/
-    securityAndMonitoring/
-      prod.securityAndMonitoring.parameters.json
+    sharedServices/
+      prod.sharedServices.parameters.json
 
     imageManagement/
       prod.imageManagement.parameters.json
@@ -381,7 +402,7 @@ A typical image refresh pipeline stage (after initial setup) runs only Steps 3�
 # Monitor replacement progress via the Azure Monitor Workbook deployed with the add-on.
 ```
 
-Security & Monitoring (Step 1), Image Management infrastructure (Step 2), and Host Pool (Step 5) are deployed once and not part of the recurring pipeline unless infrastructure is changing.
+AVD Shared Services (Step 1), Image Management infrastructure (Step 2), and Host Pool (Step 5) are deployed once and not part of the recurring pipeline unless infrastructure is changing.
 
 ---
 

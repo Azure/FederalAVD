@@ -64,3 +64,4 @@ module vnetResources 'vnetResources.bicep' = {
 }
 
 output vNetResourceId string = vnetResources.outputs.vnetResourceId
+output subnetResourceIds array = vnetResources.outputs.subnetResourceIds

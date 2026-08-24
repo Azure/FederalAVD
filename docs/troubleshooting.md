@@ -12,7 +12,7 @@ The most common errors on a first FederalAVD deployment. Each links to a full sy
 2. [Key Vault Crypto Officer missing — CMK deployment fails with Forbidden](#key-vault-crypto-officer-missing)
 3. [timeStamp in parameter file causes stale versions or naming conflicts](#timestamp-in-parameter-file-causes-stale-image-versions)
 4. [Editing `customer-examples/` instead of `customer/parameters/` — changes disappear on git pull](#editing-customerexamples-or-missing-customer-changes)
-5. [Image Management deployed before Security & Monitoring — CMK encryption fails](#cmk-deployment-fails-image-management-deployed-before-key-vaults)
+5. [Image Management deployed before AVD Shared Services — CMK encryption fails](#cmk-deployment-fails-image-management-deployed-before-key-vaults)
 
 ---
 
@@ -453,7 +453,7 @@ Copy-Item customer-examples/parameters/hostpools/hostpool.parameters.example.jso
 
 ---
 
-## CMK Deployment Fails — Image Management Deployed Before Security & Monitoring {#cmk-deployment-fails-image-management-deployed-before-key-vaults}
+## CMK Deployment Fails — Image Management Deployed Before AVD Shared Services {#cmk-deployment-fails-image-management-deployed-before-key-vaults}
 
 ### Symptom
 
@@ -474,7 +474,7 @@ When using Customer-Managed Keys, the Image Management template needs the Key Va
 Follow the documented deployment sequence when using CMK:
 
 ```text
-Step 1 (securityAndMonitoring)  →  Step 2 (imageManagement)  →  Step 3 (imageBuild, optional)  →  Step 4 (hostpool)
+Step 1 (sharedServices)  →  Step 2 (imageManagement)  →  Step 3 (imageBuild, optional)  →  Step 4 (hostpool)
 ```
 
-Deploy Security & Monitoring (Step 1) first, wait for it to succeed, then proceed to Image Management (Step 2). If you have already deployed Image Management without CMK and want to enable it, redeploy Image Management after Step 1 is complete — the template is idempotent and will update the encryption settings.
+Deploy AVD Shared Services (Step 1) first, wait for it to succeed, then proceed to Image Management (Step 2). If you have already deployed Image Management without CMK and want to enable it, redeploy Image Management after Step 1 is complete — the template is idempotent and will update the encryption settings.

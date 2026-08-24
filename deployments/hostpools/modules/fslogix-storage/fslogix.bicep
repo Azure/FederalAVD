@@ -1,6 +1,8 @@
 ﻿targetScope = 'subscription'
 
 param activeDirectoryConnection bool
+param createNetAppAccount bool = true
+param createNetAppCapacityPool bool = true
 param identitySolution string
 param azureFilePrivateDnsZoneResourceId string
 param deploymentSuffix string
@@ -57,6 +59,8 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
   scope: resourceGroup(resourceGroupStorage)
   params: {
     activeDirectoryConnection: activeDirectoryConnection
+    createNetAppAccount: createNetAppAccount
+    createNetAppCapacityPool: createNetAppCapacityPool
     deploymentVirtualMachineName: deploymentVirtualMachineName
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
@@ -76,6 +80,14 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     tagsNetAppAccount: union(
       !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {},
       tags[?'Microsoft.NetApp/netAppAccounts'] ?? {}
+    )
+    tagsNetAppCapacityPool: union(
+      !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {},
+      tags[?'Microsoft.NetApp/netAppAccounts/capacityPools'] ?? {}
+    )
+    tagsNetAppVolume: union(
+      !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {},
+      tags[?'Microsoft.NetApp/netAppAccounts/capacityPools/volumes'] ?? {}
     )
     deploymentSuffix: deploymentSuffix
   }

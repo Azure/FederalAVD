@@ -436,9 +436,9 @@ Each object must contain the following properties from the Entra Id group:
 param fslogixUserGroups array = []
 
 @description('''Optional.
-The resource Id of the User Assigned Identity that has been granted the Application Admnistrator Entra ID role in order to add tags
-to the enterprise application created when the storage account is enabled for Entra Kerberos Authentication. Required in order to
-automate the configuration of least priveledge permissions on the file share(s) in the Entra Kerberos (Cloud Only Identity) configuration.
+The resource ID of a user-assigned identity with the required Microsoft Graph application permissions. The identity updates and grants
+consent to storage account enterprise applications for Entra Kerberos. Cloud-only group-scoped NTFS access also requires this identity
+to enable cloud group SID support.
 ''')
 param fslogixAppUpdateUserAssignedIdentityResourceId string = ''
 
@@ -529,7 +529,7 @@ param keyManagementRecoveryServicesVault string = 'PlatformManaged'
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
 
-@description('Optional. Enable VM backups via a Recovery Services Vault. Only applies to Personal host pools. For pooled host pools, Azure Files storage protection uses soft delete and snapshots configured directly on the storage accounts.')
+@description('Optional. Enable Azure Backup. Personal host pools protect session host VMs. Pooled host pools protect newly deployed FSLogix Azure Files shares through a shared Recovery Services vault and snapshot policy.')
 param recoveryServices bool = false
 
 @description('Optional. Storage redundancy for the Recovery Services vault. Controls how backup recovery points are stored — independently of the storage account redundancy.')
@@ -546,6 +546,9 @@ param existingVmBackupVaultResourceId string = ''
 
 @description('Optional. Resource ID of an existing Azure Files backup Recovery Services Vault (pooled host pools). When provided with recoveryServices = true and Azure Files storage, uses this vault instead of creating a new one.')
 param existingFilesBackupVaultResourceId string = ''
+
+@description('Optional. Name of the Azure Files backup policy in the existing shared Recovery Services vault.')
+param existingFilesBackupPolicyName string = 'filesharepolicy'
 
 @description('Optional. The resource ID of an existing Encryption Key Vault containing customer-managed keys. When provided, the deployment uses this vault for CMK instead of creating one inline.')
 param existingEncryptionKeyVaultResourceId string = ''
@@ -702,6 +705,7 @@ var virtualMachinesRegion = vmVirtualNetwork.location
 var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
 var createDeploymentVm = deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
+var hybridDomainCredentialsRequired = deployFSLogixStorage && identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups)
 
 // deployKeyVaults controls inline KV creation within this deployment.
 //   (a) deploySecretsKeyVault = true: user explicitly requested a secrets KV deployed inline
@@ -910,6 +914,12 @@ var storageResourceGroupIdTag = deployFSLogixStorage
 // FSLogix storage configuration
 var fslogixFileShareNames = fslogixShareNamesLookup[fslogixContainerType]
 var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
+var effectiveFslogixExistingLocalStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixExistingLocalStorageAccountResourceIds, 1)
+  : fslogixExistingLocalStorageAccountResourceIds
+var effectiveFslogixExistingRemoteStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixExistingRemoteStorageAccountResourceIds, 1)
+  : fslogixExistingRemoteStorageAccountResourceIds
 
 // NOTE: the name formula below must stay in sync with azureFiles.bicep: '${storageAccountNamePrefix}${padLeft(i + storageIndex, 2, '0')}'
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
@@ -919,18 +929,18 @@ var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStor
         i => '${naming.outputs.fslogixStorageAccountNamePrefix}${padLeft(i + fslogixStorageIndex, 2, '0')}'
       ))
     }
-  : !empty(fslogixExistingLocalStorageAccountResourceIds)
+  : !empty(effectiveFslogixExistingLocalStorageAccountResourceIds)
       ? {
           fslLocalStorageAccountNames: string(map(
-            fslogixExistingLocalStorageAccountResourceIds,
+            effectiveFslogixExistingLocalStorageAccountResourceIds,
             id => last(split(id, '/'))
           ))
         }
       : {}
-var fslRemoteStorageAccountNames = !empty(fslogixExistingRemoteStorageAccountResourceIds)
+var fslRemoteStorageAccountNames = !empty(effectiveFslogixExistingRemoteStorageAccountResourceIds)
   ? {
       fslRemoteStorageAccountNames: string(map(
-        fslogixExistingRemoteStorageAccountResourceIds,
+        effectiveFslogixExistingRemoteStorageAccountResourceIds,
         id => last(split(id, '/'))
       ))
     }
@@ -1133,18 +1143,19 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     desktopFriendlyName: desktopFriendlyName
     diskSku: diskSku
     #disable-next-line BCP422
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
+    domainJoinDeploymentVirtualMachine: split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
@@ -1246,6 +1257,7 @@ module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployDiskCmk) {
     keyExpirationInDays: keyExpirationInDays
     location: virtualMachinesRegion
     tags: tags
+    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
     deploymentSuffix: deploymentSuffix
     keyName: naming.outputs.encryptionKeyNameVMs
     diskEncryptionSetName: !contains(keyManagementDisks, 'Platform')
@@ -1299,6 +1311,7 @@ module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
     keyExpirationInDays: keyExpirationInDays
     location: virtualMachinesRegion
     tags: tags
+    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
     deploymentSuffix: deploymentSuffix
     storageKeyNames: [
       for i in range(0, fslogixStorageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
@@ -1399,14 +1412,17 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
 // VM Recovery Services: vault deployment is handled inside modules/hosts/hosts.bicep.
 var deployRecoveryServices = recoveryServices && contains(hostPoolType, 'Personal')
 
-var recoveryServicesFileSharePolicyName = 'filesharepolicy'
+var recoveryServicesFileSharePolicyName = empty(existingFilesBackupVaultResourceId)
+  ? 'filesharepolicy'
+  : existingFilesBackupPolicyName
 
 // Azure Files Recovery Services Vault — shared vault in the Operations RG for pooled host pool FSLogix snapshot backup.
 // No CMK required: vault holds only metadata; snapshot data stays in the storage account.
-module recoveryServicesAzureFilesModule 'modules/operations/recoveryServices.bicep' = if (deployRecoveryServicesAzureFiles) {
+module recoveryServicesAzureFilesModule '../shared/modules/recoveryServices/fslogixBackupVault.bicep' = if (deployRecoveryServicesAzureFiles) {
   name: 'RecoveryServices-AzureFiles-${deploymentSuffix}'
   params: {
     createVault: empty(existingFilesBackupVaultResourceId)
+    manageBackupPolicy: empty(existingFilesBackupVaultResourceId)
     existingRecoveryServicesVaultResourceId: existingFilesBackupVaultResourceId
     vaultName: naming.outputs.recoveryServicesVaultNameFSLogix
     resourceGroupOperations: naming.outputs.resourceGroupOperations
@@ -1452,13 +1468,13 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
       : ''
     deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     #disable-next-line BCP422
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
@@ -1592,13 +1608,13 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     fslogixFileShareNames: fslogixFileShareNames
     fslogixLocalStorageAccountResourceIds: deployFSLogixStorage
       ? fslogix!.outputs.storageAccountResourceIds
-      : fslogixExistingLocalStorageAccountResourceIds
+      : effectiveFslogixExistingLocalStorageAccountResourceIds
     fslogixLocalNetAppVolumeResourceIds: deployFSLogixStorage
       ? fslogix!.outputs.netAppVolumeResourceIds
       : fslogixExistingLocalNetAppVolumeResourceIds
     fslogixOSSGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
     fslogixRemoteNetAppVolumeResourceIds: fslogixExistingRemoteNetAppVolumeResourceIds
-    fslogixRemoteStorageAccountResourceIds: fslogixExistingRemoteStorageAccountResourceIds
+    fslogixRemoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: split(fslogixStorageService, ' ')[0]
     hibernationEnabled: hibernationEnabled
@@ -1666,25 +1682,22 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
 }
 
 // Clean Up Deployment VM and Role Assignments
-module cleanUp 'modules/clean-up/cleanUp.bicep' = if (createDeploymentVm) {
+module cleanUp 'modules/clean-up/hostPoolCleanup.bicep' = if (createDeploymentVm) {
   name: 'CleanUp-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     resourceGroupDeployment: naming.outputs.resourceGroupDeployment
     resourceGroupHosts: naming.outputs.resourceGroupHosts
-    roleAssignmentIds: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
-      : []
     deploymentSuffix: deploymentSuffix
     userAssignedIdentityClientId: createDeploymentVm
       ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
       : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
+    roleAssignmentIds: createDeploymentVm
+      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
+      : []
     virtualMachineNames: sessionHosts.outputs.virtualMachineNames
   }
-  dependsOn: [
-    deploymentResourceGroup
-  ]
 }
 
 // Outputs
@@ -1694,6 +1707,6 @@ output workspaceResourceId string = empty(existingFeedWorkspaceResourceId)
   : existingFeedWorkspaceResourceId
 output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage
   ? fslogix!.outputs.storageAccountResourceIds
-  : fslogixExistingLocalStorageAccountResourceIds
+  : effectiveFslogixExistingLocalStorageAccountResourceIds
 output hostResouceGroupId string = hostsResourceGroup!.outputs.resourceId
 output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames

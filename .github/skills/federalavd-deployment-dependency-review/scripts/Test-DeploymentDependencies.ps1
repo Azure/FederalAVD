@@ -52,7 +52,7 @@ function Test-RequiredValue {
 
 $customerManaged = { param($value) -not [string]::IsNullOrWhiteSpace([string]$value) -and $value -ne 'PlatformManaged' }
 foreach ($name in @('keyManagementStorageAccounts', 'keyManagementGalleryImageVersions')) {
-    Test-RequiredValue -WhenName $name -When $customerManaged -RequiredName 'encryptionKeyVaultResourceId' -Detail 'Image Management CMK requires the Security and Monitoring encryption Key Vault output.'
+    Test-RequiredValue -WhenName $name -When $customerManaged -RequiredName 'encryptionKeyVaultResourceId' -Detail 'Image Management CMK requires the AVD Shared Services encryption Key Vault output.'
 }
 foreach ($name in @('keyManagementDisks', 'keyManagementStorage', 'keyManagementRecoveryServicesVault')) {
     Test-RequiredValue -WhenName $name -When $customerManaged -RequiredName 'existingEncryptionKeyVaultResourceId' -Detail 'Host Pool CMK requires an existing encryption Key Vault resource ID.'

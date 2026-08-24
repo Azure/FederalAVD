@@ -220,6 +220,7 @@ var snetFunctionApp = !empty(faSubnetsList)
   : []
 
 var allSubnets = union(snetHosts, snetPrivateEndpoints, snetFunctionApp)
+var effectiveSubnetDefinitions = concat(hostsSubnetsList, take(peSubnetsList, 1), take(faSubnetsList, 1))
 
 resource ddosProtectionPlan 'Microsoft.Network/ddosProtectionPlans@2023-04-01' = if (deployDDoSNetworkProtection) {
   name: 'default'
@@ -374,3 +375,9 @@ module remoteVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetN
 }
 
 output vnetResourceId string = vnet.id
+
+output subnetResourceIds array = [for (subnet, index) in effectiveSubnetDefinitions: {
+  name: subnet.name
+  purpose: subnet.purpose
+  resourceId: snets[index].id
+}]

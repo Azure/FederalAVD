@@ -1,36 +1,38 @@
+param configureFSLogix bool
 param fslogixContainerType string
 param fslogixFileShareNames array
+@maxLength(2)
 param fslogixLocalStorageAccountResourceIds array
 param fslogixLocalNetAppServerFqdns array
 param fslogixOSSGroups array
+@maxLength(2)
 param fslogixRemoteStorageAccountResourceIds array
 param fslogixRemoteNetAppServerFqdns array
 param fslogixStorageService string
 param identitySolution string
 param location string
 param runCommandName string
+param timeZone string
 param profileSizeInMBs int
 param virtualMachineName string
 
 // Storage Accounts
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixRemoteStorageAccountNames = [for id in fslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
-//  only get keys if EntraId
-var fslogixLocalSAKey1 = identitySolution == 'EntraId' && !empty(fslogixLocalStorageAccountResourceIds) ? [ localStorageAccounts[0].listkeys().keys[0].value ] : []
-var fslogixLocalSAKey2 = identitySolution == 'EntraId' && length(fslogixLocalStorageAccountResourceIds) > 1 ? [ localStorageAccounts[1].listkeys().keys[0].value ] : []
+var useStorageAccountKeys = configureFSLogix && identitySolution == 'EntraId'
+var fslogixLocalSAKey1 = useStorageAccountKeys && !empty(fslogixLocalStorageAccountResourceIds) ? [ localStorageAccounts[0].listkeys().keys[0].value ] : []
+var fslogixLocalSAKey2 = useStorageAccountKeys && length(fslogixLocalStorageAccountResourceIds) > 1 ? [ localStorageAccounts[1].listkeys().keys[0].value ] : []
 var fslogixLocalStorageAccountKeys = union(fslogixLocalSAKey1, fslogixLocalSAKey2)
-var fslogixRemoteAKey1 = identitySolution == 'EntraId' && !empty(fslogixRemoteStorageAccountResourceIds) ? [ remoteStorageAccounts[0].listkeys().keys[0].value ] : []
-var fslogixRemoteSAKey2 = identitySolution == 'EntraId' && length(fslogixRemoteStorageAccountResourceIds) > 1 ? [ remoteStorageAccounts[1].listkeys().keys[0].value ] : []
-var fslogixRemoteStorageAccountKeys = union(fslogixRemoteAKey1, fslogixRemoteSAKey2)
+var fslogixRemoteSAKey1 = useStorageAccountKeys && !empty(fslogixRemoteStorageAccountResourceIds) ? [ remoteStorageAccounts[0].listkeys().keys[0].value ] : []
+var fslogixRemoteSAKey2 = useStorageAccountKeys && length(fslogixRemoteStorageAccountResourceIds) > 1 ? [ remoteStorageAccounts[1].listkeys().keys[0].value ] : []
+var fslogixRemoteStorageAccountKeys = union(fslogixRemoteSAKey1, fslogixRemoteSAKey2)
 
-// call on new storage accounts only if we need the Storage Key(s)
-resource localStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [for resId in fslogixLocalStorageAccountResourceIds: if(identitySolution == 'EntraId' && !empty(fslogixLocalStorageAccountResourceIds)) {
+resource localStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [for resId in fslogixLocalStorageAccountResourceIds: if(useStorageAccountKeys) {
   name: last(split(resId, '/'))
   scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
 }]
 
-// call on remote storage accounts only if we need the Storage Key(s)
-resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [for resId in fslogixRemoteStorageAccountResourceIds: if(identitySolution == 'EntraId' && !empty(fslogixRemoteStorageAccountResourceIds)) {
+resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [for resId in fslogixRemoteStorageAccountResourceIds: if(useStorageAccountKeys) {
   name: last(split(resId, '/'))
   scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
 }]
@@ -47,7 +49,7 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
     parameters: [
       {
         name: 'ConfigureFSLogix'
-        value: 'true'
+        value: configureFSLogix ? 'true' : 'false'
       }
       {
         name: 'CloudCache'
@@ -96,20 +98,26 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
       {
         name: 'StorageService'
         value: fslogixStorageService
-      }      
-    ]
-    protectedParameters: [
-      {
-        name: 'LocalStorageAccountKeys'
-        value: string(fslogixLocalStorageAccountKeys)
       }
       {
-        name: 'RemoteStorageAccountKeys'
-        value: string(fslogixRemoteStorageAccountKeys)
+        name: 'TimeZone'
+        value: timeZone
       }
     ]
+    protectedParameters: useStorageAccountKeys
+      ? [
+          {
+            name: 'LocalStorageAccountKeys'
+            value: string(fslogixLocalStorageAccountKeys)
+          }
+          {
+            name: 'RemoteStorageAccountKeys'
+            value: string(fslogixRemoteStorageAccountKeys)
+          }
+        ]
+      : []
     source: {
-      script: loadTextContent('../../../deployments/shared/scripts/Set-FSLogixSessionHostConfiguration.ps1')
+      script: loadTextContent('../../../../../../shared/scripts/Set-AutomatedSessionHostConfiguration.ps1')
     }
     timeoutInSeconds: 180
     treatFailureAsDeploymentFailure: true    

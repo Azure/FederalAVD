@@ -63,12 +63,13 @@ var deployEncryptionKvPe = deployEncryptionKeyVault && privateEndpoint && !empty
 
 // Resolve publicNetworkAccess for each vault. When PE is used and no IPs are permitted, public access
 // is disabled — the PE becomes the sole access path. IP allowances or an explicit override keep it open.
-var kvPublicAccessDisabled = privateEndpoint && empty(permittedIPs)
+var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
+var kvPublicAccessDisabled = privateEndpoint && empty(effectivePermittedIPs)
 var secretsKvPublicNetworkAccess = kvPublicAccessDisabled ? 'Disabled' : 'Enabled'
 var encryptionKvPublicNetworkAccess = kvPublicAccessDisabled ? 'Disabled' : 'Enabled'
 
-var ipRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
-var kvHasNetworkRestrictions = privateEndpoint || !empty(permittedIPs)
+var ipRules = [for ip in effectivePermittedIPs: { value: ip, action: 'Allow' }]
+var kvHasNetworkRestrictions = privateEndpoint || !empty(effectivePermittedIPs)
 
 // Secrets KV uses AzureServices bypass because enabledForTemplateDeployment is true.
 // defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).

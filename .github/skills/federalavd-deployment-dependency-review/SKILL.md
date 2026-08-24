@@ -1,6 +1,6 @@
 ---
 name: federalavd-deployment-dependency-review
-description: "Validate FederalAVD deployment sequencing and output-to-input dependencies across Networking, Security and Monitoring, Image Management, Image Build, Host Pool, and add-ons. Use when planning deployment order, wiring deployment outputs into parameter files, reusing shared resources, or diagnosing missing resource IDs."
+description: "Validate FederalAVD deployment sequencing and output-to-input dependencies across Networking, AVD Shared Services, Image Management, Image Build, Host Pool, and add-ons. Use when planning deployment order, wiring deployment outputs into parameter files, reusing shared resources, or diagnosing missing resource IDs."
 argument-hint: "[scenario and parameter files]"
 ---
 
@@ -11,9 +11,9 @@ argument-hint: "[scenario and parameter files]"
 1. Read `docs/automation-guide.md` and identify the requested scenario: marketplace or custom
    image, CMK or platform keys, shared monitoring, existing networking, and applicable add-ons.
 2. Reduce the plan to only required steps:
-   Networking -> Security and Monitoring -> Image Management -> Image Build -> Host Pool.
+   Networking -> AVD Shared Services -> Image Management -> Image Build -> Host Pool.
    Optional steps may be skipped only when their outputs are not consumed downstream.
-3. For CMK, deploy Security and Monitoring before Image Management or Host Pool and grant the
+3. For CMK, deploy AVD Shared Services before Image Management or Host Pool and grant the
    deploying identity the documented Key Vault data-plane role.
 4. Record each required output with its producing deployment, consuming parameter, and whether an
    empty conditional output is valid. Use [dependency map](./references/dependency-map.md).

@@ -372,7 +372,12 @@ For the full procedure including CLI and PowerShell options, see [Restore Azure 
 
 Customer-managed key (CMK) encryption is supported for the vault via `keyManagementRecoveryServicesVault`. The vault always uses its system-assigned identity for CMK access — this avoids an extra user-assigned identity resource and is also required by Azure when the vault has a private endpoint. CMK and private endpoints can be enabled simultaneously — Azure Backup accesses the encryption Key Vault via the `AzureServices` trusted service bypass even when public network access on the Key Vault is disabled.
 
-> **Pooled host pools — FSLogix Azure Files snapshot backup:** When `recoveryServices = true` for a pooled host pool, the **FSLogix Azure Files file shares** are backed up using Azure Backup snapshot policy. The vault is deployed to the **shared operations resource group** (`rg-avd-operations-{loc}`) and is reused across pooled host pools in the same region — pass `existingFilesBackupVaultResourceId` on subsequent pooled deployments to avoid creating duplicate vaults.
+> **Pooled host pools — FSLogix Azure Files snapshot backup:** Deploy AVD Shared Services with
+> `deployFSLogixBackupVault = true` to create the regional vault and policy in the shared operations
+> resource group. Pass `fslogixBackupVaultResourceId` to `existingFilesBackupVaultResourceId` and
+> `fslogixBackupPolicyName` to `existingFilesBackupPolicyName` on every pooled host pool. The host
+> pool then registers its Azure Files shares without modifying shared policy settings. Inline vault
+> creation remains available as a compatibility fallback when no existing vault is supplied.
 >
 > **Why CMK is not applied to this vault (SC-28 rationale):** Azure Files snapshots are stored in the storage account itself — no user data, CUI, or profile content is transmitted to or stored in the vault. This vault holds only backup scheduling metadata (policy assignments, protection container registrations, job history). SC-28 (Protection of Information at Rest) is satisfied for actual FSLogix profile data by the storage account's own encryption, controlled by `keyManagementStorage`. Applying CMK to this metadata-only vault would provide no incremental SC-28 protection for user data and is therefore not implemented. **SSP language:** *"The shared Azure Backup vault used for FSLogix Azure Files snapshot scheduling contains no user data or CUI. Snapshot data at rest is protected by the storage account encryption key (`keyManagementStorage`), satisfying SC-28 at the data-bearing resource. CMK on the scheduling vault is not required and provides no additional protection."*
 >
@@ -482,7 +487,11 @@ When `identitySolution = 'EntraId'` (storage key authentication), FSLogix is con
 
 ### Backup Schedule Is Not Parameterized
 
-`recoveryServices = true` creates Azure Backup policies with a daily backup schedule running at 23:00 UTC. The backup frequency is not configurable via template parameters. **Retention is parameterized** — use `backupRetentionDays` (default: 30, range: 1–365) to control how many daily recovery points are kept for VM backup, or how many daily snapshots are retained for Azure Files backup. If you require custom backup windows or intraday snapshots, configure an additional custom backup policy on the Recovery Services Vault after deployment.
+Personal host-pool deployments create their VM backup policy when `recoveryServices = true`.
+For shared FSLogix backup, AVD Shared Services owns the Azure Files policy, including
+`fslogixBackupRetentionDays` and `fslogixBackupTimeZone`. The daily schedule runs at 23:00 in the
+selected time zone. If you require custom backup windows or intraday snapshots, configure an
+additional policy after deployment.
 
 ### FSLogix Office Container Cross-Region
 

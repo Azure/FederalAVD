@@ -3,7 +3,7 @@
   "view": {
     "kind": "Form",
     "properties": {
-      "title": "AVD Security Infrastructure",
+      "title": "AVD Shared Services",
       "steps": [
         {
           "name": "basics",
@@ -14,7 +14,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "Deploy shared AVD security infrastructure: a Secrets Key Vault for storing AVD credentials, an Encryption Key Vault for Customer-Managed Key (CMK) encryption, and an optional shared Log Analytics Workspace. Run this deployment before deploying host pools, image management, or add-ons that use CMK. The resource IDs output by this deployment are used as inputs to downstream solutions."
+                "text": "Deploy shared AVD services: Secrets and Encryption Key Vaults, Log Analytics and AVD Insights resources, and an FSLogix Recovery Services vault with an Azure Files snapshot backup policy. Run this deployment before host pools, image management, or add-ons that consume these shared resources."
               }
             },
             {
@@ -168,6 +168,66 @@
           ]
         },
         {
+          "name": "fslogixBackup",
+          "label": "FSLogix Backup",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Optionally deploy one regional Recovery Services vault and Azure Files snapshot backup policy for FSLogix profile storage. The vault is shared by pooled host pools and standalone FSLogix storage deployments. Profile snapshots remain in each storage account; the vault stores backup policy and scheduling metadata."
+              }
+            },
+            {
+              "name": "deployVault",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy shared FSLogix backup vault and policy",
+              "defaultValue": false,
+              "toolTip": "Deploy the shared Recovery Services vault in the operations resource group. Pass the resulting vault and policy outputs to pooled host pool or FSLogix Storage add-on deployments."
+            },
+            {
+              "name": "policySettings",
+              "type": "Microsoft.Common.Section",
+              "label": "Backup Policy",
+              "visible": "[steps('fslogixBackup').deployVault]",
+              "elements": [
+                {
+                  "name": "policyName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Backup Policy Name",
+                  "defaultValue": "filesharepolicy",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-zA-Z0-9_-]{1,150}$",
+                    "validationMessage": "Use 1-150 letters, numbers, underscores, or hyphens."
+                  }
+                },
+                {
+                  "name": "retentionDays",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Daily Snapshot Retention (Days)",
+                  "defaultValue": 30,
+                  "showStepMarkers": false,
+                  "toolTip": "Number of daily Azure Files snapshots retained by the shared policy.",
+                  "min": 1,
+                  "max": 365
+                },
+                {
+                  "name": "timeZone",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Backup Policy Time Zone",
+                  "defaultValue": "UTC",
+                  "toolTip": "Windows time zone used by the daily backup schedule, for example UTC or Eastern Standard Time.",
+                  "constraints": {
+                    "required": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
           "name": "keyVaultsScope",
           "label": "Key Vaults Location",
           "elements": [
@@ -200,7 +260,8 @@
                   "name": "location",
                   "label": "Region",
                   "resourceTypes": [
-                    "Microsoft.KeyVault/vaults"
+                    "Microsoft.KeyVault/vaults",
+                    "Microsoft.RecoveryServices/vaults"
                   ],
                   "scope": {
                     "subscriptionId": "[steps('keyVaultsScope').scope.subscription.subscriptionId]"
@@ -375,14 +436,14 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "Configure private endpoints to disable public network access on the Key Vaults and route all traffic over the Microsoft backbone. Requires an existing virtual network with a dedicated subnet (no delegations) and a Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net)."
+                "text": "Configure private endpoints for deployed Key Vaults and the optional FSLogix backup vault. Recovery Services private endpoints also require the Azure Backup, Blob, and Queue Private DNS zones."
               }
             },
             {
               "name": "privateEndpoint",
               "type": "Microsoft.Common.CheckBox",
               "label": "Deploy Private Endpoints",
-              "toolTip": "When enabled, public network access is disabled on both Key Vaults and private endpoints are deployed into the selected subnet."
+              "toolTip": "When enabled, public network access is disabled on deployed Key Vaults and the FSLogix backup vault, and private endpoints are deployed into the selected subnet."
             },
             {
               "name": "networkSection",
@@ -468,14 +529,50 @@
                 {
                   "name": "keyVaultPrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, or(steps('secretsKeyVault').deploySecretsKeyVault, steps('encryptionKeyVault').deployEncryptionKeyVault))]",
                   "label": "Key Vault Private DNS Zone",
                   "multiLine": true,
                   "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
                   "toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
                   "constraints": {
-                    "required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+                    "required": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, or(steps('secretsKeyVault').deploySecretsKeyVault, steps('encryptionKeyVault').deployEncryptionKeyVault))]",
                     "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "azureBackupPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, steps('fslogixBackup').deployVault)]",
+                  "label": "Azure Backup Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "azureBlobPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, steps('fslogixBackup').deployVault)]",
+                  "label": "Azure Blob Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "azureQueuePrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, steps('fslogixBackup').deployVault)]",
+                  "label": "Azure Queue Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
                   }
                 }
               ]
@@ -1049,6 +1146,19 @@
                   }
                 },
                 {
+                  "name": "rtCodeRsv",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Recovery Services Vaults abbreviation",
+                  "defaultValue": "rsv",
+                  "toolTip": "Abbreviation substituted for the Resource Type component in the shared FSLogix backup vault name.",
+                  "visible": "[and(steps('fslogixBackup').deployVault, or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,10}$",
+                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
                   "name": "rtCodePe",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Private Endpoints abbreviation",
@@ -1137,6 +1247,7 @@
                   "resources": [
                     "Microsoft.Resources/resourceGroups",
                     "Microsoft.KeyVault/vaults",
+                    "Microsoft.RecoveryServices/vaults",
                     "Microsoft.Network/privateEndpoints"
                   ]
                 }
@@ -1164,7 +1275,7 @@
         "encryptionKeyVaultRetentionInDays": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').encKvRetentionInDays, 90)]",
         "privateEndpoint": "[steps('networking').privateEndpoint]",
         "privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
-        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
+        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration, or(steps('secretsKeyVault').deploySecretsKeyVault, steps('encryptionKeyVault').deployEncryptionKeyVault)), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
         "permittedIPs": "[filter(map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
         "deployMonitoring": "[steps('monitoring').deployMonitoring]",
         "logAnalyticsWorkspaceSubscriptionId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').scope.subscription.subscriptionId, '')]",
@@ -1172,7 +1283,14 @@
         "logAnalyticsWorkspaceRetentionInDays": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.retentionDays, 30)]",
         "azureMonitorPrivateLinkScopeResourceId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.azureMonitorPrivateLinkScopeResourceId, '')]",
         "existingLogAnalyticsWorkspaceResourceId": "[if(steps('monitoring').deployMonitoring, '', if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, ''))]",
-        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
+        "deployFSLogixBackupVault": "[steps('fslogixBackup').deployVault]",
+        "fslogixBackupPolicyName": "[if(steps('fslogixBackup').deployVault, steps('fslogixBackup').policySettings.policyName, 'filesharepolicy')]",
+        "fslogixBackupRetentionDays": "[if(steps('fslogixBackup').deployVault, steps('fslogixBackup').policySettings.retentionDays, 30)]",
+        "fslogixBackupTimeZone": "[if(steps('fslogixBackup').deployVault, steps('fslogixBackup').policySettings.timeZone, 'UTC')]",
+        "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('fslogixBackup').deployVault, steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.azureBackupPrivateDnsZone, '')]",
+        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('fslogixBackup').deployVault, steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.azureBlobPrivateDnsZone, '')]",
+        "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('fslogixBackup').deployVault, steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.azureQueuePrivateDnsZone, '')]",
+        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"
       }
     }

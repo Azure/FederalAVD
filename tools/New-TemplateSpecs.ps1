@@ -4,7 +4,8 @@ param (
     [Parameter(Mandatory=$true)]
     [string]$Location,
     [bool]$createResourceGroup = $true,
-    [bool]$createSecurityAndMonitoring = $false,
+    [Alias('createSecurityAndMonitoring')]
+    [bool]$createSharedServices = $false,
     [bool]$createNetwork = $false,
     [bool]$createCustomImage = $true,
     [bool]$createImageManagement = $false,
@@ -64,13 +65,13 @@ if ($createResourceGroup) {
 # Build collection of template specs to create
 $templateSpecs = @()
 
-if ($createSecurityAndMonitoring) {
+if ($createSharedServices) {
     $templateSpecs += @{
-        Name = 'avd-security-monitoring'
-        DisplayName = 'AVD Security & Monitoring'
-        Description = 'Deploys optional AVD prerequisites: Key Vaults (credentials/CMK) and a Log Analytics Workspace, DCR, and DCE for diagnostics/monitoring'
-        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\securityAndMonitoring\securityAndMonitoring.json'
-        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\securityAndMonitoring\uiFormDefinition.json'
+        Name = 'avd-shared-services'
+        DisplayName = 'AVD Shared Services'
+        Description = 'Deploys optional shared AVD services: Key Vaults, monitoring resources, and an FSLogix Recovery Services vault and policy'
+        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\sharedServices.json'
+        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\uiFormDefinition.json'
     }
 }
 
@@ -118,6 +119,8 @@ if ($CreateAddOns) {
     $addOns = @(
         @{ Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
         @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
+        @{ Name = 'avd-automated-session-host-policy'; DisplayName = 'AVD Automated Session Host Policy'; Description = 'Applies FederalAVD customization and compliance controls to session hosts managed by Session Host Configuration'; FolderName = 'automatedSessionHostPolicy' },
+        @{ Name = 'avd-fslogix-storage'; DisplayName = 'AVD FSLogix Storage'; Description = 'Deploys standalone Azure Files or Azure NetApp Files storage for FSLogix profile containers'; FolderName = 'fslogixStorage' },
         @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
         @{ Name = 'avd-session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
         @{ Name = 'avd-session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }

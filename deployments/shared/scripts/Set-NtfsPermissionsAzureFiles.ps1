@@ -1,5 +1,11 @@
 param 
 (
+    [String]$DomainJoinUserPrincipalName,
+
+    [String]$DomainJoinUserPwd,
+
+    [String]$DomainName,
+
     [String]$Shares,
 
     [string]$ShardAzureFilesStorage,    
@@ -42,22 +48,21 @@ Function Convert-DomainGroupToSid {
         [Parameter(Mandatory = $true)]
         [string]$DomainName,
 
-        [Parameter(Mandatory = $true)]    
-        [string]$GroupName
+        [Parameter(Mandatory = $true)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GroupName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Server
     )
-    [string]$DomainSid = ''
     Try {
-        $DomainSid = (New-Object System.Security.Principal.NTAccount("$GroupName")).Translate([System.Security.Principal.SecurityIdentifier]).Value           
+        return (Get-ADGroup -Identity $GroupName -Server $Server -Credential $Credential).SID.Value
     }
     Catch {
-        Try {
-            $DomainSid = (New-Object System.Security.Principal.NTAccount($DomainName, "$GroupName")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-        }
-        Catch {
-            throw "Failed to convert group name $GroupName' to SID."
-        }
-    }          
-    Return $DomainSid
+        throw "Failed to resolve group '$GroupName' in domain '$DomainName' through '$Server'."
+    }
 }    
 
 Function Set-AzureFileSharePermissions {
@@ -153,14 +158,33 @@ Function Set-AzureFileSharePermissions {
 Start-Transcript -Path "c:\Windows\Logs\Set-NtfsPermissionsAzureFiles-$(Get-Date -Format 'yyyyMMdd-HHmm').log" -Force
 try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $DefaultDomain = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty Domain
-    Write-Output "Default Domain: $DefaultDomain"
+    $DomainName = $DomainName.Replace('\"', '"').Trim()
+    $DomainControllerHostName = ''
+    $DomainCredential = $null
    
     # Convert User Groups to SIDs if provided
     [array]$UserGroupSids = @()
     if ($UserGroups -and $UserGroups -ne '[]') {
         [array]$UserGroupsArray = $UserGroups.replace('\"', '"') | ConvertFrom-Json
         Write-Output "Processing User Groups..."
+        $DomainGroups = @($UserGroupsArray | Where-Object { -not [guid]::TryParse($_, [ref]([guid]::Empty)) })
+        if ($DomainGroups.Count -gt 0) {
+            if ([string]::IsNullOrWhiteSpace($DomainName) -or [string]::IsNullOrWhiteSpace($DomainJoinUserPrincipalName) -or [string]::IsNullOrWhiteSpace($DomainJoinUserPwd)) {
+                throw 'Domain name and domain credentials are required to resolve domain group names.'
+            }
+            $RsatInstalled = (Get-WindowsFeature -Name 'RSAT-AD-PowerShell').Installed
+            if (!$RsatInstalled) {
+                Install-WindowsFeature -Name 'RSAT-AD-PowerShell' | Out-Null
+            }
+            $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force
+            $DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserPrincipalName, $DomainPassword)
+            $DomainController = Get-ADDomainController -Discover -DomainName $DomainName -Service ADWS -ForceDiscover
+            [string]$DomainControllerHostName = ($DomainController.HostName | Select-Object -First 1)
+            if ([string]::IsNullOrWhiteSpace($DomainControllerHostName)) {
+                throw "Domain controller discovery returned no usable hostname for $DomainName."
+            }
+            Write-Output "Using domain controller '$DomainControllerHostName' to resolve domain groups."
+        }
         ForEach ($UserGroup in $UserGroupsArray) {
             Write-Output "User Group: $UserGroup"
             $output = [guid]::Empty
@@ -171,8 +195,7 @@ try {
                 $UserGroupSids += $sid
             }
             Else {
-                # Not a GUID, treat as group name
-                $sid = Convert-DomainGroupToSID -DomainName $DefaultDomain -GroupName $UserGroup
+                $sid = Convert-DomainGroupToSID -DomainName $DomainName -Credential $DomainCredential -GroupName $UserGroup -Server $DomainControllerHostName
                 Write-Output "Converted User Group with GroupName '$UserGroup' to SID '$sid'"
                 $UserGroupSids += $sid
             }

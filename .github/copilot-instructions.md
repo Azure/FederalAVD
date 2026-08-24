@@ -20,7 +20,7 @@ The components must be deployed in this order on first deployment:
 
 ```text
 Step 0 (optional): Networking      — VNet, subnets, NSGs, route tables, private DNS zones
-Step 1 (optional): Security & Monitoring — Key Vaults (required only for Customer-Managed Keys (CMK) or
+Step 1 (optional): AVD Shared Services — Key Vaults (required only for Customer-Managed Keys (CMK) or
                                      Key Vault-sourced credentials) and/or a Log Analytics Workspace
                                      (optional, for diagnostic settings on Key Vaults, Image
                                      Management storage accounts, and host pool monitoring)
@@ -58,7 +58,7 @@ customer/
     hostpools/
     imageBuild/
     imageManagement/
-    securityAndMonitoring/
+    sharedServices/
     networking/
   artifacts/          ← your custom software packages (scripts, installers, configs)
 ```
@@ -115,7 +115,7 @@ deployments/
   hostpools/          ← host pool Bicep template + parameters
   imageBuild/         ← image build Bicep template + parameters
   imageManagement/    ← image management Bicep template + parameters
-  securityAndMonitoring/ ← Key Vaults + Log Analytics Workspace Bicep template + parameters
+  sharedServices/     ← Key Vaults, monitoring, and shared FSLogix backup Bicep template
   networking/         ← networking Bicep template + parameters
   add-ons/            ← optional lifecycle automation (sessionHostReplacer, storageQuotaManager, etc.)
   Update-ImageArtifacts.ps1   ← downloads and uploads software artifacts to blob storage
@@ -128,7 +128,7 @@ customer-examples/
   artifacts/          ← reference artifact packages; copy to customer/artifacts/ before use
   parameters/         ← reference parameter files; copy to customer/parameters/ before use
 docs/                 ← all documentation
-policy/               ← Azure Policy definitions and assignments
+deployments/add-ons/automatedSessionHostPolicy/modules/policy/ ← Policy definitions used by the automated host add-on
 tools/                ← utility scripts
 ```
 

@@ -265,3 +265,19 @@ module privateDNSZonesResources 'modules/privateDNS-sub-module.bicep' = if (crea
 }
 
 output vnetResourceId string = deployVnet ? vnetResources!.outputs.vNetResourceId : ''
+
+@description('Names, purposes, and resource IDs of the subnets created in the new virtual network. Empty when deployVnet is false.')
+output subnetResourceIds array = deployVnet ? vnetResources!.outputs.subnetResourceIds : []
+
+@description('Effective private DNS zone resource IDs, whether zones were created by this deployment or supplied as existing resources.')
+output privateDnsZoneResourceIds object = {
+  azureBackup: createAzureBackupZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${backupPrivateDnsZone}' : azureBackupZoneId
+  azureBlob: createAzureBlobZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${blobPrivateDnsZone}' : azureBlobZoneId
+  azureFiles: createAzureFilesZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${filesPrivateDnsZone}' : azureFilesZoneId
+  azureQueue: createAzureQueueZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${queuePrivateDnsZone}' : azureQueueZoneId
+  azureTable: createAzureTableZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${tablePrivateDnsZone}' : azureTableZoneId
+  azureKeyVault: createAzureKeyVaultZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${keyVaultPrivateDnsZone}' : azureKeyVaultZoneId
+  avdFeed: createAvdFeedZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${avdFeedPrivateDnsZone}' : avdFeedZoneId
+  avdGlobalFeed: createAvdGlobalFeedZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${avdGlobalFeedPrivateDnsZone}' : avdGlobalFeedZoneId
+  azureWebApp: createAzureWebAppZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${webAppPrivateDnsZone}' : azureWebAppZoneId
+}

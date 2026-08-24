@@ -14,114 +14,225 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "Deploy standalone FSLogix storage before creating automated session hosts. An existing deployment VM and its managed identity are required for domain registration, Entra Kerberos application updates, and NTFS initialization."
+                "text": "This deployment creates Azure Files or Azure NetApp Files storage for FSLogix profile containers. It automates the applicable storage identity configuration, domain integration, share-level access, private networking, and NTFS permissions that otherwise require manual setup."
               }
             },
             {
-              "name": "subscriptionsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "request": { "method": "GET", "path": "/subscriptions?api-version=2022-12-01" }
-            },
-            {
-              "name": "subscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Subscription",
-              "constraints": {
-                "allowedValues": "[map(steps('scope').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
+              "name": "prereqs",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Before deployment, verify that the deployment principal has the required resource and role-assignment permissions and that the selected subscription, networking, identity, and supporting services meet the prerequisites for your configuration. Review the complete prerequisite checklist before continuing.",
+                "uri": "https://github.com/Azure/FederalAVD/blob/main/deployments/add-ons/fslogixStorage/README.md#prerequisites"
               }
             },
             {
-              "name": "locationsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('scope').subscription))]",
-              "request": { "method": "GET", "path": "[concat(steps('scope').subscription.id, '/locations?api-version=2022-12-01')]" }
+              "name": "resourceScope",
+              "type": "Microsoft.Common.ResourceScope",
+              "instanceDetailsLabel": "FSLogix Storage Location and Resource Group",
+              "subscription": {
+                "resourceProviders": [
+                  "Microsoft.Compute/virtualMachines",
+                  "Microsoft.DesktopVirtualization/hostPools",
+                  "Microsoft.KeyVault/vaults",
+                  "Microsoft.ManagedIdentity/userAssignedIdentities",
+                  "Microsoft.NetApp/netAppAccounts",
+                  "Microsoft.Network/privateEndpoints",
+                  "Microsoft.Network/virtualNetworks",
+                  "Microsoft.Storage/storageAccounts"
+                ]
+              },
+              "location": {
+                "label": "Region",
+                "toolTip": "Select the Azure region for FSLogix storage and the temporary deployment resources.",
+                "resourceTypes": [
+                  "Microsoft.Compute/virtualMachines",
+                  "Microsoft.Storage/storageAccounts"
+                ]
+              }
             },
             {
-              "name": "location",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Region",
+              "name": "createStorageResourceGroup",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "Storage Resource Group",
+              "defaultValue": "Use existing",
               "constraints": {
-                "allowedValues": "[map(steps('scope').locationsApi.value, (loc) => parse(concat('{\"label\":\"', loc.displayName, '\",\"value\":\"', loc.name, '\"}')))]",
-                "required": true
+                "required": true,
+                "allowedValues": [
+                  { "label": "Use existing", "value": false },
+                  { "label": "Create new", "value": true }
+                ]
               }
             },
             {
               "name": "resourceGroupsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('scope').subscription))]",
-              "request": { "method": "GET", "path": "[concat(steps('scope').subscription.id, '/resourcegroups?api-version=2024-03-01')]" }
+              "condition": "[not(empty(steps('scope').resourceScope.subscription))]",
+              "request": { "method": "GET", "path": "[concat(steps('scope').resourceScope.subscription.id, '/resourcegroups?api-version=2024-03-01')]" }
+            },
+            {
+              "name": "virtualNetworksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('scope').resourceScope.subscription))]",
+              "request": { "method": "GET", "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]" }
+            },
+            {
+              "name": "resourceSkusApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(empty(steps('scope').resourceScope.subscription.id)), not(empty(steps('scope').resourceScope.location)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('scope').resourceScope.location.name, decodeUriComponent('%27'))]",
+                "transforms": {
+                  "deploymentVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'vCPUs'].value | [0] == '2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] |[*].{label:name, value:name}"
+                }
+              }
             },
             {
               "name": "storageResourceGroup",
               "type": "Microsoft.Common.DropDown",
-              "label": "Storage Resource Group",
+              "label": "Existing Storage Resource Group",
+              "visible": "[not(steps('scope').createStorageResourceGroup)]",
               "constraints": {
                 "allowedValues": "[map(steps('scope').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"Location: ', rg.location, '\",\"value\":\"', rg.name, '\"}')))]",
                 "required": true
               }
             },
             {
-              "name": "deploymentResourceGroup",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Deployment VM Resource Group",
-              "constraints": {
-                "allowedValues": "[map(steps('scope').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"Location: ', rg.location, '\",\"value\":{\"id\":\"', rg.id, '\",\"name\":\"', rg.name, '\"}}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "virtualMachinesApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('scope').deploymentResourceGroup))]",
-              "request": { "method": "GET", "path": "[concat(steps('scope').deploymentResourceGroup.id, '/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01')]" }
-            },
-            {
-              "name": "deploymentVirtualMachine",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Deployment Virtual Machine",
-              "constraints": {
-                "allowedValues": "[map(steps('scope').virtualMachinesApi.value, (vm) => parse(concat('{\"label\":\"', vm.name, '\",\"value\":\"', vm.name, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "deploymentIdentityClientId",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Deployment VM Identity Client ID",
-              "toolTip": "Enter the client ID of the user-assigned identity attached to the deployment VM.",
-              "constraints": {
-                "required": true,
-                "regex": "^[0-9a-fA-F-]{36}$",
-                "validationMessage": "Enter a managed identity client ID GUID."
-              }
-            },
-            {
-              "name": "parentResourceId",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Cost Management Parent Resource ID",
-              "defaultValue": "",
-              "constraints": { "required": false }
+              "name": "storagePurpose",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage Purpose and Association",
+              "elements": [
+                {
+                  "name": "storageAssociation",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "FSLogix Storage Purpose",
+                  "defaultValue": "Shared across host pools",
+                  "toolTip": "Choose whether this storage supports one host pool persona or is shared by multiple host pools. This choice controls host pool association and naming defaults.",
+                  "multiLine": true,
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Shared across host pools",
+                        "description": "Deploy storage for multiple host pools. Use a stable identifier describing the shared user population; no host pool parent tag is applied.",
+                        "value": "Shared"
+                      },
+                      {
+                        "label": "Host pool-specific - existing persona",
+                        "description": "Associate storage with an existing host pool. Its persona identifier and naming convention are offered as editable defaults, and its resource ID is applied as the parent tag.",
+                        "value": "ExistingHostPool"
+                      },
+                      {
+                        "label": "Host pool-specific - future persona",
+                        "description": "Deploy storage before its host pool. Enter the exact persona identifier that the future host pool will use.",
+                        "value": "FutureHostPool"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "hostPoolsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(steps('scope').resourceScope.subscription.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.DesktopVirtualization/hostPools?api-version=2024-04-03')]"
+                  }
+                },
+                {
+                  "name": "hostPool",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Associated Host Pool",
+                  "filter": true,
+                  "multiLine": true,
+                  "toolTip": "Select the host pool for this persona-specific storage. Its resource ID is applied as the cm-resource-parent tag for cost allocation and resource governance.",
+                  "visible": "[equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool')]",
+                  "constraints": {
+                    "allowedValues": "[map(steps('scope').storagePurpose.hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Resource Group: ', first(skip(split(hp.id, '/'), 4)), '\",\"value\":{\"id\":\"', hp.id, '\",\"name\":\"', hp.name, '\"}}')))]",
+                    "required": true
+                  }
+                },
+                {
+                  "name": "hostPoolProps",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(steps('scope').storagePurpose.hostPool.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('scope').storagePurpose.hostPool.id, '?api-version=2024-04-03')]"
+                  }
+                }
+              ]
             }
           ]
         },
         {
           "name": "identity",
-          "label": "Identity and Permissions",
+          "label": "Authentication",
           "elements": [
             {
-              "name": "identitySolution",
+              "name": "authenticationInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "First select how the session hosts that consume this storage are joined. AD DS and Microsoft Entra Domain Services directly determine Azure Files authentication. Microsoft Entra-joined hosts can use storage account keys or Microsoft Entra Kerberos. The join type also determines storage-service availability: Azure NetApp Files is available only with AD DS; all other paths use Azure Files.",
+                "uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-active-directory-overview"
+              }
+            },
+            {
+              "name": "machineIdentity",
               "type": "Microsoft.Common.DropDown",
-              "label": "Identity Solution",
-              "defaultValue": "Storage Account Keys",
+              "label": "Session Host Join Type",
+              "defaultValue": "Microsoft Entra joined",
+              "toolTip": "Select how the session hosts that consume this storage are joined. This determines the supported storage services and Azure Files authentication methods.",
+              "multiLine": true,
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Active Directory Domain Services", "value": "ActiveDirectoryDomainServices" },
-                  { "label": "Microsoft Entra Domain Services", "value": "EntraDomainServices" },
-                  { "label": "Microsoft Entra Kerberos (hybrid identities)", "value": "EntraKerberos-Hybrid" },
-                  { "label": "Microsoft Entra Kerberos (cloud-only identities)", "value": "EntraKerberos-CloudOnly" },
-                  { "label": "Storage Account Keys", "value": "EntraId" }
+                  {
+                    "label": "Active Directory Domain Services (AD DS)",
+                    "description": "Session hosts are joined to AD DS and require network connectivity to domain controllers. Azure Files uses AD DS authentication. Azure NetApp Files is also available.",
+                    "value": "ActiveDirectoryDomainServices"
+                  },
+                  {
+                    "label": "Microsoft Entra Domain Services",
+                    "description": "Session hosts are joined to a Microsoft Entra Domain Services managed domain. Azure Files uses Entra Domain Services authentication.",
+                    "value": "EntraDomainServices"
+                  },
+                  {
+                    "label": "Microsoft Entra joined",
+                    "description": "Session hosts are Microsoft Entra joined. Azure Files can use storage account keys or Microsoft Entra Kerberos. Azure NetApp Files is not available.",
+                    "value": "EntraID"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "identitySolution",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Azure Files Authentication Method",
+              "defaultValue": "Storage account key",
+              "toolTip": "Select how Microsoft Entra-joined session hosts authenticate to Azure Files.",
+              "multiLine": true,
+              "visible": "[equals(steps('identity').machineIdentity, 'EntraID')]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Storage account key",
+                    "description": "Azure Files access uses the storage account key. No Kerberos identity configuration is required, and sharding is not supported.",
+                    "value": "EntraId"
+                  },
+                  {
+                    "label": "Microsoft Entra Kerberos for cloud-only identities",
+                    "description": "For cloud-only Microsoft Entra identities and Microsoft Entra-joined clients. Supports identity-based permissions and sharding.",
+                    "value": "EntraKerberos-CloudOnly"
+                  },
+                  {
+                    "label": "Microsoft Entra Kerberos for hybrid identities",
+                    "description": "For identities synchronized from AD DS and Microsoft Entra-joined clients. Requires AD DS and synchronization to Microsoft Entra ID.",
+                    "value": "EntraKerberos-Hybrid"
+                  }
                 ]
               }
             },
@@ -130,67 +241,119 @@
               "type": "Microsoft.Common.TextBox",
               "label": "Domain Name",
               "placeholder": "contoso.com",
-              "visible": "[or(equals(steps('identity').identitySolution, 'ActiveDirectoryDomainServices'), equals(steps('identity').identitySolution, 'EntraDomainServices'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), startsWith(steps('storage').storageService, 'AzureNetAppFiles'))]",
+              "visible": "[contains(steps('identity').machineIdentity, 'DomainServices')]",
               "constraints": { "required": true }
             },
             {
               "name": "organizationalUnitPath",
               "type": "Microsoft.Common.TextBox",
-              "label": "Organizational Unit Path",
+              "label": "Storage Computer Object OU Path",
+              "toolTip": "Enter the distinguished name of the organizational unit for Azure Files storage account computer objects or the Azure NetApp Files Active Directory connection.",
+              "placeholder": "Example: OU=storage,OU=avd,DC=contoso,DC=com",
               "defaultValue": "",
-              "visible": "[not(empty(steps('identity').domainName))]",
-              "constraints": { "required": false }
+              "visible": "[equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices')]",
+              "constraints": {
+                "required": true,
+                "regex": "^(?:\\s*[Oo][Uu]\\s*=\\s*[^,]+\\s*,\\s*)+[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*(?:,\\s*[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*)+$",
+                "validationMessage": "Provide a valid OU path in distinguished name format."
+              }
+            },
+            {
+              "name": "credentialSource",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "Domain Credential Source",
+              "defaultValue": "Key Vault",
+              "toolTip": "Choose whether to read DomainJoinUserPrincipalName and DomainJoinUserPassword from Key Vault or enter them for this deployment.",
+              "visible": "[contains(steps('identity').machineIdentity, 'DomainServices')]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Key Vault", "value": "keyVault" },
+                  { "label": "Manual Entry", "value": "manual" }
+                ]
+              }
+            },
+            {
+              "name": "credentialsInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'keyVault'))]",
+              "options": {
+                "style": "Info",
+                "text": "Select a Key Vault containing DomainJoinUserPrincipalName and DomainJoinUserPassword. The temporary VM uses an internally generated local administrator password that is never exposed as a form input or deployment output."
+              }
+            },
+            {
+              "name": "credentialsKeyVault",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Deployment Credentials Key Vault",
+              "resourceType": "Microsoft.KeyVault/vaults",
+              "toolTip": "Select the Key Vault containing DomainJoinUserPrincipalName and DomainJoinUserPassword.",
+              "visible": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'keyVault'))]",
+              "constraints": { "required": true },
+              "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
             },
             {
               "name": "domainJoinUserPrincipalName",
               "type": "Microsoft.Common.TextBox",
               "label": "Domain Join Account User Principal Name",
-              "visible": "[not(empty(steps('identity').domainName))]",
-              "constraints": { "required": true }
+              "toolTip": "Enter the user principal name of an account with permission to create or join computer objects in the selected OU.",
+              "placeholder": "domainjoin@contoso.com",
+              "visible": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual'))]",
+              "constraints": {
+                "required": true,
+                "regex": "^[a-z0-9A-Z_.-]+@(?:[a-z0-9A-Z-]+\\.)+[a-zA-Z]+$",
+                "validationMessage": "Provide a valid user principal name."
+              }
             },
             {
               "name": "domainJoinUserPassword",
               "type": "Microsoft.Common.PasswordBox",
-              "label": { "password": "Domain Join Account Password", "confirmPassword": "Confirm Password" },
-              "visible": "[not(empty(steps('identity').domainName))]",
+              "label": {
+                "password": "Domain Join Account Password",
+                "confirmPassword": "Confirm Password"
+              },
+              "toolTip": "Enter the password for the domain join account.",
+              "visible": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual'))]",
               "constraints": { "required": true },
               "options": { "hideConfirmation": false }
             },
             {
-              "name": "appUpdateIdentity",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Entra Kerberos Application Update Identity",
-              "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
-              "visible": "[contains(steps('identity').identitySolution, 'EntraKerberos')]",
-              "constraints": { "required": false },
-              "scope": { "subscriptionId": "[steps('scope').subscription.subscriptionId]" }
-            },
-            {
-              "name": "adminGroups",
-              "type": "Microsoft.Common.EditableGrid",
-              "label": "FSLogix Administrator Groups",
-              "ariaLabel": "FSLogix Administrator Groups",
-              "constraints": {
-                "width": "Full",
-                "rows": { "count": { "min": 0, "max": 20 } },
-                "columns": [
-                  { "id": "name", "header": "Group Name", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } },
-                  { "id": "id", "header": "Microsoft Entra Object ID", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } }
-                ]
+              "name": "entraKerberosInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos'))]",
+              "options": {
+                "style": "Info",
+                "text": "Entra Kerberos automation updates each storage account application manifest, enables cloud group SIDs for cloud-only identities, and grants delegated Microsoft Graph consent. Select an existing user-assigned identity with Microsoft Graph application permissions Application.ReadWrite.All and DelegatedPermissionGrant.ReadWrite.All. Multifactor authentication exclusions remain a manual task.",
+                "uri": "[if(equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly'), 'https://github.com/Azure/FederalAVD/blob/main/docs/entra-kerberos-cloud-only.md', 'https://github.com/Azure/FederalAVD/blob/main/docs/entra-kerberos-hybrid.md')]"
               }
             },
             {
-              "name": "userGroups",
-              "type": "Microsoft.Common.EditableGrid",
-              "label": "FSLogix User and Sharding Groups",
-              "ariaLabel": "FSLogix User and Sharding Groups",
+              "name": "automateEntraKerberosTasks",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Use a managed identity to automate Entra Kerberos application and consent tasks",
+              "defaultValue": false,
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos'))]"
+            },
+            {
+              "name": "userAssignedIdentitiesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('scope').resourceScope.subscription))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
+              }
+            },
+            {
+              "name": "appUpdateIdentity",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Entra Kerberos Application Update Identity",
+              "filter": true,
+              "multiLine": true,
+              "toolTip": "Select an identity in the deployment region with Microsoft Graph Application.ReadWrite.All and DelegatedPermissionGrant.ReadWrite.All application permissions.",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos'), steps('identity').automateEntraKerberosTasks)]",
               "constraints": {
-                "width": "Full",
-                "rows": { "count": { "min": 0, "max": 20 } },
-                "columns": [
-                  { "id": "name", "header": "Group Name", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } },
-                  { "id": "id", "header": "Microsoft Entra Object ID", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } }
-                ]
+                "required": true,
+                "allowedValues": "[map(filter(steps('identity').userAssignedIdentitiesApi.value, (identity) => equals(identity.location, steps('scope').resourceScope.location.name)), (identity) => parse(concat('{\"label\":\"', identity.name, '\",\"description\":\"Resource Group: ', first(skip(split(identity.id, '/'), 4)), ', Location: ', identity.location, '\",\"value\":\"', identity.id, '\"}')))]"
               }
             }
           ]
@@ -206,12 +369,7 @@
               "defaultValue": "Azure Files Standard",
               "constraints": {
                 "required": true,
-                "allowedValues": [
-                  { "label": "Azure Files Premium", "value": "AzureFiles Premium" },
-                  { "label": "Azure Files Standard", "value": "AzureFiles Standard" },
-                  { "label": "Azure NetApp Files Premium", "value": "AzureNetAppFiles Premium" },
-                  { "label": "Azure NetApp Files Standard", "value": "AzureNetAppFiles Standard" }
-                ]
+                "allowedValues": "[if(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), parse('[{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"},{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"},{\"label\":\"Azure NetApp Files Premium\",\"value\":\"AzureNetAppFiles Premium\"},{\"label\":\"Azure NetApp Files Standard\",\"value\":\"AzureNetAppFiles Standard\"}]'), parse('[{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"},{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"}]'))]"
               }
             },
             {
@@ -257,26 +415,238 @@
               "constraints": { "required": true, "regex": "^[1-9][0-9]*$", "validationMessage": "Enter a positive whole number." }
             },
             {
+              "name": "ntfsAccessDescription",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))]",
+              "options": {
+                "style": "Info",
+                "text": "Choose which users can create FSLogix profile folders. Standard access grants Authenticated Users permission to create a folder at the storage root, while Creator Owner permissions isolate each user's profile contents. Select group-scoped access to limit profile creation to members of the selected groups."
+              }
+            },
+            {
+              "name": "leastPrivilegedNtfs",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Restrict NTFS access to selected groups",
+              "defaultValue": false,
+              "visible": "[or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))]"
+            },
+            {
+              "name": "shardingIntroduction",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))))]",
+              "options": {
+                "style": "Info",
+                "text": "Sharding deploys one Azure Files storage account per selected user group to distribute profile load. Sharding via Permissions relies on share and NTFS permissions. Sharding via Object Specific Settings requires corresponding FSLogix object-specific registry configuration and is not offered for Microsoft Entra Kerberos.",
+                "uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings"
+              }
+            },
+            {
               "name": "shardOptions",
               "type": "Microsoft.Common.OptionsGroup",
               "label": "Sharding Options",
               "defaultValue": "No Sharding",
-              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))))]",
               "constraints": {
+                "allowedValues": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos')), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
+              }
+            },
+            {
+              "name": "cloudOnlyRbacRegionWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly'), or(steps('storage').leastPrivilegedNtfs, not(equals(steps('storage').shardOptions, 'None'))))]",
+              "options": {
+                "style": "Warning",
+                "text": "Azure Files share-level RBAC for cloud-only identities, required for group-scoped NTFS access and profile sharding, is available only in supported Azure Commercial regions and is not currently supported in Azure Government. Verify regional availability before deployment.",
+                "uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable#regional-availability-for-microsoft-entra-kerberos"
+              }
+            },
+            {
+              "name": "userGroupSelector",
+              "type": "Microsoft.Common.Selector",
+              "label": "Select User Groups",
+              "keyPath": "displayName",
+              "descriptionKeyPath": "id",
+              "value": "[steps('storage').userGroupPickerBlade.transformed.groups]",
+              "visible": "[and(or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))), or(steps('storage').leastPrivilegedNtfs, not(equals(steps('storage').shardOptions, 'None'))))]",
+              "barColor": "[if(empty(steps('storage').userGroupPickerBlade), '#FF0000', '#7fba00')]",
+              "constraints": {
+                "required": true
+              },
+              "link": "[if(empty(steps('storage').userGroupPickerBlade), 'Select groups', 'Update selected groups')]"
+            },
+            {
+              "name": "userGroupPickerBlade",
+              "type": "Microsoft.Solutions.BladeInvokeControl",
+              "openBladeStatus": "[steps('storage').userGroupSelector.changing]",
+              "bladeReference": {
+                "name": "ObjectPickerBlade",
+                "extension": "Microsoft_AAD_IAM",
+                "parameters": {
+                  "queries": "[if(or(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid')), 4194304, 32)]",
+                  "disablers": 4,
+                  "bladeSubtitle": "Pick the groups to assign",
+                  "additionalQueriesOnSearch": 0,
+                  "advancedQueryOptions": {
+                    "suggestedObjectsOptions": {}
+                  },
+                  "selectionMaximum": 20,
+                  "selectionMinimum": 1,
+                  "bladeTitle": "Select Groups",
+                  "informationHeader": {
+                    "informationText": "Select the groups whose members will use this FSLogix storage. Group types are filtered based on the selected identity method.",
+                    "informationLink": ""
+                  },
+                  "inviteEnabled": true,
+                  "searchBoxLabel": "Search for a group",
+                  "searchBoxPlaceHolderText": "Enter a string in the group name",
+                  "searchBoxTooltip": "Search Microsoft Entra ID for a group",
+                  "searchGridNoRowsMessage": "No groups found",
+                  "selectButtonText": "Select Groups",
+                  "selectedGridLabel": "Selected User Groups",
+                  "selectedGridNoRowsMessage": "You must select at least one group"
+                }
+              },
+              "transforms": {
+                "groups": "selectedObjects|[*].{id:id, name:displayName}"
+              }
+            },
+            {
+              "name": "hybridAdLookupInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')))]",
+              "options": {
+                "style": "Info",
+                "text": "Hybrid Entra Kerberos does not domain-join the storage account or temporary VM. Selecting group-scoped NTFS access or sharding via permissions requires the temporary deployment VM to have network line of sight to an AD DS domain controller. The supplied AD credentials are used only to look up the on-premises SIDs of the selected synchronized groups before applying NTFS permissions. An authenticated account with read access to the domain is sufficient."
+              }
+            },
+            {
+              "name": "hybridDomainName",
+              "type": "Microsoft.Common.TextBox",
+              "label": "User Active Directory Domain Name",
+              "toolTip": "Enter the AD DS domain from which the selected hybrid groups are synchronized.",
+              "placeholder": "contoso.com",
+              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')))]",
+              "constraints": {
+                "required": true,
+                "regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
+                "validationMessage": "Provide a valid fully qualified domain name."
+              }
+            },
+            {
+              "name": "hybridCredentialSource",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "AD Lookup Credential Source",
+              "defaultValue": "Key Vault",
+              "toolTip": "Choose whether to read the AD lookup account from Key Vault or enter it for this deployment.",
+              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')))]",
+              "constraints": {
+                "required": true,
                 "allowedValues": [
-                  { "label": "No Sharding", "value": "None" },
-                  { "label": "Sharding via Permissions", "value": "ShardPerms" },
-                  { "label": "Sharding via Object Specific Settings", "value": "ShardOSS" }
+                  { "label": "Key Vault", "value": "keyVault" },
+                  { "label": "Manual Entry", "value": "manual" }
                 ]
               }
             },
             {
-              "name": "storageAccountNamePrefix",
+              "name": "hybridCredentialsKeyVault",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "AD Lookup Credentials Key Vault",
+              "resourceType": "Microsoft.KeyVault/vaults",
+              "toolTip": "Select the Key Vault containing DomainJoinUserPrincipalName and DomainJoinUserPassword. The account only needs permission to read domain and group information.",
+              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'keyVault'))]",
+              "constraints": { "required": true },
+              "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
+            },
+            {
+              "name": "hybridAdLookupUserPrincipalName",
               "type": "Microsoft.Common.TextBox",
-              "label": "Storage Account Name Prefix",
-              "defaultValue": "fslogix",
+              "label": "AD Lookup Account User Principal Name",
+              "toolTip": "Enter an account that can read domain and group information from AD DS.",
+              "placeholder": "adlookup@contoso.com",
+              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual'))]",
+              "constraints": {
+                "required": true,
+                "regex": "^[a-z0-9A-Z_.-]+@(?:[a-z0-9A-Z-]+\\.)+[a-zA-Z]+$",
+                "validationMessage": "Provide a valid user principal name."
+              }
+            },
+            {
+              "name": "hybridAdLookupPassword",
+              "type": "Microsoft.Common.PasswordBox",
+              "label": {
+                "password": "AD Lookup Account Password",
+                "confirmPassword": "Confirm Password"
+              },
+              "toolTip": "Enter the password for the AD lookup account.",
+              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual'))]",
+              "constraints": { "required": true },
+              "options": { "hideConfirmation": false }
+            },
+            {
+              "name": "configureAdminAccess",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Grant FSLogix storage administrator access",
+              "defaultValue": false
+            },
+            {
+              "name": "adminGroupPickerBlade",
+              "type": "Microsoft.Solutions.BladeInvokeControl",
+              "openBladeStatus": "[steps('storage').adminGroupSelector.changing]",
+              "bladeReference": {
+                "name": "ObjectPickerBlade",
+                "extension": "Microsoft_AAD_IAM",
+                "parameters": {
+                  "queries": 32,
+                  "disablers": 4,
+                  "bladeSubtitle": "Pick the groups to assign",
+                  "additionalQueriesOnSearch": 0,
+                  "advancedQueryOptions": {
+                    "suggestedObjectsOptions": {}
+                  },
+                  "selectionMaximum": 20,
+                  "selectionMinimum": 1,
+                  "bladeTitle": "Select Groups",
+                  "informationHeader": {
+                    "informationText": "Select groups that will receive administrator access to the FSLogix storage.",
+                    "informationLink": ""
+                  },
+                  "inviteEnabled": true,
+                  "searchBoxLabel": "Search for a group",
+                  "searchBoxPlaceHolderText": "Enter a string in the group name",
+                  "searchBoxTooltip": "Search Microsoft Entra ID for a group",
+                  "searchGridNoRowsMessage": "No groups found",
+                  "selectButtonText": "Select Groups",
+                  "selectedGridLabel": "Selected Admin Groups",
+                  "selectedGridNoRowsMessage": "You must select at least one group"
+                },
+                "inFullScreen": false
+              },
+              "transforms": {
+                "groups": "selectedObjects|[*].{id:id, name:displayName}"
+              }
+            },
+            {
+              "name": "adminGroupSelector",
+              "type": "Microsoft.Common.Selector",
+              "label": "Select Admin Groups",
+              "keyPath": "displayName",
+              "descriptionKeyPath": "id",
+              "value": "[steps('storage').adminGroupPickerBlade.transformed.groups]",
+              "visible": "[steps('storage').configureAdminAccess]",
+              "barColor": "[if(empty(steps('storage').adminGroupPickerBlade), '#FF0000', '#7fba00')]",
+              "constraints": {
+                "required": true
+              },
+              "link": "[if(empty(steps('storage').adminGroupPickerBlade), 'Select groups', 'Update selected groups')]"
+            },
+            {
+              "name": "storageAccountCountInfo",
+              "type": "Microsoft.Common.InfoBox",
               "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
-              "constraints": { "required": true, "regex": "^[a-z0-9]{1,22}$", "validationMessage": "Use 1-22 lowercase letters or numbers." }
+              "options": {
+                "style": "Info",
+                "text": "[if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(steps('storage').shardOptions, 'None')), 'One storage account will be deployed.', concat(string(length(steps('storage').userGroupPickerBlade.transformed.groups)), ' storage account(s) will be deployed, one for each selected user group.'))]"
+              }
             },
             {
               "name": "storageIndex",
@@ -285,13 +655,6 @@
               "defaultValue": "1",
               "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
               "constraints": { "required": true, "regex": "^([0-9]|[1-9][0-9])$", "validationMessage": "Enter a number from 0 through 99." }
-            },
-            {
-              "name": "deploymentSuffix",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Deployment Suffix",
-              "defaultValue": "fslogix",
-              "constraints": { "required": true, "regex": "^[A-Za-z0-9-]{1,32}$", "validationMessage": "Use 1-32 letters, numbers, or dashes." }
             },
             {
               "name": "softDeleteRetentionDays",
@@ -306,182 +669,105 @@
               "type": "Microsoft.Common.DropDown",
               "label": "Kerberos Encryption Type",
               "defaultValue": "AES256",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), not(equals(steps('identity').identitySolution, 'EntraId')))]",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))))]",
               "constraints": { "allowedValues": [ { "label": "AES256", "value": "AES256" }, { "label": "RC4", "value": "RC4" } ] }
-            }
-          ]
-        },
-        {
-          "name": "networking",
-          "label": "Networking",
-          "elements": [
-            {
-              "name": "privateEndpoint",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Deploy Azure Files private endpoints",
-              "defaultValue": true,
-              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]"
             },
             {
-              "name": "privateEndpointSubnet",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Private Endpoint Subnet",
-              "resourceType": "Microsoft.Network/virtualNetworks/subnets",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('networking').privateEndpoint)]",
-              "constraints": { "required": true },
-              "scope": { "subscriptionId": "[steps('scope').subscription.subscriptionId]" }
-            },
-            {
-              "name": "azureFilePrivateDnsZone",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Azure Files Private DNS Zone",
-              "resourceType": "Microsoft.Network/privateDnsZones",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('networking').privateEndpoint)]",
-              "constraints": { "required": false },
-              "scope": { "subscriptionId": "[steps('scope').subscription.subscriptionId]" }
-            },
-            {
-              "name": "privateEndpointNameConvention",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Private Endpoint Naming Convention",
-              "defaultValue": "pe-RESOURCE-SUBRESOURCE-VNETID",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('networking').privateEndpoint)]",
-              "constraints": { "required": true }
-            },
-            {
-              "name": "privateEndpointNicNameConvention",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Private Endpoint NIC Naming Convention",
-              "defaultValue": "nic-RESOURCE-SUBRESOURCE-VNETID",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('networking').privateEndpoint)]",
-              "constraints": { "required": true }
-            },
-            {
-              "name": "permittedIPs",
-              "type": "Microsoft.Common.EditableGrid",
-              "label": "Permitted IP Addresses and CIDR Blocks",
-              "ariaLabel": "Permitted IP Addresses and CIDR Blocks",
-              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+              "name": "netAppDeploymentMode",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "Azure NetApp Files Deployment Mode",
+              "defaultValue": "Create new account, pool, and volumes",
+              "toolTip": "Choose which Azure NetApp Files parent resources to create. New FSLogix volumes are created in every mode.",
+              "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
               "constraints": {
-                "width": "Full",
-                "rows": { "count": { "min": 0, "max": 50 } },
-                "columns": [ { "id": "value", "header": "IP Address or CIDR", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } } ]
+                "required": true,
+                "allowedValues": "[if(steps('scope').createStorageResourceGroup, parse('[{\"label\":\"Create new account, pool, and volumes\",\"value\":\"CreateAll\"}]'), parse('[{\"label\":\"Create new account, pool, and volumes\",\"value\":\"CreateAll\"},{\"label\":\"Use existing account; create pool and volumes\",\"value\":\"ExistingAccountNewPool\"},{\"label\":\"Use existing account and pool; create volumes\",\"value\":\"ExistingAccountAndPool\"}]'))]"
               }
-            }
-          ]
-        },
-        {
-          "name": "encryptionOperations",
-          "label": "Encryption and Operations",
-          "elements": [
+            },
             {
-              "name": "keyManagementStorage",
+              "name": "netAppExistingResourcesInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(equals(steps('storage').netAppDeploymentMode, 'CreateAll')))]",
+              "options": {
+                "style": "Info",
+                "text": "The existing Azure NetApp Files account is not modified and must already have a valid Active Directory connection. This deployment creates new FSLogix volumes and initializes their NTFS permissions."
+              }
+            },
+            {
+              "name": "netAppAccountsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(equals(steps('storage').netAppDeploymentMode, 'CreateAll')), not(empty(steps('scope').storageResourceGroup)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/resourceGroups/', steps('scope').storageResourceGroup, '/providers/Microsoft.NetApp/netAppAccounts?api-version=2023-07-01')]"
+              }
+            },
+            {
+              "name": "existingNetAppAccountName",
               "type": "Microsoft.Common.DropDown",
-              "label": "Storage Encryption Key Management",
-              "defaultValue": "Platform Managed",
-              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+              "label": "Existing Azure NetApp Files Account",
+              "filter": true,
+              "multiLine": true,
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(equals(steps('storage').netAppDeploymentMode, 'CreateAll')))]",
               "constraints": {
-                "allowedValues": [
-                  { "label": "Platform Managed", "value": "PlatformManaged" },
-                  { "label": "Customer Managed", "value": "CustomerManaged" },
-                  { "label": "Customer Managed HSM", "value": "CustomerManagedHSM" }
-                ]
+                "required": true,
+                "allowedValues": "[map(filter(steps('storage').netAppAccountsApi.value, (account) => equals(account.location, steps('scope').resourceScope.location.name)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, '\",\"value\":\"', account.name, '\"}')))]"
               }
             },
             {
-              "name": "encryptionKeyVaultUri",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Encryption Key Vault URI",
-              "visible": "[contains(steps('encryptionOperations').keyManagementStorage, 'CustomerManaged')]",
-              "constraints": { "required": true }
+              "name": "netAppCapacityPoolsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'ExistingAccountAndPool'), not(empty(steps('storage').existingNetAppAccountName)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/resourceGroups/', steps('scope').storageResourceGroup, '/providers/Microsoft.NetApp/netAppAccounts/', steps('storage').existingNetAppAccountName, '/capacityPools?api-version=2023-07-01')]"
+              }
             },
             {
-              "name": "encryptionKeyNameConvention",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Encryption Key Naming Convention",
-              "defaultValue": "key-fsl-##",
-              "visible": "[contains(steps('encryptionOperations').keyManagementStorage, 'CustomerManaged')]",
-              "constraints": { "required": true, "regex": "^.*##.*$", "validationMessage": "Include the ## storage index token." }
+              "name": "existingNetAppCapacityPoolName",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Existing Azure NetApp Files Capacity Pool",
+              "filter": true,
+              "multiLine": true,
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'ExistingAccountAndPool'))]",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(filter(steps('storage').netAppCapacityPoolsApi.value, (pool) => equals(pool.properties.serviceLevel, last(split(steps('storage').storageService, ' ')))), (pool) => parse(concat('{\"label\":\"', pool.name, '\",\"description\":\"Service level: ', pool.properties.serviceLevel, '\",\"value\":\"', pool.name, '\"}')))]"
+              }
             },
             {
-              "name": "encryptionIdentity",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Encryption User Assigned Identity",
-              "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
-              "visible": "[contains(steps('encryptionOperations').keyManagementStorage, 'CustomerManaged')]",
-              "constraints": { "required": true },
-              "scope": { "subscriptionId": "[steps('scope').subscription.subscriptionId]" }
-            },
-            {
-              "name": "logAnalyticsWorkspace",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Log Analytics Workspace",
-              "resourceType": "Microsoft.OperationalInsights/workspaces",
-              "constraints": { "required": false },
-              "scope": { "subscriptionId": "[steps('scope').subscription.subscriptionId]" }
-            },
-            {
-              "name": "recoveryServicesVault",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Recovery Services Vault",
-              "resourceType": "Microsoft.RecoveryServices/vaults",
-              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
-              "constraints": { "required": false },
-              "scope": { "subscriptionId": "[steps('scope').subscription.subscriptionId]" }
-            },
-            {
-              "name": "fileSharePolicyName",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Azure Files Backup Policy Name",
-              "defaultValue": "filesharepolicy",
-              "visible": "[not(empty(steps('encryptionOperations').recoveryServicesVault))]",
-              "constraints": { "required": true }
-            }
-          ]
-        },
-        {
-          "name": "netAppRemote",
-          "label": "Azure NetApp Files and Remote Storage",
-          "elements": [
-            {
-              "name": "existingSharedActiveDirectoryConnection",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Azure NetApp account already has the required Active Directory connection",
-              "defaultValue": false,
-              "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]"
-            },
-            {
-              "name": "netAppAccountName",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Azure NetApp Files Account Name",
-              "defaultValue": "anf-fslogix",
+              "name": "netAppVirtualNetwork",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Azure NetApp Files Virtual Network",
+              "defaultValue": "",
+              "multiLine": true,
+              "toolTip": "Select the virtual network containing the subnet delegated to Microsoft.NetApp/volumes.",
               "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
-              "constraints": { "required": true }
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(filter(steps('scope').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+              }
             },
             {
-              "name": "netAppCapacityPoolName",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Azure NetApp Files Capacity Pool Name",
-              "defaultValue": "pool-fslogix",
-              "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
-              "constraints": { "required": true }
+              "name": "netAppSubnetsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(empty(steps('storage').netAppVirtualNetwork)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('storage').netAppVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+              }
             },
             {
               "name": "netAppVolumesSubnet",
-              "type": "Microsoft.Solutions.ResourceSelector",
+              "type": "Microsoft.Common.DropDown",
               "label": "Azure NetApp Files Delegated Subnet",
-              "resourceType": "Microsoft.Network/virtualNetworks/subnets",
+              "defaultValue": "",
+              "toolTip": "Select a subnet delegated to Microsoft.NetApp/volumes.",
               "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
-              "constraints": { "required": true },
-              "scope": { "subscriptionId": "[steps('scope').subscription.subscriptionId]" }
-            },
-            {
-              "name": "smbServerLocation",
-              "type": "Microsoft.Common.TextBox",
-              "label": "SMB Server Location Token",
-              "defaultValue": "[steps('scope').location]",
-              "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
-              "constraints": { "required": true }
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(filter(steps('storage').netAppSubnetsApi.value, (snet) => contains(map(snet.properties.delegations, (delegation) => delegation.properties.serviceName), 'Microsoft.NetApp/volumes')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
+              }
             },
             {
               "name": "remoteStorageAccountResourceIds",
@@ -510,18 +796,530 @@
           ]
         },
         {
-          "name": "tags",
-          "label": "Tags",
+          "name": "zeroTrust",
+          "label": "Zero Trust Configuration",
           "elements": [
             {
-              "name": "tags",
-              "type": "Microsoft.Common.TagsByResource",
-              "resources": [
-                "Microsoft.Storage/storageAccounts",
-                "Microsoft.NetApp/netAppAccounts",
-                "Microsoft.NetApp/netAppAccounts/capacityPools",
-                "Microsoft.NetApp/netAppAccounts/capacityPools/volumes",
-                "Microsoft.Network/privateEndpoints"
+              "name": "introduction",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Configure encryption, private access, monitoring, and recovery controls for the FSLogix storage deployment.",
+                "link": {
+                  "label": "Microsoft Learn | Zero Trust Security",
+                  "uri": "https://learn.microsoft.com/en-us/azure/security/fundamentals/zero-trust"
+                }
+              }
+            },
+            {
+              "name": "keyManagement",
+              "type": "Microsoft.Common.Section",
+              "label": "Encryption Key Management",
+              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+              "elements": [
+                {
+                  "name": "keyManagementInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Azure Files is encrypted at rest with platform-managed keys by default. For customer-managed keys, select an existing Key Vault. The deployment creates one indexed key per storage account, creates a storage encryption identity, and grants that identity key-scoped encryption access."
+                  }
+                },
+                {
+                  "name": "keyManagementStorage",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "FSLogix Storage Encryption Key Management",
+                  "defaultValue": "Platform-Managed Keys",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Platform-Managed Keys", "value": "PlatformManaged" },
+                      { "label": "Customer-Managed Keys", "value": "CustomerManaged" },
+                      { "label": "Customer-Managed Keys protected by HSM", "value": "CustomerManagedHSM" }
+                    ]
+                  }
+                },
+                {
+                  "name": "existingEncryptionKeyVault",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Existing Encryption Key Vault",
+                  "resourceType": "Microsoft.KeyVault/vaults",
+                  "toolTip": "Select the existing Key Vault where the deployment will create one encryption key per Azure Files storage account.",
+                  "visible": "[contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')]",
+                  "constraints": { "required": true },
+                  "scope": {
+                    "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]",
+                    "location": "[steps('scope').resourceScope.location.name]"
+                  }
+                },
+                {
+                  "name": "keyExpirationInDays",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Encryption Key Rotation (in Days)",
+                  "defaultValue": 180,
+                  "showStepMarkers": false,
+                  "toolTip": "Days before a new key version is automatically generated in the selected Key Vault.",
+                  "min": 30,
+                  "max": 180,
+                  "visible": "[contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')]",
+                  "constraints": { "required": true }
+                }
+              ]
+            },
+            {
+              "name": "privateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Private Networking",
+              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Private endpoints keep Azure Files traffic on private network paths. When private endpoints are enabled without permitted public IP ranges, public network access is disabled."
+                  }
+                },
+                {
+                  "name": "privateEndpoint",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Deploy Azure Files private endpoints",
+                  "defaultValue": true
+                },
+                {
+                  "name": "privateEndpointVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private Endpoint Virtual Network",
+                  "defaultValue": "",
+                  "multiLine": true,
+                  "toolTip": "Select the virtual network where the Azure Files private endpoints will be created.",
+                  "visible": "[steps('zeroTrust').privateNetworking.privateEndpoint]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('scope').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('zeroTrust').privateNetworking.privateEndpoint, not(empty(steps('zeroTrust').privateNetworking.privateEndpointVirtualNetwork)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('zeroTrust').privateNetworking.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private Endpoint Subnet",
+                  "defaultValue": "",
+                  "visible": "[steps('zeroTrust').privateNetworking.privateEndpoint]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('zeroTrust').privateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "azureFilePrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Azure Files Private DNS Zone",
+                  "defaultValue": "[first(map(filter(steps('zeroTrust').privateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))]",
+                  "multiLine": true,
+                  "toolTip": "Select the existing Private DNS Zone for Azure Files.",
+                  "visible": "[steps('zeroTrust').privateNetworking.privateEndpoint]",
+                  "constraints": {
+                    "allowedValues": "[map(filter(steps('zeroTrust').privateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
+                    "required": false
+                  }
+                },
+                {
+                  "name": "permittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Permitted IP Addresses and CIDR Blocks",
+                  "ariaLabel": "Permitted IP Addresses and CIDR Blocks",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": { "count": { "min": 0, "max": 50 } },
+                    "columns": [ { "id": "value", "header": "IP Address or CIDR", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } } ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "operations",
+              "type": "Microsoft.Common.Section",
+              "label": "Monitoring and Recovery",
+              "elements": [
+                {
+                  "name": "logAnalyticsWorkspace",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Log Analytics Workspace",
+                  "resourceType": "Microsoft.OperationalInsights/workspaces",
+                  "constraints": { "required": false },
+                  "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
+                },
+                {
+                  "name": "recoveryServicesVault",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Recovery Services Vault",
+                  "resourceType": "Microsoft.RecoveryServices/vaults",
+                  "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+                  "constraints": { "required": false },
+                  "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
+                },
+                {
+                  "name": "fileSharePolicyName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Azure Files Backup Policy Name",
+                  "defaultValue": "filesharepolicy",
+                  "visible": "[not(empty(steps('zeroTrust').operations.recoveryServicesVault))]",
+                  "constraints": { "required": true }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "deployment",
+          "label": "Temporary Deployment Resources",
+          "elements": [
+            {
+              "name": "deploymentInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "A temporary virtual machine and managed identity are required to initialize root NTFS permissions for every storage option. Domain-backed and Entra Kerberos configurations also use the VM for identity setup. Cleanup removes external role assignments and deletes the temporary resource group after configuration completes."
+              }
+            },
+            {
+              "name": "deploymentVirtualNetwork",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Temporary Deployment VM Virtual Network",
+              "defaultValue": "",
+              "multiLine": true,
+              "toolTip": "Select the virtual network for the temporary deployment VM.",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(filter(steps('scope').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+              }
+            },
+            {
+              "name": "deploymentSubnetsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('deployment').deploymentVirtualNetwork))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('deployment').deploymentVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+              }
+            },
+            {
+              "name": "deploymentVirtualMachineSubnet",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Temporary Deployment VM Subnet",
+              "defaultValue": "",
+              "toolTip": "Select a subnet with network line of sight to domain controllers and private storage endpoints when required.",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(steps('deployment').deploymentSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
+              }
+            },
+            {
+              "name": "deploymentVirtualMachineOrganizationalUnitPath",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Temporary Deployment VM OU Path",
+              "toolTip": "Enter the distinguished name of the organizational unit where the temporary Azure NetApp Files deployment VM is joined.",
+              "placeholder": "Example: OU=deployment,OU=avd,DC=contoso,DC=com",
+              "defaultValue": "",
+              "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
+              "constraints": {
+                "required": true,
+                "regex": "^(?:\\s*[Oo][Uu]\\s*=\\s*[^,]+\\s*,\\s*)+[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*(?:,\\s*[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*)+$",
+                "validationMessage": "Provide a valid OU path in distinguished name format."
+              }
+            },
+            {
+              "name": "deploymentVirtualMachineSize",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Temporary Deployment VM Size",
+              "filter": true,
+              "toolTip": "Select the size of the temporary deployment virtual machine (2 vCPUs, available in your subscription). This VM is automatically deleted after deployment completes.",
+              "defaultValue": "Standard_D2ads_v5",
+              "constraints": {
+                "allowedValues": "[steps('scope').resourceSkusApi.transformed.deploymentVMSizes]",
+                "required": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "tagsAndNaming",
+          "label": "Tags & Naming",
+          "elements": [
+            {
+              "name": "naming",
+              "type": "Microsoft.Common.Section",
+              "label": "Advanced Naming",
+              "elements": [
+                {
+                  "name": "namingInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Resource names use the shared FederalAVD naming engine. The standard convention is resource type, workload, purpose, and region. When an existing FederalAVD host pool is selected, its stored naming convention can be used as the starting convention. Individual resource-name overrides remain available for exceptions."
+                  }
+                },
+                {
+                  "name": "personaInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[not(equals(steps('scope').storagePurpose.storageAssociation, 'Shared'))]",
+                  "options": {
+                    "text": "Host Pool Persona is the same identifier used on the host pool form. It represents the distinct user group served by the host pool. Selecting an existing FederalAVD host pool reads its hpIdentifier tag as an editable default; for a future host pool, enter the exact persona value that host pool will use.",
+                    "link": {
+                      "label": "AVD User Personas - CAF",
+                      "uri": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/scenarios/azure-virtual-desktop/migrate-assess#user-personas"
+                    }
+                  }
+                },
+                {
+                  "name": "existingHostPoolPersona",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Host Pool Persona",
+                  "defaultValue": "[coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpIdentifier, '')]",
+                  "toolTip": "The selected FederalAVD host pool's hpIdentifier tag is offered as an editable default. This field uses the same constraints as Host Pool Persona in the host-pool form.",
+                  "visible": "[and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(steps('scope').storagePurpose.hostPoolProps)))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9]([a-zA-Z0-9_.-]*[a-zA-Z0-9])?$",
+                        "message": "The identifier must begin and end with an alphanumeric character and can only contain alphanumeric characters, underscores, dashes, and dots."
+                      },
+                      {
+                        "isValid": "[not(greater(length(steps('tagsAndNaming').naming.existingHostPoolPersona), 16))]",
+                        "message": "The identifier cannot exceed 16 characters."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "futureHostPoolPersona",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Host Pool Persona",
+                  "toolTip": "Enter the exact short Host Pool Persona value that the future host pool will use. This field uses the same constraints as Host Pool Persona in the host-pool form.",
+                  "visible": "[equals(steps('scope').storagePurpose.storageAssociation, 'FutureHostPool')]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9]([a-zA-Z0-9_.-]*[a-zA-Z0-9])?$",
+                        "message": "The identifier must begin and end with an alphanumeric character and can only contain alphanumeric characters, underscores, dashes, and dots."
+                      },
+                      {
+                        "isValid": "[not(greater(length(steps('tagsAndNaming').naming.futureHostPoolPersona), 16))]",
+                        "message": "The identifier cannot exceed 16 characters."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "sharedStorageIdentifier",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Shared Storage Identifier",
+                  "defaultValue": "fslogix",
+                  "toolTip": "The default fslogix identifier follows the fixed purpose-token pattern used by shared monitoring, operations, control-plane, and image-management resources. Change it only to distinguish multiple shared FSLogix storage scopes.",
+                  "visible": "[equals(steps('scope').storagePurpose.storageAssociation, 'Shared')]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9]([a-zA-Z0-9_.-]*[a-zA-Z0-9])?$",
+                        "message": "The identifier must begin and end with an alphanumeric character and can only contain alphanumeric characters, underscores, dashes, and dots."
+                      },
+                      {
+                        "isValid": "[not(greater(length(steps('tagsAndNaming').naming.sharedStorageIdentifier), 16))]",
+                        "message": "The identifier cannot exceed 16 characters."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "useHostPoolNamingConvention",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Use the selected host pool naming convention",
+                  "defaultValue": true,
+                  "toolTip": "Uses the hpNamingConvention tag stored on the selected FederalAVD host pool. Clear this option to use the standard FederalAVD convention instead.",
+                  "visible": "[and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))))]"
+                },
+                {
+                  "name": "hostPoolNamingTagWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(steps('scope').storagePurpose.hostPool)), empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, '')))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The selected host pool does not contain a FederalAVD hpNamingConvention tag. Generated names will use the standard FederalAVD convention unless you provide individual overrides."
+                  }
+                },
+                {
+                  "name": "enableNameOverrides",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Override generated resource names",
+                  "defaultValue": false
+                },
+                {
+                  "name": "nameOverrideGuidance",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "options": {
+                    "style": "Info",
+                    "text": "Each field shows the standard generated name as a placeholder. Leave a field blank to use the naming engine. In placeholders, {identifier}, {location}, {unique}, and {vmName} describe generated values and should be replaced in explicit names. In private endpoint conventions, RESOURCE, SUBRESOURCE, and VNETID are required runtime tokens and must remain in the entered convention."
+                  }
+                },
+                {
+                  "name": "storageResourceGroupNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Storage Resource Group Name",
+                  "placeholder": "rg-avd-{identifier}-storage-{location}",
+                  "toolTip": "Optional. Explicit storage resource group name. The placeholder previews the standard convention; leave blank to generate the name.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, steps('scope').createStorageResourceGroup)]",
+                  "constraints": { "required": false, "regex": "^$|^[a-zA-Z0-9._()\\-]{1,90}$", "validationMessage": "Enter a valid resource group name or leave blank to use the generated name." }
+                },
+                {
+                  "name": "deploymentResourceGroupNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Temporary Deployment Resource Group Name",
+                  "placeholder": "rg-avd-{identifier}-deployment-{location}",
+                  "toolTip": "Optional. Explicit temporary deployment resource group name. The placeholder previews the standard convention; leave blank to generate the name.",
+                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "constraints": { "required": false, "regex": "^$|^[a-zA-Z0-9._()\\-]{1,90}$", "validationMessage": "Enter a valid resource group name or leave blank to use the generated name." }
+                },
+                {
+                  "name": "deploymentVirtualMachineNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Temporary Deployment VM Name",
+                  "placeholder": "avd{identifier}{location}{unique}",
+                  "toolTip": "Optional. Explicit temporary deployment VM name. The generated name removes separators, adds a unique suffix, and is truncated to 15 characters; leave blank to generate it.",
+                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "constraints": { "required": false, "regex": "^$|^[A-Za-z0-9-]{1,15}$", "validationMessage": "Use 1-15 letters, numbers, or dashes, or leave blank to use the generated name." }
+                },
+                {
+                  "name": "deploymentVirtualMachineDiskNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Temporary Deployment VM OS Disk Name",
+                  "placeholder": "{vmName}-disk",
+                  "toolTip": "Optional. Explicit OS disk name. Replace {vmName} with the temporary deployment VM name, or leave blank to derive the disk name from the generated VM name.",
+                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "deploymentVirtualMachineNicNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Temporary Deployment VM NIC Name",
+                  "placeholder": "{vmName}-nic",
+                  "toolTip": "Optional. Explicit network interface name. Replace {vmName} with the temporary deployment VM name, or leave blank to derive the NIC name from the generated VM name.",
+                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "deploymentUserAssignedIdentityNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Temporary Deployment Identity Name",
+                  "placeholder": "uai-avd-{identifier}-deployment-{location}",
+                  "toolTip": "Optional. Explicit name for the temporary deployment user-assigned identity. The placeholder previews the standard convention; leave blank to generate the name.",
+                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "constraints": { "required": false, "regex": "^$|^[A-Za-z0-9-_]{3,128}$", "validationMessage": "Use 3-128 letters, numbers, dashes, or underscores, or leave blank to use the generated name." }
+                },
+                {
+                  "name": "storageAccountNamePrefixOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Azure Files Storage Account Name Prefix",
+                  "placeholder": "fslogix{unique}",
+                  "toolTip": "Optional. Lowercase alphanumeric prefix for Azure Files storage accounts. The naming engine appends a generated six-character value by default, and the deployment appends a two-digit storage index to this prefix.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'))]",
+                  "constraints": { "required": false, "regex": "^$|^[a-z0-9]{1,13}$", "validationMessage": "Use 1-13 lowercase letters or numbers so the two-digit index remains AD-compatible, or leave blank to use the generated prefix." }
+                },
+                {
+                  "name": "privateEndpointNameConventionOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private Endpoint Naming Convention",
+                  "placeholder": "pe-RESOURCE-SUBRESOURCE-VNETID",
+                  "toolTip": "Optional. Naming convention for private endpoints. RESOURCE, SUBRESOURCE, and VNETID are replaced at deployment time and must remain in the convention.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
+                  "constraints": { "required": false, "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$", "validationMessage": "Include the RESOURCE, SUBRESOURCE, and VNETID tokens, or leave blank to use the generated convention." }
+                },
+                {
+                  "name": "privateEndpointNicNameConventionOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private Endpoint NIC Naming Convention",
+                  "placeholder": "nic-pe-RESOURCE-SUBRESOURCE-VNETID",
+                  "toolTip": "Optional. Naming convention for private endpoint network interfaces. RESOURCE, SUBRESOURCE, and VNETID are replaced at deployment time and must remain in the convention.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
+                  "constraints": { "required": false, "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$", "validationMessage": "Include the RESOURCE, SUBRESOURCE, and VNETID tokens, or leave blank to use the generated convention." }
+                },
+                {
+                  "name": "encryptionUserAssignedIdentityNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Storage Encryption Identity Name",
+                  "placeholder": "uai-avd-{identifier}-storage-cmk-{location}",
+                  "toolTip": "Optional. Explicit name for the Azure Files encryption identity. The placeholder previews the standard convention; leave blank to generate the name.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'))]",
+                  "constraints": { "required": false, "regex": "^$|^[A-Za-z0-9-_]{3,128}$", "validationMessage": "Use 3-128 letters, numbers, dashes, or underscores, or leave blank to use the generated name." }
+                },
+                {
+                  "name": "netAppAccountNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "New Azure NetApp Files Account Name",
+                  "placeholder": "naa-avd-{identifier}-{location}",
+                  "toolTip": "Optional. Explicit Azure NetApp Files account name. The placeholder previews the standard convention; leave blank to generate the name.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'CreateAll'))]",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "netAppCapacityPoolNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "New Azure NetApp Files Capacity Pool Name",
+                  "placeholder": "nacp-avd-{identifier}-{location}",
+                  "toolTip": "Optional. Explicit Azure NetApp Files capacity pool name. The placeholder previews the standard convention; leave blank to generate the name.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(equals(steps('storage').netAppDeploymentMode, 'ExistingAccountAndPool')))]",
+                  "constraints": { "required": false }
+                },
+                {
+                  "name": "smbServerLocationOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "SMB Server Location Token",
+                  "placeholder": "{location}",
+                  "toolTip": "Optional. Short location token used in the Azure NetApp Files SMB server name (for example, use2). Leave blank to use the naming engine's abbreviation for the selected region.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'CreateAll'))]",
+                  "constraints": { "required": false }
+                }
+              ]
+            },
+            {
+              "name": "tagsSection",
+              "type": "Microsoft.Common.Section",
+              "label": "Tags",
+              "elements": [
+                {
+                  "name": "tags",
+                  "type": "Microsoft.Common.TagsByResource",
+                  "resources": [
+                    "Microsoft.Resources/resourceGroups",
+                    "Microsoft.Compute/virtualMachines",
+                    "Microsoft.ManagedIdentity/userAssignedIdentities",
+                    "Microsoft.Storage/storageAccounts",
+                    "Microsoft.NetApp/netAppAccounts",
+                    "Microsoft.NetApp/netAppAccounts/capacityPools",
+                    "Microsoft.NetApp/netAppAccounts/capacityPools/volumes",
+                    "Microsoft.Network/privateEndpoints"
+                  ]
+                }
               ]
             }
           ]
@@ -530,54 +1328,65 @@
     },
     "outputs": {
       "parameters": {
-        "location": "[steps('scope').location]",
-        "storageResourceGroupName": "[steps('scope').storageResourceGroup]",
-        "deploymentResourceGroupName": "[steps('scope').deploymentResourceGroup.name]",
-        "deploymentVirtualMachineName": "[steps('scope').deploymentVirtualMachine]",
-        "deploymentUserAssignedIdentityClientId": "[steps('scope').deploymentIdentityClientId]",
-        "identitySolution": "[steps('identity').identitySolution]",
-        "domainJoinUserPrincipalName": "[if(empty(steps('identity').domainName), '', steps('identity').domainJoinUserPrincipalName)]",
-        "domainJoinUserPassword": "[if(empty(steps('identity').domainName), '', steps('identity').domainJoinUserPassword.password)]",
-        "domainName": "[coalesce(steps('identity').domainName, '')]",
-        "organizationalUnitPath": "[if(empty(steps('identity').domainName), '', steps('identity').organizationalUnitPath)]",
-        "appUpdateUserAssignedIdentityResourceId": "[if(contains(steps('identity').identitySolution, 'EntraKerberos'), steps('identity').appUpdateIdentity.id, '')]",
+        "location": "[steps('scope').resourceScope.location.name]",
+        "identifier": "[if(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), steps('tagsAndNaming').naming.existingHostPoolPersona, if(equals(steps('scope').storagePurpose.storageAssociation, 'FutureHostPool'), steps('tagsAndNaming').naming.futureHostPoolPersona, steps('tagsAndNaming').naming.sharedStorageIdentifier))]",
+        "namingConvention": "[if(and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))), steps('tagsAndNaming').naming.useHostPoolNamingConvention), parse(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention), parse('{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"}'))]",
+        "storageResourceGroupName": "[if(steps('scope').createStorageResourceGroup, if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.storageResourceGroupNameOverride, ''), ''), steps('scope').storageResourceGroup)]",
+        "createStorageResourceGroup": "[steps('scope').createStorageResourceGroup]",
+        "deploymentResourceGroupName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentResourceGroupNameOverride, ''), '')]",
+        "deploymentVirtualMachineName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineNameOverride, ''), '')]",
+        "deploymentVirtualMachineDiskName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineDiskNameOverride, ''), '')]",
+        "deploymentVirtualMachineNicName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineNicNameOverride, ''), '')]",
+        "deploymentVirtualMachineSize": "[steps('deployment').deploymentVirtualMachineSize]",
+        "deploymentVirtualMachineSubnetResourceId": "[steps('deployment').deploymentVirtualMachineSubnet.id]",
+        "deploymentUserAssignedIdentityName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentUserAssignedIdentityNameOverride, ''), '')]",
+        "identitySolution": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').machineIdentity, steps('identity').identitySolution)]",
+        "credentialsKeyVaultResourceId": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'keyVault')), steps('identity').credentialsKeyVault.id, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'keyVault')), steps('storage').hybridCredentialsKeyVault.id, ''))]",
+        "domainJoinUserPrincipalName": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPrincipalName, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupUserPrincipalName, ''))]",
+        "domainJoinUserPassword": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPassword, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupPassword, ''))]",
+        "domainName": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').domainName, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms'))), steps('storage').hybridDomainName, ''))]",
+        "organizationalUnitPath": "[if(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), steps('identity').organizationalUnitPath, '')]",
+        "deploymentVirtualMachineOrganizationalUnitPath": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('deployment').deploymentVirtualMachineOrganizationalUnitPath, '')]",
+        "appUpdateUserAssignedIdentityResourceId": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos'), steps('identity').automateEntraKerberosTasks), steps('identity').appUpdateIdentity, '')]",
         "fslogixStorageService": "[steps('storage').storageService]",
         "fslogixStorageRedundancy": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('storage').storageRedundancy, 'LocallyRedundant')]",
         "fslogixContainerType": "[steps('storage').containerType]",
         "profileSizeInMBs": "[int(steps('storage').profileSizeInMBs)]",
         "shareSizeInGB": "[int(steps('storage').shareSizeInGB)]",
-        "fslogixShardOptions": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('storage').shardOptions, 'None')]",
-        "fslogixAdminGroups": "[steps('identity').adminGroups]",
-        "fslogixUserGroups": "[steps('identity').userGroups]",
-        "storageAccountNamePrefix": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('storage').storageAccountNamePrefix, 'fslogix')]",
+        "fslogixShardOptions": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))), steps('storage').shardOptions, 'None')]",
+        "fslogixAdminGroups": "[if(steps('storage').configureAdminAccess, steps('storage').adminGroupPickerBlade.transformed.groups, parse('[]'))]",
+        "fslogixUserGroups": "[if(and(or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))), or(steps('storage').leastPrivilegedNtfs, not(equals(steps('storage').shardOptions, 'None')))), steps('storage').userGroupPickerBlade.transformed.groups, parse('[]'))]",
+        "storageAccountNamePrefix": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles')), coalesce(steps('tagsAndNaming').naming.storageAccountNamePrefixOverride, ''), '')]",
         "storageIndex": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), int(steps('storage').storageIndex), 1)]",
-        "deploymentSuffix": "[steps('storage').deploymentSuffix]",
-        "parentResourceId": "[steps('scope').parentResourceId]",
-        "privateEndpoint": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('networking').privateEndpoint)]",
-        "privateEndpointSubnetResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('networking').privateEndpoint), steps('networking').privateEndpointSubnet.id, '')]",
-        "azureFilePrivateDnsZoneResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('networking').privateEndpoint, not(empty(steps('networking').azureFilePrivateDnsZone))), steps('networking').azureFilePrivateDnsZone.id, '')]",
-        "privateEndpointNameConvention": "[steps('networking').privateEndpointNameConvention]",
-        "privateEndpointNicNameConvention": "[steps('networking').privateEndpointNicNameConvention]",
-        "permittedIPs": "[map(steps('networking').permittedIPs, (item) => item.value)]",
-        "logAnalyticsWorkspaceResourceId": "[if(empty(steps('encryptionOperations').logAnalyticsWorkspace), '', steps('encryptionOperations').logAnalyticsWorkspace.id)]",
-        "keyManagementStorage": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('encryptionOperations').keyManagementStorage, 'PlatformManaged')]",
-        "encryptionKeyVaultUri": "[if(contains(steps('encryptionOperations').keyManagementStorage, 'CustomerManaged'), steps('encryptionOperations').encryptionKeyVaultUri, '')]",
-        "fslogixEncryptionKeyNameConvention": "[steps('encryptionOperations').encryptionKeyNameConvention]",
-        "encryptionUserAssignedIdentityResourceId": "[if(contains(steps('encryptionOperations').keyManagementStorage, 'CustomerManaged'), steps('encryptionOperations').encryptionIdentity.id, '')]",
+        "parentResourceId": "[if(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), steps('scope').storagePurpose.hostPool.id, '')]",
+        "privateEndpoint": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
+        "privateEndpointSubnetResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), steps('zeroTrust').privateNetworking.privateEndpointSubnet.id, '')]",
+        "azureFilePrivateDnsZoneResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint, not(empty(steps('zeroTrust').privateNetworking.azureFilePrivateDnsZone))), steps('zeroTrust').privateNetworking.azureFilePrivateDnsZone, '')]",
+        "privateEndpointNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNameConventionOverride, ''), '')]",
+        "privateEndpointNicNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNicNameConventionOverride, ''), '')]",
+        "permittedIPs": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), filter(map(steps('zeroTrust').privateNetworking.permittedIPs, (item) => item.value), (ip) => not(empty(ip))), parse('[]'))]",
+        "logAnalyticsWorkspaceResourceId": "[if(empty(steps('zeroTrust').operations.logAnalyticsWorkspace), '', steps('zeroTrust').operations.logAnalyticsWorkspace.id)]",
+        "keyManagementStorage": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').keyManagement.keyManagementStorage, 'PlatformManaged')]",
+        "existingEncryptionKeyVaultResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), steps('zeroTrust').keyManagement.existingEncryptionKeyVault.id, '')]",
+        "keyExpirationInDays": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), steps('zeroTrust').keyManagement.keyExpirationInDays, 180)]",
+        "encryptionUserAssignedIdentityName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), coalesce(steps('tagsAndNaming').naming.encryptionUserAssignedIdentityNameOverride, ''), '')]",
         "softDeleteRetentionDays": "[int(steps('storage').softDeleteRetentionDays)]",
-        "kerberosEncryptionType": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), not(equals(steps('identity').identitySolution, 'EntraId'))), steps('storage').kerberosEncryptionType, 'AES256')]",
-        "recoveryServicesVaultResourceId": "[if(empty(steps('encryptionOperations').recoveryServicesVault), '', steps('encryptionOperations').recoveryServicesVault.id)]",
-        "fileSharePolicyName": "[steps('encryptionOperations').fileSharePolicyName]",
-        "existingSharedActiveDirectoryConnection": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('netAppRemote').existingSharedActiveDirectoryConnection, false)]",
-        "netAppAccountName": "[steps('netAppRemote').netAppAccountName]",
-        "netAppCapacityPoolName": "[steps('netAppRemote').netAppCapacityPoolName]",
-        "netAppVolumesSubnetResourceId": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('netAppRemote').netAppVolumesSubnet.id, '')]",
-        "smbServerLocation": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('netAppRemote').smbServerLocation, steps('scope').location)]",
-        "remoteStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache')), map(steps('netAppRemote').remoteStorageAccountResourceIds, (item) => item.resourceId), parse('[]'))]",
-        "remoteNetAppServerFqdns": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache')), map(steps('netAppRemote').remoteNetAppServerFqdns, (item) => item.fqdn), parse('[]'))]",
-        "tags": "[steps('tags').tags]"
+        "kerberosEncryptionType": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))), steps('storage').kerberosEncryptionType, 'AES256')]",
+        "recoveryServicesVaultResourceId": "[if(empty(steps('zeroTrust').operations.recoveryServicesVault), '', steps('zeroTrust').operations.recoveryServicesVault.id)]",
+        "fileSharePolicyName": "[steps('zeroTrust').operations.fileSharePolicyName]",
+        "existingSharedActiveDirectoryConnection": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
+        "netAppDeploymentMode": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('storage').netAppDeploymentMode, 'CreateAll')]",
+        "netAppAccountName": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(equals(steps('storage').netAppDeploymentMode, 'CreateAll'))), steps('storage').existingNetAppAccountName, if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles')), coalesce(steps('tagsAndNaming').naming.netAppAccountNameOverride, ''), ''))]",
+        "netAppCapacityPoolName": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'ExistingAccountAndPool')), steps('storage').existingNetAppCapacityPoolName, if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles')), coalesce(steps('tagsAndNaming').naming.netAppCapacityPoolNameOverride, ''), ''))]",
+        "netAppVolumesSubnetResourceId": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('storage').netAppVolumesSubnet.id, '')]",
+        "smbServerLocation": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'CreateAll')), coalesce(steps('tagsAndNaming').naming.smbServerLocationOverride, ''), '')]",
+        "remoteStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache')), map(steps('storage').remoteStorageAccountResourceIds, (item) => item.resourceId), parse('[]'))]",
+        "remoteNetAppServerFqdns": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache')), map(steps('storage').remoteNetAppServerFqdns, (item) => item.fqdn), parse('[]'))]",
+        "tags": "[steps('tagsAndNaming').tagsSection.tags]"
       },
-      "location": "[steps('scope').location]"
+      "kind": "Subscription",
+      "subscriptionId": "[steps('scope').resourceScope.subscription.id]",
+      "location": "[steps('scope').resourceScope.location.name]"
     }
   }
 }

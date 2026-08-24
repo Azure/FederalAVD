@@ -961,7 +961,11 @@ Ensure your firewall, NSGs, and proxy configurations allow access to the require
 
 #### Azure Resource Manager (ARM) API
 
-The hostpool deployment uses Run Commands executed on a temporary deployment VM to perform domain join validation and other orchestration tasks. These scripts call the **Azure Resource Manager API** using the VM's managed identity.
+The host pool deployment uses Run Commands on a temporary deployment VM for storage identity
+registration, NTFS configuration, validation, and other orchestration tasks. For Azure Files, this
+VM remains in a workgroup and uses explicit directory credentials when AD operations are required.
+Only the Azure NetApp Files workflow domain-joins the temporary VM. These scripts call the
+**Azure Resource Manager API** using the VM's managed identity.
 
 **Required outbound access from the session host subnet:**
 

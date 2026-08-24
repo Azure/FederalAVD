@@ -102,9 +102,10 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
 
 var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
-var storageIpRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
+var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
+var storageIpRules = [for ip in effectivePermittedIPs: { value: ip, action: 'Allow' }]
 
-var permittedIPRestrictions = [for (ip, i) in permittedIPs: {
+var permittedIPRestrictions = [for (ip, i) in effectivePermittedIPs: {
   ipAddress: ip
   action: 'Allow'
   priority: 100 + i
@@ -128,7 +129,7 @@ var azureCloudRestriction = [
   }
 ]
 
-var resolvedIpSecurityRestrictions = (privateEndpoint || !empty(permittedIPs))
+var resolvedIpSecurityRestrictions = (privateEndpoint || !empty(effectivePermittedIPs))
   ? union(permittedIPRestrictions, azureCloudRestriction)
   : null
 
@@ -478,8 +479,8 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       netFrameworkVersion: 'v8.0'
       powerShellVersion: '7.5'
       ipSecurityRestrictions: resolvedIpSecurityRestrictions
-      ipSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(permittedIPs)) ? 'Deny' : null
-      scmIpSecurityRestrictions: (privateEndpoint || !empty(permittedIPs)) ? [
+      ipSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : null
+      scmIpSecurityRestrictions: (privateEndpoint || !empty(effectivePermittedIPs)) ? [
         {
           ipAddress: 'Any'
           action: 'Deny'
@@ -488,9 +489,9 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           description: 'Deny all access'
         }
       ] : null
-      scmIpSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(permittedIPs)) ? 'Deny' : null
-      scmIpSecurityRestrictionsUseMain: (privateEndpoint || !empty(permittedIPs)) ? true : null
-      publicNetworkAccess: (privateEndpoint && empty(permittedIPs)) ? 'Disabled' : 'Enabled'
+      scmIpSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : null
+      scmIpSecurityRestrictionsUseMain: (privateEndpoint || !empty(effectivePermittedIPs)) ? true : null
+      publicNetworkAccess: (privateEndpoint && empty(effectivePermittedIPs)) ? 'Disabled' : 'Enabled'
       use32BitWorkerProcess: false
     }
     outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId)

@@ -2191,7 +2191,7 @@
               "type": "Microsoft.Common.InfoBox",
               "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), equals(steps('userProfiles').profileSolution, 'FSLogix'), equals(steps('userProfiles').deployStorage, true))]",
               "options": {
-                "text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos requires the following post-deployment tasks: 1. Grant admin consent to the new service principal, 2. If desired, assign least privilege NTFS permissions to the file share, 3. If using private endpoints, update the new storage account application's manifest to support private endpoint URIs, 4. Disable multifactor authentication on the storage account. Automation Option: You can select a User Assigned Identity with the following Microsoft Graph application permissions (not delegated) to automate all tasks except disabling multifactor authentication: 1. Application.ReadWrite.All, 2. DelegatedPermissionGrant.ReadWrite.All. Disabling multifactor authentication must be completed manually. Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts.",
+                "text": "Enabling authentication to FSLogix storage accounts using Entra Kerberos requires the following post-deployment tasks: 1. Grant admin consent to the new service principal, 2. If desired, restrict NTFS access to selected groups, 3. If using private endpoints, update the new storage account application's manifest to support private endpoint URIs, 4. Disable multifactor authentication on the storage account. Automation Option: You can select a User Assigned Identity with the following Microsoft Graph application permissions (not delegated) to automate all tasks except disabling multifactor authentication: 1. Application.ReadWrite.All, 2. DelegatedPermissionGrant.ReadWrite.All. Disabling multifactor authentication must be completed manually. Click anywhere on this infobox for the Github documentation with detailed instructions and PowerShell scripts.",
                 "style": "Info",
                 "uri": "https://github.com/Azure/FederalAVD/blob/main/docs/entra-kerberos-hybrid.md"
               }
@@ -2418,7 +2418,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[equals(steps('userProfiles').deployStorage, true)]",
                   "options": {
-                    "text": "You can choose to follow the principle of least privilege by assigning NTFS permissions to specific Active Directory groups instead of using the default \"Users\" group. If you select the checkbox below, you’ll need to pick the groups that should have access.",
+                    "text": "Choose which users can create FSLogix profile folders. Standard access grants Authenticated Users permission to create a folder at the share root, while Creator Owner permissions isolate each user's profile contents. Select group-scoped access to limit profile creation to members of the selected Active Directory groups.",
                     "link": {
                       "label": "Learn more",
                       "uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-storage-permissions"
@@ -2428,7 +2428,7 @@
                 {
                   "name": "leastPrivNTFS",
                   "type": "Microsoft.Common.CheckBox",
-                  "label": "Configure Least Privilege NTFS permissions",
+                  "label": "Restrict NTFS access to selected groups",
                   "visible": "[equals(steps('userProfiles').deployStorage, true)]"
                 },
                 {
@@ -2721,17 +2721,17 @@
                 {
                   "name": "leastPrivShardHeader",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true))]",
+                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')))]",
                   "options": {
-                    "text": "[if(equals(steps('userProfiles').deployStorage, true), 'Least Privilege, Sharding, and User Group(s) to Share Assignment(s)', 'User Group(s) to Share Assignment(s)')]"
+                    "text": "[if(equals(steps('userProfiles').deployStorage, true), 'NTFS Access and Profile Sharding', 'User Group(s) to Share Assignment(s)')]"
                   }
                 },
                 {
                   "name": "leastPrivIntroBlock",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true))]",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), not(equals(steps('userProfiles').userIdentity, 'EntraId')))]",
                   "options": {
-                    "text": "[if(or(equals(steps('hosts').machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid')), 'You can choose to follow the principle of least privilege by assigning NTFS permissions to specific Active Directory groups instead of using the default \"Users\" group. If you select the checkbox below, you’ll need to pick the groups that should have access.', 'You can choose to follow the principle of least privilege by assigning NTFS permissions to specific user groups instead of using the default \"Users\" group. If you select the checkbox below, you’ll need to pick the groups that should have access.')]",
+                    "text": "[if(or(equals(steps('hosts').machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid')), 'Choose which users can create FSLogix profile folders. Standard access grants Authenticated Users permission to create a folder at the share root, while Creator Owner permissions isolate each user''s profile contents. Select group-scoped access to limit profile creation to members of the selected Active Directory groups.', 'Choose which users can create FSLogix profile folders. Standard access grants Authenticated Users permission to create a folder at the share root, while Creator Owner permissions isolate each user''s profile contents. Select group-scoped access to limit profile creation to members of the selected groups.')]",
                     "link": {
                       "label": "Learn more",
                       "uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-storage-permissions"
@@ -2741,13 +2741,13 @@
                 {
                   "name": "leastPrivNTFS",
                   "type": "Microsoft.Common.CheckBox",
-                  "label": "Configure Least Privilege NTFS permissions",
-                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true))]"
+                  "label": "Restrict NTFS access to selected groups",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), not(equals(steps('userProfiles').userIdentity, 'EntraId')))]"
                 },
                 {
                   "name": "shardingTextBlock1",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true))]",
+                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')))]",
                   "options": {
                     "text": "In order to improve scalability of user profile data, you have the option to deploy more than one storage account per host pool. This architectural pattern is called 'Sharding'.",
                     "link": {
@@ -2774,7 +2774,7 @@
                   "constraints": {
                     "allowedValues": "[if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
                   },
-                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), steps('userProfiles').deployStorage), not(empty(steps('userProfiles').managedIdentity)), true))]"
+                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')))]"
                 },
                 {
                   "name": "cloudOnlyRbacRegionInfoBox",
@@ -2782,17 +2782,17 @@
                   "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-CloudOnly'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]" ,
                   "options": {
                     "style": "Warning",
-                    "text": "Azure Files share-level RBAC for cloud-only identities — required for least-privilege NTFS permissions and profile sharding — is available only in a subset of Azure Commercial regions. Azure Government is not currently supported for this capability. Verify that your target region is on the supported list before proceeding. Click anywhere on this infobox for the list of supported regions.",
+                    "text": "Azure Files share-level RBAC for cloud-only identities — required for group-scoped NTFS access and profile sharding — is available only in a subset of Azure Commercial regions. Azure Government is not currently supported for this capability. Verify that your target region is on the supported list before proceeding. Click anywhere on this infobox for the list of supported regions.",
                     "uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable#regional-availability-for-microsoft-entra-kerberos"
                   }
                 },
                 {
                   "name": "domainJoinWarningBox",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')))]",
                   "options": {
-                    "style": "Warning",
-                    "text": "When using Microsoft Entra Kerberos for hybrid identies and with least privilege NTFS permissions or sharding via permissions, a domain-joined deployment VM is required to configure the NTFS ACLs on the storage account. The deployment VM will be domain-joined in the OU specified below using the account credentials provided and the deployment VM will be deployed on the same subnet as the session hosts with network line of sight to a domain controller.",
+                    "style": "Info",
+                    "text": "Hybrid Entra Kerberos does not domain-join the storage account or temporary deployment VM. Selecting group-scoped NTFS access or sharding via permissions requires the temporary VM to have network line of sight to an AD DS domain controller. The supplied credentials are used only to look up the on-premises SIDs of the selected synchronized groups before applying NTFS permissions. An authenticated account with read access to the domain is sufficient.",
                     "uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-configure-file-level-permissions"
                   }
                 },
@@ -2803,7 +2803,7 @@
                   "keyPath": "displayName",
                   "descriptionKeyPath": "id",
                   "value": "[steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups]",
-                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), steps('userProfiles').deployStorage), not(empty(steps('userProfiles').managedIdentity)), true), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
+                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
                   "barColor": "[if(empty(steps('userProfiles').azureFiles.userGroupPickerBlade), '#FF0000', '#7fba00')]",
                   "constraints": {
                     "required": true
@@ -2849,7 +2849,7 @@
                 {
                   "name": "storageAccountDeployedNumberTextBlock",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), and(not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), not(equals(steps('userProfiles').userIdentity, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))]",
                   "options": {
                     "text": "The number of groups selected or provided above determines the number of storage accounts deployed by this solution. The storage account names are automatically determined by combining a suffix with a 0-padded two digit suffix starting at the 'Storage Index' value."
                   }
@@ -2857,7 +2857,7 @@
                 {
                   "name": "storageAccountsRequiredTextBlock",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(not(equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').configureSessionHosts, and(not(equals(steps('userProfiles').userIdentity, 'EntraId')), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
+                  "visible": "[and(not(equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').userIdentity, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))]",
                   "options": {
                     "text": "The number of groups selected or provided above determines the number of storage accounts that are required when selecting existing accounts."
                   }
@@ -2873,7 +2873,7 @@
                 {
                   "name": "noShardingTexBlock",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true), equals(steps('userProfiles').azureFiles.shardingOption, 'None'))]",
+                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').azureFiles.shardingOption, 'None'))]",
                   "options": {
                     "text": "A total of 1 storage account will be deployed/required because you have chosen not to Shard your storage."
                   }
@@ -2883,17 +2883,17 @@
                   "type": "Microsoft.Common.Slider",
                   "label": "Number of Storage Accounts to Deploy (Read Only)",
                   "defaultValue": 1,
-                  "min": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), steps('userProfiles').deployStorage, empty(steps('userProfiles').managedIdentity)), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
-                  "max": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), steps('userProfiles').deployStorage, empty(steps('userProfiles').managedIdentity)), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
+                  "min": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
+                  "max": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
                   "showStepMarkers": false,
                   "visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]"
                 },
                 {
                   "name": "domainName",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')))]",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')))]",
                   "label": "User Active Directory Domain Name",
-                  "toolTip": "Provide domain name from where users are synchronized. This is required to configure least-privilege or shard permissions.",
+                  "toolTip": "Provide the domain from which users are synchronized. This is required for group-scoped NTFS access or permissions-based sharding.",
                   "placeholder": "Example: contoso.com",
                   "constraints": {
                     "regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
@@ -2902,24 +2902,11 @@
                   }
                 },
                 {
-                  "name": "vmOUPath",
-                  "type": "Microsoft.Common.TextBox",
-                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')))]",
-                  "label": "Deployment VM OU Path",
-                  "toolTip": "Input the distinguished name of the desired organization unit for computer objects.",
-                  "placeholder": "Example: OU=pooled,OU=avd,DC=contoso,DC=com",
-                  "constraints": {
-                    "regex": "^(?:\\s*[Oo][Uu]\\s*=\\s*[^,]+\\s*,\\s*)+[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*(?:,\\s*[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*)+$",
-                    "required": true,
-                    "validationMessage": "Provide a valid OU distinguished name."
-                  }
-                },
-                {
                   "name": "credentialSource",
                   "type": "Microsoft.Common.OptionsGroup",
-                  "label": "Domain Join Credential Source",
+                  "label": "AD Lookup Credential Source",
                   "defaultValue": "Key Vault",
-                  "toolTip": "Select 'Manual Entry' to specify the secrets manually or 'Key Vault' to reference secrets from the Key Vault chosen on the 'Identity' pane. This key vault must also contain the following two secrets and values: 1. DomainJoinUserPrincipalName: The domain join account UserPrincipalName (i.e., domjoin@contoso.local) and 2. DomainJoinUserPassword: The password associated with the domain join user account.",
+                  "toolTip": "Select 'Manual Entry' to provide AD lookup credentials or 'Key Vault' to use the Key Vault chosen on the Identity pane. The vault must contain DomainJoinUserPrincipalName and DomainJoinUserPassword secrets. The account needs read access to the domain and is not used to join the temporary VM.",
                   "constraints": {
                     "allowedValues": [
                       {
@@ -2933,26 +2920,26 @@
                     ],
                     "required": true
                   },
-                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), equals(steps('hosts').credentials.source, 'keyVault'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')))]"
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), equals(steps('hosts').credentials.source, 'keyVault'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')))]"
                 },
                 {
                   "name": "domainJoinUserPrincipalName",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Domain Join Account UserPrincipalName",
-                  "toolTip": "Enter the user principal name with permissions to join computers to the domain in the selected OU.",
+                  "label": "AD Lookup Account UserPrincipalName",
+                  "toolTip": "Enter the user principal name for an account with read access to the domain.",
                   "placeholder": "domainjoin@contoso.com",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9A-Z_.-]+@(?:[a-z0-9]+\\.)+[a-z]+$",
                     "validationMessage": "The value must be a valid user principal name."
                   },
-                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')), not(equals(steps('userProfiles').azureFiles.credentialSource, 'keyVault')))]"
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')), or(equals(steps('hosts').credentials.source, 'manual'), equals(steps('userProfiles').azureFiles.credentialSource, 'manual')))]"
                 },
                 {
                   "name": "domainJoinUserPassword",
                   "type": "Microsoft.Common.PasswordBox",
                   "label": {
-                    "password": "Domain Join Account Password",
+                    "password": "AD Lookup Account Password",
                     "confirmPassword": "Confirm Password"
                   },
                   "toolTip": "Enter a password that is alphanumeric, contains at least 12 characters, 1 letter, 1 number and 1 special character.",
@@ -2962,7 +2949,7 @@
                   "options": {
                     "hideConfirmation": false
                   },
-                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')), not(equals(steps('userProfiles').azureFiles.credentialSource, 'keyVault')))]"
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')), or(equals(steps('hosts').credentials.source, 'manual'), equals(steps('userProfiles').azureFiles.credentialSource, 'manual')))]"
                 },
                 {
                   "name": "configureSessionHostsHeader",
@@ -3261,7 +3248,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('hosts').machineIdentity, 'DomainServices'), ' Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), ' Since you selected Entra Kerberos with Hybrid Identities as your identity solution, deployed FSLogix profile storage, and chose to either configure least privilege NTFS permissions or shard the storage, the deployment virtual machine will also be joined to the domain in the OU specified. The computer object for this virtual maachine should be deleted from the domain when the deployment is complete.','')))]"
+                    "text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), ' Azure NetApp Files requires the deployment virtual machine to join the domain so it can mount SMB volumes and apply NTFS permissions. Remove its domain computer object after deployment completes.', if(and(equals(steps('userProfiles').deployStorage, true), contains(steps('hosts').machineIdentity, 'DomainServices')), ' For Azure Files, the deployment virtual machine remains in a workgroup and uses explicit credentials to register storage account computer objects and configure NTFS permissions.', if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms'))), ' For Entra Kerberos with hybrid identities, the workgroup deployment virtual machine must have network line of sight to an AD DS domain controller for group SID lookup. The VM will not create a domain computer object.',''))))]"
                   }
                 },
                 {
@@ -3308,7 +3295,7 @@
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Use Existing Recovery Services Vault",
                   "defaultValue": false,
-                  "toolTip": "Check to select an existing Recovery Services Vault instead of creating a new one.",
+                  "toolTip": "Select a vault created by AVD Shared Services or another existing Recovery Services Vault instead of creating one in this deployment.",
                   "visible": "[steps('operationsAndMonitoring').backup.recoveryServices]"
                 },
                 {
@@ -3344,6 +3331,19 @@
                     "required": true
                   },
                   "visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)]"
+                },
+                {
+                  "name": "filesBackupPolicyName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Azure Files Backup Policy Name",
+                  "defaultValue": "filesharepolicy",
+                  "toolTip": "Name of the Azure Files snapshot backup policy already present in the shared vault. Use the fslogixBackupPolicyName output from AVD Shared Services.",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-zA-Z0-9_-]{1,150}$",
+                    "validationMessage": "Use 1-150 letters, numbers, underscores, or hyphens."
+                  },
+                  "visible": "[and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)]"
                 }
               ]
             },
@@ -5302,14 +5302,13 @@
       "parameters": {
         "identifier": "[steps('basics').identifier]",
         "identitySolution": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').machineIdentity, if(or(equals(steps('controlPlane').hostPool.type, 'Personal'), not(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)))), 'EntraId', steps('userProfiles').userIdentity))]",
-        "domainName": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').virtualMachines.domainName, if(and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.domainName, ''))]",
-        "vmOUPath": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').virtualMachines.ouPath, if(and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms'))), steps('userProfiles').azureFiles.vmOUPath, ''))]",
-        "domainJoinUserPassword": "[if(and(contains(steps('hosts').machineIdentity, 'DomainServices'), equals(steps('hosts').credentials.source, 'manual')), steps('hosts').credentials.domainJoinUserPassword, if(and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')), not(equals(steps('userProfiles').azureFiles.credentialSource, 'keyVault'))), steps('userProfiles').azureFiles.domainJoinUserPassword, ''))]",
-        "domainJoinUserPrincipalName": "[if(and(contains(steps('hosts').machineIdentity, 'DomainServices'), equals(steps('hosts').credentials.source, 'manual')), steps('hosts').credentials.domainJoinUserPrincipalName, if(and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), not(empty(steps('userProfiles').managedIdentity)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'shardPerms')), not(equals(steps('userProfiles').azureFiles.credentialSource, 'keyVault'))), steps('userProfiles').azureFiles.domainJoinUserPrincipalName, ''))]",
+        "domainName": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').virtualMachines.domainName, if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms'))), steps('userProfiles').azureFiles.domainName, ''))]",
+        "vmOUPath": "[if(contains(steps('hosts').machineIdentity, 'DomainServices'), steps('hosts').virtualMachines.ouPath, '')]",
+        "domainJoinUserPassword": "[if(and(contains(steps('hosts').machineIdentity, 'DomainServices'), equals(steps('hosts').credentials.source, 'manual')), steps('hosts').credentials.domainJoinUserPassword, if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')), or(equals(steps('hosts').credentials.source, 'manual'), equals(steps('userProfiles').azureFiles.credentialSource, 'manual'))), steps('userProfiles').azureFiles.domainJoinUserPassword, ''))]",
+        "domainJoinUserPrincipalName": "[if(and(contains(steps('hosts').machineIdentity, 'DomainServices'), equals(steps('hosts').credentials.source, 'manual')), steps('hosts').credentials.domainJoinUserPrincipalName, if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms')), or(equals(steps('hosts').credentials.source, 'manual'), equals(steps('userProfiles').azureFiles.credentialSource, 'manual'))), steps('userProfiles').azureFiles.domainJoinUserPrincipalName, ''))]",
         "virtualMachineAdminPassword": "[if(equals(steps('hosts').credentials.source, 'manual'), steps('hosts').credentials.localAdminPassword, '')]",
         "virtualMachineAdminUserName": "[if(equals(steps('hosts').credentials.source, 'manual'), steps('hosts').credentials.localAdminUsername, '')]",
         "existingCredentialsKeyVaultResourceId": "[if(equals(steps('hosts').credentials.source, 'keyVault'), steps('hosts').credentials.keyVault.id, '')]",
-        "existingHostPoolResourceId": "",
         "controlPlaneSubscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
         "controlPlaneLocation": "[steps('controlPlane').scope.location.name]",
         "existingFeedWorkspaceResourceId": "[if(and(not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))), equals(steps('controlPlane').workspace.createOption, 'update')), steps('controlPlane').workspace.existingWorkspace, '')]",
@@ -5377,8 +5376,8 @@
         "existingSharedActiveDirectoryConnection": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.existingSharedActiveDirectoryConnection, false)]",
         "fslogixExistingLocalNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.localVolumes, parse('[]'))]",
         "fslogixExistingRemoteNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), steps('userProfiles').azureNetAppFiles.remoteVolumes, parse('[]'))]",
-        "fslogixShardOptions": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true)), steps('userProfiles').azureFiles.shardingOption, 'None')]",
-        "fslogixUserGroups": "[if(and(equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureNetAppFiles.leastPrivNTFS, true)), steps('userProfiles').azureNetAppFiles.userGroupPickerBlade.transformed.groups, if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('userProfiles').userIdentity, 'EntraId')), or(equals(steps('userProfiles').configureSessionHosts, true), equals(steps('userProfiles').deployStorage, true)), if(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), not(empty(steps('userProfiles').managedIdentity)), true), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))), steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups, parse('[]')))]",
+        "fslogixShardOptions": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))), steps('userProfiles').azureFiles.shardingOption, 'None')]",
+        "fslogixUserGroups": "[if(and(equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureNetAppFiles.leastPrivNTFS, true)), steps('userProfiles').azureNetAppFiles.userGroupPickerBlade.transformed.groups, if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), not(equals(steps('userProfiles').userIdentity, 'EntraId')), or(equals(steps('userProfiles').configureSessionHosts, true), equals(steps('userProfiles').deployStorage, true)), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))), steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups, parse('[]')))]",
         "fslogixShareSizeInGB": "[if(equals(steps('userProfiles').deployStorage, true), if(equals(steps('userProfiles').storageService, 'AzureFiles'), steps('userProfiles').azureFiles.storageShareSize, steps('userProfiles').azureNetAppFiles.storageShareSize), 100)]",
         "fslogixStorageIndex": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.storageIndex, 0)]",
         "keyManagementStorage": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('zeroTrust').keyManagement.keyManagementStorage, 'PlatformManaged')]",
@@ -5393,6 +5392,7 @@
         "recoveryServicesVaultStorageRedundancy": "[if(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
         "existingVmBackupVaultResourceId": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",
         "existingFilesBackupVaultResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",
+        "existingFilesBackupPolicyName": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.filesBackupPolicyName, 'filesharepolicy')]",
         "backupRetentionDays": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), steps('operationsAndMonitoring').backup.backupRetentionDays, 30)]",
         "deploySecretsKeyVault": "[if(equals(steps('hosts').credentials.source, 'manual'), steps('hosts').credentials.deploySecretsKeyVault, false)]",
         "secretsKeyVaultEnableSoftDelete": "[if(and(equals(steps('hosts').credentials.source, 'manual'), steps('hosts').credentials.deploySecretsKeyVault), steps('hosts').credentials.enableSoftDelete, false)]",

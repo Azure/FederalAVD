@@ -12,14 +12,14 @@ deploy successfully, and retain the generated parameter files for later PowerShe
 1. **Which Azure cloud?** Commercial, Government, Government Secret, or Government Top Secret? *(Blue Button UI is only available for Commercial and Government.)*
 2. **Do you need custom software pre-installed in images, or are marketplace images sufficient?** *(If marketplace images are fine, you can skip Steps 1–3 entirely.)*
 3. **Do you already have a VNet and subnet ready?** *(If yes, you can skip Step 0.)*
-4. **Do you require customer-managed keys, centralized Log Analytics monitoring, or have diagnostic-settings policies assigned?** *(Any of these can require Security & Monitoring before downstream deployments.)*
+4. **Do you require customer-managed keys, centralized Log Analytics monitoring, or have diagnostic-settings policies assigned?** *(Any of these can require AVD Shared Services before downstream deployments.)*
 
 Once I answer, give me **exactly one next step** - not a menu. Route me as follows:
 
 - **Existing VNet + marketplace images -> PoC:** Start with the Host Pool Template Spec portal form. Tell me to download its generated parameter file, remove `timeStamp`, and save it under `customer/parameters/hostpools/`. Do not start with PowerShell or hand-edited JSON.
 - **Need networking:** Start with Step 0, then continue to the appropriate next step.
 - **Need custom images, no CMK or centralized monitoring prerequisite:** Step 2 (imageManagement) -> optional Step 3 (imageBuild) -> Step 4 (hostPool).
-- **Need custom images + CMK, centralized monitoring, or diagnostic-policy prerequisite:** Step 1 (securityAndMonitoring) first, then Step 2 -> optional Step 3 -> Step 4.
+- **Need custom images + CMK, centralized monitoring, or diagnostic-policy prerequisite:** Step 1 (sharedServices) first, then Step 2 -> optional Step 3 -> Step 4.
 - **Azure Government Secret or Top Secret:** Recommend Step 1 by default, then Step 2 -> Step 3 -> Step 4. Omit Step 1 only when the user identifies approved shared Key Vault, Log Analytics, DCR/DCE, diagnostics, and key-management services that provide equivalent documented control coverage.
 - **Air-gapped (Secret/Top Secret):** Blue Button is unavailable. Use Template Spec + Portal UI or PowerShell. Pass `-Environment AzureUSGovernment` (or the appropriate environment name) to `Connect-AzAccount`.
 
@@ -38,7 +38,7 @@ deployment. Show those commands only when I ask or after the generated parameter
 
 - **Custom images / artifacts storage:** `Owner` or `Contributor` alone is not enough when the storage account disables shared key access (which is the default). Add **`Storage Blob Data Contributor`** on the artifacts storage account to the identity running `Update-ImageArtifacts.ps1` or `Deploy-ImageManagement.ps1`. Symptom: `403 AuthorizationFailure` or `This request is not authorized to perform this operation`. See [troubleshooting](../docs/troubleshooting.md#storage-blob-data-access-fails-with-403).
 - **CMK / Key Vault:** `Owner` or `Contributor` does not grant Key Vault key operation rights (control plane ≠ data plane). Add **`Key Vault Crypto Officer`** on the encryption Key Vault to the deploying identity. See [troubleshooting](../docs/troubleshooting.md#key-vault-crypto-officer-missing).
-- **Sequencing with CMK:** Deploy Security & Monitoring (Step 1) **before** Image Management (Step 2) when using CMK. imageManagement needs the Key Vault resource ID to encrypt the compute gallery and storage account at creation time. See [troubleshooting](../docs/troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults).
+- **Sequencing with CMK:** Deploy AVD Shared Services (Step 1) **before** Image Management (Step 2) when using CMK. imageManagement needs the Key Vault resource ID to encrypt the compute gallery and storage account at creation time. See [troubleshooting](../docs/troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults).
 - **Parameter files:** Remove `timeStamp` from any saved parameter file before reusing it — it should auto-generate fresh on every deployment run. See [troubleshooting](../docs/troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
 - **customer/ folder:** Copy examples from `customer-examples/` to `customer/parameters/` (or `customer/artifacts/`) before editing. Never edit examples in place. `customer/` is git-ignored by design — don't expect changes there to be tracked or pushed. See [troubleshooting](../docs/troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 

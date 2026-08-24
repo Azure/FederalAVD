@@ -52,7 +52,7 @@ inventories and parameter details for each step.
    .\tools\New-TemplateSpecs.ps1 `
        -Location '<region>' `
        -createNetwork $true `
-       -createSecurityAndMonitoring $true `
+      -createSharedServices $true `
        -createImageManagement $true `
        -createCustomImage $true `
        -createHostPool $true `
@@ -60,12 +60,12 @@ inventories and parameter details for each step.
    ```
 
 4. **Deploy prerequisites through Template Specs.** Deploy Networking only when an existing VNet
-   and subnet are unavailable. For IL6 and IL7, deploy Security and Monitoring by default to
+   and subnet are unavailable. For IL6 and IL7, deploy AVD Shared Services by default to
    establish centralized audit collection, operational monitoring, secrets protection, and key
    management before workload resources are created. Omit it only when the approved architecture
    already provides equivalent Key Vault, Log Analytics Workspace, DCR, DCE, diagnostic-settings,
    and key-management capabilities, and the control owners have documented how those shared
-   services satisfy the applicable requirements. Security and Monitoring is a hard sequencing
+   services satisfy the applicable requirements. AVD Shared Services is a hard sequencing
    dependency before Image Management when using CMK or a policy-required Log Analytics Workspace.
    At **Review + create**, download each generated parameter file and save it under the matching
    `customer/parameters/` folder as described in the

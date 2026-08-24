@@ -1,4 +1,6 @@
 param activeDirectoryConnection bool
+param createNetAppAccount bool = true
+param createNetAppCapacityPool bool = true
 @secure()
 param domainJoinUserPassword string
 @secure()
@@ -18,6 +20,8 @@ param shareUserGroups array
 param smbServerLocation string
 param storageSku string
 param tagsNetAppAccount object
+param tagsNetAppCapacityPool object
+param tagsNetAppVolume object
 param deploymentSuffix string
 
 #disable-next-line BCP329
@@ -30,7 +34,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' existing = {
 }
 
 // ─── NetApp Account ────────────────────────────────────────────────────────────
-module netAppAccount '../../../../shared/modules/netApp/netAppAccounts/deploy.bicep' = {
+module netAppAccount '../../../../shared/modules/netApp/netAppAccounts/deploy.bicep' = if (createNetAppAccount) {
   name: 'NetAppAccount-${deploymentSuffix}'
   params: {
     name: netAppAccountName
@@ -51,14 +55,14 @@ module netAppAccount '../../../../shared/modules/netApp/netAppAccounts/deploy.bi
 }
 
 // ─── Capacity Pool ─────────────────────────────────────────────────────────────
-module capacityPool '../../../../shared/modules/netApp/netAppAccounts/capacityPools/deploy.bicep' = {
+module capacityPool '../../../../shared/modules/netApp/netAppAccounts/capacityPools/deploy.bicep' = if (createNetAppCapacityPool) {
   name: 'CapacityPool-${deploymentSuffix}'
   params: {
     netAppAccountName: netAppAccountName
     name: netAppCapacityPoolName
     location: location
     serviceLevel: storageSku
-    tags: tagsNetAppAccount
+    tags: tagsNetAppCapacityPool
   }
   dependsOn: [netAppAccount]
 }
@@ -75,7 +79,7 @@ module netAppVolumes '../../../../shared/modules/netApp/netAppAccounts/capacityP
       subnetResourceId: netAppVolumesSubnetResourceId
       usageThreshold: shareSizeInBytes
       serviceLevel: storageSku
-      tags: tagsNetAppAccount
+      tags: tagsNetAppVolume
     }
     dependsOn: [capacityPool]
   }

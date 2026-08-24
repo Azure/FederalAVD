@@ -14,7 +14,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "Deploy this add-on after creating an automated host pool with zero session hosts and before increasing its session host count. The target resource group should contain only session hosts governed by this policy."
+                "text": "Before creating the automated host pool, create the dedicated resource group that Session Host Configuration will use for its VMs. Deploy this add-on after creating the host pool with zero session hosts and before increasing its session host count. Select that same dedicated resource group as the policy scope."
               }
             },
             {
@@ -31,6 +31,27 @@
               "label": "Subscription",
               "constraints": {
                 "allowedValues": "[map(steps('scope').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+                "required": true
+              }
+            },
+            {
+              "name": "hostPoolsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('scope').subscription))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').subscription.id, '/providers/Microsoft.DesktopVirtualization/hostPools?api-version=2024-04-03')]"
+              }
+            },
+            {
+              "name": "hostPool",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Automated Host Pool",
+              "filter": true,
+              "multiLine": true,
+              "toolTip": "Select the automated host pool associated with this policy deployment. Its resource ID is applied as the cm-resource-parent tag to created resources.",
+              "constraints": {
+                "allowedValues": "[map(filter(steps('scope').hostPoolsApi.value, (hp) => equals(hp.properties.hostPoolType, 'Pooled')), (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Resource Group: ', first(skip(split(hp.id, '/'), 4)), '\",\"value\":\"', hp.id, '\"}')))]",
                 "required": true
               }
             },
@@ -65,7 +86,7 @@
               "name": "sessionHostResourceGroup",
               "type": "Microsoft.Common.DropDown",
               "label": "Session Host Resource Group",
-              "toolTip": "Select the resource group where the automated host pool will create session host virtual machines.",
+              "toolTip": "Select the existing dedicated resource group configured as the Session Host Configuration VM resource group.",
               "constraints": {
                 "allowedValues": "[map(steps('scope').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"Location: ', rg.location, '\",\"value\":\"', rg.name, '\"}')))]",
                 "required": true
@@ -76,7 +97,7 @@
               "type": "Microsoft.Common.CheckBox",
               "label": "Create a policy resource group",
               "defaultValue": false,
-              "toolTip": "Create a resource group for the policy and monitoring managed identities."
+              "toolTip": "Create a resource group for the policy remediation managed identity and optional Disk Encryption Set."
             },
             {
               "name": "existingPolicyResourceGroup",
@@ -103,14 +124,7 @@
               "name": "policyIdentityName",
               "type": "Microsoft.Common.TextBox",
               "label": "Policy Identity Name",
-              "defaultValue": "id-avd-session-host-policy",
-              "constraints": { "required": true }
-            },
-            {
-              "name": "monitoringIdentityName",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Monitoring Identity Name",
-              "defaultValue": "id-avd-session-host-monitoring",
+              "defaultValue": "[concat('id-avd-', last(split(steps('scope').hostPool, '/')), '-policy')]",
               "constraints": { "required": true }
             }
           ]
@@ -120,9 +134,88 @@
           "label": "Encryption and Monitoring",
           "elements": [
             {
+              "name": "diskEncryptionMode",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Session Host Disk Encryption",
+              "defaultValue": "Platform-managed keys",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Platform-managed keys", "value": "None" },
+                  { "label": "Create a Disk Encryption Set", "value": "Create" },
+                  { "label": "Use an existing Disk Encryption Set", "value": "Existing" }
+                ]
+              }
+            },
+            {
+              "name": "encryptionKeyVault",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Encryption Key Vault",
+              "resourceType": "Microsoft.KeyVault/vaults",
+              "toolTip": "Select an existing RBAC-enabled Key Vault where the disk encryption key will be created. HSM modes require a Premium Key Vault.",
+              "visible": "[equals(steps('securityMonitoring').diskEncryptionMode, 'Create')]",
+              "constraints": { "required": true },
+              "scope": {
+                "subscriptionId": "[steps('scope').subscription.subscriptionId]",
+                "location": "[steps('scope').location]"
+              }
+            },
+            {
+              "name": "keyManagementDisks",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Customer-Managed Key Mode",
+              "defaultValue": "Customer-managed HSM key",
+              "visible": "[equals(steps('securityMonitoring').diskEncryptionMode, 'Create')]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Customer-managed software key", "value": "CustomerManaged" },
+                  { "label": "Customer-managed HSM key", "value": "CustomerManagedHSM" },
+                  { "label": "Platform and customer-managed software keys", "value": "PlatformManagedAndCustomerManaged" },
+                  { "label": "Platform and customer-managed HSM keys", "value": "PlatformManagedAndCustomerManagedHSM" }
+                ]
+              }
+            },
+            {
+              "name": "diskEncryptionKeyName",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Disk Encryption Key Name",
+              "defaultValue": "key-avd-session-host-disk",
+              "visible": "[equals(steps('securityMonitoring').diskEncryptionMode, 'Create')]",
+              "constraints": {
+                "required": true,
+                "regex": "^[a-zA-Z0-9-]{1,127}$",
+                "validationMessage": "Use 1-127 letters, numbers, or dashes."
+              }
+            },
+            {
+              "name": "diskEncryptionSetName",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Disk Encryption Set Name",
+              "defaultValue": "des-avd-session-host",
+              "visible": "[equals(steps('securityMonitoring').diskEncryptionMode, 'Create')]",
+              "constraints": {
+                "required": true,
+                "regex": "^[a-zA-Z0-9_-]{1,80}$",
+                "validationMessage": "Use 1-80 letters, numbers, dashes, or underscores."
+              }
+            },
+            {
+              "name": "keyExpirationInDays",
+              "type": "Microsoft.Common.Slider",
+              "label": "Encryption Key Rotation (in Days)",
+              "defaultValue": 180,
+              "showStepMarkers": false,
+              "toolTip": "Days before a new key version is automatically generated in the selected Key Vault.",
+              "min": 30,
+              "max": 180,
+              "visible": "[equals(steps('securityMonitoring').diskEncryptionMode, 'Create')]",
+              "constraints": { "required": true }
+            },
+            {
               "name": "diskEncryptionSetsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('scope').subscription))]",
+              "condition": "[and(equals(steps('securityMonitoring').diskEncryptionMode, 'Existing'), not(empty(steps('scope').subscription)))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('scope').subscription.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02')]"
@@ -133,15 +226,66 @@
               "type": "Microsoft.Common.DropDown",
               "label": "Disk Encryption Set",
               "multiLine": true,
+              "visible": "[equals(steps('securityMonitoring').diskEncryptionMode, 'Existing')]",
               "constraints": {
                 "allowedValues": "[map(steps('securityMonitoring').diskEncryptionSetsApi.value, (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource Group: ', first(skip(split(des.id, '/'), 4)), ', Location: ', des.location, '\",\"value\":\"', des.id, '\"}')))]",
                 "required": true
               }
             },
             {
+              "name": "integrityMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Guest Attestation for integrity monitoring",
+              "defaultValue": true
+            },
+            {
+              "name": "encryptionAtHost",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Enable encryption at host",
+              "defaultValue": true
+            },
+            {
+              "name": "diskSizeGB",
+              "type": "Microsoft.Common.TextBox",
+              "label": "OS Disk Size (GB)",
+              "defaultValue": "0",
+              "toolTip": "Use 0 to preserve the image default size.",
+              "constraints": {
+                "required": true,
+                "regex": "^[0-9]+$",
+                "validationMessage": "Enter zero or a positive whole number."
+              }
+            },
+            {
+              "name": "enableAcceleratedNetworking",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Enable accelerated networking",
+              "defaultValue": true
+            },
+            {
+              "name": "disableManagedDiskPublicNetworkAccess",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Disable public network access on managed disks",
+              "defaultValue": false,
+              "toolTip": "Sets public network access to Disabled and network access policy to DenyAll. No Disk Access resource is created or associated."
+            },
+            {
+              "name": "virtualMachinesTimeZone",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Session Host Time Zone",
+              "defaultValue": "Eastern Standard Time",
+              "constraints": { "required": true }
+            },
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Enable Azure Monitor Agent and AVD Insights data collection",
+              "defaultValue": true
+            },
+            {
               "name": "dataCollectionRulesApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('scope').subscription))]",
+              "condition": "[and(steps('securityMonitoring').enableMonitoring, not(empty(steps('scope').subscription)))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('scope').subscription.id, '/providers/Microsoft.Insights/dataCollectionRules?api-version=2023-03-11')]"
@@ -152,6 +296,7 @@
               "type": "Microsoft.Common.DropDown",
               "label": "AVD Insights Data Collection Rule",
               "multiLine": true,
+              "visible": "[steps('securityMonitoring').enableMonitoring]",
               "constraints": {
                 "allowedValues": "[map(steps('securityMonitoring').dataCollectionRulesApi.value, (dcr) => parse(concat('{\"label\":\"', dcr.name, '\",\"description\":\"Resource Group: ', first(skip(split(dcr.id, '/'), 4)), ', Location: ', dcr.location, '\",\"value\":\"', dcr.id, '\"}')))]",
                 "required": true
@@ -160,7 +305,7 @@
             {
               "name": "dataCollectionEndpointsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('scope').subscription))]",
+              "condition": "[and(steps('securityMonitoring').enableMonitoring, not(empty(steps('scope').subscription)))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('scope').subscription.id, '/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2023-03-11')]"
@@ -171,6 +316,7 @@
               "type": "Microsoft.Common.DropDown",
               "label": "Data Collection Endpoint",
               "multiLine": true,
+              "visible": "[steps('securityMonitoring').enableMonitoring]",
               "constraints": {
                 "allowedValues": "[map(steps('securityMonitoring').dataCollectionEndpointsApi.value, (dce) => parse(concat('{\"label\":\"', dce.name, '\",\"description\":\"Resource Group: ', first(skip(split(dce.id, '/'), 4)), ', Location: ', dce.location, '\",\"value\":\"', dce.id, '\"}')))]",
                 "required": false
@@ -180,13 +326,15 @@
               "name": "scopeMonitoringToSupportedImages",
               "type": "Microsoft.Common.CheckBox",
               "label": "Restrict monitoring to supported Windows images",
-              "defaultValue": true
+              "defaultValue": true,
+              "visible": "[steps('securityMonitoring').enableMonitoring]"
             },
             {
               "name": "additionalWindowsImageResourceIds",
               "type": "Microsoft.Common.EditableGrid",
               "label": "Additional Custom Image Resource IDs",
               "ariaLabel": "Additional Custom Image Resource IDs",
+              "visible": "[steps('securityMonitoring').enableMonitoring]",
               "constraints": {
                 "width": "Full",
                 "rows": { "count": { "min": 0, "max": 20 } },
@@ -210,10 +358,17 @@
           "label": "FSLogix Configuration",
           "elements": [
             {
+              "name": "configureFSLogix",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Configure FSLogix on session hosts",
+              "defaultValue": false
+            },
+            {
               "name": "identitySolution",
               "type": "Microsoft.Common.DropDown",
               "label": "Identity Solution",
               "defaultValue": "Storage Account Keys",
+              "visible": "[steps('fslogix').configureFSLogix]",
               "constraints": {
                 "required": true,
                 "allowedValues": [
@@ -230,6 +385,7 @@
               "type": "Microsoft.Common.DropDown",
               "label": "Storage Service",
               "defaultValue": "Azure Files",
+              "visible": "[steps('fslogix').configureFSLogix]",
               "constraints": {
                 "required": true,
                 "allowedValues": [
@@ -243,6 +399,7 @@
               "type": "Microsoft.Common.DropDown",
               "label": "FSLogix Container Type(s)",
               "defaultValue": "Profile Container",
+              "visible": "[steps('fslogix').configureFSLogix]",
               "constraints": {
                 "required": true,
                 "allowedValues": [
@@ -258,6 +415,7 @@
               "type": "Microsoft.Common.TextBox",
               "label": "FSLogix VHD Size (MB)",
               "defaultValue": "30000",
+              "visible": "[steps('fslogix').configureFSLogix]",
               "constraints": {
                 "required": true,
                 "regex": "^[1-9][0-9]*$",
@@ -269,10 +427,10 @@
               "type": "Microsoft.Common.EditableGrid",
               "label": "Local Azure Files Storage Account Resource IDs",
               "ariaLabel": "Local Azure Files Storage Account Resource IDs",
-              "visible": "[equals(steps('fslogix').storageService, 'AzureFiles')]",
+              "visible": "[and(steps('fslogix').configureFSLogix, equals(steps('fslogix').storageService, 'AzureFiles'))]",
               "constraints": {
                 "width": "Full",
-                "rows": { "count": { "min": 1, "max": 20 } },
+                "rows": { "count": { "min": 1, "max": 2 } },
                 "columns": [
                   { "id": "resourceId", "header": "Resource ID", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } }
                 ]
@@ -283,10 +441,10 @@
               "type": "Microsoft.Common.EditableGrid",
               "label": "Remote Azure Files Storage Account Resource IDs",
               "ariaLabel": "Remote Azure Files Storage Account Resource IDs",
-              "visible": "[and(equals(steps('fslogix').storageService, 'AzureFiles'), contains(steps('fslogix').containerType, 'CloudCache'))]",
+              "visible": "[and(steps('fslogix').configureFSLogix, equals(steps('fslogix').storageService, 'AzureFiles'), contains(steps('fslogix').containerType, 'CloudCache'))]",
               "constraints": {
                 "width": "Full",
-                "rows": { "count": { "min": 0, "max": 20 } },
+                "rows": { "count": { "min": 0, "max": 2 } },
                 "columns": [
                   { "id": "resourceId", "header": "Resource ID", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } }
                 ]
@@ -297,7 +455,7 @@
               "type": "Microsoft.Common.EditableGrid",
               "label": "Local Azure NetApp Files SMB Server FQDNs",
               "ariaLabel": "Local Azure NetApp Files SMB Server FQDNs",
-              "visible": "[equals(steps('fslogix').storageService, 'AzureNetAppFiles')]",
+              "visible": "[and(steps('fslogix').configureFSLogix, equals(steps('fslogix').storageService, 'AzureNetAppFiles'))]",
               "constraints": {
                 "width": "Full",
                 "rows": { "count": { "min": 1, "max": 20 } },
@@ -311,7 +469,7 @@
               "type": "Microsoft.Common.EditableGrid",
               "label": "Remote Azure NetApp Files SMB Server FQDNs",
               "ariaLabel": "Remote Azure NetApp Files SMB Server FQDNs",
-              "visible": "[and(equals(steps('fslogix').storageService, 'AzureNetAppFiles'), contains(steps('fslogix').containerType, 'CloudCache'))]",
+              "visible": "[and(steps('fslogix').configureFSLogix, equals(steps('fslogix').storageService, 'AzureNetAppFiles'), contains(steps('fslogix').containerType, 'CloudCache'))]",
               "constraints": {
                 "width": "Full",
                 "rows": { "count": { "min": 0, "max": 20 } },
@@ -325,6 +483,7 @@
               "type": "Microsoft.Common.EditableGrid",
               "label": "Object-Specific Settings Group Names",
               "ariaLabel": "Object-Specific Settings Group Names",
+              "visible": "[steps('fslogix').configureFSLogix]",
               "constraints": {
                 "width": "Full",
                 "rows": { "count": { "min": 0, "max": 20 } },
@@ -420,8 +579,9 @@
               "name": "tags",
               "type": "Microsoft.Common.TagsByResource",
               "resources": [
+                "Microsoft.Resources/resourceGroups",
                 "Microsoft.ManagedIdentity/userAssignedIdentities",
-                "Microsoft.Authorization/policyAssignments"
+                "Microsoft.Compute/diskEncryptionSets"
               ]
             }
           ]
@@ -431,16 +591,30 @@
     "outputs": {
       "parameters": {
         "location": "[steps('scope').location]",
+        "hostPoolResourceId": "[steps('scope').hostPool]",
         "sessionHostResourceGroupName": "[steps('scope').sessionHostResourceGroup]",
         "policyResourceGroupName": "[if(steps('scope').createPolicyResourceGroup, steps('scope').newPolicyResourceGroupName, steps('scope').existingPolicyResourceGroup)]",
         "createPolicyResourceGroup": "[steps('scope').createPolicyResourceGroup]",
         "policyIdentityName": "[steps('scope').policyIdentityName]",
-        "monitoringIdentityName": "[steps('scope').monitoringIdentityName]",
-        "diskEncryptionSetResourceId": "[steps('securityMonitoring').diskEncryptionSet]",
-        "dataCollectionRuleResourceId": "[steps('securityMonitoring').dataCollectionRule]",
+        "deployDiskEncryptionSet": "[equals(steps('securityMonitoring').diskEncryptionMode, 'Create')]",
+        "diskEncryptionSetResourceId": "[if(equals(steps('securityMonitoring').diskEncryptionMode, 'Existing'), steps('securityMonitoring').diskEncryptionSet, '')]",
+        "encryptionKeyVaultResourceId": "[if(equals(steps('securityMonitoring').diskEncryptionMode, 'Create'), steps('securityMonitoring').encryptionKeyVault.id, '')]",
+        "keyManagementDisks": "[steps('securityMonitoring').keyManagementDisks]",
+        "diskEncryptionKeyName": "[steps('securityMonitoring').diskEncryptionKeyName]",
+        "diskEncryptionSetName": "[steps('securityMonitoring').diskEncryptionSetName]",
+        "keyExpirationInDays": "[steps('securityMonitoring').keyExpirationInDays]",
+        "enableMonitoring": "[steps('securityMonitoring').enableMonitoring]",
+        "dataCollectionRuleResourceId": "[if(steps('securityMonitoring').enableMonitoring, steps('securityMonitoring').dataCollectionRule, '')]",
         "dataCollectionEndpointResourceId": "[coalesce(steps('securityMonitoring').dataCollectionEndpoint, '')]",
         "scopeMonitoringToSupportedImages": "[steps('securityMonitoring').scopeMonitoringToSupportedImages]",
         "additionalWindowsImageResourceIds": "[map(steps('securityMonitoring').additionalWindowsImageResourceIds, (image) => image.resourceId)]",
+        "integrityMonitoring": "[steps('securityMonitoring').integrityMonitoring]",
+        "encryptionAtHost": "[steps('securityMonitoring').encryptionAtHost]",
+        "diskSizeGB": "[steps('securityMonitoring').diskSizeGB]",
+        "enableAcceleratedNetworking": "[steps('securityMonitoring').enableAcceleratedNetworking]",
+        "disableManagedDiskPublicNetworkAccess": "[steps('securityMonitoring').disableManagedDiskPublicNetworkAccess]",
+        "virtualMachinesTimeZone": "[steps('securityMonitoring').virtualMachinesTimeZone]",
+        "configureFSLogix": "[steps('fslogix').configureFSLogix]",
         "fslogixConfiguration": "[parse(concat('{\"identitySolution\":\"', steps('fslogix').identitySolution, '\",\"storageService\":\"', steps('fslogix').storageService, '\",\"containerType\":\"', steps('fslogix').containerType, '\",\"fileShareNames\":', string(if(contains(steps('fslogix').containerType, 'OfficeContainer'), parse('[\"profile-containers\",\"office-containers\"]'), parse('[\"profile-containers\"]'))), ',\"localStorageAccountResourceIds\":', string(if(equals(steps('fslogix').storageService, 'AzureFiles'), map(steps('fslogix').localStorageAccountResourceIds, (item) => item.resourceId), parse('[]'))), ',\"remoteStorageAccountResourceIds\":', string(if(and(equals(steps('fslogix').storageService, 'AzureFiles'), contains(steps('fslogix').containerType, 'CloudCache')), map(steps('fslogix').remoteStorageAccountResourceIds, (item) => item.resourceId), parse('[]'))), ',\"localNetAppServerFqdns\":', string(if(equals(steps('fslogix').storageService, 'AzureNetAppFiles'), map(steps('fslogix').localNetAppServerFqdns, (item) => item.fqdn), parse('[]'))), ',\"remoteNetAppServerFqdns\":', string(if(and(equals(steps('fslogix').storageService, 'AzureNetAppFiles'), contains(steps('fslogix').containerType, 'CloudCache')), map(steps('fslogix').remoteNetAppServerFqdns, (item) => item.fqdn), parse('[]'))), ',\"objectSpecificSettingsGroups\":', string(map(steps('fslogix').objectSpecificSettingsGroups, (group) => group.name)), ',\"profileSizeInMBs\":', steps('fslogix').profileSizeInMBs, '}'))]",
         "artifactsContainerUri": "[if(and(steps('customizations').enableCustomizations, not(empty(steps('customizations').storageAccount))), concat(steps('customizations').storageAccount.blobEndpoint, steps('customizations').containerName), '')]",
         "artifactsUserAssignedIdentityResourceId": "[if(steps('customizations').enableCustomizations, steps('customizations').managedIdentity.id, '')]",

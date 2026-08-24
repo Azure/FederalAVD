@@ -105,6 +105,9 @@ pool they monitor.
   Enable diagnostics on each host pool: **Host Pool → Diagnostic settings → Send to Log Analytics**.
 - An existing **Action Group** at the **global** location in the same subscription.
   Service Health activity log alerts require a global action group.
+  AVD Shared Services intentionally does not create this resource: notification receivers,
+  webhooks, and incident-routing configuration should remain owned by the central operations or
+  incident-response team.
   See [Creating a Global Action Group](#creating-a-global-action-group) below.
 - **Permissions** to deploy resources and assign RBAC roles at the subscription scope.
 

@@ -17,7 +17,8 @@ param (
     [string]$Shares,
     [string]$SizeInMBs,
     [string]$StorageAccountDNSSuffix,
-    [string]$StorageService
+    [string]$StorageService,
+    [string]$TimeZone
 )
 
 #region Functions
@@ -410,6 +411,7 @@ write-log -message "*** Parameter Values ***"
 Write-Log -message "AmdVmSize: $AmdVmSize"
 Write-Log -message "NvidiaVmSize: $NvidiaVmSize"
 Write-Log -message "DisableUpdates: $DisableUpdates"
+Write-Log -message "TimeZone: $TimeZone"
 [bool]$ConfigureFSLogix = [System.Convert]::ToBoolean($ConfigureFSLogix)
 Write-Log -message "ConfigureFSLogix: $ConfigureFSLogix"
 if ($SizeInMBs -ne '' -and $null -ne $SizeInMBs) {
@@ -437,6 +439,9 @@ Else {
 Write-Log -message "ProfileShareName: $ProfileShareName"
 Write-Log -message "OfficeShareName: $OfficeShareName"
 Write-Log -message "StorageService: $StorageService"
+
+Set-TimeZone -Id $TimeZone
+Write-Log -message "Time Zone set to: $TimeZone"
 
 Write-Log -message "*** Building Array of Registry Settings ***"
 $RegSettings = New-Object System.Collections.ArrayList
@@ -553,10 +558,10 @@ If ($ConfigureFSLogix) {
                 Write-Log -message "RemoteProfileContainerPath: '\\$($RemoteNetAppServers[0])\$($ProfileShareName)'"
                 $RemoteCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($RemoteNetAppServers[0])\$($ProfileShareName)")
                 Write-Log -message "RemoteCloudCacheProfileContainerPath: 'type=smb,connectionString=\\$($RemoteNetAppServers[0])\$($ProfileShareName)"
-                If ($RemoteNetAppShares.Length -gt 1 -and $OfficeShareName) {
+                If ($RemoteNetAppServers.Length -gt 1 -and $OfficeShareName) {
                     $RemoteOfficeContainerPaths.Add("\\$($RemoteNetAppServers[1])\$($OfficeShareName)")
                     Write-Log -message "RemoteOfficeContainerPath: '\\$($RemoteNetAppServers[1])\$($OfficeShareName)'"
-                    $RemoteCloudCacheOfficeContainers.Add("type=smb,connectionString=\\$($RemoteNetAppServers[1])\$($OfficeShareName)")
+                    $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($RemoteNetAppServers[1])\$($OfficeShareName)")
                     Write-Log -message "RemoteCloudCacheOfficeContainerPath: 'type=smb,connectionString=\\$($RemoteNetAppServers[1])\$($OfficeShareName)'"
                 }        
             }
@@ -648,10 +653,10 @@ If ($ConfigureFSLogix) {
             If ($RemoteStorageAccountNames) {
                 [string]$RemoteProfileContainerPath = $RemoteProfileContainerPaths[$i]
                 Write-Log -message "RemoteProfileContainerPath: '$RemoteProfileContainerPath'"
-                [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfilePaths[$i]
+                [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfileContainerPaths[$i]
                 Write-Log -message "RemoteCloudCacheProfileContainerPath: '$RemoteCloudCacheProfileContainerPath'"
-                [array]$ProfileContainerPaths = @($LocalProfileContainerPath + $RemoteProfileContainerPath)
-                [array]$CloudCacheProfileContainerPaths = @($LocalCloudCacheProfileContainerPath + $RemoteCloudCacheProfileContainerPath)
+                [array]$ProfileContainerPaths = @($LocalProfileContainerPath, $RemoteProfileContainerPath)
+                [array]$CloudCacheProfileContainerPaths = @($LocalCloudCacheProfileContainerPath, $RemoteCloudCacheProfileContainerPath)
             }
             Else {
                 [array]$ProfileContainerPaths = @($LocalProfileContainerPath)
@@ -677,10 +682,10 @@ If ($ConfigureFSLogix) {
                 If ($RemoteStorageAccountNames) {
                     [string]$RemoteOfficeContainerPath = $RemoteOfficeContainerPaths[$i]
                     Write-Log -message "RemoteOfficeContainerPath: '$RemoteOfficeContainerPath'"
-                    [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficePaths[$i]
+                    [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficeContainerPaths[$i]
                     Write-Log -message "RemoteCloudCacheOfficeContainerPath: '$RemoteCloudCacheOfficeContainerPath'"
-                    [array]$OfficeContainerPaths = @($LocalOfficeContainerPath + $RemoteOfficeContainerPath)
-                    [array]$CloudCacheOfficeContainerPaths = @($LocalCloudCacheOfficeContainerPath + $RemoteCloudCacheOfficeContainerPath)
+                    [array]$OfficeContainerPaths = @($LocalOfficeContainerPath, $RemoteOfficeContainerPath)
+                    [array]$CloudCacheOfficeContainerPaths = @($LocalCloudCacheOfficeContainerPath, $RemoteCloudCacheOfficeContainerPath)
                 }
                 Else {
                     [array]$OfficeContainerPaths = @($LocalOfficeContainerPath)

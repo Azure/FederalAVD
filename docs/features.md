@@ -148,7 +148,9 @@ This is the traditional hybrid identity model where both user accounts and sessi
 **FSLogix Storage:**
 
 - Supports both Azure Files and Azure NetApp Files
-- Storage resources are domain-joined to Active Directory
+- Azure Files storage accounts are registered in Active Directory by creating storage computer
+  objects; the temporary deployment VM remains in a workgroup
+- Azure NetApp Files domain integration still requires the temporary deployment VM to join the domain
 - Kerberos authentication with AES256 or RC4 encryption
 - See [FSLogix Profile Storage](#fslogix-profile-storage) section below for complete configuration details
 
@@ -160,7 +162,7 @@ domainName = 'contoso.com'                                   // Required: Domain
 domainJoinUserPrincipalName = 'svc-avd@contoso.com'          // Required (unless credentialsKeyVaultResourceId is provided)
 domainJoinUserPassword = 'SecurePassword123!'                // Required (unless credentialsKeyVaultResourceId is provided)
 credentialsKeyVaultResourceId = '<resourceId>'               // Optional: Key Vault with domain join credentials
-vmOUPath = 'OU=AVD,OU=Computers,DC=contoso,DC=com'           // Optional: OU for session hosts
+vmOUPath = 'OU=AVD,OU=Computers,DC=contoso,DC=com'           // Optional: Session hosts; storage objects inherit this when fslogixOUPath is empty
 ```
 
 ### Entra Domain Services
@@ -182,7 +184,8 @@ This cloud-managed domain service option provides domain services without requir
 **FSLogix Storage:**
 
 - Supports Azure Files only (Azure NetApp Files not supported)
-- Storage accounts are domain-joined to Entra Domain Services
+- Azure Files storage accounts are registered with Entra Domain Services; the temporary deployment
+  VM remains in a workgroup and uses explicit credentials for directory operations
 - See [FSLogix Profile Storage](#fslogix-profile-storage) section below for complete configuration details
 
 **Parameter Configuration:**
@@ -193,7 +196,7 @@ domainName = 'contoso.com'                                   // Required: Domain
 domainJoinUserPrincipalName = 'svc-avd@contoso.com'          // Required (unless credentialsKeyVaultResourceId is provided)
 domainJoinUserPassword = 'SecurePassword123!'                // Required (unless credentialsKeyVaultResourceId is provided)
 credentialsKeyVaultResourceId = '<resourceId>'               // Optional: Key Vault with domain join credentials
-vmOUPath = 'OU=AADDC Computers,DC=contoso,DC=com'            // Optional: OU for session hosts
+vmOUPath = 'OU=AADDC Computers,DC=contoso,DC=com'            // Optional: Session hosts; storage objects inherit this when fslogixOUPath is empty
 ```
 
 ### Entra Kerberos (Hybrid)
@@ -205,9 +208,10 @@ This hybrid approach allows session hosts to be Entra joined while still support
 - On-premises Active Directory Domain Services
 - Entra Id Connect with Password Hash Synchronization or Pass-through Authentication
 - Entra Id Kerberos functionality enabled
-- Optionally, network line of site from the session host vnet to the domain controller(s) so the deployment vm can:
-  - Configure the domain name and domain guid in the Entra Kerberos settings
-  - Apply least privilege NTFS permissions or sharding via NTFS permissions.
+- When configuring group-scoped NTFS access or permission-based sharding, DNS and network
+  connectivity from the temporary deployment VM subnet to an AD DS domain controller
+- An AD lookup account with read access to domain and group information for resolving synchronized
+  group names to on-premises SIDs
 
 **Session Host Behavior:**
 
@@ -231,11 +235,10 @@ This hybrid approach allows session hosts to be Entra joined while still support
 
 ```bicep
 identitySolution = 'EntraKerberos-Hybrid'
-domainName = 'contoso.com'                                      // Optional: Required for sharding or least privilege NTFS
+domainName = 'contoso.com'                                      // Optional: Required for sharding or group-scoped NTFS access
 domainJoinUserPrincipalName = 'svc-avd@contoso.com'             // Optional: Required for sharding/NTFS config
 domainJoinUserPassword = 'SecurePassword123!'                   // Optional: Required for sharding/NTFS config
 credentialsKeyVaultResourceId = '<resourceId>'                  // Optional: Alternative to providing credentials directly
-vmOUPath = 'OU=AVD,OU=Computers,DC=contoso,DC=com'              // Optional: OU for deployment VM
 fslogixAppUpdateUserAssignedIdentityResourceId = '<resourceId>' // Optional: Required for automated configuration
 ```
 
@@ -328,8 +331,14 @@ FSLogix storage authentication and configuration depends on your identity soluti
 
 **Domain Integration Requirements:**
 
-- **Active Directory Domain Services & Entra Domain Services**: Storage accounts/volumes are domain-joined; requires deployment VM for domain join and NTFS configuration
-- **Entra Kerberos**: Storage accounts use Entra Kerberos authentication; deployment VM required only when configuring sharding or least-privilege NTFS permissions
+- **Azure Files with Active Directory Domain Services or Entra Domain Services**: The workgroup
+  deployment VM uses explicit credentials and ADWS to create or manage the storage account computer
+  objects and configure NTFS permissions. The deployment VM itself is not domain-joined.
+- **Azure Files with Entra Kerberos**: The storage account uses Entra Kerberos and the deployment VM
+  remains in a workgroup. AD DS connectivity and lookup credentials are required only when resolving
+  hybrid groups for sharding or group-scoped NTFS access.
+- **Azure NetApp Files**: The temporary deployment VM is domain-joined because the NTFS workflow
+  mounts SMB volumes and applies permissions through Windows file-system APIs.
 - **Entra Id**: Storage account keys securely stored on session hosts using credential manager; no domain integration
 
 ### Container Types
@@ -370,7 +379,7 @@ Define security groups that control access to FSLogix storage:
 **User Groups (`fslogixUserGroups`):**
 
 - Security groups whose members need access to FSLogix storage
-- Required when using sharding or configuring least-privilege NTFS permissions
+- Required when using sharding or configuring group-scoped NTFS access
 - For domain-based solutions: Use on-premises AD or Entra Domain Services group names
 - For Entra Kerberos/EntraId solutions: Use Entra group names
 
@@ -483,8 +492,9 @@ When using Azure NetApp Files (`fslogixStorageService = 'AzureNetAppFiles Standa
 
 **Configuration Resources:**
 
-- Deployment Virtual Machine (for domain join operations and NTFS configuration)
+- Deployment Virtual Machine (for storage identity registration and NTFS configuration)
   - Network Interface and OS Disk
+  - Remains in a workgroup for Azure Files; domain-joins only for Azure NetApp Files
   - Automatically removed after configuration is complete
 - User Assigned Managed Identity
   - For Entra Kerberos: Can automate App Registration configuration via Microsoft Graph

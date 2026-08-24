@@ -470,8 +470,9 @@ module confidentialVmCmk '../shared/modules/customerManagedKeys/customerManagedK
 // Network ACLs applied to all storage accounts in this deployment.
 // bypass:'None' is intentional — image management storage does not require Azure service access.
 // defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
-var storageHasNetworkRestrictions = !empty(storagePermittedIPs) || !empty(storageServiceEndpointSubnetResourceIds) || storageNetworkAccess == 'PrivateEndpoint'
-var storageIpRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
+var effectiveStoragePermittedIPs = filter(storagePermittedIPs, ip => !empty(trim(ip)))
+var storageHasNetworkRestrictions = !empty(effectiveStoragePermittedIPs) || !empty(storageServiceEndpointSubnetResourceIds) || storageNetworkAccess == 'PrivateEndpoint'
+var storageIpRules = [for ip in effectiveStoragePermittedIPs: { value: ip, action: 'Allow' }]
 var storageVnetRules = [for id in storageServiceEndpointSubnetResourceIds: { id: id, action: 'Allow' }]
 var storageNetworkAcls = {
   bypass: 'None'
@@ -492,7 +493,7 @@ module assetsStorageAccount '../shared/modules/storage/storageAccounts/deploy.bi
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
     networkAcls: storageNetworkAcls
-    publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(storagePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(effectiveStoragePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
     sasExpirationPeriod: sasExpirationPeriod
     cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'
@@ -579,7 +580,7 @@ module logsStorageAccount '../shared/modules/storage/storageAccounts/deploy.bice
     allowSharedKeyAccess: storageAllowSharedKeyAccess
     requireInfrastructureEncryption: true
     networkAcls: storageNetworkAcls
-    publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(storagePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: (storageNetworkAccess == 'PrivateEndpoint' && empty(effectiveStoragePermittedIPs) && empty(storageServiceEndpointSubnetResourceIds)) ? 'Disabled' : 'Enabled'
     sasExpirationPeriod: sasExpirationPeriod
     cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged' && !empty(encryptionKeyVaultResourceId)
       ? '${encryptionKeyVault!.properties.vaultUri}keys/${storageEncryptionKeyName}'

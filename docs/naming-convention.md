@@ -244,6 +244,7 @@ You never set `purpose` manually. The Bicep engine assigns the correct purpose s
 | RG (Control Plane) | `control-plane` |
 | RG (Hosts) | `{identifier}-hosts` |
 | RG (Storage) | `{identifier}-storage` |
+| RG (Standalone shared FSLogix storage) | `fslogix-storage` by default |
 | RG (Operations) | `operations` |
 | RG (Monitoring) | `monitoring` |
 | Key Vault (Secrets) | `sec-{unique}` — the 6-char `uniqueString()` is **embedded in the purpose slot** |
@@ -282,7 +283,7 @@ The `uniqueString()` seed is:
 - With a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName)`
 - Without a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
 
-> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `securityAndMonitoring.bicep` deployment. Deploy `securityAndMonitoring.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
+> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `sharedServices.bicep` deployment. Deploy `sharedServices.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
 
 ### Storage Account — alphanumeric only, max 24
 
@@ -316,9 +317,10 @@ To produce a **consistent naming convention** across all solutions, pass the **s
 | Solution | Parameter name | Notes |
 | --- | --- | --- |
 | `hostpools/hostpool.bicep` | `namingConvention` | Full object; naming resolved in `modules/naming.bicep` |
-| `securityAndMonitoring/securityAndMonitoring.bicep` | `namingConvention` | Inline naming; fixed identifiers `operations` (Key Vaults) and `monitoring` (Log Analytics Workspace) |
+| `sharedServices/sharedServices.bicep` | `namingConvention` | Inline naming; fixed identifiers `operations` (Key Vaults) and `monitoring` (Log Analytics Workspace) |
 | `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
 | `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
+| `add-ons/fslogixStorage/main.bicep` | `namingConvention`, `identifier` | Shared storage defaults to fixed identifier `fslogix`; persona-specific storage uses the matching host-pool persona |
 | `add-ons/sessionHostReplacer/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
 | `add-ons/sessionHosts/main.bicep` | *(none)* | VM/disk/NIC patterns via per-resource params; no top-level convention object |
 | `add-ons/storageQuotaManager/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
@@ -517,7 +519,7 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ## Scenario test results
 
-See **[naming-convention-test-results.md](naming-convention-test-results.md)** for a full matrix of 8 scenarios run against the naming engine simulation. All scenarios pass KV name parity between the hostpool inline deployment and the standalone `securityAndMonitoring.bicep` deployment.
+See **[naming-convention-test-results.md](naming-convention-test-results.md)** for a full matrix of 8 scenarios run against the naming engine simulation. All scenarios pass KV name parity between the hostpool inline deployment and the standalone `sharedServices.bicep` deployment.
 
 The 8 scenarios cover:
 

@@ -73,22 +73,20 @@ var storageSuffix = environment().suffixes.storage
 
 var sessionHostCount = length(sessionHostNames)
 
-var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
-var fslogixRemoteStorageAccountNames = [for id in fslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
-var fslogixLocalSAKey1 = identitySolution == 'EntraId' && !empty(fslogixLocalStorageAccountResourceIds)
+var effectiveFslogixLocalStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixLocalStorageAccountResourceIds, 1)
+  : fslogixLocalStorageAccountResourceIds
+var effectiveFslogixRemoteStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixRemoteStorageAccountResourceIds, 1)
+  : fslogixRemoteStorageAccountResourceIds
+var fslogixLocalStorageAccountNames = [for id in effectiveFslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixRemoteStorageAccountNames = [for id in effectiveFslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixLocalStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixLocalStorageAccountResourceIds)
   ? [localStorageAccounts[0].listkeys().keys[0].value]
   : []
-var fslogixLocalSAKey2 = identitySolution == 'EntraId' && length(fslogixLocalStorageAccountResourceIds) > 1
-  ? [localStorageAccounts[1].listkeys().keys[0].value]
-  : []
-var fslogixLocalStorageAccountKeys = union(fslogixLocalSAKey1, fslogixLocalSAKey2)
-var fslogixRemoteAKey1 = identitySolution == 'EntraId' && !empty(fslogixRemoteStorageAccountResourceIds)
+var fslogixRemoteStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixRemoteStorageAccountResourceIds)
   ? [remoteStorageAccounts[0].listkeys().keys[0].value]
   : []
-var fslogixRemoteSAKey2 = identitySolution == 'EntraId' && length(fslogixRemoteStorageAccountResourceIds) > 1
-  ? [remoteStorageAccounts[1].listkeys().keys[0].value]
-  : []
-var fslogixRemoteStorageAccountKeys = union(fslogixRemoteAKey1, fslogixRemoteSAKey2)
 
 var identityType = (!contains(identitySolution, 'DomainServices') || enableMonitoring ? true : false)
   ? (!empty(artifactsUserAssignedIdentityResourceId) ? 'SystemAssigned, UserAssigned' : 'SystemAssigned')
@@ -117,14 +115,14 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existin
 }
 
 resource localStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
-  for resId in fslogixLocalStorageAccountResourceIds: if (identitySolution == 'EntraId' && !empty(fslogixLocalStorageAccountResourceIds)) {
+  for resId in effectiveFslogixLocalStorageAccountResourceIds: if (identitySolution == 'EntraId') {
     name: last(split(resId, '/'))
     scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
   }
 ]
 
 resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
-  for resId in fslogixRemoteStorageAccountResourceIds: if (identitySolution == 'EntraId' && !empty(fslogixRemoteStorageAccountResourceIds)) {
+  for resId in effectiveFslogixRemoteStorageAccountResourceIds: if (identitySolution == 'EntraId') {
     name: last(split(resId, '/'))
     scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
   }

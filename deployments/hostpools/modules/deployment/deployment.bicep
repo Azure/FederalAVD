@@ -13,6 +13,7 @@ param encryptionAtHost bool
 param fslogix bool
 param fslogixAppUpdateUserAssignedIdentityResourceId string
 param hostPoolName string
+param domainJoinDeploymentVirtualMachine bool
 param identitySolution string
 param keyManagementDisks string
 param keyManagementStorageAccounts string
@@ -233,7 +234,7 @@ module virtualMachine '../../../shared/modules/compute/virtualMachines/deploy.bi
           }
         }
       ],
-      (!empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName) && (contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'))
+      (domainJoinDeploymentVirtualMachine && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName))
         ? [
             {
               name: 'JsonADDomainExtension'

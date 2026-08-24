@@ -224,7 +224,7 @@ Subscription
 - **Default:** `false`
 - **Description:** Whether hub VNet has a virtual network gateway (VPN/ExpressRoute)
 
-### Security & Monitoring
+### AVD Shared Services
 
 #### `deployDDoSNetworkProtection`
 
@@ -446,6 +446,22 @@ az deployment sub create \
 ## Outputs
 
 ### `vnetResourceId`
+
+Resource ID of the virtual network created by this deployment. Empty when `deployVnet` is `false`.
+
+### `subnetResourceIds`
+
+Names, purposes, and resource IDs of the subnets actually created in the new virtual network. Empty
+when `deployVnet` is `false`. Select records by `purpose` (`hosts`, `privateEndpoints`, or
+`functionApp`) when wiring downstream deployments rather than relying on array position.
+
+### `privateDnsZoneResourceIds`
+
+Object containing the effective private DNS zone resource IDs, whether each zone was created by
+this deployment or supplied as an existing zone. Properties are `azureBackup`, `azureBlob`,
+`azureFiles`, `azureQueue`, `azureTable`, `azureKeyVault`, `avdFeed`, `avdGlobalFeed`, and
+`azureWebApp`. Pass these values to the corresponding private DNS parameters in AVD Shared
+Services, Image Management, Host Pool, and add-on deployments.
 
 - **Type:** String
 - **Description:** Resource ID of the deployed virtual network

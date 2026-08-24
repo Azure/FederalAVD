@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "15731751108190998330"
+      "templateHash": "15551600331687146735"
     }
   },
   "functions": [
@@ -270,9 +270,9 @@
     "copy": [
       {
         "name": "storageIpRules",
-        "count": "[length(parameters('storagePermittedIPs'))]",
+        "count": "[length(variables('effectiveStoragePermittedIPs'))]",
         "input": {
-          "value": "[parameters('storagePermittedIPs')[copyIndex('storageIpRules')]]",
+          "value": "[variables('effectiveStoragePermittedIPs')[copyIndex('storageIpRules')]]",
           "action": "Allow"
         }
       },
@@ -868,7 +868,8 @@
     "logsContainerName": "image-customization-logs",
     "logsPrivateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
     "logsCustomNetworkInterfaceName": "[if(variables('cnv_rtFirst'), format('{0}-{1}', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('logsPrivateEndpointName')), format('{0}-{1}', variables('logsPrivateEndpointName'), coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
-    "storageHasNetworkRestrictions": "[or(or(not(empty(parameters('storagePermittedIPs'))), not(empty(parameters('storageServiceEndpointSubnetResourceIds')))), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
+    "effectiveStoragePermittedIPs": "[filter(parameters('storagePermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
+    "storageHasNetworkRestrictions": "[or(or(not(empty(variables('effectiveStoragePermittedIPs'))), not(empty(parameters('storageServiceEndpointSubnetResourceIds')))), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
     "storageNetworkAcls": {
       "bypass": "None",
       "defaultAction": "[if(variables('storageHasNetworkRestrictions'), 'Deny', 'Allow')]",
@@ -5090,7 +5091,7 @@
           "networkAcls": {
             "value": "[variables('storageNetworkAcls')]"
           },
-          "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(parameters('storagePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+          "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(variables('effectiveStoragePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },
@@ -6110,7 +6111,7 @@
           "networkAcls": {
             "value": "[variables('storageNetworkAcls')]"
           },
-          "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(parameters('storagePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+          "publicNetworkAccess": "[if(and(and(equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), empty(variables('effectiveStoragePermittedIPs'))), empty(parameters('storageServiceEndpointSubnetResourceIds'))), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "sasExpirationPeriod": {
             "value": "[variables('sasExpirationPeriod')]"
           },

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "12597947663927460884"
+      "templateHash": "1394013684940466548"
     }
   },
   "parameters": {
@@ -7226,7 +7226,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "7265066907351045182"
+              "templateHash": "17736565881569202907"
             }
           },
           "parameters": {
@@ -7432,17 +7432,17 @@
             "copy": [
               {
                 "name": "storageIpRules",
-                "count": "[length(parameters('permittedIPs'))]",
+                "count": "[length(variables('effectivePermittedIPs'))]",
                 "input": {
-                  "value": "[parameters('permittedIPs')[copyIndex('storageIpRules')]]",
+                  "value": "[variables('effectivePermittedIPs')[copyIndex('storageIpRules')]]",
                   "action": "Allow"
                 }
               },
               {
                 "name": "permittedIPRestrictions",
-                "count": "[length(parameters('permittedIPs'))]",
+                "count": "[length(variables('effectivePermittedIPs'))]",
                 "input": {
-                  "ipAddress": "[parameters('permittedIPs')[copyIndex('permittedIPRestrictions')]]",
+                  "ipAddress": "[variables('effectivePermittedIPs')[copyIndex('permittedIPRestrictions')]]",
                   "action": "Allow",
                   "priority": "[add(100, copyIndex('permittedIPRestrictions'))]",
                   "name": "[format('PermittedIP-{0}', copyIndex('permittedIPRestrictions'))]"
@@ -7452,6 +7452,7 @@
             "cloudSuffix": "[replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')]",
             "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
             "peVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
+            "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
             "azureCloudRestriction": [
               {
                 "ipAddress": "AzureCloud",
@@ -7468,7 +7469,7 @@
                 "description": "Deny all access"
               }
             ],
-            "resolvedIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), union(variables('permittedIPRestrictions'), variables('azureCloudRestriction')), null())]",
+            "resolvedIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs')))), union(variables('permittedIPRestrictions'), variables('azureCloudRestriction')), null())]",
             "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
             "azureStoragePrivateDnsZoneResourceIds": "[union(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(and(parameters('enableQueueStorage'), not(empty(parameters('azureQueuePrivateDnsZoneResourceId')))), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(and(parameters('enableTableStorage'), not(empty(parameters('azureTablePrivateDnsZoneResourceId')))), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
             "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'))]",
@@ -7631,11 +7632,11 @@
                   "netFrameworkVersion": "v8.0",
                   "powerShellVersion": "7.5",
                   "ipSecurityRestrictions": "[variables('resolvedIpSecurityRestrictions')]",
-                  "ipSecurityRestrictionsDefaultAction": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), 'Deny', null())]",
-                  "scmIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
-                  "scmIpSecurityRestrictionsDefaultAction": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), 'Deny', null())]",
-                  "scmIpSecurityRestrictionsUseMain": "[if(or(parameters('privateEndpoint'), not(empty(parameters('permittedIPs')))), true(), null())]",
-                  "publicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(parameters('permittedIPs'))), 'Disabled', 'Enabled')]",
+                  "ipSecurityRestrictionsDefaultAction": "[if(or(parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs')))), 'Deny', null())]",
+                  "scmIpSecurityRestrictions": "[if(or(parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs')))), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
+                  "scmIpSecurityRestrictionsDefaultAction": "[if(or(parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs')))), 'Deny', null())]",
+                  "scmIpSecurityRestrictionsUseMain": "[if(or(parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs')))), true(), null())]",
+                  "publicNetworkAccess": "[if(and(parameters('privateEndpoint'), empty(variables('effectivePermittedIPs'))), 'Disabled', 'Enabled')]",
                   "use32BitWorkerProcess": false
                 },
                 "outboundVnetRouting": "[if(empty(parameters('functionAppDelegatedSubnetResourceId')), null(), createObject('allTraffic', true(), 'applicationTraffic', true()))]",

@@ -121,7 +121,7 @@ var depVirtualMachineNicName   = '${depVirtualMachineName}-${cnv_rtCodes.network
 var resourceGroupOperations = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'operations', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var resourceGroupMonitoring = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'monitoring', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
-// Seed matches securityAndMonitoring.bicep exactly.
+// Seed matches sharedServices.bicep exactly.
 var uniqueStringOperations = take(
   !contains(cnv_components, 'location')
     ? uniqueString(subscription().subscriptionId, resourceGroupOperations, virtualMachinesRegion)

@@ -51,7 +51,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' =
       }
     ]
     source: {
-      script: loadTextContent('../../../deployments/shared/scripts/Invoke-Customization.ps1')
+      script: loadTextContent('../../../../../../shared/scripts/Invoke-Customization.ps1')
     }
     timeoutInSeconds: 1800
     treatFailureAsDeploymentFailure: true

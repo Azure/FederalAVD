@@ -12,7 +12,7 @@ Get your Azure Virtual Desktop environment deployed. Pick your path below.
 | --- | --- | --- | --- |
 | 🧪 | **[PoC / Evaluation](#poc-fast-path)** — existing VNet, marketplace images, no compliance requirements | Step 4 only | ~20 min |
 | 🖼️ | **[Custom software, no CMK](#step-2-deploy-image-management-resources)** — pre-install software baked into images | Steps 2 → 3 → 4 | 2–4 hrs |
-| 🏛️ | **[Enterprise / compliance (CMK)](#step-1-deploy-security-and-monitoring-key-vaults-and-log-analytics)** — FedRAMP High, DoD IL4/IL5, CMMC | Steps 1 → 2 → 3 → 4 | 4–8 hrs |
+| 🏛️ | **[Enterprise / compliance (CMK)](#step-1-deploy-avd-shared-services)** — FedRAMP High, DoD IL4/IL5, CMMC | Steps 1 → 2 → 3 → 4 | 4–8 hrs |
 | ✈️ | **[Air-Gapped (Secret / Top Secret)](#-air-gapped-start-here)** — no Blue Button, bring-your-own artifacts, M365/Teams/OneDrive via custom image | Steps 1 → 2 → 3 → 4 | Setup day + deployment |
 | 🌐 | **No existing VNet?** — add [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first to any path above | + Step 0 | +30 min |
 
@@ -42,7 +42,7 @@ Set-AzContext -Subscription '<subscription-id>'
 .\tools\New-TemplateSpecs.ps1 `
     -Location '<region>' `
     -createNetwork $true `
-    -createSecurityAndMonitoring $true `
+    -createSharedServices $true `
     -createImageManagement $true `
     -createCustomImage $true `
     -createHostPool $true `
@@ -68,7 +68,7 @@ customer folder:
 | Template Spec | Save the generated parameters under |
 | --- | --- |
 | AVD Network Spoke | `customer\parameters\networking\<environment>.networking.parameters.json` |
-| AVD Security & Monitoring | `customer\parameters\securityAndMonitoring\<environment>.securityAndMonitoring.parameters.json` |
+| AVD Shared Services | `customer\parameters\sharedServices\<environment>.sharedServices.parameters.json` |
 | AVD Image Management | `customer\parameters\imageManagement\<environment>.imageManagement.parameters.json` |
 | AVD Custom Image | `customer\parameters\imageBuild\<image>.imageBuild.parameters.json` |
 | AVD Host Pool | `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` |
@@ -81,7 +81,7 @@ being committed upstream.
 ### 4. Carry Outputs Forward
 
 After each deployment, copy only the documented outputs required by the next form. For example,
-Security and Monitoring supplies the encryption Key Vault and shared monitoring resource IDs to
+AVD Shared Services supplies the encryption Key Vault and shared monitoring resource IDs to
 Image Management and Host Pool; Image Management supplies gallery, storage, identity, and build
 resource IDs to Image Build; Image Build supplies `customImageResourceId` to Host Pool. Use the
 [cross-team output mapping](#cross-team-output-passing) as the field-by-field reference.
@@ -103,7 +103,7 @@ graph TD
     C --> CUST
     CUST{Need Custom Software<br/>or Images?} -->|No - Marketplace / PoC<br/>CMK available inline| HP
     CUST -->|Yes| CMK{Using Customer<br/>Managed Keys?}
-    CMK -->|Yes| KV[🔒 Step 1: Deploy<br/>Security & Monitoring]
+    CMK -->|Yes| KV[🔒 Step 1: Deploy<br/>AVD Shared Services]
     CMK -->|No| IMG
     KV --> IMG[📦 Step 2: Deploy Image<br/>Management + Artifacts]
     IMG --> BUILD{Build Custom<br/>Image?}
@@ -174,7 +174,7 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 - 🔒 **Domain Services** for hybrid identity (AD DS or Entra Domain Services)
 - 🔒 **Domain Join Account** with permissions ([setup guide](hostpool-deployment.md#domain-permissions))
 - 🔒 **Entra Kerberos** for Azure Files - [Hybrid Guide](entra-kerberos-hybrid.md) | [Cloud-Only Guide](entra-kerberos-cloud-only.md)
-- 🔒 **Key Vaults** (Secrets & Encryption) — only needed upfront when using CMK with custom images; marketplace-only deployments can use inline KV deployment — see [Step 1](#step-1-deploy-security-and-monitoring-key-vaults-and-log-analytics)
+- 🔒 **Key Vaults** (Secrets & Encryption) — only needed upfront when using CMK with custom images; marketplace-only deployments can use inline KV deployment — see [Step 1](#step-1-deploy-avd-shared-services)
 
 ### Detailed Setup Guides
 
@@ -190,7 +190,7 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 | Component | Blue Button | Template Spec | PowerShell/CLI |
 | --- | --- | --- | --- |
 | **Networking** (VNet, subnets, routing) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
-| **Security & Monitoring** (Key Vaults & Log Analytics) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
+| **AVD Shared Services** (Key Vaults, monitoring, and FSLogix backup) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Image Management** (infrastructure) | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Custom Image Build** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
 | **Host Pool** | ✅ Com/Gov | ✅ All clouds | ✅ All clouds |
@@ -234,7 +234,7 @@ conditional on whether networking already exists:
 
 ```text
 Step 0 (optional): Networking
-Step 1 (strongly recommended; required for CMK or policy prerequisites): Security & Monitoring
+Step 1 (strongly recommended; required for CMK or policy prerequisites): AVD Shared Services
 Step 2: Image Management  — deploy infrastructure + upload artifacts
 Step 3: Image Build       — bake M365, Teams, OneDrive, and other software into the image
 Step 4: Host Pool         — deploy session hosts from the custom gallery image
@@ -353,9 +353,10 @@ New-AzDeployment `
 
 ---
 
-## Step 1: Deploy Security and Monitoring (Key Vaults and Log Analytics)
+## Step 1: Deploy AVD Shared Services {#step-1-deploy-avd-shared-services}
 
-**⏭️ Skip this step if:** You don't need custom images with CMK, your subscription has no Azure Policy diagnostic-settings requirements, and you don't need a shared Log Analytics Workspace before Step 2/Step 4. Key Vaults deployed inline during host pool deployment are idempotent — subsequent deployments to the same resource group reuse them, so you don't need to pre-deploy for sharing across host pools.
+**⏭️ Skip this step if:** You do not need custom images with CMK, centralized credentials or
+monitoring, policy prerequisite resources, or a shared FSLogix Azure Files backup vault and policy.
 
 > **IL6/IL7 recommendation:** Do not skip Step 1 by default in Secret or Top Secret. Its centralized
 > logging, monitoring, secrets, and key-management resources support the expected high-impact
@@ -364,22 +365,26 @@ New-AzDeployment `
 
 **Required when:** Using Customer Managed Keys with custom image management — the key vault must exist before deploying image management so the storage account and compute gallery can be encrypted. Also required whenever your subscription has Azure Policy initiatives assigned (common under FedRAMP High, DoD IL4/IL5, and CMMC) that include `DeployIfNotExists` diagnostic-settings policies — those policies need a target Log Analytics Workspace resource ID *before* Key Vaults or storage accounts are created, or remediation fails/leaves resources flagged non-compliant. See [Compliance — Log Analytics Workspace prerequisite](compliance.md#always-on-controls-no-configuration-required) for details. Also useful whenever you want Image Management's storage account diagnostics and the host pool's monitoring to share a single Log Analytics Workspace, since that workspace does not otherwise exist until the host pool deployment (Step 4) creates one.
 
-> **⚠️ Common mistake — sequence matters with CMK:** Deploy Security & Monitoring (this step) **before** Image Management (Step 2). Image Management needs the Key Vault resource ID at creation time to configure encryption on the compute gallery and storage account. Deploying out of order either fails outright or creates unencrypted resources. See [troubleshooting](troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults).
+> **⚠️ Common mistake — sequence matters with CMK:** Deploy AVD Shared Services (this step) **before** Image Management (Step 2). Image Management needs the Key Vault resource ID at creation time to configure encryption on the compute gallery and storage account. Deploying out of order either fails outright or creates unencrypted resources. See [troubleshooting](troubleshooting.md#cmk-deployment-fails-image-management-deployed-before-key-vaults).
 
 ### First Deployment: Template Spec UI
 
-1. In the Azure portal, open **Template Specs** and deploy **AVD Security & Monitoring**.
-2. Use the form to choose credential and encryption Key Vaults, centralized monitoring, and private
-    connectivity. Fields that do not apply remain hidden.
+1. In the Azure portal, open **Template Specs** and deploy **AVD Shared Services**.
+2. Use the form to choose credential and encryption Key Vaults, centralized monitoring, FSLogix
+    backup, and private connectivity. Fields that do not apply remain hidden.
 3. At **Review + create**, download the generated parameters and save them as
-    `customer\parameters\securityAndMonitoring\<environment>.securityAndMonitoring.parameters.json`.
-4. Deploy, then retain the Key Vault, Log Analytics Workspace, DCR, and DCE outputs required by
-    downstream forms.
+    `customer\parameters\sharedServices\<environment>.sharedServices.parameters.json`.
+4. Deploy, then retain the Key Vault, monitoring, FSLogix backup vault, and policy outputs required
+    by downstream forms.
 
 <details>
 <summary><b>Resources and alternative deployment methods</b></summary>
 
-The Security & Monitoring deployment creates a **dedicated operations resource group** (`rg-avd-operations-{loc}`) containing the Key Vaults, and — only when `deployMonitoring` is `true` — a separate **monitoring resource group** (`rg-avd-monitoring-{loc}`) containing the Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint. The monitoring resource group can be deployed to a different subscription than the Key Vaults via `logAnalyticsWorkspaceSubscriptionId` — useful when a centralized monitoring/security team owns a separate subscription.
+The AVD Shared Services deployment creates a **dedicated operations resource group**
+(`rg-avd-operations-{loc}`) containing the Key Vaults and optional shared FSLogix Recovery Services
+vault. When `deployMonitoring` is `true`, it also creates a separate monitoring resource group
+containing the Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection
+Endpoint. The template entry point is `deployments/sharedServices/sharedServices.bicep`.
 
 | Resource | Name Pattern | Purpose |
 | --- | --- | --- |
@@ -388,22 +393,24 @@ The Security & Monitoring deployment creates a **dedicated operations resource g
 | **Log Analytics Workspace** *(optional)* | `law-avd-{loc}` | Central workspace for Key Vault and Image Management storage account diagnostic settings, and host pool monitoring |
 | **AVD Insights Data Collection Rule** *(optional)* | `microsoft-avdi-{loc}` | Shared DCR that every host pool referencing this workspace can reuse via `existingAVDInsightsDataCollectionRuleResourceId`, instead of the first host pool creating its own |
 | **Data Collection Endpoint** *(optional)* | `dce-avd-{loc}` | Shared DCE that every host pool referencing this workspace can reuse via `existingDataCollectionEndpointResourceId` |
+| **Azure Monitor Private Link Scope** *(optional)* | `pls-avd-monitoring-{loc}` | Shared AMPLS and private endpoint for the Log Analytics Workspace and DCE. Azure Monitor private DNS records remain centrally managed. |
+| **FSLogix Recovery Services Vault** *(optional)* | `rsv-avd-files-{loc}` | Shared regional vault and Azure Files snapshot backup policy for pooled host pools and standalone FSLogix storage deployments |
 
 **Custom naming:** These patterns reflect the CAF default. To use a consistent naming convention across all solutions, see the **[Naming Convention guide](naming-convention.md)**.
 
-> **Why deploy this separately?** Deploying Security & Monitoring before image management lets you:
+> **Why deploy this separately?** Deploying AVD Shared Services before Image Management lets you:
 >
 > - Encrypt the compute gallery and artifacts storage account with CMK from the start
 > - Pre-populate credential secrets so the portal form can reference them
 > - Give your security team time to review KV access policies before deployment begins
 > - Stand up one Log Analytics Workspace, DCR, and DCE that Key Vault diagnostics, Image Management storage diagnostics, and every host pool can all share, instead of the first host pool deployment creating its own
 
-### Deploy Security & Monitoring
+### Deploy AVD Shared Services
 
 **Option 1: Azure Portal (Blue Button)** — Commercial & Government clouds only
 
-[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsecurityAndMonitoring%2FsecurityAndMonitoring.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsecurityAndMonitoring%2FuiFormDefinition.json)
-[![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsecurityAndMonitoring%2FsecurityAndMonitoring.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsecurityAndMonitoring%2FuiFormDefinition.json)
+[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsharedServices%2FsharedServices.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsharedServices%2FuiFormDefinition.json)
+[![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsharedServices%2FsharedServices.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FsharedServices%2FuiFormDefinition.json)
 
 **Option 2: PowerShell** — All clouds
 
@@ -416,7 +423,7 @@ $virtualMachineAdminPassword = Read-Host -Prompt "Enter the VM admin password" -
 $virtualMachineAdminUserName = Read-Host -Prompt "Enter the VM admin username" -AsSecureString
 $domainJoinUserPassword = Read-Host -Prompt "Enter the domain join user password" -AsSecureString
 $domainJoinUserPrincipalName = Read-Host -Prompt "Enter the domain join user principal name" -AsSecureString
-$templateFile = Get-ChildItem -Path . -Recurse -Filter 'securityAndMonitoring.json' | Where-Object { $_.FullName -like '*securityAndMonitoring*' } | Select-Object -First 1 -ExpandProperty FullName
+$templateFile = Get-ChildItem -Path . -Recurse -Filter 'sharedServices.json' | Where-Object { $_.FullName -like '*sharedServices*' } | Select-Object -First 1 -ExpandProperty FullName
 Write-Output "Template file found: $templateFile"
 New-AzDeployment `
     -TemplateFile $templateFile `
@@ -434,7 +441,7 @@ New-AzDeployment `
 
 After deployment, note the resource IDs from the deployment outputs:
 
-| Security & Monitoring Output | Used In |
+| AVD Shared Services Output | Used In |
 | :-------------- | :------ |
 | `encryptionKeyVaultResourceId` | Image Management deployment (CMK for storage/gallery) |
 | `secretsKeyVaultResourceId` | Host pool deployment (`existingCredentialsKeyVaultResourceId`) |
@@ -442,6 +449,9 @@ After deployment, note the resource IDs from the deployment outputs:
 | `logAnalyticsWorkspaceResourceId` | Image Management deployment (`logAnalyticsWorkspaceResourceId`) and Host pool deployment (`existingLogAnalyticsWorkspaceResourceId`) — only present when `deployMonitoring` was `true` |
 | `avdInsightsDataCollectionRuleResourceId` | Host pool deployment (`existingAVDInsightsDataCollectionRuleResourceId`) — only present when `deployMonitoring` was `true` |
 | `dataCollectionEndpointResourceId` | Host pool deployment (`existingDataCollectionEndpointResourceId`) — only present when `deployMonitoring` was `true` |
+| `azureMonitorPrivateLinkScopeResourceId` | Host pool deployment (`azureMonitorPrivateLinkScopeResourceId`) and centralized monitoring/DNS automation — empty when AMPLS integration is disabled |
+| `fslogixBackupVaultResourceId` | Pooled host pool (`existingFilesBackupVaultResourceId`) or FSLogix Storage add-on (`recoveryServicesVaultResourceId`) |
+| `fslogixBackupPolicyName` | Pooled host pool (`existingFilesBackupPolicyName`) or FSLogix Storage add-on (`fileSharePolicyName`) |
 
 > **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created inline by the host pool deployment, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpool-deployment.md#security-prerequisites-optional).
 
@@ -749,7 +759,7 @@ In enterprise environments, different teams own different pieces of the infrastr
 | Team | Owns | Deploys |
 | --- | --- | --- |
 | **Platform / Network** | VNet, subnets, NSGs, DNS zones, hub peering | [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) |
-| **Security** | Key Vaults, Log Analytics Workspace, encryption keys, secrets, RBAC | [Step 1: Security & Monitoring](#step-1-deploy-security-and-monitoring-key-vaults-and-log-analytics) |
+| **Security** | Key Vaults, Log Analytics Workspace, encryption keys, secrets, RBAC | [Step 1: AVD Shared Services](#step-1-deploy-avd-shared-services) |
 | **Image / Platform Engineering** | Compute gallery, artifacts storage, image builds | [Step 2: Image Management](#step-2-deploy-image-management-resources) + [Step 3: Image Build](#step-3-build-custom-image-optional) |
 | **AVD Team** | Host pools, session hosts, FSLogix, monitoring | [Step 4: Host Pool](#step-4-deploy-host-pool) |
 
@@ -797,7 +807,7 @@ The **[End-to-End Automation Guide](automation-guide.md)** covers:
 
 ```mermaid
 graph LR
-    KV[🔒 Security & Monitoring] -->|encryptionKeyVaultResourceId\nlogAnalyticsWorkspaceResourceId| IM
+    KV[🔒 AVD Shared Services] -->|encryptionKeyVaultResourceId\nlogAnalyticsWorkspaceResourceId| IM
     IM[📦 Image Management] -->|computeGalleryResourceId\nartifactsBlobContainerUrl\nmanagedIdentityResourceId| IB
     IB[🎨 Image Build] -->|customImageResourceId| HP
     HP[🏢 Host Pool] -->|hostPoolResourceId| SHR

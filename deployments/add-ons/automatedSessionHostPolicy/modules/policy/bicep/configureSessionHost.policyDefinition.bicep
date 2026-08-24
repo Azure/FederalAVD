@@ -1,10 +1,10 @@
 targetScope = 'subscription'
 
-param policyDefinitionName string = 'avdSessionHostConfigureFSLogix-DeployIfNotExists'
-param policyDefinitionDisplayName string = 'Configure FSLogix on AVD session host virtual machines'
-param policyDefinitionDescription string = 'Deploys a VM Run Command that configures FSLogix when the named command has not succeeded.'
+param policyDefinitionName string = 'avdSessionHostConfiguration-DeployIfNotExists'
+param policyDefinitionDisplayName string = 'Configure AVD session host virtual machines'
+param policyDefinitionDescription string = 'Deploys a VM Run Command that configures the time zone, enables time zone redirection, optionally configures FSLogix, and expands the OS partition.'
 
-var configureFSLogixTemplate = loadJsonContent('../templates/RunCommand/ConfigureFSLogix.json')
+var configureSessionHostTemplate = loadJsonContent('../templates/RunCommand/ConfigureSessionHost.json')
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
   name: policyDefinitionName
@@ -31,9 +31,23 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
       }
       runCommandName: {
         type: 'String'
-        defaultValue: 'ConfigureFSLogix'
+        defaultValue: 'ConfigureSessionHost'
         metadata: {
           displayName: 'Run Command name'
+        }
+      }
+      timeZone: {
+        type: 'String'
+        defaultValue: 'Eastern Standard Time'
+        metadata: {
+          displayName: 'Windows time zone'
+        }
+      }
+      configureFSLogix: {
+        type: 'Boolean'
+        defaultValue: false
+        metadata: {
+          displayName: 'Configure FSLogix'
         }
       }
       identitySolution: {
@@ -148,7 +162,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           evaluationDelay: 'AfterProvisioningSuccess'
           roleDefinitionIds: [
             '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
-            '/providers/Microsoft.Authorization/roleDefinitions/81a9662b-bebf-436f-a333-f67b29880f12'
           ]
           existenceCondition: {
             field: 'Microsoft.Compute/virtualMachines/runCommands/provisioningState'
@@ -158,6 +171,9 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
             properties: {
               mode: 'Incremental'
               parameters: {
+                configureFSLogix: {
+                  value: '[parameters(\'configureFSLogix\')]'
+                }
                 fslogixContainerType: {
                   value: '[parameters(\'fslogixContainerType\')]'
                 }
@@ -194,11 +210,14 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                 runCommandName: {
                   value: '[parameters(\'runCommandName\')]'
                 }
+                timeZone: {
+                  value: '[parameters(\'timeZone\')]'
+                }
                 virtualMachineName: {
                   value: '[field(\'name\')]'
                 }
               }
-              template: configureFSLogixTemplate
+              template: configureSessionHostTemplate
             }
           }
         }

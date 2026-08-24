@@ -106,6 +106,31 @@ param existingLogAnalyticsWorkspaceResourceId string = ''
 @description('Optional. The resource ID of the Azure Monitor Private Link Scope (AMPLS) to associate the deployed Log Analytics Workspace and Data Collection Endpoint with. Ignored when "deployMonitoring" is false. There should only be one AMPLS per network that shares the same DNS.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
 
+// FSLogix Backup
+
+@description('Optional. Deploy a shared Recovery Services vault and Azure Files snapshot backup policy for FSLogix storage. The vault is shared by pooled host pools and standalone FSLogix storage deployments in this subscription and region.')
+param deployFSLogixBackupVault bool = false
+
+@description('Optional. Name of the shared Azure Files snapshot backup policy.')
+param fslogixBackupPolicyName string = 'filesharepolicy'
+
+@description('Optional. Number of daily Azure Files snapshots retained by the shared backup policy.')
+@minValue(1)
+@maxValue(365)
+param fslogixBackupRetentionDays int = 30
+
+@description('Optional. Time zone used by the shared Azure Files snapshot backup policy.')
+param fslogixBackupTimeZone string = 'UTC'
+
+@description('Conditional. Resource ID of the Azure Backup private DNS zone used by the FSLogix backup vault private endpoint.')
+param azureBackupPrivateDnsZoneResourceId string = ''
+
+@description('Conditional. Resource ID of the Azure Blob private DNS zone used by the FSLogix backup vault private endpoint.')
+param azureBlobPrivateDnsZoneResourceId string = ''
+
+@description('Conditional. Resource ID of the Azure Queue private DNS zone used by the FSLogix backup vault private endpoint.')
+param azureQueuePrivateDnsZoneResourceId string = ''
+
 // ── Tags ───────────────────────────────────────────────────────────────────────
 
 @description('Optional. Tags to apply to deployed resources, keyed by resource type (e.g., "Microsoft.KeyVault/vaults", "Microsoft.Resources/resourceGroups").')
@@ -175,6 +200,7 @@ var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
 var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
   resourceGroups: resourceAbbreviations.resourceGroups
   keyVaults: resourceAbbreviations.keyVaults
+  recoveryServicesVaults: resourceAbbreviations.recoveryServicesVaults
   logAnalyticsWorkspaces: resourceAbbreviations.logAnalyticsWorkspaces
   dataCollectionEndpoints: resourceAbbreviations.dataCollectionEndpoints
   privateEndpoints: resourceAbbreviations.privateEndpoints
@@ -290,6 +316,18 @@ var secretsKeyVaultName    = take(kvSanitize(buildCustomName(filter(cnv_componen
 
 var encryptionKeyVaultName = take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
 
+var fslogixBackupVaultName = buildCustomName(
+  filter(cnv_components, component => component != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.?recoveryServicesVaults ?? resourceAbbreviations.recoveryServicesVaults,
+  'files',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
 module operationsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = {
@@ -403,6 +441,33 @@ module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = {
   dependsOn: [operationsResourceGroup]
 }
 
+// Shared FSLogix Backup Vault
+
+module fslogixBackupVault '../shared/modules/recoveryServices/fslogixBackupVault.bicep' = if (deployFSLogixBackupVault) {
+  name: 'Operations-FSLogixBackup-${deploymentSuffix}'
+  params: {
+    createVault: true
+    manageBackupPolicy: true
+    vaultName: fslogixBackupVaultName
+    resourceGroupOperations: operationsResourceGroupName
+    location: location
+    deploymentSuffix: deploymentSuffix
+    logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
+    privateEndpoint: privateEndpoint
+    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
+    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
+    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    privateEndpointNameConv: privateEndpointNameConv
+    privateEndpointNICNameConv: privateEndpointNICNameConv
+    tags: tags
+    timeZone: fslogixBackupTimeZone
+    fileSharePolicyName: fslogixBackupPolicyName
+    backupRetentionDays: fslogixBackupRetentionDays
+  }
+  dependsOn: [operationsResourceGroup]
+}
+
 // ── Outputs ────────────────────────────────────────────────────────────────────
 
 @description('The name of the security resource group.')
@@ -437,3 +502,12 @@ output avdInsightsDataCollectionRuleResourceId string = deployMonitoring ? avdIn
 
 @description('The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as "existingDataCollectionEndpointResourceId" to the host pool deployment.')
 output dataCollectionEndpointResourceId string = deployMonitoring ? dataCollectionEndpoint!.outputs.resourceId : ''
+
+@description('The resource ID of the shared FSLogix Recovery Services vault. Pass as "existingFilesBackupVaultResourceId" to pooled host pool deployments or "recoveryServicesVaultResourceId" to the FSLogix Storage add-on.')
+output fslogixBackupVaultResourceId string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.recoveryServicesVaultResourceId : ''
+
+@description('The name of the shared Azure Files snapshot backup policy. Pass as "existingFilesBackupPolicyName" to pooled host pool deployments or "fileSharePolicyName" to the FSLogix Storage add-on.')
+output fslogixBackupPolicyName string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.fileShareBackupPolicyName : ''
+
+@description('The resource ID of the shared Azure Files snapshot backup policy.')
+output fslogixBackupPolicyResourceId string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.fileShareBackupPolicyResourceId : ''

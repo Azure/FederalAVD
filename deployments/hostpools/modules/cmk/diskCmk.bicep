@@ -6,6 +6,8 @@ param keyManagementType string
 param keyExpirationInDays int
 param location string
 param tags object = {}
+@description('Optional. Resource ID stamped as the cm-resource-parent tag on the key and Disk Encryption Set.')
+param parentResourceId string = ''
 param deploymentSuffix string
 param keyName string
 param diskEncryptionSetName string
@@ -19,6 +21,7 @@ module cmk '../../../shared/modules/customerManagedKeys/customerManagedKeys.bice
     keyExpirationInDays: keyExpirationInDays
     location: location
     tags: tags
+    parentResourceId: parentResourceId
     deploymentSuffix: deploymentSuffix
     diskEncryptionConfigs: [
       {

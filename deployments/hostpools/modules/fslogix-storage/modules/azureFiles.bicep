@@ -69,10 +69,11 @@ var storageRedundancySuffix = storageRedundancy == 'ZoneRedundant' ? '_ZRS' : '_
 // Network ACLs for FSLogix storage accounts.
 // AzureServices bypass is required for Azure Files backup and monitoring.
 // defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
-var storageIpRules = [for ip in permittedIPs: { value: ip, action: 'Allow' }]
+var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
+var storageIpRules = [for ip in effectivePermittedIPs: { value: ip, action: 'Allow' }]
 var storageNetworkAcls = {
   bypass: 'AzureServices'
-  defaultAction: (privateEndpoint || !empty(permittedIPs)) ? 'Deny' : 'Allow'
+  defaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : 'Allow'
   ipRules: storageIpRules
   virtualNetworkRules: []
 }
@@ -108,7 +109,7 @@ module storageAccounts '../../../../shared/modules/storage/storageAccounts/deplo
       largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
       sasExpirationPeriod: '180.00:00:00'
       networkAcls: storageNetworkAcls
-      publicNetworkAccess: (privateEndpoint && empty(permittedIPs)) ? 'Disabled' : 'Enabled'
+      publicNetworkAccess: (privateEndpoint && empty(effectivePermittedIPs)) ? 'Disabled' : 'Enabled'
       azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId'
         ? {
             defaultSharePermission: defaultSharePermission
@@ -220,6 +221,7 @@ module configureADDSAuth '../../../../shared/modules/compute/virtualMachines/run
     location: location
     script: loadTextContent('../../../../shared/scripts/Configure-StorageAccountforADDS.ps1')
     parameters: [
+      { name: 'DomainName', value: domainName }
       { name: 'HostPoolName', value: !empty(hostPoolResourceId) ? last(split(hostPoolResourceId, '/'))! : storageAccountNamePrefix }
       { name: 'KerberosEncryptionType', value: kerberosEncryptionType }
       { name: 'OuPath', value: ouPath }
@@ -243,7 +245,7 @@ module configureADDSAuth '../../../../shared/modules/compute/virtualMachines/run
 
 // ─── EntraKerberos Hybrid (with domain info) ───────────────────────────────────
 // Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided.
-// If they were, the deployment helper VM is domain joined. If not, then the deployment helper VM is not domain joined and can't run this configuration.
+// The workgroup deployment helper VM uses these credentials for explicit ADWS operations; it is not domain joined.
 module configureEntraKerberosWithDomainInfo '../../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
   name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
@@ -254,6 +256,7 @@ module configureEntraKerberosWithDomainInfo '../../../../shared/modules/compute/
     script: loadTextContent('../../../../shared/scripts/Configure-StorageAccountforEntraHybrid.ps1')
     parameters: [
       { name: 'DefaultSharePermission', value: defaultSharePermission }
+      { name: 'DomainName', value: domainName }
       { name: 'ResourceManagerUri', value: environment().resourceManager }
       { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
       { name: 'StorageAccountResourceGroupName', value: resourceGroupStorage }
@@ -308,6 +311,7 @@ module SetNTFSPermissions '../../../../shared/modules/compute/virtualMachines/ru
     location: location
     script: loadTextContent('../../../../shared/scripts/Set-NtfsPermissionsAzureFiles.ps1')
     parameters: [
+      { name: 'DomainName', value: domainName }
       { name: 'Shares', value: string(fileShares) }
       { name: 'ShardAzureFilesStorage', value: shardingOptions == 'None' ? 'false' : 'true' }
       { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
@@ -317,12 +321,16 @@ module SetNTFSPermissions '../../../../shared/modules/compute/virtualMachines/ru
       { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
       {
         name: 'UserGroups'
-        value: string(identitySolution == 'EntraKerberos-CloudOnly' && !empty(appUpdateUserAssignedIdentityResourceId)
+        value: string(identitySolution == 'EntraKerberos-CloudOnly'
           ? map(shareUserGroups, group => group.id)
           : !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)
               ? map(shareUserGroups, group => group.name)
               : [])
       }
+    ]
+    protectedParameters: [
+      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
     ]
     treatFailureAsDeploymentFailure: true
   }

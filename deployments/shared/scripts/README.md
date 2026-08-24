@@ -84,7 +84,8 @@ Unified session host initialization script that combines configuration and AVD a
 
 **Execution Phases:**
 
-*Phase 1 — Session Host Configuration*
+##### Phase 1 - Session Host Configuration
+
 - Sets the system time zone
 - Optionally disables Windows Update, Edge, OneDrive, M365, and Teams auto-updates
 - Enables time zone redirection registry policy
@@ -100,7 +101,8 @@ Unified session host initialization script that combines configuration and AVD a
 - Applies all registry settings via `Set-RegistryValue`
 - Resizes the OS disk partition to its maximum supported size
 
-*Phase 2 — AVD Agent Installation*
+##### Phase 2 - AVD Agent Installation
+
 - Detects Server OS and installs `RDS-RD-Server` Windows Feature if needed
 - Skips installation if the VM is already registered (`RDInfraAgent` registry key)
 - Downloads the RDAgent MSI using a two-tier strategy:
@@ -117,7 +119,7 @@ Comprehensive session host configuration including FSLogix, GPU drivers, time zo
 
 - **Used by:** Host Pool Deployment
 - **Parameters:** AmdVmSize, NvidiaVmSize, DisableUpdates, ConfigureFSLogix, CloudCache, IdentitySolution, LocalNetAppServers, LocalStorageAccountNames, LocalStorageAccountKeys, OSSGroups, RemoteNetAppServers, RemoteStorageAccountNames, RemoteStorageAccountKeys, Shares, SizeInMBs, StorageAccountDNSSuffix, StorageService, TimeZone
-- **Features:** 
+- **Features:**
   - FSLogix profile container configuration with Cloud Cache support
   - GPU driver installation (AMD/NVIDIA)
   - Time zone configuration
@@ -125,12 +127,13 @@ Comprehensive session host configuration including FSLogix, GPU drivers, time zo
   - Storage account configuration for profiles
 - **Output:** Session host configuration logs
 
-#### [Set-FSLogixSessionHostConfiguration.ps1](Set-FSLogixSessionHostConfiguration.ps1)
+#### [Set-AutomatedSessionHostConfiguration.ps1](Set-AutomatedSessionHostConfiguration.ps1)
 
-Dedicated FSLogix configuration for session hosts.
+Unified post-provisioning configuration for service-managed session hosts.
 
-- **Used by:** Host Pool Deployment
-- **Purpose:** Configure FSLogix registry settings for profile and ODFC containers
+- **Used by:** Automated Session Host Policy add-on
+- **Purpose:** Set the Windows time zone, enable time zone redirection, optionally configure
+  FSLogix registry settings, and expand the guest OS partition
 
 #### [Set-ConfidentialVMOSDiskEncryptionKey.ps1](Set-ConfidentialVMOSDiskEncryptionKey.ps1)
 
@@ -145,10 +148,11 @@ Configures OS disk encryption keys for confidential VMs.
 
 Configures Azure Files storage account for Active Directory Domain Services authentication.
 
-- **Used by:** Host Pool Deployment
-- **Parameters:** DomainJoinUserPwd, DomainJoinUserPrincipalName, HostPoolName, KerberosEncryptionType, OuPath, ResourceManagerUri, StorageAccountPrefix, StorageAccountResourceGroupName, StorageCount
-- **Features:** 
-  - Domain join storage account computer objects
+- **Used by:** Host Pool Deployment and FSLogix Storage add-on
+- **Parameters:** DomainJoinUserPwd, DomainJoinUserPrincipalName, DomainName, HostPoolName, KerberosEncryptionType, OuPath, ResourceManagerUri, StorageAccountPrefix, StorageAccountResourceGroupName, StorageCount
+- **Features:**
+  - Discover an ADWS-capable domain controller without requiring local domain membership
+  - Create and manage storage account computer objects without requiring local domain membership
   - Configure Kerberos encryption (AES256/RC4)
   - Set SPNs for file share access
 - **Output:** AD DS integration for FSLogix profile storage
@@ -157,19 +161,19 @@ Configures Azure Files storage account for Active Directory Domain Services auth
 
 Configures Azure Files storage account for Entra ID Kerberos authentication (hybrid scenarios).
 
-- **Used by:** Host Pool Deployment
+- **Used by:** Host Pool Deployment and FSLogix Storage add-on
 - **Purpose:** Enable Entra ID Kerberos authentication for FSLogix storage
-- **Features:** Supports hybrid identity scenarios with on-premises AD sync
+- **Features:** Supports hybrid identity scenarios with on-premises AD sync and explicit ADWS discovery
 
 #### [Set-NtfsPermissionsAzureFiles.ps1](Set-NtfsPermissionsAzureFiles.ps1)
 
 Sets NTFS permissions on Azure Files shares for FSLogix profiles.
 
-- **Used by:** Host Pool Deployment
-- **Parameters:** Shares, ShardAzureFilesStorage, StorageAccountPrefix, StorageCount, StorageIndex, StorageSuffix, UserAssignedIdentityClientId, UserGroups
-- **Features:** 
+- **Used by:** Host Pool Deployment and FSLogix Storage add-on
+- **Parameters:** DomainJoinUserPwd, DomainJoinUserPrincipalName, DomainName, Shares, ShardAzureFilesStorage, StorageAccountPrefix, StorageCount, StorageIndex, StorageSuffix, UserAssignedIdentityClientId, UserGroups
+- **Features:**
   - Configure share-level and NTFS permissions
-  - Support for user/group-based access control
+  - Resolve domain groups through an explicitly discovered ADWS server
   - Entra ID SID conversion for cloud-only identities
 - **Output:** Properly secured FSLogix profile shares
 

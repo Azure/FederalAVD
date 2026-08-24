@@ -10,7 +10,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 
 | Page | Description |
 | --- | --- |
-| [Quick Start Guide](quick-start.md) | Step-by-step walkthrough of the full deployment sequence — Security & Monitoring → Image Management → Image Build → Host Pool. Start here for a first deployment. New to FederalAVD? See the [PoC callout in Step 4](quick-start.md#step-4-deploy-host-pool). [Top 5 first-deployment mistakes](troubleshooting.md#top-5-first-deployment-mistakes). |
+| [Quick Start Guide](quick-start.md) | Step-by-step walkthrough of the full deployment sequence — AVD Shared Services → Image Management → Image Build → Host Pool. Start here for a first deployment. New to FederalAVD? See the [PoC callout in Step 4](quick-start.md#step-4-deploy-host-pool). [Top 5 first-deployment mistakes](troubleshooting.md#top-5-first-deployment-mistakes). |
 | [Design](design.md) | Architecture overview — resource organization, naming conventions, resource group layout, and CAF alignment. |
 | [Features](features.md) | Capability overview — Zero Trust architecture, multi-subscription support, encryption options, and key solution characteristics. Intro to federal ZT mandates. |
 | [Solution Limitations](limitations.md) | Known constraints and unsupported scenarios — identity solution limitations, feature gaps, and workarounds. Read before designing a deployment. |
@@ -76,7 +76,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 
 | Page | Description |
 | --- | --- |
-| [Parameters Reference](parameters.md) | Parameter documentation for all deployment templates — hostpool, imageBuild, imageManagement, securityAndMonitoring, networking — with compliance quick-reference. |
+| [Parameters Reference](parameters.md) | Parameter documentation for all deployment templates — hostpool, imageBuild, imageManagement, sharedServices, networking — with compliance quick-reference. |
 | [Naming Convention](naming-convention.md) | Full naming convention reference — `namingConvention` parameter schema, CAF default patterns, RT-first/RT-last, segment descriptions, and aligned cross-solution examples. |
 | [Naming Convention Test Results](naming-convention-test-results.md) | Auto-generated output of 8 naming scenarios exercised across all solutions — KV parity checks, resource names, add-on inference. |
 | [Troubleshooting](troubleshooting.md) | Common deployment errors and fixes — role assignment failures, image build issues, FSLogix authentication errors, and more. |

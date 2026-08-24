@@ -93,7 +93,7 @@ The Azure identity running this deployment needs:
 
 - **Type:** Object
 - **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
-- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (securityAndMonitoring, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (sharedServices, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
 
 ### Storage Configuration
 
@@ -204,7 +204,7 @@ Image version replication to a remote region is configured per imageBuild deploy
 
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of an existing Log Analytics Workspace for storage account diagnostic logs. When provided, diagnostic settings are enabled on both the artifacts and build logs storage accounts. Leave empty to skip diagnostic settings. See the [Security & Monitoring deployment](../securityAndMonitoring/) for an option to deploy a new shared workspace (`deployMonitoring`), then pass its `logAnalyticsWorkspaceResourceId` output here.
+- **Description:** Resource ID of an existing Log Analytics Workspace for storage account diagnostic logs. When provided, diagnostic settings are enabled on both the artifacts and build logs storage accounts. Leave empty to skip diagnostic settings. See the [AVD Shared Services deployment](../sharedServices/) for an option to deploy a new shared workspace (`deployMonitoring`), then pass its `logAnalyticsWorkspaceResourceId` output here.
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-monitoring-va/providers/Microsoft.OperationalInsights/workspaces/law-avd-va`
 
 ### Build Logs Storage Account

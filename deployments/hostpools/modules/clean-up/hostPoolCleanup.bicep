@@ -9,7 +9,6 @@ param deploymentVirtualMachineName string
 param roleAssignmentIds array
 param virtualMachineNames array
 
-// Remove run commands left on session host VMs from earlier deployment stages
 module removeRunCommands '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Remove-RunCommands-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
@@ -18,7 +17,8 @@ module removeRunCommands '../../../shared/modules/compute/virtualMachines/runCom
     name: 'Remove-RunCommands-${deploymentSuffix}'
     location: location
     script: loadTextContent('../../../shared/scripts/Remove-RunCommands.ps1')
-    asyncExecution: true
+    timeoutInSeconds: 3600
+    treatFailureAsDeploymentFailure: true
     parameters: [
       { name: 'ResourceManagerUri', value: environment().resourceManager }
       { name: 'SubscriptionId', value: subscription().subscriptionId }
@@ -29,7 +29,6 @@ module removeRunCommands '../../../shared/modules/compute/virtualMachines/runCom
   }
 }
 
-// Remove role assignments on other resource groups so the deployment resource group can be deleted
 module removeRoleAssignments '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Remove-RoleAssignments-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
@@ -38,7 +37,8 @@ module removeRoleAssignments '../../../shared/modules/compute/virtualMachines/ru
     name: 'Remove-RoleAssignments-${deploymentSuffix}'
     location: location
     script: loadTextContent('../../../shared/scripts/Remove-RoleAssignments.ps1')
-    asyncExecution: true
+    timeoutInSeconds: 900
+    treatFailureAsDeploymentFailure: true
     parameters: [
       { name: 'ResourceManagerUri', value: environment().resourceManager }
       { name: 'RoleAssignmentIds', value: string(roleAssignmentIds) }
@@ -48,7 +48,6 @@ module removeRoleAssignments '../../../shared/modules/compute/virtualMachines/ru
   dependsOn: [removeRunCommands]
 }
 
-// Self-delete the deployment resource group (VM deletes itself and the RG via script)
 module removeDeploymentResourceGroup '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
@@ -67,5 +66,5 @@ module removeDeploymentResourceGroup '../../../shared/modules/compute/virtualMac
       { name: 'UserAssignedIdentityClientId', value: userAssignedIdentityClientId }
     ]
   }
-  dependsOn: [removeRunCommands, removeRoleAssignments]
+  dependsOn: [removeRoleAssignments]
 }

@@ -11,7 +11,7 @@ This solution supports using **Entra Kerberos** for authentication to Azure File
 Session hosts are Microsoft Entra joined, and users are cloud-only identities in Microsoft Entra ID.
 
 > [!NOTE]
-> Microsoft Entra Kerberos for cloud-only identities is generally available in Azure Commercial and Azure US Government. However, share-level Azure RBAC for cloud-only identities — required for least-privilege NTFS permissions and profile sharding — is currently available only in a [subset of Azure Commercial regions](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable#regional-availability-for-microsoft-entra-kerberos). Azure Government is not currently supported for this RBAC capability.
+> Microsoft Entra Kerberos for cloud-only identities is generally available in Azure Commercial and Azure US Government. However, share-level Azure RBAC for cloud-only identities — required for group-scoped NTFS access and profile sharding — is currently available only in a [subset of Azure Commercial regions](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable#regional-availability-for-microsoft-entra-kerberos). Azure Government is not currently supported for this RBAC capability.
 
 For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Authentication for hybrid and cloud-only identities on Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune).
 
@@ -132,13 +132,13 @@ If you provide the Resource ID of the Managed Identity with the required permiss
     * Adds `User.Read`, `openid`, and `profile` to `requiredResourceAccess`.
     * Grants Admin Consent for these permissions.
     * **Cloud Group Support**: Updates the application tags to include `kdc_enable_cloud_group_sids`, enabling support for Entra groups (mandatory for cloud-only identities).
-2. **Least Privilege NTFS Permissions**: Configures NTFS permissions on the file shares by assigning only the specified FSLogix group(s), restricting access to authorized users only.
+2. **Optional Group-Scoped NTFS Access**: When selected, replaces the Authenticated Users root entry with the specified FSLogix groups, limiting profile creation to those groups.
 
 ### Without User Assigned Managed Identity
 
 If you do **not** provide the Managed Identity:
 
-1. **Default Permissions**: The storage account NTFS permissions are configured with default permissions that allow **Authenticated Users** to create their user profile folders.
+1. **Standard FSLogix Access**: The storage account NTFS permissions allow **Authenticated Users** to create their profile folders at the share root. Creator Owner and inherited permissions isolate each user's profile contents.
 2. **Manual Configuration Required**: You must manually perform the following steps after deployment:
     * **Grant Admin Consent**[^1]:
         1. Navigate to **App registrations** in the Azure Portal.
@@ -154,7 +154,7 @@ If you do **not** provide the Managed Identity:
         2. Add `"kdc_enable_cloud_group_sids"` to the array.
         3. Save the changes.
     * **Configure NTFS Permissions**[^4]:
-        1. Since the automated identity was not used, you must manually configure NTFS permissions if the default authenticated users access is insufficient.
+        1. Since the automated identity was not used, you must manually configure group-scoped NTFS access if standard Authenticated Users access does not match your access requirements.
 
 > [!Note]
 > You could leverage the PowerShell Script located at '.common\scripts\Update-StorageAccountApplications.ps1' within a pipeline to automatically perform the first three tasks in this list.
