@@ -12,9 +12,6 @@ param sessionHostResourceGroupName string
 @description('Required. Resource ID of the session-host subnet.')
 param subnetResourceId string
 
-@description('Optional. Resource ID of the network security group attached to session-host NICs.')
-param networkSecurityGroupResourceId string = ''
-
 @description('Optional. Resource ID of the selected Compute Gallery image version.')
 param customImageResourceId string = ''
 
@@ -25,11 +22,7 @@ param credentialsKeyVaultResourceId string
 param principalId string
 
 var desktopVirtualizationVirtualMachineContributorRoleId = 'a959dbd1-f747-45e3-8ba6-dd80f235f97c'
-var virtualMachineContributorRoleId = '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
-var networkSecurityGroupSubscriptionDiffers = !empty(networkSecurityGroupResourceId) && toLower(split(networkSecurityGroupResourceId, '/')[2]) != toLower(split(subnetResourceId, '/')[2])
-var networkSecurityGroupResourceGroupDiffers = !empty(networkSecurityGroupResourceId) && toLower(split(networkSecurityGroupResourceId, '/')[4]) != toLower(split(subnetResourceId, '/')[4])
-var deployNetworkSecurityGroupRoles = networkSecurityGroupSubscriptionDiffers || networkSecurityGroupResourceGroupDiffers
 
 module sessionHostResourceGroupRole '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
@@ -48,26 +41,6 @@ module networkResourceGroupRole '../../shared/modules/authorization/roleAssignme
     principalId: principalId
     principalType: 'ServicePrincipal'
     assignmentDescription: 'Allows Azure Virtual Desktop to attach automated session hosts to the selected network.'
-  }
-}
-
-module networkSecurityGroupDesktopVirtualizationRole '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (deployNetworkSecurityGroupRoles) {
-  scope: resourceGroup(split(networkSecurityGroupResourceId, '/')[2], split(networkSecurityGroupResourceId, '/')[4])
-  params: {
-    roleDefinitionId: desktopVirtualizationVirtualMachineContributorRoleId
-    principalId: principalId
-    principalType: 'ServicePrincipal'
-    assignmentDescription: 'Allows Azure Virtual Desktop to attach the selected network security group to automated session hosts.'
-  }
-}
-
-module networkSecurityGroupVirtualMachineRole '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (deployNetworkSecurityGroupRoles) {
-  scope: resourceGroup(split(networkSecurityGroupResourceId, '/')[2], split(networkSecurityGroupResourceId, '/')[4])
-  params: {
-    roleDefinitionId: virtualMachineContributorRoleId
-    principalId: principalId
-    principalType: 'ServicePrincipal'
-    assignmentDescription: 'Allows Azure Virtual Desktop to use a network security group outside the session-host subnet resource group.'
   }
 }
 
@@ -111,11 +84,5 @@ output roleAssignmentResourceIds string[] = concat(
     hostPoolResourceRole.outputs.resourceId
   ],
   credentialVaultRole.outputs.resourceIds,
-  !empty(customImageResourceId) ? [imageResourceGroupRole!.outputs.resourceId] : [],
-  deployNetworkSecurityGroupRoles
-    ? [
-        networkSecurityGroupDesktopVirtualizationRole!.outputs.resourceId
-        networkSecurityGroupVirtualMachineRole!.outputs.resourceId
-      ]
-    : []
+  !empty(customImageResourceId) ? [imageResourceGroupRole!.outputs.resourceId] : []
 )

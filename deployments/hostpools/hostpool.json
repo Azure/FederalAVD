@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "3164968060033929749"
+      "templateHash": "4223845020818475012"
     }
   },
   "parameters": {
@@ -17367,7 +17367,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "3867789122714279201"
+              "templateHash": "11257782004030038965"
             }
           },
           "parameters": {
@@ -19719,7 +19719,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "12742924053125579257"
+                      "templateHash": "9594715583614190906"
                     }
                   },
                   "parameters": {
@@ -20097,6 +20097,8 @@
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))]",
+                      "subscriptionId": "[subscription().subscriptionId]",
+                      "location": "[resourceGroup().location]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -20114,13 +20116,13 @@
                           }
                         },
                         "template": {
-                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "8802480784895534281"
+                              "templateHash": "1420129561619092179"
                             }
                           },
                           "parameters": {
@@ -20263,11 +20265,11 @@
                           "fslogixOSSGroups": {
                             "value": "[parameters('fslogixOSSGroups')]"
                           },
-                          "fslogixLocalNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixLocalNetAppVolumeResourceIds')))), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.localNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
+                          "fslogixLocalNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixLocalNetAppVolumeResourceIds')))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.localNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
                           "fslogixLocalStorageAccountResourceIds": {
                             "value": "[parameters('fslogixLocalStorageAccountResourceIds')]"
                           },
-                          "fslogixRemoteNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds')))), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.remoteNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
+                          "fslogixRemoteNetAppServerFqdns": "[if(and(parameters('fslogixConfigureSessionHosts'), not(empty(parameters('fslogixRemoteNetAppVolumeResourceIds')))), createObject('value', reference(subscriptionResourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.remoteNetAppVolumeSmbServerFqdns.value), createObject('value', createArray()))]",
                           "fslogixRemoteStorageAccountResourceIds": {
                             "value": "[parameters('fslogixRemoteStorageAccountResourceIds')]"
                           },
@@ -21395,7 +21397,7 @@
                       },
                       "dependsOn": [
                         "availabilitySets",
-                        "[resourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix')))]"
+                        "[subscriptionResourceId('Microsoft.Resources/deployments', format('NetAppVolumeFqdns-{0}', parameters('deploymentSuffix')))]"
                       ]
                     },
                     {

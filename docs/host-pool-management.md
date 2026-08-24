@@ -92,7 +92,8 @@ For ongoing operations:
 1. Change the Session Host Configuration when the image or VM configuration changes.
 2. Use Session Host Update to roll that desired state across the pool.
 3. Optionally use dynamic autoscale with `CreateDeletePowerManage` to let AVD create and delete
-   hosts according to schedule and demand.
+  hosts according to schedule and demand. Define one or more named schedules and assign each day
+  to at most one schedule, grouping days only when they share the same times and capacity limits.
 4. Don't deploy VMs with a registration token or run Session Host Replacer against this pool.
 
 This approach removes the need to operate a separate replacement Function App, but it also moves

@@ -7,10 +7,9 @@ param tags object = {}
 param timeZone string
 param exclusionTag string
 param hostPoolResourceId string
-param scheduleName string
-param schedule object
+param schedules array
 
-module scalingPlan 'dynamicScalingPlanResource.bicep' = {
+module scalingPlan '../../shared/modules/desktopVirtualization/scalingPlans/deployAutomated.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
     name: name
@@ -19,10 +18,9 @@ module scalingPlan 'dynamicScalingPlanResource.bicep' = {
     timeZone: timeZone
     exclusionTag: exclusionTag
     hostPoolResourceId: hostPoolResourceId
-    scheduleName: scheduleName
-    schedule: schedule
+    schedules: schedules
   }
 }
 
 output resourceId string = scalingPlan.outputs.resourceId
-output scheduleResourceId string = scalingPlan.outputs.scheduleResourceId
+output scheduleResourceIds array = scalingPlan.outputs.scheduleResourceIds

@@ -1,3 +1,5 @@
+targetScope = 'subscription'
+
 param localNetAppVolumeResourceIds array
 param remoteNetAppVolumeResourceIds array
 param shareNames array

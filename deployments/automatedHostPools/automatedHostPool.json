@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17877669179687357029"
+      "templateHash": "13731465702305294072"
     }
   },
   "definitions": {
@@ -59,9 +59,12 @@
         }
       }
     },
-    "dynamicScalingScheduleType": {
+    "dynamicScalingScheduleInputType": {
       "type": "object",
       "properties": {
+        "name": {
+          "type": "string"
+        },
         "daysOfWeek": {
           "type": "array",
           "items": {
@@ -69,88 +72,66 @@
           }
         },
         "rampUpStartTime": {
-          "$ref": "#/definitions/scalingTimeType"
-        },
-        "rampUpLoadBalancingAlgorithm": {
-          "type": "string",
-          "allowedValues": [
-            "BreadthFirst",
-            "DepthFirst"
-          ]
-        },
-        "rampUpMinimumHostsPct": {
-          "type": "int"
-        },
-        "rampUpCapacityThresholdPct": {
-          "type": "int"
-        },
-        "rampUpMinimumHostPoolSize": {
-          "type": "int"
-        },
-        "rampUpMaximumHostPoolSize": {
-          "type": "int"
-        },
-        "peakStartTime": {
-          "$ref": "#/definitions/scalingTimeType"
-        },
-        "peakLoadBalancingAlgorithm": {
-          "type": "string",
-          "allowedValues": [
-            "BreadthFirst",
-            "DepthFirst"
-          ]
-        },
-        "rampDownStartTime": {
-          "$ref": "#/definitions/scalingTimeType"
-        },
-        "rampDownLoadBalancingAlgorithm": {
-          "type": "string",
-          "allowedValues": [
-            "BreadthFirst",
-            "DepthFirst"
-          ]
-        },
-        "rampDownMinimumHostsPct": {
-          "type": "int"
-        },
-        "rampDownCapacityThresholdPct": {
-          "type": "int"
-        },
-        "rampDownMinimumHostPoolSize": {
-          "type": "int"
-        },
-        "rampDownMaximumHostPoolSize": {
-          "type": "int"
-        },
-        "rampDownForceLogoffUsers": {
-          "type": "bool"
-        },
-        "rampDownWaitTimeMinutes": {
-          "type": "int"
-        },
-        "rampDownNotificationMessage": {
           "type": "string"
         },
-        "rampDownStopHostsWhen": {
-          "type": "string",
-          "allowedValues": [
-            "ZeroActiveSessions",
-            "ZeroSessions"
-          ]
+        "rampUpMinimumHostsPct": {
+          "type": "string"
+        },
+        "rampUpCapacityThresholdPct": {
+          "type": "string"
+        },
+        "rampUpMinimumHostPoolSize": {
+          "type": "string"
+        },
+        "rampUpMaximumHostPoolSize": {
+          "type": "string"
+        },
+        "peakStartTime": {
+          "type": "string"
+        },
+        "rampDownStartTime": {
+          "type": "string"
+        },
+        "rampDownMinimumHostsPct": {
+          "type": "string"
+        },
+        "rampDownCapacityThresholdPct": {
+          "type": "string"
+        },
+        "rampDownMinimumHostPoolSize": {
+          "type": "string"
+        },
+        "rampDownMaximumHostPoolSize": {
+          "type": "string"
         },
         "offPeakStartTime": {
-          "$ref": "#/definitions/scalingTimeType"
-        },
-        "offPeakLoadBalancingAlgorithm": {
-          "type": "string",
-          "allowedValues": [
-            "BreadthFirst",
-            "DepthFirst"
-          ]
+          "type": "string"
         }
       }
     }
   },
+  "functions": [
+    {
+      "namespace": "__bicep",
+      "members": {
+        "parseScalingTime": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/scalingTimeType",
+            "value": {
+              "hour": "[int(first(split(parameters('value'), ':')))]",
+              "minute": "[int(last(split(parameters('value'), ':')))]"
+            }
+          }
+        }
+      }
+    }
+  ],
   "parameters": {
     "identifier": {
       "type": "string",
@@ -194,13 +175,6 @@
         "description": "Required. Resource ID of the subnet used by automated session hosts."
       }
     },
-    "networkSecurityGroupResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Resource ID of a network security group attached to session-host NICs."
-      }
-    },
     "credentialsKeyVaultResourceId": {
       "type": "string",
       "metadata": {
@@ -211,14 +185,14 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Versionless Key Vault secret URI containing the local VM administrator username. Defaults to the VirtualMachineAdminUserName secret in credentialsKeyVaultResourceId."
+        "description": "Optional. Versionless Key Vault secret URI containing the local VM administrator username. Defaults to VirtualMachineAdminUserName in credentialsKeyVaultResourceId."
       }
     },
     "vmAdministratorPasswordSecretUri": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Versionless Key Vault secret URI containing the local VM administrator password. Defaults to the VirtualMachineAdminPassword secret in credentialsKeyVaultResourceId."
+        "description": "Optional. Versionless Key Vault secret URI containing the local VM administrator password. Defaults to VirtualMachineAdminPassword in credentialsKeyVaultResourceId."
       }
     },
     "identitySolution": {
@@ -252,14 +226,14 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Versionless Key Vault secret URI containing the domain-join username. Defaults to the DomainJoinUserPrincipalName secret in credentialsKeyVaultResourceId."
+        "description": "Optional. Versionless Key Vault secret URI containing the domain-join username. Defaults to DomainJoinUserPrincipalName in credentialsKeyVaultResourceId."
       }
     },
     "domainJoinPasswordSecretUri": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Versionless Key Vault secret URI containing the domain-join password. Defaults to the DomainJoinUserPassword secret in credentialsKeyVaultResourceId."
+        "description": "Optional. Versionless Key Vault secret URI containing the domain-join password. Defaults to DomainJoinUserPassword in credentialsKeyVaultResourceId."
       }
     },
     "intuneEnrollment": {
@@ -336,6 +310,14 @@
       ],
       "metadata": {
         "description": "Optional. Managed OS disk SKU."
+      }
+    },
+    "diskSizeGB": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Optional. OS disk size in GB. Set to zero to preserve the image default."
       }
     },
     "useEphemeralOsDisk": {
@@ -443,7 +425,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Object ID of the Azure Virtual Desktop service principal. Required when deployDynamicScalingPlan is true."
+        "description": "Optional. Object ID of the Azure Virtual Desktop service principal. Required when Start VM on Connect or dynamic scaling is enabled."
       }
     },
     "scalingPlanExclusionTag": {
@@ -460,51 +442,37 @@
         "description": "Optional. Time zone used by the dynamic scaling schedule."
       }
     },
-    "dynamicScalingSchedule": {
-      "$ref": "#/definitions/dynamicScalingScheduleType",
-      "defaultValue": {
-        "daysOfWeek": [
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday"
-        ],
-        "rampUpStartTime": {
-          "hour": 6,
-          "minute": 30
-        },
-        "rampUpLoadBalancingAlgorithm": "BreadthFirst",
-        "rampUpMinimumHostsPct": 20,
-        "rampUpCapacityThresholdPct": 60,
-        "rampUpMinimumHostPoolSize": 2,
-        "rampUpMaximumHostPoolSize": 10,
-        "peakStartTime": {
-          "hour": 8,
-          "minute": 30
-        },
-        "peakLoadBalancingAlgorithm": "BreadthFirst",
-        "rampDownStartTime": {
-          "hour": 17,
-          "minute": 0
-        },
-        "rampDownLoadBalancingAlgorithm": "DepthFirst",
-        "rampDownMinimumHostsPct": 10,
-        "rampDownCapacityThresholdPct": 90,
-        "rampDownMinimumHostPoolSize": 1,
-        "rampDownMaximumHostPoolSize": 5,
-        "rampDownForceLogoffUsers": false,
-        "rampDownWaitTimeMinutes": 30,
-        "rampDownNotificationMessage": "Save your work and sign out. This session host is being removed by autoscale.",
-        "rampDownStopHostsWhen": "ZeroSessions",
-        "offPeakStartTime": {
-          "hour": 20,
-          "minute": 0
-        },
-        "offPeakLoadBalancingAlgorithm": "DepthFirst"
+    "dynamicScalingSchedules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/dynamicScalingScheduleInputType"
       },
+      "defaultValue": [
+        {
+          "name": "Weekdays",
+          "daysOfWeek": [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday"
+          ],
+          "rampUpStartTime": "06:30",
+          "rampUpMinimumHostsPct": "20",
+          "rampUpCapacityThresholdPct": "60",
+          "rampUpMinimumHostPoolSize": "2",
+          "rampUpMaximumHostPoolSize": "10",
+          "peakStartTime": "08:30",
+          "rampDownStartTime": "17:00",
+          "rampDownMinimumHostsPct": "10",
+          "rampDownCapacityThresholdPct": "90",
+          "rampDownMinimumHostPoolSize": "1",
+          "rampDownMaximumHostPoolSize": "5",
+          "offPeakStartTime": "20:00"
+        }
+      ],
       "metadata": {
-        "description": "Optional. Weekday schedule and create/delete limits for dynamic autoscaling."
+        "description": "Optional. Named dynamic scaling schedules. Days may be grouped when they share a schedule."
       }
     },
     "existingWorkspaceResourceId": {
@@ -573,6 +541,13 @@
         "description": "Optional. Deploy and configure FSLogix storage before provisioning session hosts."
       }
     },
+    "fslogixConfigureSessionHosts": {
+      "type": "bool",
+      "defaultValue": "[parameters('deployFSLogixStorage')]",
+      "metadata": {
+        "description": "Optional. Configure FSLogix registry settings on automated session hosts."
+      }
+    },
     "fslogixStorageService": {
       "type": "string",
       "defaultValue": "AzureFiles Standard",
@@ -584,6 +559,17 @@
       ],
       "metadata": {
         "description": "Optional. FSLogix storage service and SKU."
+      }
+    },
+    "fslogixStorageRedundancy": {
+      "type": "string",
+      "defaultValue": "LocallyRedundant",
+      "allowedValues": [
+        "LocallyRedundant",
+        "ZoneRedundant"
+      ],
+      "metadata": {
+        "description": "Optional. Storage redundancy for newly created Azure Files accounts used by FSLogix."
       }
     },
     "fslogixContainerType": {
@@ -613,6 +599,76 @@
       "minValue": 1,
       "metadata": {
         "description": "Optional. FSLogix profile size configured on session hosts, in MB."
+      }
+    },
+    "fslogixOUPath": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. OU path for FSLogix storage computer objects. Defaults to the session-host OU path."
+      }
+    },
+    "fslogixAppUpdateUserAssignedIdentityResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing user-assigned identity that automates Entra Kerberos application updates and consent."
+      }
+    },
+    "fslogixStorageIndex": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 0,
+      "maxValue": 99,
+      "metadata": {
+        "description": "Optional. Starting index appended to newly created Azure Files storage account names."
+      }
+    },
+    "fslogixSoftDeleteRetentionDays": {
+      "type": "int",
+      "defaultValue": 14,
+      "minValue": 1,
+      "maxValue": 365,
+      "metadata": {
+        "description": "Optional. Number of days to retain deleted FSLogix Azure file shares."
+      }
+    },
+    "fslogixStorageKerberosEncryptionType": {
+      "type": "string",
+      "defaultValue": "AES256",
+      "allowedValues": [
+        "AES256",
+        "RC4"
+      ],
+      "metadata": {
+        "description": "Optional. Kerberos encryption type used by Azure Files domain authentication."
+      }
+    },
+    "fslogixKeyManagementStorage": {
+      "type": "string",
+      "defaultValue": "PlatformManaged",
+      "allowedValues": [
+        "PlatformManaged",
+        "CustomerManaged",
+        "CustomerManagedHSM"
+      ],
+      "metadata": {
+        "description": "Optional. Key management mode for newly created FSLogix Azure Files storage accounts."
+      }
+    },
+    "fslogixEncryptionKeyVaultResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing Key Vault resource ID used for FSLogix Azure Files customer-managed keys."
+      }
+    },
+    "fslogixKeyExpirationInDays": {
+      "type": "int",
+      "defaultValue": 180,
+      "minValue": 7,
+      "metadata": {
+        "description": "Optional. Number of days before FSLogix Azure Files customer-managed keys expire and rotate."
       }
     },
     "fslogixShardOptions": {
@@ -647,6 +703,60 @@
         "description": "Optional. Groups granted user access to FSLogix storage and used for sharding."
       }
     },
+    "fslogixExistingLocalStorageAccountResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Existing local Azure Files storage account resource IDs used to configure FSLogix without deploying storage."
+      }
+    },
+    "fslogixExistingRemoteStorageAccountResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Existing remote Azure Files storage account resource IDs used by FSLogix Cloud Cache."
+      }
+    },
+    "fslogixExistingLocalNetAppVolumeResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Existing local Azure NetApp Files volume resource IDs used to configure FSLogix without deploying storage."
+      }
+    },
+    "fslogixExistingRemoteNetAppVolumeResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Existing remote Azure NetApp Files volume resource IDs used by FSLogix Cloud Cache."
+      }
+    },
+    "netAppVolumesSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Resource ID of the subnet delegated to Microsoft.NetApp/volumes."
+      }
+    },
+    "existingSharedActiveDirectoryConnection": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Indicates that the Azure NetApp Files account already has the required shared Active Directory connection."
+      }
+    },
     "fslogixPrivateEndpoint": {
       "type": "bool",
       "defaultValue": true,
@@ -668,6 +778,16 @@
         "description": "Optional. Resource ID of the Azure Files private DNS zone."
       }
     },
+    "fslogixPermittedIPs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. IP addresses or CIDR blocks permitted through the Azure Files firewall."
+      }
+    },
     "deployDiskEncryptionSet": {
       "type": "bool",
       "defaultValue": false,
@@ -687,6 +807,26 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. Existing Key Vault resource ID used when creating the Disk Encryption Set."
+      }
+    },
+    "keyManagementDisks": {
+      "type": "string",
+      "defaultValue": "CustomerManagedHSM",
+      "allowedValues": [
+        "CustomerManaged",
+        "CustomerManagedHSM",
+        "PlatformManagedAndCustomerManaged",
+        "PlatformManagedAndCustomerManagedHSM"
+      ],
+      "metadata": {
+        "description": "Optional. Customer-managed encryption mode used when creating the Disk Encryption Set."
+      }
+    },
+    "disableManagedDiskPublicNetworkAccess": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Disable public network access for managed disks through policy."
       }
     },
     "integrityMonitoring": {
@@ -808,24 +948,24 @@
     "effectiveDomainJoinPasswordSecretUri": "[if(not(empty(parameters('domainJoinPasswordSecretUri'))), parameters('domainJoinPasswordSecretUri'), format('{0}/DomainJoinUserPassword', variables('credentialsKeyVaultSecretBaseUri')))]",
     "domainConfigurationIsValid": "[if(or(not(variables('domainJoinRequired')), not(empty(parameters('domainName')))), true(), bool('Domain-joined automated session hosts require domainName.'))]",
     "monitoringConfigurationIsValid": "[if(or(not(parameters('enableMonitoring')), not(empty(parameters('dataCollectionRuleResourceId')))), true(), bool('dataCollectionRuleResourceId is required when enableMonitoring is true.'))]",
-    "dynamicScalingPrincipalIsValid": "[if(or(not(parameters('deployDynamicScalingPlan')), not(empty(parameters('avdServicePrincipalObjectId')))), true(), bool('avdServicePrincipalObjectId is required when deployDynamicScalingPlan is true.'))]",
-    "dynamicScalingLimitsAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), and(lessOrEquals(parameters('dynamicScalingSchedule').rampUpMinimumHostPoolSize, parameters('dynamicScalingSchedule').rampUpMaximumHostPoolSize), lessOrEquals(parameters('dynamicScalingSchedule').rampDownMinimumHostPoolSize, parameters('dynamicScalingSchedule').rampDownMaximumHostPoolSize))), true(), bool('Dynamic scaling minimum host-pool sizes cannot exceed their corresponding maximum sizes.'))]",
-    "defaultFslogixConfiguration": {
-      "identitySolution": "[parameters('identitySolution')]",
-      "storageService": "AzureFiles",
-      "containerType": "[parameters('fslogixContainerType')]",
-      "fileShareNames": [
-        "profile-containers"
-      ],
-      "localStorageAccountResourceIds": [],
-      "remoteStorageAccountResourceIds": [],
-      "localNetAppServerFqdns": [],
-      "remoteNetAppServerFqdns": [],
-      "objectSpecificSettingsGroups": [],
-      "profileSizeInMBs": "[parameters('fslogixProfileSizeInMBs')]"
-    }
+    "avdServicePrincipalIsValid": "[if(or(not(or(parameters('deployDynamicScalingPlan'), parameters('startVMOnConnect'))), not(empty(parameters('avdServicePrincipalObjectId')))), true(), bool('avdServicePrincipalObjectId is required when dynamic scaling or Start VM on Connect is enabled.'))]",
+    "effectiveDynamicScalingSchedules": "[map(parameters('dynamicScalingSchedules'), lambda('schedule', createObject('name', lambdaVariables('schedule').name, 'daysOfWeek', lambdaVariables('schedule').daysOfWeek, 'rampUpStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').rampUpStartTime), 'rampUpLoadBalancingAlgorithm', 'BreadthFirst', 'rampUpMinimumHostsPct', int(lambdaVariables('schedule').rampUpMinimumHostsPct), 'rampUpCapacityThresholdPct', int(lambdaVariables('schedule').rampUpCapacityThresholdPct), 'rampUpMinimumHostPoolSize', int(lambdaVariables('schedule').rampUpMinimumHostPoolSize), 'rampUpMaximumHostPoolSize', int(lambdaVariables('schedule').rampUpMaximumHostPoolSize), 'peakStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').peakStartTime), 'peakLoadBalancingAlgorithm', 'BreadthFirst', 'rampDownStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').rampDownStartTime), 'rampDownLoadBalancingAlgorithm', 'DepthFirst', 'rampDownMinimumHostsPct', int(lambdaVariables('schedule').rampDownMinimumHostsPct), 'rampDownCapacityThresholdPct', int(lambdaVariables('schedule').rampDownCapacityThresholdPct), 'rampDownMinimumHostPoolSize', int(lambdaVariables('schedule').rampDownMinimumHostPoolSize), 'rampDownMaximumHostPoolSize', int(lambdaVariables('schedule').rampDownMaximumHostPoolSize), 'rampDownForceLogoffUsers', false(), 'rampDownWaitTimeMinutes', 30, 'rampDownNotificationMessage', 'Save your work and sign out. This session host is being removed by autoscale.', 'rampDownStopHostsWhen', 'ZeroSessions', 'offPeakStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').offPeakStartTime), 'offPeakLoadBalancingAlgorithm', 'DepthFirst')))]",
+    "invalidDynamicScalingLimits": "[filter(variables('effectiveDynamicScalingSchedules'), lambda('schedule', or(greater(lambdaVariables('schedule').rampUpMinimumHostPoolSize, lambdaVariables('schedule').rampUpMaximumHostPoolSize), greater(lambdaVariables('schedule').rampDownMinimumHostPoolSize, lambdaVariables('schedule').rampDownMaximumHostPoolSize))))]",
+    "dynamicScalingLimitsAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), empty(variables('invalidDynamicScalingLimits'))), true(), bool('Dynamic scaling minimum host-pool sizes cannot exceed their corresponding maximum sizes.'))]",
+    "dynamicScalingScheduleNames": "[map(variables('effectiveDynamicScalingSchedules'), lambda('schedule', toLower(lambdaVariables('schedule').name)))]",
+    "dynamicScalingScheduleDays": "[flatten(map(variables('effectiveDynamicScalingSchedules'), lambda('schedule', lambdaVariables('schedule').daysOfWeek)))]",
+    "dynamicScalingSchedulesAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), and(and(not(empty(variables('effectiveDynamicScalingSchedules'))), equals(length(variables('dynamicScalingScheduleNames')), length(union(variables('dynamicScalingScheduleNames'), variables('dynamicScalingScheduleNames'))))), equals(length(variables('dynamicScalingScheduleDays')), length(union(variables('dynamicScalingScheduleDays'), variables('dynamicScalingScheduleDays')))))), true(), bool('Dynamic scaling requires at least one schedule, unique schedule names, and each day assigned to no more than one schedule.'))]",
+    "fslogixFileShareNames": "[if(contains(parameters('fslogixContainerType'), 'OfficeContainer'), createArray('profile-containers', 'office-containers'), createArray('profile-containers'))]"
   },
   "resources": {
+    "credentialsKeyVault": {
+      "existing": true,
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "subscriptionId": "[split(parameters('credentialsKeyVaultResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('credentialsKeyVaultResourceId'), '/')[4]]",
+      "name": "[last(split(parameters('credentialsKeyVaultResourceId'), '/'))]"
+    },
     "naming": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -2933,15 +3073,10 @@
           "subnetResourceId": {
             "value": "[parameters('virtualMachineSubnetResourceId')]"
           },
-          "networkSecurityGroupResourceId": {
-            "value": "[parameters('networkSecurityGroupResourceId')]"
-          },
           "customImageResourceId": {
             "value": "[parameters('customImageResourceId')]"
           },
-          "credentialsKeyVaultResourceId": {
-            "value": "[parameters('credentialsKeyVaultResourceId')]"
-          },
+          "credentialsKeyVaultResourceId": "[if(if(and(equals(reference('credentialsKeyVault').enableRbacAuthorization, true()), equals(reference('credentialsKeyVault').enabledForTemplateDeployment, true())), true(), bool('The credentials Key Vault must use Azure RBAC and allow Azure Resource Manager template deployment.')), createObject('value', parameters('credentialsKeyVaultResourceId')), createObject('value', parameters('credentialsKeyVaultResourceId')))]",
           "principalId": {
             "value": "[reference('controlPlane').outputs.hostPoolPrincipalId.value]"
           }
@@ -2954,7 +3089,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "16952170019728946528"
+              "templateHash": "11867050814434156183"
             }
           },
           "parameters": {
@@ -2982,13 +3117,6 @@
                 "description": "Required. Resource ID of the session-host subnet."
               }
             },
-            "networkSecurityGroupResourceId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of the network security group attached to session-host NICs."
-              }
-            },
             "customImageResourceId": {
               "type": "string",
               "defaultValue": "",
@@ -3011,11 +3139,7 @@
           },
           "variables": {
             "desktopVirtualizationVirtualMachineContributorRoleId": "a959dbd1-f747-45e3-8ba6-dd80f235f97c",
-            "virtualMachineContributorRoleId": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
-            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
-            "networkSecurityGroupSubscriptionDiffers": "[and(not(empty(parameters('networkSecurityGroupResourceId'))), not(equals(toLower(split(parameters('networkSecurityGroupResourceId'), '/')[2]), toLower(split(parameters('subnetResourceId'), '/')[2]))))]",
-            "networkSecurityGroupResourceGroupDiffers": "[and(not(empty(parameters('networkSecurityGroupResourceId'))), not(equals(toLower(split(parameters('networkSecurityGroupResourceId'), '/')[4]), toLower(split(parameters('subnetResourceId'), '/')[4]))))]",
-            "deployNetworkSecurityGroupRoles": "[or(variables('networkSecurityGroupSubscriptionDiffers'), variables('networkSecurityGroupResourceGroupDiffers'))]"
+            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
           },
           "resources": {
             "sessionHostResourceGroupRole": {
@@ -3136,200 +3260,6 @@
                   },
                   "assignmentDescription": {
                     "value": "Allows Azure Virtual Desktop to attach automated session hosts to the selected network."
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              }
-            },
-            "networkSecurityGroupDesktopVirtualizationRole": {
-              "condition": "[variables('deployNetworkSecurityGroupRoles')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('networkSecurityGroupDesktopVirtualizationRole-{0}', uniqueString('networkSecurityGroupDesktopVirtualizationRole', deployment().name))]",
-              "subscriptionId": "[split(parameters('networkSecurityGroupResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('networkSecurityGroupResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "roleDefinitionId": {
-                    "value": "[variables('desktopVirtualizationVirtualMachineContributorRoleId')]"
-                  },
-                  "principalId": {
-                    "value": "[parameters('principalId')]"
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "assignmentDescription": {
-                    "value": "Allows Azure Virtual Desktop to attach the selected network security group to automated session hosts."
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              }
-            },
-            "networkSecurityGroupVirtualMachineRole": {
-              "condition": "[variables('deployNetworkSecurityGroupRoles')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('networkSecurityGroupVirtualMachineRole-{0}', uniqueString('networkSecurityGroupVirtualMachineRole', deployment().name))]",
-              "subscriptionId": "[split(parameters('networkSecurityGroupResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('networkSecurityGroupResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "roleDefinitionId": {
-                    "value": "[variables('virtualMachineContributorRoleId')]"
-                  },
-                  "principalId": {
-                    "value": "[parameters('principalId')]"
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "assignmentDescription": {
-                    "value": "Allows Azure Virtual Desktop to use a network security group outside the session-host subnet resource group."
                   }
                 },
                 "template": {
@@ -3718,13 +3648,14 @@
               "items": {
                 "type": "string"
               },
-              "value": "[concat(createArray(reference('sessionHostResourceGroupRole').outputs.resourceId.value, reference('networkResourceGroupRole').outputs.resourceId.value, reference('hostPoolResourceRole').outputs.resourceId.value), reference('credentialVaultRole').outputs.resourceIds.value, if(not(empty(parameters('customImageResourceId'))), createArray(reference('imageResourceGroupRole').outputs.resourceId.value), createArray()), if(variables('deployNetworkSecurityGroupRoles'), createArray(reference('networkSecurityGroupDesktopVirtualizationRole').outputs.resourceId.value, reference('networkSecurityGroupVirtualMachineRole').outputs.resourceId.value), createArray()))]"
+              "value": "[concat(createArray(reference('sessionHostResourceGroupRole').outputs.resourceId.value, reference('networkResourceGroupRole').outputs.resourceId.value, reference('hostPoolResourceRole').outputs.resourceId.value), reference('credentialVaultRole').outputs.resourceIds.value, if(not(empty(parameters('customImageResourceId'))), createArray(reference('imageResourceGroupRole').outputs.resourceId.value), createArray()))]"
             }
           }
         }
       },
       "dependsOn": [
         "controlPlane",
+        "credentialsKeyVault",
         "naming",
         "sessionHostResourceGroup"
       ]
@@ -3762,8 +3693,7 @@
               },
               "imageInfo": "[if(not(empty(parameters('customImageResourceId'))), createObject('type', 'Custom', 'customInfo', createObject('resourceId', parameters('customImageResourceId'))), createObject('type', 'Marketplace', 'marketplaceInfo', createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'exactVersion', parameters('imageVersion'))))]",
               "networkInfo": {
-                "subnetId": "[parameters('virtualMachineSubnetResourceId')]",
-                "securityGroupId": "[if(not(empty(parameters('networkSecurityGroupResourceId'))), parameters('networkSecurityGroupResourceId'), null())]"
+                "subnetId": "[parameters('virtualMachineSubnetResourceId')]"
               },
               "securityInfo": {
                 "type": "[parameters('securityType')]",
@@ -4082,11 +4012,15 @@
           "domainName": {
             "value": "[parameters('domainName')]"
           },
-          "organizationalUnitPath": {
-            "value": "[parameters('organizationalUnitPath')]"
+          "organizationalUnitPath": "[if(empty(parameters('fslogixOUPath')), createObject('value', parameters('organizationalUnitPath')), createObject('value', parameters('fslogixOUPath')))]",
+          "appUpdateUserAssignedIdentityResourceId": {
+            "value": "[parameters('fslogixAppUpdateUserAssignedIdentityResourceId')]"
           },
           "fslogixStorageService": {
             "value": "[parameters('fslogixStorageService')]"
+          },
+          "fslogixStorageRedundancy": {
+            "value": "[parameters('fslogixStorageRedundancy')]"
           },
           "fslogixContainerType": {
             "value": "[parameters('fslogixContainerType')]"
@@ -4109,6 +4043,34 @@
           "storageAccountNamePrefix": {
             "value": "[reference('naming').outputs.fslogixStorageAccountNamePrefix.value]"
           },
+          "storageIndex": {
+            "value": "[parameters('fslogixStorageIndex')]"
+          },
+          "softDeleteRetentionDays": {
+            "value": "[parameters('fslogixSoftDeleteRetentionDays')]"
+          },
+          "kerberosEncryptionType": {
+            "value": "[parameters('fslogixStorageKerberosEncryptionType')]"
+          },
+          "keyManagementStorage": {
+            "value": "[parameters('fslogixKeyManagementStorage')]"
+          },
+          "existingEncryptionKeyVaultResourceId": {
+            "value": "[parameters('fslogixEncryptionKeyVaultResourceId')]"
+          },
+          "keyExpirationInDays": {
+            "value": "[parameters('fslogixKeyExpirationInDays')]"
+          },
+          "netAppVolumesSubnetResourceId": {
+            "value": "[parameters('netAppVolumesSubnetResourceId')]"
+          },
+          "existingSharedActiveDirectoryConnection": {
+            "value": "[parameters('existingSharedActiveDirectoryConnection')]"
+          },
+          "remoteStorageAccountResourceIds": {
+            "value": "[parameters('fslogixExistingRemoteStorageAccountResourceIds')]"
+          },
+          "remoteNetAppServerFqdns": "[if(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds')), createObject('value', createArray()), createObject('value', reference('existingNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value))]",
           "privateEndpoint": {
             "value": "[parameters('fslogixPrivateEndpoint')]"
           },
@@ -4117,6 +4079,9 @@
           },
           "azureFilePrivateDnsZoneResourceId": {
             "value": "[parameters('azureFilePrivateDnsZoneResourceId')]"
+          },
+          "permittedIPs": {
+            "value": "[parameters('fslogixPermittedIPs')]"
           },
           "logAnalyticsWorkspaceResourceId": {
             "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
@@ -12003,8 +11968,80 @@
       },
       "dependsOn": [
         "controlPlane",
+        "existingNetAppVolumeFqdns",
         "naming"
       ]
+    },
+    "existingNetAppVolumeFqdns": {
+      "condition": "[and(parameters('fslogixConfigureSessionHosts'), or(and(not(parameters('deployFSLogixStorage')), not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds')))), not(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds')))))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('Resolve-FSLogix-NetApp-{0}', parameters('deploymentSuffix'))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "localNetAppVolumeResourceIds": {
+            "value": "[parameters('fslogixExistingLocalNetAppVolumeResourceIds')]"
+          },
+          "remoteNetAppVolumeResourceIds": {
+            "value": "[parameters('fslogixExistingRemoteNetAppVolumeResourceIds')]"
+          },
+          "shareNames": {
+            "value": "[variables('fslogixFileShareNames')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "1420129561619092179"
+            }
+          },
+          "parameters": {
+            "localNetAppVolumeResourceIds": {
+              "type": "array"
+            },
+            "remoteNetAppVolumeResourceIds": {
+              "type": "array"
+            },
+            "shareNames": {
+              "type": "array"
+            }
+          },
+          "variables": {
+            "localNetAppProfileContainerVolumeResourceIds": "[if(not(empty(parameters('localNetAppVolumeResourceIds'))), filter(parameters('localNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('shareNames')[0]))), createArray())]",
+            "localNetAppOfficeContainerVolumeResourceIds": "[if(and(not(empty(parameters('localNetAppVolumeResourceIds'))), greater(length(parameters('shareNames')), 1)), filter(parameters('localNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('shareNames')[1]))), createArray())]",
+            "sortedLocalNetAppResourceIds": "[union(variables('localNetAppProfileContainerVolumeResourceIds'), variables('localNetAppOfficeContainerVolumeResourceIds'))]",
+            "remoteNetAppProfileContainerVolumeResourceIds": "[if(not(empty(parameters('remoteNetAppVolumeResourceIds'))), filter(parameters('remoteNetAppVolumeResourceIds'), lambda('id', contains(lambdaVariables('id'), parameters('shareNames')[0]))), createArray())]",
+            "remoteNetAppOfficeContainerVolumeResourceIds": "[if(and(not(empty(parameters('remoteNetAppVolumeResourceIds'))), greater(length(parameters('shareNames')), 1)), filter(parameters('remoteNetAppVolumeResourceIds'), lambda('id', not(contains(lambdaVariables('id'), parameters('shareNames')[0])))), createArray())]",
+            "sortedRemoteNetAppResourceIds": "[union(variables('remoteNetAppProfileContainerVolumeResourceIds'), variables('remoteNetAppOfficeContainerVolumeResourceIds'))]"
+          },
+          "resources": [],
+          "outputs": {
+            "localNetAppVolumeSmbServerFqdns": {
+              "type": "array",
+              "copy": {
+                "count": "[length(range(0, length(variables('sortedLocalNetAppResourceIds'))))]",
+                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')[2], split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[0], split(last(split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[1], split(last(split(variables('sortedLocalNetAppResourceIds')[range(0, length(variables('sortedLocalNetAppResourceIds')))[range(0, length(variables('sortedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+              }
+            },
+            "remoteNetAppVolumeSmbServerFqdns": {
+              "type": "array",
+              "copy": {
+                "count": "[length(range(0, length(variables('sortedRemoteNetAppResourceIds'))))]",
+                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')[2], split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[0], split(last(split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[1], split(last(split(variables('sortedRemoteNetAppResourceIds')[range(0, length(variables('sortedRemoteNetAppResourceIds')))[range(0, length(variables('sortedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+              }
+            }
+          }
+        }
+      }
     },
     "sessionHostPolicy": {
       "type": "Microsoft.Resources/deployments",
@@ -12041,6 +12078,12 @@
           "encryptionKeyVaultResourceId": {
             "value": "[parameters('encryptionKeyVaultResourceId')]"
           },
+          "keyManagementDisks": {
+            "value": "[parameters('keyManagementDisks')]"
+          },
+          "disableManagedDiskPublicNetworkAccess": {
+            "value": "[parameters('disableManagedDiskPublicNetworkAccess')]"
+          },
           "enableMonitoring": "[if(variables('monitoringConfigurationIsValid'), createObject('value', parameters('enableMonitoring')), createObject('value', parameters('enableMonitoring')))]",
           "dataCollectionRuleResourceId": {
             "value": "[parameters('dataCollectionRuleResourceId')]"
@@ -12054,6 +12097,9 @@
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"
           },
+          "diskSizeGB": {
+            "value": "[parameters('diskSizeGB')]"
+          },
           "enableAcceleratedNetworking": {
             "value": "[parameters('enableAcceleratedNetworking')]"
           },
@@ -12061,9 +12107,9 @@
             "value": "[parameters('virtualMachinesTimeZone')]"
           },
           "configureFSLogix": {
-            "value": "[parameters('deployFSLogixStorage')]"
+            "value": "[parameters('fslogixConfigureSessionHosts')]"
           },
-          "fslogixConfiguration": "[if(parameters('deployFSLogixStorage'), createObject('value', reference('fslogixStorage').outputs.fslogixConfiguration.value), createObject('value', variables('defaultFslogixConfiguration')))]",
+          "fslogixConfiguration": "[if(parameters('deployFSLogixStorage'), createObject('value', reference('fslogixStorage').outputs.fslogixConfiguration.value), createObject('value', createObject('identitySolution', parameters('identitySolution'), 'storageService', split(parameters('fslogixStorageService'), ' ')[0], 'containerType', parameters('fslogixContainerType'), 'fileShareNames', variables('fslogixFileShareNames'), 'localStorageAccountResourceIds', parameters('fslogixExistingLocalStorageAccountResourceIds'), 'remoteStorageAccountResourceIds', parameters('fslogixExistingRemoteStorageAccountResourceIds'), 'localNetAppServerFqdns', if(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.localNetAppVolumeSmbServerFqdns.value), 'remoteNetAppServerFqdns', if(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value), 'objectSpecificSettingsGroups', if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name)), createArray()), 'profileSizeInMBs', parameters('fslogixProfileSizeInMBs'))))]",
           "artifactsContainerUri": {
             "value": "[parameters('artifactsContainerUri')]"
           },
@@ -17805,6 +17851,7 @@
       },
       "dependsOn": [
         "controlPlane",
+        "existingNetAppVolumeFqdns",
         "fslogixStorage",
         "initialSessionHostManagement",
         "naming"
@@ -17985,18 +18032,15 @@
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/scalingPlans'), createObject())]"
           },
-          "timeZone": "[if(and(variables('dynamicScalingPrincipalIsValid'), variables('dynamicScalingLimitsAreValid')), createObject('value', parameters('scalingPlanTimeZone')), createObject('value', parameters('scalingPlanTimeZone')))]",
+          "timeZone": "[if(and(and(variables('avdServicePrincipalIsValid'), variables('dynamicScalingLimitsAreValid')), variables('dynamicScalingSchedulesAreValid')), createObject('value', parameters('scalingPlanTimeZone')), createObject('value', parameters('scalingPlanTimeZone')))]",
           "exclusionTag": {
             "value": "[parameters('scalingPlanExclusionTag')]"
           },
           "hostPoolResourceId": {
             "value": "[reference('controlPlane').outputs.hostPoolResourceId.value]"
           },
-          "scheduleName": {
-            "value": "Weekday"
-          },
-          "schedule": {
-            "value": "[parameters('dynamicScalingSchedule')]"
+          "schedules": {
+            "value": "[variables('effectiveDynamicScalingSchedules')]"
           }
         },
         "template": {
@@ -18007,7 +18051,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "5093634750059361669"
+              "templateHash": "4995558869718395636"
             }
           },
           "parameters": {
@@ -18033,11 +18077,8 @@
             "hostPoolResourceId": {
               "type": "string"
             },
-            "scheduleName": {
-              "type": "string"
-            },
-            "schedule": {
-              "type": "object"
+            "schedules": {
+              "type": "array"
             }
           },
           "resources": {
@@ -18070,11 +18111,8 @@
                   "hostPoolResourceId": {
                     "value": "[parameters('hostPoolResourceId')]"
                   },
-                  "scheduleName": {
-                    "value": "[parameters('scheduleName')]"
-                  },
-                  "schedule": {
-                    "value": "[parameters('schedule')]"
+                  "schedules": {
+                    "value": "[parameters('schedules')]"
                   }
                 },
                 "template": {
@@ -18085,7 +18123,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "818302356649855653"
+                      "templateHash": "9914058627013962625"
                     }
                   },
                   "definitions": {
@@ -18103,6 +18141,9 @@
                     "dynamicScalingScheduleType": {
                       "type": "object",
                       "properties": {
+                        "name": {
+                          "type": "string"
+                        },
                         "daysOfWeek": {
                           "type": "array",
                           "allowedValues": [
@@ -18219,11 +18260,11 @@
                     "hostPoolResourceId": {
                       "type": "string"
                     },
-                    "scheduleName": {
-                      "type": "string"
-                    },
-                    "schedule": {
-                      "$ref": "#/definitions/dynamicScalingScheduleType"
+                    "schedules": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/dynamicScalingScheduleType"
+                      }
                     }
                   },
                   "resources": {
@@ -18245,35 +18286,39 @@
                         ]
                       }
                     },
-                    "pooledSchedule": {
+                    "pooledSchedules": {
+                      "copy": {
+                        "name": "pooledSchedules",
+                        "count": "[length(parameters('schedules'))]"
+                      },
                       "type": "Microsoft.DesktopVirtualization/scalingPlans/pooledSchedules",
                       "apiVersion": "2025-11-01-preview",
-                      "name": "[format('{0}/{1}', parameters('name'), parameters('scheduleName'))]",
+                      "name": "[format('{0}/{1}', parameters('name'), parameters('schedules')[copyIndex()].name)]",
                       "properties": {
-                        "daysOfWeek": "[parameters('schedule').daysOfWeek]",
+                        "daysOfWeek": "[parameters('schedules')[copyIndex()].daysOfWeek]",
                         "scalingMethod": "CreateDeletePowerManage",
                         "createDelete": {
-                          "rampUpMinimumHostPoolSize": "[parameters('schedule').rampUpMinimumHostPoolSize]",
-                          "rampUpMaximumHostPoolSize": "[parameters('schedule').rampUpMaximumHostPoolSize]",
-                          "rampDownMinimumHostPoolSize": "[parameters('schedule').rampDownMinimumHostPoolSize]",
-                          "rampDownMaximumHostPoolSize": "[parameters('schedule').rampDownMaximumHostPoolSize]"
+                          "rampUpMinimumHostPoolSize": "[parameters('schedules')[copyIndex()].rampUpMinimumHostPoolSize]",
+                          "rampUpMaximumHostPoolSize": "[parameters('schedules')[copyIndex()].rampUpMaximumHostPoolSize]",
+                          "rampDownMinimumHostPoolSize": "[parameters('schedules')[copyIndex()].rampDownMinimumHostPoolSize]",
+                          "rampDownMaximumHostPoolSize": "[parameters('schedules')[copyIndex()].rampDownMaximumHostPoolSize]"
                         },
-                        "rampUpStartTime": "[parameters('schedule').rampUpStartTime]",
-                        "rampUpLoadBalancingAlgorithm": "[parameters('schedule').rampUpLoadBalancingAlgorithm]",
-                        "rampUpMinimumHostsPct": "[parameters('schedule').rampUpMinimumHostsPct]",
-                        "rampUpCapacityThresholdPct": "[parameters('schedule').rampUpCapacityThresholdPct]",
-                        "peakStartTime": "[parameters('schedule').peakStartTime]",
-                        "peakLoadBalancingAlgorithm": "[parameters('schedule').peakLoadBalancingAlgorithm]",
-                        "rampDownStartTime": "[parameters('schedule').rampDownStartTime]",
-                        "rampDownLoadBalancingAlgorithm": "[parameters('schedule').rampDownLoadBalancingAlgorithm]",
-                        "rampDownMinimumHostsPct": "[parameters('schedule').rampDownMinimumHostsPct]",
-                        "rampDownCapacityThresholdPct": "[parameters('schedule').rampDownCapacityThresholdPct]",
-                        "rampDownForceLogoffUsers": "[parameters('schedule').rampDownForceLogoffUsers]",
-                        "rampDownWaitTimeMinutes": "[parameters('schedule').rampDownWaitTimeMinutes]",
-                        "rampDownNotificationMessage": "[parameters('schedule').rampDownNotificationMessage]",
-                        "rampDownStopHostsWhen": "[parameters('schedule').rampDownStopHostsWhen]",
-                        "offPeakStartTime": "[parameters('schedule').offPeakStartTime]",
-                        "offPeakLoadBalancingAlgorithm": "[parameters('schedule').offPeakLoadBalancingAlgorithm]"
+                        "rampUpStartTime": "[parameters('schedules')[copyIndex()].rampUpStartTime]",
+                        "rampUpLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].rampUpLoadBalancingAlgorithm]",
+                        "rampUpMinimumHostsPct": "[parameters('schedules')[copyIndex()].rampUpMinimumHostsPct]",
+                        "rampUpCapacityThresholdPct": "[parameters('schedules')[copyIndex()].rampUpCapacityThresholdPct]",
+                        "peakStartTime": "[parameters('schedules')[copyIndex()].peakStartTime]",
+                        "peakLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].peakLoadBalancingAlgorithm]",
+                        "rampDownStartTime": "[parameters('schedules')[copyIndex()].rampDownStartTime]",
+                        "rampDownLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].rampDownLoadBalancingAlgorithm]",
+                        "rampDownMinimumHostsPct": "[parameters('schedules')[copyIndex()].rampDownMinimumHostsPct]",
+                        "rampDownCapacityThresholdPct": "[parameters('schedules')[copyIndex()].rampDownCapacityThresholdPct]",
+                        "rampDownForceLogoffUsers": "[parameters('schedules')[copyIndex()].rampDownForceLogoffUsers]",
+                        "rampDownWaitTimeMinutes": "[parameters('schedules')[copyIndex()].rampDownWaitTimeMinutes]",
+                        "rampDownNotificationMessage": "[parameters('schedules')[copyIndex()].rampDownNotificationMessage]",
+                        "rampDownStopHostsWhen": "[parameters('schedules')[copyIndex()].rampDownStopHostsWhen]",
+                        "offPeakStartTime": "[parameters('schedules')[copyIndex()].offPeakStartTime]",
+                        "offPeakLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].offPeakLoadBalancingAlgorithm]"
                       },
                       "dependsOn": [
                         "scalingPlan"
@@ -18285,9 +18330,9 @@
                       "type": "string",
                       "value": "[resourceId('Microsoft.DesktopVirtualization/scalingPlans', parameters('name'))]"
                     },
-                    "scheduleResourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.DesktopVirtualization/scalingPlans/pooledSchedules', parameters('name'), parameters('scheduleName'))]"
+                    "scheduleResourceIds": {
+                      "type": "array",
+                      "value": "[map(references('pooledSchedules', 'full'), lambda('schedule', lambdaVariables('schedule').id))]"
                     }
                   }
                 }
@@ -18299,25 +18344,25 @@
               "type": "string",
               "value": "[reference('scalingPlan').outputs.resourceId.value]"
             },
-            "scheduleResourceId": {
-              "type": "string",
-              "value": "[reference('scalingPlan').outputs.scheduleResourceId.value]"
+            "scheduleResourceIds": {
+              "type": "array",
+              "value": "[reference('scalingPlan').outputs.scheduleResourceIds.value]"
             }
           }
         }
       },
       "dependsOn": [
+        "avdServicePrincipalRbac",
         "controlPlane",
-        "dynamicScalingRbac",
         "finalSessionHostManagement",
         "naming"
       ]
     },
-    "dynamicScalingRbac": {
-      "condition": "[parameters('deployDynamicScalingPlan')]",
+    "avdServicePrincipalRbac": {
+      "condition": "[or(parameters('deployDynamicScalingPlan'), parameters('startVMOnConnect'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('dynamicScalingRbac-{0}', uniqueString('dynamicScalingRbac', deployment().name))]",
+      "name": "[format('avdServicePrincipalRbac-{0}', uniqueString('avdServicePrincipalRbac', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -18325,7 +18370,13 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "avdServicePrincipalObjectId": "[if(variables('dynamicScalingPrincipalIsValid'), createObject('value', parameters('avdServicePrincipalObjectId')), createObject('value', parameters('avdServicePrincipalObjectId')))]"
+          "avdServicePrincipalObjectId": "[if(variables('avdServicePrincipalIsValid'), createObject('value', parameters('avdServicePrincipalObjectId')), createObject('value', parameters('avdServicePrincipalObjectId')))]",
+          "deployDynamicScalingPlan": {
+            "value": "[parameters('deployDynamicScalingPlan')]"
+          },
+          "startVMOnConnect": {
+            "value": "[parameters('startVMOnConnect')]"
+          }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
@@ -18334,20 +18385,39 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "9055825472216484088"
+              "templateHash": "8498358312173059597"
             }
           },
           "parameters": {
             "avdServicePrincipalObjectId": {
               "type": "string"
+            },
+            "deployDynamicScalingPlan": {
+              "type": "bool"
+            },
+            "startVMOnConnect": {
+              "type": "bool"
             }
           },
           "variables": {
+            "powerOnContributorRoleId": "489581de-a3bd-480d-9518-53dea7416b33",
             "powerOnOffContributorRoleId": "40c5ff49-9181-41f8-ae61-143b0e78555e",
             "virtualMachineContributorRoleId": "a959dbd1-f747-45e3-8ba6-dd80f235f97c"
           },
           "resources": [
             {
+              "condition": "[and(not(parameters('deployDynamicScalingPlan')), parameters('startVMOnConnect'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('avdServicePrincipalObjectId'), variables('powerOnContributorRoleId'), subscription().id)]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('powerOnContributorRoleId'))]",
+                "principalId": "[parameters('avdServicePrincipalObjectId')]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "condition": "[parameters('deployDynamicScalingPlan')]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(parameters('avdServicePrincipalObjectId'), variables('powerOnOffContributorRoleId'), subscription().id)]",
@@ -18358,6 +18428,7 @@
               }
             },
             {
+              "condition": "[parameters('deployDynamicScalingPlan')]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[guid(parameters('avdServicePrincipalObjectId'), variables('virtualMachineContributorRoleId'), subscription().id)]",

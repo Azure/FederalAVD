@@ -4,6 +4,7 @@ type scalingTimeType = {
 }
 
 type dynamicScalingScheduleType = {
+  name: string
   daysOfWeek: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[]
   rampUpStartTime: scalingTimeType
   rampUpLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
@@ -33,8 +34,7 @@ param tags object = {}
 param timeZone string
 param exclusionTag string
 param hostPoolResourceId string
-param scheduleName string
-param schedule dynamicScalingScheduleType
+param schedules dynamicScalingScheduleType[]
 
 resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2025-11-01-preview' = {
   name: name
@@ -53,9 +53,9 @@ resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2025-11-01-pr
   }
 }
 
-resource pooledSchedule 'Microsoft.DesktopVirtualization/scalingPlans/pooledSchedules@2025-11-01-preview' = {
+resource pooledSchedules 'Microsoft.DesktopVirtualization/scalingPlans/pooledSchedules@2025-11-01-preview' = [for schedule in schedules: {
   parent: scalingPlan
-  name: scheduleName
+  name: schedule.name
   properties: {
     daysOfWeek: schedule.daysOfWeek
     scalingMethod: 'CreateDeletePowerManage'
@@ -82,7 +82,7 @@ resource pooledSchedule 'Microsoft.DesktopVirtualization/scalingPlans/pooledSche
     offPeakStartTime: schedule.offPeakStartTime
     offPeakLoadBalancingAlgorithm: schedule.offPeakLoadBalancingAlgorithm
   }
-}
+}]
 
 output resourceId string = scalingPlan.id
-output scheduleResourceId string = pooledSchedule.id
+output scheduleResourceIds array = map(pooledSchedules, schedule => schedule.id)

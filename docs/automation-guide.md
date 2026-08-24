@@ -14,7 +14,7 @@ Each subgraph shows a deployment step and its outputs (rounded nodes). Arrows be
 
 ```mermaid
 flowchart TD
-    subgraph KV["🔒 Step 1 · AVD Shared Services  (optional — security / monitoring / FSLogix backup)"]
+    subgraph KV["🔒 Step 1 · AVD Shared Services  (required for automated host pools; otherwise conditional)"]
         KV_RUN["sharedServices.json"]
         KV_O1(["secretsKeyVaultResourceId"])
         KV_O2(["encryptionKeyVaultResourceId"])
@@ -62,7 +62,7 @@ flowchart TD
     KV_O3 -->|"→ logAnalyticsWorkspaceResourceId"| IM_RUN
 
     %% AVD Shared Services → Host Pool
-    KV_O1 -->|"→ existingCredentialsKeyVaultResourceId"| HP_RUN
+    KV_O1 -->|"→ existingCredentialsKeyVaultResourceId (standard) or credentialsKeyVaultResourceId (automated)"| HP_RUN
     KV_O2 -->|"→ existingEncryptionKeyVaultResourceId"| HP_RUN
     KV_O3 -->|"→ existingLogAnalyticsWorkspaceResourceId"| HP_RUN
     KV_O4 -->|"→ existingFilesBackupVaultResourceId"| HP_RUN
@@ -92,15 +92,16 @@ flowchart TD
 ## Step 1: Deploy AVD Shared Services
 
 **Script/template:** `deployments/sharedServices/sharedServices.json`
-**When required:** When using Customer Managed Keys (CMK), a pre-provisioned credentials Key Vault,
-a shared Log Analytics Workspace, or a centrally managed FSLogix Azure Files backup vault and policy.
+**When required:** For every automated host pool, including a marketplace-image PoC; when using
+Customer Managed Keys (CMK), a pre-provisioned credentials Key Vault, a shared Log Analytics
+Workspace, or a centrally managed FSLogix Azure Files backup vault and policy.
 The deployment uses the `sharedServices` path and parameter-file name.
 
 ### Key outputs
 
 | Output | Used by |
 | --- | --- |
-| `secretsKeyVaultResourceId` | Host pool — `existingCredentialsKeyVaultResourceId`; Session Host Replacer / Session Hosts add-on — `credentialsKeyVaultResourceId` |
+| `secretsKeyVaultResourceId` | Standard host pool — `existingCredentialsKeyVaultResourceId`; automated host pool, Session Host Replacer, and Session Hosts add-on — `credentialsKeyVaultResourceId` |
 | `encryptionKeyVaultResourceId` | Image Management — `encryptionKeyVaultResourceId`; Host Pool — `existingEncryptionKeyVaultResourceId` |
 | `encryptionKeyVaultUri` | Available if needed for manual key references |
 | `logAnalyticsWorkspaceResourceId` | Image Management — `logAnalyticsWorkspaceResourceId`; Host Pool — `existingLogAnalyticsWorkspaceResourceId`. Only present when `deployMonitoring` was `true`. |
@@ -231,14 +232,16 @@ These values are typically pre-populated in the image build parameter files afte
 ## Step 5: Deploy Host Pool
 
 **Script:** None yet — deploy directly via ARM/PowerShell/CLI or the Azure Portal.  
-**Template:** `deployments/hostpools/hostpool.json`
+**Templates:** `deployments/hostpools/hostpool.json` for standard management, or
+`deployments/automatedHostPools/automatedHostPool.json` for automated management.
 
 ```text
 Inputs from Step 4:
   imageDefinitionId + /versions/latest  →  hostpool parameter: customImageResourceId
 
-Inputs from Step 1 (if using pre-provisioned credentials or CMK):
-  secretsKeyVaultResourceId     →  hostpool parameter: existingCredentialsKeyVaultResourceId
+Inputs from Step 1:
+  secretsKeyVaultResourceId     →  standard hostpool: existingCredentialsKeyVaultResourceId (when pre-provisioned)
+  secretsKeyVaultResourceId     →  automated hostpool: credentialsKeyVaultResourceId (always required)
   encryptionKeyVaultResourceId  →  hostpool parameter: existingEncryptionKeyVaultResourceId
 
 Example PowerShell invocation:

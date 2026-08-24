@@ -31,7 +31,8 @@ Step 4 (required): Host Pool        — AVD host pool, session hosts, FSLogix st
 
 Steps 0-3 are optional depending on your scenario:
 
-- **PoC / marketplace images**: Skip to Step 4 only. A VNet and subnet are the only hard prerequisites.
+- **Standard host-pool PoC / marketplace images**: Skip to Step 4 only. A VNet and subnet are the only hard prerequisites.
+- **Automated host-pool PoC**: Steps 1 → 4. Deploy the Shared Services secrets Key Vault first and pass `secretsKeyVaultResourceId` to the automated host pool's required `credentialsKeyVaultResourceId` parameter.
 - **Custom software, no CMK**: Steps 2 → (3 optional) → 4
 - **Custom software + CMK**: Steps 1 → 2 → (3 optional) → 4
 - **Centralized diagnostics/monitoring**: Deploy Step 1 with `deployMonitoring: true`

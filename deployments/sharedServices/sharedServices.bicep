@@ -530,7 +530,7 @@ output resourceGroupName string = operationsResourceGroupName
 @description('The name of the Secrets Key Vault. Empty if not deployed.')
 output secretsKeyVaultName string = deploySecretsKeyVault ? secretsKeyVaultName : ''
 
-@description('The resource ID of the Secrets Key Vault. Pass as "credentialsKeyVaultResourceId" to the host pool and Session Host Replacer deployments.')
+@description('The resource ID of the Secrets Key Vault. Pass as "existingCredentialsKeyVaultResourceId" to the standard host pool, or "credentialsKeyVaultResourceId" to the automated host pool, Session Host Replacer, and Session Hosts add-on deployments.')
 output secretsKeyVaultResourceId string = deploySecretsKeyVault ? keyVaults.outputs.secretsKeyVaultResourceId : ''
 
 @description('The name of the Encryption Key Vault. Empty if not deployed.')

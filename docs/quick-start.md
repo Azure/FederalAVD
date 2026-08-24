@@ -10,7 +10,8 @@ Get your Azure Virtual Desktop environment deployed. Pick your path below.
 
 | | Path | Steps | Time |
 | --- | --- | --- | --- |
-| 🧪 | **[PoC / Evaluation](#poc-fast-path)** — existing VNet, marketplace images, no compliance requirements | Step 4 only | ~20 min |
+| 🧪 | **[Standard PoC / Evaluation](#poc-fast-path)** — existing VNet, marketplace images, no compliance requirements | Step 4 only | ~20 min |
+| 🧪 | **[Automated PoC / Evaluation](../deployments/automatedHostPools/README.md#deploy)** — Azure Commercial, existing VNet, marketplace image | Steps 1 → 4 | ~30 min |
 | 🖼️ | **[Custom software, no CMK](#step-2-deploy-image-management-resources)** — pre-install software baked into images | Steps 2 → 3 → 4 | 2–4 hrs |
 | 🏛️ | **[Enterprise / compliance (CMK)](#step-1-deploy-avd-shared-services)** — FedRAMP High, DoD IL4/IL5, CMMC | Steps 1 → 2 → 3 → 4 | 4–8 hrs |
 | ✈️ | **[Air-Gapped (Secret / Top Secret)](#-air-gapped-start-here)** — no Blue Button, bring-your-own artifacts, M365/Teams/OneDrive via custom image | Steps 1 → 2 → 3 → 4 | Setup day + deployment |
@@ -21,6 +22,12 @@ Get your Azure Virtual Desktop environment deployed. Pick your path below.
 > A policy-required or centralized Log Analytics Workspace is another sequencing reason. For IL6
 > and IL7, Step 1 is the recommended baseline even when an individual template could deploy without
 > it; omit it only when approved shared services provide equivalent control coverage.
+>
+> **Automated host pools:** Step 1 is always required, including the PoC path. Deploy the Shared
+> Services secrets Key Vault first and pass its `secretsKeyVaultResourceId` output to the automated
+> host pool's `credentialsKeyVaultResourceId` parameter. Standard host pools retain the Step 4-only
+> PoC path because they can collect credentials or deploy supporting resources through their own
+> workflow.
 >
 > **🔒 Compliance is parameter choices, not a separate path:** FedRAMP High, DoD IL4/IL5, CMMC, and similar frameworks are enabled by setting the right parameter values at each step — the deployment structure is the same. See [Compliance Configuration](parameters.md#compliance-configuration-reference). The portal form flags non-compliant defaults in a Zero Trust tab.
 
@@ -75,7 +82,9 @@ available only in Azure Commercial.
 
 In the Azure portal, open **Template Specs**, select the first required component, and choose
 **Deploy**. Follow the order shown in [Choose Your Path](#choose-your-path). Skip optional components
-rather than filling out forms for resources the environment does not need.
+rather than filling out forms for resources the environment does not need. For an automated host
+pool, deploy AVD Shared Services with the Secrets Key Vault enabled before opening the automated
+host-pool form.
 
 ### 3. Save Each Generated Parameter File
 
@@ -100,9 +109,10 @@ being committed upstream.
 ### 4. Carry Outputs Forward
 
 After each deployment, copy only the documented outputs required by the next form. For example,
-AVD Shared Services supplies the encryption Key Vault and shared monitoring resource IDs to
-Image Management and Host Pool; Image Management supplies gallery, storage, identity, and build
-resource IDs to Image Build; Image Build supplies `customImageResourceId` to Host Pool. Use the
+AVD Shared Services supplies `secretsKeyVaultResourceId` to every automated host pool and supplies
+the encryption Key Vault and shared monitoring resource IDs to Image Management and Host Pool;
+Image Management supplies gallery, storage, identity, and build resource IDs to Image Build; Image
+Build supplies `customImageResourceId` to Host Pool. Use the
 [cross-team output mapping](#cross-team-output-passing) as the field-by-field reference.
 
 ### 5. Automate the Known-Good Deployment
@@ -463,7 +473,7 @@ After deployment, note the resource IDs from the deployment outputs:
 | AVD Shared Services Output | Used In |
 | :-------------- | :------ |
 | `encryptionKeyVaultResourceId` | Image Management deployment (CMK for storage/gallery) |
-| `secretsKeyVaultResourceId` | Host pool deployment (`existingCredentialsKeyVaultResourceId`) |
+| `secretsKeyVaultResourceId` | Standard host pool (`existingCredentialsKeyVaultResourceId`) or automated host pool (`credentialsKeyVaultResourceId`, required) |
 | `encryptionKeyVaultResourceId` | Host pool deployment (`existingEncryptionKeyVaultResourceId`) |
 | `logAnalyticsWorkspaceResourceId` | Image Management deployment (`logAnalyticsWorkspaceResourceId`) and Host pool deployment (`existingLogAnalyticsWorkspaceResourceId`) — only present when `deployMonitoring` was `true` |
 | `avdInsightsDataCollectionRuleResourceId` | Host pool deployment (`existingAVDInsightsDataCollectionRuleResourceId`) — only present when `deployMonitoring` was `true` |
@@ -669,7 +679,8 @@ Replacer independently handles image-driven replacement.
 If you want a working **standard-management** AVD host pool to evaluate - existing VNet,
 marketplace images, no CMK, no custom software - you can skip Steps 0-3 entirely. This is all you
 need. For an automated-pool evaluation, use the starter file and deployment command in the
-[automated host-pool guide](../deployments/automatedHostPools/README.md#deploy).
+[automated host-pool guide](../deployments/automatedHostPools/README.md#deploy), which deploys the
+required Shared Services credentials Key Vault before the host pool.
 
 > **Before you start:** Run the [60-second preflight](#preflight-checklist) above, and make sure the Az module is installed (`Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`) and you're connected (`Connect-AzAccount`).
 

@@ -16,7 +16,8 @@ deploy successfully, and retain the generated parameter files for later PowerShe
 
 Once I answer, give me **exactly one next step** - not a menu. Route me as follows:
 
-- **Existing VNet + marketplace images -> PoC:** Start with the Host Pool Template Spec portal form. Tell me to download its generated parameter file, remove `timeStamp`, and save it under `customer/parameters/hostpools/`. Do not start with PowerShell or hand-edited JSON.
+- **Existing VNet + marketplace images -> standard PoC:** Start with the standard Host Pool Template Spec portal form. Tell me to download its generated parameter file, remove `timeStamp`, and save it under `customer/parameters/hostpools/`. Do not start with PowerShell or hand-edited JSON.
+- **Automated host-pool PoC:** Deploy AVD Shared Services with the Secrets Key Vault enabled first, then pass its `secretsKeyVaultResourceId` output to `credentialsKeyVaultResourceId` in the automated Host Pool deployment.
 - **Need networking:** Start with Step 0, then continue to the appropriate next step.
 - **Need custom images, no CMK or centralized monitoring prerequisite:** Step 2 (imageManagement) -> optional Step 3 (imageBuild) -> Step 4 (hostPool).
 - **Need custom images + CMK, centralized monitoring, or diagnostic-policy prerequisite:** Step 1 (sharedServices) first, then Step 2 -> optional Step 3 -> Step 4.

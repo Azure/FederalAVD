@@ -53,6 +53,7 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 | Source | Output | Destination | Parameter |
 | --- | --- | --- | --- |
 | **sharedServices** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
+| **sharedServices** | `secretsKeyVaultResourceId` | **automatedHostPool** | `credentialsKeyVaultResourceId` (required) |
 | **sharedServices** | `encryptionKeyVaultResourceId` | **imageManagement** | `encryptionKeyVaultResourceId` |
 | **sharedServices** | `encryptionKeyVaultResourceId` | **hostpool** | `existingEncryptionKeyVaultResourceId` |
 | **sharedServices** | `logAnalyticsWorkspaceResourceId` | **imageManagement** | `logAnalyticsWorkspaceResourceId` |

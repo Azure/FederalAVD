@@ -81,4 +81,5 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 | [Parameters Reference](parameters.md) | Parameter documentation for all deployment templates — hostpool, imageBuild, imageManagement, sharedServices, networking — with compliance quick-reference. |
 | [Naming Convention](naming-convention.md) | Full naming convention reference — `namingConvention` parameter schema, CAF default patterns, RT-first/RT-last, segment descriptions, and aligned cross-solution examples. |
 | [Naming Convention Test Results](naming-convention-test-results.md) | Auto-generated output of 8 naming scenarios exercised across all solutions — KV parity checks, resource names, add-on inference. |
+| [Standard Host Pool Issues](standard-host-pool-issues.md) | Running discrepancy log for standard host-pool defects and follow-up items discovered while validating automated host-pool parity. |
 | [Troubleshooting](troubleshooting.md) | Common deployment errors and fixes — role assignment failures, image build issues, FSLogix authentication errors, and more. |

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "7792973432433836238"
+      "templateHash": "17306224949691247031"
     }
   },
   "functions": [
@@ -3946,7 +3946,7 @@
     "secretsKeyVaultResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the Secrets Key Vault. Pass as \"credentialsKeyVaultResourceId\" to the host pool and Session Host Replacer deployments."
+        "description": "The resource ID of the Secrets Key Vault. Pass as \"existingCredentialsKeyVaultResourceId\" to the standard host pool, or \"credentialsKeyVaultResourceId\" to the automated host pool, Session Host Replacer, and Session Hosts add-on deployments."
       },
       "value": "[if(parameters('deploySecretsKeyVault'), reference('keyVaults').outputs.secretsKeyVaultResourceId.value, '')]"
     },

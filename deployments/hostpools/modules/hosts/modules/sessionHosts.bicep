@@ -141,6 +141,7 @@ module availabilitySets '../../../../shared/modules/compute/availabilitySets/dep
 
 module netAppVolumeFqdns 'getNetAppVolumeSmbServerFqdns.bicep' = if (fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
   name: 'NetAppVolumeFqdns-${deploymentSuffix}'
+  scope: subscription()
   params: {
     localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
     remoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
