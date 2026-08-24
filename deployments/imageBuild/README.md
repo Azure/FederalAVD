@@ -262,8 +262,14 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 
 - **Type:** Array
 - **Default:** `[]`
-- **Allowed Values:** `Access`, `Excel`, `OneNote`, `Outlook`, `PowerPoint`, `Publisher`, `Word`, `Project`, `Visio`, `SkypeForBusiness`
+- **Allowed Values:** `Access`, `Excel`, `OneNote`, `Outlook`, `OutlookForWindows`, `PowerPoint`, `Publisher`, `Word`, `Project`, `Visio`, `SkypeForBusiness`
 - **Example:** `["Excel", "Outlook", "PowerPoint", "Word"]`
+
+`Outlook` installs Outlook (Classic). `OutlookForWindows` installs new Outlook for Windows. The
+portal selects Outlook (Classic) and leaves new Outlook unchecked by default. When
+`OutlookForWindows` is absent, the generated Office Deployment Tool configuration includes
+`<ExcludeApp ID="OutlookForWindows" />`. The built-in Appx removal list also selects
+`Microsoft.OutlookForWindows` by default so it is removed before Microsoft 365 Apps installation.
 
 #### `installOneDrive`
 

@@ -65,6 +65,9 @@ $ConfigFile = Join-Path -Path $TempDir -ChildPath 'office365x64.xml'
 $ExcludedApps += '      <ExcludeApp ID="Groove" />'
 $ExcludedApps += '      <ExcludeApp ID="OneDrive" />'
 $ExcludedApps += '      <ExcludeApp ID="Teams" />'
+if ($AppsToInstall -notcontains 'OutlookForWindows') {
+    $ExcludedApps += '      <ExcludeApp ID="OutlookForWindows" />'
+}
 if ($AppsToInstall -notcontains 'Access') {
     $ExcludedApps += '      <ExcludeApp ID="Access" />'
 }
@@ -98,7 +101,7 @@ Else {
     $Content += '  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise">'
 }
 
-If ($AppsToInstall -contains 'Access' -or $AppsToInstall -contains 'Excel' -or $AppsToInstall -contains 'OneNote' -or $AppsToInstall -contains 'Outlook' -or $AppsToInstall -contains 'PowerPoint' -or $AppsToInstall -contains 'Publisher' -or $AppsToInstall -contains 'SkypeForBusiness' -or $AppsToInstall -contains 'Word') {
+If ($AppsToInstall -contains 'Access' -or $AppsToInstall -contains 'Excel' -or $AppsToInstall -contains 'OneNote' -or $AppsToInstall -contains 'Outlook' -or $AppsToInstall -contains 'OutlookForWindows' -or $AppsToInstall -contains 'PowerPoint' -or $AppsToInstall -contains 'Publisher' -or $AppsToInstall -contains 'SkypeForBusiness' -or $AppsToInstall -contains 'Word') {
     $Content += '    <Product ID="O365ProPlusRetail">'
     $Content += '      <Language ID="en-us" />'
     $Content += $ExcludedApps
