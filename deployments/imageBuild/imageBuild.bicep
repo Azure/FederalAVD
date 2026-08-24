@@ -74,7 +74,7 @@ param downloadLatestMicrosoftContent bool = false
 @description('Optional. Install FSLogix Agent.')
 param installFsLogix bool = false
 
-@description('Optional. List of Office 365 ProPlus Apps to Install. Default is [].')
+@description('Optional. List of Microsoft 365 Apps to install. Use Outlook for classic Outlook and OutlookForWindows for new Outlook. Default is [].')
 param office365AppsToInstall array = []
 
 @description('Optional. Install OneDrive Per Machine.')

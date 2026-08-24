@@ -580,7 +580,7 @@
                                         }
                                     ],
                                     "multiselect": true,
-                                    "toolTip": "Select the list of Office 365 ProPlus apps you wish to install.",
+                                    "toolTip": "Select the Office 365 ProPlus apps to install. Outlook is new Outlook for Windows; Outlook (Classic) is the desktop Outlook client.",
                                     "constraints": {
                                         "allowedValues": [
                                             {
@@ -596,8 +596,12 @@
                                                 "value": "OneNote"
                                             },
                                             {
-                                                "label": "Outlook",
+                                                "label": "Outlook (Classic)",
                                                 "value": "Outlook"
+                                            },
+                                            {
+                                                "label": "Outlook",
+                                                "value": "OutlookForWindows"
                                             },
                                             {
                                                 "label": "PowerPoint",

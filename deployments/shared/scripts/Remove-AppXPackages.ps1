@@ -100,17 +100,30 @@ try {
     if ($apps -contains 'Microsoft.OutlookForWindows') {
         Write-Log "Microsoft.OutlookForWindows in removal list -- blocking Windows Update Orchestrator reinstall."
         $oobeKey = 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe'
+        $windowsCurrentVersion = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+        $isWindowsClient = $windowsCurrentVersion.InstallationType -eq 'Client'
+        $windowsBuild = [int]$windowsCurrentVersion.CurrentBuildNumber
 
         # Windows 11: remove the OutlookUpdate orchestrator subkey
-        $outlookOrchestratorKey = Join-Path $oobeKey 'OutlookUpdate'
-        if (Test-Path $outlookOrchestratorKey) {
-            Remove-Item -Path $outlookOrchestratorKey -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Log "Removed Orchestrator subkey: $outlookOrchestratorKey"
-        }
-        else {
-            Write-Log "Orchestrator subkey not present (already clean or not applicable): $outlookOrchestratorKey"
+        if ($isWindowsClient -and $windowsBuild -ge 22000) {
+            $outlookOrchestratorKey = Join-Path $oobeKey 'OutlookUpdate'
+            if (Test-Path $outlookOrchestratorKey) {
+                Remove-Item -Path $outlookOrchestratorKey -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Log "Removed Orchestrator subkey: $outlookOrchestratorKey"
+            }
+            else {
+                Write-Log "Orchestrator subkey not present (already clean): $outlookOrchestratorKey"
+            }
         }
 
+        # Windows 10: block the OOBE updater that installs new Outlook.
+        if ($isWindowsClient -and $windowsBuild -lt 22000) {
+            if (-not (Test-Path $oobeKey)) {
+                New-Item -Path $oobeKey -Force | Out-Null
+            }
+            New-ItemProperty -Path $oobeKey -Name 'BlockedOobeUpdaters' -PropertyType String -Value '["MS_Outlook"]' -Force | Out-Null
+            Write-Log "Set BlockedOobeUpdaters to block the MS_Outlook OOBE updater."
+        }
     }
 }
 catch {

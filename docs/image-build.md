@@ -264,11 +264,16 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | Parameter | Description | Example |
 | --- | --- | --- |
 | **installFsLogix** | Install FSLogix Apps agent | `true` |
-| **office365AppsToInstall** | M365 Apps to install | `["Excel", "Outlook", "PowerPoint", "Word"]` |
+| **office365AppsToInstall** | M365 Apps to install; `Outlook` is classic Outlook and `OutlookForWindows` is new Outlook | `["Excel", "Outlook", "PowerPoint", "Word"]` |
 | **installOneDrive** | Install OneDrive per-machine (VDI) | `true` |
 | **installTeams** | Install New Teams for VDI | `true` |
 | **teamsCloudType** | Teams government cloud variant | `GCCH` (default: `Commercial`) |
 | **downloadLatestMicrosoftContent** | Download latest FSLogix/M365/Teams from web instead of storage | `false` |
+
+The portal selects Outlook (Classic) and leaves new Outlook unchecked by default. When
+`OutlookForWindows` is not selected, Microsoft 365 Apps setup receives an
+`OutlookForWindows` exclusion. The default Appx removal selection also removes
+`Microsoft.OutlookForWindows` before Microsoft 365 Apps installation.
 
 **Built-in image customizations:**
 
