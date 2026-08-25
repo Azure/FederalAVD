@@ -128,7 +128,7 @@ module automation 'modules/automationAccount.bicep' = {
 
 // Grant the Automation Account managed identity Storage Account Contributor on the storage
 // resource group so the runbook can read share stats and update quotas via the ARM API.
-module roleAssignment '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+module roleAssignment '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   name: 'RA-StorageAccounts-StorageContributor-${deploymentSuffix}'
   scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {

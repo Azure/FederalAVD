@@ -536,7 +536,7 @@ param recoveryServices bool = false
 @allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
 param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 
-@description('Optional. Number of daily recovery points or snapshots to retain (1–365). Used for VM backup on Personal host pools and Azure Files snapshot backup on pooled host pools — never both in the same deployment.')
+@description('Optional. Number of daily recovery points or snapshots to retain. Supports 1-365 days for Personal VM backup and 1-200 days for pooled Azure Files snapshot backup.')
 @minValue(1)
 @maxValue(365)
 param backupRetentionDays int = 30
@@ -614,9 +614,6 @@ param azureKeyVaultPrivateDnsZoneResourceId string = ''
 
 @description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureQueuePrivateDnsZoneResourceId string = ''
-
-@description('Optional. Deploy the Zero Trust Compliant Disk Access Policy to deny Public Access to the Virtual Machine Managed Disks.')
-param deployDiskAccessPolicy bool = false
 
 @description('Optional. The resource Id of the Azure Monitor Private Link Scope to which monitoring resources should be linked. There should only be one Azure Monitor Private Link Scope per network that shares the same DNS.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
@@ -863,7 +860,7 @@ var effectiveNamingConvention = union(
   !empty(namingResourceTypeCodes) ? { resourceTypeCodes: namingResourceTypeCodes } : {}
 )
 
-module naming './modules/naming.bicep' = {
+module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
   name: 'Naming-${deploymentSuffix}'
   scope: subscription()
   params: {
@@ -920,6 +917,19 @@ var effectiveFslogixExistingLocalStorageAccountResourceIds = identitySolution ==
 var effectiveFslogixExistingRemoteStorageAccountResourceIds = identitySolution == 'EntraId'
   ? take(fslogixExistingRemoteStorageAccountResourceIds, 1)
   : fslogixExistingRemoteStorageAccountResourceIds
+var fslogixShardingConfigurationIsValid = (!deployFSLogixStorage && !fslogixConfigureSessionHosts) || identitySolution == 'EntraId' || fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
+  ? true
+  : bool('fslogixUserGroups must contain at least one group when sharding is enabled.')
+var fslogixExistingLocalStorageConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || !startsWith(fslogixStorageService, 'AzureFiles') || length(effectiveFslogixExistingLocalStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingRemoteStorageConfigurationIsValid = !fslogixConfigureSessionHosts || !startsWith(fslogixStorageService, 'AzureFiles') || empty(effectiveFslogixExistingRemoteStorageAccountResourceIds) || length(effectiveFslogixExistingRemoteStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingStorageConfigurationIsValid = fslogixExistingLocalStorageConfigurationIsValid && fslogixExistingRemoteStorageConfigurationIsValid
+  ? true
+  : bool('Existing FSLogix Azure Files storage must include one local account, and when supplied one remote account, per shard. Storage Account Keys use one account per location.')
+var fslogixExistingLocalNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || !startsWith(fslogixStorageService, 'AzureNetAppFiles') || length(fslogixExistingLocalNetAppVolumeResourceIds) == length(fslogixFileShareNames)
+var fslogixExistingRemoteNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || !startsWith(fslogixStorageService, 'AzureNetAppFiles') || empty(fslogixExistingRemoteNetAppVolumeResourceIds) || length(fslogixExistingRemoteNetAppVolumeResourceIds) == length(fslogixFileShareNames)
+var fslogixExistingNetAppConfigurationIsValid = fslogixExistingLocalNetAppConfigurationIsValid && fslogixExistingRemoteNetAppConfigurationIsValid
+  ? true
+  : bool('Existing Azure NetApp Files storage must include one volume per FSLogix share, in profile-then-Office order. Remote volumes are optional but must follow the same rule when supplied.')
 
 // NOTE: the name formula below must stay in sync with azureFiles.bicep: '${storageAccountNamePrefix}${padLeft(i + storageIndex, 2, '0')}'
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
@@ -1035,7 +1045,7 @@ var vmConfigurationTags = union(
 )
 
 // Resource Groups
-module deploymentResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
+module deploymentResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
   name: 'Resource-Group-Deployment-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1046,7 +1056,7 @@ module deploymentResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
+module monitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
   name: 'Resource-Group-Monitoring-${deploymentSuffix}'
   scope: subscription(effectiveMonitoringSubscription)
   params: {
@@ -1056,7 +1066,7 @@ module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module controlPlaneResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (empty(existingFeedWorkspaceResourceId)) {
+module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (empty(existingFeedWorkspaceResourceId)) {
   name: 'Resource-Group-Control-Plane-${deploymentSuffix}'
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
@@ -1066,7 +1076,7 @@ module controlPlaneResourceGroup '../shared/modules/resources/resourceGroups/dep
   }
 }
 
-module globalFeedResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
+module globalFeedResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
   name: 'Resource-Group-Global-Feed-${deploymentSuffix}'
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
@@ -1076,7 +1086,7 @@ module globalFeedResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module hostsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = {
+module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   name: 'Resource-Group-Hosts-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1087,7 +1097,7 @@ module hostsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bic
   }
 }
 
-module operationsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || deployRecoveryServicesAzureFiles) {
+module operationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || deployRecoveryServicesAzureFiles) {
   name: 'Resource-Group-Operations-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1096,7 +1106,7 @@ module operationsResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module storageResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
+module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   name: 'Resource-Group-FSLogix-Storage-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
@@ -1108,13 +1118,13 @@ module storageResourceGroup '../shared/modules/resources/resourceGroups/deploy.b
 }
 
 // PowerOn/PowerOff/Restart VM Run Command permissions for AVD Service Principal
-module avdServicePrincipalRbac 'modules/rbac/avdServicePrincipalRbac.bicep' = [
+module avdServicePrincipalRbac '../shared/modules/resourceModules/desktopVirtualization/hostPools/avdServicePrincipalRbac.bicep' = [
   for (subId, i) in rbacSubs: if (!empty(avdObjectId) && (deployScalingPlan || startVMOnConnect)) {
     name: 'Subscription-Role-Assignment-${i}-${deploymentSuffix}'
     scope: subscription(subId)
     params: {
-      avdObjectId: avdObjectId
-      deployScalingPlan: deployScalingPlan
+      avdServicePrincipalObjectId: avdObjectId
+      scalingMethod: deployScalingPlan ? 'PowerManage' : 'None'
       startVMOnConnect: startVMOnConnect
     }
   }
@@ -1134,8 +1144,8 @@ module roleAssignment_VirtualMachineUserLogin 'modules/rbac/vmUserLoginAssignmen
 }
 
 // Deployment VM for Prerequisites
-module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeploymentVm) {
-  name: 'Deployment-Prereqs-${deploymentSuffix}'
+module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy.bicep' = if (createDeploymentVm) {
+  name: 'Deployment-Helper-${deploymentSuffix}'
   params: {
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     deploymentSuffix: deploymentSuffix
@@ -1177,14 +1187,6 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     resourceGroupStorage: naming.outputs.resourceGroupStorage
     tags: tags
     userAssignedIdentityNameConv: naming.outputs.userAssignedIdentityNameConv
-    #disable-next-line BCP422
-    virtualMachineAdminPassword: !empty(existingCredentialsKeyVaultResourceId)
-      ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
-      : virtualMachineAdminPassword
-    #disable-next-line BCP422
-    virtualMachineAdminUserName: !empty(existingCredentialsKeyVaultResourceId)
-      ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
-      : virtualMachineAdminUserName
     virtualMachineName: naming.outputs.depVirtualMachineName
     virtualMachineNICName: naming.outputs.depVirtualMachineNicName
     virtualMachineDiskName: naming.outputs.depVirtualMachineDiskName
@@ -1198,7 +1200,7 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
 // KeyVaults: Inline Key Vault creation — only runs when Security KVs were not provided.
 // For all-in-one portal deployments: deploys encryption KV when CMK is requested, secrets KV when deploySecretsKeyVault=true.
 // For Security-first deployments: skipped entirely because encryptionKeyVaultResourceId will be non-empty.
-module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
+module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
   name: 'KeyVaults-${deploymentSuffix}'
   params: {
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
@@ -1246,7 +1248,7 @@ var effectiveEncryptionKeyVaultUri = !empty(existingEncryptionKeyVaultResourceId
 // Disk CMK: DES + key + role assignment — runs in parallel with monitoring/controlPlane,
 // giving sufficient RBAC propagation buffer before sessionHosts needs the DES.
 // Confidential VM disk encryption is handled separately by cvmDiskCmk below.
-module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployDiskCmk) {
+module diskCmk '../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskCmk) {
   name: 'Disk-CMK-${deploymentSuffix}'
   params: {
     resourceGroupName: naming.outputs.resourceGroupHosts
@@ -1271,7 +1273,7 @@ module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployDiskCmk) {
 
 // CVM CMK: two-step flow — Run Command creates the key with a release policy (Key Vault data plane),
 // then the shared CMK module creates the DES + role assignments (ARM, skipKeyCreation=true).
-// Must run after deploymentPrereqs so the deployment VM and its Key Vault Crypto Officer role
+// Must run after deploymentHelper so the deployment VM and its Key Vault Crypto Officer role
 // assignment are in place before the Run Command executes.
 module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
   name: 'CVM-Disk-CMK-${deploymentSuffix}'
@@ -1283,8 +1285,8 @@ module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
     keyName: naming.outputs.encryptionKeyNameConfidentialVMs
     diskEncryptionSetName: naming.outputs.diskEncryptionSetNameConfidentialVMs
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
-    deploymentVirtualMachineName: deploymentPrereqs!.outputs.virtualMachineName
-    deploymentUserAssignedIdentityClientId: deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    deploymentUserAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
     location: virtualMachinesRegion
     tags: tags
     hostPoolResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
@@ -1302,7 +1304,7 @@ var effectiveDiskEncryptionSetResourceId = deployDiskCmk
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
-module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
+module storageCmk '../shared/modules/orchestration/customerManagedKeys/storageCmk.bicep' = if (deployStorageCmk) {
   name: 'Storage-CMK-${deploymentSuffix}'
   params: {
     resourceGroupName: naming.outputs.resourceGroupStorage
@@ -1353,9 +1355,9 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     deployScalingPlan: deployScalingPlan
     deploymentSuffix: deploymentSuffix
     deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
     desktopApplicationGroupName: naming.outputs.desktopApplicationGroupName
     desktopFriendlyName: desktopFriendlyName
     enableMonitoring: enableMonitoring
@@ -1405,6 +1407,7 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
   }
   dependsOn: [
+    avdServicePrincipalRbac
     controlPlaneResourceGroup
   ]
 }
@@ -1415,10 +1418,13 @@ var deployRecoveryServices = recoveryServices && contains(hostPoolType, 'Persona
 var recoveryServicesFileSharePolicyName = empty(existingFilesBackupVaultResourceId)
   ? 'filesharepolicy'
   : existingFilesBackupPolicyName
+var filesBackupRetentionIsValid = !deployRecoveryServicesAzureFiles || !empty(existingFilesBackupVaultResourceId) || backupRetentionDays <= 200
+  ? true
+  : bool('backupRetentionDays cannot exceed 200 when creating an Azure Files snapshot backup policy.')
 
 // Azure Files Recovery Services Vault — shared vault in the Operations RG for pooled host pool FSLogix snapshot backup.
 // No CMK required: vault holds only metadata; snapshot data stays in the storage account.
-module recoveryServicesAzureFilesModule '../shared/modules/recoveryServices/fslogixBackupVault.bicep' = if (deployRecoveryServicesAzureFiles) {
+module recoveryServicesAzureFilesModule '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deployRecoveryServicesAzureFiles) {
   name: 'RecoveryServices-AzureFiles-${deploymentSuffix}'
   params: {
     createVault: empty(existingFilesBackupVaultResourceId)
@@ -1443,7 +1449,7 @@ module recoveryServicesAzureFilesModule '../shared/modules/recoveryServices/fslo
     tags: tags
     timeZone: virtualMachinesTimeZone
     fileSharePolicyName: recoveryServicesFileSharePolicyName
-    backupRetentionDays: backupRetentionDays
+    backupRetentionDays: filesBackupRetentionIsValid ? min(backupRetentionDays, 200) : 30
   }
   dependsOn: [
     operationsResourceGroup
@@ -1457,16 +1463,16 @@ var effectiveFilesBackupVaultResourceId = deployRecoveryServicesAzureFiles
   : ''
 
 // FSLogix Storage
-module fslogix '../shared/modules/fslogix/fslogix.bicep' = if (deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
+module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
   name: 'FSLogix-${deploymentSuffix}'
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
     appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
     azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
     #disable-next-line BCP422
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
@@ -1509,7 +1515,7 @@ module fslogix '../shared/modules/fslogix/fslogix.bicep' = if (deployFSLogixStor
     shareSizeInGB: fslogixShareSizeInGB
     smbServerLocation: naming.outputs.vmsLocAbbr
     storageAccountNamePrefix: naming.outputs.fslogixStorageAccountNamePrefix
-    storageCount: fslogixStorageCount
+    storageCount: fslogixShardingConfigurationIsValid ? fslogixStorageCount : fslogixStorageCount
     storageIndex: fslogixStorageIndex
     storageSku: fslogixStorageService == 'None' ? 'None' : split(fslogixStorageService, ' ')[1]
     fslogixStorageRedundancy: fslogixStorageRedundancy
@@ -1542,15 +1548,6 @@ module diskAccess 'modules/hosts/modules/diskAccess.bicep' = if (deployDiskAcces
     privateEndpointNameConv: naming.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-  }
-}
-
-module diskAccessPolicy 'modules/hosts/modules/diskNetworkAccessPolicy.bicep' = if (deployDiskAccessPolicy) {
-  name: 'ManagedDisks-NetworkAccess-Policy-${deploymentSuffix}'
-  params: {
-    diskAccessId: deployDiskAccessResource ? diskAccess!.outputs.diskAccessId : ''
-    location: virtualMachinesRegion
-    resourceGroupName: naming.outputs.resourceGroupHosts
   }
 }
 
@@ -1603,7 +1600,9 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
-    fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
+    fslogixConfigureSessionHosts: fslogixShardingConfigurationIsValid && fslogixExistingStorageConfigurationIsValid && fslogixExistingNetAppConfigurationIsValid
+      ? fslogixConfigureSessionHosts
+      : fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
     fslogixLocalStorageAccountResourceIds: deployFSLogixStorage
@@ -1682,19 +1681,19 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
 }
 
 // Clean Up Deployment VM and Role Assignments
-module cleanUp 'modules/clean-up/hostPoolCleanup.bicep' = if (createDeploymentVm) {
-  name: 'CleanUp-${deploymentSuffix}'
+module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (createDeploymentVm) {
+  name: 'Cleanup-Deployment-Helper-${deploymentSuffix}'
   params: {
     location: virtualMachinesRegion
     resourceGroupDeployment: naming.outputs.resourceGroupDeployment
     resourceGroupHosts: naming.outputs.resourceGroupHosts
     deploymentSuffix: deploymentSuffix
     userAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
     roleAssignmentIds: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
       : []
     virtualMachineNames: sessionHosts.outputs.virtualMachineNames
   }

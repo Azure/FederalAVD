@@ -542,7 +542,7 @@ resource existingImageDefinition 'Microsoft.Compute/galleries/images@2024-03-03'
   )
 }
 
-module imageDefinition '../shared/modules/compute/galleries/images/deploy.bicep' = if (empty(imageDefinitionResourceId)) {
+module imageDefinition '../shared/modules/resourceModules/compute/galleries/images/deploy.bicep' = if (empty(imageDefinitionResourceId)) {
   name: '${depPrefix}Gallery-Image-Definition-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
@@ -569,7 +569,7 @@ resource remoteComputeGallery 'Microsoft.Compute/galleries@2024-03-03' existing 
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
 }
 
-module remoteImageDefinition '../shared/modules/compute/galleries/images/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageDefinition '../shared/modules/resourceModules/compute/galleries/images/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-Gallery-Image-Definition-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
@@ -605,7 +605,7 @@ module remoteImageDefinition '../shared/modules/compute/galleries/images/deploy.
 // on the build RG. Contributor allows the cleanup script to delete the entire RG after the build.
 // When an existing resource group is provided, all required roles must be pre-granted on the supplied UAI
 // (use the imageManagement deployment with deployImageBuildResourceGroup=true to pre-stage this).
-module roleAssignmentContributorBuildRg '../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (empty(imageBuildResourceGroupId)) {
+module roleAssignmentContributorBuildRg '../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (empty(imageBuildResourceGroupId)) {
   name: '${depPrefix}RA-OrchVM-Contributor-BuildRG-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -617,7 +617,7 @@ module roleAssignmentContributorBuildRg '../shared/modules/authorization/roleAss
 
 // * Orchestration VM * //
 
-module orchestrationVm '../shared/modules/compute/virtualMachines/deploy.bicep' = {
+module orchestrationVm '../shared/modules/resourceModules/compute/virtualMachines/deploy.bicep' = {
   name: '${depPrefix}Orchestration-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -653,7 +653,7 @@ module orchestrationVm '../shared/modules/compute/virtualMachines/deploy.bicep' 
 
 // * Image VM * //
 
-module imageVm '../shared/modules/compute/virtualMachines/deploy.bicep' = {
+module imageVm '../shared/modules/resourceModules/compute/virtualMachines/deploy.bicep' = {
   name: '${depPrefix}Image-VM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -700,7 +700,7 @@ module imageVm '../shared/modules/compute/virtualMachines/deploy.bicep' = {
 
 // * Resize OS Disk Partition * //
 
-module resizeDisk '../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
+module resizeDisk '../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
   name: '${depPrefix}Resize-ImageVM-OSDisk-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -806,7 +806,7 @@ module captureImage 'modules/captureImage.bicep' = {
 
 // * Cleanup Temporary Resources * //
 
-module removeImageBuildResources '../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module removeImageBuildResources '../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: '${depPrefix}Remove-Image-Image-Build-Resources-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
@@ -842,7 +842,7 @@ module removeImageBuildResources '../shared/modules/compute/virtualMachines/runC
   }
 }
 
-module remoteImageVersion '../shared/modules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
+module remoteImageVersion '../shared/modules/resourceModules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   name: '${depPrefix}Remote-ImageVersion-${deploymentSuffix}'
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {

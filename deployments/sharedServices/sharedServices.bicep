@@ -89,7 +89,10 @@ param permittedIPs array = []
 @description('Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as "logAnalyticsWorkspaceResourceId", "avdInsightsDataCollectionRuleResourceId", and "dataCollectionEndpointResourceId" - pass those to "existingLogAnalyticsWorkspaceResourceId", "existingAVDInsightsDataCollectionRuleResourceId", and "existingDataCollectionEndpointResourceId" on the host pool deployment (and "logAnalyticsWorkspaceResourceId" to the Image Management deployment) so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment creating its own.')
 param deployMonitoring bool = false
 
-@description('Optional. The subscription ID where the Log Analytics Workspace (and its monitoring resource group) will be deployed. If not provided, the deployment subscription is used. Use this when a centralized monitoring/security team owns a separate subscription from the one hosting the Key Vaults.')
+@description('Optional. Deploy a regional user-assigned identity for Azure Monitor Agent authentication. The identity is created in the monitoring resource group when monitoring uses the operations subscription; otherwise it is created in the operations resource group so it remains with the workload.')
+param deployAzureMonitorAgentIdentity bool = true
+
+@description('Optional. The subscription ID where the Log Analytics Workspace and related monitoring resources will be deployed. If not provided, the operations subscription is used.')
 param logAnalyticsWorkspaceSubscriptionId string = ''
 
 @description('Optional. The pricing tier for the deployed Log Analytics Workspace.')
@@ -103,10 +106,7 @@ param logAnalyticsWorkspaceRetentionInDays int = 30
 @description('Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs. Ignored when "deployMonitoring" is true - the newly deployed workspace is used instead.')
 param existingLogAnalyticsWorkspaceResourceId string = ''
 
-@description('Optional. Deploy an Azure Monitor Private Link Scope (AMPLS) for the shared Log Analytics Workspace and Data Collection Endpoint. Ignored when "deployMonitoring" is false.')
-param deployAzureMonitorPrivateLinkScope bool = false
-
-@description('Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate the deployed Log Analytics Workspace and Data Collection Endpoint with. Ignored when "deployAzureMonitorPrivateLinkScope" is true or "deployMonitoring" is false. There should only be one AMPLS per network that shares the same DNS.')
+@description('Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint, access modes, and DNS configuration must be managed by the networking platform. Ignored when "deployMonitoring" is false.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
 
 // FSLogix Backup
@@ -119,7 +119,7 @@ param fslogixBackupPolicyName string = 'filesharepolicy'
 
 @description('Optional. Number of daily Azure Files snapshots retained by the shared backup policy.')
 @minValue(1)
-@maxValue(365)
+@maxValue(200)
 param fslogixBackupRetentionDays int = 30
 
 @description('Optional. Time zone used by the shared Azure Files snapshot backup policy.')
@@ -184,10 +184,10 @@ var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbrevia
 
 var deploymentSuffix = timeStamp
 var identifier = 'operations'
-
 var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)
   ? subscription().subscriptionId
   : logAnalyticsWorkspaceSubscriptionId
+var monitoringUsesDeploymentSubscription = effectiveLogAnalyticsWorkspaceSubscription == subscription().subscriptionId
 
 #disable-next-line BCP329
 var locationAbbreviation = locations[varLocation].abbreviation
@@ -206,7 +206,6 @@ var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
   recoveryServicesVaults: resourceAbbreviations.recoveryServicesVaults
   logAnalyticsWorkspaces: resourceAbbreviations.logAnalyticsWorkspaces
   dataCollectionEndpoints: resourceAbbreviations.dataCollectionEndpoints
-  privateLinkScopes: resourceAbbreviations.privateLinkScopes
   privateEndpoints: resourceAbbreviations.privateEndpoints
   networkInterfaces: resourceAbbreviations.networkInterfaces
 }
@@ -302,24 +301,17 @@ var dataCollectionEndpointName = buildCustomName(
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 
-var azureMonitorPrivateLinkScopeName = buildCustomName(
-  filter(cnv_components, component => component != 'none'),
+var azureMonitorAgentIdentityName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
   cnv_delimiter,
-  cnv_rtCodes.?privateLinkScopes ?? resourceAbbreviations.privateLinkScopes,
-  'monitoring',
+  cnv_rtCodes.?userAssignedIdentities ?? resourceAbbreviations.userAssignedIdentities,
+  'ama',
   cnv_loc,
   namingConvention.?freeform1 ?? '',
   namingConvention.?environment ?? '',
   namingConvention.?freeform2 ?? '',
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
-
-var azureMonitorPrivateLinkScopeConfigurationIsValid = !deployAzureMonitorPrivateLinkScope || (privateEndpoint && !empty(privateEndpointSubnetResourceId))
-  ? true
-  : bool('Deploying an Azure Monitor Private Link Scope requires privateEndpoint = true and privateEndpointSubnetResourceId.')
-
-var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
-var privateEndpointVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
 // Stable 6-char unique string seeded on subscription + resource group name.
 // Add location to the seed when the convention has no location component,
@@ -353,7 +345,7 @@ var fslogixBackupVaultName = buildCustomName(
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
-module operationsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = {
+module operationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   name: 'Operations-ResourceGroup-${deploymentSuffix}'
   scope: subscription()
   params: {
@@ -365,7 +357,7 @@ module operationsResourceGroup '../shared/modules/resources/resourceGroups/deplo
 
 // ── Log Analytics Workspace ─────────────────────────────────────────────────────
 
-module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring) {
+module monitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring) {
   name: 'Monitoring-ResourceGroup-${deploymentSuffix}'
   scope: subscription(effectiveLogAnalyticsWorkspaceSubscription)
   params: {
@@ -375,7 +367,27 @@ module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module logAnalyticsWorkspace '../shared/modules/operationalInsights/workspaces/deploy.bicep' = if (deployMonitoring) {
+module localAzureMonitorAgentIdentity '../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployMonitoring && deployAzureMonitorAgentIdentity && monitoringUsesDeploymentSubscription) {
+  scope: resourceGroup(monitoringResourceGroupName)
+  params: {
+    name: azureMonitorAgentIdentityName
+    location: location
+    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
+  }
+  dependsOn: [monitoringResourceGroup]
+}
+
+module crossSubscriptionAzureMonitorAgentIdentity '../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployMonitoring && deployAzureMonitorAgentIdentity && !monitoringUsesDeploymentSubscription) {
+  scope: resourceGroup(operationsResourceGroupName)
+  params: {
+    name: azureMonitorAgentIdentityName
+    location: location
+    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
+  }
+  dependsOn: [operationsResourceGroup]
+}
+
+module logAnalyticsWorkspace '../shared/modules/resourceModules/operationalInsights/workspaces/deploy.bicep' = if (deployMonitoring) {
   name: 'Monitoring-LogAnalytics-${deploymentSuffix}'
   scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
   params: {
@@ -388,41 +400,12 @@ module logAnalyticsWorkspace '../shared/modules/operationalInsights/workspaces/d
   dependsOn: [monitoringResourceGroup]
 }
 
-module azureMonitorPrivateLinkScope '../shared/modules/privateLinkScope/deploy.bicep' = if (deployMonitoring && deployAzureMonitorPrivateLinkScope && azureMonitorPrivateLinkScopeConfigurationIsValid) {
-  scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
-  params: {
-    name: azureMonitorPrivateLinkScopeName
-    location: location
-    ingestionAccessMode: 'PrivateOnly'
-    queryAccessMode: 'PrivateOnly'
-    tags: tags[?'Microsoft.Insights/privateLinkScopes'] ?? {}
-  }
-  dependsOn: [monitoringResourceGroup]
-}
-
-module azureMonitorPrivateLinkScopePrivateEndpoint '../shared/modules/network/privateEndpoints/deploy.bicep' = if (deployMonitoring && deployAzureMonitorPrivateLinkScope && azureMonitorPrivateLinkScopeConfigurationIsValid) {
-  scope: resourceGroup(split(privateEndpointSubnetResourceId, '/')[2], split(privateEndpointSubnetResourceId, '/')[4])
-  params: {
-    name: replace(replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'azuremonitor'), 'RESOURCE', azureMonitorPrivateLinkScopeName), 'VNETID', privateEndpointVnetId)
-    location: location
-    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-    subnetResourceId: privateEndpointSubnetResourceId
-    privateLinkServiceId: azureMonitorPrivateLinkScope!.outputs.resourceId
-    groupId: 'azuremonitor'
-    customNetworkInterfaceName: replace(replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'azuremonitor'), 'RESOURCE', azureMonitorPrivateLinkScopeName), 'VNETID', privateEndpointVnetId)
-  }
-}
-
-var effectiveAzureMonitorPrivateLinkScopeResourceId = deployMonitoring
-  ? (deployAzureMonitorPrivateLinkScope
-      ? azureMonitorPrivateLinkScope!.outputs.resourceId
-      : azureMonitorPrivateLinkScopeResourceId)
-  : ''
+var effectiveAzureMonitorPrivateLinkScopeResourceId = deployMonitoring ? azureMonitorPrivateLinkScopeResourceId : ''
 
 // DCE + DCR are generic per region/workspace (not tied to any host pool) - creating them once here
 // lets every host pool that reuses this workspace share the same DCE/DCR via "existingAVDInsightsDataCollectionRuleResourceId"
 // and "existingDataCollectionEndpointResourceId", instead of the first host pool deployment creating them.
-module dataCollectionEndpoint '../shared/modules/insights/dataCollectionEndpoints/deploy.bicep' = if (deployMonitoring) {
+module dataCollectionEndpoint '../shared/modules/resourceModules/insights/dataCollectionEndpoints/deploy.bicep' = if (deployMonitoring) {
   name: 'Monitoring-DataCollectionEndpoint-${deploymentSuffix}'
   scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
   params: {
@@ -434,7 +417,7 @@ module dataCollectionEndpoint '../shared/modules/insights/dataCollectionEndpoint
   dependsOn: [monitoringResourceGroup]
 }
 
-module avdInsightsDataCollectionRule '../shared/modules/monitoring/avdInsightsDataCollectionRule.bicep' = if (deployMonitoring) {
+module avdInsightsDataCollectionRule '../shared/modules/resourceModules/monitoring/avdInsightsDataCollectionRule.bicep' = if (deployMonitoring) {
   name: 'Monitoring-AVDInsightsDCR-${deploymentSuffix}'
   scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
   params: {
@@ -445,7 +428,7 @@ module avdInsightsDataCollectionRule '../shared/modules/monitoring/avdInsightsDa
   }
 }
 
-module updatePrivateLinkScope '../shared/modules/privateLinkScope/get-PrivateLinkScope.bicep' = if (deployMonitoring && (deployAzureMonitorPrivateLinkScope || !empty(azureMonitorPrivateLinkScopeResourceId))) {
+module updatePrivateLinkScope '../shared/modules/resourceModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (deployMonitoring && !empty(azureMonitorPrivateLinkScopeResourceId)) {
   name: 'Monitoring-PrivateLinkScope-${deploymentSuffix}'
   params: {
     deploymentSuffix: deploymentSuffix
@@ -465,7 +448,7 @@ var effectiveLogAnalyticsWorkspaceResourceId = deployMonitoring
 
 // ── Key Vaults ─────────────────────────────────────────────────────────────────
 
-module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = {
+module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
   name: 'Operations-KeyVaults-${deploymentSuffix}'
   scope: subscription()
   params: {
@@ -497,7 +480,7 @@ module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = {
 
 // Shared FSLogix Backup Vault
 
-module fslogixBackupVault '../shared/modules/recoveryServices/fslogixBackupVault.bicep' = if (deployFSLogixBackupVault) {
+module fslogixBackupVault '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deployFSLogixBackupVault) {
   name: 'Operations-FSLogixBackup-${deploymentSuffix}'
   params: {
     createVault: true
@@ -557,13 +540,20 @@ output avdInsightsDataCollectionRuleResourceId string = deployMonitoring ? avdIn
 @description('The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as "existingDataCollectionEndpointResourceId" to the host pool deployment.')
 output dataCollectionEndpointResourceId string = deployMonitoring ? dataCollectionEndpoint!.outputs.resourceId : ''
 
-@description('The resource ID of the deployed or reused Azure Monitor Private Link Scope. Empty when monitoring or AMPLS integration is disabled.')
+@description('The resource ID of the regional Azure Monitor Agent user-assigned identity. Pass as "monitoringUserAssignedIdentityResourceId" to automated host pool deployments in this subscription and region.')
+output azureMonitorAgentIdentityResourceId string = deployMonitoring && deployAzureMonitorAgentIdentity
+  ? (monitoringUsesDeploymentSubscription
+      ? localAzureMonitorAgentIdentity!.outputs.resourceId
+      : crossSubscriptionAzureMonitorAgentIdentity!.outputs.resourceId)
+  : ''
+
+@description('The resource ID of the existing Azure Monitor Private Link Scope associated with the monitoring resources. Empty when monitoring or AMPLS integration is disabled.')
 output azureMonitorPrivateLinkScopeResourceId string = effectiveAzureMonitorPrivateLinkScopeResourceId
 
-@description('The resource ID of the shared FSLogix Recovery Services vault. Pass as "existingFilesBackupVaultResourceId" to pooled host pool deployments or "recoveryServicesVaultResourceId" to the FSLogix Storage add-on.')
+@description('The resource ID of the shared FSLogix Recovery Services vault. Pass as "existingFilesBackupVaultResourceId" to standard or automated pooled host pool deployments, or "recoveryServicesVaultResourceId" to the FSLogix Storage add-on.')
 output fslogixBackupVaultResourceId string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.recoveryServicesVaultResourceId : ''
 
-@description('The name of the shared Azure Files snapshot backup policy. Pass as "existingFilesBackupPolicyName" to pooled host pool deployments or "fileSharePolicyName" to the FSLogix Storage add-on.')
+@description('The name of the shared Azure Files snapshot backup policy. Pass as "existingFilesBackupPolicyName" to standard or automated pooled host pool deployments, or "fileSharePolicyName" to the FSLogix Storage add-on.')
 output fslogixBackupPolicyName string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.fileShareBackupPolicyName : ''
 
 @description('The resource ID of the shared Azure Files snapshot backup policy.')

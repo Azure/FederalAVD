@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "8360238574720784560"
+      "templateHash": "158681177812551628"
     }
   },
   "definitions": {
@@ -118,6 +118,20 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. Name override for the temporary user-assigned identity used by storage configuration and cleanup scripts."
+      }
+    },
+    "manageDeploymentVirtualMachine": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Create and clean up the deployment VM within this add-on. Disable when a parent deployment supplies an existing VM and identity."
+      }
+    },
+    "existingDeploymentUserAssignedIdentityClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Client ID of an externally managed deployment identity. Required when manageDeploymentVirtualMachine is false."
       }
     },
     "identitySolution": {
@@ -519,7 +533,8 @@
     "netAppResourceGroupConfigurationIsValid": "[if(or(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), equals(parameters('netAppDeploymentMode'), 'CreateAll')), not(parameters('createStorageResourceGroup'))), true(), bool('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.'))]",
     "deployStorageCmk": "[and(equals(variables('storageSolution'), 'AzureFiles'), contains(parameters('keyManagementStorage'), 'CustomerManaged'))]",
     "storageCmkConfigurationIsValid": "[if(or(not(variables('deployStorageCmk')), not(empty(parameters('existingEncryptionKeyVaultResourceId')))), true(), bool('existingEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.'))]",
-    "domainCredentialsRequired": "[or(or(contains(parameters('identitySolution'), 'DomainServices'), equals(variables('storageSolution'), 'AzureNetAppFiles')), and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('fslogixUserGroups')))))]"
+    "domainCredentialsRequired": "[or(or(contains(parameters('identitySolution'), 'DomainServices'), equals(variables('storageSolution'), 'AzureNetAppFiles')), and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('fslogixUserGroups')))))]",
+    "externalDeploymentConfigurationIsValid": "[if(or(parameters('manageDeploymentVirtualMachine'), and(not(empty(parameters('deploymentVirtualMachineName'))), not(empty(parameters('existingDeploymentUserAssignedIdentityClientId'))))), true(), bool('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.'))]"
   },
   "resources": {
     "credentialsKeyVault": {
@@ -569,7 +584,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "8610176639713362213"
+              "templateHash": "17329485871511333550"
             }
           },
           "functions": [
@@ -1116,6 +1131,8 @@
             "recoveryServicesVaultNameVMs": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').recoveryServicesVaults, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "recoveryServicesVaultNameFSLogix": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').recoveryServicesVaults, 'files', variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "userAssignedIdentityNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').userAssignedIdentities, format('{0}{1}TOKEN', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "policyRemediationIdentityName": "[replace(variables('userAssignedIdentityNameConv'), 'TOKEN', format('policy{0}remediation', variables('cnv_delimiter')))]",
+            "azureMonitorAgentIdentityName": "[replace(variables('userAssignedIdentityNameConv'), 'TOKEN', 'ama')]",
             "resourceGroupHosts": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}{1}hosts', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "availabilitySetNameConv": "[format('{0}{1}##', __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').availabilitySets, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), variables('cnv_delimiter'))]",
             "virtualMachineNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineNameConvOverride'), ''))), parameters('namingConvention').virtualMachineNameConvOverride, if(empty(variables('cnv_rtCodes').virtualMachines), 'SHNAME', if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').virtualMachines), format('SHNAME-{0}', variables('cnv_rtCodes').virtualMachines))))]",
@@ -1229,6 +1246,14 @@
             "userAssignedIdentityNameConv": {
               "type": "string",
               "value": "[variables('userAssignedIdentityNameConv')]"
+            },
+            "policyRemediationIdentityName": {
+              "type": "string",
+              "value": "[variables('policyRemediationIdentityName')]"
+            },
+            "azureMonitorAgentIdentityName": {
+              "type": "string",
+              "value": "[variables('azureMonitorAgentIdentityName')]"
             },
             "delimiter": {
               "type": "string",
@@ -1396,6 +1421,7 @@
       ]
     },
     "deploymentResourceGroup": {
+      "condition": "[parameters('manageDeploymentVirtualMachine')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('deploymentResourceGroup-{0}', uniqueString('deploymentResourceGroup', deployment().name))]",
@@ -1461,10 +1487,11 @@
         "naming"
       ]
     },
-    "deployment": {
+    "deploymentHelper": {
+      "condition": "[parameters('manageDeploymentVirtualMachine')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('deployment-{0}', uniqueString('deployment', deployment().name))]",
+      "name": "[format('deploymentHelper-{0}', uniqueString('deploymentHelper', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1472,58 +1499,93 @@
         },
         "mode": "Incremental",
         "parameters": {
+          "confidentialVMOSDiskEncryption": {
+            "value": false
+          },
+          "desktopFriendlyName": {
+            "value": ""
+          },
+          "diskSku": {
+            "value": "StandardSSD_LRS"
+          },
+          "encryptionAtHost": {
+            "value": true
+          },
+          "fslogix": {
+            "value": true
+          },
+          "fslogixAppUpdateUserAssignedIdentityResourceId": {
+            "value": "[parameters('appUpdateUserAssignedIdentityResourceId')]"
+          },
+          "hostPoolName": {
+            "value": ""
+          },
+          "keyManagementDisks": {
+            "value": "PlatformManaged"
+          },
+          "keyManagementStorageAccounts": {
+            "value": "PlatformManaged"
+          },
           "location": {
             "value": "[parameters('location')]"
           },
-          "deploymentResourceGroupName": "[if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value))]",
           "deploymentSuffix": {
             "value": "[parameters('deploymentSuffix')]"
           },
-          "deploymentUserAssignedIdentityName": "[if(not(empty(parameters('deploymentUserAssignedIdentityName'))), createObject('value', parameters('deploymentUserAssignedIdentityName')), createObject('value', replace(reference('naming').outputs.userAssignedIdentityNameConv.value, 'TOKEN', 'deployment')))]",
-          "deploymentVirtualMachineName": "[if(not(empty(parameters('deploymentVirtualMachineName'))), createObject('value', parameters('deploymentVirtualMachineName')), createObject('value', reference('naming').outputs.depVirtualMachineName.value))]",
-          "deploymentVirtualMachineDiskName": "[if(not(empty(parameters('deploymentVirtualMachineDiskName'))), createObject('value', parameters('deploymentVirtualMachineDiskName')), createObject('value', reference('naming').outputs.depVirtualMachineDiskName.value))]",
-          "deploymentVirtualMachineNicName": "[if(not(empty(parameters('deploymentVirtualMachineNicName'))), createObject('value', parameters('deploymentVirtualMachineNicName')), createObject('value', reference('naming').outputs.depVirtualMachineNicName.value))]",
-          "deploymentVirtualMachineSize": {
+          "deploymentVmSize": {
             "value": "[parameters('deploymentVirtualMachineSize')]"
           },
-          "deploymentVirtualMachineSubnetResourceId": {
-            "value": "[parameters('deploymentVirtualMachineSubnetResourceId')]"
+          "domainJoinUserPassword": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
+          "domainJoinUserPrincipalName": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
+          "domainName": {
+            "value": "[parameters('domainName')]"
           },
-          "storageResourceGroupName": "[if(not(empty(parameters('storageResourceGroupName'))), createObject('value', parameters('storageResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
           "domainJoinDeploymentVirtualMachine": {
             "value": "[equals(variables('storageSolution'), 'AzureNetAppFiles')]"
           },
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
           },
-          "domainName": {
-            "value": "[parameters('domainName')]"
-          },
-          "organizationalUnitPath": "[if(not(empty(parameters('deploymentVirtualMachineOrganizationalUnitPath'))), createObject('value', parameters('deploymentVirtualMachineOrganizationalUnitPath')), createObject('value', parameters('organizationalUnitPath')))]",
-          "appUpdateUserAssignedIdentityResourceId": {
-            "value": "[parameters('appUpdateUserAssignedIdentityResourceId')]"
-          },
+          "ouPath": "[if(not(empty(parameters('deploymentVirtualMachineOrganizationalUnitPath'))), createObject('value', parameters('deploymentVirtualMachineOrganizationalUnitPath')), createObject('value', parameters('organizationalUnitPath')))]",
           "parentResourceId": {
             "value": "[parameters('parentResourceId')]"
           },
+          "resourceGroupControlPlane": "[if(not(empty(parameters('storageResourceGroupName'))), createObject('value', parameters('storageResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
+          "resourceGroupDeployment": "[if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value))]",
+          "resourceGroupHosts": "[if(not(empty(parameters('storageResourceGroupName'))), createObject('value', parameters('storageResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
+          "resourceGroupSecurity": "[if(not(empty(parameters('storageResourceGroupName'))), createObject('value', parameters('storageResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
+          "resourceGroupStorage": "[if(not(empty(parameters('storageResourceGroupName'))), createObject('value', parameters('storageResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
           "tags": {
             "value": "[parameters('tags')]"
           },
-          "domainJoinUserPrincipalName": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
-          "domainJoinUserPassword": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]"
+          "userAssignedIdentityName": "[if(not(empty(parameters('deploymentUserAssignedIdentityName'))), createObject('value', parameters('deploymentUserAssignedIdentityName')), createObject('value', replace(reference('naming').outputs.userAssignedIdentityNameConv.value, 'TOKEN', 'deployment')))]",
+          "virtualMachineName": "[if(not(empty(parameters('deploymentVirtualMachineName'))), createObject('value', parameters('deploymentVirtualMachineName')), createObject('value', reference('naming').outputs.depVirtualMachineName.value))]",
+          "virtualMachineNICName": "[if(not(empty(parameters('deploymentVirtualMachineNicName'))), createObject('value', parameters('deploymentVirtualMachineNicName')), createObject('value', reference('naming').outputs.depVirtualMachineNicName.value))]",
+          "virtualMachineDiskName": "[if(not(empty(parameters('deploymentVirtualMachineDiskName'))), createObject('value', parameters('deploymentVirtualMachineDiskName')), createObject('value', reference('naming').outputs.depVirtualMachineDiskName.value))]",
+          "virtualMachineSubnetResourceId": {
+            "value": "[parameters('deploymentVirtualMachineSubnetResourceId')]"
+          },
+          "manageHostResourcePermissions": {
+            "value": false
+          }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "7823256859611459350"
+              "templateHash": "1275913986896742756"
             }
           },
           "parameters": {
+            "confidentialVMOSDiskEncryption": {
+              "type": "bool"
+            },
+            "diskSku": {
+              "type": "string"
+            },
             "domainJoinUserPassword": {
               "type": "securestring"
             },
@@ -1533,77 +1595,129 @@
             "domainName": {
               "type": "string"
             },
+            "deploymentVmSize": {
+              "type": "string"
+            },
+            "desktopFriendlyName": {
+              "type": "string"
+            },
+            "encryptionAtHost": {
+              "type": "bool"
+            },
+            "fslogix": {
+              "type": "bool"
+            },
+            "fslogixAppUpdateUserAssignedIdentityResourceId": {
+              "type": "string"
+            },
+            "hostPoolName": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "parentResourceId": {
+              "type": "string",
+              "defaultValue": ""
+            },
             "domainJoinDeploymentVirtualMachine": {
               "type": "bool"
             },
             "identitySolution": {
               "type": "string"
             },
-            "appUpdateUserAssignedIdentityResourceId": {
+            "keyManagementDisks": {
+              "type": "string"
+            },
+            "keyManagementStorageAccounts": {
               "type": "string"
             },
             "location": {
               "type": "string"
             },
-            "organizationalUnitPath": {
+            "ouPath": {
               "type": "string"
             },
-            "parentResourceId": {
+            "resourceGroupControlPlane": {
               "type": "string"
             },
-            "storageResourceGroupName": {
+            "resourceGroupDeployment": {
               "type": "string"
             },
-            "deploymentResourceGroupName": {
+            "resourceGroupHosts": {
               "type": "string"
+            },
+            "resourceGroupSecurity": {
+              "type": "string"
+            },
+            "resourceGroupStorage": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
             },
             "deploymentSuffix": {
               "type": "string"
             },
-            "deploymentVirtualMachineName": {
+            "userAssignedIdentityNameConv": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "userAssignedIdentityName": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "virtualMachineName": {
               "type": "string"
             },
-            "deploymentVirtualMachineDiskName": {
+            "virtualMachineNICName": {
               "type": "string"
             },
-            "deploymentVirtualMachineNicName": {
+            "virtualMachineDiskName": {
               "type": "string"
             },
-            "deploymentVirtualMachineSize": {
+            "virtualMachineSubnetResourceId": {
               "type": "string"
             },
-            "deploymentVirtualMachineSubnetResourceId": {
-              "type": "string"
-            },
-            "deploymentUserAssignedIdentityName": {
-              "type": "string"
-            },
-            "virtualMachineAdminPassword": {
-              "type": "securestring",
-              "defaultValue": "[format('aA1!{0}', uniqueString(subscription().id, parameters('deploymentResourceGroupName'), parameters('deploymentVirtualMachineName')))]"
-            },
-            "tags": {
-              "type": "object"
+            "manageHostResourcePermissions": {
+              "type": "bool",
+              "defaultValue": true
             }
           },
           "variables": {
+            "deploymentUserAssignedIdentityName": "[if(not(empty(parameters('userAssignedIdentityName'))), parameters('userAssignedIdentityName'), replace(parameters('userAssignedIdentityNameConv'), 'TOKEN', 'deployment'))]",
+            "virtualMachineAdminUserName": "avddeploy",
+            "virtualMachineAdminPassword": "[format('aA1!{0}', uniqueString(subscription().id, parameters('resourceGroupDeployment'), parameters('virtualMachineName')))]",
+            "effectiveParentResourceId": "[if(not(empty(parameters('parentResourceId'))), parameters('parentResourceId'), if(not(empty(parameters('hostPoolName'))), format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().id, parameters('resourceGroupControlPlane'), parameters('hostPoolName')), ''))]",
+            "parentTag": "[if(empty(variables('effectiveParentResourceId')), createObject(), createObject('cm-resource-parent', variables('effectiveParentResourceId')))]",
             "roleDefinitions": {
               "Contributor": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+              "DesktopVirtualizationApplicationGroupContributor": "86240b0e-9422-4c43-887b-b61143f32ba8",
+              "KeyVaultCryptoOfficer": "14b46e9e-c2b7-41b4-b07b-48a6ebf60603",
               "RoleBasedAccessControlAdministrator": "f58310d9-a9f6-439a-9e8d-f62e7b41a168",
+              "storageFileDataPrivilegedContributor": "69566ab7-960f-475b-8e7c-b3118f30c6bd",
               "StorageAccountContributor": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
-              "StorageFileDataPrivilegedContributor": "69566ab7-960f-475b-8e7c-b3118f30c6bd"
+              "VirtualMachineContributor": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
             },
-            "storageRoleAssignments": "[union(if(or(contains(parameters('identitySolution'), 'DomainServices'), equals(parameters('identitySolution'), 'EntraKerberos-Hybrid')), createArray(createObject('name', 'StorageAccountContributor', 'roleDefinitionId', variables('roleDefinitions').StorageAccountContributor)), createArray()), createArray(createObject('name', 'StorageFileDataPrivilegedContributor', 'roleDefinitionId', variables('roleDefinitions').StorageFileDataPrivilegedContributor), createObject('name', 'StorageRbacAdministrator', 'roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator)))]",
-            "parentTag": "[if(empty(parameters('parentResourceId')), createObject(), createObject('cm-resource-parent', parameters('parentResourceId')))]",
-            "identityTags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject()))]",
-            "virtualMachineTags": "[union(if(empty(parameters('parentResourceId')), createObject(), createObject('cm-resource-parent', parameters('parentResourceId'))), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]"
+            "roleAssignmentsControlPlane": "[if(not(empty(parameters('desktopFriendlyName'))), createArray(createObject('roleDefinitionId', variables('roleDefinitions').DesktopVirtualizationApplicationGroupContributor, 'depName', 'ControlPlane-DVAppGroupCont', 'resourceGroup', parameters('resourceGroupControlPlane')), createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'ControlPlane-RBACAdmin', 'resourceGroup', parameters('resourceGroupControlPlane'))), createArray())]",
+            "roleAssignmentsDeployment": [
+              {
+                "roleDefinitionId": "[variables('roleDefinitions').Contributor]",
+                "depName": "Deployment-Cont",
+                "resourceGroup": "[parameters('resourceGroupDeployment')]"
+              }
+            ],
+            "roleAssignmentsHosts": "[if(parameters('manageHostResourcePermissions'), createArray(createObject('roleDefinitionId', variables('roleDefinitions').VirtualMachineContributor, 'depName', 'Hosts-VMCont', 'resourceGroup', parameters('resourceGroupHosts')), createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Hosts-RBACAdmin', 'resourceGroup', parameters('resourceGroupHosts'))), createArray())]",
+            "roleAssignmentsManagementConfidentialVMDiskEncryption": "[if(and(parameters('confidentialVMOSDiskEncryption'), equals(parameters('keyManagementDisks'), 'CustomerManagedHSM')), createArray(createObject('roleDefinitionId', variables('roleDefinitions').KeyVaultCryptoOfficer, 'depName', 'Security-KVCryptoOff', 'resourceGroup', parameters('resourceGroupSecurity'))), createArray())]",
+            "roleAssignmentsManagementRBACAdmin": "[if(or(or(contains(parameters('keyManagementDisks'), 'CustomManaged'), contains(parameters('keyManagementStorageAccounts'), 'CustomerManaged')), not(empty(variables('roleAssignmentsManagementConfidentialVMDiskEncryption')))), createArray(createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Security-RBACAdmin', 'resourceGroup', parameters('resourceGroupSecurity'))), createArray())]",
+            "roleAssignmentsManagement": "[union(variables('roleAssignmentsManagementConfidentialVMDiskEncryption'), variables('roleAssignmentsManagementRBACAdmin'))]",
+            "roleAssignmentsStorage": "[if(and(parameters('fslogix'), or(contains(parameters('identitySolution'), 'DomainServices'), equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'))), createArray(createObject('roleDefinitionId', variables('roleDefinitions').StorageAccountContributor, 'depName', 'Storage-StorageAcctCont', 'resourceGroup', parameters('resourceGroupStorage')), createObject('roleDefinitionId', variables('roleDefinitions').storageFileDataPrivilegedContributor, 'depName', 'Storage-StorageFileDataPrivCont', 'resourceGroup', parameters('resourceGroupStorage')), createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Storage-RBACAdmin', 'resourceGroup', parameters('resourceGroupStorage'))), if(parameters('fslogix'), createArray(createObject('roleDefinitionId', variables('roleDefinitions').storageFileDataPrivilegedContributor, 'depName', 'Storage-StorageFileDataPrivCont', 'resourceGroup', parameters('resourceGroupStorage')), createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Storage-RBACAdmin', 'resourceGroup', parameters('resourceGroupStorage'))), createArray()))]",
+            "roleAssignments": "[union(variables('roleAssignmentsControlPlane'), variables('roleAssignmentsDeployment'), variables('roleAssignmentsHosts'), variables('roleAssignmentsManagement'), variables('roleAssignmentsStorage'))]"
           },
-          "resources": {
-            "deploymentIdentity": {
+          "resources": [
+            {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('deploymentIdentity-{0}', uniqueString('deploymentIdentity', deployment().name))]",
-              "resourceGroup": "[parameters('deploymentResourceGroupName')]",
+              "name": "[format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1611,13 +1725,13 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('deploymentUserAssignedIdentityName')]"
+                    "value": "[variables('deploymentUserAssignedIdentityName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
                   },
                   "tags": {
-                    "value": "[variables('identityTags')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject()))]"
                   }
                 },
                 "template": {
@@ -1673,113 +1787,15 @@
                 }
               }
             },
-            "deploymentResourceGroupContributor": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('deploymentResourceGroupContributor-{0}', uniqueString('deploymentResourceGroupContributor', deployment().name))]",
-              "resourceGroup": "[parameters('deploymentResourceGroupName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "principalId": {
-                    "value": "[reference('deploymentIdentity').outputs.principalId.value]"
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "roleDefinitionId": {
-                    "value": "[variables('roleDefinitions').Contributor]"
-                  },
-                  "assignmentDescription": {
-                    "value": "Allows the temporary FSLogix deployment identity to delete its deployment resource group."
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "deploymentIdentity"
-              ]
-            },
-            "storageRoleAssignment": {
+            {
               "copy": {
-                "name": "storageRoleAssignment",
-                "count": "[length(variables('storageRoleAssignments'))]"
+                "name": "roleAssignments_deployment",
+                "count": "[length(range(0, length(variables('roleAssignments'))))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('RA-{0}-{1}', variables('storageRoleAssignments')[copyIndex()].name, parameters('deploymentSuffix'))]",
-              "resourceGroup": "[parameters('storageResourceGroupName')]",
+              "name": "[format('RA-{0}-{1}', variables('roleAssignments')[range(0, length(variables('roleAssignments')))[copyIndex()]].depName, parameters('deploymentSuffix'))]",
+              "resourceGroup": "[variables('roleAssignments')[range(0, length(variables('roleAssignments')))[copyIndex()]].resourceGroup]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1787,16 +1803,13 @@
                 "mode": "Incremental",
                 "parameters": {
                   "principalId": {
-                    "value": "[reference('deploymentIdentity').outputs.principalId.value]"
+                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
                   },
                   "principalType": {
                     "value": "ServicePrincipal"
                   },
                   "roleDefinitionId": {
-                    "value": "[variables('storageRoleAssignments')[copyIndex()].roleDefinitionId]"
-                  },
-                  "assignmentDescription": {
-                    "value": "Temporary access used to configure FSLogix storage."
+                    "value": "[variables('roleAssignments')[range(0, length(variables('roleAssignments')))[copyIndex()]].roleDefinitionId]"
                   }
                 },
                 "template": {
@@ -1870,14 +1883,14 @@
                 }
               },
               "dependsOn": [
-                "deploymentIdentity"
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix')))]"
               ]
             },
-            "deploymentVirtualMachine": {
+            {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('deploymentVirtualMachine-{0}', uniqueString('deploymentVirtualMachine', deployment().name))]",
-              "resourceGroup": "[parameters('deploymentResourceGroupName')]",
+              "name": "[format('VirtualMachine-Deployment-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1885,25 +1898,25 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[parameters('deploymentVirtualMachineName')]"
+                    "value": "[parameters('virtualMachineName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
                   },
                   "tags": {
-                    "value": "[variables('virtualMachineTags')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))]"
                   },
                   "nicName": {
-                    "value": "[parameters('deploymentVirtualMachineNicName')]"
+                    "value": "[parameters('virtualMachineNICName')]"
                   },
                   "subnetResourceId": {
-                    "value": "[parameters('deploymentVirtualMachineSubnetResourceId')]"
+                    "value": "[parameters('virtualMachineSubnetResourceId')]"
                   },
                   "enableAcceleratedNetworking": {
                     "value": false
                   },
                   "vmSize": {
-                    "value": "[parameters('deploymentVirtualMachineSize')]"
+                    "value": "[parameters('deploymentVmSize')]"
                   },
                   "imagePublisher": {
                     "value": "MicrosoftWindowsServer"
@@ -1915,16 +1928,16 @@
                     "value": "2019-datacenter-core-g2"
                   },
                   "osDiskName": {
-                    "value": "[parameters('deploymentVirtualMachineDiskName')]"
+                    "value": "[parameters('virtualMachineDiskName')]"
                   },
                   "osDiskSku": {
-                    "value": "StandardSSD_LRS"
+                    "value": "[parameters('diskSku')]"
                   },
                   "adminUsername": {
-                    "value": "avddeploy"
+                    "value": "[variables('virtualMachineAdminUserName')]"
                   },
                   "adminPassword": {
-                    "value": "[parameters('virtualMachineAdminPassword')]"
+                    "value": "[variables('virtualMachineAdminPassword')]"
                   },
                   "licenseType": {
                     "value": "Windows_Server"
@@ -1939,7 +1952,7 @@
                     "value": true
                   },
                   "encryptionAtHost": {
-                    "value": true
+                    "value": "[parameters('encryptionAtHost')]"
                   },
                   "bootDiagnosticsEnabled": {
                     "value": false
@@ -1947,8 +1960,10 @@
                   "systemAssignedIdentity": {
                     "value": true
                   },
-                  "userAssignedIdentityResourceIds": "[if(empty(parameters('appUpdateUserAssignedIdentityResourceId')), createObject('value', createArray(reference('deploymentIdentity').outputs.resourceId.value)), createObject('value', createArray(reference('deploymentIdentity').outputs.resourceId.value, parameters('appUpdateUserAssignedIdentityResourceId'))))]",
-                  "extensions": "[if(and(parameters('domainJoinDeploymentVirtualMachine'), not(empty(parameters('domainName')))), createObject('value', createArray(createObject('name', 'JsonADDomainExtension', 'publisher', 'Microsoft.Compute', 'type', 'JsonADDomainExtension', 'typeHandlerVersion', '1.3', 'autoUpgradeMinorVersion', true(), 'forceUpdateTag', parameters('deploymentSuffix'), 'settings', createObject('Name', parameters('domainName'), 'User', parameters('domainJoinUserPrincipalName'), 'Restart', 'true', 'Options', '3', 'OUPath', parameters('organizationalUnitPath')), 'protectedSettings', createObject('Password', parameters('domainJoinUserPassword'))))), createObject('value', createArray()))]"
+                  "userAssignedIdentityResourceIds": "[if(not(empty(parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value)))]",
+                  "extensions": {
+                    "value": "[union(createArray(createObject('name', 'GuestAttestation', 'publisher', 'Microsoft.Azure.Security.WindowsAttestation', 'type', 'GuestAttestation', 'typeHandlerVersion', '1.0', 'autoUpgradeMinorVersion', true(), 'settings', createObject('AttestationConfig', createObject('MaaSettings', createObject('maaEndpoint', '', 'maaTenantName', 'GuestAttestation'), 'AscSettings', createObject('ascReportingEndpoint', '', 'ascReportingFrequency', ''), 'useCustomToken', 'false', 'disableAlerts', 'false')))), if(and(and(and(parameters('domainJoinDeploymentVirtualMachine'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName')))), createArray(createObject('name', 'JsonADDomainExtension', 'publisher', 'Microsoft.Compute', 'type', 'JsonADDomainExtension', 'typeHandlerVersion', '1.3', 'autoUpgradeMinorVersion', true(), 'forceUpdateTag', parameters('deploymentSuffix'), 'settings', createObject('Name', parameters('domainName'), 'User', parameters('domainJoinUserPrincipalName'), 'Restart', 'true', 'Options', '3', 'OUPath', parameters('ouPath')), 'protectedSettings', createObject('Password', parameters('domainJoinUserPassword')), 'provisionAfterExtensions', createArray('GuestAttestation'))), createArray()))]"
+                  }
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -2346,28 +2361,29 @@
                 }
               },
               "dependsOn": [
-                "deploymentIdentity",
-                "deploymentResourceGroupContributor",
-                "storageRoleAssignment"
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix')))]"
               ]
             }
-          },
+          ],
           "outputs": {
             "deploymentUserAssignedIdentityClientId": {
               "type": "string",
-              "value": "[reference('deploymentIdentity').outputs.clientId.value]"
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.clientId.value]"
             },
             "deploymentUserAssignedIdentityResourceId": {
               "type": "string",
-              "value": "[reference('deploymentIdentity').outputs.resourceId.value]"
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
             },
-            "externalRoleAssignmentResourceIds": {
+            "deploymentUserAssignedIdentityRoleAssignmentIds": {
               "type": "array",
-              "value": "[map(references('storageRoleAssignment'), lambda('assignment', lambdaVariables('assignment').outputs.resourceId.value))]"
+              "copy": {
+                "count": "[length(filter(range(0, length(variables('roleAssignments'))), lambda('i', not(equals(variables('roleAssignments')[lambdaVariables('i')].resourceGroup, parameters('resourceGroupDeployment'))))))]",
+                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('roleAssignments')[range(0, length(variables('roleAssignments')))[filter(range(0, length(variables('roleAssignments'))), lambda('i', not(equals(variables('roleAssignments')[lambdaVariables('i')].resourceGroup, parameters('resourceGroupDeployment')))))[copyIndex()]]].resourceGroup), 'Microsoft.Resources/deployments', format('RA-{0}-{1}', variables('roleAssignments')[range(0, length(variables('roleAssignments')))[filter(range(0, length(variables('roleAssignments'))), lambda('i', not(equals(variables('roleAssignments')[lambdaVariables('i')].resourceGroup, parameters('resourceGroupDeployment')))))[copyIndex()]]].depName, parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+              }
             },
             "virtualMachineName": {
               "type": "string",
-              "value": "[reference('deploymentVirtualMachine').outputs.name.value]"
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('VirtualMachine-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
             }
           }
         }
@@ -3787,12 +3803,8 @@
           "azureFilePrivateDnsZoneResourceId": {
             "value": "[parameters('azureFilePrivateDnsZoneResourceId')]"
           },
-          "deploymentUserAssignedIdentityClientId": {
-            "value": "[reference('deployment').outputs.deploymentUserAssignedIdentityClientId.value]"
-          },
-          "deploymentVirtualMachineName": {
-            "value": "[reference('deployment').outputs.virtualMachineName.value]"
-          },
+          "deploymentUserAssignedIdentityClientId": "[if(variables('externalDeploymentConfigurationIsValid'), if(parameters('manageDeploymentVirtualMachine'), createObject('value', reference('deploymentHelper').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', parameters('existingDeploymentUserAssignedIdentityClientId'))), createObject('value', parameters('existingDeploymentUserAssignedIdentityClientId')))]",
+          "deploymentVirtualMachineName": "[if(variables('externalDeploymentConfigurationIsValid'), if(parameters('manageDeploymentVirtualMachine'), createObject('value', reference('deploymentHelper').outputs.virtualMachineName.value), createObject('value', parameters('deploymentVirtualMachineName'))), createObject('value', parameters('deploymentVirtualMachineName')))]",
           "domainJoinUserPassword": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
           "domainJoinUserPrincipalName": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
           "domainName": {
@@ -7378,17 +7390,18 @@
         }
       },
       "dependsOn": [
-        "deployment",
+        "deploymentHelper",
         "encryptionKeyVault",
         "naming",
         "storageCmk",
         "storageResourceGroup"
       ]
     },
-    "cleanUp": {
+    "cleanupDeploymentHelper": {
+      "condition": "[parameters('manageDeploymentVirtualMachine')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('cleanUp-{0}', uniqueString('cleanUp', deployment().name))]",
+      "name": "[format('cleanupDeploymentHelper-{0}', uniqueString('cleanupDeploymentHelper', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -7399,61 +7412,79 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "deploymentResourceGroupName": "[if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value))]",
+          "resourceGroupDeployment": "[if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value))]",
+          "resourceGroupHosts": "[if(not(empty(parameters('storageResourceGroupName'))), createObject('value', parameters('storageResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
           "deploymentSuffix": {
             "value": "[parameters('deploymentSuffix')]"
           },
-          "deploymentUserAssignedIdentityClientId": {
-            "value": "[reference('deployment').outputs.deploymentUserAssignedIdentityClientId.value]"
+          "userAssignedIdentityClientId": {
+            "value": "[reference('deploymentHelper').outputs.deploymentUserAssignedIdentityClientId.value]"
           },
           "deploymentVirtualMachineName": {
-            "value": "[reference('deployment').outputs.virtualMachineName.value]"
+            "value": "[reference('deploymentHelper').outputs.virtualMachineName.value]"
           },
-          "externalRoleAssignmentResourceIds": {
-            "value": "[reference('deployment').outputs.externalRoleAssignmentResourceIds.value]"
+          "roleAssignmentIds": {
+            "value": "[reference('deploymentHelper').outputs.deploymentUserAssignedIdentityRoleAssignmentIds.value]"
+          },
+          "virtualMachineNames": {
+            "value": []
+          },
+          "removeHostRunCommands": {
+            "value": false
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "3734279393718827516"
+              "templateHash": "9367913685587491967"
             }
           },
           "parameters": {
             "location": {
               "type": "string"
             },
-            "deploymentResourceGroupName": {
+            "resourceGroupHosts": {
+              "type": "string"
+            },
+            "resourceGroupDeployment": {
               "type": "string"
             },
             "deploymentSuffix": {
               "type": "string"
             },
-            "deploymentUserAssignedIdentityClientId": {
+            "userAssignedIdentityClientId": {
               "type": "string"
             },
             "deploymentVirtualMachineName": {
               "type": "string"
             },
-            "externalRoleAssignmentResourceIds": {
+            "roleAssignmentIds": {
               "type": "array"
+            },
+            "virtualMachineNames": {
+              "type": "array"
+            },
+            "removeHostRunCommands": {
+              "type": "bool",
+              "defaultValue": true
             }
           },
           "variables": {
-            "$fxv#0": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$RoleAssignmentIds,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Delete Role Assignments\r\n\r\n    [array]$RoleAssignmentIds = $RoleAssignmentIds.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n    ForEach ($RoleAssignmentId in $RoleAssignmentIds) {\r\n        Start-Sleep -Seconds 1\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $RoleAssignmentId + '?api-version=2022-04-01')\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}",
-            "$fxv#1": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceGroupResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    $StopWatch = [Diagnostics.Stopwatch]::StartNew()\r\n\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Wait for at least 30 seconds to allow the Run Command to report status to ARM to avoid deployment failed error when VM is deleted before status is returned.\r\n    # Run commands have a minimum of 20 seconds to report status to ARM. This gives an additional 10 seconds buffer.\r\n    $StopWatch.Stop()\r\n    $StopWatch.Elapsed.TotalSeconds\r\n    If ($StopWatch.Elapsed.TotalSeconds -lt 30) {\r\n        Start-Sleep -Seconds (30 - $StopWatch.Elapsed.TotalSeconds)\r\n    }\r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ResourceGroupResourceId + '?forceDeletionTypes=Microsoft.Compute/virtualMachines&api-version=2021-04-01')\r\n}\r\ncatch {\r\n    throw\r\n}"
+            "$fxv#0": "Param(    \r\n    [string]$ResourceManagerUri,\r\n    [string]$SubscriptionId,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$VirtualMachineNames,\r\n    [string]$VirtualMachinesResourceGroup\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\n[array]$VirtualMachineNames = $VirtualMachineNames.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n# Get an access token  -  use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n$TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\nif (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n$AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n$ResourceGroupId = '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $VirtualMachinesResourceGroup\r\n\r\nForEach ($VMName in $VirtualMachineNames) {\r\n    $RunCommands = (Invoke-RestMethod `\r\n                        -Headers $AzureManagementHeader `\r\n                        -Method 'GET' `\r\n                        -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/' + $VMName + '/runCommands?api-version=2024-03-01')).value.name\r\n    ForEach ($RunCommand in $RunCommands) {\r\n        Invoke-RestMethod `\r\n            -Headers $AzureManagementHeader `\r\n            -Method 'DELETE' `\r\n            -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/' + $VmName + '/runCommands/' + $RunCommand + '?api-version=2024-03-01') | Out-Null\r\n    }\r\n}",
+            "$fxv#1": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$RoleAssignmentIds,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Delete Role Assignments\r\n\r\n    [array]$RoleAssignmentIds = $RoleAssignmentIds.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n    ForEach ($RoleAssignmentId in $RoleAssignmentIds) {\r\n        Start-Sleep -Seconds 1\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $RoleAssignmentId + '?api-version=2022-04-01')\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}",
+            "$fxv#2": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceGroupResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    $StopWatch = [Diagnostics.Stopwatch]::StartNew()\r\n\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Wait for at least 30 seconds to allow the Run Command to report status to ARM to avoid deployment failed error when VM is deleted before status is returned.\r\n    # Run commands have a minimum of 20 seconds to report status to ARM. This gives an additional 10 seconds buffer.\r\n    $StopWatch.Stop()\r\n    $StopWatch.Elapsed.TotalSeconds\r\n    If ($StopWatch.Elapsed.TotalSeconds -lt 30) {\r\n        Start-Sleep -Seconds (30 - $StopWatch.Elapsed.TotalSeconds)\r\n    }\r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ResourceGroupResourceId + '?forceDeletionTypes=Microsoft.Compute/virtualMachines&api-version=2021-04-01')\r\n}\r\ncatch {\r\n    throw\r\n}"
           },
-          "resources": {
-            "removeRoleAssignments": {
+          "resources": [
+            {
+              "condition": "[parameters('removeHostRunCommands')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('removeRoleAssignments-{0}', uniqueString('removeRoleAssignments', deployment().name))]",
-              "resourceGroup": "[parameters('deploymentResourceGroupName')]",
+              "name": "[format('Remove-RunCommands-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -7464,7 +7495,7 @@
                     "value": "[parameters('deploymentVirtualMachineName')]"
                   },
                   "name": {
-                    "value": "[format('Remove-RoleAssignments-{0}', parameters('deploymentSuffix'))]"
+                    "value": "[format('Remove-RunCommands-{0}', parameters('deploymentSuffix'))]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -7473,7 +7504,7 @@
                     "value": "[variables('$fxv#0')]"
                   },
                   "timeoutInSeconds": {
-                    "value": 900
+                    "value": 3600
                   },
                   "treatFailureAsDeploymentFailure": {
                     "value": true
@@ -7485,12 +7516,20 @@
                         "value": "[environment().resourceManager]"
                       },
                       {
-                        "name": "RoleAssignmentIds",
-                        "value": "[string(parameters('externalRoleAssignmentResourceIds'))]"
+                        "name": "SubscriptionId",
+                        "value": "[subscription().subscriptionId]"
                       },
                       {
                         "name": "UserAssignedIdentityClientId",
-                        "value": "[parameters('deploymentUserAssignedIdentityClientId')]"
+                        "value": "[parameters('userAssignedIdentityClientId')]"
+                      },
+                      {
+                        "name": "VirtualMachineNames",
+                        "value": "[string(parameters('virtualMachineNames'))]"
+                      },
+                      {
+                        "name": "virtualMachinesResourceGroup",
+                        "value": "[parameters('resourceGroupHosts')]"
                       }
                     ]
                   }
@@ -7638,11 +7677,11 @@
                 }
               }
             },
-            "removeDeploymentResourceGroup": {
+            {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('removeDeploymentResourceGroup-{0}', uniqueString('removeDeploymentResourceGroup', deployment().name))]",
-              "resourceGroup": "[parameters('deploymentResourceGroupName')]",
+              "name": "[format('Remove-RoleAssignments-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -7653,7 +7692,7 @@
                     "value": "[parameters('deploymentVirtualMachineName')]"
                   },
                   "name": {
-                    "value": "[format('Delete-DeploymentResourceGroup-{0}', parameters('deploymentSuffix'))]"
+                    "value": "[format('Remove-RoleAssignments-{0}', parameters('deploymentSuffix'))]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -7661,22 +7700,25 @@
                   "script": {
                     "value": "[variables('$fxv#1')]"
                   },
-                  "asyncExecution": {
+                  "timeoutInSeconds": {
+                    "value": 900
+                  },
+                  "treatFailureAsDeploymentFailure": {
                     "value": true
                   },
                   "parameters": {
                     "value": [
                       {
-                        "name": "ResourceGroupResourceId",
-                        "value": "[format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('deploymentResourceGroupName'))]"
-                      },
-                      {
                         "name": "ResourceManagerUri",
                         "value": "[environment().resourceManager]"
                       },
                       {
+                        "name": "RoleAssignmentIds",
+                        "value": "[string(parameters('roleAssignmentIds'))]"
+                      },
+                      {
                         "name": "UserAssignedIdentityClientId",
-                        "value": "[parameters('deploymentUserAssignedIdentityClientId')]"
+                        "value": "[parameters('userAssignedIdentityClientId')]"
                       }
                     ]
                   }
@@ -7824,14 +7866,203 @@
                 }
               },
               "dependsOn": [
-                "removeRoleAssignments"
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('Remove-RunCommands-{0}', parameters('deploymentSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('Delete-DeploymentResourceGroup-{0}', parameters('deploymentSuffix'))]",
+              "resourceGroup": "[parameters('resourceGroupDeployment')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "virtualMachineName": {
+                    "value": "[parameters('deploymentVirtualMachineName')]"
+                  },
+                  "name": {
+                    "value": "[format('Delete-DeploymentResourceGroup-{0}', parameters('deploymentSuffix'))]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "script": {
+                    "value": "[variables('$fxv#2')]"
+                  },
+                  "asyncExecution": {
+                    "value": true
+                  },
+                  "parameters": {
+                    "value": [
+                      {
+                        "name": "ResourceGroupResourceId",
+                        "value": "[format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment'))]"
+                      },
+                      {
+                        "name": "ResourceManagerUri",
+                        "value": "[environment().resourceManager]"
+                      },
+                      {
+                        "name": "UserAssignedIdentityClientId",
+                        "value": "[parameters('userAssignedIdentityClientId')]"
+                      }
+                    ]
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "3524014955198313820"
+                    }
+                  },
+                  "parameters": {
+                    "virtualMachineName": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "script": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "PowerShell script content to execute. Provide either script or scriptUri, not both."
+                      }
+                    },
+                    "scriptUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "URI of a script to execute. Provide either script or scriptUri, not both."
+                      }
+                    },
+                    "scriptUriManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the script URI."
+                      }
+                    },
+                    "parameters": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named parameters to pass to the script."
+                      }
+                    },
+                    "protectedParameters": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named protected (secure) parameters to pass to the script."
+                      }
+                    },
+                    "timeoutInSeconds": {
+                      "type": "int",
+                      "defaultValue": 0,
+                      "metadata": {
+                        "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
+                      }
+                    },
+                    "asyncExecution": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Run the command asynchronously (fire and forget)."
+                      }
+                    },
+                    "treatFailureAsDeploymentFailure": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Treat a non-zero exit code as a deployment failure."
+                      }
+                    },
+                    "outputBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                      }
+                    },
+                    "errorBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                      }
+                    },
+                    "outputBlobManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                      }
+                    },
+                    "errorBlobManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Compute/virtualMachines/runCommands",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "source": {
+                          "script": "[if(not(empty(parameters('script'))), parameters('script'), null())]",
+                          "scriptUri": "[if(not(empty(parameters('scriptUri'))), parameters('scriptUri'), null())]",
+                          "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
+                        },
+                        "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
+                        "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                        "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
+                        "asyncExecution": "[parameters('asyncExecution')]",
+                        "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
+                        "outputBlobUri": "[if(not(empty(parameters('outputBlobUri'))), parameters('outputBlobUri'), null())]",
+                        "errorBlobUri": "[if(not(empty(parameters('errorBlobUri'))), parameters('errorBlobUri'), null())]",
+                        "outputBlobManagedIdentity": "[if(not(empty(parameters('outputBlobManagedIdentityClientId'))), createObject('clientId', parameters('outputBlobManagedIdentityClientId')), null())]",
+                        "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('virtualMachineName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('Remove-RoleAssignments-{0}', parameters('deploymentSuffix')))]"
               ]
             }
-          }
+          ]
         }
       },
       "dependsOn": [
-        "deployment",
+        "deploymentHelper",
         "fslogix",
         "naming"
       ]

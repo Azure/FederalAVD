@@ -225,6 +225,19 @@ To request a quota increase, go to **Azure Portal → Subscriptions → [your su
 
 As a short-term workaround, reduce `sessionHostCount` or switch to a smaller `virtualMachineSize` that uses fewer vCPUs per VM. Run `tools/Get-AvailableVMSkus.ps1 -Region <location>` to see all VM sizes available in the region.
 
+### Automated scaling plan is absent after a failed deployment
+
+An automated host-pool deployment can have `deployDynamicScalingPlan: true` while the overall
+deployment fails on another parallel branch. Inspect deployment operations before diagnosing the
+scaling configuration itself. `SkuNotAvailable` on the temporary FSLogix deployment helper, for
+example, is a VM capacity failure rather than a scaling-plan failure.
+
+Current automated templates deploy scaling as a control-plane branch after the host pool and AVD
+service-principal RBAC. It does not depend on FSLogix, policy, or session-host provisioning. For
+older Template Spec versions that serialized scaling after provisioning, publish the current
+template and redeploy. Select an available deployment-helper size when the failed operation reports
+`SkuNotAvailable`.
+
 ## Host Pool Registration Token Expired
 
 ### Symptom

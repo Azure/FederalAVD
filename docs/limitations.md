@@ -15,6 +15,9 @@ FederalAVD automated host pools use Azure Virtual Desktop Session Host Configura
 - Azure Virtual Desktop exclusively owns VM creation, update, scaling, and deletion. Session Host
     Replacer, the Session Hosts add-on, registration-token deployments, and other external VM
     lifecycle automation aren't supported with automated pools.
+- Session Host Management accepts a VM name prefix but owns the resulting session-host VM, OS disk,
+    and NIC names. The standard deployment's `SHNAME` patterns, starting index, and index padding
+    therefore don't apply. Supporting resources created by FederalAVD use the shared naming module.
 - Dynamic create/delete autoscale requires the Azure Virtual Desktop service principal roles and
     outbound access to the service's current session-host agent download endpoint.
 - Preview APIs can change and might not meet an organization's production support requirements.

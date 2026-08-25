@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17306224949691247031"
+      "templateHash": "3203240329042603275"
     }
   },
   "functions": [
@@ -229,11 +229,18 @@
         "description": "Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as \"logAnalyticsWorkspaceResourceId\", \"avdInsightsDataCollectionRuleResourceId\", and \"dataCollectionEndpointResourceId\" - pass those to \"existingLogAnalyticsWorkspaceResourceId\", \"existingAVDInsightsDataCollectionRuleResourceId\", and \"existingDataCollectionEndpointResourceId\" on the host pool deployment (and \"logAnalyticsWorkspaceResourceId\" to the Image Management deployment) so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment creating its own."
       }
     },
+    "deployAzureMonitorAgentIdentity": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Deploy a regional user-assigned identity for Azure Monitor Agent authentication. The identity is created in the monitoring resource group when monitoring uses the operations subscription; otherwise it is created in the operations resource group so it remains with the workload."
+      }
+    },
     "logAnalyticsWorkspaceSubscriptionId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. The subscription ID where the Log Analytics Workspace (and its monitoring resource group) will be deployed. If not provided, the deployment subscription is used. Use this when a centralized monitoring/security team owns a separate subscription from the one hosting the Key Vaults."
+        "description": "Optional. The subscription ID where the Log Analytics Workspace and related monitoring resources will be deployed. If not provided, the operations subscription is used."
       }
     },
     "logAnalyticsWorkspaceSku": {
@@ -259,18 +266,11 @@
         "description": "Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs. Ignored when \"deployMonitoring\" is true - the newly deployed workspace is used instead."
       }
     },
-    "deployAzureMonitorPrivateLinkScope": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Deploy an Azure Monitor Private Link Scope (AMPLS) for the shared Log Analytics Workspace and Data Collection Endpoint. Ignored when \"deployMonitoring\" is false."
-      }
-    },
     "azureMonitorPrivateLinkScopeResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate the deployed Log Analytics Workspace and Data Collection Endpoint with. Ignored when \"deployAzureMonitorPrivateLinkScope\" is true or \"deployMonitoring\" is false. There should only be one AMPLS per network that shares the same DNS."
+        "description": "Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint, access modes, and DNS configuration must be managed by the networking platform. Ignored when \"deployMonitoring\" is false."
       }
     },
     "deployFSLogixBackupVault": {
@@ -291,7 +291,7 @@
       "type": "int",
       "defaultValue": 30,
       "minValue": 1,
-      "maxValue": 365,
+      "maxValue": 200,
       "metadata": {
         "description": "Optional. Number of daily Azure Files snapshots retained by the shared backup policy."
       }
@@ -902,10 +902,11 @@
     "deploymentSuffix": "[parameters('timeStamp')]",
     "identifier": "operations",
     "effectiveLogAnalyticsWorkspaceSubscription": "[if(empty(parameters('logAnalyticsWorkspaceSubscriptionId')), subscription().subscriptionId, parameters('logAnalyticsWorkspaceSubscriptionId'))]",
+    "monitoringUsesDeploymentSubscription": "[equals(variables('effectiveLogAnalyticsWorkspaceSubscription'), subscription().subscriptionId)]",
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
     "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
     "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
-    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'recoveryServicesVaults', variables('resourceAbbreviations').recoveryServicesVaults, 'logAnalyticsWorkspaces', variables('resourceAbbreviations').logAnalyticsWorkspaces, 'dataCollectionEndpoints', variables('resourceAbbreviations').dataCollectionEndpoints, 'privateLinkScopes', variables('resourceAbbreviations').privateLinkScopes, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
+    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'recoveryServicesVaults', variables('resourceAbbreviations').recoveryServicesVaults, 'logAnalyticsWorkspaces', variables('resourceAbbreviations').logAnalyticsWorkspaces, 'dataCollectionEndpoints', variables('resourceAbbreviations').dataCollectionEndpoints, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
     "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
     "cnv_rtFirst": "[if(not(empty(variables('cnv_components'))), not(equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
     "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
@@ -915,14 +916,12 @@
     "monitoringResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "logAnalyticsWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'logAnalyticsWorkspaces'), variables('resourceAbbreviations').logAnalyticsWorkspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "dataCollectionEndpointName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'dataCollectionEndpoints'), variables('resourceAbbreviations').dataCollectionEndpoints), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "azureMonitorPrivateLinkScopeName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('component', not(equals(lambdaVariables('component'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'privateLinkScopes'), variables('resourceAbbreviations').privateLinkScopes), 'monitoring', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "azureMonitorPrivateLinkScopeConfigurationIsValid": "[if(or(not(parameters('deployAzureMonitorPrivateLinkScope')), and(parameters('privateEndpoint'), not(empty(parameters('privateEndpointSubnetResourceId'))))), true(), bool('Deploying an Azure Monitor Private Link Scope requires privateEndpoint = true and privateEndpointSubnetResourceId.'))]",
-    "privateEndpointVnetName": "[if(not(empty(parameters('privateEndpointSubnetResourceId'))), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
-    "privateEndpointVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
+    "azureMonitorAgentIdentityName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'userAssignedIdentities'), variables('resourceAbbreviations').userAssignedIdentities), 'ama', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
     "secretsKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]",
     "encryptionKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]",
-    "fslogixBackupVaultName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('component', not(equals(lambdaVariables('component'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'recoveryServicesVaults'), variables('resourceAbbreviations').recoveryServicesVaults), 'files', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]"
+    "fslogixBackupVaultName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('component', not(equals(lambdaVariables('component'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'recoveryServicesVaults'), variables('resourceAbbreviations').recoveryServicesVaults), 'files', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]"
   },
   "resources": {
     "operationsResourceGroup": {
@@ -1056,6 +1055,162 @@
           }
         }
       }
+    },
+    "localAzureMonitorAgentIdentity": {
+      "condition": "[and(and(parameters('deployMonitoring'), parameters('deployAzureMonitorAgentIdentity')), variables('monitoringUsesDeploymentSubscription'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('localAzureMonitorAgentIdentity-{0}', uniqueString('localAzureMonitorAgentIdentity', deployment().name))]",
+      "resourceGroup": "[variables('monitoringResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[variables('azureMonitorAgentIdentityName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "92643184089507860"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "clientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').clientId]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "monitoringResourceGroup"
+      ]
+    },
+    "crossSubscriptionAzureMonitorAgentIdentity": {
+      "condition": "[and(and(parameters('deployMonitoring'), parameters('deployAzureMonitorAgentIdentity')), not(variables('monitoringUsesDeploymentSubscription')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('crossSubscriptionAzureMonitorAgentIdentity-{0}', uniqueString('crossSubscriptionAzureMonitorAgentIdentity', deployment().name))]",
+      "resourceGroup": "[variables('operationsResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[variables('azureMonitorAgentIdentityName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "92643184089507860"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "clientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').clientId]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "operationsResourceGroup"
+      ]
     },
     "logAnalyticsWorkspace": {
       "condition": "[parameters('deployMonitoring')]",
@@ -1289,278 +1444,6 @@
         "monitoringResourceGroup"
       ]
     },
-    "azureMonitorPrivateLinkScope": {
-      "condition": "[and(and(parameters('deployMonitoring'), parameters('deployAzureMonitorPrivateLinkScope')), variables('azureMonitorPrivateLinkScopeConfigurationIsValid'))]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('azureMonitorPrivateLinkScope-{0}', uniqueString('azureMonitorPrivateLinkScope', deployment().name))]",
-      "subscriptionId": "[variables('effectiveLogAnalyticsWorkspaceSubscription')]",
-      "resourceGroup": "[variables('monitoringResourceGroupName')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "name": {
-            "value": "[variables('azureMonitorPrivateLinkScopeName')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "ingestionAccessMode": {
-            "value": "PrivateOnly"
-          },
-          "queryAccessMode": {
-            "value": "PrivateOnly"
-          },
-          "tags": {
-            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/privateLinkScopes'), createObject())]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "7394285161610511139"
-            }
-          },
-          "parameters": {
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure Monitor Private Link Scope name."
-              }
-            },
-            "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Azure region for the Azure Monitor Private Link Scope."
-              }
-            },
-            "ingestionAccessMode": {
-              "type": "string",
-              "defaultValue": "PrivateOnly",
-              "allowedValues": [
-                "Open",
-                "PrivateOnly"
-              ],
-              "metadata": {
-                "description": "Optional. Default access mode for ingestion through associated private endpoints."
-              }
-            },
-            "queryAccessMode": {
-              "type": "string",
-              "defaultValue": "PrivateOnly",
-              "allowedValues": [
-                "Open",
-                "PrivateOnly"
-              ],
-              "metadata": {
-                "description": "Optional. Default access mode for queries through associated private endpoints."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Resource tags."
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Insights/privateLinkScopes",
-              "apiVersion": "2021-09-01",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "accessModeSettings": {
-                  "ingestionAccessMode": "[parameters('ingestionAccessMode')]",
-                  "queryAccessMode": "[parameters('queryAccessMode')]",
-                  "exclusions": []
-                }
-              }
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Insights/privateLinkScopes', parameters('name'))]"
-            },
-            "resourceName": {
-              "type": "string",
-              "value": "[parameters('name')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "monitoringResourceGroup"
-      ]
-    },
-    "azureMonitorPrivateLinkScopePrivateEndpoint": {
-      "condition": "[and(and(parameters('deployMonitoring'), parameters('deployAzureMonitorPrivateLinkScope')), variables('azureMonitorPrivateLinkScopeConfigurationIsValid'))]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('azureMonitorPrivateLinkScopePrivateEndpoint-{0}', uniqueString('azureMonitorPrivateLinkScopePrivateEndpoint', deployment().name))]",
-      "subscriptionId": "[split(parameters('privateEndpointSubnetResourceId'), '/')[2]]",
-      "resourceGroup": "[split(parameters('privateEndpointSubnetResourceId'), '/')[4]]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "name": {
-            "value": "[replace(replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'azuremonitor'), 'RESOURCE', variables('azureMonitorPrivateLinkScopeName')), 'VNETID', variables('privateEndpointVnetId'))]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "tags": {
-            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
-          },
-          "subnetResourceId": {
-            "value": "[parameters('privateEndpointSubnetResourceId')]"
-          },
-          "privateLinkServiceId": {
-            "value": "[reference('azureMonitorPrivateLinkScope').outputs.resourceId.value]"
-          },
-          "groupId": {
-            "value": "azuremonitor"
-          },
-          "customNetworkInterfaceName": {
-            "value": "[replace(replace(replace(variables('privateEndpointNICNameConv'), 'SUBRESOURCE', 'azuremonitor'), 'RESOURCE', variables('azureMonitorPrivateLinkScopeName')), 'VNETID', variables('privateEndpointVnetId'))]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "17519891137637288802"
-            }
-          },
-          "parameters": {
-            "name": {
-              "type": "string"
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]"
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {}
-            },
-            "subnetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the subnet to deploy the private endpoint into."
-              }
-            },
-            "privateLinkServiceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the resource to create the private endpoint for."
-              }
-            },
-            "groupId": {
-              "type": "string",
-              "metadata": {
-                "description": "Group ID (sub-resource) of the private link service."
-              }
-            },
-            "customNetworkInterfaceName": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Custom name for the network interface created for this endpoint."
-              }
-            },
-            "privateDNSZoneIds": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
-              }
-            }
-          },
-          "variables": {
-            "copy": [
-              {
-                "name": "privateDnsZoneConfigs",
-                "count": "[length(parameters('privateDNSZoneIds'))]",
-                "input": {
-                  "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
-                  "properties": {
-                    "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
-                  }
-                }
-              }
-            ]
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Network/privateEndpoints",
-              "apiVersion": "2023-09-01",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "subnet": {
-                  "id": "[parameters('subnetResourceId')]"
-                },
-                "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
-                "privateLinkServiceConnections": [
-                  {
-                    "name": "[parameters('name')]",
-                    "properties": {
-                      "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
-                      "groupIds": [
-                        "[parameters('groupId')]"
-                      ]
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
-              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-              "apiVersion": "2023-04-01",
-              "name": "[format('{0}/{1}', parameters('name'), 'default')]",
-              "properties": {
-                "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-              ]
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-            },
-            "name": {
-              "type": "string",
-              "value": "[parameters('name')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "azureMonitorPrivateLinkScope"
-      ]
-    },
     "dataCollectionEndpoint": {
       "condition": "[parameters('deployMonitoring')]",
       "type": "Microsoft.Resources/deployments",
@@ -1583,7 +1466,7 @@
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionEndpoints'), createObject())]"
           },
-          "publicNetworkAccess": "[if(empty(if(parameters('deployMonitoring'), if(parameters('deployAzureMonitorPrivateLinkScope'), reference('azureMonitorPrivateLinkScope').outputs.resourceId.value, parameters('azureMonitorPrivateLinkScopeResourceId')), '')), createObject('value', 'Enabled'), createObject('value', 'Disabled'))]"
+          "publicNetworkAccess": "[if(empty(variables('effectiveAzureMonitorPrivateLinkScopeResourceId')), createObject('value', 'Enabled'), createObject('value', 'Disabled'))]"
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -1643,7 +1526,6 @@
         }
       },
       "dependsOn": [
-        "azureMonitorPrivateLinkScope",
         "monitoringResourceGroup"
       ]
     },
@@ -1803,7 +1685,7 @@
       ]
     },
     "updatePrivateLinkScope": {
-      "condition": "[and(parameters('deployMonitoring'), or(parameters('deployAzureMonitorPrivateLinkScope'), not(empty(parameters('azureMonitorPrivateLinkScopeResourceId')))))]",
+      "condition": "[and(parameters('deployMonitoring'), not(empty(parameters('azureMonitorPrivateLinkScopeResourceId'))))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('Monitoring-PrivateLinkScope-{0}', variables('deploymentSuffix'))]",
@@ -1817,7 +1699,9 @@
           "deploymentSuffix": {
             "value": "[variables('deploymentSuffix')]"
           },
-          "privateLinkScopeResourceId": "[if(parameters('deployMonitoring'), if(parameters('deployAzureMonitorPrivateLinkScope'), createObject('value', reference('azureMonitorPrivateLinkScope').outputs.resourceId.value), createObject('value', parameters('azureMonitorPrivateLinkScopeResourceId'))), createObject('value', ''))]",
+          "privateLinkScopeResourceId": {
+            "value": "[variables('effectiveAzureMonitorPrivateLinkScopeResourceId')]"
+          },
           "scopedResourceIds": {
             "value": [
               "[reference('logAnalyticsWorkspace').outputs.resourceId.value]",
@@ -1914,7 +1798,6 @@
         }
       },
       "dependsOn": [
-        "azureMonitorPrivateLinkScope",
         "dataCollectionEndpoint",
         "logAnalyticsWorkspace"
       ]
@@ -3219,7 +3102,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "17296002199990440179"
+              "templateHash": "12875773250427210099"
             }
           },
           "parameters": {
@@ -3343,7 +3226,7 @@
               "type": "int",
               "defaultValue": 30,
               "minValue": 1,
-              "maxValue": 365,
+              "maxValue": 200,
               "metadata": {
                 "description": "Optional. Number of daily snapshots to retain."
               }
@@ -4006,24 +3889,31 @@
       },
       "value": "[if(parameters('deployMonitoring'), reference('dataCollectionEndpoint').outputs.resourceId.value, '')]"
     },
+    "azureMonitorAgentIdentityResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the regional Azure Monitor Agent user-assigned identity. Pass as \"monitoringUserAssignedIdentityResourceId\" to automated host pool deployments in this subscription and region."
+      },
+      "value": "[if(and(parameters('deployMonitoring'), parameters('deployAzureMonitorAgentIdentity')), if(variables('monitoringUsesDeploymentSubscription'), reference('localAzureMonitorAgentIdentity').outputs.resourceId.value, reference('crossSubscriptionAzureMonitorAgentIdentity').outputs.resourceId.value), '')]"
+    },
     "azureMonitorPrivateLinkScopeResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the deployed or reused Azure Monitor Private Link Scope. Empty when monitoring or AMPLS integration is disabled."
+        "description": "The resource ID of the existing Azure Monitor Private Link Scope associated with the monitoring resources. Empty when monitoring or AMPLS integration is disabled."
       },
-      "value": "[if(parameters('deployMonitoring'), if(parameters('deployAzureMonitorPrivateLinkScope'), reference('azureMonitorPrivateLinkScope').outputs.resourceId.value, parameters('azureMonitorPrivateLinkScopeResourceId')), '')]"
+      "value": "[variables('effectiveAzureMonitorPrivateLinkScopeResourceId')]"
     },
     "fslogixBackupVaultResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the shared FSLogix Recovery Services vault. Pass as \"existingFilesBackupVaultResourceId\" to pooled host pool deployments or \"recoveryServicesVaultResourceId\" to the FSLogix Storage add-on."
+        "description": "The resource ID of the shared FSLogix Recovery Services vault. Pass as \"existingFilesBackupVaultResourceId\" to standard or automated pooled host pool deployments, or \"recoveryServicesVaultResourceId\" to the FSLogix Storage add-on."
       },
       "value": "[if(parameters('deployFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, '')]"
     },
     "fslogixBackupPolicyName": {
       "type": "string",
       "metadata": {
-        "description": "The name of the shared Azure Files snapshot backup policy. Pass as \"existingFilesBackupPolicyName\" to pooled host pool deployments or \"fileSharePolicyName\" to the FSLogix Storage add-on."
+        "description": "The name of the shared Azure Files snapshot backup policy. Pass as \"existingFilesBackupPolicyName\" to standard or automated pooled host pool deployments, or \"fileSharePolicyName\" to the FSLogix Storage add-on."
       },
       "value": "[if(parameters('deployFSLogixBackupVault'), reference('fslogixBackupVault').outputs.fileShareBackupPolicyName.value, '')]"
     },

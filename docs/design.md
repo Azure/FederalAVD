@@ -133,6 +133,7 @@ All resource names are assembled from an ordered array of **components** — nam
 | purpose | Per-resource differentiator (e.g., \vd-01\, \sec\, \control-plane\) — set automatically by the engine for each resource; no direct CAF equivalent |
 | RT-first | esourceType\ is the first non-one\ component — produces \dpool-avd-use\ style names |
 | RT-last | esourceType\ is the last non-one\ component — produces \vd-use-vdpool\ style names |
+
 ### CAF-aligned default
 
 The default `namingConvention` value produces names following `{resourceType}-avd-{purpose}-{location}` via the same `cnv()` user-defined function used for all resources. This is CAF-aligned but not a strict CAF implementation: CAF does not define a `purpose` component.
@@ -147,4 +148,4 @@ The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) 
 
 ### Implementation location
 
-The full naming engine lives in [deployments/hostpools/modules/naming.bicep](../deployments/hostpools/modules/naming.bicep) (user-defined functions: `resolveSegment`, `buildCustomName`, `cnv`, `stripSeps`, `kvSanitize`). AVD Shared Services and imageManagement solutions use the same functions inline.
+The host-pool naming engine lives in [deployments/shared/modules/orchestration/naming/hostPool.bicep](../deployments/shared/modules/orchestration/naming/hostPool.bicep) and is shared by standard host pools, automated host pools, and standalone FSLogix storage. AVD Shared Services and Image Management use the same convention shape in their solution-specific naming logic.

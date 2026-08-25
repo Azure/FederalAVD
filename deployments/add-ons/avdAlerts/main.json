@@ -1,11 +1,11 @@
-﻿{
+{
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "18332939916653488919"
+      "version": "0.46.1.21595",
+      "templateHash": "7332712525845947659"
     }
   },
   "parameters": {
@@ -597,8 +597,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "7989689542494056490"
+              "version": "0.46.1.21595",
+              "templateHash": "3725922968737296394"
             }
           },
           "parameters": {
@@ -696,7 +696,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'ResourceManagerUri')]",
               "properties": {
                 "value": "[format('\"{0}\"', parameters('resourceManagerUri'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "Azure Resource Manager endpoint URI for this cloud."
               },
               "dependsOn": [
@@ -710,7 +710,7 @@
               "name": "[format('{0}/{1}', parameters('automationAccountName'), 'StorageAccountResourceIDs')]",
               "properties": {
                 "value": "[format('\"{0}\"', replace(parameters('storageAccountResourceIdsJson'), '\"', '\\\"'))]",
-                "isEncrypted": false,
+                "isEncrypted": true,
                 "description": "JSON array of storage account resource IDs for the storage space collector."
               },
               "dependsOn": [
@@ -853,8 +853,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "6089610056640259539"
+              "version": "0.46.1.21595",
+              "templateHash": "10795873954311893403"
             }
           },
           "parameters": {
@@ -936,8 +936,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "6089610056640259539"
+              "version": "0.46.1.21595",
+              "templateHash": "10795873954311893403"
             }
           },
           "parameters": {
@@ -1048,8 +1048,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "12188417853054168833"
+              "version": "0.46.1.21595",
+              "templateHash": "13269192146652480308"
             }
           },
           "parameters": {
@@ -2426,8 +2426,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "5710395126310250388"
+              "version": "0.46.1.21595",
+              "templateHash": "13474267306351702627"
             }
           },
           "parameters": {
@@ -2998,8 +2998,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "2617368336243791226"
+              "version": "0.46.1.21595",
+              "templateHash": "8615744370747316447"
             }
           },
           "parameters": {
@@ -3467,8 +3467,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "5657292134707359737"
+              "version": "0.46.1.21595",
+              "templateHash": "2070282259325786632"
             }
           },
           "parameters": {
@@ -3618,8 +3618,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "16753931454069317348"
+              "version": "0.46.1.21595",
+              "templateHash": "8655860947021697347"
             }
           },
           "parameters": {

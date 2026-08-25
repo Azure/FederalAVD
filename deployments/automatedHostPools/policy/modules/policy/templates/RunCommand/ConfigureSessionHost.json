@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "3484456248572231767"
+      "templateHash": "18406825002961716405"
     }
   },
   "parameters": {
@@ -19,8 +19,7 @@
       "type": "array"
     },
     "fslogixLocalStorageAccountResourceIds": {
-      "type": "array",
-      "maxLength": 2
+      "type": "array"
     },
     "fslogixLocalNetAppServerFqdns": {
       "type": "array"
@@ -29,8 +28,7 @@
       "type": "array"
     },
     "fslogixRemoteStorageAccountResourceIds": {
-      "type": "array",
-      "maxLength": 2
+      "type": "array"
     },
     "fslogixRemoteNetAppServerFqdns": {
       "type": "array"

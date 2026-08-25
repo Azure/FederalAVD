@@ -155,7 +155,7 @@ var effectiveRecoveryServicesVaultResourceId = deployRecoveryServices
       : existingVmBackupVaultResourceId)
   : ''
 
-module sessionHosts 'modules/sessionHosts.bicep' = {
+module sessionHosts '../../../shared/modules/orchestration/sessionHosts/sessionHosts.bicep' = {
   name: 'Session-Hosts-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {

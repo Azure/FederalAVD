@@ -34,14 +34,17 @@ param sessionHostResourceGroupName string
 })
 param hostPoolResourceId string = ''
 
-@description('Required. Resource group containing the policy assignment managed identity.')
-param policyResourceGroupName string
+@description('Required. Name of the user-assigned identity used by Azure Policy remediation.')
+param policyIdentityName string
 
-@description('Optional. Create the policy resource group when it does not already exist.')
-param createPolicyResourceGroup bool = false
+@description('Required. Name of the user-assigned identity used by Azure Monitor Agent on session hosts.')
+param monitoringIdentityName string
 
-@description('Optional. Name of the user-assigned identity used by Azure Policy remediation.')
-param policyIdentityName string = 'id-avd-session-host-policy-${substring(uniqueString(hostPoolResourceId, sessionHostResourceGroupName), 0, 8)}'
+@description('Optional. Resource ID of an existing user-assigned identity in the session-host subscription for Azure Monitor Agent authentication. When empty, this module creates the named identity in the session-host resource group.')
+@metadata({
+  strongType: 'Microsoft.ManagedIdentity/userAssignedIdentities'
+})
+param monitoringUserAssignedIdentityResourceId string = ''
 
 @description('Optional. Create the disk encryption key and Disk Encryption Set in this deployment.')
 param deployDiskEncryptionSet bool = false
@@ -70,7 +73,7 @@ param keyManagementDisks string = 'CustomerManagedHSM'
 @description('Optional. Name of the Key Vault key created for session host disk encryption.')
 param diskEncryptionKeyName string = 'key-avd-session-host-disk'
 
-@description('Optional. Name of the Disk Encryption Set created in the policy resource group.')
+@description('Optional. Name of the Disk Encryption Set created in the session-host resource group.')
 param diskEncryptionSetName string = 'des-avd-session-host'
 
 @minValue(7)
@@ -155,9 +158,10 @@ var monitoringPolicyRoleDefinitionIds = [
   '749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
   '92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor
 ]
-var windowsAmaSystemAssignedIdentityPolicyResourceId = tenantResourceId(
-  'Microsoft.Authorization/policyDefinitions',
-  'ca817e41-e85a-4783-bc7f-dc532d36235e'
+var managedIdentityOperatorRoleDefinitionId = 'f1a07417-d97a-45cb-824c-7a7467783830'
+var windowsAmaUserAssignedIdentityInitiativeResourceId = tenantResourceId(
+  'Microsoft.Authorization/policySetDefinitions',
+  '0d1b56c6-6d1f-4a5d-8695-b15efbea6b49'
 )
 var windowsDcrDceAssociationPolicyResourceId = tenantResourceId(
   'Microsoft.Authorization/policyDefinitions',
@@ -177,6 +181,15 @@ var fslogixStorageAccountKeyResourceIds = useFslogixStorageAccountKeys
 var monitoringConfigurationIsValid = !enableMonitoring || !empty(dataCollectionRuleResourceId)
   ? true
   : bool('dataCollectionRuleResourceId is required when enableMonitoring is true.')
+var monitoringIdentityConfigurationIsValid = empty(monitoringUserAssignedIdentityResourceId) || split(monitoringUserAssignedIdentityResourceId, '/')[2] == subscription().subscriptionId
+  ? true
+  : bool('monitoringUserAssignedIdentityResourceId must be in the session-host subscription because the built-in Azure Monitor Agent initiative does not accept an identity subscription parameter.')
+var effectiveMonitoringIdentityName = empty(monitoringUserAssignedIdentityResourceId)
+  ? monitoringIdentityName
+  : last(split(monitoringUserAssignedIdentityResourceId, '/'))!
+var effectiveMonitoringIdentityResourceGroupName = empty(monitoringUserAssignedIdentityResourceId)
+  ? sessionHostResourceGroupName
+  : split(monitoringUserAssignedIdentityResourceId, '/')[4]
 var relativeSessionHostCustomizations = filter(sessionHostCustomizations, customization => !startsWith(customization.blobNameOrUri, 'https://'))
 var sessionHostCustomizationConfigurationIsValid = empty(sessionHostCustomizations) || (!empty(artifactsUserAssignedIdentityResourceId) && (empty(relativeSessionHostCustomizations) || !empty(artifactsContainerUri)))
   ? true
@@ -198,13 +211,7 @@ resource existingSessionHostResourceGroup 'Microsoft.Resources/resourceGroups@20
   name: sessionHostResourceGroupName
 }
 
-resource policyResourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = if (createPolicyResourceGroup) {
-  name: policyResourceGroupName
-  location: location
-  tags: resourceGroupTags
-}
-
-module sessionHostResourceGroupTags '../../shared/modules/resources/resourceGroups/deploy.bicep' = if (!empty(hostPoolResourceId)) {
+module sessionHostResourceGroupTags '../../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (!empty(hostPoolResourceId)) {
   params: {
     name: sessionHostResourceGroupName
     location: existingSessionHostResourceGroup.location
@@ -212,21 +219,27 @@ module sessionHostResourceGroupTags '../../shared/modules/resources/resourceGrou
   }
 }
 
-module policyIdentity '../../shared/modules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
-  scope: resourceGroup(policyResourceGroupName)
+module policyIdentity '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
+  scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     name: policyIdentityName
     location: location
     tags: managedIdentityTags
   }
-  dependsOn: [
-    policyResourceGroup
-  ]
 }
 
-module diskCmk '../../hostpools/modules/cmk/diskCmk.bicep' = if (deployDiskEncryptionSet) {
+module monitoringIdentity '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (enableMonitoring && empty(monitoringUserAssignedIdentityResourceId)) {
+  scope: resourceGroup(sessionHostResourceGroupName)
   params: {
-    resourceGroupName: policyResourceGroupName
+    name: monitoringIdentityName
+    location: location
+    tags: managedIdentityTags
+  }
+}
+
+module diskCmk '../../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskEncryptionSet) {
+  params: {
+    resourceGroupName: sessionHostResourceGroupName
     keyVaultResourceId: diskEncryptionSetConfigurationIsValid ? encryptionKeyVaultResourceId : encryptionKeyVaultResourceId
     keyManagementType: keyManagementDisks
     keyExpirationInDays: keyExpirationInDays
@@ -237,9 +250,6 @@ module diskCmk '../../hostpools/modules/cmk/diskCmk.bicep' = if (deployDiskEncry
     keyName: diskEncryptionKeyName
     diskEncryptionSetName: diskEncryptionSetName
   }
-  dependsOn: [
-    policyResourceGroup
-  ]
 }
 
 module diskEncryptionSetPolicyDefinition 'modules/policy/bicep/virtualMachine-diskEncryptionSet.policyDefinition.bicep' = if (deployDiskEncryptionSet || !empty(diskEncryptionSetResourceId)) {
@@ -270,11 +280,7 @@ module acceleratedNetworkingPolicyDefinition 'modules/policy/bicep/networkInterf
   params: {}
 }
 
-module systemAssignedIdentityPolicyDefinition 'modules/policy/bicep/virtualMachine-SystemAssignedIdentity.policyDefinition.bicep' = if (enableMonitoring) {
-  params: {}
-}
-
-module policyIdentityVirtualMachineContributor '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+module policyIdentityVirtualMachineContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     roleDefinitionId: virtualMachineContributorRoleDefinitionId
@@ -284,7 +290,7 @@ module policyIdentityVirtualMachineContributor '../../shared/modules/authorizati
   }
 }
 
-module policyIdentityNetworkContributor '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+module policyIdentityNetworkContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     roleDefinitionId: '4d97b98b-1d4f-4787-a291-c67834d212e7'
@@ -294,7 +300,7 @@ module policyIdentityNetworkContributor '../../shared/modules/authorization/role
   }
 }
 
-module policyIdentityTagContributor '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (!empty(hostPoolResourceId)) {
+module policyIdentityTagContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (!empty(hostPoolResourceId)) {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     roleDefinitionId: tagContributorRoleDefinitionId
@@ -304,7 +310,7 @@ module policyIdentityTagContributor '../../shared/modules/authorization/roleAssi
   }
 }
 
-module policyIdentityDiskPoolOperator '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (disableManagedDiskPublicNetworkAccess) {
+module policyIdentityDiskPoolOperator '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (disableManagedDiskPublicNetworkAccess) {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     roleDefinitionId: '60fc6e62-5479-42d4-8bf4-67625fcc2840'
@@ -314,7 +320,7 @@ module policyIdentityDiskPoolOperator '../../shared/modules/authorization/roleAs
   }
 }
 
-module monitoringPolicyRoleAssignments '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+module monitoringPolicyRoleAssignments '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for roleDefinitionId in monitoringPolicyRoleDefinitionIds: if (enableMonitoring) {
     scope: resourceGroup(sessionHostResourceGroupName)
     params: {
@@ -326,7 +332,17 @@ module monitoringPolicyRoleAssignments '../../shared/modules/authorization/roleA
   }
 ]
 
-module fslogixStorageKeyRoleAssignments '../../shared/modules/storage/storageAccounts/roleAssignment.bicep' = [
+module policyIdentityManagedIdentityOperator '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (enableMonitoring) {
+  scope: resourceGroup(subscription().subscriptionId, effectiveMonitoringIdentityResourceGroupName)
+  params: {
+    roleDefinitionId: managedIdentityOperatorRoleDefinitionId
+    principalId: policyIdentity.outputs.principalId
+    principalType: 'ServicePrincipal'
+    assignmentDescription: 'Allows Azure Policy to attach the Azure Monitor Agent identity to automated AVD session hosts.'
+  }
+}
+
+module fslogixStorageKeyRoleAssignments '../../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = [
   for (storageAccountResourceId, i) in fslogixStorageAccountKeyResourceIds: {
     scope: resourceGroup(split(storageAccountResourceId, '/')[2], split(storageAccountResourceId, '/')[4])
     params: {
@@ -440,65 +456,25 @@ module resourceOwnershipTagPolicyAssignment 'modules/policyAssignment.bicep' = i
   ]
 }
 
-module systemAssignedIdentityPolicyAssignment 'modules/policyAssignment.bicep' = if (enableMonitoring) {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    name: 'avd-sh-system-id'
-    location: location
-    policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: systemAssignedIdentityPolicyDefinition!.outputs.resourceId
-    displayName: 'Configure automated AVD session hosts with system-assigned managed identity'
-    description: 'Enables system-assigned managed identity on session host virtual machines while preserving any user-assigned identities.'
-    parameters: {
-      effect: {
-        value: 'Modify'
-      }
-    }
-    nonComplianceMessage: 'The session host must have a system-assigned managed identity for Azure Monitor Agent authentication.'
-  }
-  dependsOn: [
-    policyIdentityVirtualMachineContributor
-  ]
-}
-
 module monitoringPolicyAssignment 'modules/policyAssignment.bicep' = if (enableMonitoring) {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     name: 'avd-sh-monitor'
     location: location
     policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: windowsAmaSystemAssignedIdentityPolicyResourceId
-    displayName: 'Deploy Azure Monitor Agent to automated AVD session hosts'
-    description: 'Uses the Microsoft built-in policy to deploy Azure Monitor Agent with each VM system-assigned identity.'
+    policyDefinitionResourceId: windowsAmaUserAssignedIdentityInitiativeResourceId
+    displayName: 'Deploy Azure Monitor Agent and DCR association to automated AVD session hosts'
+    description: 'Uses the Microsoft built-in initiative to attach the monitoring identity, deploy Azure Monitor Agent with user-assigned identity authentication, and associate the selected Data Collection Rule.'
     parameters: {
-      effect: {
-        value: 'DeployIfNotExists'
+      bringYourOwnUserAssignedManagedIdentity: {
+        value: true
       }
-      scopeToSupportedImages: {
-        value: scopeMonitoringToSupportedImages
+      userAssignedManagedIdentityName: {
+        value: monitoringIdentityConfigurationIsValid ? effectiveMonitoringIdentityName : effectiveMonitoringIdentityName
       }
-      listOfWindowsImageIdToInclude: {
-        value: additionalWindowsImageResourceIds
+      userAssignedManagedIdentityResourceGroup: {
+        value: effectiveMonitoringIdentityResourceGroupName
       }
-    }
-    nonComplianceMessage: 'The session host must run Azure Monitor Agent using its system-assigned managed identity.'
-  }
-  dependsOn: [
-    monitoringPolicyRoleAssignments
-    systemAssignedIdentityPolicyAssignment
-  ]
-}
-
-module dataCollectionRulePolicyAssignment 'modules/policyAssignment.bicep' = if (enableMonitoring) {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    name: 'avd-sh-dcr'
-    location: location
-    policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: windowsDcrDceAssociationPolicyResourceId
-    displayName: 'Associate automated AVD session hosts with a Data Collection Rule'
-    description: 'Uses the Microsoft built-in policy to associate each session host with the selected Data Collection Rule.'
-    parameters: {
       effect: {
         value: 'DeployIfNotExists'
       }
@@ -511,15 +487,13 @@ module dataCollectionRulePolicyAssignment 'modules/policyAssignment.bicep' = if 
       dcrResourceId: {
         value: monitoringConfigurationIsValid ? dataCollectionRuleResourceId : dataCollectionRuleResourceId
       }
-      resourceType: {
-        value: 'Microsoft.Insights/dataCollectionRules'
-      }
     }
-    nonComplianceMessage: 'The session host must be associated with the selected Data Collection Rule.'
+    nonComplianceMessage: 'The session host must use the monitoring identity, run Azure Monitor Agent, and be associated with the selected Data Collection Rule.'
   }
   dependsOn: [
+    monitoringIdentity
     monitoringPolicyRoleAssignments
-    monitoringPolicyAssignment
+    policyIdentityManagedIdentityOperator
   ]
 }
 
@@ -712,7 +686,12 @@ output managedDiskNetworkAccessPolicyAssignmentResourceId string = disableManage
   ? managedDiskNetworkAccessPolicyAssignment!.outputs.resourceId
   : ''
 output monitoringPolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.resourceId : ''
-output dataCollectionRulePolicyAssignmentResourceId string = enableMonitoring ? dataCollectionRulePolicyAssignment!.outputs.resourceId : ''
+output dataCollectionRulePolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.resourceId : ''
+output monitoringIdentityResourceId string = enableMonitoring
+  ? (empty(monitoringUserAssignedIdentityResourceId)
+      ? monitoringIdentity!.outputs.resourceId
+      : monitoringUserAssignedIdentityResourceId)
+  : ''
 output policyIdentityResourceId string = policyIdentity.outputs.resourceId
 output resourceOwnershipTagPolicyAssignmentResourceId string = !empty(hostPoolResourceId)
   ? resourceOwnershipTagPolicyAssignment!.outputs.resourceId

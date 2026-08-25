@@ -21,7 +21,7 @@ Parameter documentation lives alongside each deployment template. Find the secti
 
 ## Naming Convention
 
-All resource names across solutions are controlled by the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, the same parameter object should be passed to every solution for a consistent enterprise naming strategy.
+FederalAVD-created resource names across solutions are controlled by the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, the same parameter object should be passed to every solution for a consistent enterprise naming strategy. Azure Virtual Desktop owns automated session-host VM, OS disk, and NIC names and exposes only a VM name prefix; see [Solution Limitations](limitations.md#automated-host-pool-limitations).
 
 See the **[Naming Convention guide](naming-convention.md)** for:
 
@@ -60,6 +60,7 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 | **sharedServices** | `logAnalyticsWorkspaceResourceId` | **hostpool** | `existingLogAnalyticsWorkspaceResourceId` |
 | **sharedServices** | `avdInsightsDataCollectionRuleResourceId` | **hostpool** | `existingAVDInsightsDataCollectionRuleResourceId` |
 | **sharedServices** | `dataCollectionEndpointResourceId` | **hostpool** | `existingDataCollectionEndpointResourceId` |
+| **sharedServices** | `azureMonitorAgentIdentityResourceId` | **automatedHostPool** | `monitoringUserAssignedIdentityResourceId` |
 | **sharedServices** | `azureMonitorPrivateLinkScopeResourceId` | **hostpool** | `azureMonitorPrivateLinkScopeResourceId` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **hostpool** | `existingFilesBackupVaultResourceId` |
 | **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |

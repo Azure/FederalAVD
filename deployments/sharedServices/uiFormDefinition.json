@@ -18,177 +18,78 @@
               }
             },
             {
+              "name": "location",
+              "type": "Microsoft.Common.LocationSelector",
+              "label": "Region",
+              "toolTip": "Select the Azure region for all Shared Services resources. Operations and monitoring resources can use different subscriptions but share this region.",
+              "resourceTypes": [
+                "Microsoft.Insights/dataCollectionEndpoints",
+                "Microsoft.Insights/dataCollectionRules",
+                "Microsoft.KeyVault/vaults",
+                "Microsoft.ManagedIdentity/userAssignedIdentities",
+                "Microsoft.OperationalInsights/workspaces",
+                "Microsoft.RecoveryServices/vaults"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "operations",
+          "label": "Operations Resources",
+          "elements": [
+            {
+              "name": "operationsInfoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Choose the workload subscription and configure shared Key Vault, FSLogix backup, and private endpoint resources."
+              }
+            },
+            {
               "name": "subscriptionsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "request": {
                 "method": "GET",
                 "path": "/subscriptions?api-version=2022-12-01"
               }
-            }
-          ]
-        },
-        {
-          "name": "monitoring",
-          "label": "Log Analytics Workspace",
-          "elements": [
+            },
             {
-              "name": "infoBox",
-              "type": "Microsoft.Common.InfoBox",
-              "options": {
-                "style": "Info",
-                "text": "Optionally deploy a shared Log Analytics Workspace, AVD Insights Data Collection Rule (DCR), and Data Collection Endpoint (DCE) here. Every AVD host pool, image management, and add-on deployment can then reference this same workspace/DCR/DCE instead of each creating its own. Choose the subscription here first \u2014 the Key Vaults step later in this form defaults to the same subscription, so pick this location carefully if your monitoring and security resources are typically centralized in a different subscription than your Key Vaults."
+              "name": "subscription",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Operations Resources Subscription",
+              "toolTip": "Select the workload subscription for the operations resource group, Key Vaults, FSLogix Recovery Services vault, and the shared Azure Monitor Agent identity when monitoring uses a different subscription.",
+              "constraints": {
+                "allowedValues": "[map(steps('operations').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+                "required": true
               }
             },
             {
-              "name": "deployMonitoring",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Deploy Log Analytics Workspace, DCR, and DCE",
-              "defaultValue": false,
-              "toolTip": "Deploy a new Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Pass the resulting resource IDs to the host pool deployment (existingLogAnalyticsWorkspaceResourceId, existingAVDInsightsDataCollectionRuleResourceId, existingDataCollectionEndpointResourceId) and to the Image Management deployment (logAnalyticsWorkspaceResourceId)."
-            },
-            {
-              "name": "scope",
+              "name": "resources",
               "type": "Microsoft.Common.Section",
-              "label": "Subscription and Location",
-              "visible": "[steps('monitoring').deployMonitoring]",
+              "label": "Resources",
               "elements": [
                 {
-                  "name": "subscription",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Monitoring Subscription",
-                  "toolTip": "Select the subscription where the Log Analytics Workspace, DCR, and DCE will be deployed. The Key Vaults step later in this form defaults to this same subscription.",
-                  "constraints": {
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                    "required": true
-                  }
-                },
-                {
-                  "name": "locationNote",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "Region is chosen later, in the Key Vaults Location step \u2014 Key Vaults and the Log Analytics Workspace share one region in this deployment."
-                  }
-                }
-              ]
-            },
-            {
-              "name": "settings",
-              "type": "Microsoft.Common.Section",
-              "label": "Workspace Settings",
-              "visible": "[steps('monitoring').deployMonitoring]",
-              "elements": [
-                {
-                  "name": "sku",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Pricing Tier",
-                  "defaultValue": "Pay-as-you-go (Per-GB)",
-                  "toolTip": "Log Analytics Workspace pricing tier. Pay-as-you-go (PerGB2018) is recommended for most deployments.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": [
-                      {
-                        "label": "Pay-as-you-go (Per-GB)",
-                        "value": "PerGB2018"
-                      },
-                      {
-                        "label": "Commitment Tier - 100 GB/day",
-                        "value": "CapacityReservation"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "name": "retentionDays",
-                  "type": "Microsoft.Common.Slider",
-                  "label": "Data Retention (Days)",
-                  "toolTip": "Number of days to retain Log Analytics data.",
-                  "min": 30,
-                  "max": 730,
-                  "defaultValue": 30,
-                  "showStepMarkers": false
-                },
-                {
-                  "name": "deployAzureMonitorPrivateLinkScope",
+                  "name": "deploySecretsKeyVault",
                   "type": "Microsoft.Common.CheckBox",
-                  "label": "Deploy Azure Monitor Private Link Scope",
-                  "toolTip": "Creates a shared AMPLS and private endpoint for this workspace and Data Collection Endpoint. Also enable private endpoints and select a private endpoint subnet in the Networking step. Azure Monitor private DNS records must be managed by your central DNS platform."
+                  "label": "Deploy Secrets Key Vault",
+                  "defaultValue": true
                 },
                 {
-                  "name": "azureMonitorPrivateLinkScopeResourceId",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Azure Monitor Private Link Scope Resource ID",
-                  "placeholder": "/subscriptions/.../resourceGroups/.../providers/microsoft.insights/privateLinkScopes/...",
-                  "toolTip": "Optional. Resource ID of an existing AMPLS whose private endpoint and DNS configuration are managed outside this deployment.",
-                  "visible": "[not(steps('monitoring').settings.deployAzureMonitorPrivateLinkScope)]",
-                  "constraints": {
-                    "required": false
-                  }
+                  "name": "deployEncryptionKeyVault",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Deploy Encryption Key Vault",
+                  "defaultValue": true
                 },
                 {
-                  "name": "amplsDnsInfo",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[steps('monitoring').settings.deployAzureMonitorPrivateLinkScope]",
-                  "options": {
-                    "style": "Warning",
-                    "text": "AMPLS creation requires Private Endpoints to be enabled in the Networking step. This deployment creates the AMPLS private endpoint, but Azure Monitor uses multiple cloud-specific private DNS zones. Configure those records in your central DNS platform before sending production monitoring traffic through AMPLS."
-                  }
+                  "name": "deployFSLogixBackupVault",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Deploy FSLogix Backup Vault and Policy",
+                  "defaultValue": false
                 }
               ]
             },
             {
-              "name": "existingWorkspaceInfoBox",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[not(steps('monitoring').deployMonitoring)]",
-              "options": {
-                "text": "Not deploying a new workspace here? You can still send Key Vault audit and diagnostic logs to an existing Log Analytics Workspace."
-              }
-            },
-            {
-              "name": "enableMonitoring",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Send Key Vault Diagnostic Logs to an Existing Log Analytics Workspace",
-              "visible": "[not(steps('monitoring').deployMonitoring)]"
-            },
-            {
-              "name": "monitoringSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "visible": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
-              "label": "Log Analytics Workspace Subscription",
-              "toolTip": "Select the subscription containing the target Log Analytics Workspace.",
-              "constraints": {
-                "required": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-              }
-            },
-            {
-              "name": "logAnalyticsWorkspacesApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring, not(empty(steps('monitoring').monitoringSubscription)))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('monitoring').monitoringSubscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
-              }
-            },
-            {
-              "name": "logAnalyticsWorkspace",
-              "type": "Microsoft.Common.DropDown",
-              "visible": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
-              "label": "Existing Log Analytics Workspace",
-              "multiLine": true,
-              "toolTip": "Select the Log Analytics Workspace for Key Vault diagnostic logs.",
-              "constraints": {
-                "required": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
-                "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
-              }
-            }
-          ]
-        },
-        {
-          "name": "fslogixBackup",
-          "label": "FSLogix Backup",
-          "elements": [
-            {
-              "name": "infoBox",
+              "name": "fslogixBackupInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
@@ -196,17 +97,10 @@
               }
             },
             {
-              "name": "deployVault",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Deploy shared FSLogix backup vault and policy",
-              "defaultValue": false,
-              "toolTip": "Deploy the shared Recovery Services vault in the operations resource group. Pass the resulting vault and policy outputs to pooled host pool or FSLogix Storage add-on deployments."
-            },
-            {
               "name": "policySettings",
               "type": "Microsoft.Common.Section",
               "label": "Backup Policy",
-              "visible": "[steps('fslogixBackup').deployVault]",
+              "visible": "[steps('operations').resources.deployFSLogixBackupVault]",
               "elements": [
                 {
                   "name": "policyName",
@@ -225,75 +119,106 @@
                   "label": "Daily Snapshot Retention (Days)",
                   "defaultValue": 30,
                   "showStepMarkers": false,
-                  "toolTip": "Number of daily Azure Files snapshots retained by the shared policy.",
+                  "toolTip": "Number of daily Azure Files snapshots retained by the shared snapshot-tier policy (1-200).",
                   "min": 1,
-                  "max": 365
+                  "max": 200
                 },
                 {
                   "name": "timeZone",
-                  "type": "Microsoft.Common.TextBox",
+                  "type": "Microsoft.Common.DropDown",
                   "label": "Backup Policy Time Zone",
-                  "defaultValue": "UTC",
-                  "toolTip": "Windows time zone used by the daily backup schedule, for example UTC or Eastern Standard Time.",
+                  "defaultValue": "(UTC+00:00) Coordinated Universal Time",
+                  "toolTip": "Select the Windows time zone used by the daily backup schedule.",
                   "constraints": {
+                    "allowedValues": [
+                      {
+                        "label": "(UTC-10:00) Hawaii",
+                        "value": "Hawaiian Standard Time"
+                      },
+                      {
+                        "label": "(UTC-09:00) Alaska",
+                        "value": "Alaskan Standard Time"
+                      },
+                      {
+                        "label": "(UTC-08:00) Pacific Time (US & Canada)",
+                        "value": "Pacific Standard Time"
+                      },
+                      {
+                        "label": "(UTC-07:00) Arizona",
+                        "value": "US Mountain Standard Time"
+                      },
+                      {
+                        "label": "(UTC-07:00) Mountain Time (US & Canada)",
+                        "value": "Mountain Standard Time"
+                      },
+                      {
+                        "label": "(UTC-06:00) Central Time (US & Canada)",
+                        "value": "Central Standard Time"
+                      },
+                      {
+                        "label": "(UTC-05:00) Eastern Time (US & Canada)",
+                        "value": "Eastern Standard Time"
+                      },
+                      {
+                        "label": "(UTC+00:00) Coordinated Universal Time",
+                        "value": "UTC"
+                      },
+                      {
+                        "label": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London",
+                        "value": "GMT Standard Time"
+                      },
+                      {
+                        "label": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris",
+                        "value": "Romance Standard Time"
+                      },
+                      {
+                        "label": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb",
+                        "value": "Central European Standard Time"
+                      },
+                      {
+                        "label": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague",
+                        "value": "Central Europe Standard Time"
+                      },
+                      {
+                        "label": "(UTC+01:00) West Central Africa",
+                        "value": "W. Central Africa Standard Time"
+                      },
+                      {
+                        "label": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna",
+                        "value": "W. Europe Standard Time"
+                      },
+                      {
+                        "label": "(UTC+02:00) Jerusalem",
+                        "value": "Israel Standard Time"
+                      },
+                      {
+                        "label": "(UTC+03:00) Kuwait, Riyadh",
+                        "value": "Arab Standard Time"
+                      },
+                      {
+                        "label": "(UTC+03:00) Nairobi",
+                        "value": "E. Africa Standard Time"
+                      },
+                      {
+                        "label": "(UTC+09:00) Osaka, Sapporo, Tokyo",
+                        "value": "Tokyo Standard Time"
+                      },
+                      {
+                        "label": "(UTC+09:00) Seoul",
+                        "value": "Korea Standard Time"
+                      },
+                      {
+                        "label": "(UTC+10:00) Guam, Port Moresby",
+                        "value": "West Pacific Standard Time"
+                      }
+                    ],
                     "required": true
                   }
                 }
               ]
-            }
-          ]
-        },
-        {
-          "name": "keyVaultsScope",
-          "label": "Key Vaults Location",
-          "elements": [
-            {
-              "name": "infoBox",
-              "type": "Microsoft.Common.InfoBox",
-              "options": {
-                "style": "Info",
-                "text": "Choose where the Secrets and Encryption Key Vaults are deployed."
-              }
             },
             {
-              "name": "scope",
-              "type": "Microsoft.Common.Section",
-              "label": "Subscription and Location",
-              "elements": [
-                {
-                  "name": "subscription",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Subscription",
-                  "defaultValue": "[if(steps('monitoring').deployMonitoring, steps('monitoring').scope.subscription.displayName, '')]",
-                  "toolTip": "Select the subscription for the Key Vaults. Defaults to the Log Analytics Workspace subscription when one is being deployed.",
-                  "constraints": {
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                    "required": true
-                  }
-                },
-                {
-                  "type": "Microsoft.Common.LocationSelector",
-                  "name": "location",
-                  "label": "Region",
-                  "resourceTypes": [
-                    "Microsoft.KeyVault/vaults",
-                    "Microsoft.RecoveryServices/vaults",
-                    "Microsoft.Insights/privateLinkScopes"
-                  ],
-                  "scope": {
-                    "subscriptionId": "[steps('keyVaultsScope').scope.subscription.subscriptionId]"
-                  }
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name": "secretsKeyVault",
-          "label": "Secrets Key Vault",
-          "elements": [
-            {
-              "name": "infoBox",
+              "name": "secretsKeyVaultInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
@@ -301,17 +226,10 @@
               }
             },
             {
-              "name": "deploySecretsKeyVault",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Deploy Secrets Key Vault",
-              "defaultValue": true,
-              "toolTip": "Deploy a Standard SKU Key Vault for storing AVD credentials."
-            },
-            {
               "name": "kvSettings",
               "type": "Microsoft.Common.Section",
               "label": "Key Vault Settings",
-              "visible": "[steps('secretsKeyVault').deploySecretsKeyVault]",
+              "visible": "[steps('operations').resources.deploySecretsKeyVault]",
               "elements": [
                 {
                   "name": "enableSoftDelete",
@@ -343,7 +261,7 @@
               "name": "credentials",
               "type": "Microsoft.Common.Section",
               "label": "AVD Credentials",
-              "visible": "[steps('secretsKeyVault').deploySecretsKeyVault]",
+              "visible": "[steps('operations').resources.deploySecretsKeyVault]",
               "elements": [
                 {
                   "name": "credentialsInfoBox",
@@ -408,27 +326,14 @@
                   }
                 }
               ]
-            }
-          ]
-        },
-        {
-          "name": "encryptionKeyVault",
-          "label": "Encryption Key Vault",
-          "elements": [
+            },
             {
-              "name": "infoBox",
+              "name": "encryptionKeyVaultInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
                 "text": "The Encryption Key Vault (Premium SKU) stores RSA-4096 keys for Customer-Managed Key (CMK) encryption of VM disks, FSLogix storage, image management storage, image build storage, and function app storage. Required when any AVD solution uses CMK. The deploying identity requires the 'Key Vault Crypto Officer' role on this vault at deployment time to create encryption keys."
               }
-            },
-            {
-              "name": "deployEncryptionKeyVault",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Deploy Encryption Key Vault",
-              "defaultValue": true,
-              "toolTip": "Deploy a Premium SKU Key Vault (HSM-backed) for Customer-Managed Key encryption across all AVD solutions."
             },
             {
               "name": "encKvRetentionInDays",
@@ -439,17 +344,10 @@
               "toolTip": "Number of days the Encryption Key Vault and its objects are retained after deletion before permanent removal.",
               "min": 7,
               "max": 90,
-              "visible": "[steps('encryptionKeyVault').deployEncryptionKeyVault]"
-            }
-
-          ]
-        },
-        {
-          "name": "networking",
-          "label": "Networking",
-          "elements": [
+              "visible": "[steps('operations').resources.deployEncryptionKeyVault]"
+            },
             {
-              "name": "infoBox",
+              "name": "networkingInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
@@ -466,15 +364,15 @@
               "name": "networkSection",
               "type": "Microsoft.Common.Section",
               "label": "Network Configuration",
-              "visible": "[steps('networking').privateEndpoint]",
+              "visible": "[steps('operations').privateEndpoint]",
               "elements": [
                 {
                   "name": "virtualNetworksApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('networking').privateEndpoint, not(empty(steps('keyVaultsScope').scope.subscription)))]",
+                  "condition": "[and(steps('operations').privateEndpoint, not(empty(steps('operations').subscription)))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('keyVaultsScope').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+                    "path": "[concat(steps('operations').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
                   }
                 },
                 {
@@ -485,16 +383,16 @@
                   "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('networking').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('keyVaultsScope').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                    "allowedValues": "[map(filter(steps('operations').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
                   }
                 },
                 {
                   "name": "subnetsApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('networking').networkSection.virtualNetwork))]",
+                  "condition": "[not(empty(steps('operations').networkSection.virtualNetwork))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('networking').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                    "path": "[concat(steps('operations').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
                   }
                 },
                 {
@@ -504,7 +402,7 @@
                   "toolTip": "Select the subnet for Key Vault private endpoints. Must not have any service delegations.",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('networking').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+                    "allowedValues": "[map(filter(steps('operations').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
                   }
                 }
               ]
@@ -513,7 +411,7 @@
               "name": "privateDnsSection",
               "type": "Microsoft.Common.Section",
               "label": "Private DNS Zone",
-              "visible": "[steps('networking').privateEndpoint]",
+              "visible": "[steps('operations').privateEndpoint]",
               "elements": [
                 {
                   "name": "enablePrivateDNSIntegration",
@@ -525,71 +423,71 @@
                 {
                   "name": "privateDNSZonesSubscription",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
+                  "visible": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
                   "label": "Private DNS Zone Subscription",
-                  "defaultValue": "[steps('keyVaultsScope').scope.subscription.displayName]",
+                  "defaultValue": "[steps('operations').subscription.displayName]",
                   "toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
                   "constraints": {
-                    "required": "[steps('networking').privateDnsSection.enablePrivateDNSIntegration]",
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                    "required": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
+                    "allowedValues": "[map(steps('operations').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
                   }
                 },
                 {
                   "name": "privateDNSZonesApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('networking').privateDnsSection.privateDNSZonesSubscription)))]",
+                  "condition": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('operations').privateDnsSection.privateDNSZonesSubscription)))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('networking').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                    "path": "[concat(steps('operations').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
                   }
                 },
                 {
                   "name": "keyVaultPrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, or(steps('secretsKeyVault').deploySecretsKeyVault, steps('encryptionKeyVault').deployEncryptionKeyVault))]",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
                   "label": "Key Vault Private DNS Zone",
                   "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
                   "toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
                   "constraints": {
-                    "required": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, or(steps('secretsKeyVault').deploySecretsKeyVault, steps('encryptionKeyVault').deployEncryptionKeyVault))]",
-                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                    "required": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
                   }
                 },
                 {
                   "name": "azureBackupPrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, steps('fslogixBackup').deployVault)]",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
                   "label": "Azure Backup Private DNS Zone",
                   "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
                   }
                 },
                 {
                   "name": "azureBlobPrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, steps('fslogixBackup').deployVault)]",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
                   "label": "Azure Blob Private DNS Zone",
                   "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
                   }
                 },
                 {
                   "name": "azureQueuePrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('networking').privateDnsSection.enablePrivateDNSIntegration, steps('fslogixBackup').deployVault)]",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
                   "label": "Azure Queue Private DNS Zone",
                   "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('networking').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
                   }
                 }
               ]
@@ -639,6 +537,159 @@
                   }
                 }
               ]
+            }
+          ]
+        },
+        {
+          "name": "monitoring",
+          "label": "Log Analytics Workspace",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Optionally deploy a shared Log Analytics Workspace, AVD Insights Data Collection Rule (DCR), and Data Collection Endpoint (DCE). Monitoring can use the operations subscription selected on Deployment Basics or a separate centralized monitoring subscription."
+              }
+            },
+            {
+              "name": "deployMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Log Analytics Workspace, DCR, and DCE",
+              "defaultValue": false,
+              "toolTip": "Deploy a new Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group."
+            },
+            {
+              "name": "subscription",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Monitoring Subscription",
+              "defaultValue": "[steps('operations').subscription.displayName]",
+              "toolTip": "Select the subscription where monitoring resources will be deployed or where the existing Log Analytics Workspace is located. Defaults to the operations resources subscription.",
+              "constraints": {
+                "allowedValues": "[map(steps('operations').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
+                "required": true
+              }
+            },
+            {
+              "name": "deployAzureMonitorAgentIdentity",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Shared Azure Monitor Agent Identity",
+              "defaultValue": true,
+              "visible": "[steps('monitoring').deployMonitoring]",
+              "toolTip": "Deploy a regional user-assigned identity for automated session hosts. It is placed in the monitoring resource group when monitoring and operations use the same subscription; otherwise it remains with the workload in the operations resource group."
+            },
+            {
+              "name": "azureMonitorAgentIdentityInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(steps('monitoring').deployMonitoring, steps('monitoring').deployAzureMonitorAgentIdentity)]",
+              "options": {
+                "style": "Info",
+                "text": "[if(equals(steps('monitoring').subscription.subscriptionId, steps('operations').subscription.subscriptionId), 'The shared Azure Monitor Agent user-assigned identity will be deployed in the monitoring resource group because monitoring and operations use the same subscription.', 'The shared Azure Monitor Agent user-assigned identity will be deployed in the operations resource group so it remains in the workload subscription. The Microsoft AMA policy initiative requires this identity to be in the same subscription as automated session hosts.')]"
+              }
+            },
+            {
+              "name": "azureMonitorPrivateLinkScopeInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[steps('monitoring').deployMonitoring]",
+              "options": {
+                "text": "An Azure Monitor Private Link Scope (AMPLS) defines the monitoring boundary for networks that share DNS. The AMPLS, private endpoint, access modes, and private DNS configuration must be deployed and managed by your networking platform.",
+                "link": {
+                  "label": "Design Azure Monitor Private Link configuration | Microsoft Learn",
+                  "uri": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-design"
+                }
+              }
+            },
+            {
+              "name": "attachToAzureMonitorPrivateLinkScope",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Attach monitoring resources to an existing Azure Monitor Private Link Scope (AMPLS)",
+              "defaultValue": false,
+              "visible": "[steps('monitoring').deployMonitoring]",
+              "toolTip": "Attach the deployed Log Analytics Workspace and Data Collection Endpoint to an existing AMPLS. Public network access is disabled on those resources when they are attached."
+            },
+            {
+              "name": "azureMonitorPrivateLinkScopeResourceId",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Azure Monitor Private Link Scope",
+              "resourceType": "Microsoft.Insights/privateLinkScopes",
+              "visible": "[and(steps('monitoring').deployMonitoring, steps('monitoring').attachToAzureMonitorPrivateLinkScope)]",
+              "toolTip": "Select the existing AMPLS managed for the network and DNS boundary. The deploying identity must be able to add scoped resources to it.",
+              "constraints": {
+                "required": true
+              }
+            },
+            {
+              "name": "settings",
+              "type": "Microsoft.Common.Section",
+              "label": "Workspace Settings",
+              "visible": "[steps('monitoring').deployMonitoring]",
+              "elements": [
+                {
+                  "name": "sku",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Pricing Tier",
+                  "defaultValue": "Pay-as-you-go (Per-GB)",
+                  "toolTip": "Log Analytics Workspace pricing tier. Pay-as-you-go (PerGB2018) is recommended for most deployments.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Pay-as-you-go (Per-GB)",
+                        "value": "PerGB2018"
+                      },
+                      {
+                        "label": "Commitment Tier - 100 GB/day",
+                        "value": "CapacityReservation"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "retentionDays",
+                  "type": "Microsoft.Common.Slider",
+                  "label": "Data Retention (Days)",
+                  "toolTip": "Number of days to retain Log Analytics data.",
+                  "min": 30,
+                  "max": 730,
+                  "defaultValue": 30,
+                  "showStepMarkers": false
+                }
+              ]
+            },
+            {
+              "name": "existingWorkspaceInfoBox",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[not(steps('monitoring').deployMonitoring)]",
+              "options": {
+                "text": "Not deploying a new workspace here? You can still send Key Vault audit and diagnostic logs to an existing Log Analytics Workspace."
+              }
+            },
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Send Key Vault Diagnostic Logs to an Existing Log Analytics Workspace",
+              "visible": "[not(steps('monitoring').deployMonitoring)]"
+            },
+            {
+              "name": "logAnalyticsWorkspacesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring, not(empty(steps('monitoring').subscription)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('monitoring').subscription.id, '/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01')]"
+              }
+            },
+            {
+              "name": "logAnalyticsWorkspace",
+              "type": "Microsoft.Common.DropDown",
+              "visible": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
+              "label": "Existing Log Analytics Workspace",
+              "multiLine": true,
+              "toolTip": "Select the Log Analytics Workspace for Key Vault diagnostic logs.",
+              "constraints": {
+                "required": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
+                "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
+              }
             }
           ]
         },
@@ -1168,7 +1219,20 @@
                   "label": "Recovery Services Vaults abbreviation",
                   "defaultValue": "rsv",
                   "toolTip": "Abbreviation substituted for the Resource Type component in the shared FSLogix backup vault name.",
-                  "visible": "[and(steps('fslogixBackup').deployVault, or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
+                  "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,10}$",
+                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
+                  "name": "rtCodeUai",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "User Assigned Identities abbreviation",
+                  "defaultValue": "uai",
+                  "toolTip": "Abbreviation substituted for the Resource Type component in the shared Azure Monitor Agent identity name.",
+                  "visible": "[and(steps('monitoring').deployMonitoring, steps('monitoring').deployAzureMonitorAgentIdentity, or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
                     "regex": "^[a-z0-9]{1,10}$",
@@ -1265,6 +1329,7 @@
                     "Microsoft.Resources/resourceGroups",
                     "Microsoft.KeyVault/vaults",
                     "Microsoft.RecoveryServices/vaults",
+                    "Microsoft.ManagedIdentity/userAssignedIdentities",
                     "Microsoft.Network/privateEndpoints"
                   ]
                 }
@@ -1276,39 +1341,39 @@
     },
     "outputs": {
       "kind": "Subscription",
-      "location": "[steps('keyVaultsScope').scope.location.name]",
-      "subscriptionId": "[steps('keyVaultsScope').scope.subscription.id]",
+      "location": "[steps('basics').location.name]",
+      "subscriptionId": "[steps('operations').subscription.id]",
       "parameters": {
-        "location": "[steps('keyVaultsScope').scope.location.name]",
-        "deploySecretsKeyVault": "[steps('secretsKeyVault').deploySecretsKeyVault]",
-        "secretsKeyVaultEnableSoftDelete": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enableSoftDelete, true)]",
-        "secretsKeyVaultEnablePurgeProtection": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.enablePurgeProtection, true)]",
-        "secretsKeyVaultRetentionInDays": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').kvSettings.retentionDays, 90)]",
-        "virtualMachineAdminUserName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminUserName, '')]",
-        "virtualMachineAdminPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.virtualMachineAdminPassword, '')]",
-        "domainJoinUserPrincipalName": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPrincipalName, '')]",
-        "domainJoinUserPassword": "[if(steps('secretsKeyVault').deploySecretsKeyVault, steps('secretsKeyVault').credentials.domainJoinUserPassword, '')]",
-        "deployEncryptionKeyVault": "[steps('encryptionKeyVault').deployEncryptionKeyVault]",
-        "encryptionKeyVaultRetentionInDays": "[if(steps('encryptionKeyVault').deployEncryptionKeyVault, steps('encryptionKeyVault').encKvRetentionInDays, 90)]",
-        "privateEndpoint": "[steps('networking').privateEndpoint]",
-        "privateEndpointSubnetResourceId": "[if(steps('networking').privateEndpoint, steps('networking').networkSection.privateEndpointSubnet, '')]",
-        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration, or(steps('secretsKeyVault').deploySecretsKeyVault, steps('encryptionKeyVault').deployEncryptionKeyVault)), steps('networking').privateDnsSection.keyVaultPrivateDnsZone, '')]",
-        "permittedIPs": "[filter(map(steps('networking').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+        "location": "[steps('basics').location.name]",
+        "deploySecretsKeyVault": "[steps('operations').resources.deploySecretsKeyVault]",
+        "secretsKeyVaultEnableSoftDelete": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').kvSettings.enableSoftDelete, true)]",
+        "secretsKeyVaultEnablePurgeProtection": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').kvSettings.enablePurgeProtection, true)]",
+        "secretsKeyVaultRetentionInDays": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').kvSettings.retentionDays, 90)]",
+        "virtualMachineAdminUserName": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').credentials.virtualMachineAdminUserName, '')]",
+        "virtualMachineAdminPassword": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').credentials.virtualMachineAdminPassword, '')]",
+        "domainJoinUserPrincipalName": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').credentials.domainJoinUserPrincipalName, '')]",
+        "domainJoinUserPassword": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').credentials.domainJoinUserPassword, '')]",
+        "deployEncryptionKeyVault": "[steps('operations').resources.deployEncryptionKeyVault]",
+        "encryptionKeyVaultRetentionInDays": "[if(steps('operations').resources.deployEncryptionKeyVault, steps('operations').encKvRetentionInDays, 90)]",
+        "privateEndpoint": "[steps('operations').privateEndpoint]",
+        "privateEndpointSubnetResourceId": "[if(steps('operations').privateEndpoint, steps('operations').networkSection.privateEndpointSubnet, '')]",
+        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault)), steps('operations').privateDnsSection.keyVaultPrivateDnsZone, '')]",
+        "permittedIPs": "[filter(map(steps('operations').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
         "deployMonitoring": "[steps('monitoring').deployMonitoring]",
-        "logAnalyticsWorkspaceSubscriptionId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').scope.subscription.subscriptionId, '')]",
+        "deployAzureMonitorAgentIdentity": "[and(steps('monitoring').deployMonitoring, steps('monitoring').deployAzureMonitorAgentIdentity)]",
+        "logAnalyticsWorkspaceSubscriptionId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').subscription.subscriptionId, '')]",
         "logAnalyticsWorkspaceSku": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.sku, 'PerGB2018')]",
         "logAnalyticsWorkspaceRetentionInDays": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.retentionDays, 30)]",
-        "deployAzureMonitorPrivateLinkScope": "[and(steps('monitoring').deployMonitoring, steps('monitoring').settings.deployAzureMonitorPrivateLinkScope)]",
-        "azureMonitorPrivateLinkScopeResourceId": "[if(and(steps('monitoring').deployMonitoring, not(steps('monitoring').settings.deployAzureMonitorPrivateLinkScope)), steps('monitoring').settings.azureMonitorPrivateLinkScopeResourceId, '')]",
+        "azureMonitorPrivateLinkScopeResourceId": "[if(and(steps('monitoring').deployMonitoring, steps('monitoring').attachToAzureMonitorPrivateLinkScope, not(empty(steps('monitoring').azureMonitorPrivateLinkScopeResourceId))), steps('monitoring').azureMonitorPrivateLinkScopeResourceId.id, '')]",
         "existingLogAnalyticsWorkspaceResourceId": "[if(steps('monitoring').deployMonitoring, '', if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, ''))]",
-        "deployFSLogixBackupVault": "[steps('fslogixBackup').deployVault]",
-        "fslogixBackupPolicyName": "[if(steps('fslogixBackup').deployVault, steps('fslogixBackup').policySettings.policyName, 'filesharepolicy')]",
-        "fslogixBackupRetentionDays": "[if(steps('fslogixBackup').deployVault, steps('fslogixBackup').policySettings.retentionDays, 30)]",
-        "fslogixBackupTimeZone": "[if(steps('fslogixBackup').deployVault, steps('fslogixBackup').policySettings.timeZone, 'UTC')]",
-        "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('fslogixBackup').deployVault, steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.azureBackupPrivateDnsZone, '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('fslogixBackup').deployVault, steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.azureBlobPrivateDnsZone, '')]",
-        "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('fslogixBackup').deployVault, steps('networking').privateEndpoint, steps('networking').privateDnsSection.enablePrivateDNSIntegration), steps('networking').privateDnsSection.azureQueuePrivateDnsZone, '')]",
-        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
+        "deployFSLogixBackupVault": "[steps('operations').resources.deployFSLogixBackupVault]",
+        "fslogixBackupPolicyName": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.policyName, 'filesharepolicy')]",
+        "fslogixBackupRetentionDays": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.retentionDays, 30)]",
+        "fslogixBackupTimeZone": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.timeZone, 'UTC')]",
+        "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBackupPrivateDnsZone, '')]",
+        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBlobPrivateDnsZone, '')]",
+        "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureQueuePrivateDnsZone, '')]",
+        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"
       }
     }

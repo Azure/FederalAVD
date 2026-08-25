@@ -2,7 +2,7 @@
 // main.bicep — Standalone session hosts deployment entry point
 // Handles credentials (Key Vault lookup), naming convention auto-detection,
 // and availability set index computation, then delegates VM deployment to
-// the shared orchestration module under hostpools/modules/hosts/modules/.
+// the shared session-host orchestration module.
 //
 // Used as:
 //   • A Template Spec loaded by the Session Host Replacer function app
@@ -274,8 +274,8 @@ resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 }
 
 // ── Session hosts ─────────────────────────────────────────────────────────────
-// Delegates to the shared RG-scoped orchestration module under hostpools/modules/hosts/modules/.
-module sessionHosts '../../hostpools/modules/hosts/modules/sessionHosts.bicep' = {
+// Delegates to the shared RG-scoped session-host orchestration module.
+module sessionHosts '../../shared/modules/orchestration/sessionHosts/sessionHosts.bicep' = {
   name: 'SessionHosts-${deploymentSuffix}'
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl

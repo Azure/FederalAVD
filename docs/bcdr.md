@@ -146,7 +146,7 @@ imageBuild → builds in primary region
 
 ### Deployment Sequence
 
-**Step 1: Deploy imageManagement in both regions**
+#### Step 1: Deploy imageManagement in both regions
 
 Run the imageManagement template twice — once per region. Storage accounts and build logs storage are only needed in the build region (primary); the secondary deployment can deploy only the gallery:
 
@@ -167,7 +167,7 @@ Secondary region parameter file:
 }
 ```
 
-**Step 2: Pass both gallery resource IDs to imageBuild**
+#### Step 2: Pass both gallery resource IDs to imageBuild
 
 ```json
 {
@@ -182,7 +182,7 @@ Secondary region parameter file:
 
 The template automatically derives the secondary region name from the gallery resource's `.location` property and adds it to the image version's `targetRegions` array. No manual region string is required.
 
-**Step 3: Secondary host pool references its local gallery**
+#### Step 3: Secondary host pool references its local gallery
 
 ```json
 {
@@ -205,6 +205,7 @@ If `keyManagementGalleryImageVersions` is not `PlatformManaged`, the `diskEncryp
 **What it protects against:** Full regional outage of the primary AVD host pool.
 
 **RTO:**
+
 - **Warm standby** (VMs pre-deployed, powered off): Minutes — power on VMs and ensure users can reach the secondary workspace.
 - **Cold standby** (no VMs pre-deployed): Hours to days — must deploy session hosts before users can connect.
 
@@ -375,13 +376,15 @@ Customer-managed key (CMK) encryption is supported for the vault via `keyManagem
 > **Pooled host pools — FSLogix Azure Files snapshot backup:** Deploy AVD Shared Services with
 > `deployFSLogixBackupVault = true` to create the regional vault and policy in the shared operations
 > resource group. Pass `fslogixBackupVaultResourceId` to `existingFilesBackupVaultResourceId` and
-> `fslogixBackupPolicyName` to `existingFilesBackupPolicyName` on every pooled host pool. The host
-> pool then registers its Azure Files shares without modifying shared policy settings. Inline vault
-> creation remains available as a compatibility fallback when no existing vault is supplied.
+> `fslogixBackupPolicyName` to `existingFilesBackupPolicyName` on every standard or automated pooled
+> host pool. The host pool then registers its newly deployed Azure Files shares without modifying
+> shared policy settings. Inline vault creation remains available as a standard host-pool
+> compatibility fallback when no existing vault is supplied; automated host pools use an existing
+> shared vault only.
 >
 > **Why CMK is not applied to this vault (SC-28 rationale):** Azure Files snapshots are stored in the storage account itself — no user data, CUI, or profile content is transmitted to or stored in the vault. This vault holds only backup scheduling metadata (policy assignments, protection container registrations, job history). SC-28 (Protection of Information at Rest) is satisfied for actual FSLogix profile data by the storage account's own encryption, controlled by `keyManagementStorage`. Applying CMK to this metadata-only vault would provide no incremental SC-28 protection for user data and is therefore not implemented. **SSP language:** *"The shared Azure Backup vault used for FSLogix Azure Files snapshot scheduling contains no user data or CUI. Snapshot data at rest is protected by the storage account encryption key (`keyManagementStorage`), satisfying SC-28 at the data-bearing resource. CMK on the scheduling vault is not required and provides no additional protection."*
 >
-> Vault storage redundancy is hardcoded to `LocallyRedundant` (snapshot data stays in the storage account regardless). The `backupRetentionDays` parameter controls snapshot retention. Soft-delete retention for FSLogix file shares is controlled separately by `fslogixSoftDeleteRetentionDays` (default: 14 days). For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments).
+> Vault storage redundancy is hardcoded to `LocallyRedundant` (snapshot data stays in the storage account regardless). The `backupRetentionDays` parameter controls snapshot retention, with a maximum of 200 days for the current snapshot-tier Azure Files policy. Soft-delete retention for FSLogix file shares is controlled separately by `fslogixSoftDeleteRetentionDays` (default: 14 days). Snapshot retention does not extend the soft-delete window for recovering an accidentally deleted share. For cross-region profile resilience on pooled host pools, see [Profile Strategy for Cross-Region Deployments](#profile-strategy-for-cross-region-deployments).
 
 ---
 
@@ -448,6 +451,7 @@ graph TB
 ```
 
 **On primary region failure:**
+
 1. Cloud Cache has already synchronized all profile writes to `fslogix2` — no data recovery needed
 2. Users connect to `workspace` — the feed shows both app groups; the secondary app group routes to `hp2`
 3. Session hosts in `hp2` start via Start VM on Connect (if warm standby) or are deployed by Session Host Replacer (if cold)

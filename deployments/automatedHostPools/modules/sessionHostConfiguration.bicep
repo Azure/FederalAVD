@@ -9,7 +9,7 @@ param hostPoolName string
 @description('Required. Session Host Configuration properties.')
 param properties resourceInput<'Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview'>.properties
 
-module sessionHostConfiguration '../../shared/modules/desktopVirtualization/hostPools/deploySessionHostConfiguration.bicep' = {
+module sessionHostConfiguration '../../shared/modules/resourceModules/desktopVirtualization/hostPools/deploySessionHostConfiguration.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
     hostPoolName: hostPoolName

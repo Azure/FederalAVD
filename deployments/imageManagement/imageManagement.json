@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "15551600331687146735"
+      "templateHash": "15707673636011422756"
     }
   },
   "functions": [
@@ -5814,7 +5814,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "12034810620394266512"
+              "templateHash": "17519891137637288802"
             }
           },
           "parameters": {
@@ -5902,6 +5902,7 @@
               }
             },
             {
+              "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2023-04-01",
               "name": "[format('{0}/{1}', parameters('name'), 'default')]",
@@ -6908,7 +6909,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "12034810620394266512"
+              "templateHash": "17519891137637288802"
             }
           },
           "parameters": {
@@ -6996,6 +6997,7 @@
               }
             },
             {
+              "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2023-04-01",
               "name": "[format('{0}/{1}', parameters('name'), 'default')]",

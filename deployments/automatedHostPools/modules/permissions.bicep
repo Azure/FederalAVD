@@ -24,7 +24,7 @@ param principalId string
 var desktopVirtualizationVirtualMachineContributorRoleId = 'a959dbd1-f747-45e3-8ba6-dd80f235f97c'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 
-module sessionHostResourceGroupRole '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+module sessionHostResourceGroupRole '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     roleDefinitionId: desktopVirtualizationVirtualMachineContributorRoleId
@@ -34,7 +34,7 @@ module sessionHostResourceGroupRole '../../shared/modules/authorization/roleAssi
   }
 }
 
-module networkResourceGroupRole '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+module networkResourceGroupRole '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   scope: resourceGroup(split(subnetResourceId, '/')[2], split(subnetResourceId, '/')[4])
   params: {
     roleDefinitionId: desktopVirtualizationVirtualMachineContributorRoleId
@@ -44,7 +44,7 @@ module networkResourceGroupRole '../../shared/modules/authorization/roleAssignme
   }
 }
 
-module imageResourceGroupRole '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (!empty(customImageResourceId)) {
+module imageResourceGroupRole '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (!empty(customImageResourceId)) {
   scope: resourceGroup(split(customImageResourceId, '/')[2], split(customImageResourceId, '/')[4])
   params: {
     roleDefinitionId: desktopVirtualizationVirtualMachineContributorRoleId
@@ -54,7 +54,7 @@ module imageResourceGroupRole '../../shared/modules/authorization/roleAssignment
   }
 }
 
-module credentialVaultRole '../../shared/modules/keyVault/vaults/roleAssignment.bicep' = {
+module credentialVaultRole '../../shared/modules/resourceModules/keyVault/vaults/roleAssignment.bicep' = {
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
     keyVaultName: last(split(credentialsKeyVaultResourceId, '/'))

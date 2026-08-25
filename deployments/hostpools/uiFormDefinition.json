@@ -393,14 +393,14 @@
                   "name": "groupSelector",
                   "type": "Microsoft.Common.Selector",
                   "label": "Select Groups",
-                  "keyPath": "displayName",
+                  "keyPath": "name",
                   "descriptionKeyPath": "id",
                   "value": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
-                  "barColor": "[if(empty(steps('controlPlane').assignments.groupPickerBlade), '#FF0000', '#7fba00')]",
+                  "barColor": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.groups), '#FF0000', '#7fba00')]",
                   "constraints": {
                     "required": true
                   },
-                  "link": "[if(empty(steps('controlPlane').assignments.groupPickerBlade), 'Select groups', 'Update selected groups')]"
+                  "link": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.groups), 'Select groups', 'Update selected groups')]"
                 }
               ]
             },
@@ -1570,7 +1570,7 @@
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Confidential OS Disk Encryption",
                   "toolTip": "Check to enable Confidential VM disk encryption",
-                  "defaultValue": true,
+                  "defaultValue": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]",
                   "visible": "[equals(steps('hosts').security.securityType, 'ConfidentialVM')]"
                 }
               ]
@@ -2435,15 +2435,15 @@
                   "name": "userGroupSelector",
                   "type": "Microsoft.Common.Selector",
                   "label": "Select User Groups",
-                  "keyPath": "displayName",
+                  "keyPath": "name",
                   "descriptionKeyPath": "id",
                   "value": "[steps('userProfiles').azureNetAppFiles.userGroupPickerBlade.transformed.groups]",
                   "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureNetAppFiles.leastPrivNTFS, true))]",
-                  "barColor": "[if(empty(steps('userProfiles').azureNetAppFiles.userGroupPickerBlade), '#FF0000', '#7fba00')]",
+                  "barColor": "[if(empty(steps('userProfiles').azureNetAppFiles.userGroupPickerBlade.transformed.groups), '#FF0000', '#7fba00')]",
                   "constraints": {
                     "required": true
                   },
-                  "link": "[if(empty(steps('userProfiles').azureNetAppFiles.userGroupPickerBlade), 'Select groups', 'Update Selected groups')]"
+                  "link": "[if(empty(steps('userProfiles').azureNetAppFiles.userGroupPickerBlade.transformed.groups), 'Select groups', 'Update Selected groups')]"
                 },
                 {
                   "name": "userGroupPickerBlade",
@@ -2484,7 +2484,7 @@
                 {
                   "name": "configureSessionHostsHeader",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[steps('hosts').configureSessionHosts]",
+                  "visible": "[steps('userProfiles').configureSessionHosts]",
                   "options": {
                     "text": "Session Host Configuration"
                   }
@@ -2561,14 +2561,23 @@
                   "name": "localVolumes",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Local Volume(s)",
-                  "multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
-                  "toolTip": "Select the existing volume from the selected NetApp capacity pool.",
-                  "defaultValue": "[if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), '')]",
+                  "multiselect": true,
+                  "toolTip": "Select one volume for Profile Container or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
+                  "defaultValue": [],
                   "constraints": {
                     "allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                     "required": true
                   },
                   "visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)))]"
+                },
+                {
+                  "name": "wrongNumberOfLocalVolumes",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), not(equals(length(steps('userProfiles').azureNetAppFiles.localVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Select one local volume for Profile Container or two in profile-then-Office order for Profile and Office Containers."
+                  }
                 },
                 {
                   "name": "remoteVolumeHeader",
@@ -2633,14 +2642,23 @@
                   "name": "remoteVolumes",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Remote Volume(s)",
-                  "multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
-                  "defaultValue": "[if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), '')]",
-                  "toolTip": "Select the office-containers and profile-containers volumes from the selected NetApp capacity pool.",
+                  "multiselect": true,
+                  "defaultValue": [],
+                  "toolTip": "Optionally select one volume for Profile Container or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
                   "constraints": {
                     "allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                     "required": false
                   },
                   "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]"
+                },
+                {
+                  "name": "wrongNumberOfRemoteVolumes",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumes)), not(equals(length(steps('userProfiles').azureNetAppFiles.remoteVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Select no remote volumes, one for Profile Container, or two in profile-then-Office order for Profile and Office Containers."
+                  }
                 }
               ]
             },
@@ -2697,7 +2715,7 @@
                   "defaultValue": 1,
                   "toolTip": "Input the starting number of the storage accounts to deploy with SMB file shares to support the use of FSLogix.",
                   "min": 1,
-                  "max": "[sub(99, steps('userProfiles').azureFiles.storageCount)]",
+                  "max": "[sub(100, if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None'), empty(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups)), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups)))]",
                   "showStepMarkers": false,
                   "constraints": {
                     "required": true
@@ -2800,15 +2818,15 @@
                   "name": "userGroupSelector",
                   "type": "Microsoft.Common.Selector",
                   "label": "Select User Groups",
-                  "keyPath": "displayName",
+                  "keyPath": "name",
                   "descriptionKeyPath": "id",
                   "value": "[steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups]",
                   "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').userIdentity, 'EntraId')), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
-                  "barColor": "[if(empty(steps('userProfiles').azureFiles.userGroupPickerBlade), '#FF0000', '#7fba00')]",
+                  "barColor": "[if(empty(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups), '#FF0000', '#7fba00')]",
                   "constraints": {
                     "required": true
                   },
-                  "link": "[if(empty(steps('userProfiles').azureFiles.userGroupPickerBlade), 'Select groups', 'Update Selected groups')]"
+                  "link": "[if(empty(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups), 'Select groups', 'Update Selected groups')]"
                 },
                 {
                   "name": "userGroupPickerBlade",
@@ -2877,16 +2895,6 @@
                   "options": {
                     "text": "A total of 1 storage account will be deployed/required because you have chosen not to Shard your storage."
                   }
-                },
-                {
-                  "name": "storageCount",
-                  "type": "Microsoft.Common.Slider",
-                  "label": "Number of Storage Accounts to Deploy (Read Only)",
-                  "defaultValue": 1,
-                  "min": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
-                  "max": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
-                  "showStepMarkers": false,
-                  "visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]"
                 },
                 {
                   "name": "domainName",
@@ -3012,7 +3020,7 @@
                 {
                   "name": "wrongNumberOfLocalStorageAccounts",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), not(equals(steps('userProfiles').azureFiles.storageCount, length(steps('userProfiles').azureFiles.existingLocalStorageAccounts))))]",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').deployStorage, true)), not(equals(length(steps('userProfiles').azureFiles.existingLocalStorageAccounts), if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None'), empty(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups)), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups)))))]",
                   "options": {
                     "style": "Error",
                     "text": "You have not selected the correct number of storage accounts. You must select the correct number before continuing or the session hosts will not be configured properly."
@@ -3071,7 +3079,7 @@
                 {
                   "name": "wrongNumberOfRemoteStorageAccounts",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(equals(length(steps('userProfiles').azureFiles.existingRemoteStorageAccounts), 0)) , not(equals(steps('userProfiles').azureFiles.storageCount, length(steps('userProfiles').azureFiles.existingRemoteStorageAccounts))))]",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureFiles.existingRemoteStorageAccounts)), not(equals(length(steps('userProfiles').azureFiles.existingRemoteStorageAccounts), if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None'), empty(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups)), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups)))))]",
                   "options": {
                     "style": "Error",
                     "text": "You have not selected the correct number of storage accounts. You must select the correct number before continuing or the session hosts will not be configured properly."
@@ -3138,15 +3146,15 @@
                   "name": "groupSelector",
                   "type": "Microsoft.Common.Selector",
                   "label": "Select Admin Groups",
-                  "keyPath": "displayName",
+                  "keyPath": "name",
                   "descriptionKeyPath": "id",
                   "value": "[steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups]",
                   "visible": "[equals(steps('userProfiles').shareManagement.configureAdminAccess, true)]",
-                  "barColor": "[if(empty(steps('userProfiles').shareManagement.groupPickerBlade), '#FF0000', '#7fba00')]",
+                  "barColor": "[if(empty(steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups), '#FF0000', '#7fba00')]",
                   "constraints": {
                     "required": true
                   },
-                  "link": "[if(empty(steps('userProfiles').shareManagement.groupPickerBlade), 'Select groups', 'Re-select groups')]"
+                  "link": "[if(empty(steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups), 'Select groups', 'Re-select groups')]"
                 }
               ]
             }
@@ -3241,7 +3249,7 @@
               "name": "deploymentVm",
               "type": "Microsoft.Common.Section",
               "label": "Deployment Virtual Machine",
-              "visible": "[or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, not(empty(steps('controlPlane').naming.desktopFriendlyName)))]",
+              "visible": "[or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName)))]",
               "elements": [
                 {
                   "name": "deploymentVmInfoBox",
@@ -3316,9 +3324,9 @@
                   "label": "Backup Retention (in Days)",
                   "defaultValue": 30,
                   "showStepMarkers": false,
-                  "toolTip": "Number of daily recovery points to retain (1–365). Applies to VM backup (personal host pools) and Azure Files snapshot backup (pooled host pools).",
+                  "toolTip": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 'Number of daily VM recovery points to retain (1-365).', 'Number of daily Azure Files snapshots to retain in the snapshot tier (1-200).')]",
                   "min": 1,
-                  "max": 365,
+                  "max": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), 365, 200)]",
                   "visible": "[and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))]"
                 },
                 {
@@ -3493,7 +3501,7 @@
                   "name": "keyManagementDisks",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Session Host Disk Encryption Key Management",
-                  "defaultValue": "Platform-Managed and Customer-Managed Keys protected by HSM",
+                  "defaultValue": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), 'Customer-Managed Keys protected by HSM', 'Platform-Managed and Customer-Managed Keys protected by HSM')]",
                   "toolTip": "Platform-managed keys are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use. Customer-managed keys are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements. Platform-Managed and Customer-Managed Keys provide double encryption with an infrastructure encryption layer using platform-managed keys and a disk encryption layer using customer-managed keys.",
                   "constraints": {
                     "allowedValues": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"}]'), parse('[{\"label\":\"Platform-Managed Keys\",\"value\":\"PlatformManaged\"},{\"label\":\"Customer-Managed Keys\",\"value\":\"CustomerManaged\"},{\"label\":\"Customer-Managed Keys protected by HSM\",\"value\":\"CustomerManagedHSM\"},{\"label\":\"Platform-Managed and Customer-Managed Keys\",\"value\":\"PlatformManagedAndCustomerManaged\"},{\"label\":\"Platform-Managed and Customer-Managed Keys protected by HSM\",\"value\":\"PlatformManagedAndCustomerManagedHSM\"}]'))]"
@@ -3502,7 +3510,7 @@
                 {
                   "name": "confOSDiskEncryptionWarning",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'))]",
+                  "visible": "[and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'))]",
                   "options": {
                     "style": "Warning",
                     "text": "You must have completed the prerequistes to support Confidential VM Disk Encryption.",
@@ -3550,7 +3558,7 @@
                     "required": true
                   },
                   "link": "[if(empty(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade), 'Select Service Principal', first(map(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.displayName)))]",
-                  "visible": "[and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'))]"
+                  "visible": "[and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'))]"
                 },
                 {
                   "name": "keyManagementStorageTextBlock1",
@@ -3665,7 +3673,7 @@
               "name": "privateEndpoints",
               "type": "Microsoft.Common.Section",
               "label": "PaaS Private Endpoints",
-              "visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
+              "visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)))]",
               "elements": [
                 {
                   "name": "privateEndpointTextBlock1",
@@ -3907,7 +3915,7 @@
               "name": "permittedIPsSection",
               "type": "Microsoft.Common.Section",
               "label": "Permitted IP Addresses",
-              "visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)))]",
+              "visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption)), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)))]",
               "elements": [
                 {
                   "name": "permittedIPsInfo",
@@ -4346,29 +4354,6 @@
                     "required": true
                   },
                   "visible": "[steps('zeroTrust').azureMonitor.privateLink]"
-                }
-              ]
-            },
-            {
-              "name": "policy",
-              "type": "Microsoft.Common.Section",
-              "label": "Policies",
-              "elements": [
-                {
-                  "name": "diskAccessTextBlock1",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), 'Check the following box to define and and assign a policy that disables public network access and automatically assigns a disk access resource to the virtual machine OS disks for private access.', 'Select the following check box to define and assign a policy that disables all network access to your managed disks.')]",
-                    "link": {
-                      "label": "Microsoft Learn | Restrict Managed Disks from Being Imported or Exported",
-                      "uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-restrict-import-export-overview"
-                    }
-                  }
-                },
-                {
-                  "name": "deployDiskAccessPolicy",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Deploy Disk Access Policy"
                 }
               ]
             }
@@ -5345,9 +5330,9 @@
         "vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
         "integrityMonitoring": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.integrityMonitoring)]",
         "encryptionAtHost": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), false, steps('hosts').diskEncryption.encryptionAtHost)]",
-        "keyManagementDisks": "[steps('zeroTrust').keyManagement.keyManagementDisks]",
-        "confidentialVMOSDiskEncryption": "[steps('hosts').diskEncryption.confidentialVMOSDiskEncryption]",
-        "confidentialVMOrchestratorObjectId": "[if(and(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, equals(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManagedHSM')), first(map(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), '')]",
+        "keyManagementDisks": "[if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), if(equals(steps('zeroTrust').keyManagement.keyManagementDisks, 'PlatformManaged'), 'PlatformManaged', 'CustomerManagedHSM'), steps('zeroTrust').keyManagement.keyManagementDisks)]",
+        "confidentialVMOSDiskEncryption": "[and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption)]",
+        "confidentialVMOrchestratorObjectId": "[if(and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), first(map(steps('zeroTrust').keyManagement.confDiskEncryptionServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), '')]",
         "dedicatedHostGroupResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHostGroup, '')]",
         "dedicatedHostResourceId": "[if(steps('hosts').dedicatedHosts.deployToDedicatedHosts, steps('hosts').dedicatedHosts.dedicatedHost, '')]",
         "availability": "[if(equals(steps('hosts').dedicatedHosts.deployToDedicatedHosts, false), steps('hosts').availability.availability, 'none')]",
@@ -5387,7 +5372,7 @@
         "fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('userProfiles').userIdentity, 'EntraKerberos'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').automateEntraKerberosTasks, true)), steps('userProfiles').managedIdentity, '')]",
         "fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
         "avdObjectId": "[if(and(steps('operationsAndMonitoring').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
-        "deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_B2s')]",
+        "deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption)), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_B2s')]",
         "recoveryServices": "[steps('operationsAndMonitoring').backup.recoveryServices]",
         "recoveryServicesVaultStorageRedundancy": "[if(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
         "existingVmBackupVaultResourceId": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",
@@ -5407,15 +5392,14 @@
         "existingAVDInsightsDataCollectionRuleResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.avdInsightsDataCollectionRule, '')]",
         "existingDataCollectionEndpointResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint, '')]",
         "deployPrivateEndpoints": "[steps('zeroTrust').privateEndpoints.deployPrivateEndpoints]",
-        "operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
+        "operationsPrivateEndpointSubnetResourceId": "[if(and(or(steps('hosts').credentials.deploySecretsKeyVault, and(or(and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), not(equals(steps('controlPlane').hostPool.type, 'Personal')))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]",
         "hostPoolResourcesPrivateEndpointSubnetResourceId": "[if(and(or(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault)), and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'))), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.hostpoolSubnet.id, '')]",
         "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBackupPrivateDnsZone, '')]",
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureBlobPrivateDnsZone, '')]",
         "azureFilesPrivateDnsZoneResourceId": "[if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilesPrivateDnsZone, '')]",
-        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(steps('hosts').credentials.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
+        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(steps('hosts').credentials.deploySecretsKeyVault, and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
         "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
         "azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
-        "deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
         "avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'None')]",
         "hostpoolPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostpoolSubnet.id, '')]",
         "workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnet.id, '')]",
@@ -5425,7 +5409,7 @@
         "existingGlobalFeedResourceId": "[first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.id))]",
         "globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
         "globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
-        "permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
+        "permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(and(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"vmsLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '\",\"cpLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '\",\"fslogixStoragePrefix\":\"', if(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue),'',steps('tagsAndNaming').naming.fslogixStoragePrefixValue), '\",\"virtualMachineNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.vmNameConvOverride),'',steps('tagsAndNaming').naming.vmNameConvOverride), '\",\"virtualMachineDiskNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.diskNameConvOverride),'',steps('tagsAndNaming').naming.diskNameConvOverride), '\",\"virtualMachineNicNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.nicNameConvOverride),'',steps('tagsAndNaming').naming.nicNameConvOverride), '\"}'))]",
         "namingResourceTypeCodes": "[if(steps('tagsAndNaming').naming.customizeAbbreviations, parse(concat('{\"resourceGroups\":\"', steps('tagsAndNaming').naming.rtCodeRg, '\",\"hostPools\":\"', steps('tagsAndNaming').naming.rtCodeHp, '\",\"desktopApplicationGroups\":\"', steps('tagsAndNaming').naming.rtCodeDag, '\",\"workspaces\":\"', steps('tagsAndNaming').naming.rtCodeWs, '\",\"scalingPlans\":\"', steps('tagsAndNaming').naming.rtCodeSp, '\",\"virtualMachines\":\"', steps('tagsAndNaming').naming.rtCodeVm, '\",\"osdisks\":\"', steps('tagsAndNaming').naming.rtCodeDisk, '\",\"diskEncryptionSets\":\"', steps('tagsAndNaming').naming.rtCodeDes, '\",\"diskAccesses\":\"', steps('tagsAndNaming').naming.rtCodeDa, '\",\"availabilitySets\":\"', steps('tagsAndNaming').naming.rtCodeAs, '\",\"storageAccounts\":\"', steps('tagsAndNaming').naming.rtCodeSa, '\",\"netAppAccounts\":\"', steps('tagsAndNaming').naming.rtCodeNaa, '\",\"netAppCapacityPools\":\"', steps('tagsAndNaming').naming.rtCodeNacp, '\",\"keyVaults\":\"', steps('tagsAndNaming').naming.rtCodeKv, '\",\"userAssignedIdentities\":\"', steps('tagsAndNaming').naming.rtCodeUai, '\",\"privateEndpoints\":\"', steps('tagsAndNaming').naming.rtCodePe, '\",\"networkInterfaces\":\"', steps('tagsAndNaming').naming.rtCodeNic, '\",\"logAnalyticsWorkspaces\":\"', steps('tagsAndNaming').naming.rtCodeLaw, '\",\"dataCollectionEndpoints\":\"', steps('tagsAndNaming').naming.rtCodeDce, '\",\"recoveryServicesVaults\":\"', steps('tagsAndNaming').naming.rtCodeRsv, '\"}')), parse('{}'))]",
         "tags": "[steps('tagsAndNaming').tags.tags]"

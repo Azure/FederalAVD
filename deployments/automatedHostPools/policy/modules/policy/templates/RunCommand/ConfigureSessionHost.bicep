@@ -1,11 +1,9 @@
 param configureFSLogix bool
 param fslogixContainerType string
 param fslogixFileShareNames array
-@maxLength(2)
 param fslogixLocalStorageAccountResourceIds array
 param fslogixLocalNetAppServerFqdns array
 param fslogixOSSGroups array
-@maxLength(2)
 param fslogixRemoteStorageAccountResourceIds array
 param fslogixRemoteNetAppServerFqdns array
 param fslogixStorageService string

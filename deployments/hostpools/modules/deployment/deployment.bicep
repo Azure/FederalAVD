@@ -35,6 +35,7 @@ param virtualMachineAdminPassword string
 @secure()
 param virtualMachineAdminUserName string
 param virtualMachineSubnetResourceId string
+param manageHostResourcePermissions bool = true
 
 var deploymentUserAssignedIdentityName = replace(userAssignedIdentityNameConv, 'TOKEN', 'deployment')
 var hostPoolParentTag = '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
@@ -73,18 +74,20 @@ var roleAssignmentsDeployment = [
   }
 ]
 
-var roleAssignmentsHosts = [
-  {
-    roleDefinitionId: roleDefinitions.VirtualMachineContributor // (Purpose: remove the run commands from the host VMs)
-    depName: 'Hosts-VMCont'
-    resourceGroup: resourceGroupHosts
-  }
-  {
-    roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the hosts resource group role assignment for the deployment identity. This role Assignment must remain last in the list.)
-    depName: 'Hosts-RBACAdmin'
-    resourceGroup: resourceGroupHosts
-  }
-]
+var roleAssignmentsHosts = manageHostResourcePermissions
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.VirtualMachineContributor // (Purpose: remove the run commands from the host VMs)
+        depName: 'Hosts-VMCont'
+        resourceGroup: resourceGroupHosts
+      }
+      {
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the hosts resource group role assignment for the deployment identity. This role Assignment must remain last in the list.)
+        depName: 'Hosts-RBACAdmin'
+        resourceGroup: resourceGroupHosts
+      }
+    ]
+  : []
 
 var roleAssignmentsManagementConfidentialVMDiskEncryption = confidentialVMOSDiskEncryption && keyManagementDisks == 'CustomerManagedHSM'
   ? [
@@ -156,7 +159,7 @@ var roleAssignments = union(
 )
 
 // ─── Deployment user-assigned identity ────────────────────────────────────────
-module deploymentUserAssignedIdentity '../../../shared/modules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
+module deploymentUserAssignedIdentity '../../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
   name: 'UserAssignedIdentity-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
@@ -170,7 +173,7 @@ module deploymentUserAssignedIdentity '../../../shared/modules/managedIdentity/u
 }
 
 // ─── Role assignments (RG-scoped, one module call per entry) ──────────────────
-module roleAssignments_deployment '../../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+module roleAssignments_deployment '../../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(roleAssignments)): {
     scope: resourceGroup(roleAssignments[i].resourceGroup)
     name: 'RA-${roleAssignments[i].depName}-${deploymentSuffix}'
@@ -183,7 +186,7 @@ module roleAssignments_deployment '../../../shared/modules/authorization/roleAss
 ]
 
 // ─── Deployment VM ─────────────────────────────────────────────────────────────
-module virtualMachine '../../../shared/modules/compute/virtualMachines/deploy.bicep' = {
+module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMachines/deploy.bicep' = {
   name: 'VirtualMachine-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {

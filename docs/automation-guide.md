@@ -107,6 +107,7 @@ The deployment uses the `sharedServices` path and parameter-file name.
 | `logAnalyticsWorkspaceResourceId` | Image Management — `logAnalyticsWorkspaceResourceId`; Host Pool — `existingLogAnalyticsWorkspaceResourceId`. Only present when `deployMonitoring` was `true`. |
 | `avdInsightsDataCollectionRuleResourceId` | Host Pool — `existingAVDInsightsDataCollectionRuleResourceId`. Only present when `deployMonitoring` was `true`. |
 | `dataCollectionEndpointResourceId` | Host Pool — `existingDataCollectionEndpointResourceId`. Only present when `deployMonitoring` was `true`. |
+| `azureMonitorAgentIdentityResourceId` | Automated Host Pool — `monitoringUserAssignedIdentityResourceId`. Only present when monitoring and shared AMA identity deployment were enabled. |
 | `azureMonitorPrivateLinkScopeResourceId` | Host Pool — `azureMonitorPrivateLinkScopeResourceId`; centralized monitoring/DNS automation. Empty when AMPLS integration is disabled. |
 | `fslogixBackupVaultResourceId` | Pooled Host Pool — `existingFilesBackupVaultResourceId`; FSLogix Storage add-on — `recoveryServicesVaultResourceId`. Only present when `deployFSLogixBackupVault` was `true`. |
 | `fslogixBackupPolicyName` | Pooled Host Pool — `existingFilesBackupPolicyName`; FSLogix Storage add-on — `fileSharePolicyName`. Only present when `deployFSLogixBackupVault` was `true`. |
@@ -120,11 +121,15 @@ The deployment uses the `sharedServices` path and parameter-file name.
 - Shared Services owns the FSLogix vault and policy settings. Each host pool or FSLogix Storage
   add-on owns registration of its storage accounts and shares as protected items.
 - The AVD Insights DCR and DCE are region/workspace-scoped, not host-pool-specific — deploying them once here lets every host pool that reuses this workspace share the same DCR/DCE instead of the first host pool deployment creating its own.
-- Use `logAnalyticsWorkspaceSubscriptionId` to deploy the Log Analytics Workspace, DCR, and DCE to a different subscription than the Key Vaults — useful when a centralized monitoring/security team owns a separate subscription.
-- `deployAzureMonitorPrivateLinkScope` creates AMPLS and its private endpoint when shared monitoring
-  is deployed. It requires the Shared Services private-endpoint option and subnet. Azure Monitor's
-  cloud-specific private DNS records remain centrally managed and must resolve before production
-  ingestion is restricted to the private path.
+- Deploy Shared Services from the workload subscription. By default its Log Analytics Workspace,
+  DCR, and DCE use that subscription; set `logAnalyticsWorkspaceSubscriptionId` to place them in
+  a centralized monitoring subscription. When subscriptions differ, the shared Azure Monitor Agent
+  identity remains in the workload operations resource group because automated session hosts must
+  use an identity from their own subscription.
+- `azureMonitorPrivateLinkScopeResourceId` associates the shared Log Analytics Workspace and DCE
+  with an existing AMPLS, matching the host pool inline monitoring behavior. The networking platform
+  must own the AMPLS, private endpoints, access modes, and cloud-specific private DNS configuration.
+  The deploying identity must be able to add scoped resources to the selected AMPLS.
 - The AVD Alerts add-on requires an existing same-subscription Action Group in the `global`
   location. AVD Shared Services intentionally does not create Action Groups because notification
   receivers, webhooks, and incident-routing ownership belong to the operations team.

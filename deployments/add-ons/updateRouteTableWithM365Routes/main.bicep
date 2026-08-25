@@ -121,7 +121,7 @@ module automation 'modules/automationAccount.bicep' = {
 
 // Grant the Automation Account managed identity Network Contributor on the route table
 // resource group so the runbook can read and update the route table via the ARM API.
-module roleAssignment '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+module roleAssignment '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   name: 'RA-RouteTable-NetworkContributor-${deploymentSuffix}'
   scope: resourceGroup(routeTableResourceGroupName)
   params: {

@@ -8,8 +8,9 @@ param userAssignedIdentityClientId string
 param deploymentVirtualMachineName string
 param roleAssignmentIds array
 param virtualMachineNames array
+param removeHostRunCommands bool = true
 
-module removeRunCommands '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module removeRunCommands '../../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (removeHostRunCommands) {
   name: 'Remove-RunCommands-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
@@ -29,7 +30,7 @@ module removeRunCommands '../../../shared/modules/compute/virtualMachines/runCom
   }
 }
 
-module removeRoleAssignments '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module removeRoleAssignments '../../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Remove-RoleAssignments-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
@@ -48,7 +49,7 @@ module removeRoleAssignments '../../../shared/modules/compute/virtualMachines/ru
   dependsOn: [removeRunCommands]
 }
 
-module removeDeploymentResourceGroup '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module removeDeploymentResourceGroup '../../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {

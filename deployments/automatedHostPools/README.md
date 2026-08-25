@@ -20,27 +20,38 @@ Update and autoscale instead.
 
 ## Deployment Flow
 
-`automatedHostPool.bicep` performs the complete ordered deployment:
+`automatedHostPool.bicep` follows the standard host-pool orchestration model. Independent phases run
+in parallel; dependencies exist only where one phase consumes another phase's resource or output:
 
-1. Creates the control-plane and dedicated session-host resource groups.
-2. Creates a pooled host pool with `managementType: Automated`, a desktop application group, and
-   a new or existing workspace association.
-3. Grants the host-pool managed identity access to the host, network, image, credential-vault, and
-   host-pool scopes required by Session Host Configuration.
-4. Creates `sessionHostConfigurations/default` with the selected image, network, credentials,
-   security profile, managed or ephemeral OS disk, VM size, and dedicated VM resource group.
+1. Resolves names and creates the control-plane, session-host, storage, deployment-helper, and
+  optional global-feed resource groups.
+2. Starts Azure Virtual Desktop service-principal RBAC, the deployment helper, and FSLogix
+  customer-managed-key resources as soon as their scopes exist. Independent preparation continues
+  while RBAC completes.
+3. After service-principal RBAC completes, creates the pooled automated host pool, application
+  group, workspace association, AVD Private Link endpoints, optional global-feed workspace, and
+  dynamic scaling plan as one control-plane phase.
+4. Grants the host-pool managed identity access to the host, network, image, credential-vault, and
+  host-pool scopes, then creates `sessionHostConfigurations/default`.
 5. Creates `sessionHostManagements/default` without a provisioning request, which is the API's
   zero-host state. The API does not accept an explicit `instanceCount: 0`.
-6. Optionally deploys FSLogix storage by composing `deployments/add-ons/fslogixStorage`.
-7. Deploys the policy and RBAC required for settings the native service does not expose by
-  composing the internal `deployments/automatedHostPools/policy` module.
-8. Updates `sessionHostManagements/default` with the requested `instanceCount` only after storage
-  and policy deployment complete.
-9. Optionally assigns the AVD service principal roles and creates a dynamic scaling plan with a
-  `CreateDeletePowerManage` pooled schedule after initial provisioning completes.
+6. In parallel, deploys optional FSLogix storage, registers newly created Azure Files shares with
+  an optional existing shared Recovery Services vault and policy, and deploys the policy/RBAC
+  required for settings the native service does not expose. Policy completion is required before
+  VM creation.
+7. Updates `sessionHostManagements/default` with the requested `instanceCount` only after the
+  zero-host resource, storage-dependent policy inputs, and policy assignments are ready.
+8. Removes the temporary deployment helper after final session-host provisioning is submitted.
 
-The existing standard host-pool deployment is unchanged. Shared naming, AVD resources, FSLogix,
-policy, Key Vault RBAC, and generic role-assignment modules are reused rather than copied.
+Shared naming, AVD resources, FSLogix, Key Vault RBAC, and generic role-assignment modules are reused
+rather than copied. Resources created by FederalAVD, including FSLogix storage, private endpoints,
+customer-managed keys, and Disk Encryption Sets, use the same naming formulas as a standard host
+pool with equivalent naming inputs.
+
+For Microsoft Entra joined hosts, application-group assignments grant users access to the desktop.
+The additional resource-group-level `Virtual Machine User Login` assignment used by the standard
+host-pool deployment is not required for host pools using Session Host Configuration, so the
+automated deployment does not create it.
 
 ## Resource Group Placement
 
@@ -79,6 +90,12 @@ currently exposed as a separate portal control.
 - When monitoring is enabled, an existing AVD Insights Data Collection Rule and optional Data
   Collection Endpoint.
 - When Azure Files private endpoints are enabled, the private DNS zone resource ID.
+- To register newly deployed FSLogix Azure Files shares for backup, an existing Recovery Services
+  vault and Azure Files snapshot backup policy in the session-host region. Shared Services can
+  create both and outputs `fslogixBackupVaultResourceId` and `fslogixBackupPolicyName`.
+- AVD Private Link requires endpoint subnets for each selected route. Optional automatic DNS
+  integration uses `privatelink.wvd.microsoft.com` and, for initial discovery, the cloud's
+  `privatelink-global.wvd.microsoft.com` private DNS zone.
 - Ephemeral OS disks require a VM size whose selected cache or resource disk can hold the image OS
   disk. Ephemeral OS disks are local to the VM and are recreated when Azure Virtual Desktop
   replaces the session host.
@@ -91,7 +108,8 @@ currently exposed as a separate portal control.
 
 The deploying principal needs permission to create subscription deployments, resource groups,
 policy definitions and assignments, managed identities, and role assignments at every referenced
-scope.
+scope. Backup registration also requires permission to register the storage accounts and create
+protected items in the selected Recovery Services vault.
 
 ## Identities and RBAC
 
@@ -134,6 +152,15 @@ $sharedServicesDeployment = New-AzDeployment `
 $credentialsKeyVaultResourceId = $sharedServicesDeployment.Outputs.secretsKeyVaultResourceId.Value
 ```
 
+To register newly deployed FSLogix Azure Files shares for snapshot backup, set
+`deployFSLogixBackupVault` to `true` in the Shared Services parameters and capture its additional
+outputs:
+
+```powershell
+$fslogixBackupVaultResourceId = $sharedServicesDeployment.Outputs.fslogixBackupVaultResourceId.Value
+$fslogixBackupPolicyName = $sharedServicesDeployment.Outputs.fslogixBackupPolicyName.Value
+```
+
 Copy the automated host-pool starter into the ignored `customer` folder and replace all placeholder
 values. Set `credentialsKeyVaultResourceId` to `$credentialsKeyVaultResourceId` in your deployment
 automation, or paste that output into the customer parameter file:
@@ -148,8 +175,14 @@ New-AzDeployment `
   -TemplateFile .\deployments\automatedHostPools\automatedHostPool.json `
   -TemplateParameterFile .\customer\parameters\automatedHostPools\myPool.parameters.json `
   -credentialsKeyVaultResourceId $credentialsKeyVaultResourceId `
+  -existingFilesBackupVaultResourceId $fslogixBackupVaultResourceId `
+  -existingFilesBackupPolicyName $fslogixBackupPolicyName `
   -Verbose
 ```
+
+Omit the two backup parameters when the Shared Services backup vault is not deployed. Backup
+registration applies only to newly deployed Azure Files storage; existing storage selected for
+FSLogix configuration is not modified by this deployment.
 
 Do not persist `deploymentSuffix` in saved parameter files. Its default changes for each deployment
 so temporary FSLogix deployment resources and nested deployments can rerun safely.
@@ -166,13 +199,20 @@ To deploy through the Azure portal, publish the automated host-pool Template Spe
 
 The automated Template Spec is opt-in because the preview resource API is available only in Azure
 Commercial. The portal form selects existing network, Key Vault, image, monitoring, and encryption
-resources. Network selection is limited to the virtual network and subnet so subnet-level NSG
-configuration remains authoritative. The form uses the default secret names listed in
-Prerequisites unless **Customize credential secret names** is selected. Optional picker overrides
-submit the selected versionless secret URI and never retrieve secret values. The deploying user
-needs Key Vault Reader on the credentials vault and browser-side data-plane network access to list
-secret metadata; users who cannot reach the vault can leave the overrides disabled and use the
-default names.
+resources. It can also select an existing shared Recovery Services vault and identify its Azure
+Files snapshot backup policy. Network selection is limited to the virtual network and subnet so
+subnet-level NSG configuration remains authoritative. The form uses the default secret names
+listed in Prerequisites unless **Customize credential secret names** is selected. Optional picker
+overrides submit the selected versionless secret URI and never retrieve secret values. The
+deploying user needs Key Vault Reader on the credentials vault and browser-side data-plane network
+access to list secret metadata; users who cannot reach the vault can leave the overrides disabled
+and use the default names.
+
+Azure Files share soft delete and Azure Backup retention are separate. Soft delete retains an
+accidentally deleted share for 14 days by default. The shared snapshot policy retains scheduled
+recovery points according to `fslogixBackupRetentionDays`, which defaults to 30 days. Because the
+current policy uses snapshot-tier backup, recovery-point data remains in the source storage account;
+backup retention does not extend the period in which a deleted share can be undeleted.
 
 ## Session Host Availability
 
@@ -198,7 +238,8 @@ capabilities are therefore available and are not feature gaps:
 | Encryption at host and accelerated networking | Policy modifies the VM or NIC creation request. The portal form capability-gates accelerated networking against the selected VM size and gallery image. |
 | Guest Attestation integrity monitoring | Policy deploys the Guest Attestation extension for Trusted Launch and Confidential VMs. |
 | AVD Insights monitoring | Policy deploys Azure Monitor Agent and associates the selected DCR and optional DCE. |
-| FSLogix configuration and storage | The deployment composes the FSLogix storage add-on before host creation, then policy configures the session hosts. |
+| FSLogix configuration and storage | The deployment composes the shared FSLogix module before host creation, then policy configures the session hosts. |
+| FSLogix Azure Files backup registration | Newly deployed shares can be registered with an existing shared-services Recovery Services vault and Azure Files snapshot backup policy. |
 | Disk Encryption Set and managed-disk network isolation | Policy injects the DES and disables managed-disk public and export access when selected. |
 | Ordered private customizations | Policy attaches the artifact identity and runs customizations from the private artifact source in input order. |
 
@@ -209,7 +250,7 @@ The remaining feature parity gaps are explicit boundaries of the automated manag
 | Availability Sets | The preview Session Host Configuration API supports Availability Zones but does not expose Availability Set placement. See [Session Host Availability](#session-host-availability). |
 | Azure Dedicated Hosts | The preview API does not expose dedicated host or host-group placement. Use the standard host-pool deployment when physical host isolation is required. |
 | IPv6 NIC configuration | Azure Virtual Desktop creates the NIC and its IP configurations. Policy cannot safely add the standard template's optional IPv6 configuration. |
-| VM starting index and index padding | Native Session Host Management accepts a VM name prefix but does not expose the standard deployment's starting-index or padding controls. |
+| Session-host VM, OS disk, and NIC naming | Native Session Host Management accepts only a VM name prefix. Azure Virtual Desktop owns the resulting VM, OS disk, and NIC names, so the standard deployment's `SHNAME` naming patterns, starting index, and index padding cannot be applied. FederalAVD-created supporting resources still use the shared naming module. |
 | Personal host pools and hibernation | Automated Session Host Management is limited to pooled host pools. Use the standard deployment for personal desktops and their hibernation workflow. |
 | GPU extension auto-detection | Bake GPU drivers into the image or supply the required driver installation as an ordered private customization. |
 
@@ -219,7 +260,7 @@ Some differences are deployment-workflow boundaries rather than missing session-
 | --- | --- |
 | Create credentials or encryption Key Vaults inline | Select existing RBAC-enabled Key Vaults, typically deployed through Shared Services. |
 | Create the complete monitoring stack inline | Select an existing AVD Insights DCR and optional Log Analytics workspace and DCE. |
-| Create or select a Recovery Services vault and configure backup | Configure FSLogix Azure Files backup separately through Shared Services and the supported backup workflow. Service-managed pooled VMs are replaceable and are not individually backed up by this deployment. |
+| Create or select a Recovery Services vault and configure backup | Deploy the shared FSLogix vault and policy through Shared Services, then select them in the automated host-pool form to register newly deployed shares. Service-managed pooled VMs are replaceable and are not individually backed up by this deployment. |
 
 See the policy module's [capability matrix](policy/README.md#capability-matrix) and
 [complete parity boundary](policy/README.md#complete-parity-boundary) for implementation details.
@@ -244,6 +285,17 @@ produce the same public-access behavior as the standard deployment:
 - Private endpoint enabled with permitted IPs: public access is enabled only for those ranges.
 - Private endpoint disabled with permitted IPs: public access is enabled only for those ranges.
 - Private endpoint disabled with no permitted IPs: public access is enabled from all networks.
+
+AVD Private Link is configured separately from PaaS private endpoints. The automated deployment
+supports the same route choices as the standard host pool:
+
+- `HostPool`: private remote-session connections through the host-pool `connection` endpoint.
+- `FeedAndHostPool`: adds the workspace `feed` endpoint for private feed download.
+- `All`: adds or reuses the single global-feed workspace and its `global` endpoint for private
+  initial feed discovery.
+
+Host-pool and workspace public network access remain explicit controls. Private DNS-zone groups are
+created when DNS integration is enabled; otherwise DNS records must be managed separately.
 
 The managed disk network-access control separately deploys policy that disables public network and
 export access for session-host managed disks. It does not control FSLogix storage networking.
@@ -275,6 +327,10 @@ Set `deployDynamicScalingPlan` to `true` to create a scaling plan. The deploymen
 creates a preview pooled schedule with `scalingMethod: CreateDeletePowerManage`. Its ramp-up and
 ramp-down minimum and maximum host-pool sizes determine how many VMs the service may create and
 retain; the capacity thresholds and phase times determine when it scales.
+
+The scaling plan is a control-plane phase. It waits for the host pool and AVD service-principal RBAC,
+but it does not wait for FSLogix, policy, or initial session-host provisioning. A failure elsewhere
+in the parent deployment therefore does not prevent ARM from attempting the scaling-plan branch.
 
 `sessionHostCount` remains the initial capacity provisioned after policy and storage are ready.
 After the scaling plan is assigned, its schedule owns ongoing create, delete, start, and stop

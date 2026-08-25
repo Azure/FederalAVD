@@ -1,7 +1,7 @@
 # FSLogix Storage Add-On
 
 This add-on provisions FSLogix storage independently of a FederalAVD host pool deployment. It uses
-the same `deployments/shared/modules/fslogix/fslogix.bicep` module as the host pool and is
+the same `deployments/shared/modules/orchestration/fslogix.bicep` module as the host pool and is
 also composed by the automated host-pool deployment before policy and session-host provisioning.
 
 ## Boundary

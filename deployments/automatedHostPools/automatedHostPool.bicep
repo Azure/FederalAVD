@@ -215,6 +215,39 @@ param dynamicScalingSchedules dynamicScalingScheduleInputType[] = [
 @description('Optional. Existing AVD workspace resource ID. When empty, a workspace is created.')
 param existingWorkspaceResourceId string = ''
 
+@allowed([
+  'None'
+  'HostPool'
+  'FeedAndHostPool'
+  'All'
+])
+@description('Optional. AVD traffic routed through Private Link. All includes initial feed discovery, feed download, and remote session connections.')
+param avdPrivateLinkPrivateRoutes string = 'None'
+
+@description('Conditional. Subnet resource ID for the host-pool connection private endpoint.')
+param hostPoolPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. AVD Private DNS zone resource ID for host-pool connection and workspace feed endpoints.')
+param avdPrivateDnsZoneResourceId string = ''
+
+@description('Optional. Public network access mode for remote session connections.')
+param hostPoolPublicNetworkAccess 'Disabled' | 'Enabled' | 'EnabledForClientsOnly' = 'Enabled'
+
+@description('Conditional. Subnet resource ID for the workspace feed private endpoint.')
+param workspaceFeedPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. Public network access mode for workspace feed requests.')
+param workspaceFeedPublicNetworkAccess 'Disabled' | 'Enabled' = 'Enabled'
+
+@description('Optional. Existing global-feed workspace resource ID. When supplied, the deployment does not create another global-feed workspace or endpoint.')
+param existingGlobalFeedResourceId string = ''
+
+@description('Conditional. Subnet resource ID for a newly created global-feed private endpoint when all AVD traffic uses private routes.')
+param globalFeedPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. AVD global-feed Private DNS zone resource ID.')
+param globalFeedPrivateDnsZoneResourceId string = ''
+
 @description('Optional. Friendly name shown for a newly created workspace.')
 param workspaceFriendlyName string = ''
 
@@ -235,6 +268,12 @@ param dataCollectionEndpointResourceId string = ''
 
 @description('Optional. Deploy Azure Monitor Agent policy assignments for automated session hosts.')
 param enableMonitoring bool = false
+
+@description('Optional. Resource ID of an existing user-assigned identity in the session-host subscription for Azure Monitor Agent authentication. When empty, a host-pool-specific identity is created in the session-host resource group.')
+@metadata({
+  strongType: 'Microsoft.ManagedIdentity/userAssignedIdentities'
+})
+param monitoringUserAssignedIdentityResourceId string = ''
 
 @description('Optional. Deploy and configure FSLogix storage before provisioning session hosts.')
 param deployFSLogixStorage bool = true
@@ -290,6 +329,12 @@ param fslogixStorageIndex int = 1
 @minValue(1)
 @maxValue(365)
 param fslogixSoftDeleteRetentionDays int = 14
+
+@description('Optional. Resource ID of an existing Recovery Services vault used to register newly deployed FSLogix Azure Files shares for snapshot backup.')
+param existingFilesBackupVaultResourceId string = ''
+
+@description('Optional. Name of the Azure Files snapshot backup policy in the existing Recovery Services vault.')
+param existingFilesBackupPolicyName string = 'filesharepolicy'
 
 @allowed([
   'AES256'
@@ -353,6 +398,9 @@ param fslogixPrivateEndpointSubnetResourceId string = virtualMachineSubnetResour
 
 @description('Optional. Resource ID of the Azure Files private DNS zone.')
 param azureFilePrivateDnsZoneResourceId string = ''
+
+@description('Optional. VM size used by the temporary FSLogix deployment virtual machine. Select an available 2-vCPU SKU in the deployment region.')
+param deploymentVirtualMachineSize string = 'Standard_D2ads_v5'
 
 @description('Optional. IP addresses or CIDR blocks permitted through the Azure Files firewall.')
 param fslogixPermittedIPs string[] = []
@@ -435,6 +483,7 @@ resource credentialsKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 var commercialCloudIsValid = environment().name == 'AzureCloud'
   ? true
   : bool('Automated host pools are currently supported only in Azure Commercial.')
+var hpBaseName = toLower(identifier)
 var credentialsKeyVaultConfigurationIsValid = credentialsKeyVault.properties.enableRbacAuthorization == true && credentialsKeyVault.properties.enabledForTemplateDeployment == true
   ? true
   : bool('The credentials Key Vault must use Azure RBAC and allow Azure Resource Manager template deployment.')
@@ -492,18 +541,97 @@ var dynamicScalingScheduleDays = flatten(map(effectiveDynamicScalingSchedules, s
 var dynamicScalingSchedulesAreValid = !deployDynamicScalingPlan || !empty(effectiveDynamicScalingSchedules) && length(dynamicScalingScheduleNames) == length(union(dynamicScalingScheduleNames, dynamicScalingScheduleNames)) && length(dynamicScalingScheduleDays) == length(union(dynamicScalingScheduleDays, dynamicScalingScheduleDays))
   ? true
   : bool('Dynamic scaling requires at least one schedule, unique schedule names, and each day assigned to no more than one schedule.')
+var hostPoolPrivateEndpointConfigurationIsValid = avdPrivateLinkPrivateRoutes == 'None' || !empty(hostPoolPrivateEndpointSubnetResourceId)
+var workspaceFeedPrivateEndpointConfigurationIsValid = !contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes) || !empty(workspaceFeedPrivateEndpointSubnetResourceId)
+var globalFeedPrivateEndpointConfigurationIsValid = avdPrivateLinkPrivateRoutes != 'All' || !empty(existingGlobalFeedResourceId) || !empty(globalFeedPrivateEndpointSubnetResourceId)
+var avdPrivateLinkConfigurationIsValid = hostPoolPrivateEndpointConfigurationIsValid && workspaceFeedPrivateEndpointConfigurationIsValid && globalFeedPrivateEndpointConfigurationIsValid
+  ? true
+  : bool('AVD Private Link requires a host-pool endpoint subnet, a workspace feed endpoint subnet for FeedAndHostPool or All, and an existing global feed or global endpoint subnet for All.')
+var deployGlobalFeed = avdPrivateLinkPrivateRoutes == 'All' && empty(existingGlobalFeedResourceId)
+var createDeploymentVm = deployFSLogixStorage || !empty(desktopFriendlyName)
+var fslogixStorageSolution 'AzureFiles' | 'AzureNetAppFiles' = startsWith(fslogixStorageService, 'AzureFiles') ? 'AzureFiles' : 'AzureNetAppFiles'
+var fslogixDomainCredentialsRequired = contains(identitySolution, 'DomainServices') || fslogixStorageSolution == 'AzureNetAppFiles' || (identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups))
+var fslogixShareNamesLookup = {
+  CloudCacheProfileContainer: ['profile-containers']
+  CloudCacheProfileOfficeContainer: ['profile-containers', 'office-containers']
+  ProfileContainer: ['profile-containers']
+  ProfileOfficeContainer: ['profile-containers', 'office-containers']
+}
+var fslogixFileShareNames = fslogixShareNamesLookup[fslogixContainerType]
+var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
+var effectiveFslogixExistingLocalStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixExistingLocalStorageAccountResourceIds, 1)
+  : fslogixExistingLocalStorageAccountResourceIds
+var effectiveFslogixExistingRemoteStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixExistingRemoteStorageAccountResourceIds, 1)
+  : fslogixExistingRemoteStorageAccountResourceIds
+var deployFslogixStorageCmk = deployFSLogixStorage && fslogixStorageSolution == 'AzureFiles' && contains(fslogixKeyManagementStorage, 'CustomerManaged')
+var fslogixShardingConfigurationIsValid = (!deployFSLogixStorage && !fslogixConfigureSessionHosts) || identitySolution == 'EntraId' || fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
+  ? true
+  : bool('fslogixUserGroups must contain at least one group when sharding is enabled.')
+var fslogixExistingLocalStorageConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || fslogixStorageSolution != 'AzureFiles' || length(effectiveFslogixExistingLocalStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingRemoteStorageConfigurationIsValid = !fslogixConfigureSessionHosts || fslogixStorageSolution != 'AzureFiles' || empty(effectiveFslogixExistingRemoteStorageAccountResourceIds) || length(effectiveFslogixExistingRemoteStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingStorageConfigurationIsValid = fslogixExistingLocalStorageConfigurationIsValid && fslogixExistingRemoteStorageConfigurationIsValid
+  ? true
+  : bool('Existing FSLogix Azure Files storage must include one local account, and when supplied one remote account, per shard. Storage Account Keys use one account per location.')
+var fslogixExistingLocalNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || fslogixStorageSolution != 'AzureNetAppFiles' || length(fslogixExistingLocalNetAppVolumeResourceIds) == length(fslogixFileShareNames)
+var fslogixExistingRemoteNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || fslogixStorageSolution != 'AzureNetAppFiles' || empty(fslogixExistingRemoteNetAppVolumeResourceIds) || length(fslogixExistingRemoteNetAppVolumeResourceIds) == length(fslogixFileShareNames)
+var fslogixExistingNetAppConfigurationIsValid = fslogixExistingLocalNetAppConfigurationIsValid && fslogixExistingRemoteNetAppConfigurationIsValid
+  ? true
+  : bool('Existing Azure NetApp Files storage must include one volume per FSLogix share, in profile-then-Office order. Remote volumes are optional but must follow the same rule when supplied.')
+var fslogixStorageIdentityConfigurationIsValid = !deployFSLogixStorage || fslogixStorageSolution != 'AzureNetAppFiles' || contains(identitySolution, 'DomainServices')
+  ? true
+  : bool('Azure NetApp Files requires ActiveDirectoryDomainServices or EntraDomainServices.')
+var fslogixStorageCmkConfigurationIsValid = !deployFslogixStorageCmk || !empty(fslogixEncryptionKeyVaultResourceId)
+  ? true
+  : bool('fslogixEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.')
 
-module naming '../hostpools/modules/naming.bicep' = {
+resource fslogixEncryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (deployFslogixStorageCmk && fslogixStorageCmkConfigurationIsValid) {
+  name: last(split(fslogixEncryptionKeyVaultResourceId, '/'))!
+  scope: resourceGroup(split(fslogixEncryptionKeyVaultResourceId, '/')[2], split(fslogixEncryptionKeyVaultResourceId, '/')[4])
+}
+
+resource globalFeedPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (deployGlobalFeed && !empty(globalFeedPrivateEndpointSubnetResourceId)) {
+  name: split(globalFeedPrivateEndpointSubnetResourceId, '/')[8]
+  scope: resourceGroup(split(globalFeedPrivateEndpointSubnetResourceId, '/')[2], split(globalFeedPrivateEndpointSubnetResourceId, '/')[4])
+}
+
+var globalFeedRegion = deployGlobalFeed && !empty(globalFeedPrivateEndpointSubnetResourceId)
+  ? globalFeedPrivateEndpointVirtualNetwork!.location
+  : ''
+
+module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
+  name: 'Naming-${deploymentSuffix}'
   params: {
-    identifier: identifier
+    identifier: hpBaseName
     virtualMachinesRegion: location
     controlPlaneRegion: controlPlaneLocation
+    globalFeedRegion: globalFeedRegion
     existingFeedWorkspaceResourceId: existingWorkspaceResourceId
     namingConvention: namingConvention
   }
 }
 
-module controlPlaneResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (empty(existingWorkspaceResourceId)) {
+var hostPoolResourceId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
+var parentResourceTag = { 'cm-resource-parent': hostPoolResourceId }
+var hostPoolCustomTags = union(
+  {
+    hostsResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupHosts}'
+    hpIdentifier: hpBaseName
+    hpNamingConvention: string({
+      components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
+      delimiter: namingConvention.?delimiter ?? '-'
+      workload: !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+      vmsLocationAbbreviation: naming.outputs.vmLocationAbbreviation
+    })
+  },
+  deployFSLogixStorage
+    ? { storageResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupStorage}' }
+    : {}
+)
+
+module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (empty(existingWorkspaceResourceId)) {
+  name: 'Resource-Group-Control-Plane-${deploymentSuffix}'
   params: {
     name: naming.outputs.resourceGroupControlPlane
     location: controlPlaneLocation
@@ -511,15 +639,102 @@ module controlPlaneResourceGroup '../shared/modules/resources/resourceGroups/dep
   }
 }
 
-module sessionHostResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = {
+module sessionHostResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
+  name: 'Resource-Group-Hosts-${deploymentSuffix}'
   params: {
     name: naming.outputs.resourceGroupHosts
     location: commercialCloudIsValid ? location : location
+    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTag)
+  }
+}
+
+module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
+  name: 'Resource-Group-FSLogix-Storage-${deploymentSuffix}'
+  params: {
+    name: naming.outputs.resourceGroupStorage
+    location: location
+    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTag)
+  }
+}
+
+module deploymentResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
+  name: 'Resource-Group-Deployment-${deploymentSuffix}'
+  params: {
+    name: naming.outputs.resourceGroupDeployment
+    location: location
+    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTag)
+  }
+}
+
+module globalFeedResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployGlobalFeed && !empty(globalFeedPrivateEndpointSubnetResourceId)) {
+  name: 'Resource-Group-Global-Feed-${deploymentSuffix}'
+  params: {
+    name: naming.outputs.globalFeedResourceGroupName
+    location: globalFeedRegion
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
 
+// Start subscription-level AVD service-principal RBAC early so it can propagate while the
+// control plane, storage, policy, and session-host configuration are prepared.
+module avdServicePrincipalRbac '../shared/modules/resourceModules/desktopVirtualization/hostPools/avdServicePrincipalRbac.bicep' = if (deployDynamicScalingPlan || startVMOnConnect) {
+  name: 'Subscription-Role-Assignment-${deploymentSuffix}'
+  params: {
+    avdServicePrincipalObjectId: avdServicePrincipalIsValid ? avdServicePrincipalObjectId : avdServicePrincipalObjectId
+    scalingMethod: deployDynamicScalingPlan ? 'CreateDeletePowerManage' : 'None'
+    startVMOnConnect: startVMOnConnect
+  }
+}
+
+module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy.bicep' = if (createDeploymentVm) {
+  name: 'Deployment-Helper-${deploymentSuffix}'
+  params: {
+    confidentialVMOSDiskEncryption: false
+    deploymentSuffix: deploymentSuffix
+    deploymentVmSize: deploymentVirtualMachineSize
+    desktopFriendlyName: desktopFriendlyName
+    diskSku: 'StandardSSD_LRS'
+    #disable-next-line BCP422
+    domainJoinUserPassword: fslogixDomainCredentialsRequired
+      ? credentialsKeyVault.getSecret(last(split(effectiveDomainJoinPasswordSecretUri, '/'))!)
+      : ''
+    #disable-next-line BCP422
+    domainJoinUserPrincipalName: fslogixDomainCredentialsRequired
+      ? credentialsKeyVault.getSecret(last(split(effectiveDomainJoinUsernameSecretUri, '/'))!)
+      : ''
+    domainName: domainName
+    domainJoinDeploymentVirtualMachine: deployFSLogixStorage && fslogixStorageSolution == 'AzureNetAppFiles'
+    encryptionAtHost: true
+    fslogix: deployFSLogixStorage
+    fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
+    hostPoolName: naming.outputs.hostPoolName
+    identitySolution: identitySolution
+    keyManagementDisks: 'PlatformManaged'
+    keyManagementStorageAccounts: fslogixKeyManagementStorage
+    location: location
+    ouPath: organizationalUnitPath
+    resourceGroupControlPlane: naming.outputs.resourceGroupControlPlane
+    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
+    resourceGroupHosts: naming.outputs.resourceGroupHosts
+    resourceGroupSecurity: naming.outputs.resourceGroupHosts
+    resourceGroupStorage: naming.outputs.resourceGroupStorage
+    tags: tags
+    userAssignedIdentityNameConv: naming.outputs.userAssignedIdentityNameConv
+    virtualMachineName: naming.outputs.depVirtualMachineName
+    virtualMachineNICName: naming.outputs.depVirtualMachineNicName
+    virtualMachineDiskName: naming.outputs.depVirtualMachineDiskName
+    virtualMachineSubnetResourceId: virtualMachineSubnetResourceId
+    manageHostResourcePermissions: false
+  }
+  dependsOn: [
+    deploymentResourceGroup
+    storageResourceGroup
+    controlPlaneResourceGroup
+  ]
+}
+
 module controlPlane 'modules/controlPlane.bicep' = {
+  name: 'ControlPlane-${deploymentSuffix}'
   params: {
     resourceGroupName: naming.outputs.resourceGroupControlPlane
     location: controlPlaneLocation
@@ -529,19 +744,50 @@ module controlPlane 'modules/controlPlane.bicep' = {
     existingWorkspaceResourceId: existingWorkspaceResourceId
     workspaceFriendlyName: workspaceFriendlyName
     desktopFriendlyName: desktopFriendlyName
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
+    deploymentUserAssignedIdentityClientId: createDeploymentVm
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
+      : ''
+    deploymentResourceGroupName: naming.outputs.resourceGroupDeployment
+    deploymentLocation: location
+    deploymentSuffix: deploymentSuffix
     appGroupSecurityGroupIds: appGroupSecurityGroupIds
     maxSessionLimit: hostPoolMaxSessionLimit
     loadBalancerType: loadBalancerType
     customRdpProperty: hostPoolRDPProperties
     validationEnvironment: hostPoolValidationEnvironment
     startVMOnConnect: startVMOnConnect
+    deployDynamicScalingPlan: deployDynamicScalingPlan
+    scalingPlanName: naming.outputs.scalingPlanName
+    scalingPlanTimeZone: avdServicePrincipalIsValid && dynamicScalingLimitsAreValid && dynamicScalingSchedulesAreValid ? scalingPlanTimeZone : scalingPlanTimeZone
+    scalingPlanExclusionTag: scalingPlanExclusionTag
+    dynamicScalingSchedules: effectiveDynamicScalingSchedules
+    hostPoolCustomTags: hostPoolCustomTags
+    avdPrivateLinkPrivateRoutes: avdPrivateLinkConfigurationIsValid ? avdPrivateLinkPrivateRoutes : avdPrivateLinkPrivateRoutes
+    hostPoolPrivateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
+    avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
+    hostPoolPublicNetworkAccess: hostPoolPublicNetworkAccess
+    workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
+    workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
+    existingGlobalWorkspaceResourceId: existingGlobalFeedResourceId
+    globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
+    globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
+    globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
+    resourceGroupGlobalFeed: naming.outputs.globalFeedResourceGroupName
+    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     tags: tags
   }
-  dependsOn: [controlPlaneResourceGroup]
+  dependsOn: [
+    avdServicePrincipalRbac
+    controlPlaneResourceGroup
+    globalFeedResourceGroup
+  ]
 }
 
 module hostPoolPermissions 'modules/permissions.bicep' = {
+  name: 'Host-Pool-Permissions-${deploymentSuffix}'
   params: {
     hostPoolName: naming.outputs.hostPoolName
     controlPlaneResourceGroupName: naming.outputs.resourceGroupControlPlane
@@ -555,6 +801,7 @@ module hostPoolPermissions 'modules/permissions.bicep' = {
 }
 
 module sessionHostConfiguration 'modules/sessionHostConfiguration.bicep' = {
+  name: 'Session-Host-Configuration-${deploymentSuffix}'
   params: {
     resourceGroupName: naming.outputs.resourceGroupControlPlane
     hostPoolName: naming.outputs.hostPoolName
@@ -632,6 +879,7 @@ module sessionHostConfiguration 'modules/sessionHostConfiguration.bicep' = {
 
 // The API requires instanceCount to be at least one. Omitting provisioning is its zero-host state.
 module initialSessionHostManagement 'modules/sessionHostManagement.bicep' = {
+  name: 'Session-Host-Management-Prepare-${deploymentSuffix}'
   params: {
     resourceGroupName: naming.outputs.resourceGroupControlPlane
     hostPoolName: naming.outputs.hostPoolName
@@ -649,54 +897,89 @@ module initialSessionHostManagement 'modules/sessionHostManagement.bicep' = {
   dependsOn: [sessionHostConfiguration]
 }
 
-module fslogixStorage '../add-ons/fslogixStorage/main.bicep' = if (deployFSLogixStorage) {
+module fslogixStorageCmk '../shared/modules/orchestration/customerManagedKeys/storageCmk.bicep' = if (deployFslogixStorageCmk && fslogixStorageCmkConfigurationIsValid) {
+  name: 'Storage-CMK-${deploymentSuffix}'
   params: {
-    location: location
-    identifier: identifier
-    namingConvention: namingConvention
-    storageResourceGroupName: naming.outputs.resourceGroupStorage
-    createStorageResourceGroup: true
-    deploymentVirtualMachineSubnetResourceId: virtualMachineSubnetResourceId
-    identitySolution: identitySolution
-    credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
-    domainName: domainName
-    organizationalUnitPath: empty(fslogixOUPath) ? organizationalUnitPath : fslogixOUPath
-    appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
-    fslogixStorageService: fslogixStorageService
-    fslogixStorageRedundancy: fslogixStorageRedundancy
-    fslogixContainerType: fslogixContainerType
-    profileSizeInMBs: fslogixProfileSizeInMBs
-    shareSizeInGB: fslogixShareSizeInGB
-    fslogixShardOptions: fslogixShardOptions
-    fslogixAdminGroups: fslogixAdminGroups
-    fslogixUserGroups: fslogixUserGroups
-    storageAccountNamePrefix: naming.outputs.fslogixStorageAccountNamePrefix
-    storageIndex: fslogixStorageIndex
-    softDeleteRetentionDays: fslogixSoftDeleteRetentionDays
-    kerberosEncryptionType: fslogixStorageKerberosEncryptionType
-    keyManagementStorage: fslogixKeyManagementStorage
-    existingEncryptionKeyVaultResourceId: fslogixEncryptionKeyVaultResourceId
+    resourceGroupName: naming.outputs.resourceGroupStorage
+    keyVaultResourceId: fslogixEncryptionKeyVaultResourceId
+    keyManagementType: contains(fslogixKeyManagementStorage, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: fslogixKeyExpirationInDays
-    netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
-    existingSharedActiveDirectoryConnection: existingSharedActiveDirectoryConnection
-    remoteStorageAccountResourceIds: fslogixExistingRemoteStorageAccountResourceIds
-    remoteNetAppServerFqdns: empty(fslogixExistingRemoteNetAppVolumeResourceIds) ? [] : existingNetAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
-    privateEndpoint: fslogixPrivateEndpoint
-    privateEndpointSubnetResourceId: fslogixPrivateEndpointSubnetResourceId
+    location: location
+    tags: tags
+    parentResourceId: hostPoolResourceId
+    deploymentSuffix: deploymentSuffix
+    storageKeyNames: [
+      for i in range(0, fslogixStorageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
+    ]
+    identityName: replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.outputs.delimiter}cmk')
+  }
+  dependsOn: [storageResourceGroup]
+}
+
+module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (deployFSLogixStorage) {
+  name: 'FSLogix-${deploymentSuffix}'
+  params: {
+    activeDirectoryConnection: fslogixStorageIdentityConfigurationIsValid ? existingSharedActiveDirectoryConnection : existingSharedActiveDirectoryConnection
+    createNetAppAccount: true
+    createNetAppCapacityPool: true
+    appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
-    permittedIPs: fslogixPermittedIPs
+    deploymentUserAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    #disable-next-line BCP422
+    domainJoinUserPassword: fslogixDomainCredentialsRequired
+      ? credentialsKeyVault.getSecret(last(split(effectiveDomainJoinPasswordSecretUri, '/'))!)
+      : ''
+    #disable-next-line BCP422
+    domainJoinUserPrincipalName: fslogixDomainCredentialsRequired
+      ? credentialsKeyVault.getSecret(last(split(effectiveDomainJoinUsernameSecretUri, '/'))!)
+      : ''
+    domainName: domainName
+    #disable-next-line BCP318
+    encryptionKeyVaultUri: deployFslogixStorageCmk ? fslogixEncryptionKeyVault.properties.vaultUri : ''
+    encryptionUserAssignedIdentityResourceId: deployFslogixStorageCmk
+      ? fslogixStorageCmk!.outputs.storageEncryptionIdentityResourceId
+      : ''
+    fslogixAdminGroups: fslogixAdminGroups
+    fslogixEncryptionKeyNameConv: naming.outputs.encryptionKeyNameFSLogix
+    fslogixFileShares: fslogixFileShareNames
+    fslogixShardOptions: fslogixShardingConfigurationIsValid ? fslogixShardOptions : fslogixShardOptions
+    fslogixSoftDeleteRetentionDays: fslogixSoftDeleteRetentionDays
+    fslogixStorageRedundancy: fslogixStorageRedundancy
+    fslogixUserGroups: fslogixUserGroups
+    recoveryServicesVaultResourceId: existingFilesBackupVaultResourceId
+    fileSharePolicyName: existingFilesBackupPolicyName
+    hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
+    identitySolution: identitySolution
+    kerberosEncryptionType: fslogixStorageKerberosEncryptionType
+    keyManagementStorageAccounts: fslogixKeyManagementStorage
+    location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    parentResourceId: controlPlane.outputs.hostPoolResourceId
+    netAppAccountName: naming.outputs.netAppAccountName
+    netAppCapacityPoolName: naming.outputs.netAppCapacityPoolName
+    netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
+    ouPath: empty(fslogixOUPath) ? organizationalUnitPath : fslogixOUPath
+    permittedIPs: fslogixPermittedIPs
+    privateEndpoint: fslogixPrivateEndpoint
+    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointSubnetResourceId: fslogixPrivateEndpointSubnetResourceId
+    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
+    resourceGroupStorage: naming.outputs.resourceGroupStorage
+    shareSizeInGB: fslogixShareSizeInGB
+    smbServerLocation: naming.outputs.vmsLocAbbr
+    storageAccountNamePrefix: naming.outputs.fslogixStorageAccountNamePrefix
+    storageCount: fslogixStorageCount
+    storageIndex: fslogixStorageIndex
+    storageSku: split(fslogixStorageService, ' ')[1]
+    storageSolution: fslogixStorageSolution
     tags: tags
     deploymentSuffix: deploymentSuffix
   }
+  dependsOn: [storageResourceGroup]
 }
 
-var fslogixFileShareNames = contains(fslogixContainerType, 'OfficeContainer')
-  ? ['profile-containers', 'office-containers']
-  : ['profile-containers']
-
-module existingNetAppVolumeFqdns '../hostpools/modules/hosts/modules/getNetAppVolumeSmbServerFqdns.bicep' = if (fslogixConfigureSessionHosts && ((!deployFSLogixStorage && !empty(fslogixExistingLocalNetAppVolumeResourceIds)) || !empty(fslogixExistingRemoteNetAppVolumeResourceIds))) {
+module existingNetAppVolumeFqdns '../shared/modules/orchestration/fslogix/modules/getNetAppVolumeSmbServerFqdns.bicep' = if (fslogixConfigureSessionHosts && ((!deployFSLogixStorage && !empty(fslogixExistingLocalNetAppVolumeResourceIds)) || !empty(fslogixExistingRemoteNetAppVolumeResourceIds))) {
   name: 'Resolve-FSLogix-NetApp-${deploymentSuffix}'
   params: {
     localNetAppVolumeResourceIds: fslogixExistingLocalNetAppVolumeResourceIds
@@ -707,28 +990,47 @@ module existingNetAppVolumeFqdns '../hostpools/modules/hosts/modules/getNetAppVo
 
 var existingFslogixConfiguration = {
   identitySolution: identitySolution
-  storageService: split(fslogixStorageService, ' ')[0]
+  storageService: fslogixStorageSolution
   containerType: fslogixContainerType
   fileShareNames: fslogixFileShareNames
-  localStorageAccountResourceIds: fslogixExistingLocalStorageAccountResourceIds
-  remoteStorageAccountResourceIds: fslogixExistingRemoteStorageAccountResourceIds
+  localStorageAccountResourceIds: effectiveFslogixExistingLocalStorageAccountResourceIds
+  remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
   localNetAppServerFqdns: empty(fslogixExistingLocalNetAppVolumeResourceIds) ? [] : existingNetAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns
   remoteNetAppServerFqdns: empty(fslogixExistingRemoteNetAppVolumeResourceIds) ? [] : existingNetAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
   objectSpecificSettingsGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
   profileSizeInMBs: fslogixProfileSizeInMBs
 }
 
+var deployedFslogixConfiguration = {
+  identitySolution: identitySolution
+  storageService: fslogixStorageSolution
+  containerType: fslogixContainerType
+  fileShareNames: fslogixFileShareNames
+  localStorageAccountResourceIds: fslogixStorage!.outputs.storageAccountResourceIds
+  remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
+  localNetAppServerFqdns: fslogixStorage!.outputs.netAppServerFqdns
+  remoteNetAppServerFqdns: empty(fslogixExistingRemoteNetAppVolumeResourceIds) ? [] : existingNetAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
+  objectSpecificSettingsGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
+  profileSizeInMBs: fslogixProfileSizeInMBs
+}
+
 module sessionHostPolicy 'policy/main.bicep' = {
+  name: 'Session-Host-Policy-${deploymentSuffix}'
   params: {
     location: location
     sessionHostResourceGroupName: naming.outputs.resourceGroupHosts
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
-    policyResourceGroupName: '${naming.outputs.resourceGroupHosts}-policy'
-    createPolicyResourceGroup: true
+    policyIdentityName: naming.outputs.policyRemediationIdentityName
+    monitoringIdentityName: naming.outputs.azureMonitorAgentIdentityName
+    monitoringUserAssignedIdentityResourceId: monitoringUserAssignedIdentityResourceId
     deployDiskEncryptionSet: deployDiskEncryptionSet
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     keyManagementDisks: keyManagementDisks
+    diskEncryptionKeyName: naming.outputs.encryptionKeyNameVMs
+    diskEncryptionSetName: contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
+      ? naming.outputs.diskEncryptionSetNamePlatformAndCustomerManaged
+      : naming.outputs.diskEncryptionSetNameCustomerManaged
     disableManagedDiskPublicNetworkAccess: disableManagedDiskPublicNetworkAccess
     enableMonitoring: monitoringConfigurationIsValid ? enableMonitoring : enableMonitoring
     dataCollectionRuleResourceId: dataCollectionRuleResourceId
@@ -738,17 +1040,20 @@ module sessionHostPolicy 'policy/main.bicep' = {
     diskSizeGB: diskSizeGB
     enableAcceleratedNetworking: enableAcceleratedNetworking
     virtualMachinesTimeZone: virtualMachinesTimeZone
-    configureFSLogix: fslogixConfigureSessionHosts
-    fslogixConfiguration: deployFSLogixStorage ? fslogixStorage!.outputs.fslogixConfiguration : existingFslogixConfiguration
+    configureFSLogix: fslogixShardingConfigurationIsValid && fslogixExistingStorageConfigurationIsValid && fslogixExistingNetAppConfigurationIsValid
+      ? fslogixConfigureSessionHosts
+      : fslogixConfigureSessionHosts
+    fslogixConfiguration: deployFSLogixStorage ? deployedFslogixConfiguration : existingFslogixConfiguration
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     sessionHostCustomizations: sessionHostCustomizations
     tags: tags
   }
-  dependsOn: [initialSessionHostManagement]
+  dependsOn: [sessionHostResourceGroup]
 }
 
 module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = {
+  name: 'Session-Host-Management-Provision-${deploymentSuffix}'
   params: {
     resourceGroupName: naming.outputs.resourceGroupControlPlane
     hostPoolName: naming.outputs.hostPoolName
@@ -769,34 +1074,25 @@ module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = {
     }
   }
   dependsOn: [
-    fslogixStorage
+    initialSessionHostManagement
     sessionHostPolicy
   ]
 }
 
-module dynamicScalingPlan 'modules/dynamicScalingPlan.bicep' = if (deployDynamicScalingPlan) {
+module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (createDeploymentVm) {
+  name: 'Cleanup-Deployment-Helper-${deploymentSuffix}'
   params: {
-    resourceGroupName: naming.outputs.resourceGroupControlPlane
-    name: naming.outputs.scalingPlanName
-    location: controlPlaneLocation
-    tags: tags[?'Microsoft.DesktopVirtualization/scalingPlans'] ?? {}
-    timeZone: avdServicePrincipalIsValid && dynamicScalingLimitsAreValid && dynamicScalingSchedulesAreValid ? scalingPlanTimeZone : scalingPlanTimeZone
-    exclusionTag: scalingPlanExclusionTag
-    hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
-    schedules: effectiveDynamicScalingSchedules
+    location: location
+    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
+    resourceGroupHosts: naming.outputs.resourceGroupHosts
+    deploymentSuffix: deploymentSuffix
+    userAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    roleAssignmentIds: deploymentHelper!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
+    virtualMachineNames: []
+    removeHostRunCommands: false
   }
-  dependsOn: [
-    finalSessionHostManagement
-    avdServicePrincipalRbac
-  ]
-}
-
-module avdServicePrincipalRbac 'modules/avdServicePrincipalRbac.bicep' = if (deployDynamicScalingPlan || startVMOnConnect) {
-  params: {
-    avdServicePrincipalObjectId: avdServicePrincipalIsValid ? avdServicePrincipalObjectId : avdServicePrincipalObjectId
-    deployDynamicScalingPlan: deployDynamicScalingPlan
-    startVMOnConnect: startVMOnConnect
-  }
+  dependsOn: [finalSessionHostManagement]
 }
 
 output hostPoolResourceId string = controlPlane.outputs.hostPoolResourceId
@@ -807,4 +1103,8 @@ output sessionHostManagementResourceId string = finalSessionHostManagement.outpu
 output sessionHostResourceGroupId string = sessionHostResourceGroup.outputs.resourceId
 output fslogixStorageAccountResourceIds array = deployFSLogixStorage ? fslogixStorage!.outputs.storageAccountResourceIds : []
 output policyIdentityResourceId string = sessionHostPolicy.outputs.policyIdentityResourceId
-output scalingPlanResourceId string = deployDynamicScalingPlan ? dynamicScalingPlan!.outputs.resourceId : ''
+output scalingPlanResourceId string = controlPlane.outputs.scalingPlanResourceId
+output hostPoolPrivateEndpointResourceId string = controlPlane.outputs.hostPoolPrivateEndpointResourceId
+output workspaceFeedPrivateEndpointResourceId string = controlPlane.outputs.workspaceFeedPrivateEndpointResourceId
+output globalFeedWorkspaceResourceId string = controlPlane.outputs.globalFeedWorkspaceResourceId
+output globalFeedPrivateEndpointResourceId string = controlPlane.outputs.globalFeedPrivateEndpointResourceId

@@ -7,6 +7,8 @@
         "/^& \\.github/skills/federalavd-bicep-maintenance/scripts/Test-BicepArmSync\\.ps1 -BicepPath deployments/add-ons/fslogixStorage/main\\.bicep$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "&": true,
+        "az": true
     }
 }

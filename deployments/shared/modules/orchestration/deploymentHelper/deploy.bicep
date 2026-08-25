@@ -1,0 +1,279 @@
+targetScope = 'subscription'
+
+param confidentialVMOSDiskEncryption bool
+param diskSku string
+@secure()
+param domainJoinUserPassword string
+@secure()
+param domainJoinUserPrincipalName string
+param domainName string
+param deploymentVmSize string
+param desktopFriendlyName string
+param encryptionAtHost bool
+param fslogix bool
+param fslogixAppUpdateUserAssignedIdentityResourceId string
+param hostPoolName string = ''
+param parentResourceId string = ''
+param domainJoinDeploymentVirtualMachine bool
+param identitySolution string
+param keyManagementDisks string
+param keyManagementStorageAccounts string
+param location string
+param ouPath string
+param resourceGroupControlPlane string
+param resourceGroupDeployment string
+param resourceGroupHosts string
+param resourceGroupSecurity string
+param resourceGroupStorage string
+param tags object
+param deploymentSuffix string
+param userAssignedIdentityNameConv string = ''
+param userAssignedIdentityName string = ''
+param virtualMachineName string
+param virtualMachineNICName string
+param virtualMachineDiskName string
+param virtualMachineSubnetResourceId string
+param manageHostResourcePermissions bool = true
+
+var deploymentUserAssignedIdentityName = !empty(userAssignedIdentityName)
+  ? userAssignedIdentityName
+  : replace(userAssignedIdentityNameConv, 'TOKEN', 'deployment')
+var virtualMachineAdminUserName = 'avddeploy'
+var virtualMachineAdminPassword = 'aA1!${uniqueString(subscription().id, resourceGroupDeployment, virtualMachineName)}'
+var effectiveParentResourceId = !empty(parentResourceId)
+  ? parentResourceId
+  : !empty(hostPoolName)
+      ? '${subscription().id}/resourceGroups/${resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${hostPoolName}'
+      : ''
+var parentTag = empty(effectiveParentResourceId) ? {} : { 'cm-resource-parent': effectiveParentResourceId }
+
+// ─── Role assignment definitions ──────────────────────────────────────────────
+var roleDefinitions = {
+  Contributor: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+  DesktopVirtualizationApplicationGroupContributor: '86240b0e-9422-4c43-887b-b61143f32ba8'
+  KeyVaultCryptoOfficer: '14b46e9e-c2b7-41b4-b07b-48a6ebf60603'
+  RoleBasedAccessControlAdministrator: 'f58310d9-a9f6-439a-9e8d-f62e7b41a168'
+  storageFileDataPrivilegedContributor: '69566ab7-960f-475b-8e7c-b3118f30c6bd'
+  StorageAccountContributor: '17d1049b-9a84-46fb-8f53-869881c3d3ab'
+  VirtualMachineContributor: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
+}
+
+var roleAssignmentsControlPlane = !empty(desktopFriendlyName)
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.DesktopVirtualizationApplicationGroupContributor // (Purpose: updates the friendly name for the desktop)
+        depName: 'ControlPlane-DVAppGroupCont'
+        resourceGroup: resourceGroupControlPlane
+      }
+      {
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role Assignment must remain last in the list.)
+        depName: 'ControlPlane-RBACAdmin'
+        resourceGroup: resourceGroupControlPlane
+      }
+    ]
+  : []
+
+var roleAssignmentsDeployment = [
+  {
+    roleDefinitionId: roleDefinitions.Contributor // (Purpose: remove the deployment resource group during cleanup as there won't be any resources within.)
+    depName: 'Deployment-Cont'
+    resourceGroup: resourceGroupDeployment
+  }
+]
+
+var roleAssignmentsHosts = manageHostResourcePermissions
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.VirtualMachineContributor // (Purpose: remove the run commands from the host VMs)
+        depName: 'Hosts-VMCont'
+        resourceGroup: resourceGroupHosts
+      }
+      {
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the hosts resource group role assignment for the deployment identity. This role Assignment must remain last in the list.)
+        depName: 'Hosts-RBACAdmin'
+        resourceGroup: resourceGroupHosts
+      }
+    ]
+  : []
+
+var roleAssignmentsManagementConfidentialVMDiskEncryption = confidentialVMOSDiskEncryption && keyManagementDisks == 'CustomerManagedHSM'
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.KeyVaultCryptoOfficer // (Purpose: Retrieve the customer managed keys from the key vault for idempotent deployment)
+        depName: 'Security-KVCryptoOff'
+        resourceGroup: resourceGroupSecurity
+      }
+    ]
+  : []
+
+var roleAssignmentsManagementRBACAdmin = contains(keyManagementDisks, 'CustomManaged') || contains(
+    keyManagementStorageAccounts,
+    'CustomerManaged'
+  ) || !empty(roleAssignmentsManagementConfidentialVMDiskEncryption)
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the security resource group role assignments for the deployment identity. This role assignment must remain last in the list if assignments are made.)
+        depName: 'Security-RBACAdmin'
+        resourceGroup: resourceGroupSecurity
+      }
+    ]
+  : []
+
+var roleAssignmentsManagement = union(
+  roleAssignmentsManagementConfidentialVMDiskEncryption,
+  roleAssignmentsManagementRBACAdmin
+)
+
+var roleAssignmentsStorage = fslogix && (contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid')
+  ? [
+      {
+        roleDefinitionId: roleDefinitions.StorageAccountContributor // (Purpose: domain join storage account)
+        depName: 'Storage-StorageAcctCont'
+        resourceGroup: resourceGroupStorage
+      }
+      {
+        roleDefinitionId: roleDefinitions.storageFileDataPrivilegedContributor // (Purpose: set NTFS permissions on the file share)
+        depName: 'Storage-StorageFileDataPrivCont'
+        resourceGroup: resourceGroupStorage
+      }
+      {
+        roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role assignment must remain last in the list.)
+        depName: 'Storage-RBACAdmin'
+        resourceGroup: resourceGroupStorage
+      }
+    ]
+  : fslogix
+      ? [
+          {
+            roleDefinitionId: roleDefinitions.storageFileDataPrivilegedContributor // (Purpose: set NTFS permissions on the file share)
+            depName: 'Storage-StorageFileDataPrivCont'
+            resourceGroup: resourceGroupStorage
+          }
+          {
+            roleDefinitionId: roleDefinitions.RoleBasedAccessControlAdministrator // (Purpose: remove the control plane role assignments for the deployment identity. This role assignment must remain last in the list.)
+            depName: 'Storage-RBACAdmin'
+            resourceGroup: resourceGroupStorage
+          }
+        ]
+      : []
+
+var roleAssignments = union(
+  roleAssignmentsControlPlane,
+  roleAssignmentsDeployment,
+  roleAssignmentsHosts,
+  roleAssignmentsManagement,
+  roleAssignmentsStorage
+)
+
+// ─── Deployment user-assigned identity ────────────────────────────────────────
+module deploymentUserAssignedIdentity '../../resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
+  name: 'UserAssignedIdentity-Deployment-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupDeployment)
+  params: {
+    name: deploymentUserAssignedIdentityName
+    location: location
+    tags: union(
+      parentTag,
+      tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
+    )
+  }
+}
+
+// ─── Role assignments (RG-scoped, one module call per entry) ──────────────────
+module roleAssignments_deployment '../../resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+  for i in range(0, length(roleAssignments)): {
+    scope: resourceGroup(roleAssignments[i].resourceGroup)
+    name: 'RA-${roleAssignments[i].depName}-${deploymentSuffix}'
+    params: {
+      principalId: deploymentUserAssignedIdentity.outputs.principalId
+      principalType: 'ServicePrincipal'
+      roleDefinitionId: roleAssignments[i].roleDefinitionId
+    }
+  }
+]
+
+// ─── Deployment VM ─────────────────────────────────────────────────────────────
+module virtualMachine '../../resourceModules/compute/virtualMachines/deploy.bicep' = {
+  name: 'VirtualMachine-Deployment-${deploymentSuffix}'
+  scope: resourceGroup(resourceGroupDeployment)
+  params: {
+    name: virtualMachineName
+    location: location
+    tags: union(parentTag, tags[?'Microsoft.Compute/virtualMachines'] ?? {})
+    nicName: virtualMachineNICName
+    subnetResourceId: virtualMachineSubnetResourceId
+    enableAcceleratedNetworking: false
+    vmSize: deploymentVmSize
+    imagePublisher: 'MicrosoftWindowsServer'
+    imageOffer: 'WindowsServer'
+    imageSku: '2019-datacenter-core-g2'
+    osDiskName: virtualMachineDiskName
+    osDiskSku: diskSku
+    adminUsername: virtualMachineAdminUserName
+    adminPassword: virtualMachineAdminPassword
+    licenseType: 'Windows_Server'
+    securityType: 'TrustedLaunch'
+    secureBootEnabled: true
+    vTpmEnabled: true
+    encryptionAtHost: encryptionAtHost
+    bootDiagnosticsEnabled: false
+    systemAssignedIdentity: true
+    userAssignedIdentityResourceIds: !empty(fslogixAppUpdateUserAssignedIdentityResourceId)
+      ? [
+          deploymentUserAssignedIdentity.outputs.resourceId
+          fslogixAppUpdateUserAssignedIdentityResourceId
+        ]
+      : [
+          deploymentUserAssignedIdentity.outputs.resourceId
+        ]
+    extensions: union(
+      [
+        {
+          name: 'GuestAttestation'
+          publisher: 'Microsoft.Azure.Security.WindowsAttestation'
+          type: 'GuestAttestation'
+          typeHandlerVersion: '1.0'
+          autoUpgradeMinorVersion: true
+          settings: {
+            AttestationConfig: {
+              MaaSettings: { maaEndpoint: '', maaTenantName: 'GuestAttestation' }
+              AscSettings: { ascReportingEndpoint: '', ascReportingFrequency: '' }
+              useCustomToken: 'false'
+              disableAlerts: 'false'
+            }
+          }
+        }
+      ],
+      (domainJoinDeploymentVirtualMachine && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName))
+        ? [
+            {
+              name: 'JsonADDomainExtension'
+              publisher: 'Microsoft.Compute'
+              type: 'JsonADDomainExtension'
+              typeHandlerVersion: '1.3'
+              autoUpgradeMinorVersion: true
+              forceUpdateTag: deploymentSuffix
+              settings: {
+                Name: domainName
+                User: domainJoinUserPrincipalName
+                Restart: 'true'
+                Options: '3'
+                OUPath: ouPath
+              }
+              protectedSettings: {
+                Password: domainJoinUserPassword
+              }
+              provisionAfterExtensions: ['GuestAttestation']
+            }
+          ]
+        : []
+    )
+  }
+}
+
+output deploymentUserAssignedIdentityClientId string = deploymentUserAssignedIdentity.outputs.clientId
+output deploymentUserAssignedIdentityResourceId string = deploymentUserAssignedIdentity.outputs.resourceId
+output deploymentUserAssignedIdentityRoleAssignmentIds array = [
+  for i in filter(range(0, length(roleAssignments)), i => roleAssignments[i].resourceGroup != resourceGroupDeployment): roleAssignments_deployment[i].outputs.resourceId
+]
+output virtualMachineName string = virtualMachine.outputs.name

@@ -47,6 +47,12 @@ param deploymentVirtualMachineSubnetResourceId string
 @description('Optional. Name override for the temporary user-assigned identity used by storage configuration and cleanup scripts.')
 param deploymentUserAssignedIdentityName string = ''
 
+@description('Optional. Create and clean up the deployment VM within this add-on. Disable when a parent deployment supplies an existing VM and identity.')
+param manageDeploymentVirtualMachine bool = true
+
+@description('Optional. Client ID of an externally managed deployment identity. Required when manageDeploymentVirtualMachine is false.')
+param existingDeploymentUserAssignedIdentityClientId string = ''
+
 @description('Required. Identity and storage authentication model.')
 @allowed([
   'ActiveDirectoryDomainServices'
@@ -286,8 +292,11 @@ var storageCmkConfigurationIsValid = !deployStorageCmk || !empty(existingEncrypt
   ? true
   : bool('existingEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.')
 var domainCredentialsRequired = contains(identitySolution, 'DomainServices') || storageSolution == 'AzureNetAppFiles' || (identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups))
+var externalDeploymentConfigurationIsValid = manageDeploymentVirtualMachine || (!empty(deploymentVirtualMachineName) && !empty(existingDeploymentUserAssignedIdentityClientId))
+  ? true
+  : bool('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.')
 
-module naming '../../hostpools/modules/naming.bicep' = {
+module naming '../../shared/modules/orchestration/naming/hostPool.bicep' = {
   params: {
     namingConvention: namingConvention
     virtualMachinesRegion: location
@@ -305,7 +314,7 @@ resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if
   scope: resourceGroup(split(existingEncryptionKeyVaultResourceId, '/')[2], split(existingEncryptionKeyVaultResourceId, '/')[4])
 }
 
-module storageResourceGroup '../../shared/modules/resources/resourceGroups/deploy.bicep' = if (createStorageResourceGroup) {
+module storageResourceGroup '../../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createStorageResourceGroup) {
   params: {
     name: effectiveStorageResourceGroupName
     location: location
@@ -316,7 +325,7 @@ module storageResourceGroup '../../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module deploymentResourceGroup '../../shared/modules/resources/resourceGroups/deploy.bicep' = {
+module deploymentResourceGroup '../../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (manageDeploymentVirtualMachine) {
   params: {
     name: resourceGroupNamesAreDistinct ? effectiveDeploymentResourceGroupName : effectiveDeploymentResourceGroupName
     location: location
@@ -327,39 +336,49 @@ module deploymentResourceGroup '../../shared/modules/resources/resourceGroups/de
   }
 }
 
-module deployment './modules/deployment.bicep' = {
+module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/deploy.bicep' = if (manageDeploymentVirtualMachine) {
   params: {
+    confidentialVMOSDiskEncryption: false
+    desktopFriendlyName: ''
+    diskSku: 'StandardSSD_LRS'
+    encryptionAtHost: true
+    fslogix: true
+    fslogixAppUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
+    hostPoolName: ''
+    keyManagementDisks: 'PlatformManaged'
+    keyManagementStorageAccounts: 'PlatformManaged'
     location: location
-    deploymentResourceGroupName: effectiveDeploymentResourceGroupName
     deploymentSuffix: deploymentSuffix
-    deploymentUserAssignedIdentityName: effectiveDeploymentUserAssignedIdentityName
-    deploymentVirtualMachineName: effectiveDeploymentVirtualMachineName
-    deploymentVirtualMachineDiskName: effectiveDeploymentVirtualMachineDiskName
-    deploymentVirtualMachineNicName: effectiveDeploymentVirtualMachineNicName
-    deploymentVirtualMachineSize: deploymentVirtualMachineSize
-    deploymentVirtualMachineSubnetResourceId: deploymentVirtualMachineSubnetResourceId
-    storageResourceGroupName: effectiveStorageResourceGroupName
-    domainJoinDeploymentVirtualMachine: storageSolution == 'AzureNetAppFiles'
-    identitySolution: identitySolution
-    domainName: domainName
-    organizationalUnitPath: !empty(deploymentVirtualMachineOrganizationalUnitPath)
-      ? deploymentVirtualMachineOrganizationalUnitPath
-      : organizationalUnitPath
-    appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
-    parentResourceId: parentResourceId
-    tags: tags
-    #disable-next-line BCP422
-    domainJoinUserPrincipalName: domainCredentialsRequired
-      ? !empty(domainJoinUserPrincipalName)
-        ? domainJoinUserPrincipalName
-        : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPrincipalName') : ''
-      : ''
-    #disable-next-line BCP422
+    deploymentVmSize: deploymentVirtualMachineSize
     domainJoinUserPassword: domainCredentialsRequired
       ? !empty(domainJoinUserPassword)
         ? domainJoinUserPassword
         : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPassword') : ''
       : ''
+    domainJoinUserPrincipalName: domainCredentialsRequired
+      ? !empty(domainJoinUserPrincipalName)
+        ? domainJoinUserPrincipalName
+        : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPrincipalName') : ''
+      : ''
+    domainName: domainName
+    domainJoinDeploymentVirtualMachine: storageSolution == 'AzureNetAppFiles'
+    identitySolution: identitySolution
+    ouPath: !empty(deploymentVirtualMachineOrganizationalUnitPath)
+      ? deploymentVirtualMachineOrganizationalUnitPath
+      : organizationalUnitPath
+    parentResourceId: parentResourceId
+    resourceGroupControlPlane: effectiveStorageResourceGroupName
+    resourceGroupDeployment: effectiveDeploymentResourceGroupName
+    resourceGroupHosts: effectiveStorageResourceGroupName
+    resourceGroupSecurity: effectiveStorageResourceGroupName
+    resourceGroupStorage: effectiveStorageResourceGroupName
+    tags: tags
+    userAssignedIdentityName: effectiveDeploymentUserAssignedIdentityName
+    virtualMachineName: effectiveDeploymentVirtualMachineName
+    virtualMachineNICName: effectiveDeploymentVirtualMachineNicName
+    virtualMachineDiskName: effectiveDeploymentVirtualMachineDiskName
+    virtualMachineSubnetResourceId: deploymentVirtualMachineSubnetResourceId
+    manageHostResourcePermissions: false
   }
   dependsOn: [
     deploymentResourceGroup
@@ -367,7 +386,7 @@ module deployment './modules/deployment.bicep' = {
   ]
 }
 
-module storageCmk '../../hostpools/modules/cmk/storageCmk.bicep' = if (deployStorageCmk && storageCmkConfigurationIsValid) {
+module storageCmk '../../shared/modules/orchestration/customerManagedKeys/storageCmk.bicep' = if (deployStorageCmk && storageCmkConfigurationIsValid) {
   params: {
     resourceGroupName: effectiveStorageResourceGroupName
     keyVaultResourceId: existingEncryptionKeyVaultResourceId
@@ -385,7 +404,7 @@ module storageCmk '../../hostpools/modules/cmk/storageCmk.bicep' = if (deploySto
   dependsOn: [storageResourceGroup]
 }
 
-module fslogix '../../shared/modules/fslogix/fslogix.bicep' = {
+module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
   params: {
     activeDirectoryConnection: storageIdentityConfigurationIsValid && netAppResourceGroupConfigurationIsValid
       ? netAppDeploymentMode == 'CreateAll' || existingSharedActiveDirectoryConnection
@@ -394,8 +413,12 @@ module fslogix '../../shared/modules/fslogix/fslogix.bicep' = {
     createNetAppCapacityPool: netAppDeploymentMode != 'ExistingAccountAndPool'
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
-    deploymentUserAssignedIdentityClientId: deployment.outputs.deploymentUserAssignedIdentityClientId
-    deploymentVirtualMachineName: deployment.outputs.virtualMachineName
+    deploymentUserAssignedIdentityClientId: externalDeploymentConfigurationIsValid
+      ? (manageDeploymentVirtualMachine ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId : existingDeploymentUserAssignedIdentityClientId)
+      : existingDeploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: externalDeploymentConfigurationIsValid
+      ? (manageDeploymentVirtualMachine ? deploymentHelper!.outputs.virtualMachineName : deploymentVirtualMachineName)
+      : deploymentVirtualMachineName
     #disable-next-line BCP422
     domainJoinUserPassword: domainCredentialsRequired
       ? !empty(domainJoinUserPassword)
@@ -451,14 +474,17 @@ module fslogix '../../shared/modules/fslogix/fslogix.bicep' = {
   dependsOn: [storageResourceGroup]
 }
 
-module cleanUp './modules/fslogixCleanup.bicep' = {
+module cleanupDeploymentHelper '../../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (manageDeploymentVirtualMachine) {
   params: {
     location: location
-    deploymentResourceGroupName: effectiveDeploymentResourceGroupName
+    resourceGroupDeployment: effectiveDeploymentResourceGroupName
+    resourceGroupHosts: effectiveStorageResourceGroupName
     deploymentSuffix: deploymentSuffix
-    deploymentUserAssignedIdentityClientId: deployment.outputs.deploymentUserAssignedIdentityClientId
-    deploymentVirtualMachineName: deployment.outputs.virtualMachineName
-    externalRoleAssignmentResourceIds: deployment.outputs.externalRoleAssignmentResourceIds
+    userAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    roleAssignmentIds: deploymentHelper!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
+    virtualMachineNames: []
+    removeHostRunCommands: false
   }
   dependsOn: [fslogix]
 }
