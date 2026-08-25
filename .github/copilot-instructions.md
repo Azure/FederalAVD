@@ -253,3 +253,12 @@ authoritative source. Deviations are intentional and documented in
 ## Notes about UIFormDefinition files
 
 - the default value you specify for Drop Downs must reference the label not the value.
+- In `deployments/hostpools/uiFormDefinition.json`, avoid complex expression-valued
+  `TextBlock.options.text` (especially nested `if(...)` with quoted string branches) for
+  explanatory text. This exact pattern caused Azure Portal runtime failure in
+  `CustomHtmlField` with `text is not a function`.
+- Prefer literal `TextBlock.options.text` for explanatory copy. If text must vary by condition,
+  use separate text blocks with visibility conditions instead of computing one dynamic text
+  expression.
+- After changing any text binding in UI form blocks, require a live portal render smoke test of
+  the affected step; JSON parse/schema validation alone is not sufficient.

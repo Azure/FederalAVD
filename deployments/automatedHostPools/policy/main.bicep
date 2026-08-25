@@ -197,6 +197,9 @@ var sessionHostCustomizationConfigurationIsValid = empty(sessionHostCustomizatio
 var normalizedArtifactsContainerUri = endsWith(artifactsContainerUri, '/')
   ? take(artifactsContainerUri, max(length(artifactsContainerUri) - 1, 0))
   : artifactsContainerUri
+var finalSessionHostCustomizationName = !empty(sessionHostCustomizations)
+  ? replace(last(sessionHostCustomizations)!.name, ' ', '-')
+  : 'PrivateCustomization-Final'
 var diskEncryptionSetConfigurationIsValid = !deployDiskEncryptionSet || (empty(diskEncryptionSetResourceId) && !empty(encryptionKeyVaultResourceId))
   ? true
   : bool('When deployDiskEncryptionSet is true, encryptionKeyVaultResourceId is required and diskEncryptionSetResourceId must be empty.')
@@ -656,6 +659,9 @@ module privateCustomizationPolicyAssignment 'modules/policyAssignment.bicep' = i
               arguments: customization.?arguments ?? ''
             }
           ]
+        }
+        finalRunCommandName: {
+          value: finalSessionHostCustomizationName
         }
         userAssignedIdentityResourceId: {
           value: artifactsUserAssignedIdentityResourceId

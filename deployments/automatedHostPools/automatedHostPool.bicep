@@ -1059,6 +1059,22 @@ module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = {
   ]
 }
 
+module activateDynamicScalingPlan 'modules/activateDynamicScalingPlan.bicep' = if (deployDynamicScalingPlan) {
+  name: 'Activate-Dynamic-Scaling-Plan-${deploymentSuffix}'
+  params: {
+    resourceGroupName: naming.outputs.resourceGroupControlPlane
+    scalingPlanName: naming.outputs.scalingPlanName
+    location: controlPlaneLocation
+    tags: tags[?'Microsoft.DesktopVirtualization/scalingPlans'] ?? {}
+    scalingPlanTimeZone: scalingPlanTimeZone
+    scalingPlanExclusionTag: scalingPlanExclusionTag
+    hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
+  }
+  dependsOn: [
+    finalSessionHostManagement
+  ]
+}
+
 module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (createDeploymentVm) {
   name: 'Cleanup-Deployment-Helper-${deploymentSuffix}'
   params: {

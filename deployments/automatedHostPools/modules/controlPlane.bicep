@@ -237,9 +237,13 @@ module dynamicScalingPlan '../../shared/modules/resourceModules/desktopVirtualiz
     timeZone: scalingPlanTimeZone
     exclusionTag: scalingPlanExclusionTag
     hostPoolResourceId: hostPool.outputs.resourceId
+    scalingPlanEnabled: false
     schedules: dynamicScalingSchedules
   }
-  dependsOn: [sessionHostConfiguration]
+  dependsOn: [
+    sessionHostConfiguration
+    initialSessionHostManagement
+  ]
 }
 
 module initialSessionHostManagement 'sessionHostManagement.bicep' = {

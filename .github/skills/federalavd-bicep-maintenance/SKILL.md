@@ -37,8 +37,15 @@ Use this workflow for templates under `deployments/`, including policy definitio
    example parameter files, `docs/parameters.md`, and deployment documentation.
 8. Validate UI forms against the current Microsoft schema and Form View documentation. Dropdown
    `defaultValue` must match the option label, not its submitted value.
-9. Review cross-solution dependencies before changing files under `deployments/`.
-10. Run the narrowest deployment validation available, then inspect the focused diff for generated
+9. For `TextBlock` content in `uiFormDefinition.json`, prefer literal strings. Avoid complex
+   expression-valued text (especially nested `if(...)` with quoted branches) in standard host pool
+   form paths. This exact pattern caused Azure Portal runtime failure in `CustomHtmlField` with
+   `text is not a function`.
+10. After any `uiFormDefinition.json` text-expression change, run a portal runtime smoke test of the
+    affected step (not just JSON/schema validation) before considering the change safe.
+11. Review cross-solution dependencies before changing files under `deployments/`.
+12. Run the narrowest deployment validation available, then inspect the focused diff for generated
     changes that are larger than expected.
 
 See [UI form rules](./references/ui-form-rules.md) for repository-specific failure modes.
+See [Secret source alignment notes](./references/secret-source-alignment-notes.md) for the postponed standard-vs-automated credential secret sourcing alignment plan.

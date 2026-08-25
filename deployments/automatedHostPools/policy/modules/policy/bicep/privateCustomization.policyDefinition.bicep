@@ -36,6 +36,14 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           description: 'Ordered customization objects containing name, artifactUri, and arguments.'
         }
       }
+      finalRunCommandName: {
+        type: 'String'
+        defaultValue: 'PrivateCustomization-Final'
+        metadata: {
+          displayName: 'Final Run Command name'
+          description: 'Name of the final customization Run Command used for existence checks.'
+        }
+      }
       userAssignedIdentityResourceId: {
         type: 'String'
         metadata: {
@@ -63,7 +71,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
         effect: '[parameters(\'effect\')]'
         details: {
           type: 'Microsoft.Compute/virtualMachines/runCommands'
-          name: '[concat(field(\'name\'), \'/\', last(parameters(\'customizations\')).name)]'
+          name: '[concat(field(\'name\'), \'/\', parameters(\'finalRunCommandName\'))]'
           evaluationDelay: 'AfterProvisioningSuccess'
           roleDefinitionIds: [
             '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c'

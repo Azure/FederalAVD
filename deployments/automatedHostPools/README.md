@@ -53,6 +53,47 @@ The additional resource-group-level `Virtual Machine User Login` assignment used
 host-pool deployment is not required for host pools using Session Host Configuration, so the
 automated deployment does not create it.
 
+## Portal VM Template Reference
+
+The Azure portal host-pool template calculates the linked VM template from the
+`nestedTemplatesLocation` parameter:
+
+```text
+vmTemplateUri = nestedTemplatesLocation + vmTemplateName + '.json'
+vmTemplateName = 'managedDisks-' + toLower(vmImageType) + 'vm'
+```
+
+For the portal template version observed on 2026-08-25, the base URI is:
+
+```text
+https://wvd.hosting.portal.azure.net/wvd/Content/1.0.03511.1407/ArmTemplates/AutomatedHostpool/nestedTemplates/
+```
+
+The resulting VM template names are:
+
+```text
+managedDisks-galleryvm.json
+managedDisks-customimagevm.json
+```
+
+The Gallery template was downloaded and inspected. It creates managed-disk session-host VMs,
+network interfaces, the AVD DSC extension, and an optional post-deployment
+`Microsoft.Compute/virtualMachines/extensions` resource using `CustomScriptExtension`.
+The extension downloads the script specified by `customConfigurationScriptUrl` and runs it with
+PowerShell. This is the portal's documented Custom Configuration pattern.
+
+The portal template passes a public HTTPS artifact location to the extension. Microsoft's related
+`RDS-Templates` sample likewise states that its JSON and PowerShell files must be stored in a
+publicly accessible location, such as a public GitHub repository or public Azure Blob container:
+
+<https://github.com/Azure/RDS-Templates/tree/master/wvd-sh/arm-template-customization>
+
+This reference confirms that VM extension resources are supported by the portal's linked ARM
+template pattern. It does not by itself prove that every resource type, private blob endpoint,
+SAS-only URL, or `Microsoft.Compute/virtualMachines/runCommands` is supported by the newer
+Session Host Configuration `customConfigurationScriptUrl` property. Those behaviors require a
+controlled automated-host-pool test before being used for production scale-out readiness.
+
 ## Resource Group Placement
 
 The portal form does not ask for resource group names. Like the standard host-pool deployment in
@@ -328,13 +369,13 @@ creates a preview pooled schedule with `scalingMethod: CreateDeletePowerManage`.
 ramp-down minimum and maximum host-pool sizes determine how many VMs the service may create and
 retain; the capacity thresholds and phase times determine when it scales.
 
-The scaling plan is a control-plane phase. It waits for the host pool and AVD service-principal RBAC,
-but it does not wait for FSLogix, policy, or initial session-host provisioning. A failure elsewhere
-in the parent deployment therefore does not prevent ARM from attempting the scaling-plan branch.
+The deployment creates the scaling plan and schedules in a disabled state during control-plane setup,
+then enables the host-pool assignment only after policy and final Session Host Management provisioning
+complete.
 
 `sessionHostCount` remains the initial capacity provisioned after policy and storage are ready.
-After the scaling plan is assigned, its schedule owns ongoing create, delete, start, and stop
-decisions. Do not run another scaling script against the same host pool.
+After the activation step enables the scaling-plan assignment, its schedule owns ongoing create,
+delete, start, and stop decisions. Do not run another scaling script against the same host pool.
 
 ## Policy Readiness
 

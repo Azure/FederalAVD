@@ -34,6 +34,7 @@ param tags object = {}
 param timeZone string
 param exclusionTag string
 param hostPoolResourceId string
+param scalingPlanEnabled bool = true
 param schedules dynamicScalingScheduleType[]
 
 resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2025-11-01-preview' = {
@@ -47,7 +48,7 @@ resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2025-11-01-pr
     hostPoolReferences: [
       {
         hostPoolArmPath: hostPoolResourceId
-        scalingPlanEnabled: true
+        scalingPlanEnabled: scalingPlanEnabled
       }
     ]
   }

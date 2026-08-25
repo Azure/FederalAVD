@@ -65,6 +65,38 @@ Function Convert-DomainGroupToSid {
     }
 }    
 
+Function Invoke-WithRetry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$ScriptBlock,
+
+        [Parameter(Mandatory = $true)]
+        [string]$OperationName,
+
+        [int]$MaxAttempts = 8,
+        [int]$DelaySeconds = 15
+    )
+
+    $attempt = 1
+    while ($true) {
+        try {
+            return & $ScriptBlock
+        }
+        catch {
+            if ($attempt -ge $MaxAttempts) {
+                Write-Output "[$OperationName]: Failed after $attempt attempts."
+                throw
+            }
+
+            Write-Output "[$OperationName]: Attempt $attempt failed: $($_.Exception.Message)"
+            Write-Output "[$OperationName]: Waiting $DelaySeconds seconds before retrying..."
+            Start-Sleep -Seconds $DelaySeconds
+            $attempt++
+        }
+    }
+}
+
 Function Set-AzureFileSharePermissions {
     param(
         [string]$ClientId,    
@@ -80,7 +112,9 @@ Function Set-AzureFileSharePermissions {
         Write-Output "[Set-AzureFileSharePermissions]: Resource URL: $ResourceUrl"
         # Get access token for Azure Files
         Write-Output "[Set-AzureFileSharePermissions]: Getting access token for Azure File Storage Account"
-        $AccessToken = (Invoke-RestMethod -Headers @{Metadata = "true" } -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceUrl + '&client_id=' + $ClientId)).access_token
+        $AccessToken = (Invoke-WithRetry -OperationName 'ManagedIdentityTokenRequest' -ScriptBlock {
+            Invoke-RestMethod -Headers @{ Metadata = 'true' } -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceUrl + '&client_id=' + $ClientId)
+        }).access_token
 
         # Step 1: Create Permission - Convert SDDL to permission key
         Write-Output "[Set-AzureFileSharePermissions]: Creating permission key from SDDL"
@@ -100,7 +134,9 @@ Function Set-AzureFileSharePermissions {
         $Uri = $($ResourceUrl + $FileShareName + '?restype=share&comp=filepermission')
         Write-Output "[Set-AzureFileSharePermissions]: Creating permission with URI: $Uri"
 
-        $Response = Invoke-WebRequest -Body $Body -Headers $Headers -Method 'PUT' -Uri $Uri -UseBasicParsing
+        $Response = Invoke-WithRetry -OperationName 'CreateFileSharePermission' -ScriptBlock {
+            Invoke-WebRequest -Body $Body -Headers $Headers -Method 'PUT' -Uri $Uri -UseBasicParsing
+        }
         $PermissionKey = $Response.Headers["x-ms-file-permission-key"]
         
         if (-not $PermissionKey) {
@@ -120,7 +156,9 @@ Function Set-AzureFileSharePermissions {
         
         $GetUri = $($ResourceUrl + $FileShareName + '?restype=directory')
         try {
-            Invoke-WebRequest -Headers $Headers -Method 'GET' -Uri $GetUri -UseBasicParsing | Out-Null
+            Invoke-WithRetry -OperationName 'GetDirectoryProperties' -ScriptBlock {
+                Invoke-WebRequest -Headers $Headers -Method 'GET' -Uri $GetUri -UseBasicParsing | Out-Null
+            }
             Write-Output "[Set-AzureFileSharePermissions]: Directory properties retrieved successfully"
         }
         catch {
@@ -142,7 +180,9 @@ Function Set-AzureFileSharePermissions {
         
         $SetUri = $($ResourceUrl + $FileShareName + '?restype=directory&comp=properties')
         Write-Output "[Set-AzureFileSharePermissions]: Setting properties with URI: $SetUri"        
-        Invoke-WebRequest -Headers $Headers -Method 'PUT' -Uri $SetUri -UseBasicParsing | Out-Null
+        Invoke-WithRetry -OperationName 'SetDirectoryProperties' -ScriptBlock {
+            Invoke-WebRequest -Headers $Headers -Method 'PUT' -Uri $SetUri -UseBasicParsing | Out-Null
+        }
         Write-Output "[Set-AzureFileSharePermissions]: Successfully set NTFS permissions on file share root"
     }
     catch {
