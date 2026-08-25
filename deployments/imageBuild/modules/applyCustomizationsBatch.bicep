@@ -8,6 +8,7 @@ param deploymentSuffix string
 param commonScriptParams array
 param restartVMParameters array
 param batchIndex int
+param batchContext string
 param resourceManagerUri string
 param subscriptionId string
 param resourceGroupName string
@@ -19,7 +20,7 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
 @batchSize(1)
 module applyCustomizations 'applyCustomization.bicep' = [
   for customization in customizations: {
-    name: '${customization.name}-${deploymentSuffix}'
+    name: '${batchContext}-${customization.name}-${deploymentSuffix}'
     params: {
       customization: customization
       location: location
@@ -36,7 +37,7 @@ module applyCustomizations 'applyCustomization.bicep' = [
 
 resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = {
   parent: orchestrationVm
-  name: 'remove-custom-software-runCommands-batch-${batchIndex}'
+  name: 'remove-${batchContext}-runCommands-batch-${batchIndex}'
   location: location
   properties: {
     asyncExecution: false
