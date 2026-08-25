@@ -39,7 +39,7 @@ resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-0
   name: 'remove-custom-software-runCommands-batch-${batchIndex}'
   location: location
   properties: {
-    asyncExecution: true
+    asyncExecution: false
     parameters: [
       {
         name: 'ResourceManagerUri'
@@ -54,16 +54,16 @@ resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-0
         value: userAssignedIdentityClientId
       }
       {
-        name: 'VirtualMachineNames'
-        value: string([imageVmName])
+        name: 'ImageVmName'
+        value: imageVmName
       }
       {
-        name: 'virtualMachinesResourceGroup'
+        name: 'ImageVmResourceGroup'
         value: resourceGroupName
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Remove-RunCommands.ps1')
+      script: loadTextContent('../../shared/scripts/Remove-ImageBuildRunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

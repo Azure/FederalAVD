@@ -404,7 +404,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
   name: 'remove-microsoft-software-runCommands'
   location: location
   properties: {
-    asyncExecution: true
+    asyncExecution: false
     parameters: [
       {
         name: 'ResourceManagerUri'
@@ -419,16 +419,16 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
         value: userAssignedIdentityClientId
       }
       {
-        name: 'VirtualMachineNames'
-        value: string([imageVmName])
+        name: 'ImageVmName'
+        value: imageVmName
       }
       {
-        name: 'virtualMachinesResourceGroup'
+        name: 'ImageVmResourceGroup'
         value: resourceGroup().name
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Remove-RunCommands.ps1')
+      script: loadTextContent('../../shared/scripts/Remove-ImageBuildRunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
