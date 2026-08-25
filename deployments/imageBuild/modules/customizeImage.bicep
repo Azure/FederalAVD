@@ -36,7 +36,6 @@ var envSuffix = substring(environment().suffixes.storage, 5, length(environment(
 
 var buildDir = 'c:\\BuildDir'
 var restartVmScript = loadTextContent('../../shared/scripts/Restart-Vm.ps1')
-var customizationScript = loadTextContent('../../shared/scripts/Invoke-Customization.ps1')
 
 var customizers = [
   for customization in customizations: {
@@ -64,6 +63,8 @@ var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365Ap
 var customizationBatchSize = 20
 var customizersCount = length(customizers)
 var batchCount = customizersCount / customizationBatchSize + (customizersCount % customizationBatchSize > 0 ? 1 : 0)
+var vdiCustomizersCount = length(vdiCustomizers)
+var vdiBatchCount = vdiCustomizersCount / customizationBatchSize + (vdiCustomizersCount % customizationBatchSize > 0 ? 1 : 0)
 
 var commonScriptParams = [
   {
@@ -399,12 +400,12 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
   ]
 }
 
-resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = if (length(customizations) + length(vdiCustomizations) > 13) {
+resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = if (!empty(customizations) || !empty(vdiCustomizations)) {
   parent: orchestrationVm
   name: 'remove-microsoft-software-runCommands'
   location: location
   properties: {
-    asyncExecution: true
+    asyncExecution: false
     parameters: [
       {
         name: 'ResourceManagerUri'
@@ -419,16 +420,16 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
         value: userAssignedIdentityClientId
       }
       {
-        name: 'VirtualMachineNames'
-        value: string([imageVmName])
+        name: 'ImageVmName'
+        value: imageVmName
       }
       {
-        name: 'virtualMachinesResourceGroup'
+        name: 'ImageVmResourceGroup'
         value: resourceGroup().name
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Remove-RunCommands.ps1')
+      script: loadTextContent('../../shared/scripts/Remove-ImageBuildRunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -471,6 +472,7 @@ module customizationBatches 'applyCustomizationsBatch.bicep' = [
     name: 'customization-batch-${i}-${deploymentSuffix}'
     params: {
       batchIndex: i
+      batchContext: 'custom'
       commonScriptParams: commonScriptParams
       customizations: map(
         filter(range(0, customizationBatchSize), j => (i * customizationBatchSize + j) < customizersCount),
@@ -494,6 +496,7 @@ module customizationBatches 'applyCustomizationsBatch.bicep' = [
     }
     dependsOn: [
       createBuildDir
+      removeRunCommandsMicrosoftSoftware
       restartMicrosoftSoftware
     ]
   }
@@ -554,6 +557,8 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
     treatFailureAsDeploymentFailure: false
   }
   dependsOn: [
+    removeRunCommandsMicrosoftSoftware
+    customizationBatches
     restartMicrosoftSoftware
     restartCustomizations
   ]
@@ -593,42 +598,36 @@ module conditionalRestartPostUpdates 'conditionalRestart.bicep' = if (installUpd
 }
 
 @batchSize(1)
-resource vdiApplications 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = [
-  for customizer in vdiCustomizers: {
-    name: customizer.name
-    location: location
-    parent: imageVm
-    properties: {
-      asyncExecution: false
-      outputBlobManagedIdentity: empty(logBlobContainerUri)
-        ? null
-        : {
-            clientId: userAssignedIdentityClientId
-          }
-      outputBlobUri: empty(logBlobContainerUri)
-        ? null
-        : '${logBlobContainerUri}${imageVmName}-${customizer.name}-${deploymentSuffix}.log'
-      parameters: union(commonScriptParams, [
-        {
-          name: 'Uri'
-          value: customizer.uri
+module vdiCustomizationBatches 'applyCustomizationsBatch.bicep' = [
+  for i in range(0, vdiBatchCount): {
+    name: 'vdi-customization-batch-${i}-${deploymentSuffix}'
+    params: {
+      batchIndex: i
+      batchContext: 'vdi'
+      commonScriptParams: commonScriptParams
+      customizations: map(
+        filter(range(0, customizationBatchSize), j => (i * customizationBatchSize + j) < vdiCustomizersCount),
+        j => {
+          name: vdiCustomizers[i * customizationBatchSize + j].name
+          uri: vdiCustomizers[i * customizationBatchSize + j].uri
+          arguments: vdiCustomizers[i * customizationBatchSize + j].arguments
+          restart: false
         }
-        {
-          name: 'Name'
-          value: customizer.name
-        }
-        {
-          name: 'Arguments'
-          value: customizer.arguments
-        }
-      ])
-      source: {
-        script: customizationScript
-      }
-      treatFailureAsDeploymentFailure: true
+      )
+      deploymentSuffix: deploymentSuffix
+      imageVmName: imageVmName
+      location: location
+      logBlobContainerUri: logBlobContainerUri
+      orchestrationVmName: orchestrationVmName
+      resourceGroupName: resourceGroup().name
+      resourceManagerUri: environment().resourceManager
+      subscriptionId: subscription().subscriptionId
+      userAssignedIdentityClientId: userAssignedIdentityClientId
+      restartVMParameters: restartVMParameters
     }
     dependsOn: [
       createBuildDir
+      removeRunCommandsMicrosoftSoftware
       restartMicrosoftSoftware
       restartCustomizations
       conditionalRestartPostUpdates
@@ -654,7 +653,7 @@ resource cleanupPublicDesktop 'Microsoft.Compute/virtualMachines/runCommands@202
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    vdiApplications
+    vdiCustomizationBatches
   ]
 }
 
@@ -693,7 +692,7 @@ resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    vdiApplications
+    vdiCustomizationBatches
   ]
 }
 
@@ -727,7 +726,7 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
     restartMicrosoftSoftware
     restartCustomizations
     conditionalRestartPostUpdates
-    vdiApplications
+    vdiCustomizationBatches
     optimizeImage
   ]
 }
