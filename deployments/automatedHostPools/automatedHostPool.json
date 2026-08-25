@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "15379334934998691142"
+      "templateHash": "12325298387820794640"
     }
   },
   "definitions": {
@@ -3424,7 +3424,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "5415905463965956534"
+              "templateHash": "6316593198391738579"
             }
           },
           "functions": [
@@ -4300,7 +4300,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "9914058627013962625"
+                      "templateHash": "14638195803911313477"
                     }
                   },
                   "definitions": {
@@ -4464,38 +4464,208 @@
                       }
                     },
                     "pooledSchedules": {
-                      "copy": {
-                        "name": "pooledSchedules",
-                        "count": "[length(parameters('schedules'))]"
-                      },
-                      "type": "Microsoft.DesktopVirtualization/scalingPlans/pooledSchedules",
-                      "apiVersion": "2025-11-01-preview",
-                      "name": "[format('{0}/{1}', parameters('name'), parameters('schedules')[copyIndex()].name)]",
+                      "condition": "[not(empty(parameters('schedules')))]",
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('PooledSchedules-{0}', uniqueString(parameters('name'), resourceGroup().id))]",
                       "properties": {
-                        "daysOfWeek": "[parameters('schedules')[copyIndex()].daysOfWeek]",
-                        "scalingMethod": "CreateDeletePowerManage",
-                        "createDelete": {
-                          "rampUpMinimumHostPoolSize": "[parameters('schedules')[copyIndex()].rampUpMinimumHostPoolSize]",
-                          "rampUpMaximumHostPoolSize": "[parameters('schedules')[copyIndex()].rampUpMaximumHostPoolSize]",
-                          "rampDownMinimumHostPoolSize": "[parameters('schedules')[copyIndex()].rampDownMinimumHostPoolSize]",
-                          "rampDownMaximumHostPoolSize": "[parameters('schedules')[copyIndex()].rampDownMaximumHostPoolSize]"
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
                         },
-                        "rampUpStartTime": "[parameters('schedules')[copyIndex()].rampUpStartTime]",
-                        "rampUpLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].rampUpLoadBalancingAlgorithm]",
-                        "rampUpMinimumHostsPct": "[parameters('schedules')[copyIndex()].rampUpMinimumHostsPct]",
-                        "rampUpCapacityThresholdPct": "[parameters('schedules')[copyIndex()].rampUpCapacityThresholdPct]",
-                        "peakStartTime": "[parameters('schedules')[copyIndex()].peakStartTime]",
-                        "peakLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].peakLoadBalancingAlgorithm]",
-                        "rampDownStartTime": "[parameters('schedules')[copyIndex()].rampDownStartTime]",
-                        "rampDownLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].rampDownLoadBalancingAlgorithm]",
-                        "rampDownMinimumHostsPct": "[parameters('schedules')[copyIndex()].rampDownMinimumHostsPct]",
-                        "rampDownCapacityThresholdPct": "[parameters('schedules')[copyIndex()].rampDownCapacityThresholdPct]",
-                        "rampDownForceLogoffUsers": "[parameters('schedules')[copyIndex()].rampDownForceLogoffUsers]",
-                        "rampDownWaitTimeMinutes": "[parameters('schedules')[copyIndex()].rampDownWaitTimeMinutes]",
-                        "rampDownNotificationMessage": "[parameters('schedules')[copyIndex()].rampDownNotificationMessage]",
-                        "rampDownStopHostsWhen": "[parameters('schedules')[copyIndex()].rampDownStopHostsWhen]",
-                        "offPeakStartTime": "[parameters('schedules')[copyIndex()].offPeakStartTime]",
-                        "offPeakLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].offPeakLoadBalancingAlgorithm]"
+                        "mode": "Incremental",
+                        "parameters": {
+                          "scalingPlanName": {
+                            "value": "[parameters('name')]"
+                          },
+                          "schedules": {
+                            "value": "[parameters('schedules')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "3014544983933811949"
+                            }
+                          },
+                          "definitions": {
+                            "scalingTimeType": {
+                              "type": "object",
+                              "properties": {
+                                "hour": {
+                                  "type": "int"
+                                },
+                                "minute": {
+                                  "type": "int"
+                                }
+                              }
+                            },
+                            "dynamicScalingScheduleType": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "daysOfWeek": {
+                                  "type": "array",
+                                  "allowedValues": [
+                                    "Friday",
+                                    "Monday",
+                                    "Saturday",
+                                    "Sunday",
+                                    "Thursday",
+                                    "Tuesday",
+                                    "Wednesday"
+                                  ]
+                                },
+                                "rampUpStartTime": {
+                                  "$ref": "#/definitions/scalingTimeType"
+                                },
+                                "rampUpLoadBalancingAlgorithm": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "BreadthFirst",
+                                    "DepthFirst"
+                                  ]
+                                },
+                                "rampUpMinimumHostsPct": {
+                                  "type": "int"
+                                },
+                                "rampUpCapacityThresholdPct": {
+                                  "type": "int"
+                                },
+                                "rampUpMinimumHostPoolSize": {
+                                  "type": "int"
+                                },
+                                "rampUpMaximumHostPoolSize": {
+                                  "type": "int"
+                                },
+                                "peakStartTime": {
+                                  "$ref": "#/definitions/scalingTimeType"
+                                },
+                                "peakLoadBalancingAlgorithm": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "BreadthFirst",
+                                    "DepthFirst"
+                                  ]
+                                },
+                                "rampDownStartTime": {
+                                  "$ref": "#/definitions/scalingTimeType"
+                                },
+                                "rampDownLoadBalancingAlgorithm": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "BreadthFirst",
+                                    "DepthFirst"
+                                  ]
+                                },
+                                "rampDownMinimumHostsPct": {
+                                  "type": "int"
+                                },
+                                "rampDownCapacityThresholdPct": {
+                                  "type": "int"
+                                },
+                                "rampDownMinimumHostPoolSize": {
+                                  "type": "int"
+                                },
+                                "rampDownMaximumHostPoolSize": {
+                                  "type": "int"
+                                },
+                                "rampDownForceLogoffUsers": {
+                                  "type": "bool"
+                                },
+                                "rampDownWaitTimeMinutes": {
+                                  "type": "int"
+                                },
+                                "rampDownNotificationMessage": {
+                                  "type": "string"
+                                },
+                                "rampDownStopHostsWhen": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "ZeroActiveSessions",
+                                    "ZeroSessions"
+                                  ]
+                                },
+                                "offPeakStartTime": {
+                                  "$ref": "#/definitions/scalingTimeType"
+                                },
+                                "offPeakLoadBalancingAlgorithm": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "BreadthFirst",
+                                    "DepthFirst"
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "parameters": {
+                            "scalingPlanName": {
+                              "type": "string"
+                            },
+                            "schedules": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/dynamicScalingScheduleType"
+                              }
+                            }
+                          },
+                          "resources": {
+                            "scalingPlan": {
+                              "existing": true,
+                              "type": "Microsoft.DesktopVirtualization/scalingPlans",
+                              "apiVersion": "2025-11-01-preview",
+                              "name": "[parameters('scalingPlanName')]"
+                            },
+                            "pooledSchedules": {
+                              "copy": {
+                                "name": "pooledSchedules",
+                                "count": "[length(parameters('schedules'))]"
+                              },
+                              "type": "Microsoft.DesktopVirtualization/scalingPlans/pooledSchedules",
+                              "apiVersion": "2025-11-01-preview",
+                              "name": "[format('{0}/{1}', parameters('scalingPlanName'), parameters('schedules')[copyIndex()].name)]",
+                              "properties": {
+                                "daysOfWeek": "[parameters('schedules')[copyIndex()].daysOfWeek]",
+                                "scalingMethod": "CreateDeletePowerManage",
+                                "createDelete": {
+                                  "rampUpMinimumHostPoolSize": "[parameters('schedules')[copyIndex()].rampUpMinimumHostPoolSize]",
+                                  "rampUpMaximumHostPoolSize": "[parameters('schedules')[copyIndex()].rampUpMaximumHostPoolSize]",
+                                  "rampDownMinimumHostPoolSize": "[parameters('schedules')[copyIndex()].rampDownMinimumHostPoolSize]",
+                                  "rampDownMaximumHostPoolSize": "[parameters('schedules')[copyIndex()].rampDownMaximumHostPoolSize]"
+                                },
+                                "rampUpStartTime": "[parameters('schedules')[copyIndex()].rampUpStartTime]",
+                                "rampUpLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].rampUpLoadBalancingAlgorithm]",
+                                "rampUpMinimumHostsPct": "[parameters('schedules')[copyIndex()].rampUpMinimumHostsPct]",
+                                "rampUpCapacityThresholdPct": "[parameters('schedules')[copyIndex()].rampUpCapacityThresholdPct]",
+                                "peakStartTime": "[parameters('schedules')[copyIndex()].peakStartTime]",
+                                "peakLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].peakLoadBalancingAlgorithm]",
+                                "rampDownStartTime": "[parameters('schedules')[copyIndex()].rampDownStartTime]",
+                                "rampDownLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].rampDownLoadBalancingAlgorithm]",
+                                "rampDownMinimumHostsPct": "[parameters('schedules')[copyIndex()].rampDownMinimumHostsPct]",
+                                "rampDownCapacityThresholdPct": "[parameters('schedules')[copyIndex()].rampDownCapacityThresholdPct]",
+                                "rampDownForceLogoffUsers": "[parameters('schedules')[copyIndex()].rampDownForceLogoffUsers]",
+                                "rampDownWaitTimeMinutes": "[parameters('schedules')[copyIndex()].rampDownWaitTimeMinutes]",
+                                "rampDownNotificationMessage": "[parameters('schedules')[copyIndex()].rampDownNotificationMessage]",
+                                "rampDownStopHostsWhen": "[parameters('schedules')[copyIndex()].rampDownStopHostsWhen]",
+                                "offPeakStartTime": "[parameters('schedules')[copyIndex()].offPeakStartTime]",
+                                "offPeakLoadBalancingAlgorithm": "[parameters('schedules')[copyIndex()].offPeakLoadBalancingAlgorithm]"
+                              }
+                            }
+                          },
+                          "outputs": {
+                            "scheduleResourceIds": {
+                              "type": "array",
+                              "value": "[map(references('pooledSchedules', 'full'), lambda('schedule', lambdaVariables('schedule').id))]"
+                            }
+                          }
+                        }
                       },
                       "dependsOn": [
                         "scalingPlan"
@@ -4509,7 +4679,7 @@
                     },
                     "scheduleResourceIds": {
                       "type": "array",
-                      "value": "[map(references('pooledSchedules', 'full'), lambda('schedule', lambdaVariables('schedule').id))]"
+                      "value": "[if(not(empty(parameters('schedules'))), reference('pooledSchedules').outputs.scheduleResourceIds.value, createArray())]"
                     }
                   }
                 }
