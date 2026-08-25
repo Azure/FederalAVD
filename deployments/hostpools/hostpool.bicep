@@ -1118,7 +1118,7 @@ module storageResourceGroup '../shared/modules/resourceModules/resources/resourc
 }
 
 // PowerOn/PowerOff/Restart VM Run Command permissions for AVD Service Principal
-module avdServicePrincipalRbac '../shared/modules/resourceModules/desktopVirtualization/hostPools/avdServicePrincipalRbac.bicep' = [
+module avdServicePrincipalRbac '../shared/modules/orchestration/avdServicePrincipalRbac.bicep' = [
   for (subId, i) in rbacSubs: if (!empty(avdObjectId) && (deployScalingPlan || startVMOnConnect)) {
     name: 'Subscription-Role-Assignment-${i}-${deploymentSuffix}'
     scope: subscription(subId)

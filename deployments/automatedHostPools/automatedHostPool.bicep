@@ -677,7 +677,7 @@ module globalFeedResourceGroup '../shared/modules/resourceModules/resources/reso
 
 // Start subscription-level AVD service-principal RBAC early so it can propagate while the
 // control plane, storage, policy, and session-host configuration are prepared.
-module avdServicePrincipalRbac '../shared/modules/resourceModules/desktopVirtualization/hostPools/avdServicePrincipalRbac.bicep' = if (deployDynamicScalingPlan || startVMOnConnect) {
+module avdServicePrincipalRbac '../shared/modules/orchestration/avdServicePrincipalRbac.bicep' = if (deployDynamicScalingPlan || startVMOnConnect) {
   name: 'Subscription-Role-Assignment-${deploymentSuffix}'
   params: {
     avdServicePrincipalObjectId: avdServicePrincipalIsValid ? avdServicePrincipalObjectId : avdServicePrincipalObjectId

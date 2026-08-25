@@ -30,7 +30,7 @@ var cnv_workload   = !empty(namingConvention.?workload ?? '') ? namingConvention
 var cnv_ff1        = namingConvention.?freeform1   ?? ''
 var cnv_env        = namingConvention.?environment ?? ''
 var cnv_ff2        = namingConvention.?freeform2   ?? ''
-var abbr           = loadJsonContent('../../../../../.common/data/resourceAbbreviations.json')
+var abbr           = loadJsonContent('../../../../.common/data/resourceAbbreviations.json')
 var cnv_rtCodes    = contains(namingConvention, 'resourceTypeCodes')
   ? union(abbr, namingConvention.resourceTypeCodes)
   : abbr

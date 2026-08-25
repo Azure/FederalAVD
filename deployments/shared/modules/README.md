@@ -25,21 +25,21 @@ is a resource leaf.
 
 | Category | Purpose |
 | --- | --- |
-| `authorization` | Reusable role-assignment modules for subscription, resource-group, and management-group scopes. |
-| `compute` | Virtual machines, galleries, images, disk encryption sets, disk access, and compute extensions. |
+| `resourceModules/authorization` | Reusable role-assignment modules for subscription, resource-group, and management-group scopes. |
+| `resourceModules/compute` | Virtual machines, galleries, images, disk encryption sets, disk access, and compute extensions. |
 | `resourceModules/desktopVirtualization` | AVD host pools, application groups, workspaces, scaling plans, and session-host API resources. |
-| `extensions` | Guest extensions such as domain join, Entra login, Azure Monitor Agent, GPU drivers, and Guest Attestation. |
-| `functionApp` | Function Apps, hosting plans, and function code resources used by add-ons. |
-| `insights` / `monitoring` / `operationalInsights` | Scheduled query rules, DCR/DCE resources, AVD Insights configuration, and Log Analytics workspaces. |
-| `keyVault` | Key Vaults, secrets, keys, and their role assignments. |
-| `managedIdentity` | User-assigned identity resources and role assignments. |
-| `netApp` | Azure NetApp Files accounts, capacity pools, and volumes. |
-| `network` | VNets, subnets, private endpoints, private DNS, route tables, NSGs, NAT gateways, and public IPs. |
-| `privateLinkScope` | Azure Monitor Private Link Scope resources and scoped-resource operations. |
-| `recoveryServices` | Recovery Services vaults, backup policies, and protected-item resources. |
-| `resources` | Resource groups and Template Specs. |
-| `storage` | Storage accounts and blob, file, queue, table, share, lifecycle, and access modules. |
-| `types` | Shared user-defined types used by resource and orchestration modules. |
+| `resourceModules/extensions` | Guest extensions such as domain join, Entra login, Azure Monitor Agent, GPU drivers, and Guest Attestation. |
+| `resourceModules/functionApp` | Function Apps, hosting plans, and function code resources used by add-ons. |
+| `resourceModules/insights`, `monitoring`, `operationalInsights` | Scheduled query rules, DCR/DCE resources, AVD Insights configuration, and Log Analytics workspaces. |
+| `resourceModules/keyVault` | Key Vaults, secrets, keys, and their role assignments. |
+| `resourceModules/managedIdentity` | User-assigned identity resources and role assignments. |
+| `resourceModules/netApp` | Azure NetApp Files accounts, capacity pools, and volumes. |
+| `resourceModules/network` | VNets, subnets, private endpoints, private DNS, route tables, NSGs, NAT gateways, and public IPs. |
+| `resourceModules/privateLinkScope` | Azure Monitor Private Link Scope resources and scoped-resource operations. |
+| `resourceModules/recoveryServices` | Recovery Services vaults, backup policies, and protected-item resources. |
+| `resourceModules/resources` | Resource groups and Template Specs. |
+| `resourceModules/storage` | Storage accounts and blob, file, queue, table, share, lifecycle, and access modules. |
+| `resourceModules/types` | Shared user-defined types used by resource and orchestration modules. |
 
 Resource modules should normally use a noun/resource-family path with `deploy.bicep` for a leaf
 resource operation. They should not depend on standard or automated host-pool entry points.
@@ -49,12 +49,14 @@ resource operation. They should not depend on standard or automated host-pool en
 | Module | Consumers | Responsibility |
 | --- | --- | --- |
 | `orchestration/deploymentHelper` | Standard host pool, automated host pool, FSLogix Storage add-on | Creates and cleans up the temporary deployment VM, identity, and required role assignments. |
-| `orchestration/diskCmk.bicep` | Standard host pool, automated policy | Composes customer-managed disk-key resources. |
-| `orchestration/fslogix.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Routes FSLogix storage to Azure Files or Azure NetApp Files and optionally registers Azure Files backup items. |
-| `orchestration/desktopVirtualization/sessionHosts` | Standard host pool, automated host pool, Session Hosts add-on | Composes direct session-host VM deployment, customization, disk, and backup operations. |
-| `orchestration/keyVaults.bicep` | Standard host pool, Shared Services | Composes secrets and encryption Key Vaults and their dependent resources. |
-| `orchestration/naming` | Standard host pool, automated host pool, FSLogix Storage add-on, Session Host Replacer | Resolves shared host-pool naming conventions. Session Host Replacer has an add-on-specific naming adapter here because its output set differs from the host-pool engine. |
-| `orchestration/storageCmk.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Composes customer-managed storage-key resources. |
+| `orchestration/avdServicePrincipalRbac.bicep` | Standard host pool, automated host pool | Assigns the Azure Virtual Desktop service principal the roles required for Start VM on Connect and dynamic scaling. |
+| `orchestration/customerManagedKeys/diskCmk.bicep` | Standard host pool, automated policy | Composes customer-managed disk-key resources. |
+| `orchestration/fslogix/fslogix.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Routes FSLogix storage to Azure Files or Azure NetApp Files and optionally registers Azure Files backup items. |
+| `orchestration/sessionHosts` | Standard host pool, Session Hosts add-on | Composes direct session-host VM deployment, customization, disk, and backup operations. |
+| `orchestration/keyVaults/keyVaults.bicep` | Standard host pool, Shared Services | Composes secrets and encryption Key Vaults and their dependent resources. |
+| `orchestration/naming/hostPool.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Resolves shared host-pool naming conventions. |
+| `orchestration/customerManagedKeys/storageCmk.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Composes customer-managed storage-key resources. |
+| `orchestration/avdServicePrincipalRbac.bicep` | Standard host pool, automated host pool | Assigns the Azure Virtual Desktop service principal the roles required for Start VM on Connect and dynamic scaling. |
 
 Orchestration modules may call resource modules, but resource modules must not call orchestration
 modules. This keeps the dependency direction easy to follow:
@@ -102,7 +104,7 @@ as generic resource modules.
 ## Naming Rules
 
 - Use the shared `orchestration/naming` modules for reusable naming behavior.
-- Keep add-on-specific purpose tokens and output sets in a small adapter, not a copied naming engine.
+- Keep add-on-specific naming modules under their owning add-on when their outputs and purpose tokens are unique.
 - Use resource-family paths for resource modules and `orchestration` for composed capabilities.
 - Keep scope adapters beside the deployment that needs the API or deployment-scope workaround.
 - Do not create a second module with equivalent behavior under a solution directory.

@@ -502,7 +502,7 @@ var effectiveIdentifier = !empty(identifier) ? identifier : 'replacer'
 var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
 
 // ── Naming module - computes all infrastructure resource names ────────────────
-module shrNaming '../../shared/modules/orchestration/naming/sessionHostReplacer.bicep' = {
+module shrNaming './modules/naming.bicep' = {
   name: 'SHR-Naming-${deploymentSuffix}'
   params: {
     namingConvention: effectiveNamingConvention
