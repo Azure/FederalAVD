@@ -61,6 +61,24 @@ param validationEnvironment bool = false
 @description('Optional. Allow session hosts to start when a user connects.')
 param startVMOnConnect bool = true
 
+@description('Required. Resource group receiving automated session hosts.')
+param sessionHostResourceGroupName string
+
+@description('Required. Resource ID of the session-host subnet.')
+param subnetResourceId string
+
+@description('Optional. Resource ID of the selected Compute Gallery image version.')
+param customImageResourceId string = ''
+
+@description('Required. Resource ID of the credential Key Vault.')
+param credentialsKeyVaultResourceId string
+
+@description('Required. Session Host Configuration properties.')
+param sessionHostConfigurationProperties resourceInput<'Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview'>.properties
+
+@description('Required. Session Host Management prepare properties.')
+param sessionHostManagementPrepareProperties resourceInput<'Microsoft.DesktopVirtualization/hostPools/sessionHostManagements@2025-11-01-preview'>.properties
+
 @description('Optional. Deploy a dynamic create/delete scaling plan for the automated host pool.')
 param deployDynamicScalingPlan bool = false
 
@@ -189,6 +207,50 @@ module hostPool '../../shared/modules/resourceModules/desktopVirtualization/host
   }
 }
 
+module hostPoolPermissions 'permissions.bicep' = {
+  params: {
+    hostPoolName: hostPoolName
+    controlPlaneResourceGroupName: resourceGroupName
+    sessionHostResourceGroupName: sessionHostResourceGroupName
+    subnetResourceId: subnetResourceId
+    customImageResourceId: customImageResourceId
+    credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
+    principalId: hostPool.outputs.principalId
+  }
+}
+
+module sessionHostConfiguration 'sessionHostConfiguration.bicep' = {
+  params: {
+    resourceGroupName: resourceGroupName
+    hostPoolName: hostPoolName
+    properties: sessionHostConfigurationProperties
+  }
+  dependsOn: [hostPoolPermissions]
+}
+
+module dynamicScalingPlan '../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deployAutomated.bicep' = if (deployDynamicScalingPlan) {
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: scalingPlanName
+    location: location
+    tags: tags[?'Microsoft.DesktopVirtualization/scalingPlans'] ?? {}
+    timeZone: scalingPlanTimeZone
+    exclusionTag: scalingPlanExclusionTag
+    hostPoolResourceId: hostPool.outputs.resourceId
+    schedules: dynamicScalingSchedules
+  }
+  dependsOn: [sessionHostConfiguration]
+}
+
+module initialSessionHostManagement 'sessionHostManagement.bicep' = {
+  params: {
+    resourceGroupName: resourceGroupName
+    hostPoolName: hostPoolName
+    properties: sessionHostManagementPrepareProperties
+  }
+  dependsOn: [sessionHostConfiguration]
+}
+
 module hostPoolPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployHostPoolPrivateEndpoint) {
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -203,19 +265,6 @@ module hostPoolPrivateEndpoint '../../shared/modules/resourceModules/network/pri
     groupId: 'connection'
     customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, hostPoolName, 'connection', hostPoolPrivateEndpointVirtualNetwork!.name)
     privateDNSZoneIds: !empty(avdPrivateDnsZoneResourceId) ? [avdPrivateDnsZoneResourceId] : []
-  }
-}
-
-module dynamicScalingPlan '../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deployAutomated.bicep' = if (deployDynamicScalingPlan) {
-  scope: resourceGroup(resourceGroupName)
-  params: {
-    name: scalingPlanName
-    location: location
-    tags: tags[?'Microsoft.DesktopVirtualization/scalingPlans'] ?? {}
-    timeZone: scalingPlanTimeZone
-    exclusionTag: scalingPlanExclusionTag
-    hostPoolResourceId: hostPool.outputs.resourceId
-    schedules: dynamicScalingSchedules
   }
 }
 
@@ -337,6 +386,8 @@ output hostPoolResourceId string = hostPool.outputs.resourceId
 output hostPoolPrincipalId string = hostPool.outputs.principalId
 output applicationGroupResourceId string = applicationGroup.outputs.resourceId
 output workspaceResourceId string = workspace.outputs.resourceId
+output sessionHostConfigurationResourceId string = sessionHostConfiguration.outputs.resourceId
+output sessionHostManagementPrepareResourceId string = initialSessionHostManagement.outputs.resourceId
 output scalingPlanResourceId string = deployDynamicScalingPlan ? dynamicScalingPlan!.outputs.resourceId : ''
 output hostPoolPrivateEndpointResourceId string = deployHostPoolPrivateEndpoint ? hostPoolPrivateEndpoint!.outputs.resourceId : ''
 output workspaceFeedPrivateEndpointResourceId string = deployWorkspaceFeedPrivateEndpoint ? workspaceFeedPrivateEndpoint!.outputs.resourceId : ''

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "12325298387820794640"
+      "templateHash": "7942370497042199931"
     }
   },
   "definitions": {
@@ -3356,6 +3356,62 @@
           "startVMOnConnect": {
             "value": "[parameters('startVMOnConnect')]"
           },
+          "sessionHostResourceGroupName": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
+          "subnetResourceId": {
+            "value": "[parameters('virtualMachineSubnetResourceId')]"
+          },
+          "customImageResourceId": {
+            "value": "[parameters('customImageResourceId')]"
+          },
+          "credentialsKeyVaultResourceId": "[if(if(and(equals(reference('credentialsKeyVault').enableRbacAuthorization, true()), equals(reference('credentialsKeyVault').enabledForTemplateDeployment, true())), true(), bool('The credentials Key Vault must use Azure RBAC and allow Azure Resource Manager template deployment.')), createObject('value', parameters('credentialsKeyVaultResourceId')), createObject('value', parameters('credentialsKeyVaultResourceId')))]",
+          "sessionHostConfigurationProperties": {
+            "value": {
+              "availabilityZones": "[if(not(empty(parameters('availabilityZones'))), parameters('availabilityZones'), null())]",
+              "diskInfo": {
+                "managedDisk": {
+                  "type": "[parameters('diskSku')]"
+                },
+                "diffDiskSettings": "[if(parameters('useEphemeralOsDisk'), createObject('option', 'Local', 'placement', parameters('ephemeralOsDiskPlacement')), null())]"
+              },
+              "domainInfo": {
+                "joinType": "[if(variables('domainJoinRequired'), 'ActiveDirectory', 'AzureActiveDirectory')]",
+                "activeDirectoryInfo": "[if(variables('domainJoinRequired'), createObject('domainCredentials', createObject('usernameKeyVaultSecretUri', if(variables('domainConfigurationIsValid'), variables('effectiveDomainJoinUsernameSecretUri'), variables('effectiveDomainJoinUsernameSecretUri')), 'passwordKeyVaultSecretUri', variables('effectiveDomainJoinPasswordSecretUri')), 'domainName', parameters('domainName'), 'ouPath', parameters('organizationalUnitPath')), null())]",
+                "azureActiveDirectoryInfo": "[if(and(not(variables('domainJoinRequired')), parameters('intuneEnrollment')), createObject('mdmProviderGuid', '0000000a-0000-0000-c000-000000000000'), null())]"
+              },
+              "imageInfo": "[if(not(empty(parameters('customImageResourceId'))), createObject('type', 'Custom', 'customInfo', createObject('resourceId', parameters('customImageResourceId'))), createObject('type', 'Marketplace', 'marketplaceInfo', createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'exactVersion', parameters('imageVersion'))))]",
+              "networkInfo": {
+                "subnetId": "[parameters('virtualMachineSubnetResourceId')]"
+              },
+              "securityInfo": {
+                "type": "[parameters('securityType')]",
+                "secureBootEnabled": "[parameters('secureBootEnabled')]",
+                "vTpmEnabled": "[parameters('vTpmEnabled')]"
+              },
+              "vmAdminCredentials": {
+                "usernameKeyVaultSecretUri": "[variables('effectiveVmAdministratorUsernameSecretUri')]",
+                "passwordKeyVaultSecretUri": "[variables('effectiveVmAdministratorPasswordSecretUri')]"
+              },
+              "vmLocation": "[parameters('location')]",
+              "vmNamePrefix": "[parameters('virtualMachineNamePrefix')]",
+              "vmResourceGroup": "[reference('naming').outputs.resourceGroupHosts.value]",
+              "vmSizeId": "[parameters('virtualMachineSize')]",
+              "vmTags": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()), createObject('cm-resource-parent', resourceId(subscription().subscriptionId, reference('naming').outputs.resourceGroupControlPlane.value, 'Microsoft.DesktopVirtualization/hostPools', reference('naming').outputs.hostPoolName.value)))]"
+            }
+          },
+          "sessionHostManagementPrepareProperties": {
+            "value": {
+              "failedSessionHostCleanupPolicy": "[parameters('failedSessionHostCleanupPolicy')]",
+              "scheduledDateTimeZone": "[parameters('virtualMachinesTimeZone')]",
+              "update": {
+                "deleteOriginalVm": "[parameters('deleteOriginalVm')]",
+                "logOffDelayMinutes": "[parameters('updateLogOffDelayMinutes')]",
+                "logOffMessage": "[parameters('updateLogOffMessage')]",
+                "maxVmsRemoved": "[parameters('updateMaxVmsRemoved')]"
+              }
+            }
+          },
           "deployDynamicScalingPlan": {
             "value": "[parameters('deployDynamicScalingPlan')]"
           },
@@ -3424,7 +3480,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "6316593198391738579"
+              "templateHash": "7587808804276865135"
             }
           },
           "functions": [
@@ -3592,6 +3648,49 @@
               "defaultValue": true,
               "metadata": {
                 "description": "Optional. Allow session hosts to start when a user connects."
+              }
+            },
+            "sessionHostResourceGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource group receiving automated session hosts."
+              }
+            },
+            "subnetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the session-host subnet."
+              }
+            },
+            "customImageResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the selected Compute Gallery image version."
+              }
+            },
+            "credentialsKeyVaultResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the credential Key Vault."
+              }
+            },
+            "sessionHostConfigurationProperties": {
+              "type": "object",
+              "metadata": {
+                "__bicep_resource_derived_type!": {
+                  "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview#properties/properties"
+                },
+                "description": "Required. Session Host Configuration properties."
+              }
+            },
+            "sessionHostManagementPrepareProperties": {
+              "type": "object",
+              "metadata": {
+                "__bicep_resource_derived_type!": {
+                  "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostManagements@2025-11-01-preview#properties/properties"
+                },
+                "description": "Required. Session Host Management prepare properties."
               }
             },
             "deployDynamicScalingPlan": {
@@ -4099,163 +4198,748 @@
                 }
               }
             },
-            "hostPoolPrivateEndpoint": {
-              "condition": "[variables('deployHostPoolPrivateEndpoint')]",
+            "hostPoolPermissions": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('hostPoolPrivateEndpoint-{0}', uniqueString('hostPoolPrivateEndpoint', deployment().name))]",
-              "resourceGroup": "[parameters('resourceGroupName')]",
+              "name": "[format('hostPoolPermissions-{0}', uniqueString('hostPoolPermissions', deployment().name))]",
+              "location": "[deployment().location]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "name": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('hostPoolName'), 'connection', split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[8])]"
+                  "hostPoolName": {
+                    "value": "[parameters('hostPoolName')]"
                   },
-                  "location": {
-                    "value": "[reference('hostPoolPrivateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                  "controlPlaneResourceGroupName": {
+                    "value": "[parameters('resourceGroupName')]"
                   },
-                  "tags": {
-                    "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()), createObject('cm-resource-parent', reference('hostPool').outputs.resourceId.value))]"
+                  "sessionHostResourceGroupName": {
+                    "value": "[parameters('sessionHostResourceGroupName')]"
                   },
                   "subnetResourceId": {
-                    "value": "[parameters('hostPoolPrivateEndpointSubnetResourceId')]"
+                    "value": "[parameters('subnetResourceId')]"
                   },
-                  "privateLinkServiceId": {
-                    "value": "[reference('hostPool').outputs.resourceId.value]"
+                  "customImageResourceId": {
+                    "value": "[parameters('customImageResourceId')]"
                   },
-                  "groupId": {
-                    "value": "connection"
+                  "credentialsKeyVaultResourceId": {
+                    "value": "[parameters('credentialsKeyVaultResourceId')]"
                   },
-                  "customNetworkInterfaceName": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('hostPoolName'), 'connection', split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[8])]"
-                  },
-                  "privateDNSZoneIds": "[if(not(empty(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                  "principalId": {
+                    "value": "[reference('hostPool').outputs.principalId.value]"
+                  }
                 },
                 "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "17519891137637288802"
+                      "templateHash": "11867050814434156183"
                     }
                   },
                   "parameters": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "location": {
+                    "hostPoolName": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "metadata": {
+                        "description": "Required. Automated host-pool name."
+                      }
                     },
-                    "tags": {
-                      "type": "object",
-                      "defaultValue": {}
+                    "controlPlaneResourceGroupName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource group containing the automated host pool."
+                      }
+                    },
+                    "sessionHostResourceGroupName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource group receiving automated session hosts."
+                      }
                     },
                     "subnetResourceId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                        "description": "Required. Resource ID of the session-host subnet."
                       }
                     },
-                    "privateLinkServiceId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Resource ID of the resource to create the private endpoint for."
-                      }
-                    },
-                    "groupId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Group ID (sub-resource) of the private link service."
-                      }
-                    },
-                    "customNetworkInterfaceName": {
+                    "customImageResourceId": {
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                        "description": "Optional. Resource ID of the selected Compute Gallery image version."
                       }
                     },
-                    "privateDNSZoneIds": {
-                      "type": "array",
-                      "defaultValue": [],
+                    "credentialsKeyVaultResourceId": {
+                      "type": "string",
                       "metadata": {
-                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                        "description": "Required. Resource ID of the credential Key Vault."
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Principal ID of the automated host-pool managed identity."
                       }
                     }
                   },
                   "variables": {
-                    "copy": [
-                      {
-                        "name": "privateDnsZoneConfigs",
-                        "count": "[length(parameters('privateDNSZoneIds'))]",
-                        "input": {
-                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
-                          "properties": {
-                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                    "desktopVirtualizationVirtualMachineContributorRoleId": "a959dbd1-f747-45e3-8ba6-dd80f235f97c",
+                    "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
+                  },
+                  "resources": {
+                    "sessionHostResourceGroupRole": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('sessionHostResourceGroupRole-{0}', uniqueString('sessionHostResourceGroupRole', deployment().name))]",
+                      "resourceGroup": "[parameters('sessionHostResourceGroupName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "roleDefinitionId": {
+                            "value": "[variables('desktopVirtualizationVirtualMachineContributorRoleId')]"
+                          },
+                          "principalId": {
+                            "value": "[parameters('principalId')]"
+                          },
+                          "principalType": {
+                            "value": "ServicePrincipal"
+                          },
+                          "assignmentDescription": {
+                            "value": "Allows Azure Virtual Desktop to create and manage automated session hosts."
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "4327984477459593833"
+                            }
+                          },
+                          "parameters": {
+                            "roleDefinitionId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                              }
+                            },
+                            "principalId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Principal ID of the identity receiving the role."
+                              }
+                            },
+                            "principalType": {
+                              "type": "string",
+                              "defaultValue": "ServicePrincipal",
+                              "allowedValues": [
+                                "ServicePrincipal",
+                                "Group",
+                                "User",
+                                "ForeignGroup",
+                                "Device",
+                                ""
+                              ],
+                              "metadata": {
+                                "description": "Principal type of the assigned principal."
+                              }
+                            },
+                            "assignmentDescription": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Optional description for the assignment."
+                              }
+                            }
+                          },
+                          "variables": {
+                            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Authorization/roleAssignments",
+                              "apiVersion": "2022-04-01",
+                              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                              "properties": {
+                                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                                "principalId": "[parameters('principalId')]",
+                                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                            }
                           }
                         }
                       }
-                    ]
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Network/privateEndpoints",
-                      "apiVersion": "2023-09-01",
-                      "name": "[parameters('name')]",
-                      "location": "[parameters('location')]",
-                      "tags": "[parameters('tags')]",
+                    },
+                    "networkResourceGroupRole": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('networkResourceGroupRole-{0}', uniqueString('networkResourceGroupRole', deployment().name))]",
+                      "subscriptionId": "[split(parameters('subnetResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('subnetResourceId'), '/')[4]]",
                       "properties": {
-                        "subnet": {
-                          "id": "[parameters('subnetResourceId')]"
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
                         },
-                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
-                        "privateLinkServiceConnections": [
-                          {
-                            "name": "[parameters('name')]",
-                            "properties": {
-                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
-                              "groupIds": [
-                                "[parameters('groupId')]"
-                              ]
+                        "mode": "Incremental",
+                        "parameters": {
+                          "roleDefinitionId": {
+                            "value": "[variables('desktopVirtualizationVirtualMachineContributorRoleId')]"
+                          },
+                          "principalId": {
+                            "value": "[parameters('principalId')]"
+                          },
+                          "principalType": {
+                            "value": "ServicePrincipal"
+                          },
+                          "assignmentDescription": {
+                            "value": "Allows Azure Virtual Desktop to attach automated session hosts to the selected network."
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "4327984477459593833"
+                            }
+                          },
+                          "parameters": {
+                            "roleDefinitionId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                              }
+                            },
+                            "principalId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Principal ID of the identity receiving the role."
+                              }
+                            },
+                            "principalType": {
+                              "type": "string",
+                              "defaultValue": "ServicePrincipal",
+                              "allowedValues": [
+                                "ServicePrincipal",
+                                "Group",
+                                "User",
+                                "ForeignGroup",
+                                "Device",
+                                ""
+                              ],
+                              "metadata": {
+                                "description": "Principal type of the assigned principal."
+                              }
+                            },
+                            "assignmentDescription": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Optional description for the assignment."
+                              }
+                            }
+                          },
+                          "variables": {
+                            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Authorization/roleAssignments",
+                              "apiVersion": "2022-04-01",
+                              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                              "properties": {
+                                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                                "principalId": "[parameters('principalId')]",
+                                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
                             }
                           }
-                        ]
+                        }
                       }
                     },
-                    {
-                      "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
-                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-                      "apiVersion": "2023-04-01",
-                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                    "imageResourceGroupRole": {
+                      "condition": "[not(empty(parameters('customImageResourceId')))]",
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('imageResourceGroupRole-{0}', uniqueString('imageResourceGroupRole', deployment().name))]",
+                      "subscriptionId": "[split(parameters('customImageResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('customImageResourceId'), '/')[4]]",
                       "properties": {
-                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
-                      },
-                      "dependsOn": [
-                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-                      ]
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "roleDefinitionId": {
+                            "value": "[variables('desktopVirtualizationVirtualMachineContributorRoleId')]"
+                          },
+                          "principalId": {
+                            "value": "[parameters('principalId')]"
+                          },
+                          "principalType": {
+                            "value": "ServicePrincipal"
+                          },
+                          "assignmentDescription": {
+                            "value": "Allows Azure Virtual Desktop to read the selected Compute Gallery image."
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "4327984477459593833"
+                            }
+                          },
+                          "parameters": {
+                            "roleDefinitionId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                              }
+                            },
+                            "principalId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Principal ID of the identity receiving the role."
+                              }
+                            },
+                            "principalType": {
+                              "type": "string",
+                              "defaultValue": "ServicePrincipal",
+                              "allowedValues": [
+                                "ServicePrincipal",
+                                "Group",
+                                "User",
+                                "ForeignGroup",
+                                "Device",
+                                ""
+                              ],
+                              "metadata": {
+                                "description": "Principal type of the assigned principal."
+                              }
+                            },
+                            "assignmentDescription": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Optional description for the assignment."
+                              }
+                            }
+                          },
+                          "variables": {
+                            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Authorization/roleAssignments",
+                              "apiVersion": "2022-04-01",
+                              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                              "properties": {
+                                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                                "principalId": "[parameters('principalId')]",
+                                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                            }
+                          }
+                        }
+                      }
                     },
-                    "name": {
-                      "type": "string",
-                      "value": "[parameters('name')]"
+                    "credentialVaultRole": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('credentialVaultRole-{0}', uniqueString('credentialVaultRole', deployment().name))]",
+                      "subscriptionId": "[split(parameters('credentialsKeyVaultResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('credentialsKeyVaultResourceId'), '/')[4]]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "keyVaultName": {
+                            "value": "[last(split(parameters('credentialsKeyVaultResourceId'), '/'))]"
+                          },
+                          "assignments": {
+                            "value": [
+                              {
+                                "roleDefinitionId": "[variables('keyVaultSecretsUserRoleId')]",
+                                "principalId": "[parameters('principalId')]",
+                                "principalType": "ServicePrincipal",
+                                "description": "Allows Azure Virtual Desktop to retrieve automated session-host credentials."
+                              }
+                            ]
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "5322964595060276058"
+                            }
+                          },
+                          "definitions": {
+                            "roleAssignmentType": {
+                              "type": "object",
+                              "properties": {
+                                "roleDefinitionId": {
+                                  "type": "string",
+                                  "metadata": {
+                                    "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                                  }
+                                },
+                                "principalId": {
+                                  "type": "string",
+                                  "metadata": {
+                                    "description": "Object (principal) ID of the identity receiving the role."
+                                  }
+                                },
+                                "principalType": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "",
+                                    "Device",
+                                    "ForeignGroup",
+                                    "Group",
+                                    "ServicePrincipal",
+                                    "User"
+                                  ],
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                                  }
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Optional human-readable description for the assignment."
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "description": "A single role assignment to apply to a specific resource.",
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                                }
+                              }
+                            }
+                          },
+                          "parameters": {
+                            "keyVaultName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the existing key vault."
+                              }
+                            },
+                            "assignments": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/roleAssignmentType"
+                              },
+                              "metadata": {
+                                "description": "Role assignments to apply to this key vault."
+                              }
+                            }
+                          },
+                          "variables": {
+                            "copy": [
+                              {
+                                "name": "formattedAssignments",
+                                "count": "[length(parameters('assignments'))]",
+                                "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+                              }
+                            ]
+                          },
+                          "resources": {
+                            "keyVault": {
+                              "existing": true,
+                              "type": "Microsoft.KeyVault/vaults",
+                              "apiVersion": "2023-07-01",
+                              "name": "[parameters('keyVaultName')]"
+                            },
+                            "roleAssignment": {
+                              "copy": {
+                                "name": "roleAssignment",
+                                "count": "[length(variables('formattedAssignments'))]"
+                              },
+                              "type": "Microsoft.Authorization/roleAssignments",
+                              "apiVersion": "2022-04-01",
+                              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+                              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+                              "properties": {
+                                "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                                "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                                "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                                "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+                              }
+                            }
+                          },
+                          "outputs": {
+                            "resourceIds": {
+                              "type": "array",
+                              "copy": {
+                                "count": "[length(variables('formattedAssignments'))]",
+                                "input": "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "hostPoolResourceRole": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('hostPoolResourceRole-{0}', uniqueString('hostPoolResourceRole', deployment().name))]",
+                      "resourceGroup": "[parameters('controlPlaneResourceGroupName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "hostPoolName": {
+                            "value": "[parameters('hostPoolName')]"
+                          },
+                          "principalId": {
+                            "value": "[parameters('principalId')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "11040881144638855240"
+                            }
+                          },
+                          "parameters": {
+                            "hostPoolName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the existing automated host pool."
+                              }
+                            },
+                            "principalId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Principal ID of the automated host-pool managed identity."
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Authorization/roleAssignments",
+                              "apiVersion": "2022-04-01",
+                              "scope": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName'))]",
+                              "name": "[guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), parameters('principalId'), 'a959dbd1-f747-45e3-8ba6-dd80f235f97c')]",
+                              "properties": {
+                                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a959dbd1-f747-45e3-8ba6-dd80f235f97c')]",
+                                "principalId": "[parameters('principalId')]",
+                                "principalType": "ServicePrincipal",
+                                "description": "Allows Azure Virtual Desktop to manage virtual machines for this automated host pool."
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[extensionResourceId(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), parameters('principalId'), 'a959dbd1-f747-45e3-8ba6-dd80f235f97c'))]"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "roleAssignmentResourceIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "value": "[concat(createArray(reference('sessionHostResourceGroupRole').outputs.resourceId.value, reference('networkResourceGroupRole').outputs.resourceId.value, reference('hostPoolResourceRole').outputs.resourceId.value), reference('credentialVaultRole').outputs.resourceIds.value, if(not(empty(parameters('customImageResourceId'))), createArray(reference('imageResourceGroupRole').outputs.resourceId.value), createArray()))]"
                     }
                   }
                 }
               },
               "dependsOn": [
-                "hostPool",
-                "hostPoolPrivateEndpointVirtualNetwork"
+                "hostPool"
+              ]
+            },
+            "sessionHostConfiguration": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('sessionHostConfiguration-{0}', uniqueString('sessionHostConfiguration', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "resourceGroupName": {
+                    "value": "[parameters('resourceGroupName')]"
+                  },
+                  "hostPoolName": {
+                    "value": "[parameters('hostPoolName')]"
+                  },
+                  "properties": {
+                    "value": "[parameters('sessionHostConfigurationProperties')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "13766308471382628608"
+                    }
+                  },
+                  "parameters": {
+                    "resourceGroupName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource group containing the automated host pool."
+                      }
+                    },
+                    "hostPoolName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Automated host-pool name."
+                      }
+                    },
+                    "properties": {
+                      "type": "object",
+                      "metadata": {
+                        "__bicep_resource_derived_type!": {
+                          "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview#properties/properties"
+                        },
+                        "description": "Required. Session Host Configuration properties."
+                      }
+                    }
+                  },
+                  "resources": {
+                    "sessionHostConfiguration": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('sessionHostConfiguration-{0}', uniqueString('sessionHostConfiguration', deployment().name))]",
+                      "resourceGroup": "[parameters('resourceGroupName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "hostPoolName": {
+                            "value": "[parameters('hostPoolName')]"
+                          },
+                          "properties": {
+                            "value": "[parameters('properties')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "15440048037145814705"
+                            }
+                          },
+                          "parameters": {
+                            "hostPoolName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the parent automated host pool."
+                              }
+                            },
+                            "properties": {
+                              "type": "object",
+                              "metadata": {
+                                "__bicep_resource_derived_type!": {
+                                  "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview#properties/properties"
+                                },
+                                "description": "Required. Session Host Configuration properties."
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations",
+                              "apiVersion": "2025-11-01-preview",
+                              "name": "[format('{0}/{1}', parameters('hostPoolName'), 'default')]",
+                              "properties": "[parameters('properties')]"
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations', parameters('hostPoolName'), 'default')]"
+                            },
+                            "name": {
+                              "type": "string",
+                              "value": "default"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[reference('sessionHostConfiguration').outputs.resourceId.value]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "hostPoolPermissions"
               ]
             },
             "dynamicScalingPlan": {
@@ -4685,7 +5369,302 @@
                 }
               },
               "dependsOn": [
-                "hostPool"
+                "hostPool",
+                "sessionHostConfiguration"
+              ]
+            },
+            "initialSessionHostManagement": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('initialSessionHostManagement-{0}', uniqueString('initialSessionHostManagement', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "resourceGroupName": {
+                    "value": "[parameters('resourceGroupName')]"
+                  },
+                  "hostPoolName": {
+                    "value": "[parameters('hostPoolName')]"
+                  },
+                  "properties": {
+                    "value": "[parameters('sessionHostManagementPrepareProperties')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "13750805687748496219"
+                    }
+                  },
+                  "parameters": {
+                    "resourceGroupName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource group containing the automated host pool."
+                      }
+                    },
+                    "hostPoolName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Automated host-pool name."
+                      }
+                    },
+                    "properties": {
+                      "type": "object",
+                      "metadata": {
+                        "__bicep_resource_derived_type!": {
+                          "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostManagements@2025-11-01-preview#properties/properties"
+                        },
+                        "description": "Required. Session Host Management properties."
+                      }
+                    }
+                  },
+                  "resources": {
+                    "sessionHostManagement": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('sessionHostManagement-{0}', uniqueString('sessionHostManagement', deployment().name))]",
+                      "resourceGroup": "[parameters('resourceGroupName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "hostPoolName": {
+                            "value": "[parameters('hostPoolName')]"
+                          },
+                          "properties": {
+                            "value": "[parameters('properties')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "12738355258815569314"
+                            }
+                          },
+                          "parameters": {
+                            "hostPoolName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the parent automated host pool."
+                              }
+                            },
+                            "properties": {
+                              "type": "object",
+                              "metadata": {
+                                "__bicep_resource_derived_type!": {
+                                  "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostManagements@2025-11-01-preview#properties/properties"
+                                },
+                                "description": "Required. Session Host Management properties."
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.DesktopVirtualization/hostPools/sessionHostManagements",
+                              "apiVersion": "2025-11-01-preview",
+                              "name": "[format('{0}/{1}', parameters('hostPoolName'), 'default')]",
+                              "properties": "[parameters('properties')]"
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.DesktopVirtualization/hostPools/sessionHostManagements', parameters('hostPoolName'), 'default')]"
+                            },
+                            "name": {
+                              "type": "string",
+                              "value": "default"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[reference('sessionHostManagement').outputs.resourceId.value]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "sessionHostConfiguration"
+              ]
+            },
+            "hostPoolPrivateEndpoint": {
+              "condition": "[variables('deployHostPoolPrivateEndpoint')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('hostPoolPrivateEndpoint-{0}', uniqueString('hostPoolPrivateEndpoint', deployment().name))]",
+              "resourceGroup": "[parameters('resourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('hostPoolName'), 'connection', split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[8])]"
+                  },
+                  "location": {
+                    "value": "[reference('hostPoolPrivateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                  },
+                  "tags": {
+                    "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()), createObject('cm-resource-parent', reference('hostPool').outputs.resourceId.value))]"
+                  },
+                  "subnetResourceId": {
+                    "value": "[parameters('hostPoolPrivateEndpointSubnetResourceId')]"
+                  },
+                  "privateLinkServiceId": {
+                    "value": "[reference('hostPool').outputs.resourceId.value]"
+                  },
+                  "groupId": {
+                    "value": "connection"
+                  },
+                  "customNetworkInterfaceName": {
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('hostPoolName'), 'connection', split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[8])]"
+                  },
+                  "privateDNSZoneIds": "[if(not(empty(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "17519891137637288802"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                      }
+                    },
+                    "privateLinkServiceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource to create the private endpoint for."
+                      }
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Group ID (sub-resource) of the private link service."
+                      }
+                    },
+                    "customNetworkInterfaceName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                      }
+                    },
+                    "privateDNSZoneIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "privateDnsZoneConfigs",
+                        "count": "[length(parameters('privateDNSZoneIds'))]",
+                        "input": {
+                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
+                          "properties": {
+                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[parameters('subnetResourceId')]"
+                        },
+                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[parameters('name')]",
+                            "properties": {
+                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "hostPool",
+                "hostPoolPrivateEndpointVirtualNetwork"
               ]
             },
             "applicationGroup": {
@@ -6072,6 +7051,14 @@
               "type": "string",
               "value": "[reference('workspace').outputs.resourceId.value]"
             },
+            "sessionHostConfigurationResourceId": {
+              "type": "string",
+              "value": "[reference('sessionHostConfiguration').outputs.resourceId.value]"
+            },
+            "sessionHostManagementPrepareResourceId": {
+              "type": "string",
+              "value": "[reference('initialSessionHostManagement').outputs.resourceId.value]"
+            },
             "scalingPlanResourceId": {
               "type": "string",
               "value": "[if(parameters('deployDynamicScalingPlan'), reference('dynamicScalingPlan').outputs.resourceId.value, '')]"
@@ -6098,932 +7085,10 @@
       "dependsOn": [
         "avdServicePrincipalRbac",
         "controlPlaneResourceGroup",
+        "credentialsKeyVault",
         "deploymentHelper",
         "globalFeedResourceGroup",
         "naming"
-      ]
-    },
-    "hostPoolPermissions": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('Host-Pool-Permissions-{0}', parameters('deploymentSuffix'))]",
-      "location": "[deployment().location]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "hostPoolName": {
-            "value": "[reference('naming').outputs.hostPoolName.value]"
-          },
-          "controlPlaneResourceGroupName": {
-            "value": "[reference('naming').outputs.resourceGroupControlPlane.value]"
-          },
-          "sessionHostResourceGroupName": {
-            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
-          },
-          "subnetResourceId": {
-            "value": "[parameters('virtualMachineSubnetResourceId')]"
-          },
-          "customImageResourceId": {
-            "value": "[parameters('customImageResourceId')]"
-          },
-          "credentialsKeyVaultResourceId": "[if(if(and(equals(reference('credentialsKeyVault').enableRbacAuthorization, true()), equals(reference('credentialsKeyVault').enabledForTemplateDeployment, true())), true(), bool('The credentials Key Vault must use Azure RBAC and allow Azure Resource Manager template deployment.')), createObject('value', parameters('credentialsKeyVaultResourceId')), createObject('value', parameters('credentialsKeyVaultResourceId')))]",
-          "principalId": {
-            "value": "[reference('controlPlane').outputs.hostPoolPrincipalId.value]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "languageVersion": "2.0",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "11867050814434156183"
-            }
-          },
-          "parameters": {
-            "hostPoolName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Automated host-pool name."
-              }
-            },
-            "controlPlaneResourceGroupName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group containing the automated host pool."
-              }
-            },
-            "sessionHostResourceGroupName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group receiving automated session hosts."
-              }
-            },
-            "subnetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the session-host subnet."
-              }
-            },
-            "customImageResourceId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Resource ID of the selected Compute Gallery image version."
-              }
-            },
-            "credentialsKeyVaultResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource ID of the credential Key Vault."
-              }
-            },
-            "principalId": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Principal ID of the automated host-pool managed identity."
-              }
-            }
-          },
-          "variables": {
-            "desktopVirtualizationVirtualMachineContributorRoleId": "a959dbd1-f747-45e3-8ba6-dd80f235f97c",
-            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
-          },
-          "resources": {
-            "sessionHostResourceGroupRole": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('sessionHostResourceGroupRole-{0}', uniqueString('sessionHostResourceGroupRole', deployment().name))]",
-              "resourceGroup": "[parameters('sessionHostResourceGroupName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "roleDefinitionId": {
-                    "value": "[variables('desktopVirtualizationVirtualMachineContributorRoleId')]"
-                  },
-                  "principalId": {
-                    "value": "[parameters('principalId')]"
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "assignmentDescription": {
-                    "value": "Allows Azure Virtual Desktop to create and manage automated session hosts."
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              }
-            },
-            "networkResourceGroupRole": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('networkResourceGroupRole-{0}', uniqueString('networkResourceGroupRole', deployment().name))]",
-              "subscriptionId": "[split(parameters('subnetResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('subnetResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "roleDefinitionId": {
-                    "value": "[variables('desktopVirtualizationVirtualMachineContributorRoleId')]"
-                  },
-                  "principalId": {
-                    "value": "[parameters('principalId')]"
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "assignmentDescription": {
-                    "value": "Allows Azure Virtual Desktop to attach automated session hosts to the selected network."
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              }
-            },
-            "imageResourceGroupRole": {
-              "condition": "[not(empty(parameters('customImageResourceId')))]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('imageResourceGroupRole-{0}', uniqueString('imageResourceGroupRole', deployment().name))]",
-              "subscriptionId": "[split(parameters('customImageResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('customImageResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "roleDefinitionId": {
-                    "value": "[variables('desktopVirtualizationVirtualMachineContributorRoleId')]"
-                  },
-                  "principalId": {
-                    "value": "[parameters('principalId')]"
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "assignmentDescription": {
-                    "value": "Allows Azure Virtual Desktop to read the selected Compute Gallery image."
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              }
-            },
-            "credentialVaultRole": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('credentialVaultRole-{0}', uniqueString('credentialVaultRole', deployment().name))]",
-              "subscriptionId": "[split(parameters('credentialsKeyVaultResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('credentialsKeyVaultResourceId'), '/')[4]]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "keyVaultName": {
-                    "value": "[last(split(parameters('credentialsKeyVaultResourceId'), '/'))]"
-                  },
-                  "assignments": {
-                    "value": [
-                      {
-                        "roleDefinitionId": "[variables('keyVaultSecretsUserRoleId')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "ServicePrincipal",
-                        "description": "Allows Azure Virtual Desktop to retrieve automated session-host credentials."
-                      }
-                    ]
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "languageVersion": "2.0",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "5322964595060276058"
-                    }
-                  },
-                  "definitions": {
-                    "roleAssignmentType": {
-                      "type": "object",
-                      "properties": {
-                        "roleDefinitionId": {
-                          "type": "string",
-                          "metadata": {
-                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
-                          }
-                        },
-                        "principalId": {
-                          "type": "string",
-                          "metadata": {
-                            "description": "Object (principal) ID of the identity receiving the role."
-                          }
-                        },
-                        "principalType": {
-                          "type": "string",
-                          "allowedValues": [
-                            "",
-                            "Device",
-                            "ForeignGroup",
-                            "Group",
-                            "ServicePrincipal",
-                            "User"
-                          ],
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Type of the assigned principal. Defaults to ServicePrincipal."
-                          }
-                        },
-                        "description": {
-                          "type": "string",
-                          "nullable": true,
-                          "metadata": {
-                            "description": "Optional human-readable description for the assignment."
-                          }
-                        }
-                      },
-                      "metadata": {
-                        "description": "A single role assignment to apply to a specific resource.",
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
-                        }
-                      }
-                    }
-                  },
-                  "parameters": {
-                    "keyVaultName": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Name of the existing key vault."
-                      }
-                    },
-                    "assignments": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/roleAssignmentType"
-                      },
-                      "metadata": {
-                        "description": "Role assignments to apply to this key vault."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "copy": [
-                      {
-                        "name": "formattedAssignments",
-                        "count": "[length(parameters('assignments'))]",
-                        "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
-                      }
-                    ]
-                  },
-                  "resources": {
-                    "keyVault": {
-                      "existing": true,
-                      "type": "Microsoft.KeyVault/vaults",
-                      "apiVersion": "2023-07-01",
-                      "name": "[parameters('keyVaultName')]"
-                    },
-                    "roleAssignment": {
-                      "copy": {
-                        "name": "roleAssignment",
-                        "count": "[length(variables('formattedAssignments'))]"
-                      },
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
-                      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
-                        "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
-                        "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
-                        "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
-                      }
-                    }
-                  },
-                  "outputs": {
-                    "resourceIds": {
-                      "type": "array",
-                      "copy": {
-                        "count": "[length(variables('formattedAssignments'))]",
-                        "input": "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            "hostPoolResourceRole": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('hostPoolResourceRole-{0}', uniqueString('hostPoolResourceRole', deployment().name))]",
-              "resourceGroup": "[parameters('controlPlaneResourceGroupName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "hostPoolName": {
-                    "value": "[parameters('hostPoolName')]"
-                  },
-                  "principalId": {
-                    "value": "[parameters('principalId')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "11040881144638855240"
-                    }
-                  },
-                  "parameters": {
-                    "hostPoolName": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Name of the existing automated host pool."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Principal ID of the automated host-pool managed identity."
-                      }
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "scope": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName'))]",
-                      "name": "[guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), parameters('principalId'), 'a959dbd1-f747-45e3-8ba6-dd80f235f97c')]",
-                      "properties": {
-                        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a959dbd1-f747-45e3-8ba6-dd80f235f97c')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "ServicePrincipal",
-                        "description": "Allows Azure Virtual Desktop to manage virtual machines for this automated host pool."
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[extensionResourceId(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), parameters('principalId'), 'a959dbd1-f747-45e3-8ba6-dd80f235f97c'))]"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "outputs": {
-            "roleAssignmentResourceIds": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "value": "[concat(createArray(reference('sessionHostResourceGroupRole').outputs.resourceId.value, reference('networkResourceGroupRole').outputs.resourceId.value, reference('hostPoolResourceRole').outputs.resourceId.value), reference('credentialVaultRole').outputs.resourceIds.value, if(not(empty(parameters('customImageResourceId'))), createArray(reference('imageResourceGroupRole').outputs.resourceId.value), createArray()))]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "controlPlane",
-        "credentialsKeyVault",
-        "naming",
-        "sessionHostResourceGroup"
-      ]
-    },
-    "sessionHostConfiguration": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('Session-Host-Configuration-{0}', parameters('deploymentSuffix'))]",
-      "location": "[deployment().location]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "resourceGroupName": {
-            "value": "[reference('naming').outputs.resourceGroupControlPlane.value]"
-          },
-          "hostPoolName": {
-            "value": "[reference('naming').outputs.hostPoolName.value]"
-          },
-          "properties": {
-            "value": {
-              "availabilityZones": "[if(not(empty(parameters('availabilityZones'))), parameters('availabilityZones'), null())]",
-              "diskInfo": {
-                "managedDisk": {
-                  "type": "[parameters('diskSku')]"
-                },
-                "diffDiskSettings": "[if(parameters('useEphemeralOsDisk'), createObject('option', 'Local', 'placement', parameters('ephemeralOsDiskPlacement')), null())]"
-              },
-              "domainInfo": {
-                "joinType": "[if(variables('domainJoinRequired'), 'ActiveDirectory', 'AzureActiveDirectory')]",
-                "activeDirectoryInfo": "[if(variables('domainJoinRequired'), createObject('domainCredentials', createObject('usernameKeyVaultSecretUri', if(variables('domainConfigurationIsValid'), variables('effectiveDomainJoinUsernameSecretUri'), variables('effectiveDomainJoinUsernameSecretUri')), 'passwordKeyVaultSecretUri', variables('effectiveDomainJoinPasswordSecretUri')), 'domainName', parameters('domainName'), 'ouPath', parameters('organizationalUnitPath')), null())]",
-                "azureActiveDirectoryInfo": "[if(and(not(variables('domainJoinRequired')), parameters('intuneEnrollment')), createObject('mdmProviderGuid', '0000000a-0000-0000-c000-000000000000'), null())]"
-              },
-              "imageInfo": "[if(not(empty(parameters('customImageResourceId'))), createObject('type', 'Custom', 'customInfo', createObject('resourceId', parameters('customImageResourceId'))), createObject('type', 'Marketplace', 'marketplaceInfo', createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'exactVersion', parameters('imageVersion'))))]",
-              "networkInfo": {
-                "subnetId": "[parameters('virtualMachineSubnetResourceId')]"
-              },
-              "securityInfo": {
-                "type": "[parameters('securityType')]",
-                "secureBootEnabled": "[parameters('secureBootEnabled')]",
-                "vTpmEnabled": "[parameters('vTpmEnabled')]"
-              },
-              "vmAdminCredentials": {
-                "usernameKeyVaultSecretUri": "[variables('effectiveVmAdministratorUsernameSecretUri')]",
-                "passwordKeyVaultSecretUri": "[variables('effectiveVmAdministratorPasswordSecretUri')]"
-              },
-              "vmLocation": "[parameters('location')]",
-              "vmNamePrefix": "[parameters('virtualMachineNamePrefix')]",
-              "vmResourceGroup": "[reference('naming').outputs.resourceGroupHosts.value]",
-              "vmSizeId": "[parameters('virtualMachineSize')]",
-              "vmTags": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()), createObject('cm-resource-parent', reference('controlPlane').outputs.hostPoolResourceId.value))]"
-            }
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "languageVersion": "2.0",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "13766308471382628608"
-            }
-          },
-          "parameters": {
-            "resourceGroupName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group containing the automated host pool."
-              }
-            },
-            "hostPoolName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Automated host-pool name."
-              }
-            },
-            "properties": {
-              "type": "object",
-              "metadata": {
-                "__bicep_resource_derived_type!": {
-                  "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview#properties/properties"
-                },
-                "description": "Required. Session Host Configuration properties."
-              }
-            }
-          },
-          "resources": {
-            "sessionHostConfiguration": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('sessionHostConfiguration-{0}', uniqueString('sessionHostConfiguration', deployment().name))]",
-              "resourceGroup": "[parameters('resourceGroupName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "hostPoolName": {
-                    "value": "[parameters('hostPoolName')]"
-                  },
-                  "properties": {
-                    "value": "[parameters('properties')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "15440048037145814705"
-                    }
-                  },
-                  "parameters": {
-                    "hostPoolName": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Name of the parent automated host pool."
-                      }
-                    },
-                    "properties": {
-                      "type": "object",
-                      "metadata": {
-                        "__bicep_resource_derived_type!": {
-                          "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview#properties/properties"
-                        },
-                        "description": "Required. Session Host Configuration properties."
-                      }
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations",
-                      "apiVersion": "2025-11-01-preview",
-                      "name": "[format('{0}/{1}', parameters('hostPoolName'), 'default')]",
-                      "properties": "[parameters('properties')]"
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations', parameters('hostPoolName'), 'default')]"
-                    },
-                    "name": {
-                      "type": "string",
-                      "value": "default"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[reference('sessionHostConfiguration').outputs.resourceId.value]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "controlPlane",
-        "hostPoolPermissions",
-        "naming"
-      ]
-    },
-    "initialSessionHostManagement": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('Session-Host-Management-Prepare-{0}', parameters('deploymentSuffix'))]",
-      "location": "[deployment().location]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "resourceGroupName": {
-            "value": "[reference('naming').outputs.resourceGroupControlPlane.value]"
-          },
-          "hostPoolName": {
-            "value": "[reference('naming').outputs.hostPoolName.value]"
-          },
-          "properties": {
-            "value": {
-              "failedSessionHostCleanupPolicy": "[parameters('failedSessionHostCleanupPolicy')]",
-              "scheduledDateTimeZone": "[parameters('virtualMachinesTimeZone')]",
-              "update": {
-                "deleteOriginalVm": "[parameters('deleteOriginalVm')]",
-                "logOffDelayMinutes": "[parameters('updateLogOffDelayMinutes')]",
-                "logOffMessage": "[parameters('updateLogOffMessage')]",
-                "maxVmsRemoved": "[parameters('updateMaxVmsRemoved')]"
-              }
-            }
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "languageVersion": "2.0",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "13750805687748496219"
-            }
-          },
-          "parameters": {
-            "resourceGroupName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Resource group containing the automated host pool."
-              }
-            },
-            "hostPoolName": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Automated host-pool name."
-              }
-            },
-            "properties": {
-              "type": "object",
-              "metadata": {
-                "__bicep_resource_derived_type!": {
-                  "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostManagements@2025-11-01-preview#properties/properties"
-                },
-                "description": "Required. Session Host Management properties."
-              }
-            }
-          },
-          "resources": {
-            "sessionHostManagement": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('sessionHostManagement-{0}', uniqueString('sessionHostManagement', deployment().name))]",
-              "resourceGroup": "[parameters('resourceGroupName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "hostPoolName": {
-                    "value": "[parameters('hostPoolName')]"
-                  },
-                  "properties": {
-                    "value": "[parameters('properties')]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "12738355258815569314"
-                    }
-                  },
-                  "parameters": {
-                    "hostPoolName": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Name of the parent automated host pool."
-                      }
-                    },
-                    "properties": {
-                      "type": "object",
-                      "metadata": {
-                        "__bicep_resource_derived_type!": {
-                          "source": "Microsoft.DesktopVirtualization/hostPools/sessionHostManagements@2025-11-01-preview#properties/properties"
-                        },
-                        "description": "Required. Session Host Management properties."
-                      }
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.DesktopVirtualization/hostPools/sessionHostManagements",
-                      "apiVersion": "2025-11-01-preview",
-                      "name": "[format('{0}/{1}', parameters('hostPoolName'), 'default')]",
-                      "properties": "[parameters('properties')]"
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.DesktopVirtualization/hostPools/sessionHostManagements', parameters('hostPoolName'), 'default')]"
-                    },
-                    "name": {
-                      "type": "string",
-                      "value": "default"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[reference('sessionHostManagement').outputs.resourceId.value]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "naming",
-        "sessionHostConfiguration"
       ]
     },
     "fslogixStorageCmk": {
@@ -17905,7 +17970,7 @@
         }
       },
       "dependsOn": [
-        "initialSessionHostManagement",
+        "controlPlane",
         "naming",
         "sessionHostPolicy"
       ]
@@ -18600,7 +18665,7 @@
     },
     "sessionHostConfigurationResourceId": {
       "type": "string",
-      "value": "[reference('sessionHostConfiguration').outputs.resourceId.value]"
+      "value": "[reference('controlPlane').outputs.sessionHostConfigurationResourceId.value]"
     },
     "sessionHostManagementResourceId": {
       "type": "string",

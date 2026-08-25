@@ -757,55 +757,11 @@ module controlPlane 'modules/controlPlane.bicep' = {
     customRdpProperty: hostPoolRDPProperties
     validationEnvironment: hostPoolValidationEnvironment
     startVMOnConnect: startVMOnConnect
-    deployDynamicScalingPlan: deployDynamicScalingPlan
-    scalingPlanName: naming.outputs.scalingPlanName
-    scalingPlanTimeZone: avdServicePrincipalIsValid && dynamicScalingLimitsAreValid && dynamicScalingSchedulesAreValid ? scalingPlanTimeZone : scalingPlanTimeZone
-    scalingPlanExclusionTag: scalingPlanExclusionTag
-    dynamicScalingSchedules: effectiveDynamicScalingSchedules
-    hostPoolCustomTags: hostPoolCustomTags
-    avdPrivateLinkPrivateRoutes: avdPrivateLinkConfigurationIsValid ? avdPrivateLinkPrivateRoutes : avdPrivateLinkPrivateRoutes
-    hostPoolPrivateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
-    avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
-    hostPoolPublicNetworkAccess: hostPoolPublicNetworkAccess
-    workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
-    workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
-    existingGlobalWorkspaceResourceId: existingGlobalFeedResourceId
-    globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
-    globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
-    globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
-    resourceGroupGlobalFeed: naming.outputs.globalFeedResourceGroupName
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    tags: tags
-  }
-  dependsOn: [
-    avdServicePrincipalRbac
-    controlPlaneResourceGroup
-    globalFeedResourceGroup
-  ]
-}
-
-module hostPoolPermissions 'modules/permissions.bicep' = {
-  name: 'Host-Pool-Permissions-${deploymentSuffix}'
-  params: {
-    hostPoolName: naming.outputs.hostPoolName
-    controlPlaneResourceGroupName: naming.outputs.resourceGroupControlPlane
     sessionHostResourceGroupName: naming.outputs.resourceGroupHosts
     subnetResourceId: virtualMachineSubnetResourceId
     customImageResourceId: customImageResourceId
     credentialsKeyVaultResourceId: credentialsKeyVaultConfigurationIsValid ? credentialsKeyVaultResourceId : credentialsKeyVaultResourceId
-    principalId: controlPlane.outputs.hostPoolPrincipalId
-  }
-  dependsOn: [sessionHostResourceGroup]
-}
-
-module sessionHostConfiguration 'modules/sessionHostConfiguration.bicep' = {
-  name: 'Session-Host-Configuration-${deploymentSuffix}'
-  params: {
-    resourceGroupName: naming.outputs.resourceGroupControlPlane
-    hostPoolName: naming.outputs.hostPoolName
-    properties: {
+    sessionHostConfigurationProperties: {
       availabilityZones: !empty(availabilityZones) ? availabilityZones : null
       diskInfo: {
         managedDisk: {
@@ -870,20 +826,17 @@ module sessionHostConfiguration 'modules/sessionHostConfiguration.bicep' = {
       vmSizeId: virtualMachineSize
       vmTags: union(
         tags[?'Microsoft.Compute/virtualMachines'] ?? {},
-        { 'cm-resource-parent': controlPlane.outputs.hostPoolResourceId }
+        {
+          'cm-resource-parent': resourceId(
+            subscription().subscriptionId,
+            naming.outputs.resourceGroupControlPlane,
+            'Microsoft.DesktopVirtualization/hostPools',
+            naming.outputs.hostPoolName
+          )
+        }
       )
     }
-  }
-  dependsOn: [hostPoolPermissions]
-}
-
-// The API requires instanceCount to be at least one. Omitting provisioning is its zero-host state.
-module initialSessionHostManagement 'modules/sessionHostManagement.bicep' = {
-  name: 'Session-Host-Management-Prepare-${deploymentSuffix}'
-  params: {
-    resourceGroupName: naming.outputs.resourceGroupControlPlane
-    hostPoolName: naming.outputs.hostPoolName
-    properties: {
+    sessionHostManagementPrepareProperties: {
       failedSessionHostCleanupPolicy: failedSessionHostCleanupPolicy
       scheduledDateTimeZone: virtualMachinesTimeZone
       update: {
@@ -893,8 +846,35 @@ module initialSessionHostManagement 'modules/sessionHostManagement.bicep' = {
         maxVmsRemoved: updateMaxVmsRemoved
       }
     }
+    deployDynamicScalingPlan: deployDynamicScalingPlan
+    scalingPlanName: naming.outputs.scalingPlanName
+    scalingPlanTimeZone: avdServicePrincipalIsValid && dynamicScalingLimitsAreValid && dynamicScalingSchedulesAreValid
+      ? scalingPlanTimeZone
+      : scalingPlanTimeZone
+    scalingPlanExclusionTag: scalingPlanExclusionTag
+    dynamicScalingSchedules: effectiveDynamicScalingSchedules
+    hostPoolCustomTags: hostPoolCustomTags
+    avdPrivateLinkPrivateRoutes: avdPrivateLinkConfigurationIsValid ? avdPrivateLinkPrivateRoutes : avdPrivateLinkPrivateRoutes
+    hostPoolPrivateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
+    avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
+    hostPoolPublicNetworkAccess: hostPoolPublicNetworkAccess
+    workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
+    workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
+    existingGlobalWorkspaceResourceId: existingGlobalFeedResourceId
+    globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
+    globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
+    globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
+    resourceGroupGlobalFeed: naming.outputs.globalFeedResourceGroupName
+    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    tags: tags
   }
-  dependsOn: [sessionHostConfiguration]
+  dependsOn: [
+    avdServicePrincipalRbac
+    controlPlaneResourceGroup
+    globalFeedResourceGroup
+  ]
 }
 
 module fslogixStorageCmk '../shared/modules/orchestration/customerManagedKeys/storageCmk.bicep' = if (deployFslogixStorageCmk && fslogixStorageCmkConfigurationIsValid) {
@@ -1074,7 +1054,7 @@ module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = {
     }
   }
   dependsOn: [
-    initialSessionHostManagement
+    controlPlane
     sessionHostPolicy
   ]
 }
@@ -1098,7 +1078,7 @@ module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper
 output hostPoolResourceId string = controlPlane.outputs.hostPoolResourceId
 output workspaceResourceId string = controlPlane.outputs.workspaceResourceId
 output applicationGroupResourceId string = controlPlane.outputs.applicationGroupResourceId
-output sessionHostConfigurationResourceId string = sessionHostConfiguration.outputs.resourceId
+output sessionHostConfigurationResourceId string = controlPlane.outputs.sessionHostConfigurationResourceId
 output sessionHostManagementResourceId string = finalSessionHostManagement.outputs.resourceId
 output sessionHostResourceGroupId string = sessionHostResourceGroup.outputs.resourceId
 output fslogixStorageAccountResourceIds array = deployFSLogixStorage ? fslogixStorage!.outputs.storageAccountResourceIds : []

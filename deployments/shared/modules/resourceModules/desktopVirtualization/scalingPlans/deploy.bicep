@@ -12,8 +12,18 @@ param exclusionTag string = 'ScalingPlanExclusion'
 @description('Host pool references for this scaling plan.')
 param hostPoolReferences array = []
 
-@description('Scaling schedules.')
-param schedules array = []
+@allowed([
+  'Pooled'
+  'Personal'
+])
+@description('Host pool type for this scaling plan.')
+param hostPoolType string = 'Pooled'
+
+@description('Pooled host pool scaling schedules.')
+param pooledSchedules array = []
+
+@description('Personal host pool scaling schedules.')
+param personalSchedules array = []
 
 param diagnosticSettings diagnosticSettingsType?
 
@@ -24,11 +34,44 @@ resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2023-09-05' =
   properties: {
     timeZone: timeZone
     exclusionTag: exclusionTag
-    hostPoolType: 'Pooled'
+    hostPoolType: hostPoolType
     hostPoolReferences: hostPoolReferences
-    schedules: schedules
+    schedules: hostPoolType == 'Pooled' ? pooledSchedules : []
   }
 }
+
+resource personalScheduleResources 'Microsoft.DesktopVirtualization/scalingPlans/personalSchedules@2023-09-05' = [for schedule in personalSchedules: if (hostPoolType == 'Personal') {
+  parent: scalingPlan
+  name: schedule.name
+  properties: {
+    daysOfWeek: schedule.daysOfWeek
+    rampUpStartTime: schedule.rampUpStartTime
+    rampUpAutoStartHosts: schedule.rampUpAutoStartHosts
+    rampUpStartVMOnConnect: schedule.rampUpStartVMOnConnect
+    rampUpMinutesToWaitOnDisconnect: schedule.rampUpMinutesToWaitOnDisconnect
+    rampUpActionOnDisconnect: schedule.rampUpActionOnDisconnect
+    rampUpMinutesToWaitOnLogoff: schedule.rampUpMinutesToWaitOnLogoff
+    rampUpActionOnLogoff: schedule.rampUpActionOnLogoff
+    peakStartTime: schedule.peakStartTime
+    peakStartVMOnConnect: schedule.peakStartVMOnConnect
+    peakMinutesToWaitOnDisconnect: schedule.peakMinutesToWaitOnDisconnect
+    peakActionOnDisconnect: schedule.peakActionOnDisconnect
+    peakMinutesToWaitOnLogoff: schedule.peakMinutesToWaitOnLogoff
+    peakActionOnLogoff: schedule.peakActionOnLogoff
+    rampDownStartTime: schedule.rampDownStartTime
+    rampDownStartVMOnConnect: schedule.rampDownStartVMOnConnect
+    rampDownMinutesToWaitOnDisconnect: schedule.rampDownMinutesToWaitOnDisconnect
+    rampDownActionOnDisconnect: schedule.rampDownActionOnDisconnect
+    rampDownMinutesToWaitOnLogoff: schedule.rampDownMinutesToWaitOnLogoff
+    rampDownActionOnLogoff: schedule.rampDownActionOnLogoff
+    offPeakStartTime: schedule.offPeakStartTime
+    offPeakStartVMOnConnect: schedule.offPeakStartVMOnConnect
+    offPeakMinutesToWaitOnDisconnect: schedule.offPeakMinutesToWaitOnDisconnect
+    offPeakActionOnDisconnect: schedule.offPeakActionOnDisconnect
+    offPeakMinutesToWaitOnLogoff: schedule.offPeakMinutesToWaitOnLogoff
+    offPeakActionOnLogoff: schedule.offPeakActionOnLogoff
+  }
+}]
 
 var diagTargetNames = filter([
   !empty(diagnosticSettings.?workspaceId ?? '') ? last(split(diagnosticSettings.?workspaceId!, '/')) : ''

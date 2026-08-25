@@ -35,7 +35,8 @@ param resourceGroupDeployment string
 param resourceGroupGlobalFeed string
 param scalingPlanExclusionTag string
 param scalingPlanName string
-param scalingPlanSchedules array
+param scalingPlanPooledSchedules array
+param scalingPlanPersonalSchedules array
 param startVMOnConnect bool
 param tags object
 param virtualMachinesTimeZone string
@@ -274,10 +275,7 @@ module feedWorkspace_pe '../../../shared/modules/resourceModules/network/private
 }
 
 // ─── Scaling Plan ──────────────────────────────────────────────────────────────
-module scalingPlan '../../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deploy.bicep' = if (deployScalingPlan && contains(
-  hostPoolType,
-  'Pooled'
-)) {
+module scalingPlan '../../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deploy.bicep' = if (deployScalingPlan) {
   name: 'ScalingPlan-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
@@ -286,13 +284,15 @@ module scalingPlan '../../../shared/modules/resourceModules/desktopVirtualizatio
     tags: tags[?'Microsoft.DesktopVirtualization/scalingPlans'] ?? {}
     timeZone: virtualMachinesTimeZone
     exclusionTag: scalingPlanExclusionTag
+    hostPoolType: effectiveHostPoolType
     hostPoolReferences: [
       {
         hostPoolArmPath: hostPool.outputs.resourceId
         scalingPlanEnabled: true
       }
     ]
-    schedules: scalingPlanSchedules
+    pooledSchedules: scalingPlanPooledSchedules
+    personalSchedules: scalingPlanPersonalSchedules
     diagnosticSettings: enableMonitoring
       ? {
           name: 'WVDInsights'

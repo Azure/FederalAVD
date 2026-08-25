@@ -53,7 +53,7 @@ resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2025-11-01-pr
   }
 }
 
-module pooledSchedules 'deployAutomatedSchedules.bicep' = if (!empty(schedules)) {
+module pooledSchedules 'pooledSchedules/deploy.bicep' = if (!empty(schedules)) {
   name: 'PooledSchedules-${uniqueString(name, resourceGroup().id)}'
   params: {
     scalingPlanName: scalingPlan.name
