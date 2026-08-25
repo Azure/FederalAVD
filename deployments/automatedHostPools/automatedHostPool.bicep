@@ -378,10 +378,10 @@ param fslogixExistingLocalStorageAccountResourceIds string[] = []
 @description('Optional. Existing remote Azure Files storage account resource IDs used by FSLogix Cloud Cache.')
 param fslogixExistingRemoteStorageAccountResourceIds string[] = []
 
-@description('Optional. Existing local Azure NetApp Files volume resource IDs used to configure FSLogix without deploying storage.')
+@description('Optional. Existing local Azure NetApp Files volume resource IDs used to configure FSLogix without deploying storage. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixExistingLocalNetAppVolumeResourceIds string[] = []
 
-@description('Optional. Existing remote Azure NetApp Files volume resource IDs used by FSLogix Cloud Cache.')
+@description('Optional. Existing remote Azure NetApp Files volume resource IDs used by FSLogix Cloud Cache. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixExistingRemoteNetAppVolumeResourceIds string[] = []
 
 @description('Optional. Resource ID of the subnet delegated to Microsoft.NetApp/volumes.')

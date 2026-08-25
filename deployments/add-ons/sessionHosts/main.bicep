@@ -112,7 +112,7 @@ param fslogixConfigureSessionHosts bool = false
 @description('Optional. FSLogix container type.')
 param fslogixContainerType string = 'ProfileContainer'
 
-@description('Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix.')
+@description('Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixLocalNetAppVolumeResourceIds array = []
 
 @description('Optional. Resource IDs of local storage accounts for FSLogix.')
@@ -121,7 +121,7 @@ param fslogixLocalStorageAccountResourceIds array = []
 @description('Optional. Entra ID group object IDs for FSLogix Office container separation.')
 param fslogixOSSGroups array = []
 
-@description('Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover.')
+@description('Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixRemoteNetAppVolumeResourceIds array = []
 
 @description('Optional. Resource IDs of remote storage accounts for FSLogix cloud cache failover.')

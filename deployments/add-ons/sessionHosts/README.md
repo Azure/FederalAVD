@@ -209,9 +209,9 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 | `fslogixContainerType` | string | `ProfileContainer` | FSLogix container type: `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` | string | `AzureFiles` | Storage backend: `AzureFiles`, `AzureNetAppFiles` |
 | `fslogixLocalStorageAccountResourceIds` | array | `[]` | Local Azure Files storage account resource IDs |
-| `fslogixLocalNetAppVolumeResourceIds` | array | `[]` | Local Azure NetApp Files volume resource IDs |
+| `fslogixLocalNetAppVolumeResourceIds` | array | `[]` | Local Azure NetApp Files volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
 | `fslogixRemoteStorageAccountResourceIds` | array | `[]` | Remote Azure Files storage account resource IDs (cloud cache failover) |
-| `fslogixRemoteNetAppVolumeResourceIds` | array | `[]` | Remote Azure NetApp Files volume resource IDs (cloud cache failover) |
+| `fslogixRemoteNetAppVolumeResourceIds` | array | `[]` | Remote Azure NetApp Files volume resource IDs for cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
 | `fslogixOSSGroups` | array | `[]` | Entra ID group object IDs for Office container separation |
 | `fslogixSizeInMBs` | int | `30720` | Maximum FSLogix VHD/VHDX size in megabytes |
 

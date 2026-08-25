@@ -387,63 +387,32 @@ module crossSubscriptionAzureMonitorAgentIdentity '../shared/modules/resourceMod
   dependsOn: [operationsResourceGroup]
 }
 
-module logAnalyticsWorkspace '../shared/modules/resourceModules/operationalInsights/workspaces/deploy.bicep' = if (deployMonitoring) {
-  name: 'Monitoring-LogAnalytics-${deploymentSuffix}'
-  scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
-  params: {
-    name: logAnalyticsWorkspaceName
-    location: location
-    tags: tags[?'Microsoft.OperationalInsights/workspaces'] ?? {}
-    sku: logAnalyticsWorkspaceSku
-    retentionInDays: logAnalyticsWorkspaceRetentionInDays
-  }
-  dependsOn: [monitoringResourceGroup]
-}
-
 var effectiveAzureMonitorPrivateLinkScopeResourceId = deployMonitoring ? azureMonitorPrivateLinkScopeResourceId : ''
 
 // DCE + DCR are generic per region/workspace (not tied to any host pool) - creating them once here
 // lets every host pool that reuses this workspace share the same DCE/DCR via "existingAVDInsightsDataCollectionRuleResourceId"
 // and "existingDataCollectionEndpointResourceId", instead of the first host pool deployment creating them.
-module dataCollectionEndpoint '../shared/modules/resourceModules/insights/dataCollectionEndpoints/deploy.bicep' = if (deployMonitoring) {
-  name: 'Monitoring-DataCollectionEndpoint-${deploymentSuffix}'
-  scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
+module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deployMonitoring) {
+  name: 'Monitoring-Stack-${deploymentSuffix}'
+  scope: subscription(effectiveLogAnalyticsWorkspaceSubscription)
   params: {
-    name: dataCollectionEndpointName
+    azureMonitorPrivateLinkScopeResourceId: effectiveAzureMonitorPrivateLinkScopeResourceId
+    dataCollectionEndpointName: dataCollectionEndpointName
+    deploymentSuffix: deploymentSuffix
     location: location
-    tags: tags[?'Microsoft.Insights/dataCollectionEndpoints'] ?? {}
-    publicNetworkAccess: empty(effectiveAzureMonitorPrivateLinkScopeResourceId) ? 'Enabled' : 'Disabled'
+    logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
+    logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetentionInDays
+    logAnalyticsWorkspaceSku: logAnalyticsWorkspaceSku
+    resourceGroupMonitoring: monitoringResourceGroupName
+    tags: tags
   }
   dependsOn: [monitoringResourceGroup]
-}
-
-module avdInsightsDataCollectionRule '../shared/modules/resourceModules/monitoring/avdInsightsDataCollectionRule.bicep' = if (deployMonitoring) {
-  name: 'Monitoring-AVDInsightsDCR-${deploymentSuffix}'
-  scope: resourceGroup(effectiveLogAnalyticsWorkspaceSubscription, monitoringResourceGroupName)
-  params: {
-    location: location
-    tags: tags[?'Microsoft.Insights/dataCollectionRules'] ?? {}
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspace!.outputs.resourceId
-    dataCollectionEndpointId: dataCollectionEndpoint!.outputs.resourceId
-  }
-}
-
-module updatePrivateLinkScope '../shared/modules/resourceModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (deployMonitoring && !empty(azureMonitorPrivateLinkScopeResourceId)) {
-  name: 'Monitoring-PrivateLinkScope-${deploymentSuffix}'
-  params: {
-    deploymentSuffix: deploymentSuffix
-    privateLinkScopeResourceId: effectiveAzureMonitorPrivateLinkScopeResourceId
-    scopedResourceIds: [
-      logAnalyticsWorkspace!.outputs.resourceId
-      dataCollectionEndpoint!.outputs.resourceId
-    ]
-  }
 }
 
 // Resolves to the newly deployed workspace when requested, otherwise falls back to whatever
 // existing workspace resource ID (if any) was passed in for Key Vault diagnostic settings.
 var effectiveLogAnalyticsWorkspaceResourceId = deployMonitoring
-  ? logAnalyticsWorkspace!.outputs.resourceId
+  ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
   : existingLogAnalyticsWorkspaceResourceId
 
 // ── Key Vaults ─────────────────────────────────────────────────────────────────
@@ -532,13 +501,13 @@ output monitoringResourceGroupName string = deployMonitoring ? monitoringResourc
 output logAnalyticsWorkspaceName string = deployMonitoring ? logAnalyticsWorkspaceName : ''
 
 @description('The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as "existingLogAnalyticsWorkspaceResourceId" to the host pool deployment and "logAnalyticsWorkspaceResourceId" to the Image Management deployment.')
-output logAnalyticsWorkspaceResourceId string = deployMonitoring ? logAnalyticsWorkspace!.outputs.resourceId : ''
+output logAnalyticsWorkspaceResourceId string = deployMonitoring ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : ''
 
 @description('The resource ID of the AVD Insights Data Collection Rule. Empty if the Log Analytics Workspace is not deployed. Pass as "existingAVDInsightsDataCollectionRuleResourceId" to the host pool deployment.')
-output avdInsightsDataCollectionRuleResourceId string = deployMonitoring ? avdInsightsDataCollectionRule!.outputs.resourceId : ''
+output avdInsightsDataCollectionRuleResourceId string = deployMonitoring ? monitoring!.outputs.avdInsightsDataCollectionRuleResourceId : ''
 
 @description('The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as "existingDataCollectionEndpointResourceId" to the host pool deployment.')
-output dataCollectionEndpointResourceId string = deployMonitoring ? dataCollectionEndpoint!.outputs.resourceId : ''
+output dataCollectionEndpointResourceId string = deployMonitoring ? monitoring!.outputs.dataCollectionEndpointResourceId : ''
 
 @description('The resource ID of the regional Azure Monitor Agent user-assigned identity. Pass as "monitoringUserAssignedIdentityResourceId" to automated host pool deployments in this subscription and region.')
 output azureMonitorAgentIdentityResourceId string = deployMonitoring && deployAzureMonitorAgentIdentity

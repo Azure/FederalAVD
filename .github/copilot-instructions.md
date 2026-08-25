@@ -209,6 +209,11 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
 
 - **Do not modify files under `deployments/`** without understanding the full template — many
   parameters have cross-solution dependencies.
+- **Prefer shared-module reuse when behavior is cross-solution.** If the same capability is
+  implemented in multiple deployment entry points, prefer composing or extending
+  `deployments/shared/modules/orchestration/*` and `deployments/shared/modules/resourceModules/*`
+  instead of duplicating orchestration under a solution folder. Keep solution-local wrappers only
+  for scope adapters, sequencing differences, or API-specific workflow constraints.
 - **`customer/` content is git-ignored** by design. Don't suggest committing files from
   `customer/parameters/` or `customer/artifacts/` to this repo.
 - **Example files in `customer-examples/`** are reference implementations — suggest copying them

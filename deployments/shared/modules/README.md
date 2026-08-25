@@ -52,11 +52,11 @@ resource operation. They should not depend on standard or automated host-pool en
 | `orchestration/avdServicePrincipalRbac.bicep` | Standard host pool, automated host pool | Assigns the Azure Virtual Desktop service principal the roles required for Start VM on Connect and dynamic scaling. |
 | `orchestration/customerManagedKeys/diskCmk.bicep` | Standard host pool, automated policy | Composes customer-managed disk-key resources. |
 | `orchestration/fslogix/fslogix.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Routes FSLogix storage to Azure Files or Azure NetApp Files and optionally registers Azure Files backup items. |
+| `orchestration/monitoring/monitoring.bicep` | Standard host pool, Shared Services | Composes Log Analytics, Data Collection Endpoint, AVD Insights DCR, and optional Azure Monitor Private Link Scope linkage. |
 | `orchestration/sessionHosts` | Standard host pool, Session Hosts add-on | Composes direct session-host VM deployment, customization, disk, and backup operations. |
 | `orchestration/keyVaults/keyVaults.bicep` | Standard host pool, Shared Services | Composes secrets and encryption Key Vaults and their dependent resources. |
 | `orchestration/naming/hostPool.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Resolves shared host-pool naming conventions. |
 | `orchestration/customerManagedKeys/storageCmk.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Composes customer-managed storage-key resources. |
-| `orchestration/avdServicePrincipalRbac.bicep` | Standard host pool, automated host pool | Assigns the Azure Virtual Desktop service principal the roles required for Start VM on Connect and dynamic scaling. |
 
 Orchestration modules may call resource modules, but resource modules must not call orchestration
 modules. This keeps the dependency direction easy to follow:
@@ -77,7 +77,6 @@ are different:
 hostpools/hostpool.bicep
   -> modules/control-plane
   -> modules/hosts
-  -> modules/monitoring
   -> shared/orchestration and shared resource modules
 
 automatedHostPools/automatedHostPool.bicep

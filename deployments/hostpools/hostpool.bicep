@@ -1326,7 +1326,7 @@ module storageCmk '../shared/modules/orchestration/customerManagedKeys/storageCm
 }
 
 // Monitoring: Log Analytics Workspace, Data Collection Endpoint, Data Collection Rules, Automation Account
-module monitoring 'modules/monitoring/monitoring.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
+module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
   name: 'Monitoring-${deploymentSuffix}'
   scope: subscription(effectiveMonitoringSubscription)
   params: {

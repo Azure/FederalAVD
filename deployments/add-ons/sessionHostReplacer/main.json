@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "16397316415863266213"
+      "templateHash": "15071181698473294844"
     }
   },
   "parameters": {
@@ -767,14 +767,14 @@
       "type": "array",
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. FSLogix local NetApp volume resource IDs."
+        "description": "Optional. FSLogix local NetApp volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order."
       }
     },
     "fslogixRemoteNetAppVolumeResourceIds": {
       "type": "array",
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. FSLogix remote NetApp volume resource IDs."
+        "description": "Optional. FSLogix remote NetApp volume resource IDs. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order."
       }
     },
     "fslogixOSSGroups": {
@@ -1079,7 +1079,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.46.1.21595",
-          "templateHash": "7124345122264875810"
+          "templateHash": "4499174880410246529"
         }
       },
       "parameters": {
@@ -1287,7 +1287,7 @@
           "type": "array",
           "defaultValue": [],
           "metadata": {
-            "description": "Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix."
+            "description": "Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order."
           }
         },
         "fslogixLocalStorageAccountResourceIds": {
@@ -1308,7 +1308,7 @@
           "type": "array",
           "defaultValue": [],
           "metadata": {
-            "description": "Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover."
+            "description": "Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order."
           }
         },
         "fslogixRemoteStorageAccountResourceIds": {
@@ -1789,7 +1789,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.46.1.21595",
-                  "templateHash": "4358597058680116365"
+                  "templateHash": "16395109154668221596"
                 }
               },
               "parameters": {
@@ -2192,7 +2192,7 @@
                         "_generator": {
                           "name": "bicep",
                           "version": "0.46.1.21595",
-                          "templateHash": "16784670199657821456"
+                          "templateHash": "2631794057619029040"
                         }
                       },
                       "parameters": {
@@ -2207,24 +2207,22 @@
                         }
                       },
                       "variables": {
-                        "volumeCountsAreValid": "[[if(and(or(empty(parameters('localNetAppVolumeResourceIds')), equals(length(parameters('localNetAppVolumeResourceIds')), length(parameters('shareNames')))), or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(parameters('shareNames'))))), true(), bool('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.'))]",
-                        "orderedLocalNetAppResourceIds": "[[if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), parameters('localNetAppVolumeResourceIds'))]",
-                        "orderedRemoteNetAppResourceIds": "[[if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), parameters('remoteNetAppVolumeResourceIds'))]"
+                        "volumeCountsAreValid": "[[if(and(or(empty(parameters('localNetAppVolumeResourceIds')), equals(length(parameters('localNetAppVolumeResourceIds')), length(parameters('shareNames')))), or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(parameters('shareNames'))))), true(), bool('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.'))]"
                       },
                       "resources": [],
                       "outputs": {
                         "localNetAppVolumeSmbServerFqdns": {
                           "type": "array",
                           "[string('copy')]": {
-                            "count": "[[length(range(0, length(variables('orderedLocalNetAppResourceIds'))))]",
-                            "input": "[[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('orderedLocalNetAppResourceIds')[range(0, length(variables('orderedLocalNetAppResourceIds')))[range(0, length(variables('orderedLocalNetAppResourceIds')))[copyIndex()]]], '/')[2], split(variables('orderedLocalNetAppResourceIds')[range(0, length(variables('orderedLocalNetAppResourceIds')))[range(0, length(variables('orderedLocalNetAppResourceIds')))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(variables('orderedLocalNetAppResourceIds')[range(0, length(variables('orderedLocalNetAppResourceIds')))[range(0, length(variables('orderedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[0], split(last(split(variables('orderedLocalNetAppResourceIds')[range(0, length(variables('orderedLocalNetAppResourceIds')))[range(0, length(variables('orderedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[1], split(last(split(variables('orderedLocalNetAppResourceIds')[range(0, length(variables('orderedLocalNetAppResourceIds')))[range(0, length(variables('orderedLocalNetAppResourceIds')))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                            "count": "[[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0)))]",
+                            "input": "[[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
                           }
                         },
                         "remoteNetAppVolumeSmbServerFqdns": {
                           "type": "array",
                           "[string('copy')]": {
-                            "count": "[[length(range(0, length(variables('orderedRemoteNetAppResourceIds'))))]",
-                            "input": "[[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('orderedRemoteNetAppResourceIds')[range(0, length(variables('orderedRemoteNetAppResourceIds')))[range(0, length(variables('orderedRemoteNetAppResourceIds')))[copyIndex()]]], '/')[2], split(variables('orderedRemoteNetAppResourceIds')[range(0, length(variables('orderedRemoteNetAppResourceIds')))[range(0, length(variables('orderedRemoteNetAppResourceIds')))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(variables('orderedRemoteNetAppResourceIds')[range(0, length(variables('orderedRemoteNetAppResourceIds')))[range(0, length(variables('orderedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[0], split(last(split(variables('orderedRemoteNetAppResourceIds')[range(0, length(variables('orderedRemoteNetAppResourceIds')))[range(0, length(variables('orderedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[1], split(last(split(variables('orderedRemoteNetAppResourceIds')[range(0, length(variables('orderedRemoteNetAppResourceIds')))[range(0, length(variables('orderedRemoteNetAppResourceIds')))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                            "count": "[[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0)))]",
+                            "input": "[[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
                           }
                         }
                       }
@@ -5037,13 +5035,22 @@
                       "type": "Microsoft.Common.DropDown",
                       "label": "Local Volume(s)",
                       "multiselect": "[[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
-                      "toolTip": "Select the existing volume from the selected NetApp capacity pool.",
+                      "toolTip": "Select one volume for Profile Container, or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
                       "defaultValue": "[[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
                       "constraints": {
                         "allowedValues": "[[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                         "required": true
                       },
                       "visible": "[[steps('userProfiles').configureSessionHosts]"
+                    },
+                    {
+                      "name": "wrongNumberOfLocalVolumes",
+                      "type": "Microsoft.Common.InfoBox",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, not(equals(length(steps('userProfiles').azureNetAppFiles.localVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
+                      "options": {
+                        "style": "Error",
+                        "text": "Select one local volume for Profile Container or two in profile-then-Office order for Profile and Office Containers."
+                      }
                     },
                     {
                       "name": "remoteVolumeHeader",
@@ -5110,12 +5117,21 @@
                       "label": "Remote Volume(s)",
                       "multiselect": "[[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
                       "defaultValue": "[[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
-                      "toolTip": "Select the office-containers and profile-containers volumes from the selected NetApp capacity pool.",
+                      "toolTip": "Optionally select one volume for Profile Container, or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
                       "constraints": {
                         "allowedValues": "[[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                         "required": false
                       },
                       "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]"
+                    },
+                    {
+                      "name": "wrongNumberOfRemoteVolumes",
+                      "type": "Microsoft.Common.InfoBox",
+                      "visible": "[[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumes)), not(equals(length(steps('userProfiles').azureNetAppFiles.remoteVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
+                      "options": {
+                        "style": "Error",
+                        "text": "Select no remote volumes, one for Profile Container, or two in profile-then-Office order for Profile and Office Containers."
+                      }
                     }
                   ]
                 },

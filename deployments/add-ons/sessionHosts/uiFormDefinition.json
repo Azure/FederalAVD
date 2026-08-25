@@ -1497,13 +1497,22 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Local Volume(s)",
                   "multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
-                  "toolTip": "Select the existing volume from the selected NetApp capacity pool.",
+                  "toolTip": "Select one volume for Profile Container, or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
                   "defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
                   "constraints": {
                     "allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                     "required": true
                   },
                   "visible": "[steps('userProfiles').configureSessionHosts]"
+                },
+                {
+                  "name": "wrongNumberOfLocalVolumes",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(length(steps('userProfiles').azureNetAppFiles.localVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Select one local volume for Profile Container or two in profile-then-Office order for Profile and Office Containers."
+                  }
                 },
                 {
                   "name": "remoteVolumeHeader",
@@ -1570,12 +1579,21 @@
                   "label": "Remote Volume(s)",
                   "multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
                   "defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
-                  "toolTip": "Select the office-containers and profile-containers volumes from the selected NetApp capacity pool.",
+                  "toolTip": "Optionally select one volume for Profile Container, or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
                   "constraints": {
                     "allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                     "required": false
                   },
                   "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]"
+                },
+                {
+                  "name": "wrongNumberOfRemoteVolumes",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumes)), not(equals(length(steps('userProfiles').azureNetAppFiles.remoteVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Select no remote volumes, one for Profile Container, or two in profile-then-Office order for Profile and Office Containers."
+                  }
                 }
               ]
             },

@@ -410,10 +410,10 @@ param fslogixLocalStorageAccountResourceIds array = []
 @description('Optional. FSLogix remote storage account resource IDs.')
 param fslogixRemoteStorageAccountResourceIds array = []
 
-@description('Optional. FSLogix local NetApp volume resource IDs.')
+@description('Optional. FSLogix local NetApp volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixLocalNetAppVolumeResourceIds array = []
 
-@description('Optional. FSLogix remote NetApp volume resource IDs.')
+@description('Optional. FSLogix remote NetApp volume resource IDs. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixRemoteNetAppVolumeResourceIds array = []
 
 @description('Optional. FSLogix OSS groups for sharding.')
