@@ -21,7 +21,7 @@ param fslogixFileShares array
 param fslogixShardOptions string
 param fslogixUserGroups array
 param hostPoolResourceId string = ''
-param kerberosEncryptionType string
+param kerberosEncryptionType string = 'AES256'
 param keyManagementStorageAccounts string
 param location string
 param logAnalyticsWorkspaceResourceId string

@@ -24,6 +24,13 @@ host-pool FSLogix experience. Encryption key management, private networking, mon
 recovery are grouped on the Zero Trust Configuration page. Resource tags and optional naming
 overrides are grouped on the final Tags and Naming page.
 
+For Cloud Cache, the form follows the host-pool workflow instead of accepting raw identifiers.
+Azure Files users select a remote region and existing storage accounts discovered from Azure.
+Azure NetApp Files users select a remote account, capacity pool, and volumes. The add-on accepts
+the selected NetApp volume resource IDs and resolves their SMB server FQDNs through the shared
+FSLogix resolver. Optional remote selections must contain one storage account per local storage
+account or one NetApp volume per FSLogix share, in profile-then-Office order.
+
 The add-on uses the host-pool naming module. The Storage Purpose selection distinguishes between
 storage associated with an existing host pool persona, storage for a future host pool persona, and
 storage shared by multiple host pools, which is the default. Persona-specific modes use the same
@@ -172,6 +179,9 @@ deployment. Multifactor authentication exclusions remain manual in either mode.
    must be delegated to `Microsoft.NetApp/volumes`, and the temporary VM must have DNS and network
    access to the domain and SMB volumes. A reused NetApp account must already have a valid Active
    Directory connection; a reused capacity pool must match the selected service level.
+- **Cloud Cache:** Remote Azure Files accounts and Azure NetApp Files volumes must be writable and
+   reachable from the consuming session hosts. Azure NetApp Files cross-region replication and
+   replica promotion remain external operational responsibilities.
 - **Diagnostics:** The selected Log Analytics workspace must already exist and accept diagnostic
    settings from the storage resources.
 - **Azure Files backup:** The selected Recovery Services vault and file-share backup policy must

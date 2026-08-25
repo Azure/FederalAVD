@@ -192,13 +192,6 @@ param encryptionUserAssignedIdentityName string = ''
 @maxValue(365)
 param softDeleteRetentionDays int = 14
 
-@description('Optional. Kerberos encryption type used by Azure Files domain authentication.')
-@allowed([
-  'AES256'
-  'RC4'
-])
-param kerberosEncryptionType string = 'AES256'
-
 @description('Optional. Resource ID of an existing Recovery Services vault used for Azure Files backup.')
 param recoveryServicesVaultResourceId string = ''
 
@@ -231,8 +224,8 @@ param smbServerLocation string = ''
 @description('Optional. Existing remote Azure Files storage account resource IDs included in the session-host configuration output.')
 param remoteStorageAccountResourceIds string[] = []
 
-@description('Optional. Existing remote Azure NetApp Files SMB server FQDNs included in the session-host configuration output.')
-param remoteNetAppServerFqdns string[] = []
+@description('Optional. Existing remote Azure NetApp Files volume resource IDs included in the session-host configuration output.')
+param remoteNetAppVolumeResourceIds string[] = []
 
 @description('Optional. Tags keyed by Azure resource type, matching the host pool deployment tag contract.')
 param tags object = {}
@@ -275,6 +268,12 @@ var effectiveNetAppCapacityPoolName = !empty(netAppCapacityPoolName) ? netAppCap
 var effectiveSmbServerLocation = !empty(smbServerLocation) ? smbServerLocation : naming.outputs.vmsLocAbbr
 var fileShareNames = fslogixShareNamesLookup[fslogixContainerType]
 var storageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
+var remoteStorageAccountConfigurationIsValid = empty(remoteStorageAccountResourceIds) || length(remoteStorageAccountResourceIds) == storageCount
+  ? true
+  : bool('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.')
+var remoteNetAppConfigurationIsValid = empty(remoteNetAppVolumeResourceIds) || length(remoteNetAppVolumeResourceIds) == length(fileShareNames)
+  ? true
+  : bool('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.')
 var shardingConfigurationIsValid = fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
   ? true
   : bool('fslogixUserGroups must contain at least one group when sharding is enabled.')
@@ -445,7 +444,6 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     fslogixUserGroups: fslogixUserGroups
     hostPoolResourceId: parentResourceId
     identitySolution: identitySolution
-    kerberosEncryptionType: kerberosEncryptionType
     keyManagementStorageAccounts: keyManagementStorage
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
@@ -474,6 +472,14 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
   dependsOn: [storageResourceGroup]
 }
 
+module remoteNetAppVolumeFqdns '../../shared/modules/orchestration/fslogix/modules/getNetAppVolumeSmbServerFqdns.bicep' = if (!empty(remoteNetAppVolumeResourceIds)) {
+  params: {
+    localNetAppVolumeResourceIds: []
+    remoteNetAppVolumeResourceIds: remoteNetAppConfigurationIsValid ? remoteNetAppVolumeResourceIds : []
+    shareNames: fileShareNames
+  }
+}
+
 module cleanupDeploymentHelper '../../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (manageDeploymentVirtualMachine) {
   params: {
     location: location
@@ -495,9 +501,9 @@ output fslogixConfiguration object = {
   containerType: fslogixContainerType
   fileShareNames: fileShareNames
   localStorageAccountResourceIds: fslogix.outputs.storageAccountResourceIds
-  remoteStorageAccountResourceIds: remoteStorageAccountResourceIds
+  remoteStorageAccountResourceIds: remoteStorageAccountConfigurationIsValid ? remoteStorageAccountResourceIds : []
   localNetAppServerFqdns: fslogix.outputs.netAppServerFqdns
-  remoteNetAppServerFqdns: remoteNetAppServerFqdns
+  remoteNetAppServerFqdns: empty(remoteNetAppVolumeResourceIds) ? [] : remoteNetAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
   objectSpecificSettingsGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
   profileSizeInMBs: profileSizeInMBs
 }

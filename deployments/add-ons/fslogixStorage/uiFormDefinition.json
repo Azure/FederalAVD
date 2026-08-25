@@ -89,6 +89,18 @@
               }
             },
             {
+              "name": "locationsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('scope').resourceScope.subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/locations?api-version=2022-12-01')]",
+                "transforms": {
+                  "list": "sort_by(value, &displayName)[?name!='global' && !contains(displayName, '(Stage)')] | [*].{label: displayName, value: name}"
+                }
+              }
+            },
+            {
               "name": "storageResourceGroup",
               "type": "Microsoft.Common.DropDown",
               "label": "Existing Storage Resource Group",
@@ -657,14 +669,6 @@
               "constraints": { "required": true, "regex": "^([0-9]|[1-9][0-9])$", "validationMessage": "Enter a number from 0 through 99." }
             },
             {
-              "name": "kerberosEncryptionType",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Kerberos Encryption Type",
-              "defaultValue": "AES256",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))))]",
-              "constraints": { "allowedValues": [ { "label": "AES256", "value": "AES256" }, { "label": "RC4", "value": "RC4" } ] }
-            },
-            {
               "name": "netAppDeploymentMode",
               "type": "Microsoft.Common.OptionsGroup",
               "label": "Azure NetApp Files Deployment Mode",
@@ -691,7 +695,7 @@
               "condition": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(equals(steps('storage').netAppDeploymentMode, 'CreateAll')), not(empty(steps('scope').storageResourceGroup)))]",
               "request": {
                 "method": "GET",
-                "path": "[concat(steps('scope').resourceScope.subscription.id, '/resourceGroups/', steps('scope').storageResourceGroup, '/providers/Microsoft.NetApp/netAppAccounts?api-version=2023-07-01')]"
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/resourceGroups/', steps('scope').storageResourceGroup, '/providers/Microsoft.NetApp/netAppAccounts?api-version=2023-11-01')]"
               }
             },
             {
@@ -762,28 +766,119 @@
               }
             },
             {
-              "name": "remoteStorageAccountResourceIds",
-              "type": "Microsoft.Common.EditableGrid",
-              "label": "Existing Remote Azure Files Storage Account Resource IDs",
-              "ariaLabel": "Existing Remote Azure Files Storage Account Resource IDs",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'))]",
-              "constraints": {
-                "width": "Full",
-                "rows": { "count": { "min": 0, "max": 20 } },
-                "columns": [ { "id": "resourceId", "header": "Resource ID", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } } ]
+              "name": "remoteStorageHeader",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[contains(steps('storage').containerType, 'CloudCache')]",
+              "options": { "text": "Remote Cloud Cache Storage" }
+            },
+            {
+              "name": "remoteStorageInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[contains(steps('storage').containerType, 'CloudCache')]",
+              "options": { "text": "Optionally select storage in a different region for FSLogix Cloud Cache resiliency. When selected, provide one remote storage account per local Azure Files account or one remote NetApp volume per FSLogix share." }
+            },
+            {
+              "name": "storageAccountsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]",
+                "transforms": { "list": "sort_by(value, &name)|[*].{name:name, id:id, location:location}" }
               }
             },
             {
-              "name": "remoteNetAppServerFqdns",
-              "type": "Microsoft.Common.EditableGrid",
-              "label": "Existing Remote Azure NetApp Files SMB Server FQDNs",
-              "ariaLabel": "Existing Remote Azure NetApp Files SMB Server FQDNs",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache'))]",
+              "name": "remoteLocation",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Remote Location",
+              "defaultValue": "",
               "constraints": {
-                "width": "Full",
-                "rows": { "count": { "min": 0, "max": 20 } },
-                "columns": [ { "id": "fqdn", "header": "SMB Server FQDN", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } } ]
+                "allowedValues": "[map(filter(steps('scope').locationsApi.transformed.list, (loc) => not(equals(loc.value, steps('scope').resourceScope.location.name))), (loc) => parse(concat('{\"label\":\"', loc.label, '\",\"value\":\"', loc.value, '\"}')))]",
+                "required": false
+              },
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'))]"
+            },
+            {
+              "name": "remoteStorageAccounts",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Existing Remote Storage Accounts",
+              "multiLine": true,
+              "multiselect": true,
+              "defaultValue": "[parse('[]')]",
+              "constraints": {
+                "allowedValues": "[map(filter(steps('storage').storageAccountsApi.transformed.list, (account) => equals(account.location, steps('storage').remoteLocation)), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\",\"value\":\"', account.id, '\"}')))]",
+                "required": false
+              },
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'))]"
+            },
+            {
+              "name": "wrongRemoteStorageAccountCount",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), not(equals(length(steps('storage').remoteStorageAccounts), 0)), not(equals(length(steps('storage').remoteStorageAccounts), if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(steps('storage').shardOptions, 'None')), 1, length(steps('storage').userGroupPickerBlade.transformed.groups)))))]",
+              "options": { "style": "Error", "text": "Select one remote storage account for each local FSLogix storage account." }
+            },
+            {
+              "name": "remoteNetAppAccountsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache'))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.NetApp/netAppAccounts?api-version=2023-11-01')]"
               }
+            },
+            {
+              "name": "remoteNetAppAccount",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Remote NetApp Account",
+              "multiLine": true,
+              "defaultValue": "",
+              "constraints": {
+                "allowedValues": "[map(filter(steps('storage').remoteNetAppAccountsApi.value, (account) => not(equals(account.location, steps('scope').resourceScope.location.name))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Location: ', account.location, ', Resource Group: ', first(skip(split(account.id, '/'), 4)), '\",\"value\":\"', account.id, '\"}')))]",
+                "required": false
+              },
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache'))]"
+            },
+            {
+              "name": "remoteNetAppCapacityPoolsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('storage').remoteNetAppAccount))]",
+              "request": { "method": "GET", "path": "[concat(steps('storage').remoteNetAppAccount, '/capacityPools?api-version=2023-11-01')]" }
+            },
+            {
+              "name": "remoteNetAppCapacityPool",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Remote Capacity Pool",
+              "defaultValue": "",
+              "constraints": {
+                "allowedValues": "[map(steps('storage').remoteNetAppCapacityPoolsApi.value, (pool) => parse(concat('{\"label\":\"', last(split(pool.name, '/')), '\",\"value\":\"', pool.id, '\"}')))]",
+                "required": false
+              },
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache'))]"
+            },
+            {
+              "name": "remoteNetAppVolumesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('storage').remoteNetAppCapacityPool))]",
+              "request": { "method": "GET", "path": "[concat(steps('storage').remoteNetAppCapacityPool, '/volumes?api-version=2023-11-01')]" }
+            },
+            {
+              "name": "remoteNetAppVolumes",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Remote Volume(s)",
+              "multiselect": true,
+              "defaultValue": "[parse('[]')]",
+              "toolTip": "Select profile-containers first and office-containers second when both container types are used.",
+              "constraints": {
+                "allowedValues": "[map(steps('storage').remoteNetAppVolumesApi.value, (volume) => parse(concat('{\"label\":\"', last(split(volume.name, '/')), '\",\"value\":\"', volume.id, '\"}')))]",
+                "required": false
+              },
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache'))]"
+            },
+            {
+              "name": "wrongRemoteNetAppVolumeCount",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache'), not(equals(length(steps('storage').remoteNetAppVolumes), 0)), not(equals(length(steps('storage').remoteNetAppVolumes), if(contains(steps('storage').containerType, 'OfficeContainer'), 2, 1))))]",
+              "options": { "style": "Error", "text": "Select one remote NetApp volume per FSLogix share: profile first, then Office when applicable." }
             }
           ]
         },
@@ -1362,7 +1457,6 @@
         "existingEncryptionKeyVaultResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), steps('zeroTrust').keyManagement.existingEncryptionKeyVault.id, '')]",
         "keyExpirationInDays": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), steps('zeroTrust').keyManagement.keyExpirationInDays, 180)]",
         "encryptionUserAssignedIdentityName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), coalesce(steps('tagsAndNaming').naming.encryptionUserAssignedIdentityNameOverride, ''), '')]",
-        "kerberosEncryptionType": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))), steps('storage').kerberosEncryptionType, 'AES256')]",
         "recoveryServicesVaultResourceId": "[if(empty(steps('zeroTrust').operations.recoveryServicesVault), '', steps('zeroTrust').operations.recoveryServicesVault.id)]",
         "fileSharePolicyName": "[steps('zeroTrust').operations.fileSharePolicyName]",
         "existingSharedActiveDirectoryConnection": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
@@ -1371,8 +1465,8 @@
         "netAppCapacityPoolName": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'ExistingAccountAndPool')), steps('storage').existingNetAppCapacityPoolName, if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles')), coalesce(steps('tagsAndNaming').naming.netAppCapacityPoolNameOverride, ''), ''))]",
         "netAppVolumesSubnetResourceId": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('storage').netAppVolumesSubnet.id, '')]",
         "smbServerLocation": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'CreateAll')), coalesce(steps('tagsAndNaming').naming.smbServerLocationOverride, ''), '')]",
-        "remoteStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache')), map(steps('storage').remoteStorageAccountResourceIds, (item) => item.resourceId), parse('[]'))]",
-        "remoteNetAppServerFqdns": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache')), map(steps('storage').remoteNetAppServerFqdns, (item) => item.fqdn), parse('[]'))]",
+        "remoteStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache')), steps('storage').remoteStorageAccounts, parse('[]'))]",
+        "remoteNetAppVolumeResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache')), steps('storage').remoteNetAppVolumes, parse('[]'))]",
         "tags": "[steps('tagsAndNaming').tagsSection.tags]"
       },
       "kind": "Subscription",

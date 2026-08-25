@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "9032460940143570448"
+      "templateHash": "7950756384530142002"
     }
   },
   "definitions": {
@@ -407,17 +407,6 @@
         "description": "Optional. Number of days to retain deleted Azure file shares."
       }
     },
-    "kerberosEncryptionType": {
-      "type": "string",
-      "defaultValue": "AES256",
-      "allowedValues": [
-        "AES256",
-        "RC4"
-      ],
-      "metadata": {
-        "description": "Optional. Kerberos encryption type used by Azure Files domain authentication."
-      }
-    },
     "recoveryServicesVaultResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -489,14 +478,14 @@
         "description": "Optional. Existing remote Azure Files storage account resource IDs included in the session-host configuration output."
       }
     },
-    "remoteNetAppServerFqdns": {
+    "remoteNetAppVolumeResourceIds": {
       "type": "array",
       "items": {
         "type": "string"
       },
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. Existing remote Azure NetApp Files SMB server FQDNs included in the session-host configuration output."
+        "description": "Optional. Existing remote Azure NetApp Files volume resource IDs included in the session-host configuration output."
       }
     },
     "tags": {
@@ -528,6 +517,8 @@
     "storageSku": "[split(parameters('fslogixStorageService'), ' ')[1]]",
     "fileShareNames": "[variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')]]",
     "storageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(parameters('fslogixUserGroups')))]",
+    "remoteStorageAccountConfigurationIsValid": "[if(or(empty(parameters('remoteStorageAccountResourceIds')), equals(length(parameters('remoteStorageAccountResourceIds')), variables('storageCount'))), true(), bool('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.'))]",
+    "remoteNetAppConfigurationIsValid": "[if(or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(variables('fileShareNames')))), true(), bool('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.'))]",
     "shardingConfigurationIsValid": "[if(or(equals(parameters('fslogixShardOptions'), 'None'), not(empty(parameters('fslogixUserGroups')))), true(), bool('fslogixUserGroups must contain at least one group when sharding is enabled.'))]",
     "storageIdentityConfigurationIsValid": "[if(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), contains(parameters('identitySolution'), 'DomainServices')), true(), bool('Azure NetApp Files requires ActiveDirectoryDomainServices or EntraDomainServices.'))]",
     "netAppResourceGroupConfigurationIsValid": "[if(or(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), equals(parameters('netAppDeploymentMode'), 'CreateAll')), not(parameters('createStorageResourceGroup'))), true(), bool('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.'))]",
@@ -3840,9 +3831,6 @@
           "identitySolution": {
             "value": "[parameters('identitySolution')]"
           },
-          "kerberosEncryptionType": {
-            "value": "[parameters('kerberosEncryptionType')]"
-          },
           "keyManagementStorageAccounts": {
             "value": "[parameters('keyManagementStorage')]"
           },
@@ -3907,7 +3895,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "624752938718730437"
+              "templateHash": "6787249968010335177"
             }
           },
           "parameters": {
@@ -3972,7 +3960,8 @@
               "defaultValue": ""
             },
             "kerberosEncryptionType": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": "AES256"
             },
             "keyManagementStorageAccounts": {
               "type": "string"
@@ -7397,6 +7386,70 @@
         "storageResourceGroup"
       ]
     },
+    "remoteNetAppVolumeFqdns": {
+      "condition": "[not(empty(parameters('remoteNetAppVolumeResourceIds')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('remoteNetAppVolumeFqdns-{0}', uniqueString('remoteNetAppVolumeFqdns', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "localNetAppVolumeResourceIds": {
+            "value": []
+          },
+          "remoteNetAppVolumeResourceIds": "[if(variables('remoteNetAppConfigurationIsValid'), createObject('value', parameters('remoteNetAppVolumeResourceIds')), createObject('value', createArray()))]",
+          "shareNames": {
+            "value": "[variables('fileShareNames')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "2631794057619029040"
+            }
+          },
+          "parameters": {
+            "localNetAppVolumeResourceIds": {
+              "type": "array"
+            },
+            "remoteNetAppVolumeResourceIds": {
+              "type": "array"
+            },
+            "shareNames": {
+              "type": "array"
+            }
+          },
+          "variables": {
+            "volumeCountsAreValid": "[if(and(or(empty(parameters('localNetAppVolumeResourceIds')), equals(length(parameters('localNetAppVolumeResourceIds')), length(parameters('shareNames')))), or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(parameters('shareNames'))))), true(), bool('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.'))]"
+          },
+          "resources": [],
+          "outputs": {
+            "localNetAppVolumeSmbServerFqdns": {
+              "type": "array",
+              "copy": {
+                "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0)))]",
+                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+              }
+            },
+            "remoteNetAppVolumeSmbServerFqdns": {
+              "type": "array",
+              "copy": {
+                "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0)))]",
+                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+              }
+            }
+          }
+        }
+      }
+    },
     "cleanupDeploymentHelper": {
       "condition": "[parameters('manageDeploymentVirtualMachine')]",
       "type": "Microsoft.Resources/deployments",
@@ -8077,9 +8130,9 @@
         "containerType": "[parameters('fslogixContainerType')]",
         "fileShareNames": "[variables('fileShareNames')]",
         "localStorageAccountResourceIds": "[reference('fslogix').outputs.storageAccountResourceIds.value]",
-        "remoteStorageAccountResourceIds": "[parameters('remoteStorageAccountResourceIds')]",
+        "remoteStorageAccountResourceIds": "[if(variables('remoteStorageAccountConfigurationIsValid'), parameters('remoteStorageAccountResourceIds'), createArray())]",
         "localNetAppServerFqdns": "[reference('fslogix').outputs.netAppServerFqdns.value]",
-        "remoteNetAppServerFqdns": "[parameters('remoteNetAppServerFqdns')]",
+        "remoteNetAppServerFqdns": "[if(empty(parameters('remoteNetAppVolumeResourceIds')), createArray(), reference('remoteNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value)]",
         "objectSpecificSettingsGroups": "[if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name)), createArray())]",
         "profileSizeInMBs": "[parameters('profileSizeInMBs')]"
       }
