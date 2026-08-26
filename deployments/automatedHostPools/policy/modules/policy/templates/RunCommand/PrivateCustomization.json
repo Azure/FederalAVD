@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "11681933315866979578"
+      "templateHash": "64479593129096039"
     }
   },
   "parameters": {
@@ -51,7 +51,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "8270329900586373089"
+              "templateHash": "3332999267861803868"
             }
           },
           "parameters": {
@@ -64,6 +64,9 @@
             "location": {
               "type": "string"
             }
+          },
+          "variables": {
+            "identityType": "SystemAssigned, UserAssigned"
           },
           "resources": [
             {
@@ -119,7 +122,9 @@
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "identityType": "[if(contains(reference(resourceId('Microsoft.Resources/deployments', format('get-{0}', parameters('vmName'))), '2025-04-01').outputs.identityType.value, 'SystemAssigned'), createObject('value', 'SystemAssigned, UserAssigned'), createObject('value', 'UserAssigned'))]",
+                  "identityType": {
+                    "value": "[variables('identityType')]"
+                  },
                   "userAssignedIdentities": {
                     "value": "[union(reference(resourceId('Microsoft.Resources/deployments', format('get-{0}', parameters('vmName'))), '2025-04-01').outputs.userAssignedIdentities.value, createObject(format('{0}', parameters('userAssignedIdentityResourceId')), createObject()))]"
                   },

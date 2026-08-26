@@ -210,9 +210,9 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "Session Desktop Friendly Name",
                   "defaultValue": "",
-                  "toolTip": "Optionally provide the default Session Desktop name displayed to users in their AVD client.",
+                  "toolTip": "Provide the default Session Desktop name displayed to users in their AVD client.",
                   "constraints": {
-                    "required": false,
+                    "required": true,
                     "validations": [
                       {
                         "isValid": "[lessOrEquals(length(steps('controlPlane').workspace.desktopFriendlyName), 20)]",
@@ -499,8 +499,8 @@
                       "advancedQueryOptions": {
                         "suggestedObjectsOptions": {}
                       },
-                      "selectionMaximum": 20,
-                      "selectionMinimum": 0,
+                      "selectionMaximum": 3,
+                      "selectionMinimum": 1,
                       "bladeTitle": "Select Groups",
                       "searchBoxLabel": "Search for a group",
                       "searchBoxPlaceHolderText": "Enter a group name",
@@ -523,9 +523,9 @@
                   "keyPath": "name",
                   "descriptionKeyPath": "id",
                   "value": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
-                  "barColor": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.groups), '#0078D4', '#7FBA00')]",
+                  "barColor": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.groups), '#FF0000', '#7FBA00')]",
                   "constraints": {
-                    "required": false
+                    "required": true
                   },
                   "link": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.groups), 'Select groups', 'Update selected groups')]"
                 }
@@ -1052,6 +1052,30 @@
                   }
                 },
                 {
+                  "name": "marketplaceVersionsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('hosts').image.source, 'marketplace'), not(empty(steps('hosts').image.publisher)), not(empty(steps('hosts').image.offer)), not(empty(steps('hosts').image.sku)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('controlPlane').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').location.name, '/publishers/', steps('hosts').image.publisher, '/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus/', steps('hosts').image.sku, '/versions?api-version=2024-03-01')]",
+                    "transforms": {
+                      "list": "sort_by([*].{label:name, value:name}, &label)|reverse(@)"
+                    }
+                  }
+                },
+                {
+                  "name": "marketplaceVersion",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Version",
+                  "filter": true,
+                  "defaultValue": "[first(steps('hosts').image.marketplaceVersionsApi.transformed.list).label]",
+                  "visible": "[equals(steps('hosts').image.source, 'marketplace')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[steps('hosts').image.marketplaceVersionsApi.transformed.list]"
+                  }
+                },
+                {
                   "name": "gallerySubscription",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Compute Gallery Subscription",
@@ -1521,17 +1545,12 @@
               "type": "Microsoft.Common.DropDown",
               "multiLine": true,
               "label": "FSLogix Authentication Method",
-              "defaultValue": "Storage Account Keys",
+              "defaultValue": "Microsoft Entra Kerberos (cloud-only identities)",
               "toolTip": "The Azure Files identity source used by FSLogix profile containers. This is independent of the VM join type for Microsoft Entra joined session hosts.",
               "visible": "[and(equals(steps('hosts').identity.machineIdentity, 'EntraID'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage))]",
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  {
-                    "label": "Storage Account Keys",
-                    "value": "EntraId",
-                    "description": "Azure Files access uses the storage account key. No Kerberos identity configuration is required, but NTFS ACL-based profile sharding is unavailable."
-                  },
                   {
                     "label": "Microsoft Entra Kerberos (cloud-only identities)",
                     "value": "EntraKerberos-CloudOnly",
@@ -1650,7 +1669,7 @@
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Sharding Options",
                   "defaultValue": "No Sharding",
-                  "visible": "[and(contains(steps('profiles').storage.service, 'AzureFiles'), not(equals(steps('profiles').userIdentity, 'EntraId')))]",
+                  "visible": "[contains(steps('profiles').storage.service, 'AzureFiles')]",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
@@ -1822,7 +1841,7 @@
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Restrict NTFS access to selected groups",
                   "defaultValue": false,
-                  "visible": "[and(not(equals(steps('profiles').userIdentity, 'EntraId')), steps('profiles').deployStorage)]"
+                  "visible": "[steps('profiles').deployStorage]"
                 },
                 {
                   "name": "userGroupPickerBlade",
@@ -1853,7 +1872,7 @@
                   "keyPath": "name",
                   "descriptionKeyPath": "id",
                   "value": "[steps('profiles').access.userGroupPickerBlade.transformed.groups]",
-                  "visible": "[and(not(equals(steps('profiles').userIdentity, 'EntraId')), or(steps('profiles').access.restrictUserAccess, not(equals(steps('profiles').storage.shardOptions, 'None'))))]",
+                  "visible": "[or(steps('profiles').access.restrictUserAccess, not(equals(steps('profiles').storage.shardOptions, 'None')))]",
                   "constraints": {
                     "required": true
                   },
@@ -1897,13 +1916,13 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'))]",
                   "options": {
-                    "text": "[if(or(equals(steps('profiles').userIdentity, 'EntraId'), equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 'Select exactly one storage account from the same region as the session hosts.', concat('Select exactly ', string(length(steps('profiles').access.userGroupPickerBlade.transformed.groups)), ' storage account(s), one for each selected FSLogix user group.'))]"
+                    "text": "[if(or(equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 'Select exactly one storage account from the same region as the session hosts.', concat('Select exactly ', string(length(steps('profiles').access.userGroupPickerBlade.transformed.groups)), ' storage account(s), one for each selected FSLogix user group.'))]"
                   }
                 },
                 {
                   "name": "wrongNumberOfLocalStorageAccounts",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), not(equals(length(steps('profiles').existingStorage.localStorageAccounts), if(or(equals(steps('profiles').userIdentity, 'EntraId'), equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
+                  "visible": "[and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), not(equals(length(steps('profiles').existingStorage.localStorageAccounts), if(or(equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
                   "options": {
                     "style": "Error",
                     "text": "You have not selected the correct number of storage accounts. You must select the correct number before continuing or the session hosts will not be configured properly."
@@ -1925,7 +1944,7 @@
                 {
                   "name": "wrongNumberOfRemoteStorageAccounts",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'CloudCache'), not(empty(steps('profiles').existingStorage.remoteStorageAccounts)), not(equals(length(steps('profiles').existingStorage.remoteStorageAccounts), if(or(equals(steps('profiles').userIdentity, 'EntraId'), equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
+                  "visible": "[and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'CloudCache'), not(empty(steps('profiles').existingStorage.remoteStorageAccounts)), not(equals(length(steps('profiles').existingStorage.remoteStorageAccounts), if(or(equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
                   "options": {
                     "style": "Error",
                     "text": "Select either no remote storage accounts or the same number required for local storage."
@@ -2625,28 +2644,6 @@
                   }
                 },
                 {
-                  "name": "useExistingIdentity",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Use an Existing Azure Monitor Agent Identity",
-                  "defaultValue": false,
-                  "visible": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",
-                  "toolTip": "Select the regional identity output by AVD Shared Services. When cleared, this deployment creates a host-pool-specific AMA identity in the session-host resource group."
-                },
-                {
-                  "name": "userAssignedIdentity",
-                  "type": "Microsoft.Solutions.ResourceSelector",
-                  "label": "Azure Monitor Agent User Assigned Identity",
-                  "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
-                  "visible": "[and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingIdentity)]",
-                  "scope": {
-                    "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
-                    "location": "[steps('hosts').location.name]"
-                  },
-                  "constraints": {
-                    "required": true
-                  }
-                },
-                {
                   "name": "logAnalyticsWorkspace",
                   "type": "Microsoft.Solutions.ResourceSelector",
                   "label": "Log Analytics Workspace",
@@ -3153,7 +3150,7 @@
         "scalingPlanTimeZone": "[steps('hosts').hostDetails.timeZone]",
         "dynamicScalingSchedules": "[if(steps('controlPlane').dynamicScaling.deploy, steps('controlPlane').dynamicScaling.schedules, parse('[]'))]",
         "appGroupSecurityGroupIds": "[if(empty(steps('controlPlane').assignments.groupPickerBlade.transformed.ids), parse('[]'), steps('controlPlane').assignments.groupPickerBlade.transformed.ids)]",
-        "identitySolution": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.machineIdentity, if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').userIdentity, 'EntraId'))]",
+        "identitySolution": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.machineIdentity, if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').userIdentity, 'EntraKerberos-CloudOnly'))]",
         "domainName": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.domainName, if(and(steps('profiles').deployStorage, equals(steps('profiles').userIdentity, 'EntraKerberos-Hybrid')), steps('profiles').storage.userDomainName, ''))]",
         "organizationalUnitPath": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.organizationalUnitPath, '')]",
         "intuneEnrollment": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), false, steps('hosts').identity.intuneEnrollment)]",
@@ -3174,7 +3171,7 @@
         "imagePublisher": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.publisher, '')]",
         "imageOffer": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.offer, '')]",
         "imageSku": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.sku, '')]",
-        "imageVersion": "latest",
+        "imageVersion": "[if(equals(steps('hosts').image.source, 'marketplace'), steps('hosts').image.marketplaceVersion, '')]",
         "customImageResourceId": "[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.imageVersionDetailsApi.transformed.latestResourceId, '')]",
         "securityType": "[steps('hosts').security.securityType]",
         "secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
@@ -3195,9 +3192,9 @@
         "fslogixStorageIndex": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.storageIndex, 1)]",
         "existingFilesBackupVaultResourceId": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').storage.registerBackup), steps('profiles').storage.recoveryServicesVault.id, '')]",
         "existingFilesBackupPolicyName": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').storage.registerBackup), steps('profiles').storage.filesBackupPolicyName, 'filesharepolicy')]",
-        "fslogixShardOptions": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), not(equals(steps('profiles').userIdentity, 'EntraId'))), steps('profiles').storage.shardOptions, 'None')]",
+        "fslogixShardOptions": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.shardOptions, 'None')]",
         "fslogixAdminGroups": "[if(and(steps('profiles').deployStorage, steps('profiles').access.configureAdminAccess, not(empty(steps('profiles').access.adminGroupPickerBlade.transformed.groups))), steps('profiles').access.adminGroupPickerBlade.transformed.groups, parse('[]'))]",
-        "fslogixUserGroups": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), not(equals(steps('profiles').userIdentity, 'EntraId')), or(steps('profiles').access.restrictUserAccess, not(equals(steps('profiles').storage.shardOptions, 'None'))), not(empty(steps('profiles').access.userGroupPickerBlade.transformed.groups))), steps('profiles').access.userGroupPickerBlade.transformed.groups, parse('[]'))]",
+        "fslogixUserGroups": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), or(steps('profiles').access.restrictUserAccess, not(equals(steps('profiles').storage.shardOptions, 'None'))), not(empty(steps('profiles').access.userGroupPickerBlade.transformed.groups))), steps('profiles').access.userGroupPickerBlade.transformed.groups, parse('[]'))]",
         "fslogixExistingLocalStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.localStorageAccounts, parse('[]'))]",
         "fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.containerType, 'CloudCache'), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.remoteStorageAccounts, parse('[]'))]",
         "fslogixExistingLocalNetAppVolumeResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureNetAppFiles')), steps('profiles').existingStorage.localNetAppVolumes, parse('[]'))]",
@@ -3213,7 +3210,6 @@
         "deploymentVirtualMachineSize": "[if(or(steps('profiles').deployStorage, not(empty(steps('controlPlane').workspace.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_D2ads_v5')]",
         "fslogixPermittedIPs": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
         "enableMonitoring": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",
-        "monitoringUserAssignedIdentityResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingIdentity), steps('operationsAndMonitoring').monitoring.userAssignedIdentity.id, '')]",
         "logAnalyticsWorkspaceResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, not(empty(steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace))), steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace.id, '')]",
         "dataCollectionRuleResourceId": "[if(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.dataCollectionRule, '')]",
         "dataCollectionEndpointResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, not(empty(steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint))), steps('operationsAndMonitoring').monitoring.dataCollectionEndpoint, '')]",

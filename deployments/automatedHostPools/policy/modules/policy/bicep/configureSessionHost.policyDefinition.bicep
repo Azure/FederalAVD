@@ -57,12 +57,11 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           'EntraDomainServices'
           'EntraKerberos-CloudOnly'
           'EntraKerberos-Hybrid'
-          'EntraId'
         ]
         defaultValue: 'EntraKerberos-CloudOnly'
         metadata: {
           displayName: 'Identity solution'
-          description: 'SMB authentication mode. EntraId uses storage keys; all other modes use identity-based authentication.'
+          description: 'Identity-based SMB authentication mode.'
         }
       }
       fslogixStorageService: {

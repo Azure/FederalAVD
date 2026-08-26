@@ -69,7 +69,6 @@ param vmAdministratorPasswordSecretUri string = ''
   'EntraDomainServices'
   'EntraKerberos-Hybrid'
   'EntraKerberos-CloudOnly'
-  'EntraId'
 ])
 @description('Required. Identity model used by the automated session hosts and FSLogix.')
 param identitySolution string
@@ -109,8 +108,8 @@ param imageOffer string = 'office-365'
 @description('Optional. Marketplace image SKU. Ignored when customImageResourceId is supplied.')
 param imageSku string = 'win11-25h2-avd-m365'
 
-@description('Optional. Exact marketplace image version.')
-param imageVersion string = 'latest'
+@description('Optional. Exact marketplace image version. Session Host Configuration does not support the latest sentinel.')
+param imageVersion string = '26200.9168.260811'
 
 @description('Optional. Resource ID of a Compute Gallery image version. When supplied, the marketplace image parameters are ignored.')
 param customImageResourceId string = ''
@@ -251,8 +250,10 @@ param globalFeedPrivateDnsZoneResourceId string = ''
 @description('Optional. Friendly name shown for a newly created workspace.')
 param workspaceFriendlyName string = ''
 
-@description('Optional. Friendly name shown for the desktop application group.')
-param desktopFriendlyName string = ''
+@minLength(1)
+@maxLength(20)
+@description('Required. Friendly name shown for the desktop application group.')
+param desktopFriendlyName string
 
 @description('Optional. Entra group object IDs assigned access to the desktop application group.')
 param appGroupSecurityGroupIds string[] = []
@@ -269,7 +270,7 @@ param dataCollectionEndpointResourceId string = ''
 @description('Optional. Deploy Azure Monitor Agent policy assignments for automated session hosts.')
 param enableMonitoring bool = false
 
-@description('Optional. Resource ID of an existing user-assigned identity in the session-host subscription for Azure Monitor Agent authentication. When empty, a host-pool-specific identity is created in the session-host resource group.')
+@description('Deprecated. Azure Monitor Agent now uses each session host system-assigned identity. Leave empty.')
 @metadata({
   strongType: 'Microsoft.ManagedIdentity/userAssignedIdentities'
 })
@@ -499,6 +500,12 @@ var domainConfigurationIsValid = !domainJoinRequired || !empty(domainName)
 var monitoringConfigurationIsValid = !enableMonitoring || !empty(dataCollectionRuleResourceId)
   ? true
   : bool('dataCollectionRuleResourceId is required when enableMonitoring is true.')
+var monitoringIdentityConfigurationIsValid = empty(monitoringUserAssignedIdentityResourceId)
+  ? true
+  : bool('monitoringUserAssignedIdentityResourceId is no longer supported. Azure Monitor Agent uses each session host system-assigned identity.')
+var marketplaceImageConfigurationIsValid = !empty(customImageResourceId) || (!empty(imageVersion) && toLower(imageVersion) != 'latest')
+  ? true
+  : bool('Marketplace automated host pools require a concrete imageVersion. The latest sentinel is not supported by Session Host Configuration.')
 var avdServicePrincipalIsValid = !(deployDynamicScalingPlan || startVMOnConnect) || !empty(avdServicePrincipalObjectId)
   ? true
   : bool('avdServicePrincipalObjectId is required when dynamic scaling or Start VM on Connect is enabled.')
@@ -558,22 +565,16 @@ var fslogixShareNamesLookup = {
   ProfileOfficeContainer: ['profile-containers', 'office-containers']
 }
 var fslogixFileShareNames = fslogixShareNamesLookup[fslogixContainerType]
-var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
-var effectiveFslogixExistingLocalStorageAccountResourceIds = identitySolution == 'EntraId'
-  ? take(fslogixExistingLocalStorageAccountResourceIds, 1)
-  : fslogixExistingLocalStorageAccountResourceIds
-var effectiveFslogixExistingRemoteStorageAccountResourceIds = identitySolution == 'EntraId'
-  ? take(fslogixExistingRemoteStorageAccountResourceIds, 1)
-  : fslogixExistingRemoteStorageAccountResourceIds
+var fslogixStorageCount = fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 var deployFslogixStorageCmk = deployFSLogixStorage && fslogixStorageSolution == 'AzureFiles' && contains(fslogixKeyManagementStorage, 'CustomerManaged')
-var fslogixShardingConfigurationIsValid = (!deployFSLogixStorage && !fslogixConfigureSessionHosts) || identitySolution == 'EntraId' || fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
+var fslogixShardingConfigurationIsValid = (!deployFSLogixStorage && !fslogixConfigureSessionHosts) || fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
   ? true
   : bool('fslogixUserGroups must contain at least one group when sharding is enabled.')
-var fslogixExistingLocalStorageConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || fslogixStorageSolution != 'AzureFiles' || length(effectiveFslogixExistingLocalStorageAccountResourceIds) == fslogixStorageCount
-var fslogixExistingRemoteStorageConfigurationIsValid = !fslogixConfigureSessionHosts || fslogixStorageSolution != 'AzureFiles' || empty(effectiveFslogixExistingRemoteStorageAccountResourceIds) || length(effectiveFslogixExistingRemoteStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingLocalStorageConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || fslogixStorageSolution != 'AzureFiles' || length(fslogixExistingLocalStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingRemoteStorageConfigurationIsValid = !fslogixConfigureSessionHosts || fslogixStorageSolution != 'AzureFiles' || empty(fslogixExistingRemoteStorageAccountResourceIds) || length(fslogixExistingRemoteStorageAccountResourceIds) == fslogixStorageCount
 var fslogixExistingStorageConfigurationIsValid = fslogixExistingLocalStorageConfigurationIsValid && fslogixExistingRemoteStorageConfigurationIsValid
   ? true
-  : bool('Existing FSLogix Azure Files storage must include one local account, and when supplied one remote account, per shard. Storage Account Keys use one account per location.')
+  : bool('Existing FSLogix Azure Files storage must include one local account, and when supplied one remote account, per shard.')
 var fslogixExistingLocalNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || fslogixStorageSolution != 'AzureNetAppFiles' || length(fslogixExistingLocalNetAppVolumeResourceIds) == length(fslogixFileShareNames)
 var fslogixExistingRemoteNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || fslogixStorageSolution != 'AzureNetAppFiles' || empty(fslogixExistingRemoteNetAppVolumeResourceIds) || length(fslogixExistingRemoteNetAppVolumeResourceIds) == length(fslogixFileShareNames)
 var fslogixExistingNetAppConfigurationIsValid = fslogixExistingLocalNetAppConfigurationIsValid && fslogixExistingRemoteNetAppConfigurationIsValid
@@ -805,7 +806,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
               publisher: imagePublisher
               offer: imageOffer
               sku: imageSku
-              exactVersion: imageVersion
+              exactVersion: marketplaceImageConfigurationIsValid ? imageVersion : imageVersion
             }
           }
       networkInfo: {
@@ -973,8 +974,8 @@ var existingFslogixConfiguration = {
   storageService: fslogixStorageSolution
   containerType: fslogixContainerType
   fileShareNames: fslogixFileShareNames
-  localStorageAccountResourceIds: effectiveFslogixExistingLocalStorageAccountResourceIds
-  remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
+  localStorageAccountResourceIds: fslogixExistingLocalStorageAccountResourceIds
+  remoteStorageAccountResourceIds: fslogixExistingRemoteStorageAccountResourceIds
   localNetAppServerFqdns: empty(fslogixExistingLocalNetAppVolumeResourceIds) ? [] : existingNetAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns
   remoteNetAppServerFqdns: empty(fslogixExistingRemoteNetAppVolumeResourceIds) ? [] : existingNetAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
   objectSpecificSettingsGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
@@ -987,7 +988,7 @@ var deployedFslogixConfiguration = {
   containerType: fslogixContainerType
   fileShareNames: fslogixFileShareNames
   localStorageAccountResourceIds: fslogixStorage!.outputs.storageAccountResourceIds
-  remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
+  remoteStorageAccountResourceIds: fslogixExistingRemoteStorageAccountResourceIds
   localNetAppServerFqdns: fslogixStorage!.outputs.netAppServerFqdns
   remoteNetAppServerFqdns: empty(fslogixExistingRemoteNetAppVolumeResourceIds) ? [] : existingNetAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
   objectSpecificSettingsGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
@@ -1001,8 +1002,6 @@ module sessionHostPolicy 'policy/main.bicep' = {
     sessionHostResourceGroupName: naming.outputs.resourceGroupHosts
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
     policyIdentityName: naming.outputs.policyRemediationIdentityName
-    monitoringIdentityName: naming.outputs.azureMonitorAgentIdentityName
-    monitoringUserAssignedIdentityResourceId: monitoringUserAssignedIdentityResourceId
     deployDiskEncryptionSet: deployDiskEncryptionSet
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
@@ -1012,7 +1011,9 @@ module sessionHostPolicy 'policy/main.bicep' = {
       ? naming.outputs.diskEncryptionSetNamePlatformAndCustomerManaged
       : naming.outputs.diskEncryptionSetNameCustomerManaged
     disableManagedDiskPublicNetworkAccess: disableManagedDiskPublicNetworkAccess
-    enableMonitoring: monitoringConfigurationIsValid ? enableMonitoring : enableMonitoring
+    enableMonitoring: monitoringConfigurationIsValid && monitoringIdentityConfigurationIsValid
+      ? enableMonitoring
+      : enableMonitoring
     dataCollectionRuleResourceId: dataCollectionRuleResourceId
     dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
     integrityMonitoring: integrityMonitoring
@@ -1030,6 +1031,17 @@ module sessionHostPolicy 'policy/main.bicep' = {
     tags: tags
   }
   dependsOn: [sessionHostResourceGroup]
+}
+
+module policyPropagationWait 'modules/waitForPolicyPropagation.bicep' = {
+  name: 'Policy-Propagation-Wait-${deploymentSuffix}'
+  params: {
+    resourceGroupName: naming.outputs.resourceGroupDeployment
+    virtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    location: location
+    deploymentSuffix: deploymentSuffix
+  }
+  dependsOn: [sessionHostPolicy]
 }
 
 module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = {
@@ -1055,7 +1067,7 @@ module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = {
   }
   dependsOn: [
     controlPlane
-    sessionHostPolicy
+    policyPropagationWait
   ]
 }
 
@@ -1088,7 +1100,7 @@ module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper
     virtualMachineNames: []
     removeHostRunCommands: false
   }
-  dependsOn: [finalSessionHostManagement]
+  dependsOn: [policyPropagationWait]
 }
 
 output hostPoolResourceId string = controlPlane.outputs.hostPoolResourceId

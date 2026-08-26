@@ -47,19 +47,18 @@ Installs Microsoft Teams optimized for Azure Virtual Desktop.
 
 #### [Initialize-SessionHost.ps1](Initialize-SessionHost.ps1)
 
-Unified session host initialization script that combines configuration and optional AVD agent installation into a single Run Command execution. This is the primary script executed on each session host after VM provisioning.
+Unified session host initialization script that combines configuration and AVD agent installation into a single Run Command execution. This is the primary script executed on each directly managed session host after VM provisioning.
 
-- **Used by:** Host Pool Deployment and Automated Host Pool policy
+- **Used by:** Host Pool Deployment and Session Hosts add-on
 - **Log:** `C:\Windows\Logs\Initialize-SessionHost.log`
 
 **Parameters:**
 
 | Parameter | Required | Description |
 | --- | --- | --- |
-| `RegistrationToken` | Conditional | Host pool registration token. Required unless `ConfigurationOnly` is `'true'` |
-| `AgentBootLoaderUrl` | Conditional | Direct URL to the RDAgentBootLoader MSI. Required unless `ConfigurationOnly` is `'true'` |
+| `RegistrationToken` | Yes | Host pool registration token |
+| `AgentBootLoaderUrl` | Yes | Direct URL to the RDAgentBootLoader MSI |
 | `TimeZone` | Yes | Windows time zone ID to configure (e.g. `Eastern Standard Time`) |
-| `ConfigurationOnly` | No | `'true'` to run session-host configuration and skip AVD agent installation and registration; default `'false'` |
 | `AgentUrl` | No | Direct URL to the RDAgent MSI — used if the Azure broker endpoint is unreachable |
 | `AADJoin` | No | `'true'` if the VM is Entra ID (Azure AD) joined; default `'false'` |
 | `MdmId` | No | MDM enrollment ID for Intune auto-enrollment with Entra ID join |

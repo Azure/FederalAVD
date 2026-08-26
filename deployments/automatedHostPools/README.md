@@ -161,13 +161,22 @@ The deployment uses three identities for different operations:
 | Host-pool managed identity | Desktop Virtualization Virtual Machine Contributor on the session-host resource group, network resource group, selected image resource group, and host pool | Always; the image scope is added only for a Compute Gallery image |
 | Host-pool managed identity | Key Vault Secrets User on the credentials Key Vault | Always |
 | Azure Virtual Desktop enterprise application | Desktop Virtualization Power On Contributor, or Power On Off Contributor plus Desktop Virtualization Virtual Machine Contributor, at subscription scope | Start VM on Connect or dynamic autoscaling, respectively |
-| Policy user-assigned identity | VM, network, tag, monitoring, storage-key, and disk permissions required by the enabled post-provisioning policies | Always created; optional permissions are assigned only when their features are enabled |
+| Policy user-assigned identity | VM, network, tag, monitoring, managed-identity, and disk permissions required by the enabled post-provisioning policies | Always created; optional permissions are assigned only when their features are enabled |
 
 The host-pool managed identity is what Azure Virtual Desktop uses to create, update, replace, and
 delete native automated session hosts and retrieve their credential secrets. It is required even
 when no scaling plan is deployed. The Azure Virtual Desktop enterprise application does not
 replace this identity; it is used by Start VM on Connect and autoscale, which don't support the
 host-pool managed identity.
+
+## Session Host Configuration Script
+
+The automated-host-pool policy uses
+`scripts/Initialize-SessionHost.ps1`. This deployment-owned script configures the time zone,
+FSLogix, local policy, Defender exclusions, and OS partition expansion. It does not install or
+register the AVD Agent because Azure Virtual Desktop performs agent provisioning for automated
+session hosts. The directly managed host-pool solutions continue to use the shared initializer,
+which includes AVD Agent installation and registration.
 
 ## Deploy
 
@@ -347,6 +356,15 @@ size into each VM creation request, and the unified guest configuration expands 
 partition after provisioning. For Bicep or parameter-file deployments, leave `diskSizeGB` at `0`
 to preserve the image default.
 
+## Image Versions
+
+Marketplace images require a concrete `imageVersion`. The Session Host Configuration API uses
+`marketplaceInfo.exactVersion` and does not accept the `latest` sentinel supported by ordinary VM
+image references. The portal form lists the versions available for the selected region, publisher,
+offer, and SKU. Parameter-file deployments must provide one of those regional versions.
+
+Compute Gallery images continue to use the selected gallery image-version resource ID.
+
 ## Ephemeral OS Disks
 
 Set `useEphemeralOsDisk` to `true` and select `CacheDisk` or `ResourceDisk` with
@@ -370,23 +388,44 @@ ramp-down minimum and maximum host-pool sizes determine how many VMs the service
 retain; the capacity thresholds and phase times determine when it scales.
 
 The deployment creates the scaling plan and schedules in a disabled state during control-plane setup,
-then enables the host-pool assignment only after policy and final Session Host Management provisioning
-complete.
+then enables the host-pool assignment only after the policy propagation wait and initial Session Host
+Management provisioning request complete.
 
 `sessionHostCount` remains the initial capacity provisioned after policy and storage are ready.
 After the activation step enables the scaling-plan assignment, its schedule owns ongoing create,
 delete, start, and stop decisions. Do not run another scaling script against the same host pool.
 
+Session Host Management and the scaling plan update different parts of the automated host pool:
+
+1. Session Host Management stores the VM configuration and performs initial provisioning, image
+  updates, and configuration updates. The deployment first creates it without a `provisioning`
+  block, which establishes the zero-host preparation state.
+2. The scaling plan and its schedules are created with the host-pool reference disabled, so they
+  cannot change capacity during policy setup or initial provisioning.
+3. After the policy wait, the deployment updates Session Host Management with `sessionHostCount`.
+  The deployment helper cleanup starts at the same point because later host provisioning does not
+  use the helper VM.
+4. After that ARM update completes, the deployment enables the scaling-plan host-pool reference.
+  The scaling schedule then owns ongoing capacity within its configured minimum and maximum sizes.
+
+Scaling-plan activation waits for the initial Session Host Management request to be accepted by ARM;
+it does not wait for every requested VM to finish provisioning. Azure Virtual Desktop coordinates the
+in-progress provisioning request and subsequent scaling decisions.
+
 ## Policy Readiness
 
 Select the desired final `sessionHostCount`. ARM first creates Session Host Management without a
 provisioning request, which is the API's zero-host state. It then deploys storage, policy assignments,
-and role assignments before updating Session Host Management with the requested host count. Session
-Host Management uses `canaryPolicy: Auto` for subsequent image and configuration updates.
+and role assignments. A Run Command on the deployment helper VM then waits five minutes for Azure
+Policy and role assignments to propagate before ARM updates Session Host Management with the
+requested host count. Session Host Management uses `canaryPolicy: Auto` for subsequent image and
+configuration updates.
 
 Azure Policy assignment propagation is eventually consistent and ARM does not expose a separate
-policy-readiness resource. After deployment, verify that the provisioned hosts received the required
-policy settings before placing the host pool into production.
+policy-readiness resource. The five-minute delay reduces the chance that initial hosts are created
+before the assignments are effective, but it is not a policy-compliance probe. After deployment,
+verify that the provisioned hosts received the required policy settings before placing the host pool
+into production.
 
 The FSLogix storage template remains independently deployable. Automated session-host policy is an
 internal part of this deployment and is not published or supported as a separate deployment.

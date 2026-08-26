@@ -1,32 +1,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
-    # Agent Installation Parameters
-    [Parameter(Mandatory = $false)]
-    [string]$ApiVersion,
-    
     [Parameter(Mandatory = $false)]
     [string]$StorageSuffix,
-
-    [Parameter(Mandatory = $false)]
-    [string]$RegistrationToken,
-    
-    [Parameter(Mandatory = $false)]
-    [string]$AgentBootLoaderUrl,
-    
-    [Parameter(Mandatory = $false)]
-    [string]$AgentUrl,
-
-    [Parameter(Mandatory = $false)]
-    [ValidateSet('true', 'false', '')]
-    [string]$AADJoin,
-
-    [Parameter(Mandatory = $false)]
-    [string]$MdmId,
-    
-    [Parameter(Mandatory = $false)]
-    [string]$UserAssignedIdentityClientId,
-
-    # Session Host Configuration Parameters
     [Parameter(Mandatory = $true)]
     [string]$TimeZone,
 
@@ -52,9 +27,6 @@ param (
     [string]$LocalStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalStorageAccountKeys = '[]',
-
-    [Parameter(Mandatory = $false)]
     [string]$OSSGroups = '[]',
 
     [Parameter(Mandatory = $false)]
@@ -62,9 +34,6 @@ param (
 
     [Parameter(Mandatory = $false)]
     [string]$RemoteStorageAccountNames = '[]',
-
-    [Parameter(Mandatory = $false)]
-    [string]$RemoteStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$Shares = '[]',
@@ -97,244 +66,6 @@ function Write-Log {
     $DateTime = Get-Date -Format 'MM-dd-yyyy HH:mm:ss'
     $Content = "[$DateTime]`t$Category`t`t$Message" 
     Add-Content $Script:LogPath $content -ErrorAction Stop
-}
-
-function Invoke-MsiWithRetry {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$DisplayName,
-        
-        [Parameter(Mandatory = $true)]
-        [string[]]$ArgumentList,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$LogPath    
-    )
-
-    $ArgumentList += "/liwemo+! `"$LogPath`""
-   
-    $MaxRetries = 20
-    $RetryDelay = 30
-    $RetryCount = 0
-    $ExitCode = $null
-    
-    do {        
-        if ($RetryCount -gt 0) {
-            Write-Log -Message "Retrying Install $DisplayName in $RetryDelay seconds (Exit code: $ExitCode) - Retry $RetryCount"
-            Start-Sleep -Seconds $RetryDelay
-        }
-        Write-Log -Message "Installing $DisplayName"
-        $Process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow
-        $ExitCode = $Process.ExitCode        
-        $RetryCount++
-    } while ($ExitCode -eq 1618 -and $RetryCount -lt $MaxRetries) # 1618 = ERROR_INSTALL_ALREADY_RUNNING
-    
-    if ($ExitCode -eq 1618) {
-        $ErrorMsg = "Install $DisplayName failed after $MaxRetries retries with Exit code $ExitCode (ERROR_INSTALL_ALREADY_RUNNING)"
-        Write-Log -Category Error -Message $ErrorMsg
-        throw $ErrorMsg
-    }
-    
-    Write-Log -Message "Install $DisplayName finished with Exit code: $ExitCode"
-    
-    # Exit codes: 0 = success, 3010 = success but restart required
-    if ($ExitCode -notin @(0, 3010)) {
-        Write-Log -Category Warning -Message "$DisplayName installation completed with Exit code: $ExitCode"
-    }
-    
-    return $ExitCode
-}
-
-function Get-RegistrationTokenClaims {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$Token
-    )
-    
-    try {
-        $ClaimsSection = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')
-        
-        # Pad with '=' to make it valid base64
-        while ($ClaimsSection.Length % 4) {
-            $ClaimsSection += '='
-        }
-        
-        $ClaimsByteArray = [System.Convert]::FromBase64String($ClaimsSection)
-        $ClaimsJson = [System.Text.Encoding]::ASCII.GetString($ClaimsByteArray)
-        $Claims = $ClaimsJson | ConvertFrom-Json
-        
-        return $Claims
-    }
-    catch {
-        Write-Log -Category Error -Message "Failed to parse registration token: $($_.Exception.Message)"
-        throw
-    }
-}
-
-function Get-AgentDownloadUrl {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$BrokerAgentApi
-    )
-    
-    try {
-        Write-Log -Message "Querying broker for agent download URL: $BrokerAgentApi"
-        
-        $Response = Invoke-WebRequest -Uri $BrokerAgentApi -UseBasicParsing
-        $ResponseJson = $Response.Content | ConvertFrom-Json
-        
-        Write-Log -Message "Obtained agent endpoint: $($ResponseJson.agentEndpoint)"
-        
-        return $ResponseJson.agentEndpoint
-    }
-    catch {
-        Write-Log -Category Error -Message "Failed to get agent download URL: $($_.Exception.Message)"
-        return $null
-    }
-}
-
-function Get-LatestAgentInstaller {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$RegistrationToken,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$DownloadFolder
-    )
-    
-    try {
-        # Parse the registration token to get broker endpoint
-        $Claims = Get-RegistrationTokenClaims -Token $RegistrationToken
-        
-        if (-not $Claims.GlobalBrokerResourceIdUri) {
-            Write-Log -Message "Unable to obtain broker endpoint from registration token"
-            return $null
-        }
-        
-        # Build the agent API URL
-        $BrokerUri = [System.UriBuilder]$Claims.GlobalBrokerResourceIdUri
-        $BrokerUri.Path = 'api/agentMsi/v1/agentVersion'
-        $BrokerAgentApi = $BrokerUri.Uri.AbsoluteUri
-        
-        Write-Log -Message "Broker agent API: $BrokerAgentApi"
-        
-        # Get the agent download URL
-        $AgentDownloadUrl = Get-AgentDownloadUrl -BrokerAgentApi $BrokerAgentApi
-        
-        if (-not $AgentDownloadUrl) {
-            Write-Log -Message "Unable to obtain agent download URL from broker"
-            return $null
-        }
-        
-        # Create download folder
-        if (-not (Test-Path $DownloadFolder)) {
-            New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null
-        }
-        
-        $AgentPath = Join-Path $DownloadFolder 'RDAgent.msi'
-        
-        # Try primary endpoint
-        try {
-            Write-Log -Message "Downloading agent from: $AgentDownloadUrl"
-            Invoke-WebRequest -Uri $AgentDownloadUrl -OutFile $AgentPath -UseBasicParsing
-            Write-Log -Message "Successfully downloaded agent to: $AgentPath"
-            return $AgentPath
-        }
-        catch {
-            Write-Log -Message "Failed to download from primary endpoint: $($_.Exception.Message)"
-        }
-        
-        # Try private link endpoint
-        try {
-            $PrivateLinkUri = [System.UriBuilder]$AgentDownloadUrl
-            $PrivateLinkUri.Host = "$($Claims.EndpointPoolId).$($PrivateLinkUri.Host)"
-            $PrivateLinkUrl = $PrivateLinkUri.Uri.AbsoluteUri
-            
-            Write-Log -Message "Trying private link endpoint: $PrivateLinkUrl"
-            Invoke-WebRequest -Uri $PrivateLinkUrl -OutFile $AgentPath -UseBasicParsing
-            Write-Log -Message "Successfully downloaded agent from private link endpoint"
-            return $AgentPath
-        }
-        catch {
-            Write-Log -Category Error -Message "Failed to download from private link endpoint: $($_.Exception.Message)"
-        }
-        
-        return $null
-    }
-    catch {
-        Write-Log -Category Error -Message "Error getting latest agent installer: $($_.Exception.Message)"
-        return $null
-    }
-}
-
-function Get-InstallerFromUrl {
-    param (
-        [string]$ApiVersion = $script:ApiVersion,
-        [string]$StorageSuffix = $script:StorageSuffix,
-        [string]$ClientId = $script:UserAssignedIdentityClientId,
-        [string]$Url,
-        [string]$DestinationPath,
-        [string]$DisplayName
-    )
-    
-    try {
-        $WebClient = New-Object System.Net.WebClient
-        
-        # If URL is Azure Storage and we have a managed identity, authenticate
-        if (-not [string]::IsNullOrEmpty($StorageSuffix) -and $Url -match $StorageSuffix -and -not [string]::IsNullOrEmpty($ClientId)) {
-            Write-Log -Message "Authenticating to Azure Storage using managed identity"
-            $StorageEndpoint = ($Url -split "://")[0] + "://" + ($Url -split "/")[2] + "/"
-            $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId"
-            $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token
-            $WebClient.Headers.Add('x-ms-version', '2017-11-09')
-            $WebClient.Headers.Add("Authorization", "Bearer $AccessToken")
-        }
-
-        Write-Log -Message "Downloading $DisplayName from: $Url"
-        $WebClient.DownloadFile("$Url", "$DestinationPath")
-        $WebClient = $null
-        Write-Log -Message "Successfully downloaded $DisplayName to: $DestinationPath"
-        return $true
-    }
-    catch {
-        Write-Log -Category Error -Message "Failed to download $DisplayName : $($_.Exception.Message)"
-        $WebClient = $null
-        return $false
-    }
-}
-
-function Wait-ForBootLoaderService {
-    $ServiceName = 'RDAgentBootLoader'
-    $MaxRetries = 18
-    $RetryDelay = 10
-    $RetryCount = 0
-    
-    while (-not (Get-Service $ServiceName -ErrorAction SilentlyContinue)) {
-        if ($RetryCount -ge $MaxRetries) {
-            $ErrorMsg = "Service $ServiceName not found after $MaxRetries retries"
-            Write-Log -Category Error -Message $ErrorMsg
-            throw $ErrorMsg
-        }
-        
-        Write-Log -Message "Service $ServiceName not found. Retrying in $RetryDelay seconds (Retry $RetryCount of $MaxRetries)"
-        Start-Sleep -Seconds $RetryDelay
-        $RetryCount++
-    }
-    
-    Write-Log -Message "Starting service: $ServiceName"
-    Start-Service $ServiceName
-    
-    Write-Log -Message "Service $ServiceName started successfully"
-}
-
-function Get-SessionHostName {
-    $Wmi = Get-WmiObject win32_computersystem
-    
-    if ($Wmi.Domain -eq 'WORKGROUP') {
-        return $Wmi.DNSHostName
-    }
-    
-    return "$($Wmi.DNSHostName).$($Wmi.Domain)"
 }
 
 Function ConvertFrom-JsonString {
@@ -578,7 +309,6 @@ try {
     Write-Log -Message '========================================='
     
     Write-Log -Message "TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize"
-    Write-Log -Message "AADJoin=$AADJoin | AgentBootLoaderUrl=$AgentBootLoaderUrl$(if ($AgentUrl) { " | AgentUrl=$AgentUrl" })$(if ($MdmId) { " | MdmId=$MdmId" })"
     
     #region Phase 1: Session Host Configuration
     
@@ -659,20 +389,13 @@ try {
                 Write-Log -message "Gathering Azure Files Storage Account Parameters"
                 [array]$OSSGroupsArray = ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups'
                 [array]$LocalStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames'
-                [array]$LocalStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues
                 [array]$RemoteStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames'
-                [array]$RemoteStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues
                 
                 # Process Local Storage Accounts
                 Write-Log -message "Processing Local Storage Accounts"
                 For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
                     $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -message "Local storage [$i]: $SAFQDN"
-
-                    If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {
-                        Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
-                        Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$SAFQDN /user:localhost\$($LocalStorageAccountNamesArray[$i]) /pass:$($LocalStorageAccountKeysArray[$i])" -NoNewWindow -Wait
-                    }
                     
                     If ($OfficeShareName) {
                         $LocalOfficeContainerPaths.Add("\\$SAFQDN\$OfficeShareName") | Out-Null
@@ -688,11 +411,6 @@ try {
                     For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
                         $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
                         Write-Log -message "Remote storage [$i]: $SAFQDN"
-
-                        If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {
-                            Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
-                            Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$($SAFQDN) /user:localhost\$($RemoteStorageAccountNamesArray[$i]) /pass:$($RemoteStorageAccountKeysArray[$i])" -NoNewWindow -Wait
-                        }
                         
                         If ($OfficeShareName) {
                             $RemoteOfficeContainerPaths.Add("\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
@@ -741,10 +459,6 @@ try {
         $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 3 })
         $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = $SizeInMBsInt })
         $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'String'; Value = 'VHDX' })
-
-        If ($LocalStorageAccountKeysArray.Count -gt 0) {
-            $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
-        }
         
         if ($CloudCacheBool -eq $True) {
             $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
@@ -762,10 +476,6 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 3 })
             $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = $SizeInMBsInt })
             $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'String'; Value = 'VHDX' })
-
-            If ($LocalStorageAccountKeysArray.Count -gt 0) {
-                $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
-            }
             
             If ($CloudCacheBool -eq $True) {
                 $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
@@ -900,39 +610,6 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\Software\Policies\Microsoft\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })
         }
 
-        # Cloud-only identity with storage keys (EntraId) requires credentials to be stored
-        # in Credential Manager via cmdkey so FSLogix can authenticate to Azure Files.
-        # "Network Access: Do not allow storage of passwords and credentials for network
-        # authentication" (DisableDomainCreds) is an older STIG control not commonly seen
-        # in current STIG releases, but may still be enforced by legacy baselines or other
-        # policy. This is a belt-and-suspenders measure: applying Disabled (0) via secedit
-        # ensures the Security Configuration Engine does not silently revert the setting on
-        # the next policy refresh, keeping cmdkey credentials intact across reboots.
-        If ($IdentitySolution -eq 'EntraId') {
-            Write-Log -message "EntraId identity with storage keys detected - setting 'DisableDomainCreds' to 0 (Disabled) via secedit so FSLogix storage key credentials can be stored in Credential Manager."
-            $seceditInf = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.inf'
-            $seceditDb  = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.sdb'
-            $seceditLog = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.log'
-            $infLines = @(
-                '[Unicode]'
-                'Unicode=yes'
-                '[Version]'
-                'signature="$CHICAGO$"'
-                'Revision=1'
-                '[Registry Values]'
-                'MACHINE\System\CurrentControlSet\Control\Lsa\DisableDomainCreds=4,0'
-            )
-            [System.IO.File]::WriteAllLines($seceditInf, $infLines, [System.Text.Encoding]::Unicode)
-            $secedit = Start-Process -FilePath 'secedit.exe' `
-                -ArgumentList "/configure /cfg `"$seceditInf`" /db `"$seceditDb`" /log `"$seceditLog`" /quiet" `
-                -Wait -PassThru -NoNewWindow
-            Write-Log -Message "secedit.exe exited with code [$($secedit.ExitCode)]."
-            If ($secedit.ExitCode -ne 0) {
-                Write-Log -Category Warning -Message "secedit returned a non-zero exit code. Review log at '$seceditLog'."
-            }
-            Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue
-        }
-
         # Microsoft Defender Antivirus Local Group Policy exclusions for FSLogix
         $LocalPathExclusions = @(
             "$env:ProgramData\FSLogix",
@@ -1029,121 +706,6 @@ try {
     Write-Log -Message "Phase 1: Session Host Configuration Complete"
     
     #endregion Phase 1: Session Host Configuration
-
-    If ([string]::IsNullOrWhiteSpace($RegistrationToken)) {
-        Throw 'RegistrationToken is required.'
-    }
-
-    If ([string]::IsNullOrWhiteSpace($AgentBootLoaderUrl)) {
-        Throw 'AgentBootLoaderUrl is required.'
-    }
-    
-    #region Phase 2: AVD Agent Installation and Registration
-    
-    Write-Log -Message ''
-    Write-Log -Message '========================================='
-    Write-Log -Message 'Phase 2: AVD Agent Installation'
-    Write-Log -Message '========================================='
-    
-    # Install RDS-RD-Server feature if this is a Server OS
-    $IsServer = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue).InstallationType -eq 'Server'
-    Write-Log -Message "Operating System Type: $(if ($IsServer) { 'Server' } else { 'Client' })"
-    if ($IsServer) {
-        $rdFeature = Get-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction SilentlyContinue
-        if ($rdFeature -and -not $rdFeature.Installed) {
-            Write-Log -Message 'Installing RDS-RD-Server feature'
-            Install-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction Stop | Out-Null
-            Write-Log -Message 'RDS-RD-Server feature installed successfully'
-        }
-    }
-    
-    # Check if already registered
-    $RDInfraReg = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\RDInfraAgent' -ErrorAction SilentlyContinue
-    
-    if ($RDInfraReg -and $RDInfraReg.IsRegistered -eq 1 -and $RDInfraReg.RegistrationToken -eq '') {
-        Write-Log -Message 'VM is already registered with RDInfraAgent. Skipping installation.'
-        exit 0
-    }
-    
-    Write-Log -Message 'VM is not registered. Proceeding with agent installation...'
-    
-    # Create temporary download folder
-    $DownloadFolder = Join-Path -Path $env:TEMP -ChildPath "AVDAgentInstall_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null
-    
-    # Get Agent Installer with endpoint-first, URL-fallback logic
-    $AgentInstallerPath = $null
-    $BootLoaderInstallerPath = $null
-    
-    # Try endpoint first
-    Write-Log -Message 'Attempting to download latest agent from Azure endpoint'
-    $AgentInstallerPath = Get-LatestAgentInstaller -RegistrationToken $RegistrationToken -DownloadFolder $DownloadFolder
-        
-    # If endpoint failed and we have a URL, fall back to URL
-    if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($AgentUrl)) {
-        Write-Log -Message 'Endpoint download failed. Falling back to provided AgentUrl'
-        $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'
-        $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'            
-        if (-not $Success) {
-            $AgentInstallerPath = $null
-            Write-Log -Category Warning -Message "Failed to download RD Agent from fallback URL: $AgentUrl"
-        }
-    }
-    
-    # Final check - if we still don't have the agent installer, fail
-    if (-not $AgentInstallerPath) {
-        throw 'Failed to obtain RD Agent installer from all available sources (Azure endpoint and AgentUrl)'
-    }
-    
-    # Get Agent Boot Loader Installer
-    Write-Log -Message 'Downloading agent boot loader from provided URL'
-    $BootLoaderInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'
-    $Success = Get-InstallerFromUrl -Url $AgentBootLoaderUrl -DestinationPath $BootLoaderInstallerPath -DisplayName 'RD Agent Boot Loader'
-
-    if (-not $Success) {
-        throw 'Failed to download RD Agent Boot Loader'
-    }
-
-    # Final verification that we have both installers
-    if (-not $AgentInstallerPath -or -not $BootLoaderInstallerPath) {
-        throw 'Failed to obtain required installers. Agent: ' + $(if ($AgentInstallerPath) { 'OK' } else { 'FAILED' }) + ', BootLoader: ' + $(if ($BootLoaderInstallerPath) { 'OK' } else { 'FAILED' })
-    }
-    
-    # Install RD Infra Agent
-    Write-Log -Message "Installing RD Infra Agent from: $AgentInstallerPath"
-    
-    Invoke-MsiWithRetry `
-        -DisplayName 'RD Infra Agent' `
-        -ArgumentList @("/i", $AgentInstallerPath, "/quiet", "/qn", "/norestart", "/passive", "REGISTRATIONTOKEN=$RegistrationToken") `
-        -LogPath "$env:TEMP\RDAgentInstall.log"
-    
-    # Install RD Agent Boot Loader
-    Write-Log -Message "Installing RD Agent Boot Loader from: $BootLoaderInstallerPath"
-    
-    Invoke-MsiWithRetry `
-        -DisplayName 'RD Agent Boot Loader' `
-        -ArgumentList @("/i", $BootLoaderInstallerPath, "/quiet", "/qn", "/norestart", "/passive") `
-        -LogPath "$env:TEMP\RDAgentBootLoaderInstall.log"
-    
-    # Wait for and start the boot loader service
-    Wait-ForBootLoaderService
-    
-    # Clean up download folder
-    try {
-        Write-Log -Message "Cleaning up download folder: $DownloadFolder"
-        Remove-Item -Path $DownloadFolder -Force -Recurse -ErrorAction SilentlyContinue
-    }
-    catch {
-        Write-Log -Message "Warning: Failed to clean up download folder: $($_.Exception.Message)"
-    }
-      
-    # Get and log the session host name
-    $SessionHostName = Get-SessionHostName
-    Write-Log -Message "Successfully registered session host: $SessionHostName"
-    
-    Write-Log -Message "Phase 2: AVD Agent Installation Complete"
-    
-    #endregion Phase 2: AVD Agent Installation and Registration
     
     Write-Log -Message ''
     Write-Log -Message '========================================='

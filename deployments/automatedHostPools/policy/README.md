@@ -51,23 +51,29 @@ them to the dedicated session host resource group. The assignment must exist bef
 Management provisions VMs so new hosts are evaluated immediately. Existing hosts are reported as
 noncompliant but are not remediated by this module.
 
-The assignments use a user-assigned managed identity with the roles required by the selected
+The assignments use a user-assigned policy remediation identity with the roles required by the selected
 policies. Resource-group scope is the enforcement boundary, so the target resource group must be
 dedicated to resources governed by one automated host-pool configuration. Azure requires the
 Session Host Configuration VM resource group to exist before the configuration references it. The
-same resource group contains the service-managed session hosts, policy remediation identity,
-fallback monitoring identity, and optional Disk Encryption Set.
+same resource group contains the service-managed session hosts, policy remediation identity, and
+optional Disk Encryption Set.
 
-Both locally created identities follow the host pool naming convention. Their purpose components
-are `<host-pool>-policy-remediation` for the identity that executes policy changes and
-`<host-pool>-ama` for the fallback identity used by Azure Monitor Agent authentication. When
-`monitoringUserAssignedIdentityResourceId` is supplied, the built-in initiative reuses that
-same-subscription regional identity instead of creating the fallback identity.
+The policy remediation identity follows the host pool naming convention with the purpose component
+`<host-pool>-policy-remediation`. A custom `Modify` policy enables system-assigned identity on every
+session host create request while preserving any existing user-assigned identities. Azure Monitor
+Agent uses that system-assigned identity for authentication.
+
+Azure Policy exposes `identity.type` as a modifiable field but does not expose the VM
+`identity.userAssignedIdentities` map through a modifiable alias. Private customization therefore
+uses one post-provisioning VM update to union the selected artifact identity into the existing map.
+The policy remediation identity receives Managed Identity Operator directly on that artifact
+identity, and the customization assignment depends on the role assignment. This preserves the
+creation-time system identity and prevents competing full identity updates.
 
 The parent deployment supplies the associated pooled host pool. Its resource ID is applied as the
 `cm-resource-parent` tag to the existing dedicated session-host resource group and to taggable
-resources created by this module: the policy remediation identity, fallback monitoring identity,
-disk-encryption key, and Disk Encryption Set. Existing tags on the session-host resource group are
+resources created by this module: the policy remediation identity, disk-encryption key, and Disk
+Encryption Set. Existing tags on the session-host resource group are
 preserved. A built-in inheritance policy copies the tag to service-created VMs, NICs, and managed
 disks. Policy definitions, policy assignments, and role assignments do not support tags.
 
@@ -108,10 +114,9 @@ The required deployment order is:
 6. Update Session Host Management with the requested host count only after storage, policy,
    managed identities, role assignments, and optional DES deployment have succeeded.
 
-FSLogix supports up to two local and two remote Azure Files storage accounts in this flow. Storage
-account key retrieval and Storage Account Key Operator role assignments are used only when
-`identitySolution` is `EntraId`. Entra Kerberos and domain services modes use the account names to
-build UNC paths but do not retrieve, pass, or grant access to storage account keys.
+FSLogix supports up to two local and two remote Azure Files storage accounts in this flow. All
+supported identity modes use identity-based SMB authentication. The policy uses storage account
+names to build UNC paths and does not retrieve, pass, or grant access to storage account keys.
 
 The parent deployment associates newly created resources with the host pool for cost allocation.
 The policy module tags the dedicated session-host resource group with
@@ -134,13 +139,13 @@ remediation contract because changing encryption on an attached OS disk can requ
 | Accelerated networking | Set the NIC property with `Modify` | `enableAcceleratedNetworking` | Implemented; enabled by default |
 | Guest Attestation | Deploy the extension to Trusted Launch and Confidential VMs | `integrityMonitoring` | Implemented; enabled by default |
 | Session host configuration | Run one post-provisioning command for the Windows time zone, time zone redirection, optional FSLogix, and guest OS partition expansion | Unified custom policy definition | Implemented |
-| VM monitoring identity | Create a dedicated user-assigned identity and attach it to each session host | Built-in initiative `0d1b56c6-6d1f-4a5d-8695-b15efbea6b49` | Implemented |
-| Azure Monitor Agent | Deploy AMA with explicit user-assigned identity authentication | Built-in initiative `0d1b56c6-6d1f-4a5d-8695-b15efbea6b49` | Implemented |
-| DCR association | Associate each VM with the selected AVD Insights DCR | Built-in initiative `0d1b56c6-6d1f-4a5d-8695-b15efbea6b49` | Implemented |
+| VM identity | Enable system-assigned identity during creation while preserving existing user-assigned identities | Custom `Modify` policy modeled on built-in policy `17b3de92-f710-4cf4-aa55-0e7859f1ed7b` | Implemented |
+| Azure Monitor Agent | Deploy AMA with system-assigned identity authentication | Built-in initiative `9575b8b7-78ab-4281-b53b-d3c1ace2260b` | Implemented |
+| DCR association | Associate each VM with the selected AVD Insights DCR | Built-in initiative `9575b8b7-78ab-4281-b53b-d3c1ace2260b` | Implemented |
 | DCE association | Assign the same built-in association policy in DCE mode | Built-in policy `244efd75-0d92-453c-b9a3-7d73ca36ed52` | Implemented |
 | Ownership tags | Inherit `cm-resource-parent` from the dedicated resource group | Built-in policy `cd3aa116-8754-49c9-a813-ad46512ece54` | Implemented |
 | FSLogix registry settings | Configure FSLogix conditionally within the unified session-host configuration Run Command | `configureFSLogix` and `fslogixConfiguration` | Implemented |
-| Private customizations | Preserve existing VM identities, attach the artifact UAI, and deploy Run Commands serially | `sessionHostCustomizations` | Implemented with input order preserved |
+| Private customizations | Union the artifact UAI into the existing VM identity map, then deploy Run Commands serially | `sessionHostCustomizations` | Implemented with input order preserved and resource-scoped Managed Identity Operator |
 | Disk Encryption Set | Create a key and DES or reuse an existing DES, then inject its resource ID into each VM creation request | `keyManagementDisks` | Implemented |
 | Managed-disk public access | Set `publicNetworkAccess: Disabled` and `networkAccessPolicy: DenyAll`; no Disk Access resource is used | `disableManagedDiskPublicNetworkAccess` | Implemented |
 
@@ -183,11 +188,13 @@ are explicit platform boundaries rather than silent policy gaps:
    They configure newly created hosts once and do not use version changes to target existing hosts.
 4. Customization artifacts must be reachable without public network access and authenticated by a
    managed identity. SAS tokens, storage keys, and embedded credentials are not permitted.
-5. The policy assignment identity deploys remediation resources; the VM identity retrieves private
-   artifacts and authenticates Azure Monitor Agent. These identities and their role assignments
-   must remain distinct in the design.
+5. The policy assignment identity deploys remediation resources; the artifact UAI retrieves private
+   artifacts, and the VM system-assigned identity authenticates Azure Monitor Agent. These
+   identities and their role assignments must remain distinct in the design.
    The customization deployment unions the artifact UAI into the VM's existing identity map so the
-   monitoring identity and any other identities are preserved.
+   system-assigned identity and any other identities are preserved.
+   Managed Identity Operator is granted to the policy assignment identity at the artifact identity
+   resource scope, not at subscription or resource-group scope.
 6. The DES assignment must be deployed before host creation. Existing-host DES remediation is a
    separate maintenance workflow and must not run automatically.
 7. Policy definitions, assignments, and role assignments are deployed as an internal stage of the
@@ -196,7 +203,7 @@ are explicit platform boundaries rather than silent policy gaps:
    explicit deployment blocker or a reviewed custom equivalent.
 
 The automated host-pool deployment currently blocks non-Commercial clouds. The Windows AMA
-user-assigned identity initiative is therefore consumed only where it is confirmed available.
+system-assigned identity initiative is therefore consumed only where it is confirmed available.
 Azure Monitor Agent VM extensions are not supported in air-gapped clouds; enabling automated host
 pools there requires a separately reviewed MSI-based monitoring design rather than this initiative.
 
@@ -205,7 +212,7 @@ pools there requires a separately reviewed MSI-based monitoring design rather th
 1. Validate Session Host Configuration resource APIs, VM tagging behavior, and built-in policy
    availability in each supported Azure cloud.
 2. Extract the FSLogix storage deployment into a standalone add-on with stable outputs.
-3. Deploy the dedicated AMA user-assigned identity, the built-in AMA and DCR initiative, and the
+3. Enable VM system-assigned identity, deploy the built-in AMA and DCR initiative, and deploy the
    optional DCE policy assignment with the roles declared by their policies.
 4. Deploy the FSLogix policy from a source-controlled Bicep definition with successful Run Command
    compliance and identity-based storage authentication.

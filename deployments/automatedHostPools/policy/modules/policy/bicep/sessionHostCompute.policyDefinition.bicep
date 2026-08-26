@@ -43,8 +43,16 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
             equals: 'Microsoft.Compute/virtualMachines'
           }
           {
-            field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.osType'
-            equals: 'Windows'
+            anyOf: [
+              {
+                field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.osType'
+                equals: 'Windows'
+              }
+              {
+                field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.osType'
+                exists: false
+              }
+            ]
           }
           {
             anyOf: [

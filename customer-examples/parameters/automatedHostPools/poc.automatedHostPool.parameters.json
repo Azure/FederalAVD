@@ -13,7 +13,7 @@
             "value": "eastus"
         },
         "identitySolution": {
-            "value": "EntraId"
+            "value": "EntraKerberos-CloudOnly"
         },
         "virtualMachineNamePrefix": {
             "value": "avdauto"

@@ -9,7 +9,7 @@ module getVm 'getVm.bicep' = {
   }
 }
 
-var identityType = (contains(getVm.outputs.identityType, 'SystemAssigned') ? 'SystemAssigned, UserAssigned' : 'UserAssigned')
+var identityType = 'SystemAssigned, UserAssigned'
 var userAssignedIdentities = union(getVm.outputs.userAssignedIdentities, {
   '${userAssignedIdentityResourceId}': {}
 })
