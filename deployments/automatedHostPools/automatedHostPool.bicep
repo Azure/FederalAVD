@@ -109,7 +109,7 @@ param imageOffer string = 'office-365'
 param imageSku string = 'win11-25h2-avd-m365'
 
 @description('Optional. Exact marketplace image version. Session Host Configuration does not support the latest sentinel.')
-param imageVersion string = '26200.9168.260811'
+param imageVersion string = ''
 
 @description('Optional. Resource ID of a Compute Gallery image version. When supplied, the marketplace image parameters are ignored.')
 param customImageResourceId string = ''

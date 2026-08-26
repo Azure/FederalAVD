@@ -12,6 +12,10 @@
         "location": {
             "value": "eastus"
         },
+        // Marketplace versions vary by region. Confirm this version remains available in the selected location.
+        "imageVersion": {
+            "value": "26200.9168.260811"
+        },
         "identitySolution": {
             "value": "EntraKerberos-CloudOnly"
         },

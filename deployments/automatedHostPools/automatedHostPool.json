@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "13773301681119674663"
+      "templateHash": "18081263215252899586"
     }
   },
   "definitions": {
@@ -287,7 +287,7 @@
     },
     "imageVersion": {
       "type": "string",
-      "defaultValue": "26200.9168.260811",
+      "defaultValue": "",
       "metadata": {
         "description": "Optional. Exact marketplace image version. Session Host Configuration does not support the latest sentinel."
       }
