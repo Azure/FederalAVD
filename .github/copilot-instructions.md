@@ -20,8 +20,9 @@ The components must be deployed in this order on first deployment:
 
 ```text
 Step 0 (optional): Networking      — VNet, subnets, NSGs, route tables, private DNS zones
-Step 1 (optional): AVD Shared Services — Key Vaults (required only for Customer-Managed Keys (CMK) or
-                                     Key Vault-sourced credentials) and/or a Log Analytics Workspace
+Step 1 (optional): AVD Shared Services — Key Vaults (required before Image Management CMK and for
+                                     automated host-pool credentials; optional shared resources for
+                                     standard host pools) and/or a Log Analytics Workspace
                                      (optional, for diagnostic settings on Key Vaults, Image
                                      Management storage accounts, and host pool monitoring)
 Step 2 (optional): Image Management — Storage account, compute gallery, managed identity for artifacts
@@ -32,9 +33,16 @@ Step 4 (required): Host Pool        — AVD host pool, session hosts, FSLogix st
 Steps 0-3 are optional depending on your scenario:
 
 - **Standard host-pool PoC / marketplace images**: Skip to Step 4 only. A VNet and subnet are the only hard prerequisites.
+- **Multiple standard host pools**: The first Step 4 deployment can create shared Key Vaults,
+  monitoring, and the FSLogix backup vault/policy; later Step 4 deployments can select those
+  existing resources. Step 1 is optional unless another component needs them first.
 - **Automated host-pool PoC**: Steps 1 → 4. Deploy the Shared Services secrets Key Vault first and pass `secretsKeyVaultResourceId` to the automated host pool's required `credentialsKeyVaultResourceId` parameter.
 - **Custom software, no CMK**: Steps 2 → (3 optional) → 4
-- **Custom software + CMK**: Steps 1 → 2 → (3 optional) → 4
+- **Runtime artifacts + CMK**: Steps 1 → 2 → 4
+- **Custom image + CMK**: Steps 1 → 2 → 3 → 4
+- **Shared FSLogix profile storage**: Deploy the FSLogix Storage add-on before consuming host pools.
+  If CMK, diagnostics, or Azure Files backup are selected, supply existing Key Vault, Log Analytics,
+  and backup vault/policy resources; deploy Step 1 first only when those resources do not yet exist.
 - **Centralized diagnostics/monitoring**: Deploy Step 1 with `deployMonitoring: true`
   first, then pass its output resource ID as `logAnalyticsWorkspaceResourceId` (Image Management)
   and `existingLogAnalyticsWorkspaceResourceId` (Host Pool) so every step shares one workspace.

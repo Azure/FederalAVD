@@ -36,9 +36,6 @@ param deploymentResourceGroupName string = ''
 @description('Optional. Azure region containing the deployment VM.')
 param deploymentLocation string = location
 
-@description('Optional. Suffix used to keep Run Command deployment names unique.')
-param deploymentSuffix string = utcNow('yyyyMMddHHmmss')
-
 @description('Optional. Entra group object IDs assigned Desktop Virtualization User access.')
 param appGroupSecurityGroupIds string[] = []
 
@@ -72,6 +69,12 @@ param customImageResourceId string = ''
 
 @description('Required. Resource ID of the credential Key Vault.')
 param credentialsKeyVaultResourceId string
+
+@description('Optional. Object ID of the Azure Virtual Desktop service principal that creates session hosts through a dynamic scaling plan.')
+param avdServicePrincipalObjectId string = ''
+
+@description('Optional. Resource ID of the Disk Encryption Set used by automated session hosts.')
+param diskEncryptionSetResourceId string = ''
 
 @description('Required. Session Host Configuration properties.')
 param sessionHostConfigurationProperties resourceInput<'Microsoft.DesktopVirtualization/hostPools/sessionHostConfigurations@2025-11-01-preview'>.properties
@@ -215,6 +218,8 @@ module hostPoolPermissions 'permissions.bicep' = {
     subnetResourceId: subnetResourceId
     customImageResourceId: customImageResourceId
     credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
+    avdServicePrincipalObjectId: avdServicePrincipalObjectId
     principalId: hostPool.outputs.principalId
   }
 }
@@ -228,7 +233,7 @@ module sessionHostConfiguration 'sessionHostConfiguration.bicep' = {
   dependsOn: [hostPoolPermissions]
 }
 
-module dynamicScalingPlan '../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deployAutomated.bicep' = if (deployDynamicScalingPlan) {
+module dynamicScalingPlan '../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deployDynamic.bicep' = if (deployDynamicScalingPlan) {
   scope: resourceGroup(resourceGroupName)
   params: {
     name: scalingPlanName
@@ -292,7 +297,7 @@ module updateDesktopFriendlyName '../../shared/modules/resourceModules/compute/v
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
-    name: 'updateDesktopFriendlyName-${deploymentSuffix}'
+    name: 'Update-Desktop-Friendly-Name'
     location: deploymentLocation
     script: loadTextContent('../../shared/scripts/Update-AvdSessionDesktopName.ps1')
     parameters: [
@@ -387,7 +392,6 @@ module applicationGroupRoleAssignments '../../shared/modules/resourceModules/des
 }
 
 output hostPoolResourceId string = hostPool.outputs.resourceId
-output hostPoolPrincipalId string = hostPool.outputs.principalId
 output applicationGroupResourceId string = applicationGroup.outputs.resourceId
 output workspaceResourceId string = workspace.outputs.resourceId
 output sessionHostConfigurationResourceId string = sessionHostConfiguration.outputs.resourceId

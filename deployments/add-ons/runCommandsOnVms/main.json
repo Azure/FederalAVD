@@ -1,11 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "10155353361278695797"
+      "templateHash": "18053201753370644111"
     }
   },
   "parameters": {
@@ -165,8 +166,36 @@
     "normalizedScriptContent": "[if(empty(parameters('scriptContent')), '', replace(replace(parameters('scriptContent'), '\r\n', '\n'), '\r', '\n'))]",
     "resolvedVmNames": "[if(not(empty(parameters('vmPrefix'))), variables('patternVmNames'), parameters('vmNames'))]"
   },
-  "resources": [
-    {
+  "resources": {
+    "logsUserAssignedIdentity": {
+      "condition": "[not(empty(parameters('logsUserAssignedIdentityResourceId')))]",
+      "existing": true,
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2018-11-30",
+      "subscriptionId": "[split(parameters('logsUserAssignedIdentityResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]]",
+      "name": "[last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))]"
+    },
+    "scriptsUserAssignedIdentity": {
+      "condition": "[not(empty(parameters('scriptsUserAssignedIdentityResourceId')))]",
+      "existing": true,
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2018-11-30",
+      "subscriptionId": "[split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[4]]",
+      "name": "[last(split(parameters('scriptsUserAssignedIdentityResourceId'), '/'))]"
+    },
+    "existingVms": {
+      "copy": {
+        "name": "existingVms",
+        "count": "[length(variables('resolvedVmNames'))]"
+      },
+      "existing": true,
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2023-03-01",
+      "name": "[variables('resolvedVmNames')[copyIndex()]]"
+    },
+    "updateVms": {
       "copy": {
         "name": "updateVms",
         "count": "[length(variables('resolvedVmNames'))]"
@@ -174,7 +203,7 @@
       "condition": "[or(not(empty(parameters('logsUserAssignedIdentityResourceId'))), not(empty(parameters('scriptsUserAssignedIdentityResourceId'))))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('VirtualMachineUpdate-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp'))]",
+      "name": "[format('updateVms-{0}-{1}', copyIndex(), uniqueString('updateVms', deployment().name))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -182,13 +211,13 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full').location]"
+            "value": "[reference(format('existingVms[{0}]', copyIndex()), '2023-03-01', 'full').location]"
           },
           "name": {
             "value": "[variables('resolvedVmNames')[copyIndex()]]"
           },
           "identity": {
-            "value": "[tryGet(reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full'), 'identity')]"
+            "value": "[tryGet(reference(format('existingVms[{0}]', copyIndex()), '2023-03-01', 'full'), 'identity')]"
           },
           "logsUserAssignedIdentityResourceId": {
             "value": "[parameters('logsUserAssignedIdentityResourceId')]"
@@ -197,16 +226,16 @@
             "value": "[parameters('scriptsUserAssignedIdentityResourceId')]"
           },
           "hardwareProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').hardwareProfile]"
+            "value": "[reference(format('existingVms[{0}]', copyIndex())).hardwareProfile]"
           },
           "storageProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').storageProfile]"
+            "value": "[reference(format('existingVms[{0}]', copyIndex())).storageProfile]"
           },
           "osProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').osProfile]"
+            "value": "[reference(format('existingVms[{0}]', copyIndex())).osProfile]"
           },
           "networkProfile": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01').networkProfile]"
+            "value": "[reference(format('existingVms[{0}]', copyIndex())).networkProfile]"
           }
         },
         "template": {
@@ -271,9 +300,17 @@
             }
           ]
         }
-      }
+      },
+      "dependsOn": [
+        "[format('existingVms[{0}]', copyIndex())]",
+        "[format('existingVms[{0}]', copyIndex())]",
+        "[format('existingVms[{0}]', copyIndex())]",
+        "[format('existingVms[{0}]', copyIndex())]",
+        "[format('existingVms[{0}]', copyIndex())]",
+        "[format('existingVms[{0}]', copyIndex())]"
+      ]
     },
-    {
+    "runCommands": {
       "copy": {
         "name": "runCommands",
         "count": "[length(variables('resolvedVmNames'))]"
@@ -281,7 +318,7 @@
       "condition": "[not(empty(parameters('scripts')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RunCommands-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp'))]",
+      "name": "[format('runCommands-{0}-{1}', copyIndex(), uniqueString('runCommands', deployment().name))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -292,13 +329,13 @@
             "value": "[variables('multipleScripts')]"
           },
           "location": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full').location]"
+            "value": "[reference(format('existingVms[{0}]', copyIndex()), '2023-03-01', 'full').location]"
           },
           "logsContainerUri": {
             "value": "[variables('logsContainerUri')]"
           },
-          "logsUserAssignedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
-          "scriptsUserAssignedIdentityClientId": "[if(empty(parameters('scriptsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[2], split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('scriptsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
+          "logsUserAssignedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('logsUserAssignedIdentity').clientId))]",
+          "scriptsUserAssignedIdentityClientId": "[if(empty(parameters('scriptsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('scriptsUserAssignedIdentity').clientId))]",
           "timeStamp": {
             "value": "[parameters('timeStamp')]"
           },
@@ -395,10 +432,13 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('VirtualMachineUpdate-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp')))]"
+        "[format('existingVms[{0}]', copyIndex())]",
+        "logsUserAssignedIdentity",
+        "scriptsUserAssignedIdentity",
+        "[format('updateVms[{0}]', copyIndex())]"
       ]
     },
-    {
+    "runCommand": {
       "copy": {
         "name": "runCommand",
         "count": "[length(variables('resolvedVmNames'))]"
@@ -406,7 +446,7 @@
       "condition": "[empty(parameters('scripts'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RunCommand-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp'))]",
+      "name": "[format('runCommand-{0}-{1}', copyIndex(), uniqueString('runCommand', deployment().name))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -414,7 +454,7 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', variables('resolvedVmNames')[copyIndex()]), '2023-03-01', 'full').location]"
+            "value": "[reference(format('existingVms[{0}]', copyIndex()), '2023-03-01', 'full').location]"
           },
           "virtualMachineName": {
             "value": "[variables('resolvedVmNames')[copyIndex()]]"
@@ -428,27 +468,46 @@
           "scriptUri": {
             "value": "[parameters('scriptUri')]"
           },
-          "scriptUriManagedIdentityClientId": "[if(empty(parameters('scriptsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[2], split(parameters('scriptsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('scriptsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
+          "scriptUriManagedIdentityClientId": "[if(empty(parameters('scriptsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('scriptsUserAssignedIdentity').clientId))]",
           "parameters": {
             "value": "[parameters('parameters')]"
           },
           "protectedParameters": "[if(empty(parameters('protectedParameter')), createObject('value', createArray()), createObject('value', createArray(parameters('protectedParameter'))))]",
           "outputBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-output-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
           "errorBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-error-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
-          "outputBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
-          "errorBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('logsUserAssignedIdentityResourceId'), '/')[2], split(parameters('logsUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('logsUserAssignedIdentityResourceId'), '/'))), '2018-11-30').clientId))]",
+          "outputBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('logsUserAssignedIdentity').clientId))]",
+          "errorBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('logsUserAssignedIdentity').clientId))]",
           "timeoutInSeconds": {
             "value": "[parameters('timeoutInSeconds')]"
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "3524014955198313820"
+              "templateHash": "9810196216141102269"
+            }
+          },
+          "definitions": {
+            "runCommandParameterType": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "metadata": {
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../../types/customizationTypes.bicep"
+                }
+              }
             }
           },
           "parameters": {
@@ -485,6 +544,9 @@
             },
             "parameters": {
               "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
               "defaultValue": [],
               "metadata": {
                 "description": "Named parameters to pass to the script."
@@ -492,6 +554,9 @@
             },
             "protectedParameters": {
               "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
               "defaultValue": [],
               "metadata": {
                 "description": "Named protected (secure) parameters to pass to the script."
@@ -547,8 +612,14 @@
               }
             }
           },
-          "resources": [
-            {
+          "resources": {
+            "virtualMachine": {
+              "existing": true,
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('virtualMachineName')]"
+            },
+            "runCommand": {
               "type": "Microsoft.Compute/virtualMachines/runCommands",
               "apiVersion": "2023-09-01",
               "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -570,7 +641,7 @@
                 "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
               }
             }
-          ],
+          },
           "outputs": {
             "resourceId": {
               "type": "string",
@@ -584,8 +655,11 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('VirtualMachineUpdate-{0}-{1}', variables('resolvedVmNames')[copyIndex()], parameters('timeStamp')))]"
+        "[format('existingVms[{0}]', copyIndex())]",
+        "logsUserAssignedIdentity",
+        "scriptsUserAssignedIdentity",
+        "[format('updateVms[{0}]', copyIndex())]"
       ]
     }
-  ]
+  }
 }

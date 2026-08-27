@@ -1,9 +1,10 @@
 targetScope = 'subscription'
 
-param appGroupSecurityGroups array
+import { personalScalingScheduleType, pooledScalingScheduleType } from '../../../shared/modules/resourceModules/types/scalingTypes.bicep'
+
+param appGroupSecurityGroups string[]
 param avdPrivateDnsZoneResourceId string
 param avdPrivateLinkPrivateRoutes string
-param deploymentSuffix string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
 param deployScalingPlan bool
@@ -35,8 +36,8 @@ param resourceGroupDeployment string
 param resourceGroupGlobalFeed string
 param scalingPlanExclusionTag string
 param scalingPlanName string
-param scalingPlanPooledSchedules array
-param scalingPlanPersonalSchedules array
+param scalingPlanPooledSchedules pooledScalingScheduleType[]
+param scalingPlanPersonalSchedules personalScalingScheduleType[]
 param startVMOnConnect bool
 param tags object
 param virtualMachinesTimeZone string
@@ -125,7 +126,6 @@ var feedExistingRefs = !empty(feedWorkspaceExistingProps)
 
 // ─── Host Pool ─────────────────────────────────────────────────────────────────
 module hostPool '../../../shared/modules/resourceModules/desktopVirtualization/hostPools/deploy.bicep' = {
-  name: 'HostPool-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     name: hostPoolName
@@ -150,7 +150,6 @@ module hostPool '../../../shared/modules/resourceModules/desktopVirtualization/h
 }
 
 module hostPool_pe '../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)) {
-  name: 'HostPool-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     name: hostPoolPrivateEndpointName
@@ -169,7 +168,6 @@ module hostPool_pe '../../../shared/modules/resourceModules/network/privateEndpo
 
 // ─── Application Group ─────────────────────────────────────────────────────────
 module applicationGroup '../../../shared/modules/resourceModules/desktopVirtualization/applicationGroups/deploy.bicep' = {
-  name: 'ApplicationGroup-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     name: desktopApplicationGroupName
@@ -191,11 +189,10 @@ module applicationGroup '../../../shared/modules/resourceModules/desktopVirtuali
 
 // Adds a friendly name to the SessionDesktop application in the app group
 module updateDesktopFriendlyName '../../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (!empty(desktopFriendlyName)) {
-  name: 'DesktopFriendlyName-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
-    name: 'updateDesktopFriendlyName-${deploymentSuffix}'
+    name: 'Update-Desktop-Friendly-Name'
     location: virtualMachinesRegion
     script: loadTextContent('../../../shared/scripts/Update-AvdSessionDesktopName.ps1')
     parameters: [
@@ -213,7 +210,6 @@ module updateDesktopFriendlyName '../../../shared/modules/resourceModules/comput
 var desktopVirtualizationUserRoleId = '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63'
 
 module appGroupRoleAssignments '../../../shared/modules/resourceModules/desktopVirtualization/applicationGroups/roleAssignment.bicep' = {
-  name: 'AppGroup-RoleAssignments-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     applicationGroupName: desktopApplicationGroupName
@@ -230,7 +226,6 @@ module appGroupRoleAssignments '../../../shared/modules/resourceModules/desktopV
 
 // ─── Feed Workspace ────────────────────────────────────────────────────────────
 module feedWorkspace '../../../shared/modules/resourceModules/desktopVirtualization/workspaces/deploy.bicep' = {
-  name: 'WorkspaceFeed-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     name: empty(feedWorkspaceExistingProps) ? workspaceName : feedWorkspaceExistingProps.name
@@ -257,7 +252,6 @@ module feedWorkspace '../../../shared/modules/resourceModules/desktopVirtualizat
 // The original condition avdPrivateLinkPrivateRoutes != 'None' || avdPrivateLinkPrivateRoutes != 'HostPool'
 // is always true; the effective gate is whether a subnet was provided.
 module feedWorkspace_pe '../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (!empty(workspaceFeedPrivateEndpointSubnetResourceId)) {
-  name: 'WorkspaceFeed-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     name: feedPrivateEndpointName
@@ -276,7 +270,6 @@ module feedWorkspace_pe '../../../shared/modules/resourceModules/network/private
 
 // ─── Scaling Plan ──────────────────────────────────────────────────────────────
 module scalingPlan '../../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deploy.bicep' = if (deployScalingPlan) {
-  name: 'ScalingPlan-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     name: scalingPlanName
@@ -306,7 +299,6 @@ module scalingPlan '../../../shared/modules/resourceModules/desktopVirtualizatio
 var deployGlobalWorkspace = empty(existingGlobalWorkspaceResourceId) && avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateDnsZoneResourceId) && !empty(globalFeedPrivateEndpointSubnetResourceId)
 
 module globalWorkspace '../../../shared/modules/resourceModules/desktopVirtualization/workspaces/deploy.bicep' = if (deployGlobalWorkspace) {
-  name: 'GlobalFeed-Workspace-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupGlobalFeed)
   params: {
     name: globalWorkspaceName
@@ -325,7 +317,6 @@ module globalWorkspace '../../../shared/modules/resourceModules/desktopVirtualiz
 }
 
 module globalWorkspace_pe '../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployGlobalWorkspace) {
-  name: 'GlobalFeed-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupGlobalFeed)
   params: {
     name: globalFeedPrivateEndpointName

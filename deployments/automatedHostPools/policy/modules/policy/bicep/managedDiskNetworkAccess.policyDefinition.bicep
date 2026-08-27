@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostManagedDiskNetworkAccess-Modify'
-param policyDefinitionDisplayName string = 'Disable public network access on AVD session host managed disks'
+param policyDefinitionDisplayName string = 'Disable public access on AVD session host managed disks'
 param policyDefinitionDescription string = 'Disables public network access and denies all network export access on managed disks in the session host resource group.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -11,7 +11,9 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     displayName: policyDefinitionDisplayName
     mode: 'Indexed'
     metadata: {
-      category: 'Compute'
+      category: 'Azure Virtual Desktop'
+      solution: 'AVD Session Host Governance'
+      component: 'Creation Settings'
       version: '1.0.0'
     }
     parameters: {

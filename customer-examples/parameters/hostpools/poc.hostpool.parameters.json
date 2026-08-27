@@ -41,10 +41,6 @@
     //          -virtualMachineAdminPassword $pass `
     //          -Verbose
     //
-    // NOTE: Do not add a "timeStamp" parameter here. It must auto-generate on
-    //       each deployment run. If you export a parameter file from the Portal
-    //       or Template Spec UI, remove "timeStamp" before saving.
-    //
     // For the full step-by-step guide see:
     //   docs/quick-start.md#step-4-deploy-host-pool
     // =========================================================================
@@ -106,6 +102,13 @@
                 }
             ]
         },
+
+        // -- Personal host pool scaling (optional) ---------------------------
+        // This starter deploys a Pooled host pool, so scaling is omitted.
+        // For a Personal host pool, set hostPoolType accordingly and add
+        // deployScalingPlan plus scalingPlanPersonalSchedules. The complete
+        // multi-schedule example and field reference are in:
+        // docs/hostpool-deployment.md#scaling-plans
 
         // -- Session host customizations (optional) ---------------------------
         //    Artifacts must first be uploaded to blob storage via Update-ImageArtifacts.ps1.

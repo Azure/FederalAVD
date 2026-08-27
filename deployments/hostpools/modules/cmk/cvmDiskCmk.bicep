@@ -21,13 +21,11 @@ param deploymentUserAssignedIdentityClientId string
 param location string
 param tags object = {}
 param hostPoolResourceId string
-param deploymentSuffix string
 
 // Step 1: Create the CVM key with a key release policy via the Key Vault data plane.
 // The release policy is immutable once set; this run command is idempotent — it skips
 // creation if the key already exists.
 module setEncryptionKeyRunCommand '../../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: 'Set-EncryptionKey-ConfidentialVM-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     name: 'Set-ConfidentialVM-Key-Disks'
@@ -39,7 +37,7 @@ module setEncryptionKeyRunCommand '../../../shared/modules/resourceModules/compu
       { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
       { name: 'VaultUri', value: keyVaultUri }
     ]
-    script: loadTextContent('../../../shared/scripts/Set-ConfidentialVMOSDiskEncryptionKey.ps1')
+    script: loadTextContent('../../scripts/Set-ConfidentialVMOSDiskEncryptionKey.ps1')
     treatFailureAsDeploymentFailure: true
   }
 }
@@ -47,7 +45,6 @@ module setEncryptionKeyRunCommand '../../../shared/modules/resourceModules/compu
 // Step 2: Create the DiskEncryptionSet and role assignments.
 // skipKeyCreation: true — the key was already created by the Run Command above.
 module cmk '../../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
-  name: 'CVM-DiskCMK-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     keyVaultResourceId: keyVaultResourceId
@@ -55,7 +52,6 @@ module cmk '../../../shared/modules/orchestration/customerManagedKeys/customerMa
     keyManagementType: 'CustomerManagedHSM'
     location: location
     tags: tags
-    deploymentSuffix: deploymentSuffix
     parentResourceId: hostPoolResourceId
     diskEncryptionConfigs: [
       {

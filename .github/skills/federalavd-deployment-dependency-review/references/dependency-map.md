@@ -12,6 +12,13 @@
 | AVD Shared Services (`sharedServices`) | `azureMonitorPrivateLinkScopeResourceId` | Host Pool `azureMonitorPrivateLinkScopeResourceId`; centralized monitoring and DNS automation |
 | AVD Shared Services (`sharedServices`) | `fslogixBackupVaultResourceId` | Host Pool `existingFilesBackupVaultResourceId`; FSLogix Storage add-on `recoveryServicesVaultResourceId` |
 | AVD Shared Services (`sharedServices`) | `fslogixBackupPolicyName` | Host Pool `existingFilesBackupPolicyName`; FSLogix Storage add-on `fileSharePolicyName` |
+| First standard Host Pool (`hostpool`) | `credentialsKeyVaultResourceId` | Later standard Host Pool `existingCredentialsKeyVaultResourceId` |
+| First standard Host Pool (`hostpool`) | `encryptionKeyVaultResourceId` | Later standard Host Pool `existingEncryptionKeyVaultResourceId` |
+| First standard Host Pool (`hostpool`) | `logAnalyticsWorkspaceResourceId` | Later standard Host Pool `existingLogAnalyticsWorkspaceResourceId` |
+| First standard Host Pool (`hostpool`) | `avdInsightsDataCollectionRuleResourceId` | Later standard Host Pool `existingAVDInsightsDataCollectionRuleResourceId` |
+| First standard Host Pool (`hostpool`) | `dataCollectionEndpointResourceId` | Later standard Host Pool `existingDataCollectionEndpointResourceId` |
+| First standard Host Pool (`hostpool`) | `fslogixBackupVaultResourceId` | Later standard Host Pool `existingFilesBackupVaultResourceId`; FSLogix Storage add-on `recoveryServicesVaultResourceId` |
+| First standard Host Pool (`hostpool`) | `fslogixBackupPolicyName` | Later standard Host Pool `existingFilesBackupPolicyName`; FSLogix Storage add-on `fileSharePolicyName` |
 | Image Management | `computeGalleryResourceId` | Image Build `computeGalleryResourceId` |
 | Image Management | `artifactsStorageAccountResourceId` | `Update-ImageArtifacts.ps1 -StorageAccountResourceId` |
 | Image Management | `artifactsBlobContainerUrl` | Image Build `artifactsContainerUri` |

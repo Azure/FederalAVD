@@ -1,5 +1,7 @@
+import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
+
 param artifactsContainerUri string
-param customizations array
+param customizations artifactCustomizationType[]
 param location string = resourceGroup().location
 param userAssignedIdentityClientId string
 param virtualMachineName string

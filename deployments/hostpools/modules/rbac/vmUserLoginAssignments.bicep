@@ -1,12 +1,10 @@
 targetScope = 'subscription'
 
 param resourceGroupHosts string
-param appGroupSecurityGroups array
-param deploymentSuffix string
+param appGroupSecurityGroups string[]
 
 module roleAssignment '../../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(appGroupSecurityGroups)): {
-    name: 'RA-Hosts-VMLoginUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupHosts)
     params: {
       principalId: appGroupSecurityGroups[i]

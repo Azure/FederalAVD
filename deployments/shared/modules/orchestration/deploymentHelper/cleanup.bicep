@@ -3,7 +3,6 @@ targetScope = 'subscription'
 param location string
 param resourceGroupHosts string
 param resourceGroupDeployment string
-param deploymentSuffix string
 param userAssignedIdentityClientId string
 param deploymentVirtualMachineName string
 param roleAssignmentIds array
@@ -11,11 +10,10 @@ param virtualMachineNames array
 param removeHostRunCommands bool = true
 
 module removeRunCommands '../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (removeHostRunCommands) {
-  name: 'Remove-RunCommands-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
-    name: 'Remove-RunCommands-${deploymentSuffix}'
+    name: 'Remove-RunCommands'
     location: location
     script: loadTextContent('../../../scripts/Remove-RunCommands.ps1')
     timeoutInSeconds: 3600
@@ -31,11 +29,10 @@ module removeRunCommands '../../resourceModules/compute/virtualMachines/runComma
 }
 
 module removeRoleAssignments '../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: 'Remove-RoleAssignments-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
-    name: 'Remove-RoleAssignments-${deploymentSuffix}'
+    name: 'Remove-RoleAssignments'
     location: location
     script: loadTextContent('../../../scripts/Remove-RoleAssignments.ps1')
     timeoutInSeconds: 900
@@ -50,11 +47,10 @@ module removeRoleAssignments '../../resourceModules/compute/virtualMachines/runC
 }
 
 module removeDeploymentResourceGroup '../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName
-    name: 'Delete-DeploymentResourceGroup-${deploymentSuffix}'
+    name: 'Delete-DeploymentResourceGroup'
     location: location
     script: loadTextContent('../../../scripts/Remove-ResourceGroup.ps1')
     asyncExecution: true

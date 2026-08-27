@@ -1,11 +1,6 @@
 targetScope = 'subscription'
 
-type entraGroupType = {
-  @description('Microsoft Entra object ID of the group.')
-  id: string
-  @description('Display name of the group.')
-  name: string
-}
+import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
 
 @description('Required. Azure region for FSLogix storage resources and deployment VM Run Commands.')
 param location string
@@ -142,9 +137,6 @@ param storageAccountNamePrefix string = ''
 @maxValue(99)
 param storageIndex int = 1
 
-@description('Optional. Unique suffix for nested deployment names and deployment VM extension reruns.')
-param deploymentSuffix string = utcNow('yyyyMMddHHmmss')
-
 @description('Optional. Resource ID recorded as the Cost Management parent tag on deployed resources.')
 param parentResourceId string = ''
 
@@ -270,30 +262,30 @@ var fileShareNames = fslogixShareNamesLookup[fslogixContainerType]
 var storageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 var remoteStorageAccountConfigurationIsValid = empty(remoteStorageAccountResourceIds) || length(remoteStorageAccountResourceIds) == storageCount
   ? true
-  : bool('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.')
+  : fail('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.')
 var remoteNetAppConfigurationIsValid = empty(remoteNetAppVolumeResourceIds) || length(remoteNetAppVolumeResourceIds) == length(fileShareNames)
   ? true
-  : bool('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.')
+  : fail('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.')
 var shardingConfigurationIsValid = fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
   ? true
-  : bool('fslogixUserGroups must contain at least one group when sharding is enabled.')
+  : fail('fslogixUserGroups must contain at least one group when sharding is enabled.')
 var storageIdentityConfigurationIsValid = storageSolution != 'AzureNetAppFiles' || contains(identitySolution, 'DomainServices')
   ? true
-  : bool('Azure NetApp Files requires ActiveDirectoryDomainServices or EntraDomainServices.')
+  : fail('Azure NetApp Files requires ActiveDirectoryDomainServices or EntraDomainServices.')
 var netAppResourceGroupConfigurationIsValid = storageSolution != 'AzureNetAppFiles' || netAppDeploymentMode == 'CreateAll' || !createStorageResourceGroup
   ? true
-  : bool('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.')
+  : fail('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.')
 var resourceGroupNamesAreDistinct = toLower(effectiveStorageResourceGroupName) != toLower(effectiveDeploymentResourceGroupName)
   ? true
-  : bool('The temporary deployment resource group must differ from the storage resource group because cleanup deletes the entire temporary group.')
+  : fail('The temporary deployment resource group must differ from the storage resource group because cleanup deletes the entire temporary group.')
 var deployStorageCmk = storageSolution == 'AzureFiles' && contains(keyManagementStorage, 'CustomerManaged')
 var storageCmkConfigurationIsValid = !deployStorageCmk || !empty(existingEncryptionKeyVaultResourceId)
   ? true
-  : bool('existingEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.')
+  : fail('existingEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.')
 var domainCredentialsRequired = contains(identitySolution, 'DomainServices') || storageSolution == 'AzureNetAppFiles' || (identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups))
 var externalDeploymentConfigurationIsValid = manageDeploymentVirtualMachine || (!empty(deploymentVirtualMachineName) && !empty(existingDeploymentUserAssignedIdentityClientId))
   ? true
-  : bool('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.')
+  : fail('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.')
 
 module naming '../../shared/modules/orchestration/naming/hostPool.bicep' = {
   params: {
@@ -347,7 +339,6 @@ module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/dep
     keyManagementDisks: 'PlatformManaged'
     keyManagementStorageAccounts: 'PlatformManaged'
     location: location
-    deploymentSuffix: deploymentSuffix
     deploymentVmSize: deploymentVirtualMachineSize
     domainJoinUserPassword: domainCredentialsRequired
       ? !empty(domainJoinUserPassword)
@@ -394,7 +385,6 @@ module storageCmk '../../shared/modules/orchestration/customerManagedKeys/storag
     location: location
     tags: tags
     parentResourceId: parentResourceId
-    deploymentSuffix: deploymentSuffix
     storageKeyNames: [
       for i in range(0, storageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + storageIndex, 2, '0'))
     ]
@@ -467,7 +457,6 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     storageSku: storageSku
     storageSolution: storageSolution
     tags: tags
-    deploymentSuffix: deploymentSuffix
   }
   dependsOn: [storageResourceGroup]
 }
@@ -485,7 +474,6 @@ module cleanupDeploymentHelper '../../shared/modules/orchestration/deploymentHel
     location: location
     resourceGroupDeployment: effectiveDeploymentResourceGroupName
     resourceGroupHosts: effectiveStorageResourceGroupName
-    deploymentSuffix: deploymentSuffix
     userAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
     roleAssignmentIds: deploymentHelper!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds

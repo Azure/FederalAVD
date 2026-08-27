@@ -1,12 +1,14 @@
-param customizations array
+import { resolvedCustomizationType, runCommandParameterType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
+param customizations resolvedCustomizationType[]
 param location string
 param imageVmName string
 param orchestrationVmName string
 param userAssignedIdentityClientId string
 param logBlobContainerUri string
-param deploymentSuffix string
-param commonScriptParams array
-param restartVMParameters array
+param buildTimestamp string
+param commonScriptParams runCommandParameterType[]
+param restartVMParameters runCommandParameterType[]
 param batchIndex int
 param batchContext string
 param resourceManagerUri string
@@ -20,7 +22,6 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
 @batchSize(1)
 module applyCustomizations 'applyCustomization.bicep' = [
   for customization in customizations: {
-    name: '${batchContext}-${customization.name}-${deploymentSuffix}'
     params: {
       customization: customization
       location: location
@@ -28,7 +29,7 @@ module applyCustomizations 'applyCustomization.bicep' = [
       orchestrationVmName: orchestrationVmName
       userAssignedIdentityClientId: userAssignedIdentityClientId
       logBlobContainerUri: logBlobContainerUri
-      deploymentSuffix: deploymentSuffix
+      buildTimestamp: buildTimestamp
       commonScriptParams: commonScriptParams
       restartVMParameters: restartVMParameters
     }
@@ -64,7 +65,7 @@ resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-0
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Remove-ImageBuildRunCommands.ps1')
+      script: loadTextContent('../scripts/Remove-ImageBuildRunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

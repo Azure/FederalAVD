@@ -1,3 +1,5 @@
+import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
+
 param agentBootLoaderDownloadUrl string = ''
 param agentDownloadUrl string = ''
 param artifactsContainerUri string
@@ -6,7 +8,7 @@ param availability string
 param availabilitySetNameConv string
 param availabilitySetsCount int
 param availabilitySetsIndex int
-param availabilityZones array
+param availabilityZones string[]
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryption bool
 param customImageResourceId string = ''
@@ -14,10 +16,9 @@ param customImageResourceId string = ''
 param customImageLicenseType string = 'Windows_Client'
 param dataCollectionEndpointResourceId string
 param dedicatedHostGroupResourceId string = ''
-param dedicatedHostGroupResourceIds array = []
+param dedicatedHostGroupResourceIds string[] = []
 param dedicatedHostResourceId string = ''
-param dedicatedHostResourceIds array = []
-param deploymentSuffix string
+param dedicatedHostResourceIds string[] = []
 param diskAccessId string = ''
 param diskSizeGB int
 param diskSku string
@@ -33,12 +34,12 @@ param encryptionAtHost bool
 param diskEncryptionSetResourceId string = ''
 param fslogixConfigureSessionHosts bool
 param fslogixContainerType string
-param fslogixFileShareNames array
-param fslogixLocalNetAppVolumeResourceIds array
-param fslogixLocalStorageAccountResourceIds array
-param fslogixOSSGroups array
-param fslogixRemoteNetAppVolumeResourceIds array
-param fslogixRemoteStorageAccountResourceIds array
+param fslogixFileShareNames string[]
+param fslogixLocalNetAppVolumeResourceIds string[]
+param fslogixLocalStorageAccountResourceIds string[]
+param fslogixOSSGroups string[]
+param fslogixRemoteNetAppVolumeResourceIds string[]
+param fslogixRemoteStorageAccountResourceIds string[]
 param fslogixSizeInMBs int
 param fslogixStorageService string
 param hibernationEnabled bool
@@ -54,12 +55,12 @@ param location string
 param virtualMachineNicNameConv string
 param virtualMachineDiskNameConv string
 param ouPath string
-param preferredZones array = []
+param preferredZones string[] = []
 param recoveryServicesVaultResourceId string = ''
 param secureBootEnabled bool
 param securityType string
-param sessionHostCustomizations array
-param sessionHostNames array
+param sessionHostCustomizations artifactCustomizationType[]
+param sessionHostNames string[]
 param subnetResourceId string
 param tags object
 param timeZone string
@@ -128,7 +129,6 @@ resource artifactsUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-
 }
 
 module availabilitySets '../../resourceModules/compute/availabilitySets/deploy.bicep' = [for i in range(0, availabilitySetsCount): if (availability == 'AvailabilitySets') {
-  name: 'AvailabilitySet-${padLeft((i + availabilitySetsIndex) + 1, 2, '0')}-${deploymentSuffix}'
   params: {
     name: replace(availabilitySetNameConv, '##', padLeft((i + availabilitySetsIndex) + 1, 2, '0'))
     platformFaultDomainCount: 2
@@ -140,7 +140,6 @@ module availabilitySets '../../resourceModules/compute/availabilitySets/deploy.b
 }]
 
 module netAppVolumeFqdns '../fslogix/modules/getNetAppVolumeSmbServerFqdns.bicep' = if (fslogixConfigureSessionHosts && (!empty(fslogixLocalNetAppVolumeResourceIds) || !empty(fslogixRemoteNetAppVolumeResourceIds))) {
-  name: 'NetAppVolumeFqdns-${deploymentSuffix}'
   scope: subscription()
   params: {
     localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
@@ -151,7 +150,6 @@ module netAppVolumeFqdns '../fslogix/modules/getNetAppVolumeSmbServerFqdns.bicep
 
 @batchSize(5)
 module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostBatchCount): {
-  name: 'VirtualMachines-Batch-${i}-of-${sessionHostBatchCount}-(${i == sessionHostBatchCount && divisionRemainderValue > 0 ? divisionRemainderValue : maxVMsPerDeployment}-VMs)-${deploymentSuffix}'
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderUrl
     agentDownloadUrl: agentUrl
@@ -208,7 +206,6 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     securityType: securityType
     subnetResourceId: subnetResourceId
     tags: tags
-    deploymentSuffix: deploymentSuffix
     timeZone: timeZone
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
@@ -224,7 +221,6 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
 }]
 
 module getFlattenedVmNamesArray 'flattenVirtualMachineNames.bicep' = {
-  name: 'Flatten-VirtualMachine-Names-${deploymentSuffix}'
   params: {
     virtualMachineNamesPerBatch: [for i in range(1, sessionHostBatchCount): virtualMachines[i - 1].outputs.virtualMachineNames]
   }

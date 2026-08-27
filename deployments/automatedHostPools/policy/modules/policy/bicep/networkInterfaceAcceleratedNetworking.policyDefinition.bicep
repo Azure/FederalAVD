@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostAcceleratedNetworking-Modify'
-param policyDefinitionDisplayName string = 'Configure accelerated networking on AVD session host network interfaces'
+param policyDefinitionDisplayName string = 'Configure accelerated networking on AVD session hosts'
 param policyDefinitionDescription string = 'Enables or disables accelerated networking on network interfaces in the dedicated session host resource group.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -12,6 +12,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     mode: 'Indexed'
     metadata: {
       category: 'Azure Virtual Desktop'
+      solution: 'AVD Session Host Governance'
+      component: 'Creation Settings'
       version: '1.0.0'
     }
     parameters: {

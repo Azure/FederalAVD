@@ -34,3 +34,20 @@ type extensionType = {
   @description('Optional. Names of other extensions in this array that must be provisioned before this one. ARM uses this to serialize extension deployment order within the same template.')
   provisionAfterExtensions: string[]?
 }
+
+@export()
+type galleryImageVersionTargetRegionType = {
+  name: string
+  regionalReplicaCount: int?
+  storageAccountType: ('Standard_LRS' | 'Standard_ZRS' | 'Premium_LRS' | 'PremiumV2_LRS')?
+  excludeFromLatest: bool?
+  encryption: {
+    osDiskImage: {
+      diskEncryptionSetId: string?
+      securityProfile: {
+        confidentialVMEncryptionType: ('EncryptedVMGuestStateOnlyWithPmk' | 'EncryptedWithPmk' | 'EncryptedWithCmk' | 'NonPersistedTPM')?
+        secureVMDiskEncryptionSetId: string?
+      }?
+    }?
+  }?
+}

@@ -212,13 +212,19 @@ customer/parameters/hostpools/
 
 > **⚠️ Common mistake — editing `customer-examples/` or `deployments/hostpools/parameters/` directly:** Sample files under `deployments/` are shared and will be overwritten when you pull repo updates. Always copy a sample to `customer/parameters/hostpools/` before editing. The `customer/` folder is git-ignored by design — your environment-specific files stay local and safe. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
-> **⚠️ Common mistake — `timeStamp` in a saved parameter file:** If you export a parameter file from the Template Spec UI or from ARM deployment history, delete the `timeStamp` entry before saving the file for reuse. Leaving it causes all subsequent deployments to reuse the same timestamp, resulting in stale image version names and potential resource naming conflicts. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
-
 ### Key Parameters
 
 #### Deployment Scope
 
 The host pool deployment always creates all resources — resource groups, AVD control plane, session hosts, monitoring, Key Vaults — based on the options you select. Use individual **Use Existing** toggles (portal) or pre-populated resource ID parameters (automation) to reuse shared infrastructure instead of creating new resources:
+
+In a standard-host-pool-only environment, the first deployment can create Key Vaults, monitoring,
+and the FSLogix Azure Files backup vault and policy. Later host-pool portal forms can discover and
+select those resources. Automation can pass the first deployment's shared-resource outputs to the
+parameters below.
+Use AVD Shared Services instead when the resources must exist before the first host pool, such as
+for automated host-pool credentials, Image Management CMK, or a standalone FSLogix Storage add-on
+that enables CMK, diagnostics, or Azure Files backup.
 
 | Shared resource | "Use Existing" control | Parameter to supply |
 | --- | --- | --- |
@@ -227,6 +233,13 @@ The host pool deployment always creates all resources — resource groups, AVD c
 | Credentials Key Vault | **Credentials source → Key Vault** (Identity step) | `existingCredentialsKeyVaultResourceId` |
 | Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
+
+The deployment returns the effective resource IDs whether it created the resource or reused an
+existing one. Use `credentialsKeyVaultResourceId`, `encryptionKeyVaultResourceId`,
+`logAnalyticsWorkspaceResourceId`, `avdInsightsDataCollectionRuleResourceId`,
+`dataCollectionEndpointResourceId`, `fslogixBackupVaultResourceId`, and
+`fslogixBackupPolicyName` to configure later standard host pools. It also returns
+`fslogixBackupPolicyResourceId` for consumers that accept the complete policy resource ID.
 
 To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on.
 
@@ -544,6 +557,85 @@ Get-AzRecoveryServicesBackupItem -WorkloadType AzureStorage -VaultId $vaultId
 
 ## Scaling and Management
 
+### Scaling Plans
+
+Set `deployScalingPlan` to `true` to create an Azure Virtual Desktop scaling plan for either a
+Pooled or Personal host pool. Portal deployments show controls appropriate to the selected host
+pool type. Pooled and Personal host pools support up to seven named schedules, and each schedule can
+select multiple days of the week. Each grid row is one complete schedule: phase times, balancing
+algorithms, capacity settings, and ramp-down behavior belong to that schedule rather than to the
+scaling plan as a whole. Schedule names are case-insensitively unique, and a weekday can belong to
+only one schedule. Days not explicitly assigned continue using the preceding schedule's off-peak
+behavior until another schedule enters ramp-up.
+
+For Pooled schedules, `rampDownForceLogoffUsers`, `rampDownWaitTimeMinutes`, the notification
+message, and `rampDownStopHostsWhen` apply only during that schedule's ramp-down phase. Personal
+schedules instead define disconnect and logoff actions independently for each phase. The Pooled
+wait and notification fields are required only when force logoff is enabled. Editable Grid does not
+populate column defaults, so the portal shows placeholders instead. If a direct deployment omits
+these fields while enabling force logoff, the template uses a 30-minute wait and "Save your work and
+sign out. This session host is being removed by autoscale." When force logoff is disabled, the
+template submits a zero-minute wait and no notification message.
+
+For PowerShell or Azure CLI deployments, provide `scalingPlanPooledSchedules` or
+`scalingPlanPersonalSchedules` when scaling is enabled. Each schedule object must contain every
+field for its host-pool type except the conditionally applicable Pooled wait and notification
+fields. The template does not create a default schedule.
+
+```json
+{
+  "deployScalingPlan": {
+    "value": true
+  },
+  "scalingPlanExclusionTag": {
+    "value": "ScalingPlanExclusion"
+  },
+  "scalingPlanPersonalSchedules": {
+    "value": [
+      {
+        "name": "Weekdays",
+        "daysOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        "rampUpStartTime": "08:00",
+        "rampUpAutoStartHosts": "WithAssignedUser",
+        "rampUpStartVMOnConnect": "Enable",
+        "rampUpMinutesToWaitOnDisconnect": "0",
+        "rampUpActionOnDisconnect": "None",
+        "rampUpMinutesToWaitOnLogoff": "0",
+        "rampUpActionOnLogoff": "None",
+        "peakStartTime": "09:00",
+        "peakStartVMOnConnect": "Enable",
+        "peakMinutesToWaitOnDisconnect": "0",
+        "peakActionOnDisconnect": "None",
+        "peakMinutesToWaitOnLogoff": "0",
+        "peakActionOnLogoff": "None",
+        "rampDownStartTime": "17:00",
+        "rampDownStartVMOnConnect": "Disable",
+        "rampDownMinutesToWaitOnDisconnect": "30",
+        "rampDownActionOnDisconnect": "Deallocate",
+        "rampDownMinutesToWaitOnLogoff": "30",
+        "rampDownActionOnLogoff": "Deallocate",
+        "offPeakStartTime": "20:00",
+        "offPeakStartVMOnConnect": "Disable",
+        "offPeakMinutesToWaitOnDisconnect": "30",
+        "offPeakActionOnDisconnect": "Deallocate",
+        "offPeakMinutesToWaitOnLogoff": "30",
+        "offPeakActionOnLogoff": "Deallocate"
+      }
+    ]
+  }
+}
+```
+
+Use strict 24-hour `HH:mm` values for all phase times. Valid start-on-connect values are `Enable`
+and `Disable`. Valid disconnect and logoff actions are `None`, `Deallocate`, and `Hibernate`.
+`rampUpAutoStartHosts` accepts `None`, `WithAssignedUser`, or `All`. Disconnect and logoff waits
+must be between 0 and 360 minutes.
+
+A Personal schedule can use `Hibernate` only when `hibernationEnabled` is `true` and both the image
+and VM size support hibernation. Microsoft does not support Personal autoscale hibernation with
+FSLogix or App Attach. The template rejects Hibernate schedules when it is configuring FSLogix;
+verify that no external App Attach configuration is associated with the host pool.
+
 ### Adding Session Hosts
 
 To add more session hosts to an existing pool:
@@ -849,23 +941,8 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    - Save the `parameters.json` file
 
 3. **Prepare for PowerShell use:**
-   - Open the parameters file
-   - **Remove the `timeStamp` parameter** (if present)
-
-     ```json
-     // REMOVE THIS PARAMETER:
-     "timeStamp": {
-       "value": "20260210143522"
-     }
-     ```
-
-     **Why remove it?**
-     - The `timeStamp` parameter is auto-generated on each deployment using `utcNow()`
-     - Provides automatic uniqueness for deployment names and nested resource deployments
-     - For image builds, generates automatic version numbers (e.g., `2026.0210.1435`)
-     - If included in parameter files, it would reuse the old timestamp, defeating uniqueness
-     - Each new deployment should generate a fresh timestamp
-   - Save the file
+   - Save the file under `customer/parameters/hostpools/`.
+   - Keep passwords and other secrets out of the saved file.
 
 4. **Use for future deployments:**
 

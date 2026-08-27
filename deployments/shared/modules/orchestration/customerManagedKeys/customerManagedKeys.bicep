@@ -46,9 +46,6 @@ param tags object = {}
 @description('Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities.')
 param parentResourceId string = ''
 
-@description('Optional. Suffix appended to deployment names for uniqueness.')
-param deploymentSuffix string = uniqueString(resourceGroup().id, deployment().name)
-
 // ─── PaaS mode parameters ────────────────────────────────────────────────────
 
 @description('''
@@ -145,7 +142,6 @@ var cvmKeyReleasePolicy = base64('{"version":"1.0.0","anyOf":[{"authority":"http
 
 module paasKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
   for (keyName, i) in keyNames: {
-    name: 'CMK-PaaSKey-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
       keyVaultName: keyVaultName
@@ -165,7 +161,6 @@ module paasKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
 // do not invoke this module at all — they manage their own identity and RBAC.
 
 module paasIdentity '../../resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (!empty(keyNames)) {
-  name: 'CMK-PaaSUAI-${deploymentSuffix}'
   params: {
     name: identityName
     location: location
@@ -178,7 +173,6 @@ module paasIdentity '../../resourceModules/managedIdentity/userAssignedIdentitie
 
 module paasKeyRoleAssignments '../../resourceModules/keyVault/vaults/keys/roleAssignment.bicep' = [
   for (keyName, i) in keyNames: {
-    name: 'CMK-PaaSKeyRA-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
       keyVaultName: keyVaultName
@@ -207,7 +201,6 @@ module paasKeyRoleAssignments '../../resourceModules/keyVault/vaults/keys/roleAs
 
 module diskKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
   for (config, i) in diskEncryptionConfigs: if (!(config.?skipKeyCreation ?? false)) {
-    name: 'CMK-DiskKey-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
       keyVaultName: keyVaultName
@@ -232,7 +225,6 @@ module diskKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
 
 module diskEncryptionSets '../../resourceModules/compute/diskEncryptionSets/deploy.bicep' = [
   for (config, i) in diskEncryptionConfigs: {
-    name: 'CMK-DiskEncryptionSet-${i}-${deploymentSuffix}'
     params: {
       name: config.diskEncryptionSetName
       location: location
@@ -257,7 +249,6 @@ module diskEncryptionSets '../../resourceModules/compute/diskEncryptionSets/depl
 
 module diskKeyRoleAssignments '../../resourceModules/keyVault/vaults/keys/roleAssignment.bicep' = [
   for (config, i) in diskEncryptionConfigs: {
-    name: 'CMK-DiskKeyRA-EncryptUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
       keyVaultName: keyVaultName
@@ -277,7 +268,6 @@ module diskKeyRoleAssignments '../../resourceModules/keyVault/vaults/keys/roleAs
 
 module diskKeyReleaseUserRoleAssignments '../../resourceModules/keyVault/vaults/keys/roleAssignment.bicep' = [
   for (config, i) in diskEncryptionConfigs: if (config.?confidentialVMOSDiskEncryption ?? false) {
-    name: 'CMK-DiskKeyRA-ReleaseUser-${i}-${deploymentSuffix}'
     scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
     params: {
       keyVaultName: keyVaultName

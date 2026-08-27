@@ -217,7 +217,6 @@ var storageAccountResourceIdsJson = string(storageAccountResourceIds)
 // Extract unique storage resource group pairs: subscriptionId,resourceGroupName
 var storageRgPairs = [for id in storageAccountResourceIds: '${split(id, '/')[2]},${split(id, '/')[4]}']
 
-var deploymentSuffix = take(uniqueString(subscription().subscriptionId, resourceGroupName, deployment().name), 8)
 
 var lawSubscriptionId = split(logAnalyticsWorkspaceResourceId, '/')[2]
 var lawResourceGroup  = split(logAnalyticsWorkspaceResourceId, '/')[4]
@@ -260,7 +259,6 @@ resource existingResourceGroup 'Microsoft.Resources/resourceGroups@2022-09-01' e
 // ------------------------------------------------------------------------------------------------
 
 module automationAccountDeploy 'modules/automationAccount.bicep' = if (hasStorageAccounts) {
-  name: 'AvdAlerts-AutomationAccount-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     automationAccountName: automationAccountName
@@ -283,7 +281,6 @@ module automationAccountDeploy 'modules/automationAccount.bicep' = if (hasStorag
 
 // Log Analytics Contributor - on the LAW resource group
 module roleAssignLogAnalytics 'modules/roleAssignment.bicep' = if (hasStorageAccounts) {
-  name: 'AvdAlerts-RoleAssign-LAW-${deploymentSuffix}'
   scope: resourceGroup(lawSubscriptionId, lawResourceGroup)
   params: {
     #disable-next-line BCP318
@@ -296,7 +293,6 @@ module roleAssignLogAnalytics 'modules/roleAssignment.bicep' = if (hasStorageAcc
 
 // Storage Account Contributor - on each unique storage resource group
 module roleAssignStorage 'modules/roleAssignment.bicep' = [for (rgPair, i) in storageRgPairs: {
-  name: 'AvdAlerts-RoleAssign-Stor${i}-${deploymentSuffix}'
   scope: resourceGroup(split(rgPair, ',')[0], split(rgPair, ',')[1])
   params: {
     #disable-next-line BCP318
@@ -312,7 +308,6 @@ module roleAssignStorage 'modules/roleAssignment.bicep' = [for (rgPair, i) in st
 // ------------------------------------------------------------------------------------------------
 
 module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInfoDeduped: {
-  name: 'AvdAlerts-HP-${last(split(hp.hostPoolResourceId, '/'))}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     hostPoolName: last(split(hp.hostPoolResourceId, '/'))
@@ -336,7 +331,6 @@ module hostPoolLogAlerts 'modules/hostPoolAlerts.bicep' = [for hp in hostPoolInf
 // Per-VM-resource-group metric alerts - centralized in the monitoring resource group.
 // Deduplicated by vmResourceGroupId - one set of rules per unique VM RG.
 module vmAlerts 'modules/vmAlerts.bicep' = [for hp in vmRgInfoDeduped: {
-  name: 'AvdAlerts-VM-${last(split(hp.vmResourceGroupId, '/'))}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     hostPoolName: last(split(hp.hostPoolResourceId, '/'))
@@ -361,7 +355,6 @@ module vmAlerts 'modules/vmAlerts.bicep' = [for hp in vmRgInfoDeduped: {
 // ------------------------------------------------------------------------------------------------
 
 module storageAlerts 'modules/storageAlerts.bicep' = [for (storId, i) in storageAccountResourceIds: {
-  name: 'AvdAlerts-Stor${i}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     storageAccountResourceId: storId
@@ -384,7 +377,6 @@ module storageAlerts 'modules/storageAlerts.bicep' = [for (storId, i) in storage
 // ------------------------------------------------------------------------------------------------
 
 module anfAlerts 'modules/anfAlerts.bicep' = [for (anfId, i) in anfVolumeResourceIds: {
-  name: 'AvdAlerts-ANF${i}-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     anfVolumeResourceId: anfId
@@ -401,7 +393,6 @@ module anfAlerts 'modules/anfAlerts.bicep' = [for (anfId, i) in anfVolumeResourc
 // ------------------------------------------------------------------------------------------------
 
 module serviceHealthAlerts 'modules/serviceHealthAlerts.bicep' = {
-  name: 'AvdAlerts-SvcHealth-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     actionGroupResourceId: actionGroupResourceId

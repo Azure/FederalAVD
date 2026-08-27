@@ -109,9 +109,6 @@ param namingConvention object = {
   workload: 'avd'
 }
 
-@description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
-param timeStamp string = utcNow('yyyyMMddhhmm')
-
 // Naming conventions
 // Override any component via the namingConvention parameter.
 var cloud = toLower(environment().name)
@@ -346,7 +343,6 @@ resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if
 }
 
 module imageGallery '../shared/modules/resourceModules/compute/galleries/deploy.bicep' = {
-  name: 'Image-Gallery-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: galleryName
@@ -359,7 +355,6 @@ module imageGallery '../shared/modules/resourceModules/compute/galleries/deploy.
 // Image Build Resource Group: pre-created so imageBuild deployments can reference it via
 // imageBuildResourceGroupId without waiting for RG creation during the build.
 module imageBuildResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployImageBuildResourceGroup) {
-  name: 'Image-Build-ResourceGroup-${timeStamp}'
   params: {
     name: imageBuildRgName
     location: location
@@ -372,7 +367,6 @@ module imageBuildResourceGroup '../shared/modules/resourceModules/resources/reso
 // permissions. Contributor is required (over VM Contributor) because the cleanup script must also
 // delete managed images (Microsoft.Compute/images/delete) which VM Contributor does not include.
 module imageBuildRgContributorAssignment '../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (deployImageBuildResourceGroup) {
-  name: 'RA-MI-Contributor-ImageBuildRG-${timeStamp}'
   scope: az.resourceGroup(imageBuildRgName)
   params: {
     principalId: managedIdentity!.outputs.principalId
@@ -383,7 +377,6 @@ module imageBuildRgContributorAssignment '../shared/modules/resourceModules/auth
 }
 
 module managedIdentity '../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployArtifactsStorageAccount || deployBuildLogsStorageAccount || deployImageBuildResourceGroup) {
-  name: 'Managed-Identity-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: identityName
@@ -397,7 +390,6 @@ module managedIdentity '../shared/modules/resourceModules/managedIdentity/userAs
 // CMK must complete before any storage account deployment so the role assignment
 // propagates before the storage PUT includes the CMK reference.
 module storageCmk '../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged' && (deployArtifactsStorageAccount || deployBuildLogsStorageAccount)) {
-  name: 'Storage-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
@@ -405,7 +397,6 @@ module storageCmk '../shared/modules/orchestration/customerManagedKeys/customerM
     keyExpirationInDays: keyExpirationInDays
     location: location
     tags: tags
-    deploymentSuffix: timeStamp
     keyNames: cmkKeyNames
     identityName: storageEncryptionIdentityName
   }
@@ -416,7 +407,6 @@ module storageCmk '../shared/modules/orchestration/customerManagedKeys/customerM
 // can pass `diskEncryptionSetResourceId` as `existingDiskEncryptionSetResourceId`,
 // suppressing per-build DES creation and KV dependency during image builds.
 module diskCmk '../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
-  name: 'Disk-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
@@ -430,7 +420,6 @@ module diskCmk '../shared/modules/orchestration/customerManagedKeys/customerMana
     keyExpirationInDays: keyExpirationInDays
     location: location
     tags: tags
-    deploymentSuffix: '${timeStamp}-gal'
     diskEncryptionConfigs: [
       {
         keyName: galleryDiskEncryptionKeyName
@@ -447,14 +436,12 @@ module diskCmk '../shared/modules/orchestration/customerManagedKeys/customerMana
 // WARNING: The key release policy is immutable. Re-deploying with createConfidentialVmGalleryDes=true
 // will fail if the key already exists. Disable this option on subsequent deployments.
 module confidentialVmCmk '../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (createConfidentialVmGalleryDes) {
-  name: 'ConfidentialVM-CMK-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
     keyManagementType: 'CustomerManagedHSM'
     location: location
     tags: tags
-    deploymentSuffix: '${timeStamp}-cvm'
     diskEncryptionConfigs: [
       {
         keyName: galleryConfidentialVmDiskEncryptionKeyName
@@ -482,7 +469,6 @@ var storageNetworkAcls = {
 }
 
 module assetsStorageAccount '../shared/modules/resourceModules/storage/storageAccounts/deploy.bicep' = if (deployArtifactsStorageAccount) {
-  name: 'Assets-Storage-Account-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: artifactsStorageAccountName
@@ -510,7 +496,6 @@ module assetsStorageAccount '../shared/modules/resourceModules/storage/storageAc
 }
 
 module assetsBlobService '../shared/modules/resourceModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployArtifactsStorageAccount) {
-  name: 'Assets-Blob-Service-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: artifactsStorageAccountName
@@ -525,7 +510,6 @@ module assetsBlobService '../shared/modules/resourceModules/storage/storageAccou
 }
 
 module assetsBlobContainer '../shared/modules/resourceModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployArtifactsStorageAccount) {
-  name: 'Assets-Blob-Container-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: artifactsStorageAccountName
@@ -536,7 +520,6 @@ module assetsBlobContainer '../shared/modules/resourceModules/storage/storageAcc
 }
 
 module assetsStoragePrivateEndpoint '../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployArtifactsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
-  name: 'Assets-Storage-PE-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: privateEndpointName
@@ -551,7 +534,6 @@ module assetsStoragePrivateEndpoint '../shared/modules/resourceModules/network/p
 }
 
 module assetsStorageBlobReaderAssignment '../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
-  name: 'RA-MI-BlobReader-SA-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: artifactsStorageAccountName
@@ -569,7 +551,6 @@ module assetsStorageBlobReaderAssignment '../shared/modules/resourceModules/stor
 // ── Build Logs Storage Account ────────────────────────────────────────────────
 
 module logsStorageAccount '../shared/modules/resourceModules/storage/storageAccounts/deploy.bicep' = if (deployBuildLogsStorageAccount) {
-  name: 'Logs-Storage-Account-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: logsStorageName
@@ -597,7 +578,6 @@ module logsStorageAccount '../shared/modules/resourceModules/storage/storageAcco
 }
 
 module logsBlobService '../shared/modules/resourceModules/storage/storageAccounts/blobServices/deploy.bicep' = if (deployBuildLogsStorageAccount) {
-  name: 'Logs-Blob-Service-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: logsStorageName
@@ -608,7 +588,6 @@ module logsBlobService '../shared/modules/resourceModules/storage/storageAccount
 }
 
 module logsStorageBlobContainer '../shared/modules/resourceModules/storage/storageAccounts/blobServices/containers/deploy.bicep' = if (deployBuildLogsStorageAccount) {
-  name: 'Logs-Blob-Container-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: logsStorageName
@@ -619,7 +598,6 @@ module logsStorageBlobContainer '../shared/modules/resourceModules/storage/stora
 }
 
 module logsStorageLifecyclePolicy '../shared/modules/resourceModules/storage/storageAccounts/managementPolicies/deploy.bicep' = if (deployBuildLogsStorageAccount) {
-  name: 'Logs-Storage-LifecyclePolicy-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: logsStorageName
@@ -647,7 +625,6 @@ module logsStorageLifecyclePolicy '../shared/modules/resourceModules/storage/sto
 }
 
 module logsStoragePrivateEndpoint '../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployBuildLogsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
-  name: 'Logs-Storage-PE-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: logsPrivateEndpointName
@@ -662,7 +639,6 @@ module logsStoragePrivateEndpoint '../shared/modules/resourceModules/network/pri
 }
 
 module logsStorageBlobContributorAssignment '../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = if (deployBuildLogsStorageAccount) {
-  name: 'RA-MI-BlobContrib-LogsSA-${timeStamp}'
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: logsStorageName

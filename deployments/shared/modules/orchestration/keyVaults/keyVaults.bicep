@@ -21,7 +21,6 @@ param privateEndpointSubnetResourceId string = ''
 param privateEndpointNameConv string = ''
 param privateEndpointNICNameConv string = ''
 param tags object = {}
-param deploymentSuffix string
 @secure()
 param virtualMachineAdminPassword string = ''
 @secure()
@@ -88,7 +87,6 @@ var encryptionKvNetworkAcls = {
 // ─── Secrets Key Vault ─────────────────────────────────────────────────────────
 
 module secretsKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' = if (deploySecretsKv) {
-  name: 'Secrets-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: secretsKeyVaultName
@@ -107,7 +105,6 @@ module secretsKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' = if
 }
 
 module secretsKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
-  name: 'Secrets-KV-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: replace(
@@ -130,7 +127,6 @@ module secretsKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy
 
 module secrets '../../resourceModules/keyVault/vaults/secrets/deploy.bicep' = [
   for secret in secretList: if (deploySecretsKv) {
-    name: 'Secret-${secret.name}-${deploymentSuffix}'
     scope: resourceGroup(resourceGroupName)
     params: {
       keyVaultName: secretsKeyVaultName
@@ -144,7 +140,6 @@ module secrets '../../resourceModules/keyVault/vaults/secrets/deploy.bicep' = [
 // ─── Encryption Key Vault ──────────────────────────────────────────────────────
 
 module encryptionKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' = if (deployEncryptionKeyVault) {
-  name: 'Encryption-KeyVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: encryptionKeyVaultName
@@ -163,7 +158,6 @@ module encryptionKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' =
 }
 
 module encryptionKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
-  name: 'Encryption-KV-PE-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: replace(

@@ -1,5 +1,7 @@
 targetScope = 'subscription'
 
+import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
 type fslogixConfigurationType = {
   identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid'
   storageService: 'AzureFiles' | 'AzureNetAppFiles'
@@ -11,15 +13,6 @@ type fslogixConfigurationType = {
   remoteNetAppServerFqdns: string[]
   objectSpecificSettingsGroups: string[]
   profileSizeInMBs: int
-}
-
-type sessionHostCustomizationType = {
-  @description('Unique Run Command name for the customization.')
-  name: string
-  @description('Artifact blob path relative to artifactsContainerUri, or a full HTTPS URI.')
-  blobNameOrUri: string
-  @description('Optional. Arguments passed to the customization artifact.')
-  arguments: string?
 }
 
 @description('Required. Azure region for the policy assignment managed identity.')
@@ -37,39 +30,11 @@ param hostPoolResourceId string = ''
 @description('Required. Name of the user-assigned identity used by Azure Policy remediation.')
 param policyIdentityName string
 
-@description('Optional. Create the disk encryption key and Disk Encryption Set in this deployment.')
-param deployDiskEncryptionSet bool = false
-
-@description('Optional. Resource ID of an existing Disk Encryption Set for session host OS disks. Do not set when deployDiskEncryptionSet is true.')
+@description('Optional. Resource ID of the Disk Encryption Set enforced on session host OS disks.')
 @metadata({
   strongType: 'Microsoft.Compute/diskEncryptionSets'
 })
 param diskEncryptionSetResourceId string = ''
-
-@description('Conditional. Resource ID of the existing Key Vault where the disk encryption key is created. Required when deployDiskEncryptionSet is true.')
-@metadata({
-  strongType: 'Microsoft.KeyVault/vaults'
-})
-param encryptionKeyVaultResourceId string = ''
-
-@allowed([
-  'CustomerManaged'
-  'CustomerManagedHSM'
-  'PlatformManagedAndCustomerManaged'
-  'PlatformManagedAndCustomerManagedHSM'
-])
-@description('Optional. Customer-managed encryption mode used when creating the Disk Encryption Set.')
-param keyManagementDisks string = 'CustomerManagedHSM'
-
-@description('Optional. Name of the Key Vault key created for session host disk encryption.')
-param diskEncryptionKeyName string = 'key-avd-session-host-disk'
-
-@description('Optional. Name of the Disk Encryption Set created in the session-host resource group.')
-param diskEncryptionSetName string = 'des-avd-session-host'
-
-@minValue(7)
-@description('Optional. Disk encryption key expiration period in days. The key rotates seven days before expiration.')
-param keyExpirationInDays int = 180
 
 @description('Optional. Deploy Azure Monitor Agent and associate automated session hosts with the selected Data Collection Rule.')
 param enableMonitoring bool = true
@@ -80,29 +45,23 @@ param enableMonitoring bool = true
 })
 param dataCollectionRuleResourceId string = ''
 
-@description('Optional. Resource ID of the Data Collection Endpoint associated with automated session hosts. When supplied, a separate built-in policy assignment creates the DCE association.')
+@description('Optional. Resource ID of the Data Collection Endpoint associated with automated session hosts.')
 @metadata({
   strongType: 'Microsoft.Insights/dataCollectionEndpoints'
 })
 param dataCollectionEndpointResourceId string = ''
 
-@description('Optional. Restrict the built-in Azure Monitor Agent policies to Microsoft-supported Windows images.')
-param scopeMonitoringToSupportedImages bool = true
-
-@description('Optional. Additional supported custom image resource IDs evaluated by the Azure Monitor Agent policies.')
-param additionalWindowsImageResourceIds array = []
-
 @description('Optional. Deploy Guest Attestation to Trusted Launch and Confidential VM session hosts for integrity monitoring.')
 param integrityMonitoring bool = true
 
-@description('Optional. Encrypt temporary disks, ephemeral OS disks, and disk caches at the physical host.')
+@description('Optional. Enforce encryption at host on session hosts. When false, the creation-settings initiative does not manage this property.')
 param encryptionAtHost bool = true
 
 @minValue(0)
 @description('Optional. OS disk size in GB. Set to zero to preserve the image default.')
 param diskSizeGB int = 0
 
-@description('Optional. Enable accelerated networking on session host network interfaces. The selected VM size must support accelerated networking.')
+@description('Optional. Enforce accelerated networking on session host network interfaces. When false, the creation-settings initiative disables this member. The selected VM size must support accelerated networking.')
 param enableAcceleratedNetworking bool = true
 
 @description('Optional. Windows time zone configured on automated session hosts.')
@@ -135,7 +94,7 @@ param artifactsContainerUri string = ''
 param artifactsUserAssignedIdentityResourceId string = ''
 
 @description('Optional. Ordered, idempotent customizations applied to automated session hosts. Uses the same object shape and execution order as the host pool and session hosts add-on.')
-param sessionHostCustomizations sessionHostCustomizationType[] = []
+param sessionHostCustomizations artifactCustomizationType[] = []
 
 @description('Optional. Tags applied to resources created by this policy stage.')
 param tags object = {}
@@ -143,41 +102,28 @@ param tags object = {}
 var virtualMachineContributorRoleDefinitionId = '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
 var tagContributorRoleDefinitionId = '4a9ae827-6dc8-4573-8ac7-8239d42aa03f'
 var managedIdentityOperatorRoleDefinitionId = 'f1a07417-d97a-45cb-824c-7a7467783830'
+var readerRoleDefinitionId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+var monitoringContributorRoleDefinitionId = '749f88d5-cbae-40b8-bcfc-e573ddc772fa'
 var monitoringPolicyRoleDefinitionIds = [
-  '749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
-  '92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor
+  monitoringContributorRoleDefinitionId
 ]
-var windowsAmaSystemAssignedIdentityInitiativeResourceId = tenantResourceId(
-  'Microsoft.Authorization/policySetDefinitions',
-  '9575b8b7-78ab-4281-b53b-d3c1ace2260b'
-)
-var windowsDcrDceAssociationPolicyResourceId = tenantResourceId(
-  'Microsoft.Authorization/policyDefinitions',
-  '244efd75-0d92-453c-b9a3-7d73ca36ed52'
-)
 var inheritResourceGroupTagPolicyResourceId = tenantResourceId(
   'Microsoft.Authorization/policyDefinitions',
   'cd3aa116-8754-49c9-a813-ad46512ece54'
 )
 var monitoringConfigurationIsValid = !enableMonitoring || !empty(dataCollectionRuleResourceId)
   ? true
-  : bool('dataCollectionRuleResourceId is required when enableMonitoring is true.')
+  : fail('dataCollectionRuleResourceId is required when enableMonitoring is true.')
 var relativeSessionHostCustomizations = filter(sessionHostCustomizations, customization => !startsWith(customization.blobNameOrUri, 'https://'))
 var sessionHostCustomizationConfigurationIsValid = empty(sessionHostCustomizations) || (!empty(artifactsUserAssignedIdentityResourceId) && (empty(relativeSessionHostCustomizations) || !empty(artifactsContainerUri)))
   ? true
-  : bool('artifactsUserAssignedIdentityResourceId is required for sessionHostCustomizations, and artifactsContainerUri is required when any blobNameOrUri is relative.')
+  : fail('artifactsUserAssignedIdentityResourceId is required for sessionHostCustomizations, and artifactsContainerUri is required when any blobNameOrUri is relative.')
 var normalizedArtifactsContainerUri = endsWith(artifactsContainerUri, '/')
   ? take(artifactsContainerUri, max(length(artifactsContainerUri) - 1, 0))
   : artifactsContainerUri
 var finalSessionHostCustomizationName = !empty(sessionHostCustomizations)
   ? replace(last(sessionHostCustomizations)!.name, ' ', '-')
   : 'PrivateCustomization-Final'
-var diskEncryptionSetConfigurationIsValid = !deployDiskEncryptionSet || (empty(diskEncryptionSetResourceId) && !empty(encryptionKeyVaultResourceId))
-  ? true
-  : bool('When deployDiskEncryptionSet is true, encryptionKeyVaultResourceId is required and diskEncryptionSetResourceId must be empty.')
-var effectiveDiskEncryptionSetResourceId = deployDiskEncryptionSet
-  ? diskCmk!.outputs.diskEncryptionSetResourceId
-  : diskEncryptionSetResourceId
 var parentResourceTags = empty(hostPoolResourceId) ? {} : { 'cm-resource-parent': hostPoolResourceId }
 var resourceGroupTags = union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTags)
 var managedIdentityTags = union(tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}, parentResourceTags)
@@ -203,22 +149,7 @@ module policyIdentity '../../shared/modules/resourceModules/managedIdentity/user
   }
 }
 
-module diskCmk '../../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskEncryptionSet) {
-  params: {
-    resourceGroupName: sessionHostResourceGroupName
-    keyVaultResourceId: diskEncryptionSetConfigurationIsValid ? encryptionKeyVaultResourceId : encryptionKeyVaultResourceId
-    keyManagementType: keyManagementDisks
-    keyExpirationInDays: keyExpirationInDays
-    location: location
-    tags: tags
-    parentResourceId: hostPoolResourceId
-    deploymentSuffix: substring(uniqueString(sessionHostResourceGroupName, diskEncryptionSetName), 0, 8)
-    keyName: diskEncryptionKeyName
-    diskEncryptionSetName: diskEncryptionSetName
-  }
-}
-
-module diskEncryptionSetPolicyDefinition 'modules/policy/bicep/virtualMachine-diskEncryptionSet.policyDefinition.bicep' = if (deployDiskEncryptionSet || !empty(diskEncryptionSetResourceId)) {
+module diskEncryptionSetPolicyDefinition 'modules/policy/bicep/virtualMachine-diskEncryptionSet.policyDefinition.bicep' = {
   params: {}
 }
 
@@ -234,7 +165,7 @@ module guestAttestationPolicyDefinition 'modules/policy/bicep/guestAttestation.p
   params: {}
 }
 
-module managedDiskNetworkAccessPolicyDefinition 'modules/policy/bicep/managedDiskNetworkAccess.policyDefinition.bicep' = if (disableManagedDiskPublicNetworkAccess) {
+module managedDiskNetworkAccessPolicyDefinition 'modules/policy/bicep/managedDiskNetworkAccess.policyDefinition.bicep' = {
   params: {}
 }
 
@@ -246,8 +177,33 @@ module sessionHostSystemAssignedIdentityPolicyDefinition 'modules/policy/bicep/s
   params: {}
 }
 
+module azureMonitorAgentPolicyDefinition 'modules/policy/bicep/azureMonitorAgent.policyDefinition.bicep' = if (enableMonitoring) {
+  params: {}
+}
+
+module monitoringAssociationPolicyDefinition 'modules/policy/bicep/monitoringAssociation.policyDefinition.bicep' = if (enableMonitoring) {
+  params: {}
+}
+
+module sessionHostMonitoringPolicySetDefinition 'modules/policy/bicep/sessionHostMonitoring.policySetDefinition.bicep' = if (enableMonitoring) {
+  params: {
+    azureMonitorAgentPolicyDefinitionResourceId: azureMonitorAgentPolicyDefinition!.outputs.policyDefinitionResourceId
+    monitoringAssociationPolicyDefinitionResourceId: monitoringAssociationPolicyDefinition!.outputs.policyDefinitionResourceId
+  }
+}
+
 module acceleratedNetworkingPolicyDefinition 'modules/policy/bicep/networkInterfaceAcceleratedNetworking.policyDefinition.bicep' = {
   params: {}
+}
+
+module sessionHostCreationSettingsPolicySetDefinition 'modules/policy/bicep/sessionHostCreationSettings.policySetDefinition.bicep' = {
+  params: {
+    diskEncryptionSetPolicyDefinitionResourceId: diskEncryptionSetPolicyDefinition.outputs.policyDefinitionResourceId
+    sessionHostComputePolicyDefinitionResourceId: sessionHostComputePolicyDefinition.outputs.policyDefinitionResourceId
+    sessionHostSystemAssignedIdentityPolicyDefinitionResourceId: sessionHostSystemAssignedIdentityPolicyDefinition.outputs.policyDefinitionResourceId
+    acceleratedNetworkingPolicyDefinitionResourceId: acceleratedNetworkingPolicyDefinition.outputs.policyDefinitionResourceId
+    managedDiskNetworkAccessPolicyDefinitionResourceId: managedDiskNetworkAccessPolicyDefinition.outputs.policyDefinitionResourceId
+  }
 }
 
 module policyIdentityVirtualMachineContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
@@ -260,7 +216,7 @@ module policyIdentityVirtualMachineContributor '../../shared/modules/resourceMod
   }
 }
 
-module policyIdentityNetworkContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+module policyIdentityNetworkContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (enableAcceleratedNetworking) {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     roleDefinitionId: '4d97b98b-1d4f-4787-a291-c67834d212e7'
@@ -297,10 +253,34 @@ module monitoringPolicyRoleAssignments '../../shared/modules/resourceModules/aut
       roleDefinitionId: roleDefinitionId
       principalId: policyIdentity.outputs.principalId
       principalType: 'ServicePrincipal'
-      assignmentDescription: 'Allows the built-in Azure Monitor Agent policies to remediate automated AVD session hosts.'
+      assignmentDescription: 'Allows Azure Policy to deploy monitoring resources on automated AVD session hosts.'
     }
   }
 ]
+
+module policyIdentityDataCollectionRuleReader 'modules/dataCollectionRuleReader.bicep' = if (enableMonitoring) {
+  scope: resourceGroup(
+    split(dataCollectionRuleResourceId, '/')[2],
+    split(dataCollectionRuleResourceId, '/')[4]
+  )
+  params: {
+    dataCollectionRuleName: last(split(dataCollectionRuleResourceId, '/'))!
+    principalId: policyIdentity.outputs.principalId
+    readerRoleDefinitionId: readerRoleDefinitionId
+  }
+}
+
+module policyIdentityDataCollectionEndpointContributor 'modules/dataCollectionEndpointContributor.bicep' = if (enableMonitoring && !empty(dataCollectionEndpointResourceId)) {
+  scope: resourceGroup(
+    split(dataCollectionEndpointResourceId, '/')[2],
+    split(dataCollectionEndpointResourceId, '/')[4]
+  )
+  params: {
+    dataCollectionEndpointName: last(split(dataCollectionEndpointResourceId, '/'))!
+    principalId: policyIdentity.outputs.principalId
+    monitoringContributorRoleDefinitionId: monitoringContributorRoleDefinitionId
+  }
+}
 
 module policyIdentityArtifactManagedIdentityOperator '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(sessionHostCustomizations)) {
   scope: resourceGroup(
@@ -320,39 +300,15 @@ module policyIdentityArtifactManagedIdentityOperator '../../shared/modules/resou
   }
 }
 
-module diskEncryptionSetPolicyAssignment 'modules/policyAssignment.bicep' = if (deployDiskEncryptionSet || !empty(diskEncryptionSetResourceId)) {
+module sessionHostCreationSettingsPolicyAssignment 'modules/policyAssignment.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
-    name: 'avd-sh-des'
+    name: 'avd-sh-creation-settings'
     location: location
     policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: diskEncryptionSetPolicyDefinition!.outputs.policyDefinitionResourceId
-    displayName: 'Configure automated AVD session host OS disks with a Disk Encryption Set'
-    description: 'Assigns the created or selected Disk Encryption Set to Windows session host OS disks during VM creation or update.'
-    parameters: {
-      diskEncryptionSetResourceId: {
-        value: effectiveDiskEncryptionSetResourceId
-      }
-      effect: {
-        value: 'Modify'
-      }
-    }
-    nonComplianceMessage: 'The session host OS disk must use the Disk Encryption Set selected for this host pool.'
-  }
-  dependsOn: [
-    policyIdentityVirtualMachineContributor
-  ]
-}
-
-module sessionHostComputePolicyAssignment 'modules/policyAssignment.bicep' = {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    name: 'avd-sh-compute'
-    location: location
-    policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: sessionHostComputePolicyDefinition.outputs.policyDefinitionResourceId
-    displayName: 'Configure automated AVD session host compute security settings'
-    description: 'Enforces encryption at host and the selected OS disk size during VM creation or update.'
+    policyDefinitionResourceId: sessionHostCreationSettingsPolicySetDefinition.outputs.policySetDefinitionResourceId
+    displayName: 'Configure AVD session host creation settings'
+    description: 'Configures compute security, optional Disk Encryption Set, system-assigned identity, accelerated networking, and optional managed-disk network access during resource creation or update.'
     parameters: {
       effect: {
         value: 'Modify'
@@ -363,35 +319,28 @@ module sessionHostComputePolicyAssignment 'modules/policyAssignment.bicep' = {
       diskSizeGB: {
         value: diskSizeGB
       }
-    }
-    nonComplianceMessage: 'Session host virtual machines must use the selected encryption-at-host and OS disk settings.'
-  }
-  dependsOn: [
-    policyIdentityVirtualMachineContributor
-  ]
-}
-
-module acceleratedNetworkingPolicyAssignment 'modules/policyAssignment.bicep' = {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    name: 'avd-sh-accel-net'
-    location: location
-    policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: acceleratedNetworkingPolicyDefinition.outputs.policyDefinitionResourceId
-    displayName: 'Configure accelerated networking on automated AVD session hosts'
-    description: 'Enforces the selected accelerated-networking setting on network interfaces in the dedicated session host resource group.'
-    parameters: {
-      effect: {
-        value: 'Modify'
-      }
       enableAcceleratedNetworking: {
         value: enableAcceleratedNetworking
       }
+      acceleratedNetworkingEffect: {
+        value: enableAcceleratedNetworking ? 'Modify' : 'Disabled'
+      }
+      diskEncryptionSetEffect: {
+        value: empty(diskEncryptionSetResourceId) ? 'Disabled' : 'Modify'
+      }
+      diskEncryptionSetResourceId: {
+        value: diskEncryptionSetResourceId
+      }
+      managedDiskNetworkAccessEffect: {
+        value: disableManagedDiskPublicNetworkAccess ? 'Modify' : 'Disabled'
+      }
     }
-    nonComplianceMessage: 'Session host network interfaces must use the selected accelerated-networking setting.'
+    nonComplianceMessage: 'Session host resources must use the selected creation-time compute, identity, networking, encryption, and managed-disk settings.'
   }
   dependsOn: [
+    policyIdentityVirtualMachineContributor
     policyIdentityNetworkContributor
+    policyIdentityDiskPoolOperator
   ]
 }
 
@@ -417,109 +366,36 @@ module resourceOwnershipTagPolicyAssignment 'modules/policyAssignment.bicep' = i
   ]
 }
 
-module sessionHostIdentityPolicyAssignment 'modules/policyAssignment.bicep' = {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    name: 'avd-sh-monitor-id'
-    location: location
-    policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: sessionHostSystemAssignedIdentityPolicyDefinition.outputs.policyDefinitionResourceId
-    displayName: 'Configure system-assigned identity on automated AVD session hosts'
-    description: 'Enables system-assigned managed identity on every automated AVD session host while preserving existing user-assigned identities.'
-    parameters: {
-      effect: {
-        value: 'Modify'
-      }
-    }
-    nonComplianceMessage: 'The session host must have a system-assigned managed identity.'
-  }
-  dependsOn: [
-    policyIdentityVirtualMachineContributor
-  ]
-}
-
 module monitoringPolicyAssignment 'modules/policyAssignment.bicep' = if (enableMonitoring) {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     name: 'avd-sh-monitor'
     location: location
     policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: windowsAmaSystemAssignedIdentityInitiativeResourceId
+    policyDefinitionResourceId: sessionHostMonitoringPolicySetDefinition!.outputs.policySetDefinitionResourceId
     displayName: 'Deploy Azure Monitor Agent and DCR association to automated AVD session hosts'
-    description: 'Uses the Microsoft built-in initiative to deploy Azure Monitor Agent with system-assigned identity authentication and associate the selected Data Collection Rule.'
+    description: 'Deploys Azure Monitor Agent with system-assigned identity authentication and associates the selected Data Collection Rule and optional Data Collection Endpoint.'
     parameters: {
       effect: {
         value: 'DeployIfNotExists'
       }
-      scopeToSupportedImages: {
-        value: scopeMonitoringToSupportedImages
-      }
-      listOfWindowsImageIdToInclude: {
-        value: additionalWindowsImageResourceIds
-      }
-      DcrResourceId: {
+      dataCollectionRuleResourceId: {
         value: monitoringConfigurationIsValid ? dataCollectionRuleResourceId : dataCollectionRuleResourceId
       }
-    }
-    nonComplianceMessage: 'The session host must run Azure Monitor Agent using system-assigned identity and be associated with the selected Data Collection Rule.'
-  }
-  dependsOn: [
-    sessionHostIdentityPolicyAssignment
-    monitoringPolicyRoleAssignments
-  ]
-}
-
-module dataCollectionEndpointPolicyAssignment 'modules/policyAssignment.bicep' = if (enableMonitoring && !empty(dataCollectionEndpointResourceId)) {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    name: 'avd-sh-dce'
-    location: location
-    policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: windowsDcrDceAssociationPolicyResourceId
-    displayName: 'Associate automated AVD session hosts with a Data Collection Endpoint'
-    description: 'Uses the Microsoft built-in DCR or DCE association policy in Data Collection Endpoint mode.'
-    parameters: {
-      effect: {
-        value: 'DeployIfNotExists'
-      }
-      scopeToSupportedImages: {
-        value: scopeMonitoringToSupportedImages
-      }
-      listOfWindowsImageIdToInclude: {
-        value: additionalWindowsImageResourceIds
-      }
-      dcrResourceId: {
+      dataCollectionEndpointResourceId: {
         value: dataCollectionEndpointResourceId
       }
-      resourceType: {
-        value: 'Microsoft.Insights/dataCollectionEndpoints'
+      dataCollectionEndpointEffect: {
+        value: empty(dataCollectionEndpointResourceId) ? 'Disabled' : 'DeployIfNotExists'
       }
     }
-    nonComplianceMessage: 'The session host must be associated with the selected Data Collection Endpoint.'
+    nonComplianceMessage: 'The session host must run Azure Monitor Agent using system-assigned identity and have the selected monitoring associations.'
   }
   dependsOn: [
+    sessionHostCreationSettingsPolicyAssignment
     monitoringPolicyRoleAssignments
-  ]
-}
-
-module managedDiskNetworkAccessPolicyAssignment 'modules/policyAssignment.bicep' = if (disableManagedDiskPublicNetworkAccess) {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    name: 'avd-sh-disk-net'
-    location: location
-    policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: managedDiskNetworkAccessPolicyDefinition!.outputs.policyDefinitionResourceId
-    displayName: 'Disable public network access on automated AVD session host managed disks'
-    description: 'Disables public network access and denies all network export access on managed disks.'
-    parameters: {
-      effect: {
-        value: 'Modify'
-      }
-    }
-    nonComplianceMessage: 'Session host managed disks must disable public network access and deny all network export access.'
-  }
-  dependsOn: [
-    policyIdentityDiskPoolOperator
+    policyIdentityDataCollectionRuleReader
+    policyIdentityDataCollectionEndpointContributor
   ]
 }
 
@@ -643,26 +519,24 @@ module privateCustomizationPolicyAssignment 'modules/policyAssignment.bicep' = i
     ]
 }
 
-output diskEncryptionSetPolicyAssignmentResourceId string = deployDiskEncryptionSet || !empty(diskEncryptionSetResourceId)
-  ? diskEncryptionSetPolicyAssignment!.outputs.resourceId
+output diskEncryptionSetPolicyAssignmentResourceId string = !empty(diskEncryptionSetResourceId)
+  ? sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
   : ''
-output diskEncryptionSetResourceId string = deployDiskEncryptionSet || !empty(diskEncryptionSetResourceId)
-  ? effectiveDiskEncryptionSetResourceId
-  : ''
-output acceleratedNetworkingPolicyAssignmentResourceId string = acceleratedNetworkingPolicyAssignment.outputs.resourceId
+output diskEncryptionSetResourceId string = diskEncryptionSetResourceId
+output acceleratedNetworkingPolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
 output dataCollectionEndpointPolicyAssignmentResourceId string = enableMonitoring && !empty(dataCollectionEndpointResourceId)
-  ? dataCollectionEndpointPolicyAssignment!.outputs.resourceId
+  ? monitoringPolicyAssignment!.outputs.resourceId
   : ''
 output sessionHostConfigurationPolicyAssignmentResourceId string = sessionHostConfigurationPolicyAssignment.outputs.resourceId
 output guestAttestationPolicyAssignmentResourceId string = integrityMonitoring
   ? guestAttestationPolicyAssignment!.outputs.resourceId
   : ''
 output managedDiskNetworkAccessPolicyAssignmentResourceId string = disableManagedDiskPublicNetworkAccess
-  ? managedDiskNetworkAccessPolicyAssignment!.outputs.resourceId
+  ? sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
   : ''
 output monitoringPolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.resourceId : ''
 output dataCollectionRulePolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.resourceId : ''
-output sessionHostIdentityPolicyAssignmentResourceId string = sessionHostIdentityPolicyAssignment.outputs.resourceId
+output sessionHostIdentityPolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
 output policyIdentityResourceId string = policyIdentity.outputs.resourceId
 output resourceOwnershipTagPolicyAssignmentResourceId string = !empty(hostPoolResourceId)
   ? resourceOwnershipTagPolicyAssignment!.outputs.resourceId
@@ -670,4 +544,4 @@ output resourceOwnershipTagPolicyAssignmentResourceId string = !empty(hostPoolRe
 output sessionHostCustomizationPolicyAssignmentResourceIds array = !empty(sessionHostCustomizations)
   ? [privateCustomizationPolicyAssignment!.outputs.resourceId]
   : []
-output sessionHostComputePolicyAssignmentResourceId string = sessionHostComputePolicyAssignment.outputs.resourceId
+output sessionHostComputePolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId

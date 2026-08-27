@@ -13,9 +13,6 @@ param azureQueuePrivateDnsZoneResourceId string = ''
 @description('Optional. Resource ID of the private DNS zone for table endpoints (typically privatelink.table.core.windows.net).')
 param azureTablePrivateDnsZoneResourceId string = ''
 
-@description('Required. Unique suffix used for deterministic deployment naming and idempotency.')
-param deploymentSuffix string
-
 @description('Optional. Enables creation and wiring of Application Insights for the Function App.')
 param enableApplicationInsights bool = false
 
@@ -164,14 +161,12 @@ var createStorageEncryptionUai = useCmk
 // Delegate all CMK resource creation (key, UAI, role assignment) to the unified module.
 // This replaces the inline key/UAI/RA boilerplate that was previously duplicated here.
 module cmk '../../orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (createStorageEncryptionUai) {
-  name: 'CMK-FunctionAppStorage-${deploymentSuffix}'
   params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
     keyManagementType: keyManagementStorageAccounts == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
     location: location
     tags: tags
     parentResourceId: hostPoolResourceId
-    deploymentSuffix: deploymentSuffix
     keyNames: [encryptionKeyName]
     identityName: storageEncryptionIdentityName
   }
@@ -351,14 +346,12 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (en
 }
 
 module updatePrivateLinkScope '../privateLinkScope/get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
-  name: 'PrivateLlinkScope-${deploymentSuffix}'
   scope: subscription()
   params: {
     privateLinkScopeResourceId: privateLinkScopeResourceId
     scopedResourceIds: [
       applicationInsights.id
     ]
-    deploymentSuffix: deploymentSuffix
   }
 }
 
@@ -585,7 +578,6 @@ var storageAccountRoleDefinitions = union(
 )
 
 module roleAssignment_storageAccount '../storage/storageAccounts/roleAssignment.bicep' = {
-  name: 'set-role-assignments-storage-${deploymentSuffix}'
   params: {
     storageAccountName: storageAccount.name
     assignments: [

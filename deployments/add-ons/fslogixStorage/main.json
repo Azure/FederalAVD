@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "7950756384530142002"
+      "templateHash": "16152377393346153210"
     }
   },
   "definitions": {
@@ -24,6 +24,11 @@
           "metadata": {
             "description": "Display name of the group."
           }
+        }
+      },
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../shared/modules/resourceModules/types/identityTypes.bicep"
         }
       }
     }
@@ -298,13 +303,6 @@
         "description": "Optional. Starting index appended to Azure Files storage account names."
       }
     },
-    "deploymentSuffix": {
-      "type": "string",
-      "defaultValue": "[utcNow('yyyyMMddHHmmss')]",
-      "metadata": {
-        "description": "Optional. Unique suffix for nested deployment names and deployment VM extension reruns."
-      }
-    },
     "parentResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -517,15 +515,15 @@
     "storageSku": "[split(parameters('fslogixStorageService'), ' ')[1]]",
     "fileShareNames": "[variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')]]",
     "storageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(parameters('fslogixUserGroups')))]",
-    "remoteStorageAccountConfigurationIsValid": "[if(or(empty(parameters('remoteStorageAccountResourceIds')), equals(length(parameters('remoteStorageAccountResourceIds')), variables('storageCount'))), true(), bool('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.'))]",
-    "remoteNetAppConfigurationIsValid": "[if(or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(variables('fileShareNames')))), true(), bool('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.'))]",
-    "shardingConfigurationIsValid": "[if(or(equals(parameters('fslogixShardOptions'), 'None'), not(empty(parameters('fslogixUserGroups')))), true(), bool('fslogixUserGroups must contain at least one group when sharding is enabled.'))]",
-    "storageIdentityConfigurationIsValid": "[if(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), contains(parameters('identitySolution'), 'DomainServices')), true(), bool('Azure NetApp Files requires ActiveDirectoryDomainServices or EntraDomainServices.'))]",
-    "netAppResourceGroupConfigurationIsValid": "[if(or(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), equals(parameters('netAppDeploymentMode'), 'CreateAll')), not(parameters('createStorageResourceGroup'))), true(), bool('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.'))]",
+    "remoteStorageAccountConfigurationIsValid": "[if(or(empty(parameters('remoteStorageAccountResourceIds')), equals(length(parameters('remoteStorageAccountResourceIds')), variables('storageCount'))), true(), fail('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.'))]",
+    "remoteNetAppConfigurationIsValid": "[if(or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(variables('fileShareNames')))), true(), fail('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.'))]",
+    "shardingConfigurationIsValid": "[if(or(equals(parameters('fslogixShardOptions'), 'None'), not(empty(parameters('fslogixUserGroups')))), true(), fail('fslogixUserGroups must contain at least one group when sharding is enabled.'))]",
+    "storageIdentityConfigurationIsValid": "[if(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), contains(parameters('identitySolution'), 'DomainServices')), true(), fail('Azure NetApp Files requires ActiveDirectoryDomainServices or EntraDomainServices.'))]",
+    "netAppResourceGroupConfigurationIsValid": "[if(or(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), equals(parameters('netAppDeploymentMode'), 'CreateAll')), not(parameters('createStorageResourceGroup'))), true(), fail('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.'))]",
     "deployStorageCmk": "[and(equals(variables('storageSolution'), 'AzureFiles'), contains(parameters('keyManagementStorage'), 'CustomerManaged'))]",
-    "storageCmkConfigurationIsValid": "[if(or(not(variables('deployStorageCmk')), not(empty(parameters('existingEncryptionKeyVaultResourceId')))), true(), bool('existingEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.'))]",
+    "storageCmkConfigurationIsValid": "[if(or(not(variables('deployStorageCmk')), not(empty(parameters('existingEncryptionKeyVaultResourceId')))), true(), fail('existingEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.'))]",
     "domainCredentialsRequired": "[or(or(contains(parameters('identitySolution'), 'DomainServices'), equals(variables('storageSolution'), 'AzureNetAppFiles')), and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('fslogixUserGroups')))))]",
-    "externalDeploymentConfigurationIsValid": "[if(or(parameters('manageDeploymentVirtualMachine'), and(not(empty(parameters('deploymentVirtualMachineName'))), not(empty(parameters('existingDeploymentUserAssignedIdentityClientId'))))), true(), bool('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.'))]"
+    "externalDeploymentConfigurationIsValid": "[if(or(parameters('manageDeploymentVirtualMachine'), and(not(empty(parameters('deploymentVirtualMachineName'))), not(empty(parameters('existingDeploymentUserAssignedIdentityClientId'))))), true(), fail('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.'))]"
   },
   "resources": {
     "credentialsKeyVault": {
@@ -1423,7 +1421,7 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "name": "[if(if(not(equals(toLower(if(not(empty(parameters('storageResourceGroupName'))), parameters('storageResourceGroupName'), reference('naming').outputs.resourceGroupStorage.value)), toLower(if(not(empty(parameters('deploymentResourceGroupName'))), parameters('deploymentResourceGroupName'), reference('naming').outputs.resourceGroupDeployment.value)))), true(), bool('The temporary deployment resource group must differ from the storage resource group because cleanup deletes the entire temporary group.')), if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value)), if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value)))]",
+          "name": "[if(if(not(equals(toLower(if(not(empty(parameters('storageResourceGroupName'))), parameters('storageResourceGroupName'), reference('naming').outputs.resourceGroupStorage.value)), toLower(if(not(empty(parameters('deploymentResourceGroupName'))), parameters('deploymentResourceGroupName'), reference('naming').outputs.resourceGroupDeployment.value)))), true(), fail('The temporary deployment resource group must differ from the storage resource group because cleanup deletes the entire temporary group.')), if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value)), if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value)))]",
           "location": {
             "value": "[parameters('location')]"
           },
@@ -1520,9 +1518,6 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "deploymentSuffix": {
-            "value": "[parameters('deploymentSuffix')]"
-          },
           "deploymentVmSize": {
             "value": "[parameters('deploymentVirtualMachineSize')]"
           },
@@ -1562,12 +1557,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "1275913986896742756"
+              "templateHash": "1712327451195321264"
             }
           },
           "parameters": {
@@ -1576,6 +1572,13 @@
             },
             "diskSku": {
               "type": "string"
+            },
+            "diskEncryptionSetResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Disk Encryption Set resource ID used to encrypt the deployment-helper OS disk."
+              }
             },
             "domainJoinUserPassword": {
               "type": "securestring"
@@ -1645,8 +1648,12 @@
             "tags": {
               "type": "object"
             },
-            "deploymentSuffix": {
-              "type": "string"
+            "domainJoinForceUpdateTag": {
+              "type": "string",
+              "defaultValue": "[utcNow('yyyyMMddHHmmss')]",
+              "metadata": {
+                "description": "Changes on each deployment to force the domain-join extension to execute when configured."
+              }
             },
             "userAssignedIdentityNameConv": {
               "type": "string",
@@ -1703,11 +1710,11 @@
             "roleAssignmentsStorage": "[if(and(parameters('fslogix'), or(contains(parameters('identitySolution'), 'DomainServices'), equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'))), createArray(createObject('roleDefinitionId', variables('roleDefinitions').StorageAccountContributor, 'depName', 'Storage-StorageAcctCont', 'resourceGroup', parameters('resourceGroupStorage')), createObject('roleDefinitionId', variables('roleDefinitions').storageFileDataPrivilegedContributor, 'depName', 'Storage-StorageFileDataPrivCont', 'resourceGroup', parameters('resourceGroupStorage')), createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Storage-RBACAdmin', 'resourceGroup', parameters('resourceGroupStorage'))), if(parameters('fslogix'), createArray(createObject('roleDefinitionId', variables('roleDefinitions').storageFileDataPrivilegedContributor, 'depName', 'Storage-StorageFileDataPrivCont', 'resourceGroup', parameters('resourceGroupStorage')), createObject('roleDefinitionId', variables('roleDefinitions').RoleBasedAccessControlAdministrator, 'depName', 'Storage-RBACAdmin', 'resourceGroup', parameters('resourceGroupStorage'))), createArray()))]",
             "roleAssignments": "[union(variables('roleAssignmentsControlPlane'), variables('roleAssignmentsDeployment'), variables('roleAssignmentsHosts'), variables('roleAssignmentsManagement'), variables('roleAssignmentsStorage'))]"
           },
-          "resources": [
-            {
+          "resources": {
+            "deploymentUserAssignedIdentity": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('deploymentUserAssignedIdentity-{0}', uniqueString('deploymentUserAssignedIdentity', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1778,14 +1785,14 @@
                 }
               }
             },
-            {
+            "roleAssignments_deployment": {
               "copy": {
                 "name": "roleAssignments_deployment",
                 "count": "[length(range(0, length(variables('roleAssignments'))))]"
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('RA-{0}-{1}', variables('roleAssignments')[range(0, length(variables('roleAssignments')))[copyIndex()]].depName, parameters('deploymentSuffix'))]",
+              "name": "[format('roleAssignments_deployment-{0}-{1}', copyIndex(), uniqueString('roleAssignments_deployment', deployment().name))]",
               "resourceGroup": "[variables('roleAssignments')[range(0, length(variables('roleAssignments')))[copyIndex()]].resourceGroup]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1794,7 +1801,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "principalId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+                    "value": "[reference('deploymentUserAssignedIdentity').outputs.principalId.value]"
                   },
                   "principalType": {
                     "value": "ServicePrincipal"
@@ -1874,13 +1881,13 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix')))]"
+                "deploymentUserAssignedIdentity"
               ]
             },
-            {
+            "virtualMachine": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('VirtualMachine-Deployment-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('virtualMachine-{0}', uniqueString('virtualMachine', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1924,6 +1931,9 @@
                   "osDiskSku": {
                     "value": "[parameters('diskSku')]"
                   },
+                  "diskEncryptionSetResourceId": {
+                    "value": "[parameters('diskEncryptionSetResourceId')]"
+                  },
                   "adminUsername": {
                     "value": "[variables('virtualMachineAdminUserName')]"
                   },
@@ -1951,9 +1961,9 @@
                   "systemAssignedIdentity": {
                     "value": true
                   },
-                  "userAssignedIdentityResourceIds": "[if(not(empty(parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value)))]",
+                  "userAssignedIdentityResourceIds": "[if(not(empty(parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference('deploymentUserAssignedIdentity').outputs.resourceId.value, parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference('deploymentUserAssignedIdentity').outputs.resourceId.value)))]",
                   "extensions": {
-                    "value": "[union(createArray(createObject('name', 'GuestAttestation', 'publisher', 'Microsoft.Azure.Security.WindowsAttestation', 'type', 'GuestAttestation', 'typeHandlerVersion', '1.0', 'autoUpgradeMinorVersion', true(), 'settings', createObject('AttestationConfig', createObject('MaaSettings', createObject('maaEndpoint', '', 'maaTenantName', 'GuestAttestation'), 'AscSettings', createObject('ascReportingEndpoint', '', 'ascReportingFrequency', ''), 'useCustomToken', 'false', 'disableAlerts', 'false')))), if(and(and(and(parameters('domainJoinDeploymentVirtualMachine'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName')))), createArray(createObject('name', 'JsonADDomainExtension', 'publisher', 'Microsoft.Compute', 'type', 'JsonADDomainExtension', 'typeHandlerVersion', '1.3', 'autoUpgradeMinorVersion', true(), 'forceUpdateTag', parameters('deploymentSuffix'), 'settings', createObject('Name', parameters('domainName'), 'User', parameters('domainJoinUserPrincipalName'), 'Restart', 'true', 'Options', '3', 'OUPath', parameters('ouPath')), 'protectedSettings', createObject('Password', parameters('domainJoinUserPassword')), 'provisionAfterExtensions', createArray('GuestAttestation'))), createArray()))]"
+                    "value": "[union(createArray(createObject('name', 'GuestAttestation', 'publisher', 'Microsoft.Azure.Security.WindowsAttestation', 'type', 'GuestAttestation', 'typeHandlerVersion', '1.0', 'autoUpgradeMinorVersion', true(), 'settings', createObject('AttestationConfig', createObject('MaaSettings', createObject('maaEndpoint', '', 'maaTenantName', 'GuestAttestation'), 'AscSettings', createObject('ascReportingEndpoint', '', 'ascReportingFrequency', ''), 'useCustomToken', 'false', 'disableAlerts', 'false')))), if(and(and(and(parameters('domainJoinDeploymentVirtualMachine'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName')))), createArray(createObject('name', 'JsonADDomainExtension', 'publisher', 'Microsoft.Compute', 'type', 'JsonADDomainExtension', 'typeHandlerVersion', '1.3', 'autoUpgradeMinorVersion', true(), 'forceUpdateTag', parameters('domainJoinForceUpdateTag'), 'settings', createObject('Name', parameters('domainName'), 'User', parameters('domainJoinUserPrincipalName'), 'Restart', 'true', 'Options', '3', 'OUPath', parameters('ouPath')), 'protectedSettings', createObject('Password', parameters('domainJoinUserPassword')), 'provisionAfterExtensions', createArray('GuestAttestation'))), createArray()))]"
                   }
                 },
                 "template": {
@@ -2352,29 +2362,29 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix')))]"
+                "deploymentUserAssignedIdentity"
               ]
             }
-          ],
+          },
           "outputs": {
             "deploymentUserAssignedIdentityClientId": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.clientId.value]"
+              "value": "[reference('deploymentUserAssignedIdentity').outputs.clientId.value]"
             },
             "deploymentUserAssignedIdentityResourceId": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('UserAssignedIdentity-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+              "value": "[reference('deploymentUserAssignedIdentity').outputs.resourceId.value]"
             },
             "deploymentUserAssignedIdentityRoleAssignmentIds": {
               "type": "array",
               "copy": {
                 "count": "[length(filter(range(0, length(variables('roleAssignments'))), lambda('i', not(equals(variables('roleAssignments')[lambdaVariables('i')].resourceGroup, parameters('resourceGroupDeployment'))))))]",
-                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('roleAssignments')[range(0, length(variables('roleAssignments')))[filter(range(0, length(variables('roleAssignments'))), lambda('i', not(equals(variables('roleAssignments')[lambdaVariables('i')].resourceGroup, parameters('resourceGroupDeployment')))))[copyIndex()]]].resourceGroup), 'Microsoft.Resources/deployments', format('RA-{0}-{1}', variables('roleAssignments')[range(0, length(variables('roleAssignments')))[filter(range(0, length(variables('roleAssignments'))), lambda('i', not(equals(variables('roleAssignments')[lambdaVariables('i')].resourceGroup, parameters('resourceGroupDeployment')))))[copyIndex()]]].depName, parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                "input": "[reference(format('roleAssignments_deployment[{0}]', filter(range(0, length(variables('roleAssignments'))), lambda('i', not(equals(variables('roleAssignments')[lambdaVariables('i')].resourceGroup, parameters('resourceGroupDeployment')))))[copyIndex()])).outputs.resourceId.value]"
               }
             },
             "virtualMachineName": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('VirtualMachine-Deployment-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.name.value]"
+              "value": "[reference('virtualMachine').outputs.name.value]"
             }
           }
         }
@@ -2414,9 +2424,6 @@
           "parentResourceId": {
             "value": "[parameters('parentResourceId')]"
           },
-          "deploymentSuffix": {
-            "value": "[parameters('deploymentSuffix')]"
-          },
           "storageKeyNames": {
             "copy": [
               {
@@ -2430,12 +2437,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "8336176837384634891"
+              "templateHash": "3241068436169519352"
             }
           },
           "parameters": {
@@ -2465,9 +2473,6 @@
                 "description": "Optional. Resource ID stamped as the cm-resource-parent tag on keys and the encryption identity."
               }
             },
-            "deploymentSuffix": {
-              "type": "string"
-            },
             "storageKeyNames": {
               "type": "array"
             },
@@ -2476,11 +2481,11 @@
               "defaultValue": ""
             }
           },
-          "resources": [
-            {
+          "resources": {
+            "cmk": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Storage-CMK-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('cmk-{0}', uniqueString('cmk', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -2506,9 +2511,6 @@
                   "parentResourceId": {
                     "value": "[parameters('parentResourceId')]"
                   },
-                  "deploymentSuffix": {
-                    "value": "[parameters('deploymentSuffix')]"
-                  },
                   "keyNames": {
                     "value": "[parameters('storageKeyNames')]"
                   },
@@ -2524,7 +2526,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "11667111077634069277"
+                      "templateHash": "1332103755440952097"
                     }
                   },
                   "definitions": {
@@ -2626,13 +2628,6 @@
                         "description": "Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities."
                       }
                     },
-                    "deploymentSuffix": {
-                      "type": "string",
-                      "defaultValue": "[uniqueString(resourceGroup().id, deployment().name)]",
-                      "metadata": {
-                        "description": "Optional. Suffix appended to deployment names for uniqueness."
-                      }
-                    },
                     "keyNames": {
                       "type": "array",
                       "items": {
@@ -2702,7 +2697,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('paasKeys-{0}-{1}', copyIndex(), uniqueString('paasKeys', deployment().name))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -2858,7 +2853,7 @@
                       "condition": "[not(empty(parameters('keyNames')))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('paasIdentity-{0}', uniqueString('paasIdentity', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -2935,7 +2930,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('paasKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('paasKeyRoleAssignments', deployment().name))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -3098,7 +3093,7 @@
                       "condition": "[not(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'skipKeyCreation'), false()))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-DiskKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('diskKeys-{0}-{1}', copyIndex(), uniqueString('diskKeys', deployment().name))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -3257,7 +3252,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-DiskEncryptionSet-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('diskEncryptionSets-{0}-{1}', copyIndex(), uniqueString('diskEncryptionSets', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -3405,7 +3400,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-DiskKeyRA-EncryptUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('diskKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyRoleAssignments', deployment().name))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -3567,7 +3562,7 @@
                       "condition": "[coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false())]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CMK-DiskKeyRA-ReleaseUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('diskKeyReleaseUserRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyReleaseUserRoleAssignments', deployment().name))]",
                       "subscriptionId": "[variables('keyVaultSubscriptionId')]",
                       "resourceGroup": "[variables('keyVaultResourceGroup')]",
                       "properties": {
@@ -3753,14 +3748,14 @@
                 }
               }
             }
-          ],
+          },
           "outputs": {
             "storageEncryptionIdentityResourceId": {
               "type": "string",
               "metadata": {
                 "description": "Resource ID of the storage encryption user-assigned identity."
               },
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Storage-CMK-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.identityResourceId.value]"
+              "value": "[reference('cmk').outputs.identityResourceId.value]"
             }
           }
         }
@@ -3883,19 +3878,41 @@
           },
           "tags": {
             "value": "[parameters('tags')]"
-          },
-          "deploymentSuffix": {
-            "value": "[parameters('deploymentSuffix')]"
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "6787249968010335177"
+              "templateHash": "11375296346430872548"
+            }
+          },
+          "definitions": {
+            "entraGroupType": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Microsoft Entra object ID of the group."
+                  }
+                },
+                "name": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Display name of the group."
+                  }
+                }
+              },
+              "metadata": {
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../resourceModules/types/identityTypes.bicep"
+                }
+              }
             }
           },
           "parameters": {
@@ -3914,9 +3931,6 @@
               "type": "string"
             },
             "azureFilePrivateDnsZoneResourceId": {
-              "type": "string"
-            },
-            "deploymentSuffix": {
               "type": "string"
             },
             "deploymentUserAssignedIdentityClientId": {
@@ -3938,7 +3952,10 @@
               "type": "string"
             },
             "fslogixAdminGroups": {
-              "type": "array"
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/entraGroupType"
+              }
             },
             "appUpdateUserAssignedIdentityResourceId": {
               "type": "string"
@@ -3953,7 +3970,10 @@
               "type": "string"
             },
             "fslogixUserGroups": {
-              "type": "array"
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/entraGroupType"
+              }
             },
             "hostPoolResourceId": {
               "type": "string",
@@ -4035,6 +4055,9 @@
             },
             "permittedIPs": {
               "type": "array",
+              "items": {
+                "type": "string"
+              },
               "defaultValue": []
             },
             "fslogixSoftDeleteRetentionDays": {
@@ -4050,12 +4073,12 @@
               "defaultValue": "filesharepolicy"
             }
           },
-          "resources": [
-            {
+          "resources": {
+            "azureNetAppFiles": {
               "condition": "[and(equals(parameters('storageSolution'), 'AzureNetAppFiles'), contains(parameters('identitySolution'), 'DomainServices'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Azure-NetAppFiles-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('azureNetAppFiles-{0}', uniqueString('azureNetAppFiles', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupStorage')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -4128,19 +4151,17 @@
                   },
                   "tagsNetAppVolume": {
                     "value": "[union(if(not(empty(parameters('hostPoolResourceId'))), createObject('cm-resource-parent', parameters('hostPoolResourceId')), createObject()), coalesce(tryGet(parameters('tags'), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes'), createObject()))]"
-                  },
-                  "deploymentSuffix": {
-                    "value": "[parameters('deploymentSuffix')]"
                   }
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "12087088173255722952"
+                      "templateHash": "16526919628001769944"
                     }
                   },
                   "parameters": {
@@ -4211,9 +4232,6 @@
                     },
                     "tagsNetAppVolume": {
                       "type": "object"
-                    },
-                    "deploymentSuffix": {
-                      "type": "string"
                     }
                   },
                   "variables": {
@@ -4221,12 +4239,20 @@
                     "ouRelativePath": "[if(contains(parameters('ouPath'), 'DC'), substring(split(parameters('ouPath'), 'DC')[0], 0, sub(length(split(parameters('ouPath'), 'DC')[0]), 1)), parameters('ouPath'))]",
                     "shareSizeInBytes": "[mul(mul(mul(parameters('shareSizeInGB'), 1024), 1024), 1024)]"
                   },
-                  "resources": [
-                    {
+                  "resources": {
+                    "vnet": {
+                      "existing": true,
+                      "type": "Microsoft.Network/virtualNetworks",
+                      "apiVersion": "2023-11-01",
+                      "subscriptionId": "[split(parameters('netAppVolumesSubnetResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('netAppVolumesSubnetResourceId'), '/')[4]]",
+                      "name": "[split(parameters('netAppVolumesSubnetResourceId'), '/')[8]]"
+                    },
+                    "netAppAccount": {
                       "condition": "[parameters('createNetAppAccount')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('NetAppAccount-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('netAppAccount-{0}', uniqueString('netAppAccount', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -4242,7 +4268,7 @@
                           "tags": {
                             "value": "[parameters('tagsNetAppAccount')]"
                           },
-                          "activeDirectory": "[if(parameters('activeDirectoryConnection'), createObject('value', createObject('aesEncryption', true(), 'domain', parameters('domainName'), 'dns', string(reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('netAppVolumesSubnetResourceId'), '/')[2], split(parameters('netAppVolumesSubnetResourceId'), '/')[4]), 'Microsoft.Network/virtualNetworks', split(parameters('netAppVolumesSubnetResourceId'), '/')[8]), '2023-11-01').dhcpOptions.dnsServers), 'organizationalUnit', variables('ouRelativePath'), 'password', parameters('domainJoinUserPassword'), 'smbServerName', format('anf-{0}', parameters('smbServerLocation')), 'username', split(parameters('domainJoinUserPrincipalName'), '@')[0])), createObject('value', createObject()))]"
+                          "activeDirectory": "[if(parameters('activeDirectoryConnection'), createObject('value', createObject('aesEncryption', true(), 'domain', parameters('domainName'), 'dns', string(reference('vnet').dhcpOptions.dnsServers), 'organizationalUnit', variables('ouRelativePath'), 'password', parameters('domainJoinUserPassword'), 'smbServerName', format('anf-{0}', parameters('smbServerLocation')), 'username', split(parameters('domainJoinUserPrincipalName'), '@')[0])), createObject('value', createObject()))]"
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -4297,13 +4323,16 @@
                             }
                           }
                         }
-                      }
+                      },
+                      "dependsOn": [
+                        "vnet"
+                      ]
                     },
-                    {
+                    "capacityPool": {
                       "condition": "[parameters('createNetAppCapacityPool')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('CapacityPool-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('capacityPool-{0}', uniqueString('capacityPool', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -4394,17 +4423,17 @@
                         }
                       },
                       "dependsOn": [
-                        "[resourceId('Microsoft.Resources/deployments', format('NetAppAccount-{0}', parameters('deploymentSuffix')))]"
+                        "netAppAccount"
                       ]
                     },
-                    {
+                    "netAppVolumes": {
                       "copy": {
                         "name": "netAppVolumes",
                         "count": "[length(range(0, length(parameters('shares'))))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[copyIndex()]], parameters('deploymentSuffix'))]",
+                      "name": "[format('netAppVolumes-{0}-{1}', copyIndex(), uniqueString('netAppVolumes', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -4537,13 +4566,13 @@
                         }
                       },
                       "dependsOn": [
-                        "[resourceId('Microsoft.Resources/deployments', format('CapacityPool-{0}', parameters('deploymentSuffix')))]"
+                        "capacityPool"
                       ]
                     },
-                    {
+                    "setNTFSPermissions": {
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('Set-NTFSPermissions-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('setNTFSPermissions-{0}', uniqueString('setNTFSPermissions', deployment().name))]",
                       "resourceGroup": "[parameters('resourceGroupDeployment')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -4571,7 +4600,7 @@
                               },
                               {
                                 "name": "NetAppServers",
-                                "value": "[string(if(greater(length(parameters('shares')), 1), createArray(reference(resourceId('Microsoft.Resources/deployments', format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[0]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value, reference(resourceId('Microsoft.Resources/deployments', format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[1]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value), createArray(reference(resourceId('Microsoft.Resources/deployments', format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[0]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value)))]"
+                                "value": "[string(if(greater(length(parameters('shares')), 1), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value, reference(format('netAppVolumes[{0}]', 1)).outputs.smbServerFqdn.value), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value)))]"
                               },
                               {
                                 "name": "Shares",
@@ -4601,12 +4630,31 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "3524014955198313820"
+                              "templateHash": "9810196216141102269"
+                            }
+                          },
+                          "definitions": {
+                            "runCommandParameterType": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
+                                }
+                              }
                             }
                           },
                           "parameters": {
@@ -4643,6 +4691,9 @@
                             },
                             "parameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named parameters to pass to the script."
@@ -4650,6 +4701,9 @@
                             },
                             "protectedParameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named protected (secure) parameters to pass to the script."
@@ -4705,8 +4759,14 @@
                               }
                             }
                           },
-                          "resources": [
-                            {
+                          "resources": {
+                            "virtualMachine": {
+                              "existing": true,
+                              "type": "Microsoft.Compute/virtualMachines",
+                              "apiVersion": "2023-09-01",
+                              "name": "[parameters('virtualMachineName')]"
+                            },
+                            "runCommand": {
                               "type": "Microsoft.Compute/virtualMachines/runCommands",
                               "apiVersion": "2023-09-01",
                               "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -4728,7 +4788,7 @@
                                 "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                               }
                             }
-                          ],
+                          },
                           "outputs": {
                             "resourceId": {
                               "type": "string",
@@ -4745,28 +4805,28 @@
                         "netAppVolumes"
                       ]
                     }
-                  ],
+                  },
                   "outputs": {
                     "volumeResourceIds": {
                       "type": "array",
                       "copy": {
                         "count": "[length(range(0, length(parameters('shares'))))]",
-                        "input": "[reference(resourceId('Microsoft.Resources/deployments', format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[range(0, length(parameters('shares')))[copyIndex()]]], parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                        "input": "[reference(format('netAppVolumes[{0}]', range(0, length(parameters('shares')))[copyIndex()])).outputs.resourceId.value]"
                       }
                     },
                     "smbServerFqdns": {
                       "type": "array",
-                      "value": "[if(greater(length(parameters('shares')), 1), createArray(reference(resourceId('Microsoft.Resources/deployments', format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[0]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value, reference(resourceId('Microsoft.Resources/deployments', format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[1]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value), createArray(reference(resourceId('Microsoft.Resources/deployments', format('Volume-{0}-{1}', parameters('shares')[range(0, length(parameters('shares')))[0]], parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdn.value))]"
+                      "value": "[if(greater(length(parameters('shares')), 1), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value, reference(format('netAppVolumes[{0}]', 1)).outputs.smbServerFqdn.value), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value))]"
                     }
                   }
                 }
               }
             },
-            {
+            "azureFiles": {
               "condition": "[equals(parameters('storageSolution'), 'AzureFiles')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Azure-Files-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('azureFiles-{0}', uniqueString('azureFiles', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupStorage')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -4874,9 +4934,6 @@
                   "tags": {
                     "value": "[parameters('tags')]"
                   },
-                  "deploymentSuffix": {
-                    "value": "[parameters('deploymentSuffix')]"
-                  },
                   "permittedIPs": {
                     "value": "[parameters('permittedIPs')]"
                   },
@@ -4886,12 +4943,13 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "2424880875830397864"
+                      "templateHash": "16411601411880769843"
                     }
                   },
                   "parameters": {
@@ -4998,9 +5056,6 @@
                     "tags": {
                       "type": "object"
                     },
-                    "deploymentSuffix": {
-                      "type": "string"
-                    },
                     "permittedIPs": {
                       "type": "array",
                       "defaultValue": [],
@@ -5056,15 +5111,24 @@
                     "parentResourceTags": "[if(not(empty(parameters('hostPoolResourceId'))), createObject('cm-resource-parent', parameters('hostPoolResourceId')), createObject())]",
                     "graphEndpoint": "[if(equals(environment().name, 'AzureUSGovernment'), 'https://graph.microsoft.us', if(startsWith(environment().name, 'us'), format('https://graph.{0}', environment().suffixes.storage), 'https://graph.microsoft.com'))]"
                   },
-                  "resources": [
-                    {
+                  "resources": {
+                    "appUpdateUai": {
+                      "condition": "[not(empty(parameters('appUpdateUserAssignedIdentityResourceId')))]",
+                      "existing": true,
+                      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+                      "apiVersion": "2023-01-31",
+                      "subscriptionId": "[split(parameters('appUpdateUserAssignedIdentityResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('appUpdateUserAssignedIdentityResourceId'), '/')[4]]",
+                      "name": "[last(split(parameters('appUpdateUserAssignedIdentityResourceId'), '/'))]"
+                    },
+                    "storageAccounts": {
                       "copy": {
                         "name": "storageAccounts",
                         "count": "[length(range(0, parameters('storageCount')))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))]",
+                      "name": "[format('storageAccounts-{0}-{1}', copyIndex(), uniqueString('storageAccounts', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -5107,7 +5171,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "7441663825666218963"
+                              "templateHash": "15467135385355449491"
                             }
                           },
                           "definitions": {
@@ -5356,7 +5420,7 @@
                           "variables": {
                             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
                             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
-                            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
+                            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), fail('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
                             "cmkKeyVaultUri": "[if(not(empty(parameters('cmkKeyUri'))), format('{0}/', split(parameters('cmkKeyUri'), '/keys/')[0]), '')]",
                             "cmkKeyPathSegments": "[split(if(not(empty(parameters('cmkKeyUri'))), split(parameters('cmkKeyUri'), '/keys/')[1], ''), '/')]",
                             "cmkKeyName": "[if(not(empty(parameters('cmkKeyUri'))), variables('cmkKeyPathSegments')[0], '')]",
@@ -5445,14 +5509,14 @@
                         }
                       }
                     },
-                    {
+                    "fileServices": {
                       "copy": {
                         "name": "fileServices",
                         "count": "[length(range(0, parameters('storageCount')))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('{0}{1}-fileService-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))]",
+                      "name": "[format('fileServices-{0}-{1}', copyIndex(), uniqueString('fileServices', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -5723,14 +5787,14 @@
                         "storageAccounts"
                       ]
                     },
-                    {
+                    "shares": {
                       "copy": {
                         "name": "shares",
                         "count": "[length(range(0, parameters('storageCount')))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('{0}{1}-fileShares-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))]",
+                      "name": "[format('shares-{0}-{1}', copyIndex(), uniqueString('shares', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -5880,7 +5944,7 @@
                         "storageAccounts"
                       ]
                     },
-                    {
+                    "storageAccountPes": {
                       "copy": {
                         "name": "storageAccountPes",
                         "count": "[length(range(0, parameters('storageCount')))]"
@@ -5888,7 +5952,7 @@
                       "condition": "[parameters('privateEndpoint')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('StorageAccount-PE-{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))]",
+                      "name": "[format('storageAccountPes-{0}-{1}', copyIndex(), uniqueString('storageAccountPes', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -5908,7 +5972,7 @@
                             "value": "[parameters('privateEndpointSubnetResourceId')]"
                           },
                           "privateLinkServiceId": {
-                            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                            "value": "[reference(format('storageAccounts[{0}]', range(0, parameters('storageCount'))[copyIndex()])).outputs.resourceId.value]"
                           },
                           "groupId": {
                             "value": "file"
@@ -6037,17 +6101,17 @@
                       "dependsOn": [
                         "fileServices",
                         "shares",
-                        "[resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix')))]"
+                        "[format('storageAccounts[{0}]', range(0, parameters('storageCount'))[copyIndex()])]"
                       ]
                     },
-                    {
+                    "roleAssignmentsAdmins": {
                       "copy": {
                         "name": "roleAssignmentsAdmins",
                         "count": "[length(parameters('shareAdminGroups'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('RoleAssignment-Admin-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+                      "name": "[format('roleAssignmentsAdmins-{0}-{1}', copyIndex(), uniqueString('roleAssignmentsAdmins', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -6135,11 +6199,11 @@
                         }
                       }
                     },
-                    {
+                    "configureADDSAuth": {
                       "condition": "[equals(parameters('identitySolution'), 'ActiveDirectoryDomainServices')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('Join-Domain-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('configureADDSAuth-{0}', uniqueString('configureADDSAuth', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -6229,12 +6293,31 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "3524014955198313820"
+                              "templateHash": "9810196216141102269"
+                            }
+                          },
+                          "definitions": {
+                            "runCommandParameterType": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
+                                }
+                              }
                             }
                           },
                           "parameters": {
@@ -6271,6 +6354,9 @@
                             },
                             "parameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named parameters to pass to the script."
@@ -6278,6 +6364,9 @@
                             },
                             "protectedParameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named protected (secure) parameters to pass to the script."
@@ -6333,8 +6422,14 @@
                               }
                             }
                           },
-                          "resources": [
-                            {
+                          "resources": {
+                            "virtualMachine": {
+                              "existing": true,
+                              "type": "Microsoft.Compute/virtualMachines",
+                              "apiVersion": "2023-09-01",
+                              "name": "[parameters('virtualMachineName')]"
+                            },
+                            "runCommand": {
                               "type": "Microsoft.Compute/virtualMachines/runCommands",
                               "apiVersion": "2023-09-01",
                               "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -6356,7 +6451,7 @@
                                 "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                               }
                             }
-                          ],
+                          },
                           "outputs": {
                             "resourceId": {
                               "type": "string",
@@ -6374,11 +6469,11 @@
                         "storageAccountPes"
                       ]
                     },
-                    {
+                    "configureEntraKerberosWithDomainInfo": {
                       "condition": "[and(and(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('Configure-Entra-Kerberos-DomainInfo-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('configureEntraKerberosWithDomainInfo-{0}', uniqueString('configureEntraKerberosWithDomainInfo', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -6460,12 +6555,31 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "3524014955198313820"
+                              "templateHash": "9810196216141102269"
+                            }
+                          },
+                          "definitions": {
+                            "runCommandParameterType": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
+                                }
+                              }
                             }
                           },
                           "parameters": {
@@ -6502,6 +6616,9 @@
                             },
                             "parameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named parameters to pass to the script."
@@ -6509,6 +6626,9 @@
                             },
                             "protectedParameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named protected (secure) parameters to pass to the script."
@@ -6564,8 +6684,14 @@
                               }
                             }
                           },
-                          "resources": [
-                            {
+                          "resources": {
+                            "virtualMachine": {
+                              "existing": true,
+                              "type": "Microsoft.Compute/virtualMachines",
+                              "apiVersion": "2023-09-01",
+                              "name": "[parameters('virtualMachineName')]"
+                            },
+                            "runCommand": {
                               "type": "Microsoft.Compute/virtualMachines/runCommands",
                               "apiVersion": "2023-09-01",
                               "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -6587,7 +6713,7 @@
                                 "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                               }
                             }
-                          ],
+                          },
                           "outputs": {
                             "resourceId": {
                               "type": "string",
@@ -6605,11 +6731,11 @@
                         "storageAccountPes"
                       ]
                     },
-                    {
+                    "updateStorageApplicationsManifest": {
                       "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('Update-Storage-App-Manifest-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('updateStorageApplicationsManifest-{0}', uniqueString('updateStorageApplicationsManifest', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -6637,7 +6763,7 @@
                               },
                               {
                                 "name": "ClientId",
-                                "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('appUpdateUserAssignedIdentityResourceId'), '/')[2], split(parameters('appUpdateUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('appUpdateUserAssignedIdentityResourceId'), '/'))), '2023-01-31').clientId]"
+                                "value": "[reference('appUpdateUai').clientId]"
                               },
                               {
                                 "name": "GraphEndpoint",
@@ -6659,12 +6785,31 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "3524014955198313820"
+                              "templateHash": "9810196216141102269"
+                            }
+                          },
+                          "definitions": {
+                            "runCommandParameterType": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
+                                }
+                              }
                             }
                           },
                           "parameters": {
@@ -6701,6 +6846,9 @@
                             },
                             "parameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named parameters to pass to the script."
@@ -6708,6 +6856,9 @@
                             },
                             "protectedParameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named protected (secure) parameters to pass to the script."
@@ -6763,8 +6914,14 @@
                               }
                             }
                           },
-                          "resources": [
-                            {
+                          "resources": {
+                            "virtualMachine": {
+                              "existing": true,
+                              "type": "Microsoft.Compute/virtualMachines",
+                              "apiVersion": "2023-09-01",
+                              "name": "[parameters('virtualMachineName')]"
+                            },
+                            "runCommand": {
                               "type": "Microsoft.Compute/virtualMachines/runCommands",
                               "apiVersion": "2023-09-01",
                               "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -6786,7 +6943,7 @@
                                 "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                               }
                             }
-                          ],
+                          },
                           "outputs": {
                             "resourceId": {
                               "type": "string",
@@ -6800,15 +6957,16 @@
                         }
                       },
                       "dependsOn": [
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('deploymentResourceGroupName')), 'Microsoft.Resources/deployments', format('Configure-Entra-Kerberos-DomainInfo-{0}', parameters('deploymentSuffix')))]",
+                        "appUpdateUai",
+                        "configureEntraKerberosWithDomainInfo",
                         "shares",
                         "storageAccountPes"
                       ]
                     },
-                    {
+                    "SetNTFSPermissions": {
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('Set-NTFS-Permissions-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('SetNTFSPermissions-{0}', uniqueString('SetNTFSPermissions', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -6886,12 +7044,31 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "3524014955198313820"
+                              "templateHash": "9810196216141102269"
+                            }
+                          },
+                          "definitions": {
+                            "runCommandParameterType": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
+                                }
+                              }
                             }
                           },
                           "parameters": {
@@ -6928,6 +7105,9 @@
                             },
                             "parameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named parameters to pass to the script."
@@ -6935,6 +7115,9 @@
                             },
                             "protectedParameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named protected (secure) parameters to pass to the script."
@@ -6990,8 +7173,14 @@
                               }
                             }
                           },
-                          "resources": [
-                            {
+                          "resources": {
+                            "virtualMachine": {
+                              "existing": true,
+                              "type": "Microsoft.Compute/virtualMachines",
+                              "apiVersion": "2023-09-01",
+                              "name": "[parameters('virtualMachineName')]"
+                            },
+                            "runCommand": {
                               "type": "Microsoft.Compute/virtualMachines/runCommands",
                               "apiVersion": "2023-09-01",
                               "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -7013,7 +7202,7 @@
                                 "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                               }
                             }
-                          ],
+                          },
                           "outputs": {
                             "resourceId": {
                               "type": "string",
@@ -7027,18 +7216,18 @@
                         }
                       },
                       "dependsOn": [
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('deploymentResourceGroupName')), 'Microsoft.Resources/deployments', format('Join-Domain-{0}', parameters('deploymentSuffix')))]",
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('deploymentResourceGroupName')), 'Microsoft.Resources/deployments', format('Configure-Entra-Kerberos-DomainInfo-{0}', parameters('deploymentSuffix')))]",
+                        "configureADDSAuth",
+                        "configureEntraKerberosWithDomainInfo",
                         "shares",
                         "storageAccountPes",
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('deploymentResourceGroupName')), 'Microsoft.Resources/deployments', format('Update-Storage-App-Manifest-{0}', parameters('deploymentSuffix')))]"
+                        "updateStorageApplicationsManifest"
                       ]
                     },
-                    {
+                    "grantStorageApplicationsConsent": {
                       "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('Grant-Storage-App-Consent-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('grantStorageApplicationsConsent-{0}', uniqueString('grantStorageApplicationsConsent', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -7066,7 +7255,7 @@
                               },
                               {
                                 "name": "ClientId",
-                                "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('appUpdateUserAssignedIdentityResourceId'), '/')[2], split(parameters('appUpdateUserAssignedIdentityResourceId'), '/')[4]), 'Microsoft.ManagedIdentity/userAssignedIdentities', last(split(parameters('appUpdateUserAssignedIdentityResourceId'), '/'))), '2023-01-31').clientId]"
+                                "value": "[reference('appUpdateUai').clientId]"
                               },
                               {
                                 "name": "GraphEndpoint",
@@ -7080,12 +7269,31 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "3524014955198313820"
+                              "templateHash": "9810196216141102269"
+                            }
+                          },
+                          "definitions": {
+                            "runCommandParameterType": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
+                                }
+                              }
                             }
                           },
                           "parameters": {
@@ -7122,6 +7330,9 @@
                             },
                             "parameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named parameters to pass to the script."
@@ -7129,6 +7340,9 @@
                             },
                             "protectedParameters": {
                               "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
                               "defaultValue": [],
                               "metadata": {
                                 "description": "Named protected (secure) parameters to pass to the script."
@@ -7184,8 +7398,14 @@
                               }
                             }
                           },
-                          "resources": [
-                            {
+                          "resources": {
+                            "virtualMachine": {
+                              "existing": true,
+                              "type": "Microsoft.Compute/virtualMachines",
+                              "apiVersion": "2023-09-01",
+                              "name": "[parameters('virtualMachineName')]"
+                            },
+                            "runCommand": {
                               "type": "Microsoft.Compute/virtualMachines/runCommands",
                               "apiVersion": "2023-09-01",
                               "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -7207,7 +7427,7 @@
                                 "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                               }
                             }
-                          ],
+                          },
                           "outputs": {
                             "resourceId": {
                               "type": "string",
@@ -7221,27 +7441,28 @@
                         }
                       },
                       "dependsOn": [
-                        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('deploymentResourceGroupName')), 'Microsoft.Resources/deployments', format('Set-NTFS-Permissions-{0}', parameters('deploymentSuffix')))]"
+                        "appUpdateUai",
+                        "SetNTFSPermissions"
                       ]
                     }
-                  ],
+                  },
                   "outputs": {
                     "storageAccountResourceIds": {
                       "type": "array",
                       "copy": {
                         "count": "[length(range(0, parameters('storageCount')))]",
-                        "input": "[reference(resourceId('Microsoft.Resources/deployments', format('{0}{1}-{2}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[range(0, parameters('storageCount'))[copyIndex()]], parameters('storageIndex')), 2, '0')), parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                        "input": "[reference(format('storageAccounts[{0}]', range(0, parameters('storageCount'))[copyIndex()])).outputs.resourceId.value]"
                       }
                     }
                   }
                 }
               }
             },
-            {
+            "fslogixBackupRegistration": {
               "condition": "[and(equals(parameters('storageSolution'), 'AzureFiles'), not(empty(parameters('recoveryServicesVaultResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('FSLogix-BackupItems-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('fslogixBackupRegistration-{0}', uniqueString('fslogixBackupRegistration', deployment().name))]",
               "subscriptionId": "[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
               "resourceGroup": "[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
               "properties": {
@@ -7260,7 +7481,7 @@
                     "value": "[parameters('fslogixFileShares')]"
                   },
                   "storageAccountResourceIds": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-Files-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value]"
+                    "value": "[reference('azureFiles').outputs.storageAccountResourceIds.value]"
                   },
                   "fileSharePolicyName": {
                     "value": "[parameters('fileSharePolicyName')]"
@@ -7354,10 +7575,10 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-Files-{0}', parameters('deploymentSuffix')))]"
+                "azureFiles"
               ]
             }
-          ],
+          },
           "outputs": {
             "encryptionUserAssignedIdentityResourceId": {
               "type": "string",
@@ -7365,15 +7586,15 @@
             },
             "netAppVolumeResourceIds": {
               "type": "array",
-              "value": "[if(equals(parameters('storageSolution'), 'AzureNetAppFiles'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-NetAppFiles-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.volumeResourceIds.value, createArray())]"
+              "value": "[if(equals(parameters('storageSolution'), 'AzureNetAppFiles'), reference('azureNetAppFiles').outputs.volumeResourceIds.value, createArray())]"
             },
             "netAppServerFqdns": {
               "type": "array",
-              "value": "[if(equals(parameters('storageSolution'), 'AzureNetAppFiles'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-NetAppFiles-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.smbServerFqdns.value, createArray())]"
+              "value": "[if(equals(parameters('storageSolution'), 'AzureNetAppFiles'), reference('azureNetAppFiles').outputs.smbServerFqdns.value, createArray())]"
             },
             "storageAccountResourceIds": {
               "type": "array",
-              "value": "[if(equals(parameters('storageSolution'), 'AzureFiles'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupStorage')), 'Microsoft.Resources/deployments', format('Azure-Files-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.storageAccountResourceIds.value, createArray())]"
+              "value": "[if(equals(parameters('storageSolution'), 'AzureFiles'), reference('azureFiles').outputs.storageAccountResourceIds.value, createArray())]"
             }
           }
         }
@@ -7413,7 +7634,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "2631794057619029040"
+              "templateHash": "13791563802196400493"
             }
           },
           "parameters": {
@@ -7428,7 +7649,7 @@
             }
           },
           "variables": {
-            "volumeCountsAreValid": "[if(and(or(empty(parameters('localNetAppVolumeResourceIds')), equals(length(parameters('localNetAppVolumeResourceIds')), length(parameters('shareNames')))), or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(parameters('shareNames'))))), true(), bool('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.'))]"
+            "volumeCountsAreValid": "[if(and(or(empty(parameters('localNetAppVolumeResourceIds')), equals(length(parameters('localNetAppVolumeResourceIds')), length(parameters('shareNames')))), or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(parameters('shareNames'))))), true(), fail('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.'))]"
           },
           "resources": [],
           "outputs": {
@@ -7467,9 +7688,6 @@
           },
           "resourceGroupDeployment": "[if(not(empty(parameters('deploymentResourceGroupName'))), createObject('value', parameters('deploymentResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupDeployment.value))]",
           "resourceGroupHosts": "[if(not(empty(parameters('storageResourceGroupName'))), createObject('value', parameters('storageResourceGroupName')), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
-          "deploymentSuffix": {
-            "value": "[parameters('deploymentSuffix')]"
-          },
           "userAssignedIdentityClientId": {
             "value": "[reference('deploymentHelper').outputs.deploymentUserAssignedIdentityClientId.value]"
           },
@@ -7488,12 +7706,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "9367913685587491967"
+              "templateHash": "5408952412415973300"
             }
           },
           "parameters": {
@@ -7504,9 +7723,6 @@
               "type": "string"
             },
             "resourceGroupDeployment": {
-              "type": "string"
-            },
-            "deploymentSuffix": {
               "type": "string"
             },
             "userAssignedIdentityClientId": {
@@ -7531,12 +7747,12 @@
             "$fxv#1": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$RoleAssignmentIds,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Delete Role Assignments\r\n\r\n    [array]$RoleAssignmentIds = $RoleAssignmentIds.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n    ForEach ($RoleAssignmentId in $RoleAssignmentIds) {\r\n        Start-Sleep -Seconds 1\r\n        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $RoleAssignmentId + '?api-version=2022-04-01')\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}",
             "$fxv#2": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceGroupResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    $StopWatch = [Diagnostics.Stopwatch]::StartNew()\r\n\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Wait for at least 30 seconds to allow the Run Command to report status to ARM to avoid deployment failed error when VM is deleted before status is returned.\r\n    # Run commands have a minimum of 20 seconds to report status to ARM. This gives an additional 10 seconds buffer.\r\n    $StopWatch.Stop()\r\n    $StopWatch.Elapsed.TotalSeconds\r\n    If ($StopWatch.Elapsed.TotalSeconds -lt 30) {\r\n        Start-Sleep -Seconds (30 - $StopWatch.Elapsed.TotalSeconds)\r\n    }\r\n    Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ResourceGroupResourceId + '?forceDeletionTypes=Microsoft.Compute/virtualMachines&api-version=2021-04-01')\r\n}\r\ncatch {\r\n    throw\r\n}"
           },
-          "resources": [
-            {
+          "resources": {
+            "removeRunCommands": {
               "condition": "[parameters('removeHostRunCommands')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Remove-RunCommands-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('removeRunCommands-{0}', uniqueString('removeRunCommands', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -7548,7 +7764,7 @@
                     "value": "[parameters('deploymentVirtualMachineName')]"
                   },
                   "name": {
-                    "value": "[format('Remove-RunCommands-{0}', parameters('deploymentSuffix'))]"
+                    "value": "Remove-RunCommands"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -7589,12 +7805,31 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "3524014955198313820"
+                      "templateHash": "9810196216141102269"
+                    }
+                  },
+                  "definitions": {
+                    "runCommandParameterType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../../types/customizationTypes.bicep"
+                        }
+                      }
                     }
                   },
                   "parameters": {
@@ -7631,6 +7866,9 @@
                     },
                     "parameters": {
                       "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
                       "defaultValue": [],
                       "metadata": {
                         "description": "Named parameters to pass to the script."
@@ -7638,6 +7876,9 @@
                     },
                     "protectedParameters": {
                       "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
                       "defaultValue": [],
                       "metadata": {
                         "description": "Named protected (secure) parameters to pass to the script."
@@ -7693,8 +7934,14 @@
                       }
                     }
                   },
-                  "resources": [
-                    {
+                  "resources": {
+                    "virtualMachine": {
+                      "existing": true,
+                      "type": "Microsoft.Compute/virtualMachines",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('virtualMachineName')]"
+                    },
+                    "runCommand": {
                       "type": "Microsoft.Compute/virtualMachines/runCommands",
                       "apiVersion": "2023-09-01",
                       "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -7716,7 +7963,7 @@
                         "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                       }
                     }
-                  ],
+                  },
                   "outputs": {
                     "resourceId": {
                       "type": "string",
@@ -7730,10 +7977,10 @@
                 }
               }
             },
-            {
+            "removeRoleAssignments": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Remove-RoleAssignments-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('removeRoleAssignments-{0}', uniqueString('removeRoleAssignments', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -7745,7 +7992,7 @@
                     "value": "[parameters('deploymentVirtualMachineName')]"
                   },
                   "name": {
-                    "value": "[format('Remove-RoleAssignments-{0}', parameters('deploymentSuffix'))]"
+                    "value": "Remove-RoleAssignments"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -7778,12 +8025,31 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "3524014955198313820"
+                      "templateHash": "9810196216141102269"
+                    }
+                  },
+                  "definitions": {
+                    "runCommandParameterType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../../types/customizationTypes.bicep"
+                        }
+                      }
                     }
                   },
                   "parameters": {
@@ -7820,6 +8086,9 @@
                     },
                     "parameters": {
                       "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
                       "defaultValue": [],
                       "metadata": {
                         "description": "Named parameters to pass to the script."
@@ -7827,6 +8096,9 @@
                     },
                     "protectedParameters": {
                       "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
                       "defaultValue": [],
                       "metadata": {
                         "description": "Named protected (secure) parameters to pass to the script."
@@ -7882,8 +8154,14 @@
                       }
                     }
                   },
-                  "resources": [
-                    {
+                  "resources": {
+                    "virtualMachine": {
+                      "existing": true,
+                      "type": "Microsoft.Compute/virtualMachines",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('virtualMachineName')]"
+                    },
+                    "runCommand": {
                       "type": "Microsoft.Compute/virtualMachines/runCommands",
                       "apiVersion": "2023-09-01",
                       "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -7905,7 +8183,7 @@
                         "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                       }
                     }
-                  ],
+                  },
                   "outputs": {
                     "resourceId": {
                       "type": "string",
@@ -7919,13 +8197,13 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('Remove-RunCommands-{0}', parameters('deploymentSuffix')))]"
+                "removeRunCommands"
               ]
             },
-            {
+            "removeDeploymentResourceGroup": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Delete-DeploymentResourceGroup-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('removeDeploymentResourceGroup-{0}', uniqueString('removeDeploymentResourceGroup', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupDeployment')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -7937,7 +8215,7 @@
                     "value": "[parameters('deploymentVirtualMachineName')]"
                   },
                   "name": {
-                    "value": "[format('Delete-DeploymentResourceGroup-{0}', parameters('deploymentSuffix'))]"
+                    "value": "Delete-DeploymentResourceGroup"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -7967,12 +8245,31 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "3524014955198313820"
+                      "templateHash": "9810196216141102269"
+                    }
+                  },
+                  "definitions": {
+                    "runCommandParameterType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../../types/customizationTypes.bicep"
+                        }
+                      }
                     }
                   },
                   "parameters": {
@@ -8009,6 +8306,9 @@
                     },
                     "parameters": {
                       "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
                       "defaultValue": [],
                       "metadata": {
                         "description": "Named parameters to pass to the script."
@@ -8016,6 +8316,9 @@
                     },
                     "protectedParameters": {
                       "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
                       "defaultValue": [],
                       "metadata": {
                         "description": "Named protected (secure) parameters to pass to the script."
@@ -8071,8 +8374,14 @@
                       }
                     }
                   },
-                  "resources": [
-                    {
+                  "resources": {
+                    "virtualMachine": {
+                      "existing": true,
+                      "type": "Microsoft.Compute/virtualMachines",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('virtualMachineName')]"
+                    },
+                    "runCommand": {
                       "type": "Microsoft.Compute/virtualMachines/runCommands",
                       "apiVersion": "2023-09-01",
                       "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('name'))]",
@@ -8094,7 +8403,7 @@
                         "errorBlobManagedIdentity": "[if(not(empty(parameters('errorBlobManagedIdentityClientId'))), createObject('clientId', parameters('errorBlobManagedIdentityClientId')), null())]"
                       }
                     }
-                  ],
+                  },
                   "outputs": {
                     "resourceId": {
                       "type": "string",
@@ -8108,10 +8417,10 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupDeployment')), 'Microsoft.Resources/deployments', format('Remove-RoleAssignments-{0}', parameters('deploymentSuffix')))]"
+                "removeRoleAssignments"
               ]
             }
-          ]
+          }
         }
       },
       "dependsOn": [

@@ -1,5 +1,7 @@
 targetScope = 'subscription'
 
+import { artifactCustomizationType } from '../../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
 param resourceGroupHosts string
 param agentBootLoaderDownloadUrl string = ''
 param agentDownloadUrl string = ''
@@ -9,7 +11,7 @@ param availability string
 param availabilitySetNameConv string
 param availabilitySetsCount int
 param availabilitySetsIndex int
-param availabilityZones array
+param availabilityZones string[]
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryption bool
 param customImageResourceId string = ''
@@ -30,14 +32,14 @@ param enableAcceleratedNetworking bool
 param enableIPv6 bool
 param encryptionAtHost bool
 param diskEncryptionSetResourceId string = ''
-param fslogixFileShareNames array
+param fslogixFileShareNames string[]
 param fslogixConfigureSessionHosts bool
 param fslogixContainerType string
-param fslogixLocalNetAppVolumeResourceIds array
-param fslogixLocalStorageAccountResourceIds array
-param fslogixOSSGroups array
-param fslogixRemoteNetAppVolumeResourceIds array
-param fslogixRemoteStorageAccountResourceIds array
+param fslogixLocalNetAppVolumeResourceIds string[]
+param fslogixLocalStorageAccountResourceIds string[]
+param fslogixOSSGroups string[]
+param fslogixRemoteNetAppVolumeResourceIds string[]
+param fslogixRemoteStorageAccountResourceIds string[]
 param fslogixSizeInMBs int
 param fslogixStorageService string
 param hibernationEnabled bool
@@ -56,12 +58,11 @@ param ouPath string
 param secureBootEnabled bool
 param securityType string
 param sessionHostCount int
-param sessionHostCustomizations array
+param sessionHostCustomizations artifactCustomizationType[]
 param sessionHostIndex int
 param vmNameIndexLength int
 param subnetResourceId string
 param tags object
-param deploymentSuffix string
 param timeZone string
 param virtualMachineNameConv string
 param virtualMachineNamePrefix string
@@ -120,7 +121,6 @@ var generatedSessionHostNames = [for i in range(0, sessionHostCount): '${virtual
 var vmBackupPolicyName = 'AvdPolicyVm'
 
 module recoveryServicesModule 'modules/recoveryServices.bicep' = if (deployRecoveryServices) {
-  name: 'RecoveryServices-${deploymentSuffix}'
   params: {
     createVault: createVault
     existingRecoveryServicesVaultResourceId: existingVmBackupVaultResourceId
@@ -128,7 +128,6 @@ module recoveryServicesModule 'modules/recoveryServices.bicep' = if (deployRecov
     resourceGroupHosts: resourceGroupHosts
     location: location
     storageRedundancy: vaultStorageRedundancy
-    deploymentSuffix: deploymentSuffix
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateEndpoint: deployPrivateEndpoints
     privateEndpointSubnetResourceId: vaultPrivateEndpointSubnetResourceId
@@ -156,7 +155,6 @@ var effectiveRecoveryServicesVaultResourceId = deployRecoveryServices
   : ''
 
 module sessionHosts '../../../shared/modules/orchestration/sessionHosts/sessionHosts.bicep' = {
-  name: 'Session-Hosts-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
@@ -215,7 +213,6 @@ module sessionHosts '../../../shared/modules/orchestration/sessionHosts/sessionH
     vmNameIndexLength: vmNameIndexLength
     subnetResourceId: subnetResourceId
     tags: tags
-    deploymentSuffix: deploymentSuffix
     timeZone: timeZone
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName

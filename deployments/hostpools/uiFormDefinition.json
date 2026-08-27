@@ -444,353 +444,515 @@
                   "visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
                 },
                 {
-                  "name": "textBlock",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]",
-                  "options": {
-                    "text": "Use the grids and selectors below to configure the Weekday Scaling Plan schedule."
+                  "name": "pooledSchedules",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Pooled Scaling Schedules",
+                  "ariaLabel": "Named Pooled host pool scaling schedules",
+                  "visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled'))]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 1,
+                        "max": 7
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "name",
+                        "header": "Name",
+                        "width": "2fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "Weekdays",
+                          "placeholder": "Weekdays",
+                          "constraints": {
+                            "required": true,
+                            "regex": "^[A-Za-z0-9@._ -]{1,64}$",
+                            "validationMessage": "Use 1-64 letters, numbers, spaces, periods, underscores, dashes, or @ characters."
+                          }
+                        }
+                      },
+                      {
+                        "id": "daysOfWeek",
+                        "header": "Days",
+                        "width": "3fr",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "multiselect": true,
+                          "selectAll": false,
+                          "defaultValue": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              { "label": "Monday", "value": "Monday" },
+                              { "label": "Tuesday", "value": "Tuesday" },
+                              { "label": "Wednesday", "value": "Wednesday" },
+                              { "label": "Thursday", "value": "Thursday" },
+                              { "label": "Friday", "value": "Friday" },
+                              { "label": "Saturday", "value": "Saturday" },
+                              { "label": "Sunday", "value": "Sunday" }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "id": "rampUpStartTime",
+                        "header": "Ramp-up",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "08:00",
+                          "placeholder": "08:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 08:00." }
+                        }
+                      },
+                      {
+                        "id": "peakStartTime",
+                        "header": "Peak",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "09:00",
+                          "placeholder": "09:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 09:00." }
+                        }
+                      },
+                      {
+                        "id": "rampDownStartTime",
+                        "header": "Ramp-down",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "18:00",
+                          "placeholder": "18:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 18:00." }
+                        }
+                      },
+                      {
+                        "id": "offPeakStartTime",
+                        "header": "Off-peak",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "22:00",
+                          "placeholder": "22:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 22:00." }
+                        }
+                      },
+                      {
+                        "id": "rampUpLoadBalancingAlgorithm",
+                        "header": "Ramp-up Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Breadth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                        }
+                      },
+                      {
+                        "id": "rampUpMinimumHostsPct",
+                        "header": "Ramp-up Min %",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "20",
+                          "placeholder": "20",
+                          "constraints": { "required": true, "regex": "^(100|[1-9]?[0-9])$", "validationMessage": "Enter 0-100." }
+                        }
+                      },
+                      {
+                        "id": "rampUpCapacityThresholdPct",
+                        "header": "Ramp-up Threshold %",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "60",
+                          "placeholder": "60",
+                          "constraints": { "required": true, "regex": "^(100|[1-9][0-9]?)$", "validationMessage": "Enter 1-100." }
+                        }
+                      },
+                      {
+                        "id": "peakLoadBalancingAlgorithm",
+                        "header": "Peak Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Depth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                        }
+                      },
+                      {
+                        "id": "rampDownLoadBalancingAlgorithm",
+                        "header": "Ramp-down Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Depth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                        }
+                      },
+                      {
+                        "id": "rampDownMinimumHostsPct",
+                        "header": "Ramp-down Min %",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "10",
+                          "placeholder": "10",
+                          "constraints": { "required": true, "regex": "^(100|[1-9]?[0-9])$", "validationMessage": "Enter 0-100." }
+                        }
+                      },
+                      {
+                        "id": "rampDownCapacityThresholdPct",
+                        "header": "Ramp-down Threshold %",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "90",
+                          "placeholder": "90",
+                          "constraints": { "required": true, "regex": "^(100|[1-9][0-9]?)$", "validationMessage": "Enter 1-100." }
+                        }
+                      },
+                      {
+                        "id": "rampDownForceLogoffUsers",
+                        "header": "Force Logoff",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "No",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Yes", "value": true }, { "label": "No", "value": false }] }
+                        }
+                      },
+                      {
+                        "id": "rampDownWaitTimeMinutes",
+                        "header": "Logoff Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "30",
+                          "constraints": { "required": "[last(take(steps('controlPlane').scalingPlan.pooledSchedules, $rowIndex)).rampDownForceLogoffUsers]", "regex": "^(?:[0-9]|[1-9][0-9]|1[01][0-9]|120)$", "validationMessage": "Enter 0-120 minutes." }
+                        }
+                      },
+                      {
+                        "id": "rampDownNotificationMessage",
+                        "header": "Logoff Message",
+                        "width": "3fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "Save your work and sign out. This session host is being removed by autoscale.",
+                          "constraints": { "required": "[last(take(steps('controlPlane').scalingPlan.pooledSchedules, $rowIndex)).rampDownForceLogoffUsers]" }
+                        }
+                      },
+                      {
+                        "id": "rampDownStopHostsWhen",
+                        "header": "Stop Hosts When",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Zero Sessions",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Zero Sessions", "value": "ZeroSessions" }, { "label": "Zero Active Sessions", "value": "ZeroActiveSessions" }] }
+                        }
+                      },
+                      {
+                        "id": "offPeakLoadBalancingAlgorithm",
+                        "header": "Off-peak Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Depth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                        }
+                      }
+                    ]
                   }
                 },
                 {
-                  "name": "weekdayRampUpSchedule",
+                  "name": "personalSchedules",
                   "type": "Microsoft.Common.EditableGrid",
-                  "ariaLabel": "Enter Weekday Schedule Information",
-                  "label": "Weekday Ramp Up Schedule",
+                  "label": "Personal Scaling Schedules",
+                  "ariaLabel": "Named Personal host pool scaling schedules",
+                  "visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal'))]",
                   "constraints": {
                     "width": "Full",
                     "rows": {
                       "count": {
                         "min": 1,
-                        "max": 1
+                        "max": 7
                       }
                     },
                     "columns": [
                       {
-                        "id": "startTime",
-                        "header": "Ramp Up Time",
+                        "id": "name",
+                        "header": "Name",
                         "width": "2fr",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "placeholder": "8:00",
+                          "defaultValue": "Weekdays",
+                          "placeholder": "Weekdays",
                           "constraints": {
                             "required": true,
-                            "validations": [
-                              {
-                                "regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
-                                "message": "Must be a valid 24-hour time format without leading zeros."
-                              }
-                            ]
+                            "regex": "^[A-Za-z0-9@._ -]{1,64}$",
+                            "validationMessage": "Use 1-64 letters, numbers, spaces, periods, underscores, dashes, or @ characters."
                           }
                         }
                       },
                       {
-                        "id": "minimumHostsPct",
-                        "header": "Min % of Hosts",
-                        "width": "1fr",
-                        "element": {
-                          "type": "Microsoft.Common.TextBox",
-                          "placeholder": "20",
-                          "constraints": {
-                            "required": true,
-                            "validations": [
-                              {
-                                "regex": "^([1-9][0-9]?|100)$",
-                                "message": "Must be an integer from 1 - 100."
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "capacityThresholdPct",
-                        "header": "Capacity threshold (%)",
-                        "width": "2fr",
-                        "element": {
-                          "type": "Microsoft.Common.TextBox",
-                          "placeholder": "60",
-                          "constraints": {
-                            "required": true,
-                            "validations": [
-                              {
-                                "regex": "^([1-9][0-9]?|100)$",
-                                "message": "Must be an integer from 1 - 100."
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "loadBalancingAlgorithm",
-                        "header": "Load Balancing Algorithm",
-                        "width": "1fr",
+                        "id": "daysOfWeek",
+                        "header": "Days",
+                        "width": "3fr",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
+                          "multiselect": true,
+                          "selectAll": false,
+                          "defaultValue": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
                           "constraints": {
+                            "required": true,
                             "allowedValues": [
-                              {
-                                "label": "Breadth-First",
-                                "value": "BreadthFirst"
-                              },
-                              {
-                                "label": "Depth-First",
-                                "value": "DepthFirst"
-                              }
-                            ],
-                            "defaultValue": "Breadth-First",
-                            "required": true
+                              { "label": "Monday", "value": "Monday" },
+                              { "label": "Tuesday", "value": "Tuesday" },
+                              { "label": "Wednesday", "value": "Wednesday" },
+                              { "label": "Thursday", "value": "Thursday" },
+                              { "label": "Friday", "value": "Friday" },
+                              { "label": "Saturday", "value": "Saturday" },
+                              { "label": "Sunday", "value": "Sunday" }
+                            ]
                           }
+                        }
+                      },
+                      {
+                        "id": "rampUpStartTime",
+                        "header": "Ramp-up Time",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "08:00",
+                          "placeholder": "08:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 08:00." }
+                        }
+                      },
+                      {
+                        "id": "rampUpAutoStartHosts",
+                        "header": "Ramp-up Auto-start",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "With Assigned User",
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              { "label": "None", "value": "None" },
+                              { "label": "With Assigned User", "value": "WithAssignedUser" },
+                              { "label": "All", "value": "All" }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "id": "rampUpStartVMOnConnect",
+                        "header": "Ramp-up Start on Connect",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Enable",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                        }
+                      },
+                      {
+                        "id": "rampUpMinutesToWaitOnDisconnect",
+                        "header": "Ramp-up Disconnect Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "0",
+                          "placeholder": "0",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "rampUpActionOnDisconnect",
+                        "header": "Ramp-up Disconnect Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "None",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                        }
+                      },
+                      {
+                        "id": "rampUpMinutesToWaitOnLogoff",
+                        "header": "Ramp-up Logoff Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "0",
+                          "placeholder": "0",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "rampUpActionOnLogoff",
+                        "header": "Ramp-up Logoff Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "None",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                        }
+                      },
+                      {
+                        "id": "peakStartTime",
+                        "header": "Peak Time",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "09:00",
+                          "placeholder": "09:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 09:00." }
+                        }
+                      },
+                      {
+                        "id": "peakStartVMOnConnect",
+                        "header": "Peak Start on Connect",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Enable",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                        }
+                      },
+                      {
+                        "id": "peakMinutesToWaitOnDisconnect",
+                        "header": "Peak Disconnect Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "0",
+                          "placeholder": "0",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "peakActionOnDisconnect",
+                        "header": "Peak Disconnect Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "None",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                        }
+                      },
+                      {
+                        "id": "peakMinutesToWaitOnLogoff",
+                        "header": "Peak Logoff Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "0",
+                          "placeholder": "0",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "peakActionOnLogoff",
+                        "header": "Peak Logoff Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "None",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                        }
+                      },
+                      {
+                        "id": "rampDownStartTime",
+                        "header": "Ramp-down Time",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "17:00",
+                          "placeholder": "17:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 17:00." }
+                        }
+                      },
+                      {
+                        "id": "rampDownStartVMOnConnect",
+                        "header": "Ramp-down Start on Connect",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Disable",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                        }
+                      },
+                      {
+                        "id": "rampDownMinutesToWaitOnDisconnect",
+                        "header": "Ramp-down Disconnect Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "30",
+                          "placeholder": "30",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "rampDownActionOnDisconnect",
+                        "header": "Ramp-down Disconnect Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Deallocate",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                        }
+                      },
+                      {
+                        "id": "rampDownMinutesToWaitOnLogoff",
+                        "header": "Ramp-down Logoff Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "30",
+                          "placeholder": "30",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "rampDownActionOnLogoff",
+                        "header": "Ramp-down Logoff Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Deallocate",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                        }
+                      },
+                      {
+                        "id": "offPeakStartTime",
+                        "header": "Off-peak Time",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "20:00",
+                          "placeholder": "20:00",
+                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 20:00." }
+                        }
+                      },
+                      {
+                        "id": "offPeakStartVMOnConnect",
+                        "header": "Off-peak Start on Connect",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Disable",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                        }
+                      },
+                      {
+                        "id": "offPeakMinutesToWaitOnDisconnect",
+                        "header": "Off-peak Disconnect Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "30",
+                          "placeholder": "30",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "offPeakActionOnDisconnect",
+                        "header": "Off-peak Disconnect Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Deallocate",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                        }
+                      },
+                      {
+                        "id": "offPeakMinutesToWaitOnLogoff",
+                        "header": "Off-peak Logoff Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "defaultValue": "30",
+                          "placeholder": "30",
+                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                        }
+                      },
+                      {
+                        "id": "offPeakActionOnLogoff",
+                        "header": "Off-peak Logoff Action",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Deallocate",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
                         }
                       }
                     ]
-                  },
-                  "visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
-                },
-                {
-                  "name": "weekdayPeakSchedule",
-                  "type": "Microsoft.Common.EditableGrid",
-                  "ariaLabel": "Enter Weekday Schedule Information",
-                  "label": "Weekday Peak Schedule",
-                  "constraints": {
-                    "width": "Full",
-                    "rows": {
-                      "count": {
-                        "min": 1,
-                        "max": 1
-                      }
-                    },
-                    "columns": [
-                      {
-                        "id": "startTime",
-                        "header": "Peak Start Time",
-                        "width": "5fr",
-                        "element": {
-                          "type": "Microsoft.Common.TextBox",
-                          "placeholder": "9:00",
-                          "constraints": {
-                            "required": true,
-                            "validations": [
-                              {
-                                "regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
-                                "message": "Must be a valid 24-hour time format without leading zeros."
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "loadBalancingAlgorithm",
-                        "header": "Load Balancing Algorithm",
-                        "width": "1fr",
-                        "element": {
-                          "type": "Microsoft.Common.DropDown",
-                          "constraints": {
-                            "allowedValues": [
-                              {
-                                "label": "Breadth-First",
-                                "value": "BreadthFirst"
-                              },
-                              {
-                                "label": "Depth-First",
-                                "value": "DepthFirst"
-                              }
-                            ],
-                            "defaultValue": "Depth-First",
-                            "required": true
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
-                },
-                {
-                  "name": "weekdayRampDownSchedule",
-                  "type": "Microsoft.Common.EditableGrid",
-                  "ariaLabel": "Enter Weekday Schedule Information",
-                  "label": "Weekday Ramp Down Schedule",
-                  "constraints": {
-                    "width": "Full",
-                    "rows": {
-                      "count": {
-                        "min": 1,
-                        "max": 1
-                      }
-                    },
-                    "columns": [
-                      {
-                        "id": "startTime",
-                        "header": "Ramp Down Start Time",
-                        "width": "2fr",
-                        "element": {
-                          "type": "Microsoft.Common.TextBox",
-                          "placeholder": "18:00",
-                          "constraints": {
-                            "required": true,
-                            "validations": [
-                              {
-                                "regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
-                                "message": "Must be a valid 24-hour time format without leading zeros."
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "minimumHostsPct",
-                        "header": "Min % of Hosts",
-                        "width": "1fr",
-                        "element": {
-                          "type": "Microsoft.Common.TextBox",
-                          "placeholder": "10",
-                          "constraints": {
-                            "required": true,
-                            "validations": [
-                              {
-                                "regex": "^([1-9][0-9]?|100)$",
-                                "message": "Must be an integer from 1 - 100."
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "capacityThresholdPct",
-                        "header": "Capacity threshold (%)",
-                        "width": "2fr",
-                        "element": {
-                          "type": "Microsoft.Common.TextBox",
-                          "placeholder": "90",
-                          "constraints": {
-                            "required": true,
-                            "validations": [
-                              {
-                                "regex": "^([1-9][0-9]?|100)$",
-                                "message": "Must be an integer from 1 - 100."
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "loadBalancingAlgorithm",
-                        "header": "Load Balancing Algorithm",
-                        "width": "1fr",
-                        "element": {
-                          "type": "Microsoft.Common.DropDown",
-                          "constraints": {
-                            "allowedValues": [
-                              {
-                                "label": "Breadth-First",
-                                "value": "BreadthFirst"
-                              },
-                              {
-                                "label": "Depth-First",
-                                "value": "DepthFirst"
-                              }
-                            ],
-                            "defaultValue": "Depth-First",
-                            "required": true
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
-                },
-                {
-                  "name": "forceLogoff",
-                  "type": "Microsoft.Common.OptionsGroup",
-                  "label": "Force Logoff during Ramp Down",
-                  "defaultValue": "No",
-                  "toolTip": "",
-                  "constraints": {
-                    "allowedValues": [
-                      {
-                        "label": "Yes",
-                        "value": true
-                      },
-                      {
-                        "label": "No",
-                        "value": false
-                      }
-                    ],
-                    "required": true
-                  },
-                  "visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
-                },
-                {
-                  "name": "minsToLogoff",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Number of minutes before users are forcefully logged off",
-                  "placeholder": "30",
-                  "toolTip": "Use only integers",
-                  "constraints": {
-                    "required": true,
-                    "regex": "^(?:[1-9]|[1-9][0-9]|1[01][0-9]|120)$",
-                    "validationMessage": "Must be an integer from 1 - 120."
-                  },
-                  "visible": "[and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff)]"
-                },
-                {
-                  "name": "weekdayOffPeakSchedule",
-                  "type": "Microsoft.Common.EditableGrid",
-                  "ariaLabel": "Enter Weekday Off Peak Schedule Information",
-                  "label": "Weekday Off Peak Schedule",
-                  "constraints": {
-                    "width": "Full",
-                    "rows": {
-                      "count": {
-                        "min": 1,
-                        "max": 1
-                      }
-                    },
-                    "columns": [
-                      {
-                        "id": "startTime",
-                        "header": "Off Peak Start Time",
-                        "width": "5fr",
-                        "element": {
-                          "type": "Microsoft.Common.TextBox",
-                          "placeholder": "22:00",
-                          "constraints": {
-                            "required": true,
-                            "validations": [
-                              {
-                                "regex": "^(0?[1-9]|1[0-9]|2[0-3]):[0-5][0-9]$",
-                                "message": "Must be a valid 24-hour time format without leading zeros."
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "loadBalancingAlgorithm",
-                        "header": "Load Balancing Algorithm",
-                        "width": "1fr",
-                        "element": {
-                          "type": "Microsoft.Common.DropDown",
-                          "constraints": {
-                            "allowedValues": [
-                              {
-                                "label": "Breadth-First",
-                                "value": "BreadthFirst"
-                              },
-                              {
-                                "label": "Depth-First",
-                                "value": "DepthFirst"
-                              }
-                            ],
-                            "defaultValue": "Depth-First",
-                            "required": true
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "visible": "[steps('controlPlane').scalingPlan.deployScalingPlan]"
+                  }
                 }
-              ],
-              "visible": "[equals(steps('controlPlane').hostPool.type, 'Pooled')]"
+              ]
             }
           ]
         },
@@ -1746,7 +1908,7 @@
                   "visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))))]",
                   "options": {
                     "icon": "Info",
-                    "text": "This image supports Hibernation. Enable hibernation below to pause VMs when not in use and save on compute costs. Note: The VM size you select must also support hibernation for this feature to work.",
+                    "text": "This image supports Hibernation. Personal scaling schedules may use Hibernate only when hibernation is enabled and the selected VM size supports it. FSLogix and App Attach do not support Personal autoscale hibernation.",
                     "uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/hibernate-resume"
                   }
                 },
@@ -1755,7 +1917,7 @@
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Enable Hibernation",
                   "defaultValue": false,
-                  "toolTip": "Hibernation allows you to pause VMs that aren't being used and save on compute costs. The VM size must support hibernation.",
+                  "toolTip": "Required when a Personal scaling schedule uses Hibernate. The image and VM size must support hibernation, and the host pool must not use FSLogix or App Attach.",
                   "visible": "[and(equals(steps('controlPlane').hostPool.type, 'Personal'), or(equals(steps('hosts').image.source, 'marketplace'), and(equals(steps('hosts').image.source, 'gallery'), not(empty(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported)), bool(steps('hosts').image.imageDefinitionApi.transformed.IsHibernateSupported))))]"
                 },
                 {
@@ -4335,29 +4497,6 @@
                   "visible": "[steps('zeroTrust').azureMonitor.privateLink]"
                 }
               ]
-            },
-            {
-              "name": "policy",
-              "type": "Microsoft.Common.Section",
-              "label": "Policies",
-              "elements": [
-                {
-                  "name": "diskAccessTextBlock1",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), 'Check the following box to define and and assign a policy that disables public network access and automatically assigns a disk access resource to the virtual machine OS disks for private access.', 'Select the following check box to define and assign a policy that disables all network access to your managed disks.')]",
-                    "link": {
-                      "label": "Microsoft Learn | Restrict Managed Disks from Being Imported or Exported",
-                      "uri": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-restrict-import-export-overview"
-                    }
-                  }
-                },
-                {
-                  "name": "deployDiskAccessPolicy",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Deploy Disk Access Policy"
-                }
-              ]
             }
           ]
         },
@@ -5296,7 +5435,6 @@
         "virtualMachineAdminPassword": "[if(equals(steps('hosts').credentials.source, 'manual'), steps('hosts').credentials.localAdminPassword, '')]",
         "virtualMachineAdminUserName": "[if(equals(steps('hosts').credentials.source, 'manual'), steps('hosts').credentials.localAdminUsername, '')]",
         "existingCredentialsKeyVaultResourceId": "[if(equals(steps('hosts').credentials.source, 'keyVault'), steps('hosts').credentials.keyVault.id, '')]",
-        "existingHostPoolResourceId": "",
         "controlPlaneSubscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
         "controlPlaneLocation": "[steps('controlPlane').scope.location.name]",
         "existingFeedWorkspaceResourceId": "[if(and(not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').scope.location.name)))), equals(steps('controlPlane').workspace.createOption, 'update')), steps('controlPlane').workspace.existingWorkspace, '')]",
@@ -5310,12 +5448,8 @@
         "appGroupSecurityGroups": "[steps('controlPlane').assignments.groupPickerBlade.transformed.groups]",
         "deployScalingPlan": "[steps('controlPlane').scalingPlan.deployScalingPlan]",
         "scalingPlanExclusionTag": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.exclusionTag, '')]",
-        "scalingPlanRampUpSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayRampUpSchedule), parse('{}'))]",
-        "scalingPlanPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayPeakSchedule), parse('{}'))]",
-        "scalingPlanRampDownSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayRampDownSchedule), parse('{}'))]",
-        "scalingPlanOffPeakSchedule": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, first(steps('controlPlane').scalingPlan.weekdayOffPeakSchedule), parse('{}'))]",
-        "scalingPlanForceLogoff": "[if(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff, false)]",
-        "scalingPlanMinsBeforeLogoff": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, steps('controlPlane').scalingPlan.forceLogoff), steps('controlPlane').scalingPlan.minsToLogoff, 0)]",
+        "scalingPlanPooledSchedules": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Pooled')), steps('controlPlane').scalingPlan.pooledSchedules, parse('[]'))]",
+        "scalingPlanPersonalSchedules": "[if(and(steps('controlPlane').scalingPlan.deployScalingPlan, equals(steps('controlPlane').hostPool.type, 'Personal')), steps('controlPlane').scalingPlan.personalSchedules, parse('[]'))]",
         "virtualMachinesTimeZone": "[steps('hosts').scope.timeZone]",
         "virtualMachineNamePrefix": "[steps('hosts').naming.virtualMachineNamePrefix]",
         "sessionHostIndex": "[steps('hosts').naming.index]",
@@ -5402,7 +5536,6 @@
         "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(steps('hosts').credentials.deploySecretsKeyVault, steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').privateEndpoints.azureKeyVaultPrivateDnsZone, '')]",
         "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureQueuePrivateDnsZone, '')]",
         "azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
-        "deployDiskAccessPolicy": "[steps('zeroTrust').policy.deployDiskAccessPolicy]",
         "avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'None')]",
         "hostpoolPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostpoolSubnet.id, '')]",
         "workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnet.id, '')]",

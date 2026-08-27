@@ -1,7 +1,8 @@
 targetScope = 'subscription'
 
+import { galleryImageVersionTargetRegionType } from '../../shared/modules/resourceModules/types/computeTypes.bicep'
+
 param computeGalleryResourceId string
-param depPrefix string
 param hyperVGeneration string
 param imageBuildResourceGroupName string
 param imageDefinitionSecurityType string
@@ -11,10 +12,9 @@ param imageVersionDefaultReplicaCount int
 param imageVersionDefaultStorageAccountType string
 param imageVersionEndOfLifeDate string
 param imageVersionExcludeFromLatest bool
-param imageVersionReplicationRegions array
+param imageVersionReplicationRegions galleryImageVersionTargetRegionType[]
 param location string
 param tags object
-param deploymentSuffix string
 param virtualMachineResourceId string
 param diskEncryptionSetId string = ''
 param confidentialVMEncryptionType string = ''
@@ -24,7 +24,6 @@ param secureVMDiskEncryptionSetId string = ''
 // support capture directly from a VM. Must create a legacy managed image first.
 
 module managedImage '../../shared/modules/resourceModules/compute/images/deploy.bicep' = if(contains(imageDefinitionSecurityType, 'Supported')) {
-  name: '${depPrefix}Image-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     hyperVGeneration: hyperVGeneration
@@ -36,7 +35,6 @@ module managedImage '../../shared/modules/resourceModules/compute/images/deploy.
 }
 
 module imageVersion '../../shared/modules/resourceModules/compute/galleries/images/versions/deploy.bicep' = {
-  name: '${depPrefix}ImageVersion-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
     location: location

@@ -49,17 +49,25 @@
                         "Friday"
                     ],
                     "rampUpStartTime": "06:30",
+                    "rampUpLoadBalancingAlgorithm": "BreadthFirst",
                     "rampUpMinimumHostsPct": "20",
                     "rampUpCapacityThresholdPct": "60",
                     "rampUpMinimumHostPoolSize": "2",
                     "rampUpMaximumHostPoolSize": "10",
                     "peakStartTime": "08:30",
+                    "peakLoadBalancingAlgorithm": "BreadthFirst",
                     "rampDownStartTime": "17:00",
+                    "rampDownLoadBalancingAlgorithm": "DepthFirst",
                     "rampDownMinimumHostsPct": "10",
                     "rampDownCapacityThresholdPct": "90",
                     "rampDownMinimumHostPoolSize": "1",
                     "rampDownMaximumHostPoolSize": "5",
-                    "offPeakStartTime": "20:00"
+                    "rampDownForceLogoffUsers": false,
+                    "rampDownWaitTimeMinutes": "30",
+                    "rampDownNotificationMessage": "Save your work and sign out. This session host is being removed by autoscale.",
+                    "rampDownStopHostsWhen": "ZeroSessions",
+                    "offPeakStartTime": "20:00",
+                    "offPeakLoadBalancingAlgorithm": "DepthFirst"
                 }
             ]
         },

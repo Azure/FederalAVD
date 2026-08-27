@@ -95,7 +95,6 @@ var automationAccountName = !empty(automationAccountNameOverride)
   ? automationAccountNameOverride
   : '${resourceAbbreviations.automationAccounts}-urt-${uniqueStringUrt}-${regionAbbr}'
 
-var deploymentSuffix = take(uniqueString(resourceGroup().id, deployment().name), 8)
 
 // ========== //
 // Resources  //
@@ -103,7 +102,6 @@ var deploymentSuffix = take(uniqueString(resourceGroup().id, deployment().name),
 
 // Automation Account and all supporting resources
 module automation 'modules/automationAccount.bicep' = {
-  name: 'UrtAutomation-${deploymentSuffix}'
   params: {
     automationAccountName: automationAccountName
     deploymentTime: deploymentTime
@@ -122,7 +120,6 @@ module automation 'modules/automationAccount.bicep' = {
 // Grant the Automation Account managed identity Network Contributor on the route table
 // resource group so the runbook can read and update the route table via the ARM API.
 module roleAssignment '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
-  name: 'RA-RouteTable-NetworkContributor-${deploymentSuffix}'
   scope: resourceGroup(routeTableResourceGroupName)
   params: {
     principalId: automation.outputs.principalId

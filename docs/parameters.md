@@ -30,7 +30,6 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 - The eight naming segments and how `purpose` drives per-resource uniqueness
 - How to align naming across hostpool, sharedServices, imageManagement, and add-ons
 - Named examples for six common conventions
-- [Scenario test results](naming-convention-test-results.md) for 8 scenarios across all solutions
 
 ---
 

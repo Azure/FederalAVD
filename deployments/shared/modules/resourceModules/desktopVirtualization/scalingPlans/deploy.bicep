@@ -1,4 +1,5 @@
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
+import { personalScalingScheduleType, pooledScalingScheduleType, scalingHostPoolReferenceType } from '../../types/scalingTypes.bicep'
 
 param name string
 param location string = resourceGroup().location
@@ -10,7 +11,7 @@ param timeZone string = 'Eastern Standard Time'
 param exclusionTag string = 'ScalingPlanExclusion'
 
 @description('Host pool references for this scaling plan.')
-param hostPoolReferences array = []
+param hostPoolReferences scalingHostPoolReferenceType[] = []
 
 @allowed([
   'Pooled'
@@ -20,10 +21,10 @@ param hostPoolReferences array = []
 param hostPoolType string = 'Pooled'
 
 @description('Pooled host pool scaling schedules.')
-param pooledSchedules array = []
+param pooledSchedules pooledScalingScheduleType[] = []
 
 @description('Personal host pool scaling schedules.')
-param personalSchedules array = []
+param personalSchedules personalScalingScheduleType[] = []
 
 param diagnosticSettings diagnosticSettingsType?
 

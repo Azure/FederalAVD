@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostGuestAttestation-DeployIfNotExists'
-param policyDefinitionDisplayName string = 'Deploy Guest Attestation on AVD session host virtual machines'
+param policyDefinitionDisplayName string = 'Deploy Guest Attestation on automated AVD session hosts'
 param policyDefinitionDescription string = 'Deploys the Guest Attestation extension required for Trusted Launch integrity monitoring.'
 
 var guestAttestationTemplate = loadJsonContent('../templates/Extensions/GuestAttestation.json')
@@ -14,6 +14,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     mode: 'All'
     metadata: {
       category: 'Azure Virtual Desktop'
+      solution: 'Automated AVD Host Pools'
+      component: 'Session Host Governance'
       version: '1.0.0'
     }
     parameters: {
@@ -32,10 +34,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           {
             field: 'type'
             equals: 'Microsoft.Compute/virtualMachines'
-          }
-          {
-            field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.osType'
-            equals: 'Windows'
           }
           {
             field: 'Microsoft.Compute/virtualMachines/securityProfile.securityType'

@@ -2,6 +2,8 @@ targetScope = 'subscription'
 
 param confidentialVMOSDiskEncryption bool
 param diskSku string
+@description('Optional. Disk Encryption Set resource ID used to encrypt the deployment-helper OS disk.')
+param diskEncryptionSetResourceId string = ''
 @secure()
 param domainJoinUserPassword string
 @secure()
@@ -26,7 +28,8 @@ param resourceGroupHosts string
 param resourceGroupSecurity string
 param resourceGroupStorage string
 param tags object
-param deploymentSuffix string
+@description('Changes on each deployment to force the domain-join extension to execute when configured.')
+param domainJoinForceUpdateTag string = utcNow('yyyyMMddHHmmss')
 param userAssignedIdentityNameConv string = ''
 param userAssignedIdentityName string = ''
 param virtualMachineName string
@@ -167,7 +170,6 @@ var roleAssignments = union(
 
 // ─── Deployment user-assigned identity ────────────────────────────────────────
 module deploymentUserAssignedIdentity '../../resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
-  name: 'UserAssignedIdentity-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     name: deploymentUserAssignedIdentityName
@@ -183,7 +185,6 @@ module deploymentUserAssignedIdentity '../../resourceModules/managedIdentity/use
 module roleAssignments_deployment '../../resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for i in range(0, length(roleAssignments)): {
     scope: resourceGroup(roleAssignments[i].resourceGroup)
-    name: 'RA-${roleAssignments[i].depName}-${deploymentSuffix}'
     params: {
       principalId: deploymentUserAssignedIdentity.outputs.principalId
       principalType: 'ServicePrincipal'
@@ -194,7 +195,6 @@ module roleAssignments_deployment '../../resourceModules/authorization/roleAssig
 
 // ─── Deployment VM ─────────────────────────────────────────────────────────────
 module virtualMachine '../../resourceModules/compute/virtualMachines/deploy.bicep' = {
-  name: 'VirtualMachine-Deployment-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     name: virtualMachineName
@@ -209,6 +209,7 @@ module virtualMachine '../../resourceModules/compute/virtualMachines/deploy.bice
     imageSku: '2019-datacenter-core-g2'
     osDiskName: virtualMachineDiskName
     osDiskSku: diskSku
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
     adminUsername: virtualMachineAdminUserName
     adminPassword: virtualMachineAdminPassword
     licenseType: 'Windows_Server'
@@ -252,7 +253,7 @@ module virtualMachine '../../resourceModules/compute/virtualMachines/deploy.bice
               type: 'JsonADDomainExtension'
               typeHandlerVersion: '1.3'
               autoUpgradeMinorVersion: true
-              forceUpdateTag: deploymentSuffix
+              forceUpdateTag: domainJoinForceUpdateTag
               settings: {
                 Name: domainName
                 User: domainJoinUserPrincipalName

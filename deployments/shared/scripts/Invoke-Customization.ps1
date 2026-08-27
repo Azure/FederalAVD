@@ -18,6 +18,158 @@ function Write-Log {
   Write-Output $Entry
 }
 
+function Get-WebException {
+  param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+  $exception = $ErrorRecord.Exception
+  while ($exception.InnerException -and -not ($exception -is [System.Net.WebException])) {
+    $exception = $exception.InnerException
+  }
+  return $exception
+}
+
+function Get-WebFailureDetail {
+  param(
+    [System.Management.Automation.ErrorRecord]$ErrorRecord,
+    [ValidateSet('ManagedIdentity', 'Download')]
+    [string]$Operation
+  )
+
+  $exception = Get-WebException -ErrorRecord $ErrorRecord
+  $response = $exception.Response
+  $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }
+  $webStatus = if ($exception -is [System.Net.WebException]) { $exception.Status } else { $null }
+  $category = if ($Operation -eq 'ManagedIdentity' -and $statusCode -eq 400) {
+    'IdentityUnavailable'
+  }
+  elseif ($webStatus -in @('ConnectFailure', 'ConnectionClosed', 'NameResolutionFailure', 'ProxyNameResolutionFailure', 'ReceiveFailure', 'SendFailure', 'Timeout')) {
+    if ($Operation -eq 'ManagedIdentity') { 'ImdsConnectivity' } else { 'StorageConnectivity' }
+  }
+  elseif ($null -ne $statusCode) {
+    "Http$statusCode"
+  }
+  else {
+    'UnexpectedError'
+  }
+
+  $parts = @("Category=$category")
+  if ($null -ne $statusCode) { $parts += "HTTP=$statusCode" }
+  if ($null -ne $webStatus) { $parts += "WebStatus=$webStatus" }
+  $parts += "Message=$($exception.Message)"
+  return $parts -join '; '
+}
+
+function Test-TransientManagedIdentityFailure {
+  param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+  $exception = Get-WebException -ErrorRecord $ErrorRecord
+  $response = $exception.Response
+  $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }
+  if ($statusCode -in @(400, 408, 429, 500, 502, 503, 504)) { return $true }
+  if ($exception -is [System.Net.WebException]) {
+    return $exception.Status -in @(
+      'ConnectFailure',
+      'ConnectionClosed',
+      'KeepAliveFailure',
+      'NameResolutionFailure',
+      'PipelineFailure',
+      'ProxyNameResolutionFailure',
+      'ReceiveFailure',
+      'RequestCanceled',
+      'SendFailure',
+      'Timeout'
+    )
+  }
+  return $false
+}
+
+function Test-TransientDownloadFailure {
+  param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+  $exception = Get-WebException -ErrorRecord $ErrorRecord
+  $response = $exception.Response
+  $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }
+  if ($statusCode -in @(403, 408, 429, 500, 502, 503, 504)) { return $true }
+  if ($exception -is [System.Net.WebException]) {
+    return $exception.Status -in @(
+      'ConnectFailure',
+      'ConnectionClosed',
+      'KeepAliveFailure',
+      'NameResolutionFailure',
+      'PipelineFailure',
+      'ProxyNameResolutionFailure',
+      'ReceiveFailure',
+      'RequestCanceled',
+      'SendFailure',
+      'Timeout'
+    )
+  }
+  return $false
+}
+
+function Get-ManagedIdentityAccessToken {
+  param(
+    [string]$TokenUri,
+    [int]$MaxAttempts = 12,
+    [int]$RetryDelaySeconds = 10
+  )
+
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    $responseReceived = $false
+    try {
+      $response = Invoke-WebRequest -Headers @{Metadata = $true} -Uri $TokenUri -UseBasicParsing
+      $responseReceived = $true
+      $accessToken = ($response.Content | ConvertFrom-Json).access_token
+      if ([string]::IsNullOrWhiteSpace($accessToken)) {
+        throw 'Managed identity endpoint returned an empty access token.'
+      }
+      return $accessToken
+    }
+    catch {
+      $failureDetail = Get-WebFailureDetail -ErrorRecord $_ -Operation ManagedIdentity
+      $isTransient = $responseReceived -or (Test-TransientManagedIdentityFailure -ErrorRecord $_)
+      if (-not $isTransient) {
+        throw "Managed identity token request failed without retry. $failureDetail"
+      }
+      if ($attempt -eq $MaxAttempts) {
+        throw "Managed identity token request failed after $MaxAttempts attempts. $failureDetail"
+      }
+      Write-Log "Managed identity token request attempt $attempt of $MaxAttempts failed. $failureDetail Retrying in $RetryDelaySeconds seconds."
+      Start-Sleep -Seconds $RetryDelaySeconds
+    }
+  }
+}
+
+function Invoke-ArtifactDownload {
+  param(
+    $WebClient,
+    [string]$Uri,
+    [string]$DestinationPath,
+    [int]$MaxAttempts = 6,
+    [int]$RetryDelaySeconds = 10
+  )
+
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    try {
+      $WebClient.DownloadFile($Uri, $DestinationPath)
+      return
+    }
+    catch {
+      $failureDetail = Get-WebFailureDetail -ErrorRecord $_ -Operation Download
+      $isTransient = Test-TransientDownloadFailure -ErrorRecord $_
+      Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue
+      if (-not $isTransient) {
+        throw "Artifact download failed without retry. $failureDetail"
+      }
+      if ($attempt -eq $MaxAttempts) {
+        throw "Artifact download failed after $MaxAttempts attempts. $failureDetail"
+      }
+      Write-Log "Artifact download attempt $attempt of $MaxAttempts failed. $failureDetail Retrying in $RetryDelaySeconds seconds."
+      Start-Sleep -Seconds $RetryDelaySeconds
+    }
+  }
+}
+
 function Split-ArgumentString {
   param([string]$ArgumentString)
 
@@ -225,7 +377,7 @@ try {
     Write-Log "Getting access token for '$Uri' using User Assigned Identity."
     $StorageEndpoint = ($Uri -split '://')[0] + '://' + ($Uri -split '/')[2] + '/'
     $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId"
-    $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true} -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token
+    $AccessToken = Get-ManagedIdentityAccessToken -TokenUri $TokenUri
     $WebClient.Headers.Add('x-ms-version', '2017-11-09')
     $WebClient.Headers.Add('Authorization', "Bearer $AccessToken")
   }
@@ -233,7 +385,7 @@ try {
   $SourceFileName = ($Uri -split '/')[-1]
   Write-Log "Downloading '$Uri' to '$TempDir'."
   $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName
-  $WebClient.DownloadFile("$Uri", "$DestFile")
+  Invoke-ArtifactDownload -WebClient $WebClient -Uri $Uri -DestinationPath $DestFile
   Start-Sleep -Seconds 10
 
   If (!(Test-Path -Path $DestFile)) {

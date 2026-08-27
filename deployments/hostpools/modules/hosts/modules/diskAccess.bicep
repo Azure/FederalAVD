@@ -4,7 +4,6 @@ param resourceGroupHosts string
 param diskAccessName string
 param location string
 param hostPoolResourceId string
-param deploymentSuffix string
 param tags object = {}
 param deployPrivateEndpoint bool
 param privateEndpointSubnetResourceId string = ''
@@ -14,7 +13,6 @@ param azureBlobPrivateDnsZoneResourceId string = ''
 
 module diskAccessResource '../../../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = {
   scope: resourceGroup(resourceGroupHosts)
-  name: 'DiskAccess-${deploymentSuffix}'
   params: {
     name: diskAccessName
     location: location
@@ -24,7 +22,6 @@ module diskAccessResource '../../../../shared/modules/resourceModules/compute/di
 
 module diskAccessPrivateEndpoint '../../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployPrivateEndpoint && !empty(privateEndpointSubnetResourceId)) {
   scope: resourceGroup(resourceGroupHosts)
-  name: 'PE-DiskAccess-${deploymentSuffix}'
   params: {
     name: replace(replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])
     customNetworkInterfaceName: replace(replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'disks'), 'RESOURCE', diskAccessName), 'VNETID', split(privateEndpointSubnetResourceId, '/')[8])

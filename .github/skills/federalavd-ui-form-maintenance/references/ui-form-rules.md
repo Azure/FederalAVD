@@ -6,6 +6,8 @@
 - A dropdown `defaultValue` matches its label, not its submitted value.
 - Keep dependent publisher, offer, SKU API, transform, and default expressions gated together.
 - In an `EditableGrid`, use `$rowIndex` only in expression locations where the portal supports it.
+- In an `EditableGrid`, do not rely on column `defaultValue` to populate new rows. Use placeholders
+  for guidance and handle conditionally omitted values in the deployment contract.
 - Avoid wrapping asynchronous API-control values in `coalesce(..., [])` when that prevents later
   population.
 - Ensure `outputs` is in the schema-defined location; misplaced outputs can evaluate as blank
@@ -19,7 +21,9 @@
   simplify to low-risk visibility toggles across multiple text blocks instead of computing one
   text string expression.
 - Required verification after text-binding changes: run a live portal form render test through the
-  affected step and confirm the section loads without `CustomHtmlField` errors.
+  affected step and confirm the section loads without `CustomHtmlField` errors. If portal
+  authentication is unavailable, report the test as blocked rather than treating static checks as
+  equivalent.
 
 Example - avoid:
 

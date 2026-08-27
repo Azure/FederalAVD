@@ -2,7 +2,7 @@ param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
 param imageVmName string
-param deploymentSuffix string = utcNow('yyyyMMddhhmm')
+param buildTimestamp string = utcNow('yyyyMMddHHmmss')
 param userAssignedIdentityClientId string
 param context string  // e.g. 'PreBuild', 'PostUpdates', 'PostCleanup' — disambiguates resource names and blob URIs when called multiple times
 
@@ -34,9 +34,9 @@ resource cbsCheck 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-CbsCheck-${context}-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-CbsCheck-${context}-${buildTimestamp}.log'
     source: {
-      script: loadTextContent('../../shared/scripts/Check-CbsState.ps1')
+      script: loadTextContent('../scripts/Check-CbsState.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -62,7 +62,7 @@ resource conditionalRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-ConditionalRestart-${context}-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-ConditionalRestart-${context}-${buildTimestamp}.log'
     parameters: [
       {
         name: 'ResourceManagerUri'
@@ -82,7 +82,7 @@ resource conditionalRestart 'Microsoft.Compute/virtualMachines/runCommands@2023-
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Invoke-ConditionalRestart.ps1')
+      script: loadTextContent('../scripts/Invoke-ConditionalRestart.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

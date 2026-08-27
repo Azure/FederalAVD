@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostCompute-Modify'
-param policyDefinitionDisplayName string = 'Configure AVD session host compute security settings'
+param policyDefinitionDisplayName string = 'Configure AVD session host compute settings'
 param policyDefinitionDescription string = 'Configures encryption at host and an optional OS disk size during session host virtual machine creation or update.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -12,6 +12,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     mode: 'Indexed'
     metadata: {
       category: 'Azure Virtual Desktop'
+      solution: 'AVD Session Host Governance'
+      component: 'Creation Settings'
       version: '1.0.0'
     }
     parameters: {
@@ -57,8 +59,16 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           {
             anyOf: [
               {
-                field: 'Microsoft.Compute/virtualMachines/securityProfile.encryptionAtHost'
-                notEquals: '[parameters(\'encryptionAtHost\')]'
+                allOf: [
+                  {
+                    value: '[parameters(\'encryptionAtHost\')]'
+                    equals: true
+                  }
+                  {
+                    field: 'Microsoft.Compute/virtualMachines/securityProfile.encryptionAtHost'
+                    notEquals: true
+                  }
+                ]
               }
               {
                 allOf: [
@@ -85,9 +95,10 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           ]
           operations: [
             {
+              condition: '[parameters(\'encryptionAtHost\')]'
               operation: 'AddOrReplace'
               field: 'Microsoft.Compute/virtualMachines/securityProfile.encryptionAtHost'
-              value: '[parameters(\'encryptionAtHost\')]'
+              value: true
             }
             {
               condition: '[greater(parameters(\'diskSizeGB\'), 0)]'

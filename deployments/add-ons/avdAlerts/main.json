@@ -1,11 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "7332712525845947659"
+      "templateHash": "1978337979717863271"
     }
   },
   "parameters": {
@@ -533,14 +534,13 @@
     "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), format('{0}-avd-alerts-{1}', variables('resourceAbbreviations').automationAccounts, variables('regionAbbr')))]",
     "hasStorageAccounts": "[not(empty(parameters('storageAccountResourceIds')))]",
     "storageAccountResourceIdsJson": "[string(parameters('storageAccountResourceIds'))]",
-    "deploymentSuffix": "[take(uniqueString(subscription().subscriptionId, parameters('resourceGroupName'), deployment().name), 8)]",
     "lawSubscriptionId": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[2]]",
     "lawResourceGroup": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[4]]",
     "hostPoolInfoDeduped": "[reduce(parameters('hostPoolInfo'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').hostPoolResourceId)), lambdaVariables('item').hostPoolResourceId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]",
     "vmRgInfoDeduped": "[reduce(variables('hostPoolInfoDeduped'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').vmResourceGroupId)), lambdaVariables('item').vmResourceGroupId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]"
   },
-  "resources": [
-    {
+  "resources": {
+    "newResourceGroup": {
       "condition": "[parameters('createResourceGroup')]",
       "type": "Microsoft.Resources/resourceGroups",
       "apiVersion": "2022-09-01",
@@ -548,11 +548,18 @@
       "location": "[parameters('location')]",
       "tags": "[parameters('tags')]"
     },
-    {
+    "existingResourceGroup": {
+      "condition": "[not(parameters('createResourceGroup'))]",
+      "existing": true,
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2022-09-01",
+      "name": "[parameters('resourceGroupName')]"
+    },
+    "automationAccountDeploy": {
       "condition": "[variables('hasStorageAccounts')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('automationAccountDeploy-{0}', uniqueString('automationAccountDeploy', deployment().name))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -818,14 +825,15 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "existingResourceGroup",
+        "newResourceGroup"
       ]
     },
-    {
+    "roleAssignLogAnalytics": {
       "condition": "[variables('hasStorageAccounts')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-RoleAssign-LAW-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('roleAssignLogAnalytics-{0}', uniqueString('roleAssignLogAnalytics', deployment().name))]",
       "subscriptionId": "[variables('lawSubscriptionId')]",
       "resourceGroup": "[variables('lawResourceGroup')]",
       "properties": {
@@ -835,7 +843,7 @@
         "mode": "Incremental",
         "parameters": {
           "principalId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+            "value": "[reference('automationAccountDeploy').outputs.principalId.value]"
           },
           "roleDefinitionId": {
             "value": "92aaf0da-9dab-42b6-94a3-d43ce8d16293"
@@ -898,17 +906,17 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix')))]"
+        "automationAccountDeploy"
       ]
     },
-    {
+    "roleAssignStorage": {
       "copy": {
         "name": "roleAssignStorage",
         "count": "[length(variables('storageRgPairs'))]"
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-RoleAssign-Stor{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
+      "name": "[format('roleAssignStorage-{0}-{1}', copyIndex(), uniqueString('roleAssignStorage', deployment().name))]",
       "subscriptionId": "[split(variables('storageRgPairs')[copyIndex()], ',')[0]]",
       "resourceGroup": "[split(variables('storageRgPairs')[copyIndex()], ',')[1]]",
       "properties": {
@@ -918,7 +926,7 @@
         "mode": "Incremental",
         "parameters": {
           "principalId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+            "value": "[reference('automationAccountDeploy').outputs.principalId.value]"
           },
           "roleDefinitionId": {
             "value": "17d1049b-9a84-46fb-8f53-869881c3d3ab"
@@ -981,17 +989,17 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('AvdAlerts-AutomationAccount-{0}', variables('deploymentSuffix')))]"
+        "automationAccountDeploy"
       ]
     },
-    {
+    "hostPoolLogAlerts": {
       "copy": {
         "name": "hostPoolLogAlerts",
         "count": "[length(variables('hostPoolInfoDeduped'))]"
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-HP-{0}-{1}', last(split(variables('hostPoolInfoDeduped')[copyIndex()].hostPoolResourceId, '/')), variables('deploymentSuffix'))]",
+      "name": "[format('hostPoolLogAlerts-{0}-{1}', copyIndex(), uniqueString('hostPoolLogAlerts', deployment().name))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2362,17 +2370,18 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "existingResourceGroup",
+        "newResourceGroup"
       ]
     },
-    {
+    "vmAlerts": {
       "copy": {
         "name": "vmAlerts",
         "count": "[length(variables('vmRgInfoDeduped'))]"
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-VM-{0}-{1}', last(split(variables('vmRgInfoDeduped')[copyIndex()].vmResourceGroupId, '/')), variables('deploymentSuffix'))]",
+      "name": "[format('vmAlerts-{0}-{1}', copyIndex(), uniqueString('vmAlerts', deployment().name))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2943,17 +2952,18 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "existingResourceGroup",
+        "newResourceGroup"
       ]
     },
-    {
+    "storageAlerts": {
       "copy": {
         "name": "storageAlerts",
         "count": "[length(parameters('storageAccountResourceIds'))]"
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-Stor{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
+      "name": "[format('storageAlerts-{0}-{1}', copyIndex(), uniqueString('storageAlerts', deployment().name))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3427,17 +3437,18 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "existingResourceGroup",
+        "newResourceGroup"
       ]
     },
-    {
+    "anfAlerts": {
       "copy": {
         "name": "anfAlerts",
         "count": "[length(parameters('anfVolumeResourceIds'))]"
       },
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-ANF{0}-{1}', copyIndex(), variables('deploymentSuffix'))]",
+      "name": "[format('anfAlerts-{0}-{1}', copyIndex(), uniqueString('anfAlerts', deployment().name))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3588,13 +3599,14 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "existingResourceGroup",
+        "newResourceGroup"
       ]
     },
-    {
+    "serviceHealthAlerts": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('AvdAlerts-SvcHealth-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('serviceHealthAlerts-{0}', uniqueString('serviceHealthAlerts', deployment().name))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3788,8 +3800,9 @@
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "existingResourceGroup",
+        "newResourceGroup"
       ]
     }
-  ]
+  }
 }

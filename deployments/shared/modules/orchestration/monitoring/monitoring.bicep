@@ -2,7 +2,6 @@ targetScope = 'subscription'
 
 param azureMonitorPrivateLinkScopeResourceId string
 param dataCollectionEndpointName string
-param deploymentSuffix string
 param location string
 param logAnalyticsWorkspaceName string
 param logAnalyticsWorkspaceRetention int = 30
@@ -12,7 +11,6 @@ param tags object
 
 // ─── Log Analytics Workspace ───────────────────────────────────────────────────
 module logAnalyticsWorkspace '../../resourceModules/operationalInsights/workspaces/deploy.bicep' = {
-  name: 'LogAnalytics-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
     name: logAnalyticsWorkspaceName
@@ -25,7 +23,6 @@ module logAnalyticsWorkspace '../../resourceModules/operationalInsights/workspac
 
 // ─── Data Collection Endpoint ──────────────────────────────────────────────────
 module dataCollectionEndpoint '../../resourceModules/insights/dataCollectionEndpoints/deploy.bicep' = {
-  name: 'DataCollectionEndpoint-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
     name: dataCollectionEndpointName
@@ -37,7 +34,6 @@ module dataCollectionEndpoint '../../resourceModules/insights/dataCollectionEndp
 
 // ─── AVD Insights Data Collection Rule ────────────────────────────────────────
 module avdInsightsDataCollectionRule '../../resourceModules/monitoring/avdInsightsDataCollectionRule.bicep' = {
-  name: 'AVDInsights-DataCollectionRule-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
     location: location
@@ -49,9 +45,7 @@ module avdInsightsDataCollectionRule '../../resourceModules/monitoring/avdInsigh
 
 // ─── Azure Monitor Private Link Scope ─────────────────────────────────────────
 module updatePrivateLinkScope '../../resourceModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
-  name: 'PrivateLinkScope-${deploymentSuffix}'
   params: {
-    deploymentSuffix: deploymentSuffix
     privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
     scopedResourceIds: [
       logAnalyticsWorkspace.outputs.resourceId

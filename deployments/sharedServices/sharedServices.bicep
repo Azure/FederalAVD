@@ -168,9 +168,6 @@ param namingConvention object = {
   workload: 'avd'
 }
 
-@description('DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
-param timeStamp string = utcNow('yyyyMMddHHmmss')
-
 // ── Naming Convention ──────────────────────────────────────────────────────────
 
 var cloud = toLower(environment().name)
@@ -182,7 +179,6 @@ var locations = startsWith(cloud, 'us')
   : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
 var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
 
-var deploymentSuffix = timeStamp
 var identifier = 'operations'
 var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)
   ? subscription().subscriptionId
@@ -346,7 +342,6 @@ var fslogixBackupVaultName = buildCustomName(
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
 module operationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
-  name: 'Operations-ResourceGroup-${deploymentSuffix}'
   scope: subscription()
   params: {
     location: location
@@ -358,7 +353,6 @@ module operationsResourceGroup '../shared/modules/resourceModules/resources/reso
 // ── Log Analytics Workspace ─────────────────────────────────────────────────────
 
 module monitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring) {
-  name: 'Monitoring-ResourceGroup-${deploymentSuffix}'
   scope: subscription(effectiveLogAnalyticsWorkspaceSubscription)
   params: {
     location: location
@@ -393,12 +387,10 @@ var effectiveAzureMonitorPrivateLinkScopeResourceId = deployMonitoring ? azureMo
 // lets every host pool that reuses this workspace share the same DCE/DCR via "existingAVDInsightsDataCollectionRuleResourceId"
 // and "existingDataCollectionEndpointResourceId", instead of the first host pool deployment creating them.
 module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deployMonitoring) {
-  name: 'Monitoring-Stack-${deploymentSuffix}'
   scope: subscription(effectiveLogAnalyticsWorkspaceSubscription)
   params: {
     azureMonitorPrivateLinkScopeResourceId: effectiveAzureMonitorPrivateLinkScopeResourceId
     dataCollectionEndpointName: dataCollectionEndpointName
-    deploymentSuffix: deploymentSuffix
     location: location
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
     logAnalyticsWorkspaceRetention: logAnalyticsWorkspaceRetentionInDays
@@ -418,7 +410,6 @@ var effectiveLogAnalyticsWorkspaceResourceId = deployMonitoring
 // ── Key Vaults ─────────────────────────────────────────────────────────────────
 
 module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
-  name: 'Operations-KeyVaults-${deploymentSuffix}'
   scope: subscription()
   params: {
     resourceGroupName: operationsResourceGroupName
@@ -442,7 +433,6 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
     permittedIPs: permittedIPs
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     tags: tags
-    deploymentSuffix: deploymentSuffix
   }
   dependsOn: [operationsResourceGroup]
 }
@@ -450,14 +440,12 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
 // Shared FSLogix Backup Vault
 
 module fslogixBackupVault '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deployFSLogixBackupVault) {
-  name: 'Operations-FSLogixBackup-${deploymentSuffix}'
   params: {
     createVault: true
     manageBackupPolicy: true
     vaultName: fslogixBackupVaultName
     resourceGroupOperations: operationsResourceGroupName
     location: location
-    deploymentSuffix: deploymentSuffix
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     privateEndpoint: privateEndpoint
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId

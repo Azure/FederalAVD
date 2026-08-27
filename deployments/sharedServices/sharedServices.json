@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "15866292025727770341"
+      "templateHash": "11839670329239624166"
     }
   },
   "functions": [
@@ -345,13 +345,6 @@
       },
       "metadata": {
         "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
-      }
-    },
-    "timeStamp": {
-      "type": "string",
-      "defaultValue": "[utcNow('yyyyMMddHHmmss')]",
-      "metadata": {
-        "description": "DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter."
       }
     }
   },
@@ -899,7 +892,6 @@
     "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
     "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
     "resourceAbbreviations": "[variables('$fxv#2')]",
-    "deploymentSuffix": "[parameters('timeStamp')]",
     "identifier": "operations",
     "effectiveLogAnalyticsWorkspaceSubscription": "[if(empty(parameters('logAnalyticsWorkspaceSubscriptionId')), subscription().subscriptionId, parameters('logAnalyticsWorkspaceSubscriptionId'))]",
     "monitoringUsesDeploymentSubscription": "[equals(variables('effectiveLogAnalyticsWorkspaceSubscription'), subscription().subscriptionId)]",
@@ -927,7 +919,7 @@
     "operationsResourceGroup": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Operations-ResourceGroup-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('operationsResourceGroup-{0}', uniqueString('operationsResourceGroup', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -993,7 +985,7 @@
       "condition": "[parameters('deployMonitoring')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Monitoring-ResourceGroup-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('monitoringResourceGroup-{0}', uniqueString('monitoringResourceGroup', deployment().name))]",
       "subscriptionId": "[variables('effectiveLogAnalyticsWorkspaceSubscription')]",
       "location": "[deployment().location]",
       "properties": {
@@ -1216,7 +1208,7 @@
       "condition": "[parameters('deployMonitoring')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Monitoring-Stack-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('monitoring-{0}', uniqueString('monitoring', deployment().name))]",
       "subscriptionId": "[variables('effectiveLogAnalyticsWorkspaceSubscription')]",
       "location": "[deployment().location]",
       "properties": {
@@ -1230,9 +1222,6 @@
           },
           "dataCollectionEndpointName": {
             "value": "[variables('dataCollectionEndpointName')]"
-          },
-          "deploymentSuffix": {
-            "value": "[variables('deploymentSuffix')]"
           },
           "location": {
             "value": "[parameters('location')]"
@@ -1255,12 +1244,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "3622543968441522670"
+              "templateHash": "6812981609405490166"
             }
           },
           "parameters": {
@@ -1268,9 +1258,6 @@
               "type": "string"
             },
             "dataCollectionEndpointName": {
-              "type": "string"
-            },
-            "deploymentSuffix": {
               "type": "string"
             },
             "location": {
@@ -1294,11 +1281,11 @@
               "type": "object"
             }
           },
-          "resources": [
-            {
+          "resources": {
+            "logAnalyticsWorkspace": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('LogAnalytics-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('logAnalyticsWorkspace-{0}', uniqueString('logAnalyticsWorkspace', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupMonitoring')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1522,10 +1509,10 @@
                 }
               }
             },
-            {
+            "dataCollectionEndpoint": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('dataCollectionEndpoint-{0}', uniqueString('dataCollectionEndpoint', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupMonitoring')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1602,10 +1589,10 @@
                 }
               }
             },
-            {
+            "avdInsightsDataCollectionRule": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('AVDInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('avdInsightsDataCollectionRule-{0}', uniqueString('avdInsightsDataCollectionRule', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupMonitoring')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1620,10 +1607,10 @@
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/dataCollectionRules'), createObject())]"
                   },
                   "logAnalyticsWorkspaceResourceId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                    "value": "[reference('logAnalyticsWorkspace').outputs.resourceId.value]"
                   },
                   "dataCollectionEndpointId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                    "value": "[reference('dataCollectionEndpoint').outputs.resourceId.value]"
                   }
                 },
                 "template": {
@@ -1751,15 +1738,15 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
+                "dataCollectionEndpoint",
+                "logAnalyticsWorkspace"
               ]
             },
-            {
+            "updatePrivateLinkScope": {
               "condition": "[not(empty(parameters('azureMonitorPrivateLinkScopeResourceId')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('PrivateLinkScope-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('updatePrivateLinkScope-{0}', uniqueString('updatePrivateLinkScope', deployment().name))]",
               "location": "[deployment().location]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -1767,27 +1754,25 @@
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "deploymentSuffix": {
-                    "value": "[parameters('deploymentSuffix')]"
-                  },
                   "privateLinkScopeResourceId": {
                     "value": "[parameters('azureMonitorPrivateLinkScopeResourceId')]"
                   },
                   "scopedResourceIds": {
                     "value": [
-                      "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]",
-                      "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                      "[reference('logAnalyticsWorkspace').outputs.resourceId.value]",
+                      "[reference('dataCollectionEndpoint').outputs.resourceId.value]"
                     ]
                   }
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "6554509103004020044"
+                      "templateHash": "920014938514405928"
                     }
                   },
                   "parameters": {
@@ -1802,19 +1787,13 @@
                       "metadata": {
                         "description": "Required. Array of resource IDs to associate as scoped resources on the AMPLS."
                       }
-                    },
-                    "deploymentSuffix": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Unique suffix used for deterministic deployment naming and idempotency."
-                      }
                     }
                   },
-                  "resources": [
-                    {
+                  "resources": {
+                    "addScopedResources": {
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('addScopedResources-{0}', parameters('deploymentSuffix'))]",
+                      "name": "[format('addScopedResources-{0}', uniqueString('addScopedResources', deployment().name))]",
                       "subscriptionId": "[split(parameters('privateLinkScopeResourceId'), '/')[2]]",
                       "resourceGroup": "[split(parameters('privateLinkScopeResourceId'), '/')[4]]",
                       "properties": {
@@ -1865,31 +1844,31 @@
                         }
                       }
                     }
-                  ]
+                  }
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix')))]",
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix')))]"
+                "dataCollectionEndpoint",
+                "logAnalyticsWorkspace"
               ]
             }
-          ],
+          },
           "outputs": {
             "avdInsightsDataCollectionRuleResourceId": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('AVDInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+              "value": "[reference('avdInsightsDataCollectionRule').outputs.resourceId.value]"
             },
             "avdInsightsDataCollectionRulesResourceId": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('AVDInsights-DataCollectionRule-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+              "value": "[reference('avdInsightsDataCollectionRule').outputs.resourceId.value]"
             },
             "dataCollectionEndpointResourceId": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('DataCollectionEndpoint-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+              "value": "[reference('dataCollectionEndpoint').outputs.resourceId.value]"
             },
             "logAnalyticsWorkspaceResourceId": {
               "type": "string",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupMonitoring')), 'Microsoft.Resources/deployments', format('LogAnalytics-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+              "value": "[reference('logAnalyticsWorkspace').outputs.resourceId.value]"
             }
           }
         }
@@ -1901,7 +1880,7 @@
     "keyVaults": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Operations-KeyVaults-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('keyVaults-{0}', uniqueString('keyVaults', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1969,19 +1948,17 @@
           "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
           "tags": {
             "value": "[parameters('tags')]"
-          },
-          "deploymentSuffix": {
-            "value": "[variables('deploymentSuffix')]"
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "11548568156399288228"
+              "templateHash": "12106560424088397430"
             }
           },
           "parameters": {
@@ -2042,9 +2019,6 @@
             "tags": {
               "type": "object",
               "defaultValue": {}
-            },
-            "deploymentSuffix": {
-              "type": "string"
             },
             "virtualMachineAdminPassword": {
               "type": "securestring",
@@ -2111,12 +2085,12 @@
               "ipRules": "[variables('ipRules')]"
             }
           },
-          "resources": [
-            {
+          "resources": {
+            "secretsKeyVault": {
               "condition": "[variables('deploySecretsKv')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Secrets-KeyVault-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('secretsKeyVault-{0}', uniqueString('secretsKeyVault', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -2410,11 +2384,11 @@
                 }
               }
             },
-            {
+            "secretsKeyVault_pe": {
               "condition": "[variables('deploySecretsKvPe')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Secrets-KV-PE-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('secretsKeyVault_pe-{0}', uniqueString('secretsKeyVault_pe', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -2435,7 +2409,7 @@
                     "value": "[parameters('privateEndpointSubnetResourceId')]"
                   },
                   "privateLinkServiceId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                    "value": "[reference('secretsKeyVault').outputs.resourceId.value]"
                   },
                   "groupId": {
                     "value": "vault"
@@ -2562,10 +2536,10 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix')))]"
+                "secretsKeyVault"
               ]
             },
-            {
+            "secrets": {
               "copy": {
                 "name": "secrets",
                 "count": "[length(variables('secretList'))]"
@@ -2573,7 +2547,7 @@
               "condition": "[variables('deploySecretsKv')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Secret-{0}-{1}', variables('secretList')[copyIndex()].name, parameters('deploymentSuffix'))]",
+              "name": "[format('secrets-{0}-{1}', copyIndex(), uniqueString('secrets', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -2648,14 +2622,14 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix')))]"
+                "secretsKeyVault"
               ]
             },
-            {
+            "encryptionKeyVault": {
               "condition": "[parameters('deployEncryptionKeyVault')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('encryptionKeyVault-{0}', uniqueString('encryptionKeyVault', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -2949,11 +2923,11 @@
                 }
               }
             },
-            {
+            "encryptionKeyVault_pe": {
               "condition": "[variables('deployEncryptionKvPe')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('Encryption-KV-PE-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('encryptionKeyVault_pe-{0}', uniqueString('encryptionKeyVault_pe', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -2974,7 +2948,7 @@
                     "value": "[parameters('privateEndpointSubnetResourceId')]"
                   },
                   "privateLinkServiceId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                    "value": "[reference('encryptionKeyVault').outputs.resourceId.value]"
                   },
                   "groupId": {
                     "value": "vault"
@@ -3101,22 +3075,22 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix')))]"
+                "encryptionKeyVault"
               ]
             }
-          ],
+          },
           "outputs": {
             "secretsKeyVaultResourceId": {
               "type": "string",
-              "value": "[if(variables('deploySecretsKv'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Secrets-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, '')]"
+              "value": "[if(variables('deploySecretsKv'), reference('secretsKeyVault').outputs.resourceId.value, '')]"
             },
             "encryptionKeyVaultResourceId": {
               "type": "string",
-              "value": "[if(parameters('deployEncryptionKeyVault'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, '')]"
+              "value": "[if(parameters('deployEncryptionKeyVault'), reference('encryptionKeyVault').outputs.resourceId.value, '')]"
             },
             "encryptionKeyVaultUri": {
               "type": "string",
-              "value": "[if(parameters('deployEncryptionKeyVault'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('Encryption-KeyVault-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.uri.value, '')]"
+              "value": "[if(parameters('deployEncryptionKeyVault'), reference('encryptionKeyVault').outputs.uri.value, '')]"
             }
           }
         }
@@ -3130,7 +3104,7 @@
       "condition": "[parameters('deployFSLogixBackupVault')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Operations-FSLogixBackup-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('fslogixBackupVault-{0}', uniqueString('fslogixBackupVault', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3152,9 +3126,6 @@
           },
           "location": {
             "value": "[parameters('location')]"
-          },
-          "deploymentSuffix": {
-            "value": "[variables('deploymentSuffix')]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
           "privateEndpoint": {
@@ -3193,12 +3164,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "12875773250427210099"
+              "templateHash": "4424147620843077713"
             }
           },
           "parameters": {
@@ -3238,12 +3210,6 @@
               "type": "string",
               "metadata": {
                 "description": "Required. Azure region for all resources."
-              }
-            },
-            "deploymentSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Short unique deployment suffix."
               }
             },
             "logAnalyticsWorkspaceResourceId": {
@@ -3334,12 +3300,12 @@
             "effectiveVaultResourceGroupName": "[if(parameters('createVault'), parameters('resourceGroupOperations'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
             "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]"
           },
-          "resources": [
-            {
+          "resources": {
+            "recoveryServicesVault": {
               "condition": "[parameters('createVault')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('RecoveryServicesVault-AzureFiles-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('recoveryServicesVault-{0}', uniqueString('recoveryServicesVault', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupOperations')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -3379,7 +3345,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "6064904845978056209"
+                      "templateHash": "6107118818399515654"
                     }
                   },
                   "definitions": {
@@ -3550,7 +3516,7 @@
                   },
                   "variables": {
                     "cmkEnabled": "[not(empty(parameters('cmkKeyUri')))]",
-                    "cmkConfigurationValidated": "[if(or(and(not(variables('cmkEnabled')), empty(parameters('cmkUserAssignedIdentityResourceId'))), and(and(variables('cmkEnabled'), contains(parameters('cmkKeyUri'), '/keys/')), equals(parameters('cmkUseSystemAssignedIdentity'), empty(parameters('cmkUserAssignedIdentityResourceId'))))), true(), bool('Invalid CMK configuration. Provide cmkKeyUri (including /keys/) with either cmkUserAssignedIdentityResourceId (no vault PE) or cmkUseSystemAssignedIdentity=true (vault PE), but not both identity options simultaneously.'))]",
+                    "cmkConfigurationValidated": "[if(or(and(not(variables('cmkEnabled')), empty(parameters('cmkUserAssignedIdentityResourceId'))), and(and(variables('cmkEnabled'), contains(parameters('cmkKeyUri'), '/keys/')), equals(parameters('cmkUseSystemAssignedIdentity'), empty(parameters('cmkUserAssignedIdentityResourceId'))))), true(), fail('Invalid CMK configuration. Provide cmkKeyUri (including /keys/) with either cmkUserAssignedIdentityResourceId (no vault PE) or cmkUseSystemAssignedIdentity=true (vault PE), but not both identity options simultaneously.'))]",
                     "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
                     "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
                   },
@@ -3630,11 +3596,11 @@
                 }
               }
             },
-            {
+            "fileShareBackupPolicy": {
               "condition": "[parameters('manageBackupPolicy')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('RSV-BackupPolicy-AzureFiles-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('fileShareBackupPolicy-{0}', uniqueString('fileShareBackupPolicy', deployment().name))]",
               "subscriptionId": "[variables('effectiveVaultSubscriptionId')]",
               "resourceGroup": "[variables('effectiveVaultResourceGroupName')]",
               "properties": {
@@ -3721,14 +3687,14 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-AzureFiles-{0}', parameters('deploymentSuffix')))]"
+                "recoveryServicesVault"
               ]
             },
-            {
+            "vaultPrivateEndpoint": {
               "condition": "[and(and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('azureBackupPrivateDnsZoneResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('PE-RecoveryServicesVault-AzureFiles-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('vaultPrivateEndpoint-{0}', uniqueString('vaultPrivateEndpoint', deployment().name))]",
               "resourceGroup": "[parameters('resourceGroupOperations')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -3749,7 +3715,7 @@
                     "value": "[parameters('privateEndpointSubnetResourceId')]"
                   },
                   "privateLinkServiceId": {
-                    "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-AzureFiles-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value]"
+                    "value": "[reference('recoveryServicesVault').outputs.resourceId.value]"
                   },
                   "groupId": {
                     "value": "AzureBackup"
@@ -3881,14 +3847,14 @@
                 }
               },
               "dependsOn": [
-                "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-AzureFiles-{0}', parameters('deploymentSuffix')))]"
+                "recoveryServicesVault"
               ]
             }
-          ],
+          },
           "outputs": {
             "recoveryServicesVaultResourceId": {
               "type": "string",
-              "value": "[if(parameters('createVault'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupOperations')), 'Microsoft.Resources/deployments', format('RecoveryServicesVault-AzureFiles-{0}', parameters('deploymentSuffix'))), '2025-04-01').outputs.resourceId.value, parameters('existingRecoveryServicesVaultResourceId'))]"
+              "value": "[if(parameters('createVault'), reference('recoveryServicesVault').outputs.resourceId.value, parameters('existingRecoveryServicesVaultResourceId'))]"
             },
             "fileShareBackupPolicyName": {
               "type": "string",

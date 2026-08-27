@@ -376,6 +376,15 @@
                         }
                       },
                       {
+                        "id": "rampUpLoadBalancingAlgorithm",
+                        "header": "Ramp-up Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Breadth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                        }
+                      },
+                      {
                         "id": "peakStartTime",
                         "header": "Peak",
                         "element": {
@@ -385,12 +394,30 @@
                         }
                       },
                       {
+                        "id": "peakLoadBalancingAlgorithm",
+                        "header": "Peak Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Breadth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                        }
+                      },
+                      {
                         "id": "rampDownStartTime",
                         "header": "Ramp-down",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "defaultValue": "17:00",
                           "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm." }
+                        }
+                      },
+                      {
+                        "id": "rampDownLoadBalancingAlgorithm",
+                        "header": "Ramp-down Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Depth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       },
                       {
@@ -472,6 +499,52 @@
                           "type": "Microsoft.Common.TextBox",
                           "defaultValue": "5",
                           "constraints": { "required": true, "regex": "^[1-9][0-9]*$", "validationMessage": "Enter a positive whole number." }
+                        }
+                      },
+                      {
+                        "id": "rampDownForceLogoffUsers",
+                        "header": "Force Logoff",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "No",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Yes", "value": true }, { "label": "No", "value": false }] }
+                        }
+                      },
+                      {
+                        "id": "rampDownWaitTimeMinutes",
+                        "header": "Logoff Wait",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "30",
+                          "constraints": { "required": "[last(take(steps('controlPlane').dynamicScaling.schedules, $rowIndex)).rampDownForceLogoffUsers]", "regex": "^(?:[0-9]|[1-9][0-9]|1[01][0-9]|120)$", "validationMessage": "Enter 0-120 minutes." }
+                        }
+                      },
+                      {
+                        "id": "rampDownNotificationMessage",
+                        "header": "Logoff Message",
+                        "width": "3fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "Save your work and sign out. This session host is being removed by autoscale.",
+                          "constraints": { "required": "[last(take(steps('controlPlane').dynamicScaling.schedules, $rowIndex)).rampDownForceLogoffUsers]" }
+                        }
+                      },
+                      {
+                        "id": "rampDownStopHostsWhen",
+                        "header": "Stop Hosts When",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Zero Sessions",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Zero Sessions", "value": "ZeroSessions" }, { "label": "Zero Active Sessions", "value": "ZeroActiveSessions" }] }
+                        }
+                      },
+                      {
+                        "id": "offPeakLoadBalancingAlgorithm",
+                        "header": "Off-peak Balancing",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "defaultValue": "Depth-First",
+                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       }
                     ]
@@ -899,12 +972,13 @@
                 {
                   "name": "sessionHostCount",
                   "type": "Microsoft.Common.Slider",
-                  "label": "Desired Session Host Count",
+                  "label": "Initial Session Host Count",
                   "defaultValue": 1,
                   "min": 1,
                   "max": 100,
                   "showStepMarkers": false,
-                  "toolTip": "The final number of session hosts to provision. The deployment internally creates the host pool with zero hosts, deploys storage and policy, and then provisions this requested capacity."
+                  "visible": "[not(steps('controlPlane').dynamicScaling.deploy)]",
+                  "toolTip": "The number of session hosts to provision when dynamic autoscaling is disabled. Dynamic autoscaling uses the active schedule to determine initial and ongoing capacity."
                 },
                 {
                   "name": "timeZone",
@@ -2564,12 +2638,13 @@
             {
               "name": "servicePrincipals",
               "type": "Microsoft.Common.Section",
-              "label": "Azure Virtual Desktop Service Principal RBAC Assignment",
+              "label": "Azure Virtual Desktop Service Principal RBAC Assignments",
               "visible": "[or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').dynamicScaling.deploy)]",
               "elements": [
                 {
                   "name": "avdServicePrincipalInfoBox",
                   "type": "Microsoft.Common.InfoBox",
+                  "visible": "[or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').dynamicScaling.deploy)]",
                   "options": {
                     "style": "Info",
                     "text": "Select the Azure/Windows Virtual Desktop Microsoft Application (AppId: 9cdead84-a844-4324-93f2-b2e6bb768d07). Start VM on Connect requires Desktop Virtualization Power On Contributor. Dynamic create/delete autoscaling requires Desktop Virtualization Power On Off Contributor and Desktop Virtualization Virtual Machine Contributor.",
@@ -2579,6 +2654,7 @@
                 {
                   "name": "avdServicePrincipalPickerBlade",
                   "type": "Microsoft.Solutions.BladeInvokeControl",
+                  "visible": "[or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').dynamicScaling.deploy)]",
                   "openBladeStatus": "[steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalSelector.changing]",
                   "bladeReference": {
                     "name": "ObjectPickerBlade",
@@ -2609,6 +2685,7 @@
                 {
                   "name": "avdServicePrincipalSelector",
                   "type": "Microsoft.Common.Selector",
+                  "visible": "[or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').dynamicScaling.deploy)]",
                   "label": "Select the 'Azure Virtual Desktop' Microsoft Application",
                   "keyPath": "displayName",
                   "value": "[steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection]",

@@ -1,6 +1,6 @@
 ---
 name: federalavd-bicep-maintenance
-description: "Modify and validate FederalAVD Bicep templates, generated ARM JSON, parameters, and uiFormDefinition files. Use when changing deployment resources, adding parameters or outputs, synchronizing Bicep with JSON, publishing Template Specs, or debugging portal form behavior."
+description: "Modify and validate FederalAVD Bicep templates, generated ARM JSON, and deployment parameters. Use when changing Azure resources, module contracts, parameters or outputs, synchronizing Bicep with ARM JSON, publishing Template Specs, or diagnosing Bicep compilation failures."
 argument-hint: "[deployment folder or Bicep file]"
 ---
 
@@ -8,6 +8,12 @@ argument-hint: "[deployment folder or Bicep file]"
 
 Use this workflow for templates under `deployments/`, including policy definitions under
 `deployments/automatedHostPools/policy/modules/policy/bicep/`.
+
+For automated host-pool policy definitions, initiatives, assignments, nested remediation templates,
+or policy RBAC, also use the `federalavd-policy-authoring` skill.
+
+For `uiFormDefinition.json`, Azure Portal controls, Form View expressions, or form output mappings,
+also use the `federalavd-ui-form-maintenance` skill.
 
 ## Procedure
 
@@ -24,6 +30,13 @@ Use this workflow for templates under `deployments/`, including policy definitio
     with Azure CLI before running the sync test. The sync test only builds a temporary comparison
     file; it does not update the tracked JSON.
 
+    Build generated-template dependencies before the entry points that load them. Known required
+    orderings are:
+
+    - `policy/templates/RunCommand/PrivateCustomization.bicep` before
+       `automatedHostPools/automatedHostPool.bicep`.
+    - `add-ons/sessionHosts/main.bicep` before `add-ons/sessionHostReplacer/main.bicep`.
+
    ```powershell
     az bicep build `
        --file deployments/<component>/<component>.bicep `
@@ -33,19 +46,15 @@ Use this workflow for templates under `deployments/`, including policy definitio
      -BicepPath deployments/<component>/<component>.bicep
    ```
 
-7. When adding or changing a user-facing parameter, review the sibling `uiFormDefinition.json`,
-   example parameter files, `docs/parameters.md`, and deployment documentation.
-8. Validate UI forms against the current Microsoft schema and Form View documentation. Dropdown
-   `defaultValue` must match the option label, not its submitted value.
-9. For `TextBlock` content in `uiFormDefinition.json`, prefer literal strings. Avoid complex
-   expression-valued text (especially nested `if(...)` with quoted branches) in standard host pool
-   form paths. This exact pattern caused Azure Portal runtime failure in `CustomHtmlField` with
-   `text is not a function`.
-10. After any `uiFormDefinition.json` text-expression change, run a portal runtime smoke test of the
-    affected step (not just JSON/schema validation) before considering the change safe.
-11. Review cross-solution dependencies before changing files under `deployments/`.
-12. Run the narrowest deployment validation available, then inspect the focused diff for generated
+7. When adding or changing a user-facing parameter, use the `federalavd-ui-form-maintenance` skill
+   to review the sibling `uiFormDefinition.json`. Also review example parameter files,
+   `docs/parameters.md`, and deployment documentation.
+8. Review cross-solution dependencies before changing files under `deployments/`.
+9. Run the narrowest deployment validation available, then inspect the focused diff for generated
     changes that are larger than expected.
 
-See [UI form rules](./references/ui-form-rules.md) for repository-specific failure modes.
 See [Secret source alignment notes](./references/secret-source-alignment-notes.md) for the postponed standard-vs-automated credential secret sourcing alignment plan.
+See [FSLogix form parity notes](./references/fslogix-form-parity.md) before aligning the standard
+host-pool and standalone storage forms.
+See [storage application sequencing](./references/storage-application-sequencing.md) before changing
+Entra Kerberos, private endpoint, or NTFS permission orchestration.

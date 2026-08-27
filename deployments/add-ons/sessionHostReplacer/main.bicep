@@ -3,6 +3,8 @@
 
 targetScope = 'subscription'
 
+import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
 // ========== //
 // Parameters //
 // ========== //
@@ -326,7 +328,7 @@ param timeZone string = 'Eastern Standard Time'
 param availability string = 'None'
 
 @description('Optional. Availability zones for session hosts.')
-param availabilityZones array = []
+param availabilityZones string[] = []
 
 @description('Optional. Security type for session hosts.')
 @allowed([
@@ -405,19 +407,19 @@ param fslogixSizeInMBs int = 30720
 param fslogixStorageService string = 'AzureFiles'
 
 @description('Optional. FSLogix local storage account resource IDs.')
-param fslogixLocalStorageAccountResourceIds array = []
+param fslogixLocalStorageAccountResourceIds string[] = []
 
 @description('Optional. FSLogix remote storage account resource IDs.')
-param fslogixRemoteStorageAccountResourceIds array = []
+param fslogixRemoteStorageAccountResourceIds string[] = []
 
 @description('Optional. FSLogix local NetApp volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
-param fslogixLocalNetAppVolumeResourceIds array = []
+param fslogixLocalNetAppVolumeResourceIds string[] = []
 
 @description('Optional. FSLogix remote NetApp volume resource IDs. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
-param fslogixRemoteNetAppVolumeResourceIds array = []
+param fslogixRemoteNetAppVolumeResourceIds string[] = []
 
 @description('Optional. FSLogix OSS groups for sharding.')
-param fslogixOSSGroups array = []
+param fslogixOSSGroups string[] = []
 
 @description('Optional. Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds).')
 param agentBootLoaderDownloadUrl string = ''
@@ -450,13 +452,12 @@ JSON example:
   }
 ]
 ''')
-param sessionHostCustomizations array = []
+param sessionHostCustomizations artifactCustomizationType[] = []
 
 // ========== //
 // Variables  //
 // ========== //
 
-var deploymentSuffix = uniqueString(subscription().subscriptionId, functionAppResourceGroupName, deployment().name)
 var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var hostPoolName = last(split(hostPoolResourceId, '/'))
 var hostPoolResourceGroupName = split(hostPoolResourceId, '/')[4]
@@ -503,7 +504,6 @@ var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingCo
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {
-  name: 'SHR-Naming-${deploymentSuffix}'
   params: {
     namingConvention: effectiveNamingConvention
     identifier: effectiveIdentifier
@@ -643,7 +643,6 @@ var sessionHostParameters = union(
 
 // Conditional Template Spec for Session Host Deployment
 module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
-  name: 'SessionHostTemplateSpec-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     name: templateSpecNameFinal
@@ -659,7 +658,6 @@ module templateSpec '../../shared/modules/resourceModules/resources/templateSpec
 
 // Conditional App Service Plan deployment
 module hostingPlan '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
-  name: 'FunctionAppHostingPlan-${deploymentSuffix}'
   scope: resourceGroup(aspResourceGroupName)
   params: {
     functionAppKind: 'functionApp'
@@ -709,7 +707,6 @@ var roleAssignmentsResourceGroups = union(
 )
 
 module roleAssignmentsKeyVault '../../shared/modules/resourceModules/keyVault/vaults/roleAssignment.bicep' = {
-  name: 'RoleAssign-KeyVault-KVCont-${deploymentSuffix}'
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
     assignments: [
@@ -724,7 +721,6 @@ module roleAssignmentsKeyVault '../../shared/modules/resourceModules/keyVault/va
 }
 
 module roleAssignmentVirtualMachinesSubscription '../../shared/modules/resourceModules/authorization/roleAssignments/subscription/deploy.bicep' = {
-  name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
@@ -734,7 +730,6 @@ module roleAssignmentVirtualMachinesSubscription '../../shared/modules/resourceM
 }
 
 module roleAssignmentHostPoolSubscription '../../shared/modules/resourceModules/authorization/roleAssignments/subscription/deploy.bicep' = {
-  name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
   scope: subscription(hostPoolSubscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
@@ -745,7 +740,6 @@ module roleAssignmentHostPoolSubscription '../../shared/modules/resourceModules/
 
 module roleAssignmentsRGs '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
-    name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
     params: {
       principalId: functionApp.outputs.functionAppPrincipalId
@@ -756,7 +750,6 @@ module roleAssignmentsRGs '../../shared/modules/resourceModules/authorization/ro
 ]
 
 module roleAssignmentTemplateSpec '../../shared/modules/resourceModules/resources/templateSpecs/roleAssignment.bicep' = {
-  name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
   scope: resourceGroup(templateSpecSubscriptionId, templateSpecResourceGroupName)
   params: {
     templateSpecName: !empty(sessionHostTemplateSpecResourceId)
@@ -773,7 +766,6 @@ module roleAssignmentTemplateSpec '../../shared/modules/resourceModules/resource
 }
 
 module roleAssignmentComputeGallery '../../shared/modules/resourceModules/compute/galleries/roleAssignment.bicep' = if (contains(imageReference, 'id')) {
-  name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
     galleryName: empty(computeGalleryResourceId) ? '' : last(split(computeGalleryResourceId, '/'))
@@ -788,7 +780,6 @@ module roleAssignmentComputeGallery '../../shared/modules/resourceModules/comput
 }
 
 module roleAssignmentUaiArtifacts '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
-  name: 'RoleAssign-UAI-Artifacts-MngdIdOperator-${deploymentSuffix}'
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
     split(artifactsUserAssignedIdentityResourceId, '/')[4]
@@ -808,7 +799,6 @@ module roleAssignmentUaiArtifacts '../../shared/modules/resourceModules/managedI
 }
 
 module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
-  name: 'SessionHostReplacerFunctionApp-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     location: location
@@ -816,7 +806,6 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
-    deploymentSuffix: deploymentSuffix
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     enableQueueStorage: false
     enableTableStorage: true
@@ -1025,7 +1014,6 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
 }
 
 module functionCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {
-  name: 'SessionHostReplacerFunction-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: {
@@ -1049,7 +1037,6 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
 }
 
 module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
-  name: 'SessionHostReplacerWorkbook-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     workbookName: workbookName

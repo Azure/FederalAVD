@@ -1,3 +1,5 @@
+import { runCommandParameterType } from '../../../types/customizationTypes.bicep'
+
 param virtualMachineName string
 param name string
 param location string = resourceGroup().location
@@ -12,10 +14,10 @@ param scriptUri string = ''
 param scriptUriManagedIdentityClientId string = ''
 
 @description('Named parameters to pass to the script.')
-param parameters array = []
+param parameters runCommandParameterType[] = []
 
 @description('Named protected (secure) parameters to pass to the script.')
-param protectedParameters array = []
+param protectedParameters runCommandParameterType[] = []
 
 @description('Maximum execution time in seconds. 0 = platform default (~1.5 hours).')
 param timeoutInSeconds int = 0

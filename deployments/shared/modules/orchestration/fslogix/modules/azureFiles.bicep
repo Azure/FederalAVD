@@ -35,8 +35,6 @@ param storageIndex int
 param storageSku string
 param storageRedundancy string
 param tags object
-param deploymentSuffix string
-
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
 param permittedIPs array = []
 
@@ -97,7 +95,6 @@ resource appUpdateUai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-
 // ─── Storage Accounts ──────────────────────────────────────────────────────────
 module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.bicep' = [
   for i in range(0, storageCount): {
-    name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-${deploymentSuffix}'
     params: {
       name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       location: location
@@ -132,7 +129,6 @@ module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.
 // ─── File Services ─────────────────────────────────────────────────────────────
 module fileServices '../../../resourceModules/storage/storageAccounts/fileServices/deploy.bicep' = [
   for i in range(0, storageCount): {
-    name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-fileService-${deploymentSuffix}'
     params: {
       storageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
       smbSettings: smbSettingsValues
@@ -152,7 +148,6 @@ module fileServices '../../../resourceModules/storage/storageAccounts/fileServic
 // ─── File Shares ───────────────────────────────────────────────────────────────
 module shares 'shares.bicep' = [
   for i in range(0, storageCount): {
-    name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-fileShares-${deploymentSuffix}'
     params: {
       fileShares: fileShares
       shareSizeInGB: shareSizeInGB
@@ -166,7 +161,6 @@ module shares 'shares.bicep' = [
 // ─── Private Endpoints ─────────────────────────────────────────────────────────
 module storageAccountPes '../../../resourceModules/network/privateEndpoints/deploy.bicep' = [
   for i in range(0, storageCount): if (privateEndpoint) {
-    name: 'StorageAccount-PE-${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}-${deploymentSuffix}'
     params: {
       name: replace(
         replace(
@@ -202,7 +196,6 @@ module storageAccountPes '../../../resourceModules/network/privateEndpoints/depl
 // ─── Admin Role Assignments ────────────────────────────────────────────────────
 module roleAssignmentsAdmins '../../../resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for (group, i) in shareAdminGroups: {
-    name: 'RoleAssignment-Admin-${i}-${deploymentSuffix}'
     params: {
       principalId: group.id
       roleDefinitionId: adminRoleDefinitionId
@@ -213,7 +206,6 @@ module roleAssignmentsAdmins '../../../resourceModules/authorization/roleAssignm
 
 // ─── ADDS Domain Join ──────────────────────────────────────────────────────────
 module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
-  name: 'Join-Domain-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
@@ -247,7 +239,6 @@ module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCo
 // Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided.
 // The workgroup deployment helper VM uses these credentials for explicit ADWS operations; it is not domain joined.
 module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
-  name: 'Configure-Entra-Kerberos-DomainInfo-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
@@ -278,7 +269,6 @@ module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/vi
 // PHASE 1: Update application manifest with privatelink FQDNs and tags
 // This must happen BEFORE NTFS permissions are set so authentication works through private endpoints
 module updateStorageApplicationsManifest '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
-  name: 'Update-Storage-App-Manifest-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
@@ -303,7 +293,6 @@ module updateStorageApplicationsManifest '../../../resourceModules/compute/virtu
 
 // ─── Set NTFS Permissions ──────────────────────────────────────────────────────
 module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: 'Set-NTFS-Permissions-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName
@@ -346,7 +335,6 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
 // PHASE 2: Grant admin consent to storage account applications
 // This must happen AFTER NTFS permissions are set
 module grantStorageApplicationsConsent '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
-  name: 'Grant-Storage-App-Consent-${deploymentSuffix}'
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName

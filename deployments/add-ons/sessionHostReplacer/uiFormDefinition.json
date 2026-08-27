@@ -1219,37 +1219,13 @@
                   }
                 },
                 {
-                  "name": "publisher",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Publisher",
-                  "multiLine": true,
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmImagePublisher, 'MicrosoftWindowsDesktop')]",
-                  "toolTip": "Select the marketplace image publisher. Defaults to the publisher already used by this host pool's existing session hosts (from the 'vmImagePublisher' tag on the hosts resource group) when available.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": [
-                      {
-                        "label": "MicrosoftWindowsDesktop",
-                        "description": "Windows 10/11 desktop images (single- or multi-session), including AVD-specific offers such as 'office-365'. Session hosts are licensed as Windows_Client.",
-                        "value": "MicrosoftWindowsDesktop"
-                      },
-                      {
-                        "label": "MicrosoftWindowsServer",
-                        "description": "Windows Server images. Session hosts are licensed as Windows_Server.",
-                        "value": "MicrosoftWindowsServer"
-                      }
-                    ]
-                  },
-                  "visible": "[equals(steps('hosts').image.source, 'marketplace')]"
-                },
-                {
                   "name": "offer",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Offer",
-                  "defaultValue": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), 'WindowsServer', if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer))]",
+                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer)]",
                   "toolTip": "Select the desired marketplace image offer.",
                   "constraints": {
-                    "allowedValues": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), parse('[{\"label\":\"WindowsServer\",\"value\":\"WindowsServer\"}]'), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]')))]",
+                    "allowedValues": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]'))]",
                     "required": true
                   },
                   "visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1260,11 +1236,10 @@
                   "condition": "[and(not(empty(steps('hosts').scope.subscription.id)), not(empty(steps('hosts').scope.location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/', steps('hosts').image.publisher, '/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+                    "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
                     "transforms": {
                       "personal": "[?starts_with(name, `win`) && contains(name, `ent`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
-                      "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
-                      "server": "[*].{label: name, value: name}"
+                      "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}"
                     }
                   }
                 },
@@ -1272,10 +1247,10 @@
                   "name": "sku",
                   "type": "Microsoft.Common.DropDown",
                   "label": "SKU",
-                  "defaultValue": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), '2025-datacenter-azure-edition', if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku))]",
+                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku)]",
                   "toolTip": "Select the desired marketplace image SKU.",
                   "constraints": {
-                    "allowedValues": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), steps('hosts').image.skuApi.transformed.server, if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled))]",
+                    "allowedValues": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled)]",
                     "required": true
                   },
                   "visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1345,31 +1320,9 @@
                     "transforms": {
                       "IsHibernateSupported": "properties.features[?name=='IsHibernateSupported'].value | [0]",
                       "IsAcceleratedNetworkSupported": "properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0]",
-                      "SecurityType": "properties.features[?name=='SecurityType'].value | [0]",
-                      "SourceImagePublisher": "tags.sourceImagePublisher"
+                      "SecurityType": "properties.features[?name=='SecurityType'].value | [0]"
                     }
                   }
-                },
-                {
-                  "name": "licenseType",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Session Host Operating System Type",
-                  "toolTip": "Select whether this custom image is based on a Windows desktop (10/11) or Windows Server operating system. This determines the correct licensing (Azure Hybrid Benefit / AVD per-user entitlement) applied to session hosts. Defaults automatically from the image definition's 'sourceImagePublisher' tag (set by the Image Build deployment) when available. Not applicable to marketplace images, which are detected automatically.",
-                  "defaultValue": "[if(equals(steps('hosts').image.imageDefinitionApi.transformed.SourceImagePublisher, 'MicrosoftWindowsServer'), 'Windows Server', 'Windows Client')]",
-                  "constraints": {
-                    "required": "[equals(steps('hosts').image.source, 'gallery')]",
-                    "allowedValues": [
-                      {
-                        "label": "Windows Client",
-                        "value": "Windows_Client"
-                      },
-                      {
-                        "label": "Windows Server",
-                        "value": "Windows_Server"
-                      }
-                    ]
-                  },
-                  "visible": "[equals(steps('hosts').image.source, 'gallery')]"
                 }
               ]
             },
@@ -1909,7 +1862,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('hosts').customizations.addCustomScripts]",
                   "options": {
-                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments. For array parameters, use @() syntax - e.g. -Domains @('site1.gov','site2.com')."
+                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments."
                   }
                 },
                 {
@@ -2199,22 +2152,13 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Local Volume(s)",
                   "multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
-                  "toolTip": "Select one volume for Profile Container, or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
+                  "toolTip": "Select the existing volume from the selected NetApp capacity pool.",
                   "defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.localVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslLocalNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
                   "constraints": {
                     "allowedValues": "[map(steps('userProfiles').azureNetAppFiles.localVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                     "required": true
                   },
                   "visible": "[steps('userProfiles').configureSessionHosts]"
-                },
-                {
-                  "name": "wrongNumberOfLocalVolumes",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('userProfiles').configureSessionHosts, not(equals(length(steps('userProfiles').azureNetAppFiles.localVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
-                  "options": {
-                    "style": "Error",
-                    "text": "Select one local volume for Profile Container or two in profile-then-Office order for Profile and Office Containers."
-                  }
                 },
                 {
                   "name": "remoteVolumeHeader",
@@ -2281,21 +2225,12 @@
                   "label": "Remote Volume(s)",
                   "multiselect": "[contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')]",
                   "defaultValue": "[if(and(not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumesApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds))), map(parse(steps('basics').hostsRGProps.tags.fslRemoteNetAppVolumeResourceIds), id => last(split(id, '/'))), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), parse('[]'), ''))]",
-                  "toolTip": "Optionally select one volume for Profile Container, or two volumes for Profile and Office Containers. When selecting two, select the profile volume first and the Office volume second.",
+                  "toolTip": "Select the office-containers and profile-containers volumes from the selected NetApp capacity pool.",
                   "constraints": {
                     "allowedValues": "[map(steps('userProfiles').azureNetAppFiles.remoteVolumesApi.value, (vol) => parse(concat('{\"label\":\"', last(split(vol.name, '/')), '\",\"value\":\"', vol.id, '\"}')))]",
                     "required": false
                   },
                   "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]"
-                },
-                {
-                  "name": "wrongNumberOfRemoteVolumes",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureNetAppFiles.remoteVolumes)), not(equals(length(steps('userProfiles').azureNetAppFiles.remoteVolumes), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), 2, 1))))]",
-                  "options": {
-                    "style": "Error",
-                    "text": "Select no remote volumes, one for Profile Container, or two in profile-then-Office order for Profile and Office Containers."
-                  }
                 }
               ]
             },
@@ -3431,7 +3366,7 @@
                   "visible": "[not(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv))]",
                   "options": {
                     "style": "Info",
-                    "text": "Session host naming conventions have been pre-populated from the host pool resource group tags. Review the values below and modify only if they do not match your existing VM naming."
+                    "text": "Session host naming conventions are sourced from the resource group tags set during host pool deployment. No changes needed."
                   }
                 },
                 {
@@ -3462,7 +3397,7 @@
                 {
                   "name": "virtualMachineNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Virtual Machine Naming Convention",
                   "placeholder": "vm-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'vm-SHNAME')]",
@@ -3476,7 +3411,7 @@
                 {
                   "name": "diskNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "OS Disk Naming Convention",
                   "placeholder": "disk-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'disk-SHNAME')]",
@@ -3490,7 +3425,7 @@
                 {
                   "name": "networkInterfaceNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Network Interface Naming Convention",
                   "placeholder": "nic-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'nic-SHNAME')]",
@@ -3504,7 +3439,7 @@
                 {
                   "name": "availabilitySetNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
@@ -3598,8 +3533,7 @@
         "sessionHostNameIndexLength": "[steps('hosts').naming.indexPadding]",
         "virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
         "enableIPv6": "[steps('hosts').network.enableIPv6]",
-        "imageReference": "[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"', steps('hosts').image.publisher, '\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\",\"version\":\"latest\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
-        "customImageLicenseType": "[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.licenseType, 'Windows_Client')]",
+        "imageReference": "[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"MicrosoftWindowsDesktop\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
         "securityType": "[steps('hosts').security.securityType]",
         "secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
         "vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
@@ -3643,10 +3577,10 @@
         "storageEncryptionIdentityNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
         "applicationInsightsNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
         "appServicePlanNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
-        "virtualMachineNameConv": "[steps('advanced').sessionHostNaming.virtualMachineNameConvOverride]",
-        "virtualMachineDiskNameConv": "[steps('advanced').sessionHostNaming.diskNameConvOverride]",
-        "virtualMachineNicNameConv": "[steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride]",
-        "availabilitySetNameConv": "[steps('advanced').sessionHostNaming.availabilitySetNameConvOverride]",
+        "virtualMachineNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv), steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
+        "virtualMachineDiskNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv), steps('advanced').sessionHostNaming.diskNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv)]",
+        "virtualMachineNicNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv), steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNicNameConv)]",
+        "availabilitySetNameConv": "[if(empty(steps('basics').hostsRGProps.tags.availabilitySetNameConv), steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, steps('basics').hostsRGProps.tags.availabilitySetNameConv)]",
         "tags": "[steps('advanced').tagsSection.tags]"
       },
       "kind": "Subscription",

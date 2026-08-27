@@ -103,7 +103,6 @@ resource existingVms 'Microsoft.Compute/virtualMachines@2023-03-01' existing = [
 
 module updateVms 'modules/virtualMachineUpdate.bicep' = [
    for (vmName, i) in resolvedVmNames: if(!empty(logsUserAssignedIdentityResourceId) || !empty(scriptsUserAssignedIdentityResourceId)) {
-    name: 'VirtualMachineUpdate-${vmName}-${timeStamp}'
     params: {
       location: existingVms[i].location
       name: vmName
@@ -120,7 +119,6 @@ module updateVms 'modules/virtualMachineUpdate.bicep' = [
 
 module runCommands 'modules/runCommands.bicep' = [
   for (vmName, i) in resolvedVmNames: if (!empty(scripts)) {
-    name: 'RunCommands-${vmName}-${timeStamp}'
     params: {
       scripts: multipleScripts
       location: existingVms[i].location
@@ -142,7 +140,6 @@ module runCommands 'modules/runCommands.bicep' = [
 
 module runCommand '../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for (vmName, i) in resolvedVmNames: if (empty(scripts)) {
-    name: 'RunCommand-${vmName}-${timeStamp}'
     params: {
       location: existingVms[i].location
       virtualMachineName: vmName

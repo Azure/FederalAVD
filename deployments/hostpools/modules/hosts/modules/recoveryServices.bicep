@@ -32,9 +32,6 @@ param storageRedundancy string
 // passive durability only with no recovery capability in the secondary region.
 var crossRegionRestoreEnabled = storageRedundancy == 'GeoRedundant'
 
-@description('Required. Short unique deployment suffix.')
-param deploymentSuffix string
-
 @description('Optional. Resource ID of the Log Analytics workspace for vault diagnostics.')
 param logAnalyticsWorkspaceResourceId string = ''
 
@@ -148,7 +145,6 @@ var rotationPolicy = {
 
 // ── Path A, Stage A-0: create the CMK key in Key Vault ────────────────────────
 module recoveryServicesEncryptionKey '../../../../shared/modules/resourceModules/keyVault/vaults/keys/deploy.bicep' = if (useVaultCmk) {
-  name: 'RSV-CMK-Key-${deploymentSuffix}'
   scope: resourceGroup(encryptionKeyVaultSubscriptionId, encryptionKeyVaultResourceGroup)
   params: {
     keyVaultName: encryptionKeyVaultName
@@ -164,7 +160,6 @@ module recoveryServicesEncryptionKey '../../../../shared/modules/resourceModules
 
 // ── Path A, Stage A-1: establish SAI identity, no CMK yet ─────────────────────
 module recoveryServicesVaultInit '../../../../shared/modules/resourceModules/recoveryServices/vaults/deploy.bicep' = if (createVault && useVaultCmk) {
-  name: 'RecoveryServicesVault-Init-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     name: vaultName
@@ -182,7 +177,6 @@ module recoveryServicesVaultInit '../../../../shared/modules/resourceModules/rec
 
 // ── Path A, Stage A-2: grant vault SAI access to the encryption key ───────────
 module recoveryServicesVaultSaiKvRoleAssignment '../../../../shared/modules/resourceModules/keyVault/vaults/keys/roleAssignment.bicep' = if (createVault && useVaultCmk) {
-  name: 'RSV-SAI-KvKeyRA-${deploymentSuffix}'
   scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
   params: {
     keyVaultName: last(split(encryptionKeyVaultResourceId, '/'))!
@@ -201,7 +195,6 @@ module recoveryServicesVaultSaiKvRoleAssignment '../../../../shared/modules/reso
 
 // ── Path A, Stage A-3: enable CMK now that SAI has key access ─────────────────
 module recoveryServicesVaultCmk '../../../../shared/modules/resourceModules/recoveryServices/vaults/deploy.bicep' = if (createVault && useVaultCmk) {
-  name: 'RecoveryServicesVault-CMK-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     name: vaultName
@@ -220,7 +213,6 @@ module recoveryServicesVaultCmk '../../../../shared/modules/resourceModules/reco
 
 // ── Path B: platform-managed keys only ───────────────────────────────────────
 module recoveryServicesVault '../../../../shared/modules/resourceModules/recoveryServices/vaults/deploy.bicep' = if (createVault && !useVaultCmk) {
-  name: 'RecoveryServicesVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     name: vaultName
@@ -238,7 +230,6 @@ module recoveryServicesVault '../../../../shared/modules/resourceModules/recover
 
 // ─── VM Backup Policy ────────────────────────────────────────────────────────
 module vmBackupPolicy '../../../../shared/modules/resourceModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = {
-  name: 'RSV-BackupPolicy-VirtualMachines-${deploymentSuffix}'
   scope: resourceGroup(effectiveVaultSub, effectiveVaultRG)
   params: {
     recoveryServicesVaultName: effectiveVaultName
@@ -274,7 +265,6 @@ module vmBackupPolicy '../../../../shared/modules/resourceModules/recoveryServic
 // ─── Vault Private Endpoint ───────────────────────────────────────────────────
 // Only created alongside a new vault (Complete). Existing vaults already have their PE.
 module vaultPrivateEndpoint '../../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
-  name: 'PE-RecoveryServicesVault-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupHosts)
   params: {
     name: replace(

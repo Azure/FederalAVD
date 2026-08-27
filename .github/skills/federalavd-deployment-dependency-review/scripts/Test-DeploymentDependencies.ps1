@@ -54,7 +54,13 @@ $customerManaged = { param($value) -not [string]::IsNullOrWhiteSpace([string]$va
 foreach ($name in @('keyManagementStorageAccounts', 'keyManagementGalleryImageVersions')) {
     Test-RequiredValue -WhenName $name -When $customerManaged -RequiredName 'encryptionKeyVaultResourceId' -Detail 'Image Management CMK requires the AVD Shared Services encryption Key Vault output.'
 }
-foreach ($name in @('keyManagementDisks', 'keyManagementStorage', 'keyManagementRecoveryServicesVault')) {
+$diskEncryptionKeyVaultParameter = if ($values.ContainsKey('deployDynamicScalingPlan')) {
+    'encryptionKeyVaultResourceId'
+} else {
+    'existingEncryptionKeyVaultResourceId'
+}
+Test-RequiredValue -WhenName 'keyManagementDisks' -When $customerManaged -RequiredName $diskEncryptionKeyVaultParameter -Detail 'Host Pool disk CMK requires an encryption Key Vault resource ID.'
+foreach ($name in @('keyManagementStorage', 'keyManagementRecoveryServicesVault')) {
     Test-RequiredValue -WhenName $name -When $customerManaged -RequiredName 'existingEncryptionKeyVaultResourceId' -Detail 'Host Pool CMK requires an existing encryption Key Vault resource ID.'
 }
 

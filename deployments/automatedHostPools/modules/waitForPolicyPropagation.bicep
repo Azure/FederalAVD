@@ -3,17 +3,22 @@ targetScope = 'subscription'
 param resourceGroupName string
 param virtualMachineName string
 param location string
-param deploymentSuffix string
+var waitTimeoutInSeconds = 300
 
 module policyPropagationWait '../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: 'Policy-Propagation-Wait-Command-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupName)
   params: {
     virtualMachineName: virtualMachineName
-    name: 'Policy-Propagation-Wait-${deploymentSuffix}'
+    name: 'Policy-Propagation-Wait'
     location: location
     script: loadTextContent('../scripts/Wait-PolicyPropagation.ps1')
-    timeoutInSeconds: 600
+    parameters: [
+      {
+        name: 'WaitSeconds'
+        value: string(waitTimeoutInSeconds)
+      }
+    ]
+    timeoutInSeconds: waitTimeoutInSeconds + 30
     treatFailureAsDeploymentFailure: true
   }
 }

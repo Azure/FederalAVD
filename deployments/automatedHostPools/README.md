@@ -161,13 +161,13 @@ The deployment uses three identities for different operations:
 | Host-pool managed identity | Desktop Virtualization Virtual Machine Contributor on the session-host resource group, network resource group, selected image resource group, and host pool | Always; the image scope is added only for a Compute Gallery image |
 | Host-pool managed identity | Key Vault Secrets User on the credentials Key Vault | Always |
 | Azure Virtual Desktop enterprise application | Desktop Virtualization Power On Contributor, or Power On Off Contributor plus Desktop Virtualization Virtual Machine Contributor, at subscription scope | Start VM on Connect or dynamic autoscaling, respectively |
+| Azure Virtual Desktop enterprise application | Key Vault Secrets User on the credentials Key Vault | Dynamic autoscaling only, for session hosts created by the scaling plan |
 | Policy user-assigned identity | VM, network, tag, monitoring, managed-identity, and disk permissions required by the enabled post-provisioning policies | Always created; optional permissions are assigned only when their features are enabled |
 
-The host-pool managed identity is what Azure Virtual Desktop uses to create, update, replace, and
-delete native automated session hosts and retrieve their credential secrets. It is required even
-when no scaling plan is deployed. The Azure Virtual Desktop enterprise application does not
-replace this identity; it is used by Start VM on Connect and autoscale, which don't support the
-host-pool managed identity.
+The host-pool managed identity is what Azure Virtual Desktop uses for Session Host Management
+operations and their credential secrets. It is required even when no scaling plan is deployed.
+Create/delete autoscale operations run as the Azure Virtual Desktop enterprise application, so the
+deployment also grants that principal credential-secret access when dynamic scaling is enabled.
 
 ## Session Host Configuration Script
 
@@ -234,9 +234,6 @@ Omit the two backup parameters when the Shared Services backup vault is not depl
 registration applies only to newly deployed Azure Files storage; existing storage selected for
 FSLogix configuration is not modified by this deployment.
 
-Do not persist `deploymentSuffix` in saved parameter files. Its default changes for each deployment
-so temporary FSLogix deployment resources and nested deployments can rerun safely.
-
 To deploy through the Azure portal, publish the automated host-pool Template Spec and its form:
 
 ```powershell
@@ -290,7 +287,7 @@ capabilities are therefore available and are not feature gaps:
 | AVD Insights monitoring | Policy deploys Azure Monitor Agent and associates the selected DCR and optional DCE. |
 | FSLogix configuration and storage | The deployment composes the shared FSLogix module before host creation, then policy configures the session hosts. |
 | FSLogix Azure Files backup registration | Newly deployed shares can be registered with an existing shared-services Recovery Services vault and Azure Files snapshot backup policy. |
-| Disk Encryption Set and managed-disk network isolation | Policy injects the DES and disables managed-disk public and export access when selected. |
+| Disk Encryption Set and managed-disk network isolation | The DES is created before the temporary deployment helper and directly encrypts its OS disk. Policy injects the same DES into service-created session hosts and disables managed-disk public and export access when selected. |
 | Ordered private customizations | Policy attaches the artifact identity and runs customizations from the private artifact source in input order. |
 
 The remaining feature parity gaps are explicit boundaries of the automated management model:
@@ -377,23 +374,39 @@ capacity. Data that must survive host replacement belongs in FSLogix or another 
 
 ## Dynamic Autoscaling
 
-Provide `avdServicePrincipalObjectId` when `startVMOnConnect` or `deployDynamicScalingPlan` is
-enabled. Start VM on Connect assigns Desktop Virtualization Power On Contributor. Dynamic scaling
-assigns Desktop Virtualization Power On Off Contributor and Desktop Virtualization Virtual Machine
-Contributor.
+Provide `avdServicePrincipalObjectId` for the Azure/Windows Virtual Desktop application (application
+ID `9cdead84-a844-4324-93f2-b2e6bb768d07`) when `startVMOnConnect` or
+`deployDynamicScalingPlan` is enabled. Start VM on Connect assigns Desktop Virtualization Power On
+Contributor. Dynamic scaling assigns Desktop Virtualization Power On Off Contributor and Desktop
+Virtualization Virtual Machine Contributor.
+
+When Disk Encryption Set enforcement is enabled, the host pool permissions deployment assigns
+Reader on the selected Disk Encryption Set to the automated host pool's system-assigned identity.
+The identity is created with the host pool, so no principal input is required. This assignment
+completes before Session Host Configuration and the later request that creates the initial VMs.
 
 Set `deployDynamicScalingPlan` to `true` to create a scaling plan. The deployment
-creates a preview pooled schedule with `scalingMethod: CreateDeletePowerManage`. Its ramp-up and
-ramp-down minimum and maximum host-pool sizes determine how many VMs the service may create and
-retain; the capacity thresholds and phase times determine when it scales.
+creates preview pooled schedules with `scalingMethod: CreateDeletePowerManage`. Each
+`dynamicScalingSchedules` entry is one complete schedule and owns its selected weekdays, phase
+times, load-balancing algorithms, capacity thresholds, create/delete minimum and maximum host-pool
+sizes, and ramp-down behavior. Schedule names are case-insensitively unique, and a weekday can
+belong to only one schedule.
+
+Ramp-down force logoff, wait time, notification message, and stop condition are schedule-specific
+and apply during that schedule's ramp-down phase. The wait and notification fields are required in
+the portal only when force logoff is enabled. Editable Grid does not populate column defaults, so
+the portal shows placeholders instead. If a direct deployment omits these fields while enabling
+force logoff, the template uses a 30-minute wait and "Save your work and sign out. This session host
+is being removed by autoscale." When force logoff is disabled, the template submits a zero-minute
+wait and an empty notification message. The template does not create a default schedule or supply
+fallback values for the other schedule behavior fields.
 
 The deployment creates the scaling plan and schedules in a disabled state during control-plane setup,
-then enables the host-pool assignment only after the policy propagation wait and initial Session Host
-Management provisioning request complete.
-
-`sessionHostCount` remains the initial capacity provisioned after policy and storage are ready.
-After the activation step enables the scaling-plan assignment, its schedule owns ongoing create,
-delete, start, and stop decisions. Do not run another scaling script against the same host pool.
+then enables the host-pool assignment after the policy propagation wait. No separate initial
+Session Host Management provisioning request is submitted when dynamic scaling is enabled. The
+active schedule owns both initial and ongoing create, delete, start, and stop decisions.
+`sessionHostCount` applies only when dynamic scaling is disabled. Do not run another scaling script
+against the same host pool.
 
 Session Host Management and the scaling plan update different parts of the automated host pool:
 
@@ -402,24 +415,25 @@ Session Host Management and the scaling plan update different parts of the autom
   block, which establishes the zero-host preparation state.
 2. The scaling plan and its schedules are created with the host-pool reference disabled, so they
   cannot change capacity during policy setup or initial provisioning.
-3. After the policy wait, the deployment updates Session Host Management with `sessionHostCount`.
-  The deployment helper cleanup starts at the same point because later host provisioning does not
-  use the helper VM.
-4. After that ARM update completes, the deployment enables the scaling-plan host-pool reference.
-  The scaling schedule then owns ongoing capacity within its configured minimum and maximum sizes.
+3. After the policy wait, the deployment enables the scaling-plan host-pool reference. The active
+  schedule then establishes initial capacity and owns ongoing capacity within its configured minimum
+  and maximum sizes.
+4. When dynamic scaling is disabled, the deployment instead updates Session Host Management with
+  `sessionHostCount` after the policy wait.
 
-Scaling-plan activation waits for the initial Session Host Management request to be accepted by ARM;
-it does not wait for every requested VM to finish provisioning. Azure Virtual Desktop coordinates the
-in-progress provisioning request and subsequent scaling decisions.
+The deployment grants the Azure Virtual Desktop enterprise application Key Vault Secrets User on
+the credentials vault before the scaling plan is activated. This allows schedule-driven create and
+replacement operations to resolve the configured administrator and domain credential secret URIs.
 
 ## Policy Readiness
 
-Select the desired final `sessionHostCount`. ARM first creates Session Host Management without a
-provisioning request, which is the API's zero-host state. It then deploys storage, policy assignments,
-and role assignments. A Run Command on the deployment helper VM then waits five minutes for Azure
-Policy and role assignments to propagate before ARM updates Session Host Management with the
-requested host count. Session Host Management uses `canaryPolicy: Auto` for subsequent image and
-configuration updates.
+When dynamic scaling is disabled, select the desired initial `sessionHostCount`. ARM first creates
+Session Host Management without a provisioning request, which is the API's zero-host state. It then
+deploys storage, policy assignments, and role assignments. A Run Command on the deployment helper VM
+waits five minutes for Azure Policy and role assignments to propagate before ARM updates Session Host
+Management with the requested host count. When dynamic scaling is enabled, the deployment activates
+the scaling plan after the same policy wait and the active schedule determines initial capacity.
+Session Host Management uses `canaryPolicy: Auto` for subsequent image and configuration updates.
 
 Azure Policy assignment propagation is eventually consistent and ARM does not expose a separate
 policy-readiness resource. The five-minute delay reduces the chance that initial hosts are created

@@ -1,3 +1,5 @@
+import { galleryImageVersionTargetRegionType } from '../../../../types/computeTypes.bicep'
+
 @sys.description('Required. Name of the image version.')
 param name string
 
@@ -37,7 +39,7 @@ param replicationMode string = 'Full'
 param storageAccountType string = 'Standard_LRS'
 
 @sys.description('Optional. The target regions where the Image Version is going to be replicated to. If this object is not specified, then the deployment location will be used.')
-param targetRegions array = []
+param targetRegions galleryImageVersionTargetRegionType[] = []
 
 @sys.description('Optional. A relative URI containing the resource ID of the disk encryption set.')
 param diskEncryptionSetId string = ''

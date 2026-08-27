@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostPrivateCustomization-DeployIfNotExists'
-param policyDefinitionDisplayName string = 'Run a private customization on AVD session host virtual machines'
+param policyDefinitionDisplayName string = 'Run private customizations on automated AVD session hosts'
 param policyDefinitionDescription string = 'Preserves existing VM identities, attaches a private artifact identity, and deploys ordered customization Run Commands when the final command has not succeeded.'
 
 var customizationTemplate = loadJsonContent('../templates/RunCommand/PrivateCustomization.json')
@@ -14,6 +14,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     mode: 'All'
     metadata: {
       category: 'Azure Virtual Desktop'
+      solution: 'Automated AVD Host Pools'
+      component: 'Session Host Governance'
       version: '1.0.0'
     }
     parameters: {
@@ -60,10 +62,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           {
             field: 'type'
             equals: 'Microsoft.Compute/virtualMachines'
-          }
-          {
-            field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.osType'
-            equals: 'Windows'
           }
         ]
       }

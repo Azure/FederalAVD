@@ -19,7 +19,6 @@ param hubVnetSubscriptionId string
 param virtualNetworkGatewayOnHub bool
 param location string
 param tags object
-param timeStamp string
 
 var azureCloud = environment().name
 
@@ -346,7 +345,6 @@ resource snets 'Microsoft.Network/virtualNetworks/subnets@2022-05-01' = [
 ]
 
 module localVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetName)) {
-  name: 'localVnetPeering-${timeStamp}'
   params: {
     allowForwardedTraffic: true
     allowVirtualNetworkAccess: true
@@ -360,7 +358,6 @@ module localVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetNa
 }
 
 module remoteVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetName)) {
-  name: 'remoteVnetPeering-${timeStamp}'
   scope: resourceGroup(hubVnetSubscriptionId, hubVnetResourceGroup)
   params: {
     allowForwardedTraffic: true

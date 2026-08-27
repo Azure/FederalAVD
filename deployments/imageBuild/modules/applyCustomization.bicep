@@ -1,12 +1,14 @@
-param customization object
+import { resolvedCustomizationType, runCommandParameterType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
+param customization resolvedCustomizationType
 param location string
 param imageVmName string
 param orchestrationVmName string
 param userAssignedIdentityClientId string
 param logBlobContainerUri string
-param deploymentSuffix string
-param commonScriptParams array
-param restartVMParameters array
+param buildTimestamp string
+param commonScriptParams runCommandParameterType[]
+param restartVMParameters runCommandParameterType[]
 
 var customizationScript = loadTextContent('../../shared/scripts/Invoke-Customization.ps1')
 
@@ -31,7 +33,7 @@ resource applyCustomization 'Microsoft.Compute/virtualMachines/runCommands@2023-
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-${customization.name}-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-${customization.name}-${buildTimestamp}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Uri'
@@ -61,7 +63,7 @@ resource restart 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if
     asyncExecution: false
     parameters: restartVMParameters
     source: {
-      script: loadTextContent('../../shared/scripts/Restart-Vm.ps1')
+      script: loadTextContent('../scripts/Restart-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

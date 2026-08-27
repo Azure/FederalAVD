@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostConfiguration-DeployIfNotExists'
-param policyDefinitionDisplayName string = 'Configure AVD session host virtual machines'
+param policyDefinitionDisplayName string = 'Configure automated AVD session host virtual machines'
 param policyDefinitionDescription string = 'Deploys a VM Run Command that configures the time zone, enables time zone redirection, optionally configures FSLogix, and expands the OS partition.'
 
 var configureSessionHostTemplate = loadJsonContent('../templates/RunCommand/ConfigureSessionHost.json')
@@ -14,6 +14,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     mode: 'All'
     metadata: {
       category: 'Azure Virtual Desktop'
+      solution: 'Automated AVD Host Pools'
+      component: 'Session Host Governance'
       version: '1.0.0'
     }
     parameters: {
@@ -146,10 +148,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           {
             field: 'type'
             equals: 'Microsoft.Compute/virtualMachines'
-          }
-          {
-            field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.osType'
-            equals: 'Windows'
           }
         ]
       }

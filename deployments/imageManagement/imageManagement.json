@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "15707673636011422756"
+      "templateHash": "1917326709659686651"
     }
   },
   "functions": [
@@ -256,13 +256,6 @@
       },
       "metadata": {
         "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Multiple resources of the same type exist in this deployment (two storage accounts,\n                 two UAIs, multiple DES). Without 'purpose' they produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still embedded in storage account names\n                 and added to unique-string seeds so cross-region deployments remain collision-free, but other\n                 resource names will not contain a location segment.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
-      }
-    },
-    "timeStamp": {
-      "type": "string",
-      "defaultValue": "[utcNow('yyyyMMddhhmm')]",
-      "metadata": {
-        "description": "DO NOT MODIFY THIS VALUE! The timestamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter."
       }
     }
   },
@@ -897,7 +890,7 @@
     "imageGallery": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Image-Gallery-{0}', parameters('timeStamp'))]",
+      "name": "[format('imageGallery-{0}', uniqueString('imageGallery', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -987,7 +980,7 @@
       "condition": "[parameters('deployImageBuildResourceGroup')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Image-Build-ResourceGroup-{0}', parameters('timeStamp'))]",
+      "name": "[format('imageBuildResourceGroup-{0}', uniqueString('imageBuildResourceGroup', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1053,7 +1046,7 @@
       "condition": "[parameters('deployImageBuildResourceGroup')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RA-MI-Contributor-ImageBuildRG-{0}', parameters('timeStamp'))]",
+      "name": "[format('imageBuildRgContributorAssignment-{0}', uniqueString('imageBuildRgContributorAssignment', deployment().name))]",
       "resourceGroup": "[variables('imageBuildRgName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1150,7 +1143,7 @@
       "condition": "[or(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), parameters('deployImageBuildResourceGroup'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Managed-Identity-{0}', parameters('timeStamp'))]",
+      "name": "[format('managedIdentity-{0}', uniqueString('managedIdentity', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1228,7 +1221,7 @@
       "condition": "[and(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Storage-CMK-{0}', parameters('timeStamp'))]",
+      "name": "[format('storageCmk-{0}', uniqueString('storageCmk', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1249,9 +1242,6 @@
           "tags": {
             "value": "[parameters('tags')]"
           },
-          "deploymentSuffix": {
-            "value": "[parameters('timeStamp')]"
-          },
           "keyNames": {
             "value": "[variables('cmkKeyNames')]"
           },
@@ -1267,7 +1257,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "11667111077634069277"
+              "templateHash": "1332103755440952097"
             }
           },
           "definitions": {
@@ -1369,13 +1359,6 @@
                 "description": "Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities."
               }
             },
-            "deploymentSuffix": {
-              "type": "string",
-              "defaultValue": "[uniqueString(resourceGroup().id, deployment().name)]",
-              "metadata": {
-                "description": "Optional. Suffix appended to deployment names for uniqueness."
-              }
-            },
             "keyNames": {
               "type": "array",
               "items": {
@@ -1445,7 +1428,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('paasKeys-{0}-{1}', copyIndex(), uniqueString('paasKeys', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -1601,7 +1584,7 @@
               "condition": "[not(empty(parameters('keyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('paasIdentity-{0}', uniqueString('paasIdentity', deployment().name))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -1678,7 +1661,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('paasKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('paasKeyRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -1841,7 +1824,7 @@
               "condition": "[not(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'skipKeyCreation'), false()))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeys-{0}-{1}', copyIndex(), uniqueString('diskKeys', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2000,7 +1983,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskEncryptionSet-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskEncryptionSets-{0}-{1}', copyIndex(), uniqueString('diskEncryptionSets', deployment().name))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -2148,7 +2131,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKeyRA-EncryptUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2310,7 +2293,7 @@
               "condition": "[coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false())]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKeyRA-ReleaseUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeyReleaseUserRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyReleaseUserRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2503,7 +2486,7 @@
       "condition": "[not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Disk-CMK-{0}', parameters('timeStamp'))]",
+      "name": "[format('diskCmk-{0}', uniqueString('diskCmk', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2524,9 +2507,6 @@
           "tags": {
             "value": "[parameters('tags')]"
           },
-          "deploymentSuffix": {
-            "value": "[format('{0}-gal', parameters('timeStamp'))]"
-          },
           "diskEncryptionConfigs": {
             "value": [
               {
@@ -2545,7 +2525,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "11667111077634069277"
+              "templateHash": "1332103755440952097"
             }
           },
           "definitions": {
@@ -2647,13 +2627,6 @@
                 "description": "Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities."
               }
             },
-            "deploymentSuffix": {
-              "type": "string",
-              "defaultValue": "[uniqueString(resourceGroup().id, deployment().name)]",
-              "metadata": {
-                "description": "Optional. Suffix appended to deployment names for uniqueness."
-              }
-            },
             "keyNames": {
               "type": "array",
               "items": {
@@ -2723,7 +2696,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('paasKeys-{0}-{1}', copyIndex(), uniqueString('paasKeys', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -2879,7 +2852,7 @@
               "condition": "[not(empty(parameters('keyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('paasIdentity-{0}', uniqueString('paasIdentity', deployment().name))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -2956,7 +2929,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('paasKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('paasKeyRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -3119,7 +3092,7 @@
               "condition": "[not(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'skipKeyCreation'), false()))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeys-{0}-{1}', copyIndex(), uniqueString('diskKeys', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -3278,7 +3251,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskEncryptionSet-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskEncryptionSets-{0}-{1}', copyIndex(), uniqueString('diskEncryptionSets', deployment().name))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -3426,7 +3399,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKeyRA-EncryptUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -3588,7 +3561,7 @@
               "condition": "[coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false())]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKeyRA-ReleaseUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeyReleaseUserRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyReleaseUserRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -3781,7 +3754,7 @@
       "condition": "[parameters('createConfidentialVmGalleryDes')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('ConfidentialVM-CMK-{0}', parameters('timeStamp'))]",
+      "name": "[format('confidentialVmCmk-{0}', uniqueString('confidentialVmCmk', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3800,9 +3773,6 @@
           },
           "tags": {
             "value": "[parameters('tags')]"
-          },
-          "deploymentSuffix": {
-            "value": "[format('{0}-cvm', parameters('timeStamp'))]"
           },
           "diskEncryptionConfigs": {
             "value": [
@@ -3823,7 +3793,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "11667111077634069277"
+              "templateHash": "1332103755440952097"
             }
           },
           "definitions": {
@@ -3925,13 +3895,6 @@
                 "description": "Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities."
               }
             },
-            "deploymentSuffix": {
-              "type": "string",
-              "defaultValue": "[uniqueString(resourceGroup().id, deployment().name)]",
-              "metadata": {
-                "description": "Optional. Suffix appended to deployment names for uniqueness."
-              }
-            },
             "keyNames": {
               "type": "array",
               "items": {
@@ -4001,7 +3964,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('paasKeys-{0}-{1}', copyIndex(), uniqueString('paasKeys', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -4157,7 +4120,7 @@
               "condition": "[not(empty(parameters('keyNames')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSUAI-{0}', parameters('deploymentSuffix'))]",
+              "name": "[format('paasIdentity-{0}', uniqueString('paasIdentity', deployment().name))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -4234,7 +4197,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-PaaSKeyRA-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('paasKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('paasKeyRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -4397,7 +4360,7 @@
               "condition": "[not(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'skipKeyCreation'), false()))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKey-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeys-{0}-{1}', copyIndex(), uniqueString('diskKeys', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -4556,7 +4519,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskEncryptionSet-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskEncryptionSets-{0}-{1}', copyIndex(), uniqueString('diskEncryptionSets', deployment().name))]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -4704,7 +4667,7 @@
               },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKeyRA-EncryptUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeyRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -4866,7 +4829,7 @@
               "condition": "[coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false())]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('CMK-DiskKeyRA-ReleaseUser-{0}-{1}', copyIndex(), parameters('deploymentSuffix'))]",
+              "name": "[format('diskKeyReleaseUserRoleAssignments-{0}-{1}', copyIndex(), uniqueString('diskKeyReleaseUserRoleAssignments', deployment().name))]",
               "subscriptionId": "[variables('keyVaultSubscriptionId')]",
               "resourceGroup": "[variables('keyVaultResourceGroup')]",
               "properties": {
@@ -5059,7 +5022,7 @@
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Assets-Storage-Account-{0}', parameters('timeStamp'))]",
+      "name": "[format('assetsStorageAccount-{0}', uniqueString('assetsStorageAccount', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -5110,7 +5073,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "7441663825666218963"
+              "templateHash": "15467135385355449491"
             }
           },
           "definitions": {
@@ -5359,7 +5322,7 @@
           "variables": {
             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
-            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
+            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), fail('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
             "cmkKeyVaultUri": "[if(not(empty(parameters('cmkKeyUri'))), format('{0}/', split(parameters('cmkKeyUri'), '/keys/')[0]), '')]",
             "cmkKeyPathSegments": "[split(if(not(empty(parameters('cmkKeyUri'))), split(parameters('cmkKeyUri'), '/keys/')[1], ''), '/')]",
             "cmkKeyName": "[if(not(empty(parameters('cmkKeyUri'))), variables('cmkKeyPathSegments')[0], '')]",
@@ -5457,7 +5420,7 @@
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Assets-Blob-Service-{0}', parameters('timeStamp'))]",
+      "name": "[format('assetsBlobService-{0}', uniqueString('assetsBlobService', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -5701,7 +5664,7 @@
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Assets-Blob-Container-{0}', parameters('timeStamp'))]",
+      "name": "[format('assetsBlobContainer-{0}', uniqueString('assetsBlobContainer', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -5776,7 +5739,7 @@
       "condition": "[and(parameters('deployArtifactsStorageAccount'), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Assets-Storage-PE-{0}', parameters('timeStamp'))]",
+      "name": "[format('assetsStoragePrivateEndpoint-{0}', uniqueString('assetsStoragePrivateEndpoint', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -5934,7 +5897,7 @@
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RA-MI-BlobReader-SA-{0}', parameters('timeStamp'))]",
+      "name": "[format('assetsStorageBlobReaderAssignment-{0}', uniqueString('assetsStorageBlobReaderAssignment', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -6080,7 +6043,7 @@
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Logs-Storage-Account-{0}', parameters('timeStamp'))]",
+      "name": "[format('logsStorageAccount-{0}', uniqueString('logsStorageAccount', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -6131,7 +6094,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "7441663825666218963"
+              "templateHash": "15467135385355449491"
             }
           },
           "definitions": {
@@ -6380,7 +6343,7 @@
           "variables": {
             "supportsBlobService": "[or(or(or(equals(parameters('kind'), 'BlockBlobStorage'), equals(parameters('kind'), 'BlobStorage')), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
             "supportsFileService": "[or(or(equals(parameters('kind'), 'FileStorage'), equals(parameters('kind'), 'StorageV2')), equals(parameters('kind'), 'Storage'))]",
-            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), bool('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
+            "cmkConfigurationValidated": "[if(and(or(empty(parameters('cmkKeyUri')), contains(parameters('cmkKeyUri'), '/keys/')), equals(empty(parameters('cmkKeyUri')), empty(parameters('cmkUserAssignedIdentityResourceId')))), true(), fail('Invalid CMK configuration. Set both cmkKeyUri and cmkUserAssignedIdentityResourceId together (or neither), and ensure cmkKeyUri includes /keys/.'))]",
             "cmkKeyVaultUri": "[if(not(empty(parameters('cmkKeyUri'))), format('{0}/', split(parameters('cmkKeyUri'), '/keys/')[0]), '')]",
             "cmkKeyPathSegments": "[split(if(not(empty(parameters('cmkKeyUri'))), split(parameters('cmkKeyUri'), '/keys/')[1], ''), '/')]",
             "cmkKeyName": "[if(not(empty(parameters('cmkKeyUri'))), variables('cmkKeyPathSegments')[0], '')]",
@@ -6478,7 +6441,7 @@
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Logs-Blob-Service-{0}', parameters('timeStamp'))]",
+      "name": "[format('logsBlobService-{0}', uniqueString('logsBlobService', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -6710,7 +6673,7 @@
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Logs-Blob-Container-{0}', parameters('timeStamp'))]",
+      "name": "[format('logsStorageBlobContainer-{0}', uniqueString('logsStorageBlobContainer', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -6785,7 +6748,7 @@
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Logs-Storage-LifecyclePolicy-{0}', parameters('timeStamp'))]",
+      "name": "[format('logsStorageLifecyclePolicy-{0}', uniqueString('logsStorageLifecyclePolicy', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -6871,7 +6834,7 @@
       "condition": "[and(parameters('deployBuildLogsStorageAccount'), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('Logs-Storage-PE-{0}', parameters('timeStamp'))]",
+      "name": "[format('logsStoragePrivateEndpoint-{0}', uniqueString('logsStoragePrivateEndpoint', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -7029,7 +6992,7 @@
       "condition": "[parameters('deployBuildLogsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RA-MI-BlobContrib-LogsSA-{0}', parameters('timeStamp'))]",
+      "name": "[format('logsStorageBlobContributorAssignment-{0}', uniqueString('logsStorageBlobContributorAssignment', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {

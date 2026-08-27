@@ -37,8 +37,9 @@ generated parameter file in the matching folder:
 | AVD Host Pool | `hostpools/<hostpool>.hostpool.parameters.json` |
 | AVD Automated Host Pool | `automatedHostPools/<hostpool>.automatedHostPool.parameters.json` |
 
-Remove `timeStamp` from every generated file so the template creates a fresh value on each
-deployment. Do not add passwords, secrets, tokens, or other credentials to these files. After the
+Remove `timeStamp` from generated Image Build files so every build receives fresh resource and
+image-version identities. Other deployment templates no longer expose this parameter. Do not add
+passwords, secrets, tokens, or other credentials to these files. After the
 first successful UI deployment, use the saved files for repeat PowerShell, Azure CLI, or CI/CD
 deployments.
 

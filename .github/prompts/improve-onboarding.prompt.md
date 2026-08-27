@@ -12,7 +12,7 @@ The docs are extensive and accurate. The problem is **not** missing content — 
 2. **Predictable footguns that fail silently at deploy time**, with the fix buried in `docs/troubleshooting.md` (unopened until after failure). The top five, all already hinted at in the docs:
    - **Storage data-plane RBAC** — `Owner`/`Contributor` assumed sufficient; shared-key access is disabled, so **Storage Blob Data Contributor** is required.
    - **Key Vault data-plane RBAC** — CMK needs **Key Vault Crypto Officer** (control plane ≠ data plane).
-   - **`timeStamp`** left in saved parameter files, breaking auto-versioning.
+   - **`timeStamp`** left in saved Image Build parameter files, breaking auto-versioning.
    - **`customer/` workflow** — editing `customer-examples/` in place, or expecting git to track the git-ignored `customer/`.
    - **Out-of-order sequencing** — Image Management before Key Vaults when using CMK.
 
@@ -38,7 +38,7 @@ Make the golden path impossible to get wrong, and make the top five mistakes fai
 
 **4 — Harden the Copilot prompt.** `.github/prompts/getting-started.prompt.md`. Instruct Copilot to ask 2–3 diagnostic questions first (existing VNet? marketplace/custom? CMK? which cloud?), route to exactly one path, default beginners to the Task 1 golden path, and warn about the relevant gotchas. *Done:* given "I want to deploy AVD," it asks first and lands one next step + warnings — not the full tier table.
 
-**5 — Default to generated parameter files.** `docs/quick-start.md`. Promote "generate parameter files from the Template Spec UI" from a buried tip to the recommended first-param-file method (built-in validation, no hand-edited JSON); keep hand-authoring as the alternative and keep the `timeStamp` removal warning. *Done:* beginners are steered to generate-then-save before hand-editing.
+**5 — Default to generated parameter files.** `docs/quick-start.md`. Promote "generate parameter files from the Template Spec UI" from a buried tip to the recommended first-param-file method (built-in validation, no hand-edited JSON); keep hand-authoring as the alternative and keep the Image Build `timeStamp` removal warning. *Done:* beginners are steered to generate-then-save before hand-editing.
 
 **6 — Surface mistakes + troubleshooting early.** `docs/quick-start.md`, `docs/README.md`, `README.md`. Add a compact **"Top 5 first-deployment mistakes"** list (one line each) linking into `docs/troubleshooting.md` anchors, reachable within one click of the first screen. *Done:* troubleshooting is linked from the golden path and preflight, not just the index.
 

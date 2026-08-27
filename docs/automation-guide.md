@@ -147,7 +147,7 @@ Inputs from Step 1 (if CMK):
 
 Script invocation:
   .\Deploy-ImageManagement.ps1 -Location <region> -ParameterFilePrefix <prefix>
-  # Add -UpdateArtifacts to also run Step 3 automatically
+  # Add -UpdateArtifacts to upload artifacts after deploying Image Management
 ```
 
 If your customer parameter files live outside the extracted repo zip, pass `-CustomerRootPath <path>` so the script reads from your external customer folder.
@@ -265,6 +265,14 @@ Example PowerShell invocation:
 | --- | --- |
 | `hostPoolResourceId` | Host pool resource ID — useful for Session Host Replacer add-on |
 | `workspaceResourceId` | AVD workspace resource ID |
+| `credentialsKeyVaultResourceId` | Effective credentials Key Vault ID for later standard host pools |
+| `encryptionKeyVaultResourceId` | Effective encryption Key Vault ID for later standard host pools |
+| `logAnalyticsWorkspaceResourceId` | Effective Log Analytics workspace ID |
+| `avdInsightsDataCollectionRuleResourceId` | Effective AVD Insights DCR ID |
+| `dataCollectionEndpointResourceId` | Effective Azure Monitor DCE ID |
+| `fslogixBackupVaultResourceId` | Effective pooled FSLogix backup vault ID |
+| `fslogixBackupPolicyName` | Effective pooled FSLogix Azure Files backup policy name |
+| `fslogixBackupPolicyResourceId` | Effective pooled FSLogix backup policy resource ID |
 | `virtualMachineNames` | Array of deployed session host VM names |
 | `fslogixLocalStorageAccountResourceIds` | Storage account(s) for FSLogix profiles |
 

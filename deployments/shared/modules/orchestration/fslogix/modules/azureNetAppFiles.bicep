@@ -22,8 +22,6 @@ param storageSku string
 param tagsNetAppAccount object
 param tagsNetAppCapacityPool object
 param tagsNetAppVolume object
-param deploymentSuffix string
-
 #disable-next-line BCP329
 var ouRelativePath = contains(ouPath, 'DC') ? substring(split(ouPath, 'DC')[0], 0, length(split(ouPath, 'DC')[0]) - 1) : ouPath
 var shareSizeInBytes = shareSizeInGB * 1024 * 1024 * 1024
@@ -35,7 +33,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' existing = {
 
 // ─── NetApp Account ────────────────────────────────────────────────────────────
 module netAppAccount '../../../resourceModules/netApp/netAppAccounts/deploy.bicep' = if (createNetAppAccount) {
-  name: 'NetAppAccount-${deploymentSuffix}'
   params: {
     name: netAppAccountName
     location: location
@@ -56,7 +53,6 @@ module netAppAccount '../../../resourceModules/netApp/netAppAccounts/deploy.bice
 
 // ─── Capacity Pool ─────────────────────────────────────────────────────────────
 module capacityPool '../../../resourceModules/netApp/netAppAccounts/capacityPools/deploy.bicep' = if (createNetAppCapacityPool) {
-  name: 'CapacityPool-${deploymentSuffix}'
   params: {
     netAppAccountName: netAppAccountName
     name: netAppCapacityPoolName
@@ -70,7 +66,6 @@ module capacityPool '../../../resourceModules/netApp/netAppAccounts/capacityPool
 // ─── Volumes ───────────────────────────────────────────────────────────────────
 module netAppVolumes '../../../resourceModules/netApp/netAppAccounts/capacityPools/volumes/deploy.bicep' = [
   for i in range(0, length(shares)): {
-    name: 'Volume-${shares[i]}-${deploymentSuffix}'
     params: {
       netAppAccountName: netAppAccountName
       capacityPoolName: netAppCapacityPoolName
@@ -91,7 +86,6 @@ var netappServerFqdns = length(shares) > 1
 
 // ─── Set NTFS Permissions ──────────────────────────────────────────────────────
 module setNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: 'Set-NTFSPermissions-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     virtualMachineName: deploymentVirtualMachineName

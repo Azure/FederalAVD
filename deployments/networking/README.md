@@ -324,12 +324,6 @@ If zones already exist, provide their resource IDs:
   }
   ```
 
-#### `timeStamp`
-
-- **Type:** String
-- **Default:** `utcNow('yyyyMMddhhmmss')`
-- **Description:** Timestamp for deployment uniqueness (DO NOT MODIFY)
-
 ### Air-Gapped Cloud Specific
 
 #### `azureRecoveryServicesGeoCode`

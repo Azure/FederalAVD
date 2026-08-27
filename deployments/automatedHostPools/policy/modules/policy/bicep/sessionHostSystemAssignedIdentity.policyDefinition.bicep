@@ -2,7 +2,7 @@ targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostSystemAssignedIdentity-Modify'
 param policyDefinitionDisplayName string = 'Configure system-assigned identity on AVD session hosts'
-param policyDefinitionDescription string = 'Enables system-assigned managed identity on automated AVD session host virtual machines while preserving existing user-assigned identities.'
+param policyDefinitionDescription string = 'Enables system-assigned managed identity on AVD session host virtual machines while preserving existing user-assigned identities.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
   name: policyDefinitionName
@@ -12,6 +12,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     mode: 'Indexed'
     metadata: {
       category: 'Azure Virtual Desktop'
+      solution: 'AVD Session Host Governance'
+      component: 'Creation Settings'
       version: '1.0.0'
     }
     parameters: {

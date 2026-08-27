@@ -10,6 +10,8 @@
 // ============================================================================
 // targetScope = resourceGroup (default)
 
+import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
 @description('Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
 param agentBootLoaderDownloadUrl string = ''
 
@@ -34,7 +36,7 @@ param availability string = 'None'
 param availabilitySetNameConv string = 'avset-##'
 
 @description('Optional. Availability zones to spread session hosts across when availability is AvailabilityZones.')
-param availabilityZones array = []
+param availabilityZones string[] = []
 
 @description('Optional. Resource ID of the AVD Insights data collection rule.')
 param avdInsightsDataCollectionRulesResourceId string = ''
@@ -49,13 +51,13 @@ param credentialsKeyVaultResourceId string
 param dataCollectionEndpointResourceId string = ''
 
 @description('Optional. Per-VM array of dedicated host group resource IDs. One entry per session host, a single-entry array applied to all, or empty for no assignment.')
-param dedicatedHostGroupResourceIds array = []
+param dedicatedHostGroupResourceIds string[] = []
 
 @description('Optional. Per-VM array of dedicated host resource IDs. One entry per session host, a single-entry array applied to all, or empty for no assignment.')
-param dedicatedHostResourceIds array = []
+param dedicatedHostResourceIds string[] = []
 
 @description('Optional. Per-VM preferred availability zones (as zone strings). One entry per session host, or empty for no preference.')
-param preferredZones array = []
+param preferredZones string[] = []
 
 @description('Optional. Resource ID of the disk access resource to restrict managed disk network access.')
 param diskAccessId string = ''
@@ -113,19 +115,19 @@ param fslogixConfigureSessionHosts bool = false
 param fslogixContainerType string = 'ProfileContainer'
 
 @description('Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
-param fslogixLocalNetAppVolumeResourceIds array = []
+param fslogixLocalNetAppVolumeResourceIds string[] = []
 
 @description('Optional. Resource IDs of local storage accounts for FSLogix.')
-param fslogixLocalStorageAccountResourceIds array = []
+param fslogixLocalStorageAccountResourceIds string[] = []
 
 @description('Optional. Entra ID group object IDs for FSLogix Office container separation.')
-param fslogixOSSGroups array = []
+param fslogixOSSGroups string[] = []
 
 @description('Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
-param fslogixRemoteNetAppVolumeResourceIds array = []
+param fslogixRemoteNetAppVolumeResourceIds string[] = []
 
 @description('Optional. Resource IDs of remote storage accounts for FSLogix cloud cache failover.')
-param fslogixRemoteStorageAccountResourceIds array = []
+param fslogixRemoteStorageAccountResourceIds string[] = []
 
 @description('Optional. Maximum size of FSLogix VHD/VHDX in megabytes.')
 param fslogixSizeInMBs int = 30720
@@ -190,7 +192,7 @@ param secureBootEnabled bool = true
 param securityType string = 'TrustedLaunch'
 
 @description('Optional. Custom script extension configurations for post-provisioning session host customization.')
-param sessionHostCustomizations array = []
+param sessionHostCustomizations artifactCustomizationType[] = []
 
 @minValue(1)
 @maxValue(4)
@@ -198,7 +200,7 @@ param sessionHostCustomizations array = []
 param sessionHostNameIndexLength int = 2
 
 @description('Optional. Explicit array of session host computer names (e.g. ["avd01","avd02"]). When non-empty, takes precedence over convention mode. Used by the Session Host Replacer.')
-param sessionHostNames array = []
+param sessionHostNames string[] = []
 
 @description('Optional. Short prefix for session host computer names in convention mode (e.g. "avd"). Ignored when sessionHostNames is non-empty.')
 param sessionHostNamePrefix string = ''
@@ -262,9 +264,6 @@ var endAvSetRange = maxVmNumber / maxAvSetMembers
 var calculatedAvailabilitySetsCount = endAvSetRange - beginAvSetRange + 1
 var calculatedAvailabilitySetsIndex = beginAvSetRange
 
-// ── Deployment suffix ─────────────────────────────────────────────────────────
-var deploymentSuffix = uniqueString(deployment().name)
-
 var effectiveVmBackupPolicyName = !empty(vmBackupPolicyName) ? vmBackupPolicyName : 'AvdPolicyVm'
 
 // ── Credentials from Key Vault ────────────────────────────────────────────────
@@ -276,7 +275,6 @@ resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 // ── Session hosts ─────────────────────────────────────────────────────────────
 // Delegates to the shared RG-scoped session-host orchestration module.
 module sessionHosts '../../shared/modules/orchestration/sessionHosts/sessionHosts.bicep' = {
-  name: 'SessionHosts-${deploymentSuffix}'
   params: {
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
     agentDownloadUrl: agentDownloadUrl
@@ -344,7 +342,6 @@ module sessionHosts '../../shared/modules/orchestration/sessionHosts/sessionHost
     vTpmEnabled: vTpmEnabled
     subnetResourceId: subnetResourceId
     tags: tags
-    deploymentSuffix: deploymentSuffix
     timeZone: timeZone
     recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
     vmBackupPolicyName: effectiveVmBackupPolicyName

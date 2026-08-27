@@ -1,4 +1,10 @@
-param customizations array
+type resolvedPolicyCustomizationType = {
+  name: string
+  artifactUri: string
+  arguments: string?
+}
+
+param customizations resolvedPolicyCustomizationType[]
 param location string
 param userAssignedIdentityResourceId string
 param virtualMachineName string
@@ -13,7 +19,8 @@ module assignArtifactIdentity '../AssignUAI/deploy.bicep' = {
 
 @batchSize(1)
 module customization 'PrivateCustomizationRunCommand.bicep' = [
-  for customization in customizations: {
+  for (customization, index) in customizations: {
+    name: 'customization-${index}-${take(virtualMachineName, 20)}-${uniqueString('customization', deployment().name)}'
     params: {
       artifactUri: customization.artifactUri
       arguments: customization.?arguments ?? ''

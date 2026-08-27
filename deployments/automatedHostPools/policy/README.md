@@ -5,6 +5,9 @@ Configuration management approach (`managementType: Automated`). It is intended 
 the service-managed VM configuration cannot express or cannot deliver through a private,
 managed-identity-based path.
 
+See [Automated Host-Pool Policy Authoring](AUTHORING.md) for the contributor workflow, directory
+layout, source-of-truth rules, and validation commands.
+
 > This feature is under active development on the `feature/automated-hostpool-policy` branch.
 
 ## Problem
@@ -81,6 +84,37 @@ All custom policy definitions and nested deployment templates used by this modul
 `modules/policy`. They are deployed only through the automated host-pool deployment; there is no separate repository-level
 policy deployment stack.
 
+### Why Custom Policies and Initiatives
+
+Session Host Configuration creates virtual machines through the Azure Virtual Desktop service. Its
+VM create request does not always contain persisted properties such as
+`storageProfile.osDisk.osType`. The built-in Azure Monitor Agent and data-collection association
+policies use that field in request-time image predicates, so they can miss the create request and
+cannot reliably deploy the required child resources automatically. The custom monitoring policies
+match the VM resource type at the dedicated session-host resource-group scope instead. This scope
+is the operating-system and workload boundary that makes the broader request-time predicate safe.
+
+Custom `Modify` policies are also required for creation settings that Session Host Configuration
+does not expose directly, including encryption at host, OS disk sizing, Disk Encryption Set,
+system-assigned identity, accelerated networking, and managed-disk network access. Applying these
+settings to the initial VM, NIC, or disk request avoids a post-provisioning replacement workflow.
+
+The creation-settings and monitoring initiatives group policies that share a lifecycle, assignment
+scope, and remediation identity. This reduces assignment and propagation overhead while retaining
+member-level effects for optional capabilities. Creation-settings policy resources use the
+`avdSessionHost*` name family and the following shared metadata so they can be discovered together
+without depending on the repository name or deployment method:
+
+- `category: Azure Virtual Desktop`
+- `solution: AVD Session Host Governance`
+- `component: Creation Settings`
+
+The creation initiative is assigned by the automated host-pool deployment as
+`avd-sh-creation-settings`. Its resource-type predicates require assignment to a dedicated session-host
+resource group, whether the hosts are service-created, portal-created, or deployed through another
+workflow. Monitoring and post-provisioning policies retain automated-host-pool metadata because their
+request-shape and sequencing assumptions have not been generalized.
+
 ### VM CMK Ownership
 
 This module supports three disk-encryption modes:
@@ -124,25 +158,32 @@ The policy module tags the dedicated session-host resource group with
 and managed disks receive the same ownership tag when created or updated. Session Host
 Configuration `vmTags` remains available for additional VM-only tags.
 
-The DES policy uses the Azure Policy `Modify` effect to add or replace the VM OS disk
-`diskEncryptionSet.id` during the VM create request. Although the other remediation policies use
-`DeployIfNotExists`, DES assignment is not a DINE deployment because the target is a property on the
-VM request rather than a related child resource. Existing running VMs are outside the initial
+The DES member of the creation-settings initiative uses the Azure Policy `Modify` effect to add or
+replace the VM OS disk `diskEncryptionSet.id` during the VM create request. Unlike the remediation
+policies that use `DeployIfNotExists`, this member is not a DINE deployment because the target is a
+property on the VM request rather than a related child resource. Existing running VMs are outside the initial
 remediation contract because changing encryption on an attached OS disk can require deallocation.
+
+The creation-settings initiative uses one assignment for compute settings, Disk Encryption Set,
+system-assigned identity, accelerated networking, and managed-disk network access. Disk Encryption
+Set and managed-disk network access use member-level effects. Accelerated networking also uses a
+member-level effect so `enableAcceleratedNetworking: false` leaves the NIC property unmanaged.
+Within the compute member, `encryptionAtHost: false` skips only that operation; a nonzero OS disk
+size remains enforceable independently.
 
 ## Capability Matrix
 
 | Capability | Policy approach | Standard host-pool equivalent | Status |
 | --- | --- | --- | --- |
-| Encryption at host | Inject `securityProfile.encryptionAtHost` with `Modify` | `encryptionAtHost` | Implemented; enabled by default |
+| Encryption at host | Inject `securityProfile.encryptionAtHost` with `Modify` when enabled; leave the property unmanaged when disabled | `encryptionAtHost` | Implemented; enabled by default |
 | OS disk size | Inject a nonzero requested size with `Modify`, then expand the guest OS partition in the unified configuration Run Command | `diskSizeGB` | Implemented |
-| Accelerated networking | Set the NIC property with `Modify` | `enableAcceleratedNetworking` | Implemented; enabled by default |
+| Accelerated networking | Set the NIC property with `Modify` when enabled; disable the initiative member otherwise | `enableAcceleratedNetworking` | Implemented; enabled by default |
 | Guest Attestation | Deploy the extension to Trusted Launch and Confidential VMs | `integrityMonitoring` | Implemented; enabled by default |
 | Session host configuration | Run one post-provisioning command for the Windows time zone, time zone redirection, optional FSLogix, and guest OS partition expansion | Unified custom policy definition | Implemented |
 | VM identity | Enable system-assigned identity during creation while preserving existing user-assigned identities | Custom `Modify` policy modeled on built-in policy `17b3de92-f710-4cf4-aa55-0e7859f1ed7b` | Implemented |
-| Azure Monitor Agent | Deploy AMA with system-assigned identity authentication | Built-in initiative `9575b8b7-78ab-4281-b53b-d3c1ace2260b` | Implemented |
-| DCR association | Associate each VM with the selected AVD Insights DCR | Built-in initiative `9575b8b7-78ab-4281-b53b-d3c1ace2260b` | Implemented |
-| DCE association | Assign the same built-in association policy in DCE mode | Built-in policy `244efd75-0d92-453c-b9a3-7d73ca36ed52` | Implemented |
+| Azure Monitor Agent | Deploy AMA after the system-assigned identity `Modify` policy applies | Custom monitoring initiative and AMA policy definition | Implemented |
+| DCR association | Associate each VM with the selected AVD Insights DCR | Custom monitoring initiative and association policy definition | Implemented |
+| DCE association | Reference the association policy a second time in optional DCE mode | Custom monitoring initiative and association policy definition | Implemented |
 | Ownership tags | Inherit `cm-resource-parent` from the dedicated resource group | Built-in policy `cd3aa116-8754-49c9-a813-ad46512ece54` | Implemented |
 | FSLogix registry settings | Configure FSLogix conditionally within the unified session-host configuration Run Command | `configureFSLogix` and `fslogixConfiguration` | Implemented |
 | Private customizations | Union the artifact UAI into the existing VM identity map, then deploy Run Commands serially | `sessionHostCustomizations` | Implemented with input order preserved and resource-scoped Managed Identity Operator |
@@ -202,18 +243,19 @@ are explicit platform boundaries rather than silent policy gaps:
 8. Built-in policy availability must be validated per Azure cloud. Unsupported built-ins need an
    explicit deployment blocker or a reviewed custom equivalent.
 
-The automated host-pool deployment currently blocks non-Commercial clouds. The Windows AMA
-system-assigned identity initiative is therefore consumed only where it is confirmed available.
-Azure Monitor Agent VM extensions are not supported in air-gapped clouds; enabling automated host
-pools there requires a separately reviewed MSI-based monitoring design rather than this initiative.
+The automated host-pool deployment currently blocks non-Commercial clouds. The custom monitoring
+initiative is therefore deployed only where its Azure Monitor Agent extension and association
+resources are confirmed available. Azure Monitor Agent VM extensions are not supported in
+air-gapped clouds; enabling automated host pools there requires a separately reviewed MSI-based
+monitoring design.
 
 ## Implementation Phases
 
 1. Validate Session Host Configuration resource APIs, VM tagging behavior, and built-in policy
    availability in each supported Azure cloud.
 2. Extract the FSLogix storage deployment into a standalone add-on with stable outputs.
-3. Enable VM system-assigned identity, deploy the built-in AMA and DCR initiative, and deploy the
-   optional DCE policy assignment with the roles declared by their policies.
+3. Deploy the creation-settings initiative, then deploy the custom AMA, DCR, and optional DCE
+   monitoring initiative with the roles declared by its policies.
 4. Deploy the FSLogix policy from a source-controlled Bicep definition with successful Run Command
    compliance and identity-based storage authentication.
 5. Deploy private customizations as one serial policy deployment after granting the artifact UAI

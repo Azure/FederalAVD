@@ -102,7 +102,6 @@ var resolvedTags = !empty(hostPoolResourceId)
   ? union(tags, { 'cm-resource-parent': hostPoolResourceId })
   : tags
 
-var deploymentSuffix = take(uniqueString(resourceGroup().id, deployment().name), 8)
 
 // ========== //
 // Resources  //
@@ -110,7 +109,6 @@ var deploymentSuffix = take(uniqueString(resourceGroup().id, deployment().name),
 
 // Automation Account and all supporting resources
 module automation 'modules/automationAccount.bicep' = {
-  name: 'SqmAutomation-${deploymentSuffix}'
   params: {
     automationAccountName: automationAccountName
     createJobSchedule: createJobSchedule
@@ -129,7 +127,6 @@ module automation 'modules/automationAccount.bicep' = {
 // Grant the Automation Account managed identity Storage Account Contributor on the storage
 // resource group so the runbook can read share stats and update quotas via the ARM API.
 module roleAssignment '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
-  name: 'RA-StorageAccounts-StorageContributor-${deploymentSuffix}'
   scope: resourceGroup(storageSubscriptionId, storageResourceGroupName)
   params: {
     principalId: automation.outputs.principalId

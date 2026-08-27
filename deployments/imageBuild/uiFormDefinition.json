@@ -580,7 +580,7 @@
                                         }
                                     ],
                                     "multiselect": true,
-                                    "toolTip": "Select the Office 365 ProPlus apps to install. Outlook is new Outlook for Windows; Outlook (Classic) is the desktop Outlook client.",
+                                    "toolTip": "Select the list of Office 365 ProPlus apps you wish to install.",
                                     "constraints": {
                                         "allowedValues": [
                                             {
@@ -596,12 +596,8 @@
                                                 "value": "OneNote"
                                             },
                                             {
-                                                "label": "Outlook (Classic)",
-                                                "value": "Outlook"
-                                            },
-                                            {
                                                 "label": "Outlook",
-                                                "value": "OutlookForWindows"
+                                                "value": "Outlook"
                                             },
                                             {
                                                 "label": "PowerPoint",
@@ -616,7 +612,7 @@
                                                 "value": "Publisher"
                                             },
                                             {
-                                                "label": "Skype For Business",
+                                                "label": "SkypeForBusiness",
                                                 "value": "SkypeForBusiness"
                                             },
                                             {
@@ -1089,7 +1085,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addCustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments (for arrays use @() syntax - e.g. -Param @('val1','val2')), and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments, and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
                                     }
                                 },
                                 {
@@ -1192,7 +1188,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addVDICustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments; for arrays use @() syntax - e.g. -Param @('val1','val2')."
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments."
                                     }
                                 },
                                 {
@@ -2203,7 +2199,7 @@
                 "imageVersionExcludeFromLatest": "[steps('imageDest').imageVersion.excludeFromLatest]",
                 "imageVersionDefaultReplicaCount": "[steps('imageDest').imageVersion.replicaCount]",
                 "imageVersionDefaultStorageAccountType": "[steps('imageDest').imageVersion.storageAccountType]",
-                "imageVersionTargetRegions": "[if(equals(steps('imageDest').imageVersion.specifyReplicationRegions, true), steps('imageDest').imageVersion.replicationRegions, parse('[]'))]",
+                "imageVersionTargetRegions": "[if(equals(steps('imageDest').imageVersion.specifyReplicationRegions, true), map(steps('imageDest').imageVersion.replicationRegions, (region) => parse(concat('{\"name\":\"', region.name, '\",\"storageAccountType\":\"', if(empty(region.storageAccountType), steps('imageDest').imageVersion.storageAccountType, region.storageAccountType), '\",\"regionalReplicaCount\":', if(empty(region.regionalReplicaCount), string(steps('imageDest').imageVersion.replicaCount), region.regionalReplicaCount), '}'))), parse('[]'))]",
                 "remoteComputeGalleryResourceId": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.remoteComputeGallery.id, '')]",
                 "remoteImageVersionStorageAccountType": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.storageAccountType , 'Standard_LRS')]",
                 "remoteImageVersionDefaultReplicaCount": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.replicaCount, 1)]",

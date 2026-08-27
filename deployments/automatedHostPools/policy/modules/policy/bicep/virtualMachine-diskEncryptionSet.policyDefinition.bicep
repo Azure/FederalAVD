@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
-param policyDefinitionName string = 'virtualMachineDiskEncryptionSet-Modify'
-param policyDefinitionDisplayName string = 'Configure virtual machine OS disks with a Disk Encryption Set'
+param policyDefinitionName string = 'avdSessionHostDiskEncryptionSet-Modify'
+param policyDefinitionDisplayName string = 'Configure AVD session host Disk Encryption Set'
 param policyDefinitionDescription string = 'Adds the specified Disk Encryption Set to Windows virtual machine OS disks during resource creation or update.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -11,7 +11,9 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
     displayName: policyDefinitionDisplayName
     mode: 'Indexed'
     metadata: {
-      category: 'Compute'
+      category: 'Azure Virtual Desktop'
+      solution: 'AVD Session Host Governance'
+      component: 'Creation Settings'
       version: '1.0.0'
     }
     parameters: {
@@ -43,10 +45,6 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           {
             field: 'type'
             equals: 'Microsoft.Compute/virtualMachines'
-          }
-          {
-            field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.osType'
-            equals: 'Windows'
           }
           {
             field: 'Microsoft.Compute/virtualMachines/storageProfile.osDisk.managedDisk.diskEncryptionSet.id'

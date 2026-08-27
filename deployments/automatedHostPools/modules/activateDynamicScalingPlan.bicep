@@ -21,7 +21,7 @@ param scalingPlanExclusionTag string = 'ScalingPlanExclusion'
 @description('Required. Host pool resource ID associated with this scaling plan.')
 param hostPoolResourceId string
 
-module activateScalingPlan '../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deployAutomated.bicep' = {
+module activateScalingPlan '../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deployDynamic.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
     name: scalingPlanName

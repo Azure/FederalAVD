@@ -46,7 +46,9 @@ retained after sysprep".
 | `MPEG2VideoExtension` | MPEG-2 Video Extension | `9N95Q1ZZPMH4` |
 | `HEIFImageExtension` | HEIF Image Extension | `9PMMSR1CGPWG` |
 
-Add or remove entries from `downloads.json` to change which apps are staged and provisioned.
+Add or remove entries from `downloads.json` to change which apps are staged through the repository
+pipeline. To build a standalone transfer zip from an explicit array of Store IDs, use the local
+builder described below.
 
 The AVC Encoder Video Extension enables applications to encode H.264 video through Windows media
 APIs, using DirectX 12 hardware encoding when available. Azure Virtual Desktop RDP hardware
@@ -116,6 +118,46 @@ do not overwrite it. Merge the entries with `"WingetPreserveLayout": true` and
 file.
 
 ### 3. Download and package the artifact
+
+#### Standalone transfer builder
+
+The `_build` folder contains a connected-workstation builder that does not depend on
+`Update-ImageArtifacts.ps1` or `downloads.json`. It accepts an array of Microsoft Store product IDs,
+downloads the packages with `winget`, keeps the best x64-compatible package variant, removes Arm
+dependencies, deduplicates shared framework packages, and creates one zip for transfer:
+
+```powershell
+cd C:\repos\FederalAVD\customer-examples\artifacts\BuiltIn-UWP-Apps\_build
+
+.\Build-BuiltinUwpApps.ps1 `
+    -AppStoreIds @(
+        '9WZDNCRFHVN5', # Calculator
+        '9PCFS5B6T72H', # Paint
+        '9MZ95KL8MR0L'  # Snipping Tool
+    ) `
+    -OutputPath 'C:\AirGapTransfer\BuiltIn-UWP-Apps.zip'
+```
+
+Known IDs use the friendly folder names in the table above. Unknown valid Store IDs use the ID as
+the app folder name, which is still compatible with the installer. Override a folder name when
+needed:
+
+```powershell
+.\Build-BuiltinUwpApps.ps1 `
+    -AppStoreIds @('9WZDNCRFHVN5') `
+    -AppFolderNames @{ '9WZDNCRFHVN5' = 'Calculator' } `
+    -OutputPath 'C:\AirGapTransfer'
+```
+
+The builder itself is nested under `_build` and is not included in the generated zip, so
+`Invoke-Customization.ps1` cannot select it. The runtime installer also ignores underscore-prefixed
+directories when enumerating app payloads.
+
+On the disconnected network, upload `BuiltIn-UWP-Apps.zip` to the artifacts container or extract it
+to `customer\artifacts\BuiltIn-UWP-Apps` and run the normal package/upload process with downloading
+disabled.
+
+#### Repository-wide package builder
 
 To create `BuiltIn-UWP-Apps.zip` locally without an Azure subscription or storage account:
 

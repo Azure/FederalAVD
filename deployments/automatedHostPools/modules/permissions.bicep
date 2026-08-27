@@ -18,6 +18,12 @@ param customImageResourceId string = ''
 @description('Required. Resource ID of the credential Key Vault.')
 param credentialsKeyVaultResourceId string
 
+@description('Optional. Object ID of the Azure Virtual Desktop service principal that creates session hosts through a dynamic scaling plan.')
+param avdServicePrincipalObjectId string = ''
+
+@description('Optional. Resource ID of the Disk Encryption Set used by automated session hosts.')
+param diskEncryptionSetResourceId string = ''
+
 @description('Required. Principal ID of the automated host-pool managed identity.')
 param principalId string
 
@@ -58,12 +64,42 @@ module credentialVaultRole '../../shared/modules/resourceModules/keyVault/vaults
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
     keyVaultName: last(split(credentialsKeyVaultResourceId, '/'))
+    assignments: concat(
+      [
+        {
+          roleDefinitionId: keyVaultSecretsUserRoleId
+          principalId: principalId
+          principalType: 'ServicePrincipal'
+          description: 'Allows the automated host pool identity to retrieve session-host credentials.'
+        }
+      ],
+      !empty(avdServicePrincipalObjectId)
+        ? [
+            {
+              roleDefinitionId: keyVaultSecretsUserRoleId
+              principalId: avdServicePrincipalObjectId
+              principalType: 'ServicePrincipal'
+              description: 'Allows the Azure Virtual Desktop service principal to retrieve credentials for dynamic session-host creation.'
+            }
+          ]
+        : []
+    )
+  }
+}
+
+module diskEncryptionSetReaderRole '../../shared/modules/resourceModules/compute/diskEncryptionSets/roleAssignment.bicep' = if (!empty(diskEncryptionSetResourceId)) {
+  scope: resourceGroup(
+    split(diskEncryptionSetResourceId, '/')[2],
+    split(diskEncryptionSetResourceId, '/')[4]
+  )
+  params: {
+    diskEncryptionSetName: last(split(diskEncryptionSetResourceId, '/'))!
     assignments: [
       {
-        roleDefinitionId: keyVaultSecretsUserRoleId
         principalId: principalId
         principalType: 'ServicePrincipal'
-        description: 'Allows Azure Virtual Desktop to retrieve automated session-host credentials.'
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+        description: 'Allows the automated host pool identity to read the Disk Encryption Set linked from session host VM requests.'
       }
     ]
   }
@@ -84,5 +120,6 @@ output roleAssignmentResourceIds string[] = concat(
     hostPoolResourceRole.outputs.resourceId
   ],
   credentialVaultRole.outputs.resourceIds,
-  !empty(customImageResourceId) ? [imageResourceGroupRole!.outputs.resourceId] : []
+  !empty(customImageResourceId) ? [imageResourceGroupRole!.outputs.resourceId] : [],
+  !empty(diskEncryptionSetResourceId) ? diskEncryptionSetReaderRole!.outputs.resourceIds : []
 )

@@ -9,7 +9,7 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 ## Contents
 
 1. [How naming works](#how-naming-works)
-2. [The built-in CAF default](#the-built-in-caf-default)
+2. [The built-in CAF-aligned default](#the-built-in-caf-aligned-default)
 3. [The `namingConvention` parameter](#the-namingconvention-parameter)
 4. [The eight naming components](#the-eight-naming-components)
 5. [The `purpose` component](#the-purpose-component)
@@ -17,7 +17,6 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 7. [Aligning naming across solutions](#aligning-naming-across-solutions)
 8. [Add-on naming](#add-on-naming)
 9. [Examples](#examples)
-10. [Scenario test results](#scenario-test-results)
 
 ---
 
@@ -517,23 +516,4 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ---
 
-## Scenario test results
-
-See **[naming-convention-test-results.md](naming-convention-test-results.md)** for a full matrix of 8 scenarios run against the naming engine simulation. All scenarios pass KV name parity between the hostpool inline deployment and the standalone `sharedServices.bicep` deployment.
-
-The 8 scenarios cover:
-
-| # | Scenario |
-| --- | --- |
-| 1 | CAF default, single region |
-| 2 | CAF default, split CP / VMs regions |
-| 3 | Custom RT-first, 4 components, workload + environment |
-| 4 | Custom RT-last, 4 components |
-| 5 | Custom with org prefix in `freeform1`, RT-last |
-| 6 | Custom with `environment` component, underscore delimiter |
-| 7 | Custom with no `location` component (tests KV seed fallback) |
-| 8 | Custom with RT in mid-position (not first, not last) |
-
----
-
-*Last updated: 2026-06-17*
+Last updated: 2026-06-17

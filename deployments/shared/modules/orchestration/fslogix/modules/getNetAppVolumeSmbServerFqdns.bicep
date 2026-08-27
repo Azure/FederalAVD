@@ -8,7 +8,7 @@ param shareNames array
 // For Profile+Office scenarios, index 0 is profile and index 1 is office.
 var volumeCountsAreValid = (empty(localNetAppVolumeResourceIds) || length(localNetAppVolumeResourceIds) == length(shareNames)) && (empty(remoteNetAppVolumeResourceIds) || length(remoteNetAppVolumeResourceIds) == length(shareNames))
   ? true
-  : bool('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.')
+  : fail('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.')
 
 resource localNetAppVolumes 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes@2023-11-01' existing = [for i in range(0, volumeCountsAreValid ? length(localNetAppVolumeResourceIds) : 0): {
   name: last(split(localNetAppVolumeResourceIds[i], '/'))

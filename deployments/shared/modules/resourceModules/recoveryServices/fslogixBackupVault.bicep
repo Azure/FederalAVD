@@ -18,9 +18,6 @@ param resourceGroupOperations string
 @description('Required. Azure region for all resources.')
 param location string
 
-@description('Required. Short unique deployment suffix.')
-param deploymentSuffix string
-
 @description('Optional. Resource ID of the Log Analytics workspace for vault diagnostics.')
 param logAnalyticsWorkspaceResourceId string = ''
 
@@ -77,7 +74,6 @@ var effectiveVaultName = createVault
 
 // Azure Files snapshots remain in the storage account, so the vault stores backup metadata only.
 module recoveryServicesVault 'vaults/deploy.bicep' = if (createVault) {
-  name: 'RecoveryServicesVault-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: vaultName
@@ -93,7 +89,6 @@ module recoveryServicesVault 'vaults/deploy.bicep' = if (createVault) {
 }
 
 module fileShareBackupPolicy 'vaults/backupPolicies/deploy.bicep' = if (manageBackupPolicy) {
-  name: 'RSV-BackupPolicy-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(effectiveVaultSubscriptionId, effectiveVaultResourceGroupName)
   params: {
     recoveryServicesVaultName: effectiveVaultName
@@ -124,7 +119,6 @@ module fileShareBackupPolicy 'vaults/backupPolicies/deploy.bicep' = if (manageBa
 }
 
 module vaultPrivateEndpoint '../network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
-  name: 'PE-RecoveryServicesVault-AzureFiles-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: replace(

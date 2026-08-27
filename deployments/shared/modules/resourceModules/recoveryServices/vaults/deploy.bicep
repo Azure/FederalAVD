@@ -44,7 +44,7 @@ var cmkEnabled = !empty(cmkKeyUri)
 // exactly both valid CMK identity states (SAI: true==true; UAI: false==false).
 var cmkConfigurationValidated = ((!cmkEnabled && empty(cmkUserAssignedIdentityResourceId)) || (cmkEnabled && contains(cmkKeyUri, '/keys/') && (cmkUseSystemAssignedIdentity == empty(cmkUserAssignedIdentityResourceId))))
   ? true
-  : bool('Invalid CMK configuration. Provide cmkKeyUri (including /keys/) with either cmkUserAssignedIdentityResourceId (no vault PE) or cmkUseSystemAssignedIdentity=true (vault PE), but not both identity options simultaneously.')
+  : fail('Invalid CMK configuration. Provide cmkKeyUri (including /keys/) with either cmkUserAssignedIdentityResourceId (no vault PE) or cmkUseSystemAssignedIdentity=true (vault PE), but not both identity options simultaneously.')
 
 resource recoveryServicesVault 'Microsoft.RecoveryServices/vaults@2023-04-01' = {
   name: name

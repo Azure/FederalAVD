@@ -1,32 +1,4 @@
-type scalingTimeType = {
-  hour: int
-  minute: int
-}
-
-type dynamicScalingScheduleType = {
-  name: string
-  daysOfWeek: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[]
-  rampUpStartTime: scalingTimeType
-  rampUpLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
-  rampUpMinimumHostsPct: int
-  rampUpCapacityThresholdPct: int
-  rampUpMinimumHostPoolSize: int
-  rampUpMaximumHostPoolSize: int
-  peakStartTime: scalingTimeType
-  peakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
-  rampDownStartTime: scalingTimeType
-  rampDownLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
-  rampDownMinimumHostsPct: int
-  rampDownCapacityThresholdPct: int
-  rampDownMinimumHostPoolSize: int
-  rampDownMaximumHostPoolSize: int
-  rampDownForceLogoffUsers: bool
-  rampDownWaitTimeMinutes: int
-  rampDownNotificationMessage: string
-  rampDownStopHostsWhen: 'ZeroSessions' | 'ZeroActiveSessions'
-  offPeakStartTime: scalingTimeType
-  offPeakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
-}
+import { dynamicScalingScheduleType } from '../../../types/scalingTypes.bicep'
 
 param scalingPlanName string
 param schedules dynamicScalingScheduleType[]
@@ -66,4 +38,4 @@ resource pooledSchedules 'Microsoft.DesktopVirtualization/scalingPlans/pooledSch
   }
 }]
 
-output scheduleResourceIds array = map(pooledSchedules, schedule => schedule.id)
+output scheduleResourceIds string[] = map(pooledSchedules, schedule => schedule.id)

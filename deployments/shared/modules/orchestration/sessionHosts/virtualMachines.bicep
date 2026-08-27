@@ -1,3 +1,5 @@
+import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
+
 param agentBootLoaderDownloadUrl string
 param agentDownloadUrl string
 param artifactsContainerUri string
@@ -5,13 +7,12 @@ param artifactsUserAssignedIdentityClientId string
 param artifactsUserAssignedIdentityResourceId string
 param availability string
 param availabilitySetNameConv string
-param availabilityZones array
+param availabilityZones string[]
 param avdInsightsDataCollectionRulesResourceId string
 param confidentialVMOSDiskEncryptionType string
 param dataCollectionEndpointResourceId string
-param dedicatedHostGroupResourceIds array
-param dedicatedHostResourceIds array
-param deploymentSuffix string
+param dedicatedHostGroupResourceIds string[]
+param dedicatedHostResourceIds string[]
 param diskAccessId string = ''
 param diskEncryptionSetResourceId string
 param diskSizeGB int
@@ -27,12 +28,12 @@ param enableMonitoring bool
 param encryptionAtHost bool
 param fslogixConfigureSessionHosts bool
 param fslogixContainerType string
-param fslogixFileShareNames array
-param fslogixLocalNetAppServerFqdns array
-param fslogixLocalStorageAccountResourceIds array
-param fslogixOSSGroups array
-param fslogixRemoteNetAppServerFqdns array
-param fslogixRemoteStorageAccountResourceIds array
+param fslogixFileShareNames string[]
+param fslogixLocalNetAppServerFqdns string[]
+param fslogixLocalStorageAccountResourceIds string[]
+param fslogixOSSGroups string[]
+param fslogixRemoteNetAppServerFqdns string[]
+param fslogixRemoteStorageAccountResourceIds string[]
 param fslogixSizeInMBs int
 param fslogixStorageService string
 param hibernationEnabled bool = false
@@ -48,10 +49,10 @@ param location string
 param virtualMachineNicNameConv string
 param virtualMachineDiskNameConv string
 param ouPath string
-param preferredZones array
-param sessionHostCustomizations array
-param sessionHostNames array
-param vmNumbers array
+param preferredZones string[]
+param sessionHostCustomizations artifactCustomizationType[]
+param sessionHostNames string[]
+param vmNumbers int[]
 param securityType string
 param secureBootEnabled bool
 param subnetResourceId string
@@ -68,6 +69,9 @@ param hasAmdGpu bool
 param hasNvidiaGpu bool
 param recoveryServicesVaultResourceId string = ''
 param vmBackupPolicyName string = 'AvdPolicyVm'
+
+@description('Changes on each deployment to force the domain-join extension to execute when configured.')
+param domainJoinForceUpdateTag string = utcNow('yyyyMMddHHmmss')
 
 var storageSuffix = environment().suffixes.storage
 
@@ -304,7 +308,7 @@ resource extension_JsonADDomainExtension 'Microsoft.Compute/virtualMachines/exte
     name: 'JsonADDomainExtension'
     location: location
     properties: {
-      forceUpdateTag: deploymentSuffix
+      forceUpdateTag: domainJoinForceUpdateTag
       publisher: 'Microsoft.Compute'
       type: 'JsonADDomainExtension'
       typeHandlerVersion: '1.3'
@@ -440,7 +444,6 @@ resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/ext
 
 module customizations 'invokeCustomizations.bicep' = [
   for i in range(0, sessionHostCount): if (!empty(sessionHostCustomizations)) {
-    name: '${virtualMachineNames[i]}-Customizations-${deploymentSuffix}'
     params: {
       artifactsContainerUri: artifactsContainerUri
       customizations: sessionHostCustomizations
@@ -516,19 +519,15 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
 
 module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
-    name: '${virtualMachineNames[i]}-disable-osDisk-PublicAccess-${deploymentSuffix}'
     params: {
       diskAccessId: diskAccessId
       diskName: virtualMachine[i].properties.storageProfile.osDisk.name
       location: location
-      deploymentSuffix: deploymentSuffix
-      vmName: virtualMachineNames[i]
     }
   }
 ]
 
 module vmBackupRegistration 'vmBackupItems.bicep' = if (!empty(recoveryServicesVaultResourceId)) {
-  name: 'VmBackupRegistration-${deploymentSuffix}'
   scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
   params: {
     hostPoolResourceId: hostPoolResourceId

@@ -1,11 +1,12 @@
 ﻿targetScope = 'subscription'
 
+import { entraGroupType } from '../../resourceModules/types/identityTypes.bicep'
+
 param activeDirectoryConnection bool
 param createNetAppAccount bool = true
 param createNetAppCapacityPool bool = true
 param identitySolution string
 param azureFilePrivateDnsZoneResourceId string
-param deploymentSuffix string
 param deploymentUserAssignedIdentityClientId string
 param deploymentVirtualMachineName string
 @secure()
@@ -14,12 +15,12 @@ param domainJoinUserPassword string
 param domainJoinUserPrincipalName string
 param domainName string
 param encryptionKeyVaultUri string
-param fslogixAdminGroups array
+param fslogixAdminGroups entraGroupType[]
 param appUpdateUserAssignedIdentityResourceId string
 param fslogixEncryptionKeyNameConv string
 param fslogixFileShares array
 param fslogixShardOptions string
-param fslogixUserGroups array
+param fslogixUserGroups entraGroupType[]
 param hostPoolResourceId string = ''
 param kerberosEncryptionType string = 'AES256'
 param keyManagementStorageAccounts string
@@ -45,7 +46,7 @@ param fslogixStorageRedundancy string
 param storageSolution string
 param tags object
 param encryptionUserAssignedIdentityResourceId string = ''
-param permittedIPs array = []
+param permittedIPs string[] = []
 param fslogixSoftDeleteRetentionDays int = 14
 param recoveryServicesVaultResourceId string = ''
 param fileSharePolicyName string = 'filesharepolicy'
@@ -55,7 +56,6 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
   identitySolution,
   'DomainServices'
 )) {
-  name: 'Azure-NetAppFiles-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupStorage)
   params: {
     activeDirectoryConnection: activeDirectoryConnection
@@ -89,13 +89,11 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
       !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {},
       tags[?'Microsoft.NetApp/netAppAccounts/capacityPools/volumes'] ?? {}
     )
-    deploymentSuffix: deploymentSuffix
   }
 }
 
 // Azure files for FSLogix
 module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFiles') {
-  name: 'Azure-Files-${deploymentSuffix}'
   scope: resourceGroup(resourceGroupStorage)
   params: {
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
@@ -134,7 +132,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     storageSku: storageSku
     storageRedundancy: fslogixStorageRedundancy
     tags: tags
-    deploymentSuffix: deploymentSuffix
     permittedIPs: permittedIPs
     softDeleteRetentionDays: fslogixSoftDeleteRetentionDays
   }
@@ -143,7 +140,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
 // Register all Azure Files storage accounts and shares with the Recovery Services Vault for snapshot backup.
 // Scoped to the vault's resource group so ARM child resource declarations resolve correctly.
 module fslogixBackupRegistration 'modules/fslogixBackupItems.bicep' = if (storageSolution == 'AzureFiles' && !empty(recoveryServicesVaultResourceId)) {
-  name: 'FSLogix-BackupItems-${deploymentSuffix}'
   scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
   params: {
     vaultName: last(split(recoveryServicesVaultResourceId, '/'))!
