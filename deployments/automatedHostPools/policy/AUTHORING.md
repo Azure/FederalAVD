@@ -49,9 +49,6 @@ policy/
         RunCommand/
 ```
 
-The empty `modules/policy/definitions/` directory is not part of the active deployment path. Do
-not place new policy definitions there.
-
 ## Source Of Truth
 
 Use the following ownership rules:
@@ -61,9 +58,6 @@ Use the following ownership rules:
   `Microsoft.Authorization/policySetDefinitions`.
 - A remediation template with both `.bicep` and `.json` files uses the `.bicep` file as its source
   of truth. Regenerate the adjacent JSON after every Bicep change.
-- `Extensions/AzureMonitorWindowsAgent.json` and
-  `Associations/DataCollectionAssociation.json` are currently JSON-only remediation templates.
-  Edit them as structured JSON until they gain Bicep sources.
 - `policy/main.bicep` owns composition and sequencing. It passes definition resource IDs into
   initiatives, assigns definitions or initiatives, provisions the remediation identity, and grants
   required roles.
@@ -164,7 +158,9 @@ The known generated remediation pairs are:
 | --- | --- |
 | `templates/RunCommand/ConfigureSessionHost.bicep` | `templates/RunCommand/ConfigureSessionHost.json` |
 | `templates/RunCommand/PrivateCustomization.bicep` | `templates/RunCommand/PrivateCustomization.json` |
+| `templates/Extensions/AzureMonitorWindowsAgent.bicep` | `templates/Extensions/AzureMonitorWindowsAgent.json` |
 | `templates/Extensions/GuestAttestation.bicep` | `templates/Extensions/GuestAttestation.json` |
+| `templates/Associations/DataCollectionAssociation.bicep` | `templates/Associations/DataCollectionAssociation.json` |
 
 `PrivateCustomization.bicep` must be rebuilt before the top-level automated host-pool template
 because its generated JSON is loaded transitively during that build.

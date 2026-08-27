@@ -89,7 +89,7 @@ function Test-TransientDownloadFailure {
   $exception = Get-WebException -ErrorRecord $ErrorRecord
   $response = $exception.Response
   $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }
-  if ($statusCode -in @(403, 408, 429, 500, 502, 503, 504)) { return $true }
+  if ($statusCode -in @(400, 403, 408, 429, 500, 502, 503, 504)) { return $true }
   if ($exception -is [System.Net.WebException]) {
     return $exception.Status -in @(
       'ConnectFailure',

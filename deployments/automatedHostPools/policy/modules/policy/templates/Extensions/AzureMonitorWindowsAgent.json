@@ -1,6 +1,13 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "5763277511451240335"
+    }
+  },
   "parameters": {
     "location": {
       "type": "string"
@@ -13,7 +20,7 @@
     {
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "apiVersion": "2024-07-01",
-      "name": "[format('{0}/AzureMonitorWindowsAgent', parameters('virtualMachineName'))]",
+      "name": "[format('{0}/{1}', parameters('virtualMachineName'), 'AzureMonitorWindowsAgent')]",
       "location": "[parameters('location')]",
       "properties": {
         "publisher": "Microsoft.Azure.Monitor",

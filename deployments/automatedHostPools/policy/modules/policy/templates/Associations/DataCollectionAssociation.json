@@ -1,6 +1,13 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "14413757828628509241"
+    }
+  },
   "parameters": {
     "associationType": {
       "type": "string"
@@ -21,7 +28,7 @@
       "condition": "[equals(parameters('associationType'), 'DataCollectionRule')]",
       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
       "apiVersion": "2023-03-11",
-      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', parameters('virtualMachineName'))]",
+      "scope": "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachineName'))]",
       "name": "[variables('dcrAssociationName')]",
       "properties": {
         "dataCollectionRuleId": "[parameters('monitoringResourceId')]"
@@ -31,7 +38,7 @@
       "condition": "[equals(parameters('associationType'), 'DataCollectionEndpoint')]",
       "type": "Microsoft.Insights/dataCollectionRuleAssociations",
       "apiVersion": "2023-03-11",
-      "scope": "[format('Microsoft.Compute/virtualMachines/{0}', parameters('virtualMachineName'))]",
+      "scope": "[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachineName'))]",
       "name": "[variables('dceAssociationName')]",
       "properties": {
         "dataCollectionEndpointId": "[parameters('monitoringResourceId')]"

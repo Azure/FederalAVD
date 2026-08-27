@@ -46,8 +46,6 @@ Use this workflow for policy resources under `deployments/automatedHostPools/pol
      that generated JSON.
    - The policy-definition Bicep module loads the generated JSON with `loadJsonContent()` and embeds
      it under `details.deployment.properties.template`.
-   - `Extensions/AzureMonitorWindowsAgent.json` and
-     `Associations/DataCollectionAssociation.json` are currently JSON-only exceptions.
    - Keep any PowerShell loaded with `loadTextContent()` ASCII-only and run parser and ASCII checks.
 
 6. Keep policy parameters aligned across every boundary:
