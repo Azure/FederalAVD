@@ -159,7 +159,7 @@ module shares 'shares.bicep' = [
 ]
 
 // ─── Private Endpoints ─────────────────────────────────────────────────────────
-module storageAccountPes '../../../resourceModules/network/privateEndpoints/deploy.bicep' = [
+module privateEndpoints '../../../resourceModules/network/privateEndpoints/deploy.bicep' = [
   for i in range(0, storageCount): if (privateEndpoint) {
     params: {
       name: replace(
@@ -232,7 +232,7 @@ module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCo
     ]
     treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [storageAccountPes, shares]
+  dependsOn: [privateEndpoints, shares]
 }
 
 // ─── EntraKerberos Hybrid (with domain info) ───────────────────────────────────
@@ -263,7 +263,7 @@ module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/vi
     ]
     treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [storageAccountPes, shares]
+  dependsOn: [privateEndpoints, shares]
 }
 
 // PHASE 1: Update application manifest with privatelink FQDNs and tags
@@ -285,7 +285,7 @@ module updateStorageApplicationsManifest '../../../resourceModules/compute/virtu
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    storageAccountPes
+    privateEndpoints
     shares
     configureEntraKerberosWithDomainInfo
   ]
@@ -324,7 +324,7 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    storageAccountPes
+    privateEndpoints
     shares
     configureEntraKerberosWithDomainInfo
     configureADDSAuth

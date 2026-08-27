@@ -3,7 +3,7 @@ param shareSizeInGB int
 param StorageAccountName string
 param storageSku string
 
-module fileShareModules '../../../resourceModules/storage/storageAccounts/fileServices/shares/deploy.bicep' = [
+module shares '../../../resourceModules/storage/storageAccounts/fileServices/shares/deploy.bicep' = [
   for i in range(0, length(fileShares)): {
     name: '${StorageAccountName}-${fileShares[i]}'
     params: {

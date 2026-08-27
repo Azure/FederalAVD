@@ -158,7 +158,7 @@ resource existingWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-0
 
 var effectiveWorkspaceName = !empty(existingWorkspaceResourceId) ? existingWorkspace!.name : workspaceName
 var existingApplicationGroupReferences = !empty(existingWorkspaceResourceId)
-  ? existingWorkspace!.properties.applicationGroupReferences
+  ? map(existingWorkspace!.properties.applicationGroupReferences, resourceId => toLower(resourceId))
   : []
 var diagnostics = !empty(logAnalyticsWorkspaceResourceId)
   ? {
@@ -323,7 +323,7 @@ module workspace '../../shared/modules/resourceModules/desktopVirtualization/wor
       ? existingWorkspace!.properties.friendlyName
       : workspaceFriendlyName
     publicNetworkAccess: effectiveWorkspacePublicNetworkAccess
-    applicationGroupResourceIds: union(existingApplicationGroupReferences, [applicationGroup.outputs.resourceId])
+    applicationGroupResourceIds: union(existingApplicationGroupReferences, [toLower(applicationGroup.outputs.resourceId)])
     diagnosticSettings: !empty(existingWorkspaceResourceId) ? null : diagnostics
   }
 }

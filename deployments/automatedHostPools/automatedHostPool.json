@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "8169434706770066083"
+      "templateHash": "14170038777468508551"
     }
   },
   "definitions": {
@@ -4910,7 +4910,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "1486002322852474748"
+              "templateHash": "9867315995546361660"
             }
           },
           "functions": [
@@ -7808,7 +7808,7 @@
                   "friendlyName": "[if(not(empty(parameters('existingWorkspaceResourceId'))), createObject('value', reference('existingWorkspace').friendlyName), createObject('value', parameters('workspaceFriendlyName')))]",
                   "publicNetworkAccess": "[if(variables('deployWorkspaceFeedPrivateEndpoint'), createObject('value', parameters('workspacePublicNetworkAccess')), if(and(not(empty(parameters('existingWorkspaceResourceId'))), equals(reference('existingWorkspace').publicNetworkAccess, 'Disabled')), createObject('value', 'Disabled'), createObject('value', 'Enabled')))]",
                   "applicationGroupResourceIds": {
-                    "value": "[union(if(not(empty(parameters('existingWorkspaceResourceId'))), reference('existingWorkspace').applicationGroupReferences, createArray()), createArray(reference('applicationGroup').outputs.resourceId.value))]"
+                    "value": "[union(if(not(empty(parameters('existingWorkspaceResourceId'))), map(reference('existingWorkspace').applicationGroupReferences, lambda('resourceId', toLower(lambdaVariables('resourceId')))), createArray()), createArray(toLower(reference('applicationGroup').outputs.resourceId.value)))]"
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('existingWorkspaceResourceId'))), createObject('value', null()), createObject('value', variables('diagnostics')))]"
                 },
@@ -10295,7 +10295,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "11375296346430872548"
+              "templateHash": "1383186007574840151"
             }
           },
           "definitions": {
@@ -11356,7 +11356,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "16411601411880769843"
+                      "templateHash": "169135254427648663"
                     }
                   },
                   "parameters": {
@@ -12228,7 +12228,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.46.1.21595",
-                              "templateHash": "1545375305340900345"
+                              "templateHash": "7537225758134930297"
                             }
                           },
                           "parameters": {
@@ -12248,7 +12248,7 @@
                           "resources": [
                             {
                               "copy": {
-                                "name": "fileShareModules",
+                                "name": "shares",
                                 "count": "[length(range(0, length(parameters('fileShares'))))]"
                               },
                               "type": "Microsoft.Resources/deployments",
@@ -12351,15 +12351,15 @@
                         "storageAccounts"
                       ]
                     },
-                    "storageAccountPes": {
+                    "privateEndpoints": {
                       "copy": {
-                        "name": "storageAccountPes",
+                        "name": "privateEndpoints",
                         "count": "[length(range(0, parameters('storageCount')))]"
                       },
                       "condition": "[parameters('privateEndpoint')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('storageAccountPes-{0}-{1}', copyIndex(), uniqueString('storageAccountPes', deployment().name))]",
+                      "name": "[format('privateEndpoints-{0}-{1}', copyIndex(), uniqueString('privateEndpoints', deployment().name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -12872,8 +12872,8 @@
                         }
                       },
                       "dependsOn": [
-                        "shares",
-                        "storageAccountPes"
+                        "privateEndpoints",
+                        "shares"
                       ]
                     },
                     "configureEntraKerberosWithDomainInfo": {
@@ -13134,8 +13134,8 @@
                         }
                       },
                       "dependsOn": [
-                        "shares",
-                        "storageAccountPes"
+                        "privateEndpoints",
+                        "shares"
                       ]
                     },
                     "updateStorageApplicationsManifest": {
@@ -13366,8 +13366,8 @@
                       "dependsOn": [
                         "appUpdateUai",
                         "configureEntraKerberosWithDomainInfo",
-                        "shares",
-                        "storageAccountPes"
+                        "privateEndpoints",
+                        "shares"
                       ]
                     },
                     "SetNTFSPermissions": {
@@ -13625,8 +13625,8 @@
                       "dependsOn": [
                         "configureADDSAuth",
                         "configureEntraKerberosWithDomainInfo",
+                        "privateEndpoints",
                         "shares",
-                        "storageAccountPes",
                         "updateStorageApplicationsManifest"
                       ]
                     },
@@ -13865,11 +13865,11 @@
                 }
               }
             },
-            "fslogixBackupRegistration": {
+            "backupRegistration": {
               "condition": "[and(equals(parameters('storageSolution'), 'AzureFiles'), not(empty(parameters('recoveryServicesVaultResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('fslogixBackupRegistration-{0}', uniqueString('fslogixBackupRegistration', deployment().name))]",
+              "name": "[format('backupRegistration-{0}', uniqueString('backupRegistration', deployment().name))]",
               "subscriptionId": "[split(parameters('recoveryServicesVaultResourceId'), '/')[2]]",
               "resourceGroup": "[split(parameters('recoveryServicesVaultResourceId'), '/')[4]]",
               "properties": {
