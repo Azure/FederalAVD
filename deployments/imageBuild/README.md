@@ -165,14 +165,14 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 #### `imageBuildResourceGroupId`
 
 - **Type:** String
-- **Description:** Resource ID of an existing resource group to use as the persistent build workspace. Leave empty to have this deployment create a **temporary** resource group that is automatically deleted when the build completes. Each deployment that creates a new resource group generates a unique timestamp-suffixed name to support parallel builds.
+- **Description:** Resource ID of an existing resource group to use as the persistent build workspace. Leave empty to have this deployment create a **temporary** resource group that is automatically deleted when the build completes. Each deployment that creates a new resource group generates a unique name containing the build timestamp and a deployment-specific run ID to support parallel builds.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/rg-image-build`
 
 #### `customBuildResourceGroupName`
 
 - **Type:** String
-- **Description:** Optional base name for the temporary build resource group (only used when `imageBuildResourceGroupId` is empty). A deployment timestamp suffix (`yyyyMMddHHmmss`) is always appended to ensure uniqueness. Leave empty to use the default CAF-compliant name. **The resource group is temporary — it is deleted automatically when the build completes.**
-- **Example:** `rg-avd-image-builds-prod` → becomes `rg-avd-image-builds-prod-20260515143022`
+- **Description:** Optional base name for the temporary build resource group (only used when `imageBuildResourceGroupId` is empty). A build-run suffix (`yyyyMMddHHmmss-xxxxxx`) is always appended to ensure uniqueness. Leave empty to use the default CAF-compliant name. **The resource group is temporary — it is deleted automatically when the build completes.**
+- **Example:** `rg-avd-image-builds-prod` becomes `rg-avd-image-builds-prod-20260515143022-a1b2c3`
 
 ### Prerequisites
 

@@ -41,6 +41,7 @@ param imageBuildResourceGroupId string = ''
 
 // Optional Custom Naming
 @description('The custom name of the resource group where the image build vm and orchestration vm will be created. Leave blank to create a new resource group based on Cloud Adoption Framework naming principals.')
+@maxLength(68)
 param customBuildResourceGroupName string = ''
 
 // Source Image Properties
@@ -326,6 +327,7 @@ param tags object = {}
 var buildTimestamp = startsWith(deployment().name, 'Microsoft.Template-')
   ? substring(deployment().name, 19, 14)
   : timeStamp
+var buildRunId = uniqueString(subscription().subscriptionId, deployment().name, buildTimestamp)
 
 // Function to ensure unique names in customization arrays by appending index to duplicates
 var uniqueCustomizers = map(range(0, length(customizations)), i => {
@@ -363,13 +365,13 @@ var artifactsContainerUriNormalized = endsWith(artifactsContainerUri, '/')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
-// The auto-generated and custom names include the deployment timestamp so each build gets a unique
-// resource group name. This allows parallel builds and prevents naming conflicts.
+// The auto-generated and custom names include the deployment timestamp and build run ID so each
+// build gets a unique resource group name. This allows parallel builds and prevents naming conflicts.
 // The orchestration VM deletes the entire resource group at the end of the build.
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
-      ? '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${buildTimestamp}'
-      : '${customBuildResourceGroupName}-${buildTimestamp}')
+      ? '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${buildTimestamp}-${take(buildRunId, 6)}'
+      : '${customBuildResourceGroupName}-${buildTimestamp}-${take(buildRunId, 6)}')
   : last(split(imageBuildResourceGroupId, '/'))
 
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
@@ -495,8 +497,8 @@ var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
   ? dateTimeAdd(buildTimestamp, 'P${imageVersionEOLinDays}D')
   : ''
 
-var imageVmName = take('${depPrefix}vmimg-${uniqueString(buildTimestamp)}', 15)
-var orchestrationVmName = take('${depPrefix}vmorc-${uniqueString(buildTimestamp)}', 15)
+var imageVmName = '${depPrefix}vmimg-${buildRunId}'
+var orchestrationVmName = '${depPrefix}vmorc-${buildRunId}'
 
 var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
