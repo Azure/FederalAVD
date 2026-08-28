@@ -168,6 +168,15 @@ param namingConvention object = {
   workload: 'avd'
 }
 
+@description('Optional. Complete name override for the Secrets Key Vault. When empty, the name is generated from namingConvention.')
+@maxLength(24)
+#disable-next-line secure-secrets-in-params
+param secretsKeyVaultNameOverride string = ''
+
+@description('Optional. Complete name override for the Encryption Key Vault. When empty, the name is generated from namingConvention.')
+@maxLength(24)
+param encryptionKeyVaultNameOverride string = ''
+
 // ── Naming Convention ──────────────────────────────────────────────────────────
 
 var cloud = toLower(environment().name)
@@ -319,13 +328,23 @@ var uniqueStringOperations = take(
     : uniqueString(subscription().subscriptionId, operationsResourceGroupName),
   6
 )
+var effectiveSecretsKeyVaultNameOverride = !empty(secretsKeyVaultNameOverride)
+  ? secretsKeyVaultNameOverride
+  : namingConvention.?secretsKeyVaultNameOverride ?? ''
+var effectiveEncryptionKeyVaultNameOverride = !empty(encryptionKeyVaultNameOverride)
+  ? encryptionKeyVaultNameOverride
+  : namingConvention.?encryptionKeyVaultNameOverride ?? ''
 
 // Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
 // kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
 // kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
-var secretsKeyVaultName    = take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
+var secretsKeyVaultName = !empty(effectiveSecretsKeyVaultNameOverride)
+  ? effectiveSecretsKeyVaultNameOverride
+  : take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
 
-var encryptionKeyVaultName = take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
+var encryptionKeyVaultName = !empty(effectiveEncryptionKeyVaultNameOverride)
+  ? effectiveEncryptionKeyVaultNameOverride
+  : take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
 
 var fslogixBackupVaultName = buildCustomName(
   filter(cnv_components, component => component != 'none'),

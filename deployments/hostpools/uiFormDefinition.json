@@ -4505,6 +4505,30 @@
           "label": "Tags & Naming",
           "elements": [
             {
+              "name": "secretsKeyVaultName_checkNameAvailability",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "POST",
+                "path": "[concat(steps('hosts').scope.subscription.id,'/providers/Microsoft.KeyVault/checknameavailability?api-version=2022-07-01')]",
+                "body": {
+                  "name": "[steps('tagsAndNaming').naming.secretsKeyVaultNameOverride]",
+                  "type": "Microsoft.KeyVault/vaults"
+                }
+              }
+            },
+            {
+              "name": "encryptionKeyVaultName_checkNameAvailability",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "POST",
+                "path": "[concat(steps('hosts').scope.subscription.id,'/providers/Microsoft.KeyVault/checknameavailability?api-version=2022-07-01')]",
+                "body": {
+                  "name": "[steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride]",
+                  "type": "Microsoft.KeyVault/vaults"
+                }
+              }
+            },
+            {
               "name": "naming",
               "type": "Microsoft.Common.Section",
               "label": "Naming Convention",
@@ -5009,6 +5033,40 @@
                   }
                 },
                 {
+                  "name": "secretsKeyVaultNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Secrets Key Vault Name Override",
+                  "placeholder": "e.g. cxcti-sec-a1b2c3-use2",
+                  "toolTip": "Enter a shortened complete name for the inline-created Secrets Key Vault. It must be globally unique and no more than 24 characters; do not paste the overlength generated name.",
+                  "visible": "[and(equals(steps('hosts').credentials.source,'manual'),steps('hosts').credentials.deploySecretsKeyVault)]",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "isValid": "[or(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),steps('tagsAndNaming').secretsKeyVaultName_checkNameAvailability.nameAvailable)]",
+                        "message": "[steps('tagsAndNaming').secretsKeyVaultName_checkNameAvailability.message]"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "encryptionKeyVaultNameOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Encryption Key Vault Name Override",
+                  "placeholder": "e.g. cxcti-enc-a1b2c3-use2",
+                  "toolTip": "Enter a shortened complete name for the inline-created Encryption Key Vault. It must be globally unique and no more than 24 characters; do not paste the overlength generated name.",
+                  "visible": "[and(not(steps('zeroTrust').keyManagement.useExistingEncryptionKv),or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption,contains(steps('zeroTrust').keyManagement.keyManagementDisks,'CustomerManaged'),contains(steps('zeroTrust').keyManagement.keyManagementStorage,'CustomerManaged'),contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault,'CustomerManaged')))]",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "isValid": "[or(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),steps('tagsAndNaming').encryptionKeyVaultName_checkNameAvailability.nameAvailable)]",
+                        "message": "[steps('tagsAndNaming').encryptionKeyVaultName_checkNameAvailability.message]"
+                      }
+                    ]
+                  }
+                },
+                {
                   "name": "kvNoLocationInfo",
                   "type": "Microsoft.Common.InfoBox",
                   "visible": "[not(or(equals(steps('tagsAndNaming').naming.component1,'location'),or(equals(steps('tagsAndNaming').naming.component2,'location'),or(equals(steps('tagsAndNaming').naming.component3,'location'),or(equals(steps('tagsAndNaming').naming.component4,'location'),or(equals(steps('tagsAndNaming').naming.component5,'location'),equals(steps('tagsAndNaming').naming.component6,'location')))))))]",
@@ -5375,7 +5433,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "{cp-loc} and {vms-loc} are resolved from the selected region at deployment time. {unique} is a 6-character subscription-scoped suffix; omitted when the Key Vault base name exceeds 20 characters to stay within the 24-character Azure limit."
+                    "text": "{cp-loc} and {vms-loc} are resolved from the selected region at deployment time. {unique} is a 6-character subscription-scoped suffix. If a generated Key Vault name exceeds 24 characters, complete name overrides are required for inline-created vaults."
                   }
                 }
               ]
@@ -5546,6 +5604,8 @@
         "globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
         "globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
         "permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').credentials.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
+        "secretsKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),'',steps('tagsAndNaming').naming.secretsKeyVaultNameOverride)]",
+        "encryptionKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),'',steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride)]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"vmsLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '\",\"cpLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride),'',steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '\",\"fslogixStoragePrefix\":\"', if(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue),'',steps('tagsAndNaming').naming.fslogixStoragePrefixValue), '\",\"virtualMachineNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.vmNameConvOverride),'',steps('tagsAndNaming').naming.vmNameConvOverride), '\",\"virtualMachineDiskNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.diskNameConvOverride),'',steps('tagsAndNaming').naming.diskNameConvOverride), '\",\"virtualMachineNicNameConvOverride\":\"', if(empty(steps('tagsAndNaming').naming.nicNameConvOverride),'',steps('tagsAndNaming').naming.nicNameConvOverride), '\"}'))]",
         "namingResourceTypeCodes": "[if(steps('tagsAndNaming').naming.customizeAbbreviations, parse(concat('{\"resourceGroups\":\"', steps('tagsAndNaming').naming.rtCodeRg, '\",\"hostPools\":\"', steps('tagsAndNaming').naming.rtCodeHp, '\",\"desktopApplicationGroups\":\"', steps('tagsAndNaming').naming.rtCodeDag, '\",\"workspaces\":\"', steps('tagsAndNaming').naming.rtCodeWs, '\",\"scalingPlans\":\"', steps('tagsAndNaming').naming.rtCodeSp, '\",\"virtualMachines\":\"', steps('tagsAndNaming').naming.rtCodeVm, '\",\"osdisks\":\"', steps('tagsAndNaming').naming.rtCodeDisk, '\",\"diskEncryptionSets\":\"', steps('tagsAndNaming').naming.rtCodeDes, '\",\"diskAccesses\":\"', steps('tagsAndNaming').naming.rtCodeDa, '\",\"availabilitySets\":\"', steps('tagsAndNaming').naming.rtCodeAs, '\",\"storageAccounts\":\"', steps('tagsAndNaming').naming.rtCodeSa, '\",\"netAppAccounts\":\"', steps('tagsAndNaming').naming.rtCodeNaa, '\",\"netAppCapacityPools\":\"', steps('tagsAndNaming').naming.rtCodeNacp, '\",\"keyVaults\":\"', steps('tagsAndNaming').naming.rtCodeKv, '\",\"userAssignedIdentities\":\"', steps('tagsAndNaming').naming.rtCodeUai, '\",\"privateEndpoints\":\"', steps('tagsAndNaming').naming.rtCodePe, '\",\"networkInterfaces\":\"', steps('tagsAndNaming').naming.rtCodeNic, '\",\"logAnalyticsWorkspaces\":\"', steps('tagsAndNaming').naming.rtCodeLaw, '\",\"dataCollectionEndpoints\":\"', steps('tagsAndNaming').naming.rtCodeDce, '\",\"recoveryServicesVaults\":\"', steps('tagsAndNaming').naming.rtCodeRsv, '\"}')), parse('{}'))]",
         "tags": "[steps('tagsAndNaming').tags.tags]"

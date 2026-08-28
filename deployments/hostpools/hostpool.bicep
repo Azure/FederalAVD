@@ -94,6 +94,15 @@ param namingConvention object = {
   workload: 'avd'
 }
 
+@description('Optional. Complete name override for the inline-created Secrets Key Vault. When empty, the name is generated from namingConvention.')
+@maxLength(24)
+#disable-next-line secure-secrets-in-params
+param secretsKeyVaultNameOverride string = ''
+
+@description('Optional. Complete name override for the inline-created Encryption Key Vault. When empty, the name is generated from namingConvention.')
+@maxLength(24)
+param encryptionKeyVaultNameOverride string = ''
+
 @description('''Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding
 default from .common/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.
 Produced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.
@@ -985,7 +994,9 @@ var hpBaseName = toLower(identifier)
 // Merge namingResourceTypeCodes into namingConvention before passing to the naming module.
 var effectiveNamingConvention = union(
   namingConvention,
-  !empty(namingResourceTypeCodes) ? { resourceTypeCodes: namingResourceTypeCodes } : {}
+  !empty(namingResourceTypeCodes) ? { resourceTypeCodes: namingResourceTypeCodes } : {},
+  !empty(secretsKeyVaultNameOverride) ? { secretsKeyVaultNameOverride: secretsKeyVaultNameOverride } : {},
+  !empty(encryptionKeyVaultNameOverride) ? { encryptionKeyVaultNameOverride: encryptionKeyVaultNameOverride } : {}
 )
 
 module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {

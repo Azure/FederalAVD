@@ -56,6 +56,23 @@ function Get-WebFailureDetail {
   if ($null -ne $statusCode) { $parts += "HTTP=$statusCode" }
   if ($null -ne $webStatus) { $parts += "WebStatus=$webStatus" }
   $parts += "Message=$($exception.Message)"
+  if ($response) {
+    try {
+      $responseStream = $response.GetResponseStream()
+      if ($responseStream) {
+        $reader = New-Object System.IO.StreamReader($responseStream)
+        $responseBody = ($reader.ReadToEnd() -replace '\s+', ' ').Trim()
+        $reader.Dispose()
+        if (-not [string]::IsNullOrWhiteSpace($responseBody)) {
+          if ($responseBody.Length -gt 1000) { $responseBody = $responseBody.Substring(0, 1000) }
+          $parts += "Response=$responseBody"
+        }
+      }
+    }
+    catch {
+      # Preserve the original failure when the response stream cannot be read.
+    }
+  }
   return $parts -join '; '
 }
 

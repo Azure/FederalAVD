@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "11839670329239624166"
+      "templateHash": "10328557198482376394"
     }
   },
   "functions": [
@@ -345,6 +345,22 @@
       },
       "metadata": {
         "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
+      }
+    },
+    "secretsKeyVaultNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 24,
+      "metadata": {
+        "description": "Optional. Complete name override for the Secrets Key Vault. When empty, the name is generated from namingConvention."
+      }
+    },
+    "encryptionKeyVaultNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 24,
+      "metadata": {
+        "description": "Optional. Complete name override for the Encryption Key Vault. When empty, the name is generated from namingConvention."
       }
     }
   },
@@ -910,8 +926,10 @@
     "dataCollectionEndpointName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'dataCollectionEndpoints'), variables('resourceAbbreviations').dataCollectionEndpoints), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "azureMonitorAgentIdentityName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'userAssignedIdentities'), variables('resourceAbbreviations').userAssignedIdentities), 'ama', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
-    "secretsKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]",
-    "encryptionKeyVaultName": "[take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24)]",
+    "effectiveSecretsKeyVaultNameOverride": "[if(not(empty(parameters('secretsKeyVaultNameOverride'))), parameters('secretsKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'secretsKeyVaultNameOverride'), ''))]",
+    "effectiveEncryptionKeyVaultNameOverride": "[if(not(empty(parameters('encryptionKeyVaultNameOverride'))), parameters('encryptionKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'encryptionKeyVaultNameOverride'), ''))]",
+    "secretsKeyVaultName": "[if(not(empty(variables('effectiveSecretsKeyVaultNameOverride'))), variables('effectiveSecretsKeyVaultNameOverride'), take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24))]",
+    "encryptionKeyVaultName": "[if(not(empty(variables('effectiveEncryptionKeyVaultNameOverride'))), variables('effectiveEncryptionKeyVaultNameOverride'), take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24))]",
     "fslogixBackupVaultName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('component', not(equals(lambdaVariables('component'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'recoveryServicesVaults'), variables('resourceAbbreviations').recoveryServicesVaults), 'files', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]"
   },

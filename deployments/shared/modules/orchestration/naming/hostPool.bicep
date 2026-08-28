@@ -74,6 +74,8 @@ var cnv_ff1      = namingConvention.?freeform1    ?? ''
 var cnv_env      = namingConvention.?environment  ?? ''
 var cnv_ff2      = namingConvention.?freeform2    ?? ''
 var cnv_workload = !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+var cnv_secretsKeyVaultNameOverride = namingConvention.?secretsKeyVaultNameOverride ?? ''
+var cnv_encryptionKeyVaultNameOverride = namingConvention.?encryptionKeyVaultNameOverride ?? ''
 
 // ── User-defined functions ────────────────────────────────────────────────────
 func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
@@ -132,8 +134,12 @@ var uniqueStringOperations = take(
 // Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
 // kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
 // kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
-var keyVaultNameSecrets    = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec${cnv_delimiter}${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
-var keyVaultNameEncryption = take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc${cnv_delimiter}${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var keyVaultNameSecrets = !empty(cnv_secretsKeyVaultNameOverride)
+  ? cnv_secretsKeyVaultNameOverride
+  : take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec${cnv_delimiter}${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var keyVaultNameEncryption = !empty(cnv_encryptionKeyVaultNameOverride)
+  ? cnv_encryptionKeyVaultNameOverride
+  : take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc${cnv_delimiter}${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
 
 // ── Monitoring ────────────────────────────────────────────────────────────────
 var dataCollectionEndpointName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)

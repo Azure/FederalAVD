@@ -275,7 +275,7 @@ Key Vault names are capped at **24 characters**. The unique suffix is **embedded
 - RT-first default: `kv-avd-sec-d527e9-use` (unique is the 3rd component, before location)
 - RT-last: `avd-sec-d527e9-use2-kv` (unique is part of the 2nd component, before location and RT)
 
-The full name is assembled from `purpose = 'sec-{unique}'` or `'enc-{unique}'`, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. For longer conventions (e.g., with a `freeform1` org prefix), the name may be truncated — the portal shows a warning and a live name preview.
+The full name is assembled from `purpose = 'sec-{unique}'` or `'enc-{unique}'`, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
 
 The `uniqueString()` seed is:
 
@@ -468,7 +468,7 @@ contoso-avd-sec-9ef5b1-u
 SHNAME-vm  →  avdhost001-vm
 ```
 
-> **Note:** The KV name is truncated to 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). The `location` and `resourceType` suffix are lost to truncation. If you use long org prefixes, consider keeping `location` before `resourceType` and keeping the total component length short.
+> **Note:** The generated KV name exceeds 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). Portal deployments require complete Key Vault name overrides so meaningful trailing components are not silently lost.
 
 ### Example 5 — Underscore delimiter (no hyphens in names)
 
@@ -490,7 +490,7 @@ kv-avd-prod-sec-f0485a-u
 vm-SHNAME  (VM/disk/NIC always use hyphens in the SHNAME pattern)
 ```
 
-> **Note:** `kvSanitize()` converts underscores and dots to hyphens in Key Vault names, so the KV name always uses `-` regardless of the convention delimiter. The KV name is also truncated to 24 characters here.
+> **Note:** `kvSanitize()` converts underscores and dots to hyphens in generated Key Vault names, so the generated KV name always uses `-` regardless of the convention delimiter. Complete overrides must independently satisfy Azure Key Vault naming rules.
 
 ### Example 6 — Abbreviation override
 

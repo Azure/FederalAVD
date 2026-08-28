@@ -698,6 +698,30 @@
           "label": "Tags & Naming",
           "elements": [
             {
+              "name": "secretsKeyVaultName_checkNameAvailability",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "POST",
+                "path": "[concat(steps('operations').subscription.id,'/providers/Microsoft.KeyVault/checknameavailability?api-version=2022-07-01')]",
+                "body": {
+                  "name": "[steps('tagsAndNaming').naming.secretsKeyVaultNameOverride]",
+                  "type": "Microsoft.KeyVault/vaults"
+                }
+              }
+            },
+            {
+              "name": "encryptionKeyVaultName_checkNameAvailability",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "POST",
+                "path": "[concat(steps('operations').subscription.id,'/providers/Microsoft.KeyVault/checknameavailability?api-version=2022-07-01')]",
+                "body": {
+                  "name": "[steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride]",
+                  "type": "Microsoft.KeyVault/vaults"
+                }
+              }
+            },
+            {
               "name": "naming",
               "type": "Microsoft.Common.Section",
               "label": "Naming Convention",
@@ -713,6 +737,40 @@
                     }
                   }
                 },
+                {
+                      "name": "secretsKeyVaultNameOverride",
+                      "type": "Microsoft.Common.TextBox",
+                      "label": "Secrets Key Vault Name Override",
+                      "placeholder": "e.g. cxcti-sec-a1b2c3-use2",
+                      "toolTip": "Enter a shortened complete name for the Secrets Key Vault. It must be globally unique and no more than 24 characters; do not paste the overlength generated name.",
+                      "visible": "[steps('operations').resources.deploySecretsKeyVault]",
+                      "constraints": {
+                        "required": false,
+                        "validations": [
+                          {
+                            "isValid": "[or(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),steps('tagsAndNaming').secretsKeyVaultName_checkNameAvailability.nameAvailable)]",
+                            "message": "[steps('tagsAndNaming').secretsKeyVaultName_checkNameAvailability.message]"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "name": "encryptionKeyVaultNameOverride",
+                      "type": "Microsoft.Common.TextBox",
+                      "label": "Encryption Key Vault Name Override",
+                      "placeholder": "e.g. cxcti-enc-a1b2c3-use2",
+                      "toolTip": "Enter a shortened complete name for the Encryption Key Vault. It must be globally unique and no more than 24 characters; do not paste the overlength generated name.",
+                      "visible": "[steps('operations').resources.deployEncryptionKeyVault]",
+                      "constraints": {
+                        "required": false,
+                        "validations": [
+                          {
+                            "isValid": "[or(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),steps('tagsAndNaming').encryptionKeyVaultName_checkNameAvailability.nameAvailable)]",
+                            "message": "[steps('tagsAndNaming').encryptionKeyVaultName_checkNameAvailability.message]"
+                          }
+                        ]
+                      }
+                    },
                 {
                   "name": "builderInfo",
                   "type": "Microsoft.Common.TextBlock",
@@ -1305,7 +1363,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "{loc} is resolved from the selected region at deployment time. {unique} is a 6-character subscription-scoped suffix always embedded in the purpose slot. Names longer than 24 characters are automatically truncated to 24 by the deployment. Underscores and dots in the delimiter are replaced with hyphens in Key Vault names."
+                    "text": "{loc} is resolved from the selected region at deployment time. {unique} is a 6-character subscription-scoped suffix embedded in the purpose slot. If a generated Key Vault name exceeds 24 characters, complete name overrides are required. Underscores and dots in the delimiter are replaced with hyphens in generated Key Vault names."
                   }
                 }
               ]
@@ -1373,6 +1431,8 @@
         "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBackupPrivateDnsZone, '')]",
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBlobPrivateDnsZone, '')]",
         "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureQueuePrivateDnsZone, '')]",
+        "secretsKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),'',steps('tagsAndNaming').naming.secretsKeyVaultNameOverride)]",
+        "encryptionKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),'',steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride)]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"
       }
