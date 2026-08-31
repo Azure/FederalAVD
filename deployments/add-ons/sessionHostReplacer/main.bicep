@@ -86,7 +86,7 @@ param appServicePlanNameOverride string = ''
 // security, encryption, and monitoring capabilities.
 // ================================================================================================
 
-@description('Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). If not provided, the function app will use its system-assigned managed identity.')
+@description('Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). The identity must be in the same Azure region as the Function App because Microsoft.Web enforces regional identity isolation. If not provided, the function app will use its system-assigned managed identity.')
 param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
@@ -146,6 +146,9 @@ param privateLinkScopeResourceId string = ''
 // These parameters control the behavior and execution logic of the session host replacer function,
 // including lifecycle policies, tagging strategies, device cleanup, and execution schedule.
 // ================================================================================================
+
+@description('Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted. Existing Function Apps change versions only when this template is redeployed with a different value.')
+param powerShellVersion string = '7.4'
 
 @description('Required. The resource ID of the Key Vault containing session host credential secrets (VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, DomainJoinUserPrincipalName).')
 param credentialsKeyVaultResourceId string
@@ -1002,6 +1005,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
+    powerShellVersion: powerShellVersion
     serverFarmId: !empty(existingAppServicePlanResourceId) ? existingAppServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
     storageAccountName: storageAccountName
     storageAccountRoleDefinitionIds: [

@@ -37,6 +37,9 @@ param functionAppName string
 @description('Optional. Additional app settings merged into the default Function App configuration.')
 param functionAppAppSettings array
 
+@description('Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted.')
+param powerShellVersion string = '7.4'
+
 @description('Optional. Existing user-assigned identity resource ID for the Function App. When omitted, system-assigned identity is used.')
 param functionAppUserAssignedIdentityResourceId string = ''
 
@@ -100,9 +103,13 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
 var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
 var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
-var storageIpRules = [for ip in effectivePermittedIPs: { value: ip, action: 'Allow' }]
+var storagePermittedIPs = [for ip in effectivePermittedIPs: endsWith(trim(ip), '/32')
+  ? replace(trim(ip), '/32', '')
+  : trim(ip)]
+var functionAppPermittedIPs = [for ip in effectivePermittedIPs: contains(trim(ip), '/') ? trim(ip) : '${trim(ip)}/32']
+var storageIpRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
 
-var permittedIPRestrictions = [for (ip, i) in effectivePermittedIPs: {
+var permittedIPRestrictions = [for (ip, i) in functionAppPermittedIPs: {
   ipAddress: ip
   action: 'Allow'
   priority: 100 + i
@@ -373,7 +380,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   properties: {
     clientAffinityEnabled: false
     httpsOnly: true
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: (privateEndpoint && empty(effectivePermittedIPs)) ? 'Disabled' : 'Enabled'
     serverFarmId: serverFarmId
     siteConfig: {
       alwaysOn: true
@@ -470,7 +477,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       functionAppScaleLimit: 200
       minimumElasticInstanceCount: 0
       netFrameworkVersion: 'v8.0'
-      powerShellVersion: '7.5'
+      powerShellVersion: powerShellVersion
       ipSecurityRestrictions: resolvedIpSecurityRestrictions
       ipSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : null
       scmIpSecurityRestrictions: (privateEndpoint || !empty(effectivePermittedIPs)) ? [
@@ -568,10 +575,10 @@ var functionAppPrincipalId = !empty(functionAppUserAssignedIdentityResourceId)
   ? functionAppUAI!.properties.principalId
   : functionApp.identity.principalId
 
-// Storage account role assignments - always include Storage Blob Data Contributor and Storage Queue Data Contributor, optionally add others
+// Storage account role assignments - always include roles required by AzureWebJobsStorage, optionally add others
 var storageAccountRoleDefinitions = union(
   [
-    'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor (always required)
+    'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' // Storage Blob Data Owner
     '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
   ],
   storageAccountRoleDefinitionIds

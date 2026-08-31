@@ -218,6 +218,7 @@ The Session Host Replacer Function App supports two identity options:
 ##### Option B: User-Assigned Managed Identity
 
 - **Pre-created** before deployment
+- **Regional requirement**: Must be in the same Azure region as the Function App because Microsoft.Web cannot attach a user-assigned identity across regional isolation boundaries
 - **Required for**: Device cleanup with hostname reuse in DeleteFirst mode (Graph permissions must exist before first run)
 - **Best for**: Environments with a large number of host pools
 - **Benefit**: Graph permissions can be granted before deployment
@@ -384,13 +385,35 @@ The deployment creates or uses an existing Function App:
 
 ## Deployment
 
-### Quick Deploy
+### Template Spec Portal Form (First Deployment)
+
+From the repository root, publish the add-on Template Specs:
+
+```powershell
+.\tools\New-TemplateSpecs.ps1 `
+  -ResourceGroupName 'rg-avd-operations-p-eus2' `
+  -Location 'eastus2' `
+  -createSharedServices $false `
+  -createNetwork $false `
+  -createImageManagement $false `
+  -createCustomImage $false `
+  -createHostPool $false `
+  -createAutomatedHostPool $false `
+  -CreateAddOns $true
+```
+
+In the Azure portal, open **Template Specs**, select **AVD Session Host Replacer**, and choose
+**Deploy**. On **Review + create**, select **Download template and parameters** before submitting,
+then retain the working parameter file for subsequent PowerShell or CI/CD deployments.
+
+### Blue Button (Azure Commercial / Government Alternative)
 
 Click the button for your target cloud to open the deployment UI in Azure Portal:
 
 [![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2FuiFormDefinition.json)
 
-**⚠️ Note:** For Air-Gapped clouds (Secret/Top Secret), use Template Specs or PowerShell deployment methods. See [deployment-guide.md](deployment-guide.md) for detailed deployment instructions.
+**⚠️ Note:** Blue Button is unavailable in air-gapped clouds. Use the Template Spec form above.
+See [deployment-guide.md](deployment-guide.md) for update procedures after the initial deployment.
 
 ### Brownfield Deployments
 
@@ -450,24 +473,35 @@ For more information, see [Template Specs | Microsoft Learn](https://learn.micro
    Set-AzContext -Subscription <subscriptionID>
    ```
 
-3. Navigate to the tools folder and execute the script with the add-ons flag:
+3. From the repository root, execute the script with the core Template Specs disabled:
 
    ```powershell
-   cd tools
-   .\New-TemplateSpecs.ps1 -ResourceGroupName <resource-group-name> -Location <location> -CreateAddOns $true
+   .\tools\New-TemplateSpecs.ps1 `
+     -ResourceGroupName <resource-group-name> `
+     -Location <location> `
+     -createCustomImage $false `
+     -createHostPool $false `
+     -CreateAddOns $true
    ```
 
    Example:
 
    ```powershell
-   .\New-TemplateSpecs.ps1 -ResourceGroupName "rg-avd-management-use2" -Location "eastus2" -CreateAddOns $true
+   .\tools\New-TemplateSpecs.ps1 `
+     -ResourceGroupName 'rg-avd-management-use2' `
+     -Location 'eastus2' `
+     -createCustomImage $false `
+     -createHostPool $false `
+     -CreateAddOns $true
    ```
 
-This creates a template spec named **sessionHostReplacer** with a custom UI form in the specified resource group that you can deploy directly from the portal.
+This publishes **AVD Session Host Replacer** with its custom UI form in the specified resource
+group. Publishing does not deploy the add-on.
 
 ### 2. Deploy Infrastructure
 
-You can deploy the Session Host Replacer using either the Azure Portal with the custom UI form (recommended) or PowerShell.
+Use the published Template Spec portal form for the first deployment. Use PowerShell with the
+exported parameter file for subsequent deployments.
 
 #### Option 1: Deploy via Azure Portal (Recommended)
 
@@ -541,7 +575,8 @@ $params = @{
     resourceGroupName = "rg-avd-management-use2"
     location = "eastus2"
     hostPoolResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.DesktopVirtualization/hostpools/vdpool-prod"
-    # Optional: Only required if device cleanup is needed from first run (DeleteFirst mode)
+    # Optional: Only required if device cleanup is needed from first run (DeleteFirst mode).
+    # The identity must be in the same Azure region as the Function App.
     sessionHostReplacerUserAssignedIdentityResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-sessionhostreplacer"
     # ... other parameters
 }
@@ -1329,6 +1364,17 @@ METRICS: NewHosts: 10/10 (100%) Available
 - Investigate when multiple runs show low availability (image/config issues)
 
 ## Configuration
+
+### Function App Runtime
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `powerShellVersion` | `7.4` | PowerShell worker version used by the Function App. The Template Spec form attempts to discover GA and preview versions available in the selected region. If the Portal returns no runtime metadata, the form offers PowerShell 7.6 preview and 7.4 as fallback choices. |
+
+The deployed Function App remains pinned to the selected version. Publishing a newer Template Spec
+does not change an existing app. To upgrade, redeploy the Session Host Replacer and explicitly select
+the newer supported version. This allows the same template to create new apps on the current regional
+default while existing apps continue running their configured version until a planned upgrade.
 
 ### Replacement Mode Parameters
 
