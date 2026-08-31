@@ -118,6 +118,10 @@ inventories and parameter details for each step.
 
    Add `-SkipDownloadingNewSources` when the management workstation cannot reach the approved
    air-gapped software distribution endpoints.
+   To deploy selected packages after VM creation, verify that Compute Gallery VM Applications are
+   available in the target cloud and continue with the
+   [VM Application publishing guide](vm-applications.md). The publisher uses only pre-staged blobs,
+   managed identity, and the active cloud's storage endpoint suffix.
 7. **Build the custom image when required.** In the Custom Image Template Spec form, use the outputs from Image
    Management. On **Image Customizations**, set **Download Microsoft Sources from Web** to **No**
    (`downloadLatestMicrosoftContent = false`). Under **VDI Optimizations**, select **Air-gapped /

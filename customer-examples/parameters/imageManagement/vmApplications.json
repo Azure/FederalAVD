@@ -1,0 +1,24 @@
+{
+  "applications": [
+    {
+      "name": "Contoso-Agent",
+      "version": "1.0.0",
+      "packageBlob": "Contoso-Agent.zip",
+      "packageFileName": "Contoso-Agent.zip",
+      "supportedOSType": "Windows",
+      "description": "Example VM Application published from a FederalAVD artifact package.",
+      "install": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath '.\\Contoso-Agent.zip' -DestinationPath '.\\package' -Force; & '.\\package\\Install-ContosoAgent.ps1'\"",
+      "remove": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\\package\\Remove-ContosoAgent.ps1",
+      "update": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath '.\\Contoso-Agent.zip' -DestinationPath '.\\package' -Force; & '.\\package\\Update-ContosoAgent.ps1'\"",
+      "targetRegions": [
+        {
+          "name": "eastus2",
+          "regionalReplicaCount": 1,
+          "storageAccountType": "Standard_LRS"
+        }
+      ],
+      "excludeFromLatest": false,
+      "scriptBehaviorAfterReboot": "Rerun"
+    }
+  ]
+}

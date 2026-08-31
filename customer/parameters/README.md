@@ -83,6 +83,20 @@ Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
 
 Remove or comment out entries you do not need before running the script.
 
+## Optional VM Applications manifest
+
+To publish selected artifact ZIPs as Azure Compute Gallery VM Applications, copy and customize the
+example manifest:
+
+```powershell
+Copy-Item -Path "customer-examples\parameters\imageManagement\vmApplications.json" `
+          -Destination "customer\parameters\imageManagement\" -Force
+```
+
+Validate and publish it with `deployments/Publish-VMApplications.ps1`. See the
+[VM Application publishing guide](../../docs/vm-applications.md) for lifecycle command,
+versioning, managed identity, and air-gapped guidance.
+
 ## Further reading
 
 - [Parameters Reference](../../docs/parameters.md)

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "1917326709659686651"
+      "templateHash": "16588746586261344336"
     }
   },
   "functions": [
@@ -906,16 +906,18 @@
           },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/galleries'), createObject())]"
-          }
+          },
+          "userAssignedIdentityResourceIds": "[if(parameters('deployArtifactsStorageAccount'), createObject('value', createArray(reference('managedIdentity').outputs.resourceId.value)), createObject('value', createArray()))]"
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "4445171758737744691"
+              "templateHash": "17090935560304612242"
             }
           },
           "parameters": {
@@ -946,20 +948,34 @@
               "metadata": {
                 "description": "Optional. Description of the Azure Compute Gallery."
               }
+            },
+            "userAssignedIdentityResourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. User-assigned managed identity resource IDs attached to the Azure Compute Gallery."
+              }
             }
           },
-          "resources": [
-            {
+          "variables": {
+            "userAssignedIdentities": "[reduce(parameters('userAssignedIdentityResourceIds'), createObject(), lambda('current', 'resourceId', union(lambdaVariables('current'), createObject(format('{0}', lambdaVariables('resourceId')), createObject()))))]"
+          },
+          "resources": {
+            "gallery": {
               "type": "Microsoft.Compute/galleries",
-              "apiVersion": "2022-03-03",
+              "apiVersion": "2024-03-03",
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": "[if(not(empty(parameters('userAssignedIdentityResourceIds'))), createObject('type', 'UserAssigned', 'userAssignedIdentities', variables('userAssignedIdentities')), null())]",
               "properties": {
                 "description": "[parameters('description')]"
               }
             }
-          ],
+          },
           "outputs": {
             "resourceId": {
               "type": "string",
@@ -973,6 +989,7 @@
         }
       },
       "dependsOn": [
+        "managedIdentity",
         "resourceGroup"
       ]
     },
@@ -5893,11 +5910,11 @@
         "assetsStorageAccount"
       ]
     },
-    "assetsStorageBlobReaderAssignment": {
+    "assetsStorageBlobContributorAssignment": {
       "condition": "[parameters('deployArtifactsStorageAccount')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('assetsStorageBlobReaderAssignment-{0}', uniqueString('assetsStorageBlobReaderAssignment', deployment().name))]",
+      "name": "[format('assetsStorageBlobContributorAssignment-{0}', uniqueString('assetsStorageBlobContributorAssignment', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -5912,7 +5929,7 @@
             "value": [
               {
                 "principalId": "[reference('managedIdentity').outputs.principalId.value]",
-                "roleDefinitionId": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
+                "roleDefinitionId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
                 "principalType": "ServicePrincipal"
               }
             ]

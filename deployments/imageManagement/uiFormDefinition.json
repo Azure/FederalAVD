@@ -55,7 +55,7 @@
               "type": "Microsoft.Common.CheckBox",
               "label": "Deploy Artifacts Storage Account",
               "defaultValue": true,
-              "toolTip": "Deploy the artifacts storage account and managed identity. The managed identity is granted Storage Blob Data Reader. Disable only when all image customizations use fully-qualified public URIs or an external storage account."
+              "toolTip": "Deploy the artifacts storage account and managed identity. The identity is granted Storage Blob Data Contributor and attached to the Compute Gallery for managed-identity-backed VM Application publishing. Disable only when all image customizations use fully-qualified public URIs or external storage."
             },
             {
               "name": "deployBuildLogsStorageAccount",

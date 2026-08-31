@@ -348,6 +348,7 @@ module imageGallery '../shared/modules/resourceModules/compute/galleries/deploy.
     name: galleryName
     location: location
     tags: tags[?'Microsoft.Compute/galleries'] ?? {}
+    userAssignedIdentityResourceIds: deployArtifactsStorageAccount ? [managedIdentity!.outputs.resourceId] : []
   }
   dependsOn: [resourceGroup]
 }
@@ -533,14 +534,14 @@ module assetsStoragePrivateEndpoint '../shared/modules/resourceModules/network/p
   }
 }
 
-module assetsStorageBlobReaderAssignment '../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
+module assetsStorageBlobContributorAssignment '../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: artifactsStorageAccountName
     assignments: [
       {
         principalId: managedIdentity!.outputs.principalId
-        roleDefinitionId: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1' // Storage Blob Data Reader
+        roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
         principalType: 'ServicePrincipal'
       }
     ]
