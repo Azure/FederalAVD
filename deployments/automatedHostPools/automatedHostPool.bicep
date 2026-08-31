@@ -763,6 +763,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
     sessionHostResourceGroupName: naming.outputs.resourceGroupHosts
     subnetResourceId: virtualMachineSubnetResourceId
     customImageResourceId: customImageResourceId
+    sessionHostVmApplications: sessionHostVmApplications
     credentialsKeyVaultResourceId: credentialsKeyVaultConfigurationIsValid ? credentialsKeyVaultResourceId : credentialsKeyVaultResourceId
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     avdServicePrincipalObjectId: deployDynamicScalingPlan ? avdServicePrincipalObjectId : ''

@@ -1,6 +1,9 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $policyPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
+$entryTemplatePath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$controlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
+$permissionsPath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\permissions.bicep'
 
 Describe 'Automated host-pool VM Application assignments' {
     BeforeAll {
@@ -9,10 +12,15 @@ Describe 'Automated host-pool VM Application assignments' {
         $controlPlaneStep = $form.view.properties.steps | Where-Object { $_.name -eq 'controlPlane' }
         $hostsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'hosts' }
         $sessionHostLocation = $hostsStep.elements | Where-Object { $_.name -eq 'location' }
+        $resourceSkusApi = $hostsStep.elements | Where-Object { $_.name -eq 'resourceSkusApi' }
+        $availability = $hostsStep.elements | Where-Object { $_.name -eq 'availability' }
         $vmApplications = $hostsStep.elements | Where-Object { $_.name -eq 'vmApplications' }
         $applicationsApi = $vmApplications.elements | Where-Object { $_.name -eq 'applicationsApi' }
         $applicationsGrid = $vmApplications.elements | Where-Object { $_.name -eq 'applications' }
         $policySource = Get-Content -LiteralPath $policyPath -Raw
+        $entryTemplateSource = Get-Content -LiteralPath $entryTemplatePath -Raw
+        $controlPlaneSource = Get-Content -LiteralPath $controlPlanePath -Raw
+        $permissionsSource = Get-Content -LiteralPath $permissionsPath -Raw
     }
 
     It 'uses one deployment subscription selected on Basics' {
@@ -26,6 +34,17 @@ Describe 'Automated host-pool VM Application assignments' {
         @($controlPlaneStep.elements | Where-Object { $_.name -eq 'scope' }).Count | Should Be 0
         $sessionHostLocation.defaultValue | Should Be "[steps('controlPlane').controlPlaneLocation.displayName]"
         (Get-Content -LiteralPath $formPath -Raw) | Should Not Match "steps\('controlPlane'\)\.scope\.controlPlaneLocation"
+    }
+
+    It 'excludes subscription-restricted zones from availability choices' {
+        $resourceSkusApi.request.transforms.vmSizes | Should Match 'zones:locationInfo\[0\]\.zones'
+        $resourceSkusApi.request.transforms.vmSizes | Should Match "restrictedZones:restrictions\[\?type == 'Zone'\]\.restrictionInfo\.zones"
+        $availabilityOption = $availability.elements | Where-Object { $_.name -eq 'option' }
+        $availabilityZones = $availability.elements | Where-Object { $_.name -eq 'availabilityZones' }
+        $availabilityOption.defaultValue | Should Match 'sku\.restrictedZones'
+        $availabilityOption.constraints.allowedValues | Should Match 'sku\.restrictedZones'
+        $availabilityZones.defaultValue | Should Match 'sku\.restrictedZones'
+        $availabilityZones.constraints.allowedValues | Should Match 'sku\.restrictedZones'
     }
 
     It 'offers latest Gallery application version references from ARM' {
@@ -63,5 +82,16 @@ Describe 'Automated host-pool VM Application assignments' {
         $policySource | Should Match "contains\(toLower\(application.packageReferenceId\), '/versions/'\)"
         $policySource | Should Match "lastIndexOf\(toLower\(application.packageReferenceId\), '/versions/'\)"
         $policySource | Should Match 'cannot contain more than one version of the same application'
+    }
+
+    It 'grants the host-pool identity gallery-scoped Reader access before host creation' {
+        $entryTemplateSource | Should Match 'sessionHostVmApplications: sessionHostVmApplications'
+        $controlPlaneSource | Should Match 'sessionHostVmApplications: sessionHostVmApplications'
+        $permissionsSource | Should Match 'var vmApplicationGalleryResourceIds = union\(map\('
+        $permissionsSource | Should Match "lastIndexOf\(toLower\(application.packageReferenceId\), '/applications/'\)"
+        $permissionsSource | Should Match "var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'"
+        $permissionsSource | Should Match "module vmApplicationGalleryReaderRoles '.+/compute/galleries/roleAssignment.bicep'"
+        $permissionsSource | Should Match "galleryName: last\(split\(galleryResourceId, '/'\)\)"
+        $controlPlaneSource | Should Match 'module sessionHostConfiguration[\s\S]+dependsOn: \[hostPoolPermissions\]'
     }
 }

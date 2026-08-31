@@ -28,6 +28,10 @@ For an automated host pool, add the returned `packageReferenceId` values to the 
 assignment owns the complete `applicationProfile.galleryApplications` array. New hosts receive the
 declaration during creation. Assign either a specific semantic version for a pinned rollout or an
 ID ending in `/versions/latest` to resolve the newest version not marked `excludeFromLatest`.
+The deployment grants the automated host-pool managed identity `Reader` on each referenced Compute
+Gallery so Azure can authorize linked application-version reads during VM creation. When a gallery
+is in another subscription, the deploying identity must be able to create role assignments at that
+gallery scope.
 Changed assignments and newly published versions selected through `latest` require an intentional
 policy remediation task or VM update for existing hosts; publication alone does not update them.
 Installation is asynchronous, so application readiness must be part of the pool's admission and

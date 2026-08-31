@@ -1,3 +1,5 @@
+import { vmApplicationAssignmentType } from '../policy/modules/policy/bicep/vmApplicationTypes.bicep'
+
 targetScope = 'subscription'
 
 @description('Required. Automated host-pool name.')
@@ -15,6 +17,9 @@ param subnetResourceId string
 @description('Optional. Resource ID of the selected Compute Gallery image version.')
 param customImageResourceId string = ''
 
+@description('Optional. Compute Gallery application versions assigned to automated session hosts.')
+param sessionHostVmApplications vmApplicationAssignmentType[] = []
+
 @description('Required. Resource ID of the credential Key Vault.')
 param credentialsKeyVaultResourceId string
 
@@ -29,6 +34,12 @@ param principalId string
 
 var desktopVirtualizationVirtualMachineContributorRoleId = 'a959dbd1-f747-45e3-8ba6-dd80f235f97c'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+var vmApplicationGalleryResourceIds = union(map(sessionHostVmApplications, application => substring(
+  application.packageReferenceId,
+  0,
+  lastIndexOf(toLower(application.packageReferenceId), '/applications/')
+)), [])
 
 module sessionHostResourceGroupRole '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
@@ -59,6 +70,21 @@ module imageResourceGroupRole '../../shared/modules/resourceModules/authorizatio
     assignmentDescription: 'Allows Azure Virtual Desktop to read the selected Compute Gallery image.'
   }
 }
+
+module vmApplicationGalleryReaderRoles '../../shared/modules/resourceModules/compute/galleries/roleAssignment.bicep' = [for galleryResourceId in vmApplicationGalleryResourceIds: {
+  scope: resourceGroup(split(galleryResourceId, '/')[2], split(galleryResourceId, '/')[4])
+  params: {
+    galleryName: last(split(galleryResourceId, '/'))!
+    assignments: [
+      {
+        principalId: principalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: readerRoleId
+        description: 'Allows the automated host pool identity to read VM Applications linked from session host VM requests.'
+      }
+    ]
+  }
+}]
 
 module credentialVaultRole '../../shared/modules/resourceModules/keyVault/vaults/roleAssignment.bicep' = {
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])

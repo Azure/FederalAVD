@@ -781,7 +781,7 @@
 								"method": "GET",
 								"path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('hosts').location.name, decodeUriComponent('%27'))]",
 								"transforms": {
-									"vmSizes": "value[?resourceType == 'virtualMachines'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])]), ephemeralOsDiskSupported:capabilities[?name == 'EphemeralOSDiskSupported'].value | [0], ephemeralOsDiskPlacements:capabilities[?name == 'SupportedEphemeralOSDiskPlacements'].value | [0], cachedDiskBytes:capabilities[?name == 'CachedDiskBytes'].value | [0], maxResourceVolumeMB:capabilities[?name == 'MaxResourceVolumeMB'].value | [0]}",
+									"vmSizes": "value[?resourceType == 'virtualMachines'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])]), ephemeralOsDiskSupported:capabilities[?name == 'EphemeralOSDiskSupported'].value | [0], ephemeralOsDiskPlacements:capabilities[?name == 'SupportedEphemeralOSDiskPlacements'].value | [0], cachedDiskBytes:capabilities[?name == 'CachedDiskBytes'].value | [0], maxResourceVolumeMB:capabilities[?name == 'MaxResourceVolumeMB'].value | [0], zones:locationInfo[0].zones, restrictedZones:restrictions[?type == 'Zone'].restrictionInfo.zones | [0]}",
 									"deploymentVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'vCPUs'].value | [0] == '2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
 									"deploymentVMSizesNames": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'vCPUs'].value | [0] == '2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].name"
 								}
@@ -1545,23 +1545,23 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Availability Options",
 									"toolTip": "Select the redundancy and resiliency for the session hosts.",
-									"defaultValue": "[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => equals(sku.name, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones))), 'No infrastructure redundancy required', 'Availability Zones')]",
+									"defaultValue": "[if(empty(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone)))), 'No infrastructure redundancy required', 'Availability Zones')]",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => equals(sku.name, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
+										"allowedValues": "[if(empty(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone)))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
 									}
 								},
 								{
 									"name": "availabilityZones",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Select Availability Zones",
-									"defaultValue": "[map(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => equals(sku.name, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), (zone) => concat('Zone ', zone))]",
+									"defaultValue": "[map(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone))), (zone) => concat('Zone ', zone))]",
 									"multiselect": true,
 									"selectAll": true,
 									"toolTip": "Select from the availability zones supported by the chosen VM size in the session-host region.",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[map(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => equals(sku.name, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), (zone) => parse(concat('{\"label\":\"Zone ', zone, '\",\"value\":', zone, '}')))]"
+										"allowedValues": "[map(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone))), (zone) => parse(concat('{\"label\":\"Zone ', zone, '\",\"value\":', zone, '}')))]"
 									},
 									"visible": "[equals(steps('hosts').availability.option, 'AvailabilityZones')]"
 								}
