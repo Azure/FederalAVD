@@ -196,6 +196,42 @@ This step has **no Azure deployment outputs** — it only writes blobs to storag
 
 ---
 
+## Optional Step 3A: Publish VM Applications
+
+**Script:** `deployments/Publish-VMApplications.ps1`
+
+**When required:** After uploading an application artifact that should be versioned and assigned
+independently from the session-host image.
+
+`Update-ImageArtifacts.ps1` prepares and uploads ZIP packages. It does not publish VM Applications.
+Publication is a separate, explicit release gate driven by
+`customer/parameters/imageManagement/vmApplications.json`:
+
+```powershell
+$publishedApplications = .\Publish-VMApplications.ps1 `
+  -ManifestPath '..\customer\parameters\imageManagement\vmApplications.json' `
+  -GalleryResourceId $computeGalleryResourceId `
+  -StorageAccountResourceId $artifactsStorageAccountResourceId
+```
+
+The publisher creates only the application definitions and immutable versions declared in the
+manifest, waits for target-region replication, and returns each `packageReferenceId`. A pipeline
+can validate the manifest first with `-ValidateOnly`.
+
+For an automated host pool, copy the returned version IDs into the ordered
+`sessionHostVmApplications` parameter and redeploy the automated host pool. Its policy assignment
+owns the complete VM Application array for session hosts in the dedicated resource group. New
+hosts receive the declaration during creation. After an assignment change, create an intentional
+Azure Policy remediation task or update existing VMs; publication alone does not install software.
+
+For standard host pools, use direct VM assignment or customer-owned automation. FederalAVD does
+not apply the automated-host-pool assignment policy to standard hosts.
+
+See [Publish Artifact Packages as VM Applications](vm-applications.md) for package eligibility,
+lifecycle commands, versioning, and air-gapped publication.
+
+---
+
 ## Step 4: Build Custom Image
 
 **Script:** `deployments/Invoke-ImageBuilds.ps1`  
@@ -288,7 +324,7 @@ Example PowerShell invocation:
 
 Because there is no single orchestration script today, outputs must be captured and passed manually between steps. Common approaches:
 
-**Option A — Save outputs to variables in a single session**
+### Option A - Save Outputs to Variables in a Single Session
 
 ```powershell
 # Step 2
@@ -303,7 +339,7 @@ $identityId  = $imgMgmt.Outputs.managedIdentityResourceId.Value
 # Step 4 — pre-populate these values in your imageBuild parameter file, or pass inline
 ```
 
-**Option B — Capture outputs to a JSON file between steps**
+### Option B - Capture Outputs to a JSON File Between Steps
 
 ```powershell
 $imgMgmt.Outputs | ConvertTo-Json | Set-Content ".\imageManagement.outputs.json"
@@ -312,7 +348,8 @@ $outputs = Get-Content ".\imageManagement.outputs.json" | ConvertFrom-Json
 $galleryId = $outputs.computeGalleryResourceId.Value
 ```
 
-**Option C — Store outputs in an Azure Key Vault or App Configuration**  
+### Option C - Store Outputs in Azure Key Vault or App Configuration
+
 Suitable for pipeline automation where steps run in separate jobs with no shared memory.
 
 **Option D — Read outputs from deployment history**  
@@ -374,10 +411,12 @@ flowchart LR
 The Session Host Replacer is an Azure Function add-on that monitors the Compute Gallery and manages the entire replacement cycle without human intervention.
 
 **What triggers a new replacement cycle:**
+
 - A new image version is published to the gallery (i.e., Step 2 above completes)
 - The function detects that running hosts have an image version older than the gallery's latest
 
 **What it handles automatically:**
+
 - Marks outdated hosts as drain mode (no new sessions)
 - Waits for configurable grace period before removing hosts with active sessions
 - Deploys new hosts using the host pool's current configuration + latest gallery image
@@ -420,6 +459,31 @@ A typical image refresh pipeline stage (after initial setup) runs only Steps 3�
 
 AVD Shared Services (Step 1), Image Management infrastructure (Step 2), and Host Pool (Step 5) are deployed once and not part of the recurring pipeline unless infrastructure is changing.
 
+## Ongoing VM Application Lifecycle
+
+Use this path for independently versioned applications that do not need to be baked into the image:
+
+```mermaid
+flowchart LR
+  A["1. Update application artifact"] -->
+  B["2. Package and upload ZIP"] -->
+  C["3. Publish immutable VM Application version"] -->
+  D["4. Update sessionHostVmApplications"] -->
+  E["5. Redeploy assignment policy"] -->
+  F["6. Remediate existing hosts intentionally"]
+  E --> G["Future hosts receive assignment automatically"]
+```
+
+Package creation, Gallery publication, and fleet assignment are intentionally separate. This
+prevents every uploaded script or configuration artifact from becoming deployable software and
+keeps application release approval independent from host-pool infrastructure deployment.
+
+When a selected application version changes, Azure VM Applications uses the published lifecycle
+commands. If the application version has no explicit update command, Azure runs the old version's
+remove command followed by the new version's install command. Keep policy and configuration
+artifacts, security onboarding, OS servicing, and shared host dependencies in their existing image,
+customization, or endpoint-management workflows.
+
 ---
 
 ## Related Resources
@@ -427,6 +491,7 @@ AVD Shared Services (Step 1), Image Management infrastructure (Step 2), and Host
 - [Quick Start Guide](quick-start.md) — Step-by-step walkthrough with portal options
 - [imageManagement README](../deployments/imageManagement/README.md) — Infrastructure parameters
 - [Update-ImageArtifacts Script](update-image-artifacts.md) — Artifact upload options
+- [VM Application Publishing Guide](vm-applications.md) — Explicit publication and assignment handoff
 - [Image Build Guide](image-build.md) — Image build parameters and monitoring
 - [Host Pool Deployment Guide](hostpool-deployment.md) — Full host pool parameter reference
 - [Air-Gapped Cloud Guide](air-gapped-clouds.md) — Secret/Top Secret cloud considerations

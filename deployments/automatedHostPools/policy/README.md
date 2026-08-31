@@ -195,8 +195,8 @@ size remains enforceable independently.
 | DCE association | Reference the association policy a second time in optional DCE mode | Custom monitoring initiative and association policy definition | Implemented |
 | Ownership tags | Inherit `cm-resource-parent` from the dedicated resource group | Built-in policy `cd3aa116-8754-49c9-a813-ad46512ece54` | Implemented |
 | FSLogix registry settings | Configure FSLogix conditionally within the unified session-host configuration Run Command | `configureFSLogix` and `fslogixConfiguration` | Implemented |
-| Private customizations | Union the artifact UAI into the existing VM identity map, then deploy Run Commands serially | `sessionHostCustomizations` | Implemented with input order preserved and resource-scoped Managed Identity Operator |
-| Compute Gallery VM Applications | Replace `applicationProfile.galleryApplications` with one authoritative ordered array through one resource-group-scoped `Modify` assignment | `sessionHostVmApplications` | Implemented; up to 25 existing versions |
+| Private customizations | Union the artifact UAI into the existing VM identity map, then deploy provisioning-time configuration or bootstrap Run Commands serially | `sessionHostCustomizations` | Implemented with input order preserved and resource-scoped Managed Identity Operator; not the preferred application delivery path |
+| Compute Gallery VM Applications | Replace `applicationProfile.galleryApplications` with one authoritative ordered array through one resource-group-scoped `Modify` assignment | `sessionHostVmApplications` | Preferred for independently installable applications; implemented for up to 25 specific or `latest` version references |
 | Disk Encryption Set | Create a key and DES or reuse an existing DES, then inject its resource ID into each VM creation request | `keyManagementDisks` | Implemented |
 | Managed-disk public access | Set `publicNetworkAccess: Disabled` and `networkAccessPolicy: DenyAll`; no Disk Access resource is used | `disableManagedDiskPublicNetworkAccess` | Implemented |
 
@@ -239,8 +239,9 @@ are explicit platform boundaries rather than silent policy gaps:
    They configure newly created hosts once and do not use version changes to target existing hosts.
    Because evaluation and remediation are asynchronous, pair critical profile, security,
    authentication, monitoring, or workload prerequisites with a readiness or access control that
-   prevents user access until the required state is verified. Noncritical agents and software that
-   tolerate delayed convergence remain appropriate customization candidates.
+   prevents user access until the required state is verified. Use VM Applications for independently
+   installable software with meaningful install and remove behavior. Reserve customizations for
+   configuration, bootstrap actions, and documented exceptions that tolerate delayed convergence.
 4. Customization artifacts must be reachable without public network access and authenticated by a
    managed identity. SAS tokens, storage keys, and embedded credentials are not permitted.
 5. The policy assignment identity deploys remediation resources; the artifact UAI retrieves private
@@ -285,18 +286,26 @@ optional `arguments` object shape as `sessionHostCustomizations` in the host poo
 add-on. Relative artifact names resolve against `artifactsContainerUri`; full HTTPS URIs are used as
 provided. The supplied array order is preserved with serial nested deployments.
 
+For automated host pools, private customizations are not the default application-management path.
+Publish lifecycle-capable software as Compute Gallery VM Applications and declare it through
+`sessionHostVmApplications`. Use private customizations only for configuration, bootstrap actions,
+or a documented application exception that cannot provide an independent install/remove lifecycle.
+
 The policy module does not create remediation tasks. Existing hosts that lack a successful named Run
 Command are reported as noncompliant during periodic evaluation but are not changed automatically.
 Use the `runCommandsOnVms` add-on for intentional updates or reruns on existing hosts.
 
 VM Applications are selected from versions already published in an Azure Compute Gallery; this
 module does not create galleries, application definitions, versions, or replication targets. Each
-version must be replicated to the VM region. Azure permits up to 25 applications per VM, only one
-version of an application, packages up to 2 GB each, and 50 GB total package size. The single
+reference can select a specific semantic version or end in `/versions/latest`. Azure resolves
+`latest` to the newest replicated version that is not marked `excludeFromLatest`. Azure permits up
+to 25 applications per VM, only one version of an application, packages up to 2 GB each, and 50 GB
+total package size. The single
 `avd-sh-vm-applications` assignment replaces the full ordered array, including additions, removals,
 version changes, and order changes. New hosts are modified during creation. For existing hosts,
-create an intentional Azure Policy remediation task or update the VM after changing the array;
-application installation and policy convergence are asynchronous.
+create an intentional Azure Policy remediation task or update the VM after changing the array or
+publishing a newer version selected through `latest`; publication alone does not update an existing
+host. Application installation and policy convergence are asynchronous.
 
 ## Authoritative References
 

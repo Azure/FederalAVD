@@ -59,6 +59,11 @@ The managed identity is automatically assigned:
 - Attached to the Compute Gallery for VM Application package ingestion without SAS tokens
 - Used by image build VMs to download artifacts and write customization logs without storage account keys
 
+Image Management also enables the storage account's `AzureServices` network bypass. Azure Compute
+Gallery is a trusted Microsoft service and requires this exception to ingest a private VM
+Application package through the Gallery identity. Storage remains deny-by-default when network
+restrictions are configured; the exception does not enable anonymous blob access or shared keys.
+
 ## Prerequisites
 
 ### Required Deployer Permissions

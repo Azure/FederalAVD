@@ -1,12 +1,14 @@
 ﻿[CmdletBinding()]
 param (
+    [ValidateSet('Install', 'Uninstall')]
+    [string]$DeploymentType = 'Install',
     [Parameter()]
     [bool]$DisableUpdates = $true,
     [int[]]$SuccessExitCodes = @(0, 3010)
 )
 #region Initialization
-$SoftwareName = 'Google Chrome'
-$Script:Name = 'Install-GoogleChromeEnterprise'
+$SoftwareName = 'Amazon WorkSpaces'
+$Script:Name = 'Deploy-AmazonWorkspacesClient'
 #endregion
 
 #region Supporting Functions
@@ -118,6 +120,35 @@ function Wait-MsiexecIdle {
     }
 }
 
+function Remove-AmazonWorkSpacesClient {
+    param ([int]$TimeoutMs = 600000)
+    $registryPaths = @(
+        'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )
+    $matches = @(
+        foreach ($registryPath in $registryPaths) {
+            if (Test-Path -LiteralPath $registryPath) {
+                Get-ChildItem -LiteralPath $registryPath -ErrorAction SilentlyContinue | ForEach-Object {
+                    $application = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                    if ($application.DisplayName -like 'Amazon WorkSpaces*' -and
+                        $application.Publisher -like 'Amazon Web Services*' -and
+                        $_.PSChildName -match '^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$') {
+                        [pscustomobject]@{ DisplayName = $application.DisplayName; ProductCode = $_.PSChildName }
+                    }
+                }
+            }
+        }
+    )
+    if (-not $matches) { Write-Log -Message "No MSI installation of '$SoftwareName' was found."; return }
+    if ($matches.Count -gt 1) { throw "Multiple Amazon WorkSpaces MSI installations matched: $(($matches.DisplayName) -join ', ')" }
+    Write-Log -Message "Removing '$($matches[0].DisplayName)' with ProductCode '$($matches[0].ProductCode)'."
+    Wait-MsiexecIdle
+    $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x $($matches[0].ProductCode) /qn /norestart" -PassThru
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "'$SoftwareName' uninstaller timed out." }
+    if ($process.ExitCode -notin $SuccessExitCodes) { throw "'$SoftwareName' uninstaller failed with exit code $($process.ExitCode)." }
+}
+
 #endregion
 
 ## MAIN
@@ -128,31 +159,25 @@ New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 
-$PathMSI = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: 'msiexec /i `"$PathMSI`" /qn'."
-Wait-MsiexecIdle
 $InstallerTimeoutMs = 600000 # 10 minutes
-$Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /qn" -PassThru
-if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
-    $Installer.Kill()
-    Write-Log -Category Error -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
-    exit 1
-}
-elseif ($Installer.ExitCode -in $SuccessExitCodes) {
-    if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -message "'$SoftwareName' installed successfully. A reboot is required." }
-    else { Write-Log -Category Info -message "'$SoftwareName' installed successfully." }
+if ($DeploymentType -eq 'Uninstall') {
+    Remove-AmazonWorkSpacesClient -TimeoutMs $InstallerTimeoutMs
 }
 else {
-    Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)."
-    exit $Installer.ExitCode
+    $InstallerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.msi' -File)
+    if ($InstallerFiles.Count -eq 0) { throw "No MSI installer found for '$SoftwareName' in '$PSScriptRoot'." }
+    if ($InstallerFiles.Count -gt 1) { throw "Expected one MSI installer for '$SoftwareName', but found: $($InstallerFiles.Name -join ', ')" }
+    $PathMSI = $InstallerFiles[0].FullName
+    Write-Log -Message "Installing '$SoftwareName' via cmdline: 'msiexec /i `"$PathMSI`" /qn /norestart ALLUSERS=1'."
+    Wait-MsiexecIdle
+    $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /qn /norestart ALLUSERS=1" -PassThru
+    if (-not $Installer.WaitForExit($InstallerTimeoutMs)) { $Installer.Kill(); throw "'$SoftwareName' installer timed out." }
+    if ($Installer.ExitCode -notin $SuccessExitCodes) { throw "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)." }
+    if ($Installer.ExitCode -eq 3010) { Write-Log -Message "'$SoftwareName' installed successfully. A reboot is required." }
+    else { Write-Log -Message "'$SoftwareName' installed successfully." }
+    if ($DisableUpdates) {
+        Set-RegistryValue -Name 'clientUpgradeDisabled' -Path 'HKLM:\SOFTWARE\WOW6432Node\Amazon\Amazon WorkSpaces Client' -PropertyType 'STRING' -Value 1
+    }
 }
-if ($DisableUpdates) {
-    Set-RegistryValue -Name "UpdateDefault" -Path "HKLM:\SOFTWARE\Policies\Google\Update" -PropertyType "DWORD" -Value 0
-    Set-RegistryValue -Name "DisableAutoUpdateChecksCheckboxValue" -Path "HKLM:\SOFTWARE\Policies\Google\Update" -PropertyType "DWORD" -Value 1
-    Set-RegistryValue -Name "AutoUpdateCheckPeriodMinutes" -Path "HKLM:\SOFTWARE\Policies\Google\Update" -PropertyType "DWORD" -Value 0
-    Set-RegistryValue -Name "UpdateDefault" -Path "HKLM:\SOFTWARE\Wow6432Node\Google\Update" -PropertyType "DWORD" -Value 0
-    Set-RegistryValue -Name "DisableAutoUpdateChecksCheckboxValue" -Path "HKLM:\SOFTWARE\Wow6432Node\Google\Update" -PropertyType "DWORD" -Value 1
-    Set-RegistryValue -Name "AutoUpdateCheckPeriodMinutes" -Path "HKLM:\SOFTWARE\Wow6432Node\Google\Update" -PropertyType "DWORD" -Value 0
-}    
 
-Write-Log -Category Info -message "Completed '$SoftwareName' Installation."
+Write-Log -Category Info -message "Completed '$SoftwareName' $DeploymentType."

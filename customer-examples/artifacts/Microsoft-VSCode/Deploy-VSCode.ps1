@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Installs Visual Studio Code silently and optionally disables automatic updates.
+    Installs or removes Visual Studio Code silently.
 
 .DESCRIPTION
     Installs the Visual Studio Code executable found in the same directory as this
@@ -15,24 +15,26 @@
     updates. Defaults to $false.
 
 .NOTES
-    - The installer executable (.exe) must be present in the same directory as
-      this script. The first .exe file found is used.
-    - Logs are written to C:\Windows\Logs\Install_VSCode-<datetime>.log.
+        - Exactly one .exe installer must be present in the same directory as this script.
+        - Logs are written to C:\Windows\Logs\Deploy-VSCode-<datetime>.log.
     - Designed to run silently in a SYSTEM context during an image build.
 
 .EXAMPLE
     # Install VS Code and allow automatic updates (default)
-    .\Install_VSCode.ps1
+    .\Deploy-VSCode.ps1 -DisableUpdates $false
 
 .EXAMPLE
-    # Install VS Code and disable automatic updates
-    .\Install_VSCode.ps1 -DisableUpdates $true
+    # Remove the machine-wide VS Code installation
+    .\Deploy-VSCode.ps1 -DeploymentType Uninstall
 #>
 [CmdletBinding()]
 param (
+    [ValidateSet('Install', 'Uninstall')]
+    [string]$DeploymentType = 'Install',
     [Parameter()]
     [bool]
-    $DisableUpdates = $true
+    $DisableUpdates = $true,
+    [int[]]$SuccessExitCodes = @(0, 3010)
 )
 #region functions
 Function Write-Log {
@@ -154,103 +156,43 @@ function Wait-MsiexecIdle {
 
 #region Initialization
 $Script:Name = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
-$DownloadUrl = 'https://go.microsoft.com/fwlink/?linkid=852157'
 New-Log 'C:\Windows\Logs'
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 #endregion
 
-$DownloadedInstaller = $null
-
-try {
-    #region Locate or download installer
-    $installerFiles = @(Get-ChildItem -Path $PSScriptRoot -File -Filter '*.exe' -ErrorAction Stop | Sort-Object LastWriteTime -Descending)
-    if ($installerFiles.Count -gt 0) {
-        $VSCodeExe = $installerFiles[0].FullName
-        Write-Log -Category Info -Message "Found local installer: '$VSCodeExe'."
+$ProcessTimeoutMs = 300000
+if ($DeploymentType -eq 'Uninstall') {
+    $UninstallerPath = Join-Path -Path $Env:ProgramFiles -ChildPath 'Microsoft VS Code\unins000.exe'
+    if (-not (Test-Path -LiteralPath $UninstallerPath -PathType Leaf)) {
+        Write-Log -Message 'Visual Studio Code is not installed.'
     }
     else {
-        Write-Log -Category Warning -Message "No installer executable found in '$PSScriptRoot'. Attempting download from '$DownloadUrl'."
-        Write-Log -Category Warning -Message "NOTE: When run as an Azure Run Command, PSScriptRoot resolves to a temp path, not the artifacts directory. Place the installer .exe alongside this script in the artifacts storage container."
-        $DownloadedInstaller = Join-Path -Path $env:Temp -ChildPath 'VSCodeInstaller.exe'
-        try {
-            # TimeoutSec is required -- Invoke-WebRequest has no default timeout in PowerShell 5.1
-            # and will hang indefinitely in network-restricted image build environments.
-            Invoke-WebRequest -Uri $DownloadUrl -OutFile $DownloadedInstaller -UseBasicParsing -TimeoutSec 120 -ErrorAction Stop
-        }
-        catch {
-            Write-Log -Category Error -Message "Failed to download VS Code installer from '$DownloadUrl'. Error: $_"
-            throw
-        }
-        if (-not (Test-Path -Path $DownloadedInstaller)) {
-            $errMsg = "Installer download appeared to succeed but file not found at '$DownloadedInstaller'."
-            Write-Log -Category Error -Message $errMsg
-            throw $errMsg
-        }
-        $VSCodeExe = $DownloadedInstaller
-        Write-Log -Category Info -Message "Installer downloaded to '$VSCodeExe'."
+        $Arguments = '/VERYSILENT /NORESTART'
+        Write-Log -Message "Removing Visual Studio Code with '$UninstallerPath $Arguments'."
+        $Process = Start-Process -FilePath $UninstallerPath -ArgumentList $Arguments -PassThru
+        if (-not $Process.WaitForExit($ProcessTimeoutMs)) { $Process.Kill(); throw 'Visual Studio Code uninstaller timed out.' }
+        if ($Process.ExitCode -notin $SuccessExitCodes) { throw "Visual Studio Code uninstaller failed with exit code $($Process.ExitCode)." }
     }
-    #endregion
-
-    #region Install
-    # Standard silent install switches per VS Code documentation.
-    # /VERYSILENT  -- suppresses all UI including the progress window
-    # /NORESTART   -- prevents automatic reboot (image build handles reboots explicitly)
-    # /MERGETASKS=!runcode -- deselects the "Launch VS Code after install" task
-    #
-    # NOTE: The System installer (linkid=852157) installs machine-wide by default and requires
-    # no additional switches for SYSTEM-context execution.
+}
+else {
+    $InstallerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.exe' -File)
+    if ($InstallerFiles.Count -eq 0) { throw "No EXE installer found for Visual Studio Code in '$PSScriptRoot'." }
+    if ($InstallerFiles.Count -gt 1) { throw "Expected one EXE installer for Visual Studio Code, but found: $($InstallerFiles.Name -join ', ')" }
+    $VSCodeExe = $InstallerFiles[0].FullName
     $Arguments = '/VERYSILENT /NORESTART /MERGETASKS=!runcode'
-    $InstallerTimeoutMs = 300000 # 5 minutes -- covers the WM_SETTINGCHANGE PATH broadcast delay
-    Write-Log -Category Info -Message "Starting installation of VS Code from '$VSCodeExe'."
-    Write-Log -Category Info -Message "Executing: '$VSCodeExe $Arguments'."
+    Write-Log -Message "Installing Visual Studio Code with '$VSCodeExe $Arguments'."
     Wait-MsiexecIdle
-    try {
-        $installerProcess = Start-Process -FilePath $VSCodeExe -ArgumentList $Arguments -PassThru -ErrorAction Stop
-    }
-    catch {
-        Write-Log -Category Error -Message "Failed to launch VS Code installer. Error: $_"
-        throw
-    }
-    if (-not $installerProcess.WaitForExit($InstallerTimeoutMs)) {
-        $installerProcess.Kill()
-        $errMsg = "VS Code installer did not complete within $($InstallerTimeoutMs / 60000) minutes and was terminated."
-        Write-Log -Category Error -Message $errMsg
-        throw $errMsg
-    }
-    if ($installerProcess.ExitCode -eq 0) {
-        Write-Log -Category Info -Message 'VS Code installed successfully.'
-    }
-    else {
-        $errMsg = "VS Code installer exited with non-zero exit code: $($installerProcess.ExitCode)."
-        Write-Log -Category Error -Message $errMsg
-        throw $errMsg
-    }
-    #endregion Install
+    $Process = Start-Process -FilePath $VSCodeExe -ArgumentList $Arguments -PassThru
+    if (-not $Process.WaitForExit($ProcessTimeoutMs)) { $Process.Kill(); throw 'Visual Studio Code installer timed out.' }
+    if ($Process.ExitCode -notin $SuccessExitCodes) { throw "Visual Studio Code installer failed with exit code $($Process.ExitCode)." }
+    Write-Log -Message 'Visual Studio Code installed successfully.'
 
-    #region Disable Updates
     if ($DisableUpdates) {
         Write-Log -Category Info -Message 'Disabling VS Code auto-updates via registry.'
-        try {
-            Set-RegistryValue -Key 'HKLM:\SOFTWARE\Policies\Microsoft\VSCode' -Name 'UpdateMode' -Value 'none' -Type 'String'
-        }
-        catch {
-            Write-Log -Category Error -Message "Failed to set VS Code update registry value. Error: $_"
-            throw
-        }
+        Set-RegistryValue -Key 'HKLM:\SOFTWARE\Policies\Microsoft\VSCode' -Name 'UpdateMode' -Value 'none' -Type 'String'
     }
-    #endregion Disable Updates
+}
 
-    Write-Log -Category Info -Message "Ending '$PSCommandPath'."
-}
-catch {
-    Write-Log -Category Error -Message "Script failed: $_"
-    exit 1
-}
-finally {
-    if ($null -ne $DownloadedInstaller -and (Test-Path -Path $DownloadedInstaller)) {
-        Write-Log -Category Info -Message "Removing temporary installer file '$DownloadedInstaller'."
-        Remove-Item -Path $DownloadedInstaller -Force -ErrorAction SilentlyContinue
-    }
-}
+Write-Log -Message "Completed Visual Studio Code $DeploymentType."
 

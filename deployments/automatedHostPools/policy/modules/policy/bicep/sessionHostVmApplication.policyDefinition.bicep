@@ -2,7 +2,7 @@ targetScope = 'subscription'
 
 param policyDefinitionName string = 'avdSessionHostVmApplication-Modify'
 param policyDefinitionDisplayName string = 'Configure VM Applications on AVD session hosts'
-param policyDefinitionDescription string = 'Configures an authoritative ordered list of existing Azure Compute Gallery application versions on AVD session host virtual machines during resource creation or update.'
+param policyDefinitionDescription string = 'Configures an authoritative ordered list of Azure Compute Gallery application version references on AVD session host virtual machines during resource creation or update.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
   name: policyDefinitionName
@@ -21,7 +21,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
         type: 'Array'
         metadata: {
           displayName: 'Gallery applications'
-          description: 'Authoritative ordered list of existing Gallery application versions assigned to each session host VM.'
+          description: 'Authoritative ordered list of Gallery application version references assigned to each session host VM. References may select a specific version or use /versions/latest.'
         }
       }
       effect: {

@@ -622,7 +622,7 @@ The `Microsoft-Edge-Enterprise` example artifact installs the Edge Enterprise MS
 
    ```text
    customer\artifacts\Microsoft-Edge-Enterprise\
-       Install-MicrosoftEdgeEnterprise.ps1
+      Deploy-MicrosoftEdgeEnterprise.ps1
        MicrosoftEdgeEnterpriseX64.msi
    ```
 

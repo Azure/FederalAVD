@@ -456,14 +456,14 @@ module confidentialVmCmk '../shared/modules/orchestration/customerManagedKeys/cu
 }
 
 // Network ACLs applied to all storage accounts in this deployment.
-// bypass:'None' is intentional — image management storage does not require Azure service access.
+// Azure Compute Gallery requires trusted-service access to ingest private VM Application packages.
 // defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
 var effectiveStoragePermittedIPs = filter(storagePermittedIPs, ip => !empty(trim(ip)))
 var storageHasNetworkRestrictions = !empty(effectiveStoragePermittedIPs) || !empty(storageServiceEndpointSubnetResourceIds) || storageNetworkAccess == 'PrivateEndpoint'
 var storageIpRules = [for ip in effectiveStoragePermittedIPs: { value: ip, action: 'Allow' }]
 var storageVnetRules = [for id in storageServiceEndpointSubnetResourceIds: { id: id, action: 'Allow' }]
 var storageNetworkAcls = {
-  bypass: 'None'
+  bypass: 'AzureServices'
   defaultAction: storageHasNetworkRestrictions ? 'Deny' : 'Allow'
   ipRules: storageIpRules
   virtualNetworkRules: storageVnetRules

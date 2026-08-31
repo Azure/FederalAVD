@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Path $PSScriptRoot -Parent
 $publisherPath = Join-Path -Path $repoRoot -ChildPath 'deployments\Publish-VMApplications.ps1'
 $manifestPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\parameters\imageManagement\vmApplications.json'
+$downloadsPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\parameters\imageManagement\downloads.json'
 
 $tokens = $null
 $parseErrors = $null
@@ -17,6 +18,26 @@ if (Get-Content -LiteralPath $publisherPath | Where-Object { $_ -match '[^\x00-\
 $validationOutput = @(& $publisherPath -ManifestPath $manifestPath -ValidateOnly)
 if ($validationOutput.Count -ne 0) {
     throw 'ValidateOnly wrote unexpected objects to the success stream.'
+}
+
+$sampleManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -Depth 20
+$sampleApplication = @($sampleManifest.applications)[0]
+$sampleArtifactPath = Join-Path -Path $repoRoot -ChildPath "customer-examples\artifacts\$($sampleApplication.name)"
+$sampleLifecycleScript = Join-Path -Path $sampleArtifactPath -ChildPath 'Deploy-AzCLI.ps1'
+if (-not (Test-Path -LiteralPath $sampleLifecycleScript -PathType Leaf)) {
+    throw "VM Application sample lifecycle script not found: $sampleLifecycleScript"
+}
+if ($sampleApplication.install -notmatch "Deploy-AzCLI\.ps1.*DeploymentType 'Install'" -or
+    $sampleApplication.remove -notmatch "Deploy-AzCLI\.ps1.*DeploymentType 'Uninstall'") {
+    throw 'VM Application sample does not invoke the Azure CLI artifact install and uninstall lifecycle modes.'
+}
+
+$sampleDownloads = Get-Content -LiteralPath $downloadsPath -Raw | ConvertFrom-Json -Depth 20
+$matchingDownloads = @($sampleDownloads.PSObject.Properties.Value | Where-Object {
+        @($_.DestinationFolders) -contains $sampleApplication.name
+    })
+if ($matchingDownloads.Count -eq 0) {
+    throw "No download entry stages content into the '$($sampleApplication.name)' sample artifact."
 }
 
 $invalidManifestPath = Join-Path -Path $env:TEMP -ChildPath 'FederalAVD-invalid-vmApplications.json'
@@ -70,7 +91,7 @@ function global:Invoke-AzRestMethod {
     if ($Path -match '/galleries/gallery-test\?') {
         $response.Content = '{"location":"usgovvirginia","identity":{"type":"UserAssigned","userAssignedIdentities":{"/subscriptions/test/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai":{}}}}'
     }
-    elseif ($Path -match '/applications/Contoso-Agent/versions/1\.0\.0') {
+    elseif ($Path -match '/applications/Microsoft-AzCLI/versions/1\.0\.0') {
         if ($Method -eq 'PUT') {
             $state.VersionExists = $true
             $state.VersionPayload = $Payload
@@ -95,7 +116,7 @@ function global:Invoke-AzRestMethod {
             } | ConvertTo-Json -Depth 20 -Compress
         }
     }
-    elseif ($Path -match '/applications/Contoso-Agent\?') {
+    elseif ($Path -match '/applications/Microsoft-AzCLI\?') {
         if ($Method -eq 'PUT') {
             $state.ApplicationExists = $true
             $response.StatusCode = 201
@@ -128,21 +149,21 @@ try {
     if ($result.Count -ne 1) {
         throw "Expected one publisher output object, received $($result.Count)."
     }
-    $expectedId = "$galleryId/applications/Contoso-Agent/versions/1.0.0"
+    $expectedId = "$galleryId/applications/Microsoft-AzCLI/versions/1.0.0"
     if ($result[0].packageReferenceId -ne $expectedId) {
         throw 'Publisher returned an incorrect packageReferenceId.'
     }
 
     $payload = $global:vmApplicationTestState.VersionPayload | ConvertFrom-Json -Depth 20
     $mediaLink = $payload.properties.publishingProfile.source.mediaLink
-    $expectedMediaLink = 'https://sttest.blob.core.usgovcloudapi.net/artifacts/Contoso-Agent.zip'
+    $expectedMediaLink = 'https://sttest.blob.core.usgovcloudapi.net/artifacts/Microsoft-AzCLI.zip'
     if ($mediaLink -ne $expectedMediaLink) {
         throw "Publisher returned an incorrect mediaLink: $mediaLink"
     }
     if ($mediaLink.Contains('?')) {
         throw 'Publisher added a query string or SAS token to the package URL.'
     }
-    if ($payload.properties.publishingProfile.settings.packageFileName -ne 'Contoso-Agent.zip') {
+    if ($payload.properties.publishingProfile.settings.packageFileName -ne 'Microsoft-AzCLI.zip') {
         throw 'Publisher did not preserve the ZIP package filename.'
     }
 

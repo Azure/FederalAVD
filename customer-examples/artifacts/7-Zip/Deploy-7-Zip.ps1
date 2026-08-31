@@ -1,10 +1,12 @@
 ﻿param (
+    [ValidateSet('Install', 'Uninstall')]
+    [string]$DeploymentType = 'Install',
     [int[]]$SuccessExitCodes = @(0, 3010)
 )
 
 #region Initialization
 $SoftwareName = '7-Zip'
-$Script:Name = 'Install-7-Zip'
+$Script:Name = 'Deploy-7-Zip'
 #endregion
 
 #region Supporting Functions
@@ -69,6 +71,54 @@ function Wait-MsiexecIdle {
     }
 }
 
+function Remove-MSIApplication {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [int]$TimeoutMs = 600000
+    )
+
+    $uninstallRegistryPath = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    $installedApplications = @(
+        if (Test-Path -LiteralPath $uninstallRegistryPath) {
+            Get-ChildItem -LiteralPath $uninstallRegistryPath -ErrorAction SilentlyContinue | ForEach-Object {
+                $application = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                if ($application.DisplayName -like "*$Name*" -and
+                    $_.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$') {
+                    [pscustomobject]@{
+                        DisplayName = $application.DisplayName
+                        ProductCode = $_.PSChildName
+                    }
+                }
+            }
+        }
+    )
+
+    if ($installedApplications.Count -eq 0) {
+        Write-Log -Category Info -Message "No MSI installation of '$Name' was found."
+        return
+    }
+    if ($installedApplications.Count -gt 1) {
+        $matches = ($installedApplications | ForEach-Object { "$($_.DisplayName) [$($_.ProductCode)]" }) -join ', '
+        throw "Multiple MSI installations matched '$Name': $matches"
+    }
+
+    $installedApplication = $installedApplications[0]
+    Write-Log -Category Info -Message "Removing '$($installedApplication.DisplayName)' with ProductCode '$($installedApplication.ProductCode)'."
+    Wait-MsiexecIdle
+    $uninstaller = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x $($installedApplication.ProductCode) /quiet /qn /norestart" -PassThru
+    if (-not $uninstaller.WaitForExit($TimeoutMs)) {
+        $uninstaller.Kill()
+        throw "'$Name' MSI uninstaller timed out after $($TimeoutMs / 60000) minutes and was terminated."
+    }
+    if ($uninstaller.ExitCode -notin $SuccessExitCodes) {
+        throw "'$Name' MSI uninstaller failed with exit code $($uninstaller.ExitCode)."
+    }
+
+    Write-Log -Category Info -Message "'$Name' MSI uninstall completed successfully."
+}
+
 #endregion
 
 ## MAIN
@@ -79,12 +129,16 @@ New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -message "Starting '$PSCommandPath'."
 
-$PathMSI = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-$PathEXE = (Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-
 $InstallerTimeoutMs = 600000 # 10 minutes
 
-if ($PathMSI) {
+if ($DeploymentType -eq 'Uninstall') {
+    Remove-MSIApplication -Name $SoftwareName -TimeoutMs $InstallerTimeoutMs
+}
+else {
+    $InstallerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.msi' -File)
+    if ($InstallerFiles.Count -eq 0) { throw "No MSI installer found for '$SoftwareName' in '$PSScriptRoot'." }
+    if ($InstallerFiles.Count -gt 1) { throw "Expected one MSI installer for '$SoftwareName', but found: $($InstallerFiles.Name -join ', ')" }
+    $PathMSI = $InstallerFiles[0].FullName
     Write-Log -Category Info -message "Installing '$SoftwareName' via MSI: 'msiexec /i `"$PathMSI`" /quiet /noreboot'."
     Wait-MsiexecIdle
     $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /quiet /noreboot" -PassThru
@@ -102,20 +156,5 @@ if ($PathMSI) {
         exit $Installer.ExitCode
     }
 }
-elseif ($PathEXE) {
-    Write-Log -Category Info -message "No MSI found. Installing '$SoftwareName' via EXE: '$PathEXE /S'."
-    $Installer = Start-Process -FilePath $PathEXE -ArgumentList '/S' -Wait -PassThru
-    if ($Installer.ExitCode -in $SuccessExitCodes) {
-        Write-Log -Category Info -message "'$SoftwareName' installed successfully."
-    }
-    else {
-        Write-Log -Category Error -Message "'$SoftwareName' EXE installer failed with exit code $($Installer.ExitCode)."
-        exit $Installer.ExitCode
-    }
-}
-else {
-    Write-Log -Category Error -Message "No installer found in '$PSScriptRoot'. Expected a .msi or .exe file."
-    throw "No installer found for '$SoftwareName'."
-}
 
-Write-Log -Category Info -message "Completed '$SoftwareName' Installation."
+Write-Log -Category Info -message "Completed '$SoftwareName' $DeploymentType."

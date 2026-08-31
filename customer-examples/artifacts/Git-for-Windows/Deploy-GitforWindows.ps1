@@ -1,5 +1,11 @@
-﻿#region Initialization
-$SoftwareName = 'GitforWindows'
+﻿param (
+    [ValidateSet('Install', 'Uninstall')]
+    [string]$DeploymentType = 'Install',
+    [int[]]$SuccessExitCodes = @(0, 3010)
+)
+
+#region Initialization
+$SoftwareName = 'Git for Windows'
 
 #endregion
 
@@ -44,6 +50,19 @@ function New-Log {
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
 }
 
+function Remove-GitForWindows {
+    param ([int]$TimeoutMs = 600000)
+    $UninstallerPath = Join-Path -Path $Env:ProgramFiles -ChildPath 'Git\unins000.exe'
+    if (-not (Test-Path -LiteralPath $UninstallerPath -PathType Leaf)) {
+        Write-Log -Message "'$SoftwareName' is not installed."
+        return
+    }
+    Write-Log -Message "Removing '$SoftwareName' with '$UninstallerPath /VERYSILENT /NORESTART'."
+    $process = Start-Process -FilePath $UninstallerPath -ArgumentList '/VERYSILENT /NORESTART' -PassThru -ErrorAction Stop
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "'$SoftwareName' uninstaller timed out." }
+    if ($process.ExitCode -notin $SuccessExitCodes) { throw "'$SoftwareName' uninstaller failed with exit code $($process.ExitCode)." }
+}
+
 #endregion
 
 $SetupIni = @'
@@ -82,28 +101,17 @@ $TempDir = Join-Path -Path $env:SystemRoot -ChildPath 'Temp\Git'
 $TempDirCreated = $false
 
 try {
-    # Uninstall existing installation if present
-    $Uninstaller = 'C:\Program Files\Git\unins000.exe'
-    if (Test-Path -Path $Uninstaller) {
-        Write-Log -Message "Git is already installed. Uninstalling."
-        $uninstallProcess = Start-Process -FilePath $Uninstaller -ArgumentList '/SILENT' -Wait -PassThru -ErrorAction Stop
-        if ($uninstallProcess.ExitCode -ne 0) {
-            Write-Log -Category Warning -Message "Uninstaller exited with code $($uninstallProcess.ExitCode). Continuing anyway."
-        }
-        else {
-            Write-Log -Message "Uninstall completed successfully."
-        }
+    if ($DeploymentType -eq 'Uninstall') {
+        Remove-GitForWindows
+        Write-Log -Message "Completed '$SoftwareName' Uninstall."
+        return
     }
 
-    # Locate or download installer
-    Write-Log -Message "Checking for installer in '$PSScriptRoot'."
-    $installerFiles = @(Get-ChildItem -Path $PSScriptRoot -Filter '*.exe' -ErrorAction Stop | Sort-Object LastWriteTime -Descending)
-    if ($installerFiles.Count -gt 0) {
-        $GitInstaller = $installerFiles[0].FullName
-        Write-Log -Message "Found local installer: '$GitInstaller'."
-    } else {
-        throw "No installer found in '$PSScriptRoot'. Please place the Git for Windows installer exe in the script directory and re-run."
-    }    
+    Remove-GitForWindows
+    $InstallerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.exe' -File)
+    if ($InstallerFiles.Count -eq 0) { throw "No EXE installer found for '$SoftwareName' in '$PSScriptRoot'." }
+    if ($InstallerFiles.Count -gt 1) { throw "Expected one EXE installer for '$SoftwareName', but found: $($InstallerFiles.Name -join ', ')" }
+    $GitInstaller = $InstallerFiles[0].FullName
 
     # Write setup INF to temp directory
     New-Item -Path $TempDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
@@ -115,19 +123,16 @@ try {
     # Install
     $ArgumentList = "/VERYSILENT /NORESTART /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /LOADINF=`"$InfPath`""
     Write-Log -Message "Installing '$SoftwareName' via: '$GitInstaller $ArgumentList'."
-    $installerProcess = Start-Process -FilePath $GitInstaller -ArgumentList $ArgumentList -Wait -PassThru -ErrorAction Stop
-    if ($installerProcess.ExitCode -eq 0) {
-        Write-Log -Message "'$SoftwareName' installed successfully."
-    }
-    else {
-        throw "'$SoftwareName' installer exited with non-zero exit code: $($installerProcess.ExitCode)."
-    }
+    $installerProcess = Start-Process -FilePath $GitInstaller -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    if (-not $installerProcess.WaitForExit(600000)) { $installerProcess.Kill(); throw "'$SoftwareName' installer timed out." }
+    if ($installerProcess.ExitCode -notin $SuccessExitCodes) { throw "'$SoftwareName' installer exited with code $($installerProcess.ExitCode)." }
+    Write-Log -Message "'$SoftwareName' installed successfully."
 
-    Write-Log -Message "Completed '$SoftwareName' installation."
+    Write-Log -Message "Completed '$SoftwareName' Install."
 }
 catch {
     Write-Log -Category Error -Message "Script failed: $_"
-    exit 1
+    throw
 }
 finally {
     if ($TempDirCreated -and (Test-Path -Path $TempDir)) {

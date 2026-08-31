@@ -16,11 +16,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $artifact.FullName 'README.md'))) {
     $errors.Add("Missing README.md in '$($artifact.FullName)'.")
 }
 
-$powerShellFiles = @(Get-ChildItem -LiteralPath $artifact.FullName -Filter '*.ps1' -File -Recurse)
-if ($powerShellFiles.Count -eq 0) {
-    $errors.Add("No PowerShell scripts found in '$($artifact.FullName)'.")
+$rootPowerShellFiles = @(Get-ChildItem -LiteralPath $artifact.FullName -Filter '*.ps1' -File)
+if ($rootPowerShellFiles.Count -ne 1) {
+    $errors.Add("Artifact '$($artifact.FullName)' must contain exactly one PowerShell script in its root. Found $($rootPowerShellFiles.Count). Place helper scripts in a subdirectory.")
 }
 
+$powerShellFiles = @(Get-ChildItem -LiteralPath $artifact.FullName -Filter '*.ps1' -File -Recurse)
 foreach ($file in $powerShellFiles) {
     $lineNumber = 0
     foreach ($line in Get-Content -LiteralPath $file.FullName) {

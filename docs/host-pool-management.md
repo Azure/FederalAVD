@@ -112,6 +112,37 @@ determine prerequisites, which forms to publish, deployment order, and the ongoi
 | Existing prerequisites | VNet/subnet, private DNS, Key Vault, Log Analytics, Compute Gallery, and artifact storage | Existing approved services can replace optional FederalAVD Steps 0-2 when their resource IDs and permissions are available. |
 | Security requirements | CMK, private endpoints, centralized monitoring, backup, and compliance policy prerequisites | Can make Shared Services and Networking prerequisites even when the image path alone would not require them. |
 
+### Choose Application Delivery Separately
+
+The host-pool management approach controls who creates and replaces VMs. It does not require every
+application to use the same delivery mechanism. Record an owner for each application or
+configuration package:
+
+| Delivery mechanism | Use when | Ongoing change |
+| --- | --- | --- |
+| Image | The software is required before logon, changes with the OS baseline, or cannot tolerate asynchronous installation | Build a new image version, then replace or update hosts through the selected VM lifecycle. |
+| Azure VM Application | Preferred for automated-host-pool software that has independent install and remove behavior and should be versioned outside the image | Package and upload the artifact, explicitly publish an immutable Gallery application version, then update its assignment. |
+| Intune or configuration management | An existing endpoint-management system owns detection, deployment, compliance, and retry | Change the application or policy in that system. |
+| FederalAVD customization | A configuration or bootstrap action belongs at provisioning time and has an owned retry path; it is not the default for lifecycle-capable applications | Upload the artifact and update the customization declaration. Use `runCommandsOnVms` for intentional reruns on existing standard hosts. |
+
+VM Application preparation, publication, and assignment are separate controls. Running
+`Update-ImageArtifacts.ps1` creates and uploads ZIP packages but does not publish or assign them.
+`Publish-VMApplications.ps1` publishes only entries declared in
+`customer/parameters/imageManagement/vmApplications.json` and returns immutable application-version
+resource IDs. For an automated host pool, place those IDs in `sessionHostVmApplications`; the
+FederalAVD policy assignment then owns the complete ordered VM Application array on current and
+future session hosts. New hosts receive the declaration during creation. After changing the list,
+existing hosts require an intentional Azure Policy remediation task or VM update, and application
+installation remains asynchronous.
+
+See [Publish Artifact Packages as VM Applications](vm-applications.md) for package eligibility,
+publication, versioning, and lifecycle-command requirements.
+
+For automated host pools, start with VM Applications when software can be installed and removed
+independently. Use private customizations only for configuration, bootstrap actions, or a documented
+exception that cannot use the VM Application lifecycle. If software must be present before logon,
+bake it into the image or enforce a separate readiness gate.
+
 Use the resulting operating model to select the deployment path:
 
 | Operating model | Deploy initially | Ongoing image or host operation |
@@ -136,6 +167,7 @@ image does not update existing session hosts by itself.
 | Add capacity | Deploy VMs and register them with a host-pool registration token | Increase the managed instance count or let dynamic autoscale create VMs |
 | Power scaling | AVD power-management scaling plan | AVD power-management or dynamic create/delete/power-manage scaling |
 | Image and configuration updates | Replace VMs with your process or Session Host Replacer | Update Session Host Configuration and use native Session Host Update |
+| VM Application fleet assignment | Use direct assignment or customer-owned automation | FederalAVD policy owns the complete ordered assignment declared by `sessionHostVmApplications` |
 | Fleet consistency | Enforced by your deployment pipeline and operational controls | Reconciled by Azure Virtual Desktop from the persistent configuration |
 | External VM lifecycle tools | Supported | Not supported for creating, updating, scaling, or deleting managed hosts |
 | FederalAVD Session Host Replacer | Supported and recommended for recurring custom-image refresh | Not supported; native Session Host Update owns replacement |
@@ -173,10 +205,15 @@ For ongoing operations:
 
 1. Change the Session Host Configuration when the image or VM configuration changes.
 2. Use Session Host Update to roll that desired state across the pool.
-3. Optionally use dynamic autoscale with `CreateDeletePowerManage` to let AVD create and delete
+3. For independently managed applications, publish immutable Gallery application versions, update
+  `sessionHostVmApplications`, and redeploy the automated host pool. Pin a semantic version for a
+  controlled rollout or use `/versions/latest` for the newest eligible version. Remediate existing
+  hosts intentionally after changing the declaration or publishing a newer selected version;
+  future hosts receive the declared list through policy.
+4. Optionally use dynamic autoscale with `CreateDeletePowerManage` to let AVD create and delete
   hosts according to schedule and demand. Define one or more named schedules and assign each day
   to at most one schedule, grouping days only when they share the same times and capacity limits.
-4. Don't deploy VMs with a registration token or run Session Host Replacer against this pool.
+5. Don't deploy VMs with a registration token or run Session Host Replacer against this pool.
 
 This approach removes the need to operate a separate replacement Function App, but it also moves
 the VM lifecycle boundary into the Azure Virtual Desktop service.
@@ -196,7 +233,6 @@ the VM lifecycle boundary into the Azure Virtual Desktop service.
 
 - Deploy [a standard host pool](hostpool-deployment.md).
 - Deploy [an automated host pool](../deployments/automatedHostPools/README.md).
-- Add image lifecycle automation to a standard pool with
-  [Session Host Replacer](session-host-replacer.md).
-- Review Microsoft's authoritative
-  [Host pool management approaches](https://learn.microsoft.com/azure/virtual-desktop/host-pool-management-approaches).
+- Add image lifecycle automation to a standard pool with [Session Host Replacer](session-host-replacer.md).
+- Publish independently versioned software with [Azure VM Applications](vm-applications.md).
+- Review Microsoft's authoritative [Host pool management approaches](https://learn.microsoft.com/azure/virtual-desktop/host-pool-management-approaches).

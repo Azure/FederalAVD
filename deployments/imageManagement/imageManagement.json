@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "16588746586261344336"
+      "templateHash": "4053314636599341379"
     }
   },
   "functions": [
@@ -864,7 +864,7 @@
     "effectiveStoragePermittedIPs": "[filter(parameters('storagePermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
     "storageHasNetworkRestrictions": "[or(or(not(empty(variables('effectiveStoragePermittedIPs'))), not(empty(parameters('storageServiceEndpointSubnetResourceIds')))), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]",
     "storageNetworkAcls": {
-      "bypass": "None",
+      "bypass": "AzureServices",
       "defaultAction": "[if(variables('storageHasNetworkRestrictions'), 'Deny', 'Allow')]",
       "ipRules": "[variables('storageIpRules')]",
       "virtualNetworkRules": "[variables('storageVnetRules')]"

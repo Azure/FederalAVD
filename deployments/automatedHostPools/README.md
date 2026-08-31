@@ -134,7 +134,8 @@ currently exposed as a separate portal control.
 - When VM Applications are enabled, existing application versions in an Azure Compute Gallery.
   Each selected version must be replicated to the session-host region. Azure supports at most 25
   VM Applications per VM, one version of each application, 2 GB per application package, and 50 GB
-  total across all application packages.
+  total across all application packages. FederalAVD artifact ZIPs can be published with the
+  [VM Application publishing workflow](../../docs/vm-applications.md) before this deployment.
 - When Azure Files private endpoints are enabled, the private DNS zone resource ID.
 - To register newly deployed FSLogix Azure Files shares for backup, an existing Recovery Services
   vault and Azure Files snapshot backup policy in the session-host region. Shared Services can
@@ -190,6 +191,11 @@ every first deployment is the Template Spec portal UI. Its resource pickers, con
 and validation guide the administrator to a working deployment and produce the parameter file used
 for subsequent PowerShell or CI/CD deployments. Do not start a first deployment by hand-authoring a
 parameter file unless the Template Spec UI is unavailable.
+
+> **Application delivery:** Prefer Compute Gallery VM Applications for software that has meaningful
+> install and remove behavior. Use Session Host Customizations for provisioning-time configuration,
+> bootstrap actions, or a documented exception that cannot use the VM Application lifecycle. Bake
+> software into the image when it must be ready before user logon.
 
 ### First Deployment: Template Spec Portal Forms
 
@@ -338,8 +344,8 @@ capabilities are therefore available and are not feature gaps:
 | FSLogix configuration and storage | The deployment composes the shared FSLogix module before host creation, then policy configures the session hosts. |
 | FSLogix Azure Files backup registration | Newly deployed shares can be registered with an existing shared-services Recovery Services vault and Azure Files snapshot backup policy. |
 | Disk Encryption Set and managed-disk network isolation | The DES is created before the temporary deployment helper and directly encrypts its OS disk. Policy injects the same DES into service-created session hosts and disables managed-disk public and export access when selected. |
-| Ordered private customizations | Policy attaches the artifact identity and runs customizations from the private artifact source in input order. |
-| Compute Gallery VM Applications | Select up to 25 existing Gallery application versions and their installation order. One resource-group-scoped policy assignment maintains the complete ordered array on every session host. |
+| Ordered private customizations | Policy attaches the artifact identity and runs provisioning-time configuration or bootstrap actions from the private artifact source in input order. This is not the preferred path for independently installable applications. |
+| Compute Gallery VM Applications | Preferred runtime delivery for software with an independent lifecycle. Select up to 25 Gallery application version references and their installation order. References can pin a specific version or use `latest`. One resource-group-scoped policy assignment maintains the complete ordered array on every session host. |
 
 The remaining feature parity gaps are explicit boundaries of the automated management model:
 
@@ -515,21 +521,19 @@ logon, and hosts created together can reach the same customization at different 
 deployment success confirms that the host-pool configuration and policy infrastructure were
 submitted successfully; it is not a fleet-readiness signal.
 
-Use runtime private customizations for host-pool-specific software or settings that can tolerate a
-short convergence window and a clearly defined failure or retry procedure. Noncritical inventory,
-support, or management agents can be good candidates when delayed startup does not affect users or
-violate an operational requirement. The same type of agent might not be appropriate when security
-policy, user monitoring, audit collection, licensing, or workload support requires it to be running
-before users connect. Classify each customization by its actual readiness requirement rather than
-by software category alone.
+Use private customizations for provisioning-time configuration, bootstrap actions, and documented
+exceptions that cannot use a VM Application lifecycle. Do not use them as the default software
+deployment mechanism. Independently installable software should provide meaningful install and
+remove behavior and be published as a VM Application. Any remaining customization must tolerate a
+short convergence window and have a clearly defined failure or retry procedure.
 
 [Azure VM Applications](https://learn.microsoft.com/azure/virtual-machines/vm-applications) are
-another option for software that should remain outside the base image. Publish a versioned package
+the preferred automated-host-pool mechanism for software that should remain outside the base image
+and can be installed and removed independently. Publish a versioned package
 to Azure Compute Gallery, then assign it to an existing VM through the VM's **Extensions +
 applications** page, Azure CLI, PowerShell, REST, or ARM. VM Applications support install, update,
 and remove commands, application ordering, regional package replication, and per-VM deployment
-status. They are useful for targeted or independently versioned software and do not require a new
-image version.
+status. They provide explicit versioning and removal behavior without requiring a new image version.
 
 Treat a direct VM Application assignment as instance-specific on an automated host pool. It does
 not update Session Host Configuration, automatically target later autoscale hosts, or survive VM
@@ -540,24 +544,38 @@ service-managed VM lifecycle. VM Application installation is also asynchronous. 
 not by itself prove that AVD will withhold the host from user routing. Apply the same readiness and
 access controls used for private customizations when the application is required before logon.
 
-### Future Enhancement: Publish Artifact Packages as VM Applications
+### Publish and Assign FederalAVD Artifacts as VM Applications
 
-A future image-management workflow can publish selected FederalAVD artifact packages as Azure
-Compute Gallery VM Applications. This workflow should remain separate from host-pool deployment
-and should not publish every artifact automatically. The proposed implementation should:
+FederalAVD can publish selected artifact ZIPs as Azure Compute Gallery VM Applications. Publication
+remains separate from host-pool deployment so uploading an artifact cannot silently make it an
+assigned application:
 
-1. Read a customer-owned `customer/parameters/imageManagement/vmApplications.json` manifest.
-2. Reuse ZIP packages produced and uploaded by `Update-ImageArtifacts.ps1`.
-3. Require explicit application name, semantic version, supported OS, install command, remove
-  command, optional update command, and target regions for each published package.
-4. Create the Gallery application definition when absent and publish only explicitly declared
-  immutable versions.
-5. Use managed-identity access from the Compute Gallery to private artifact blobs instead of
-  durable SAS tokens.
-6. Wait for regional replication and return application-version resource IDs that can be selected
-  by the automated host-pool form.
-7. Support connected and pre-staged air-gapped packaging flows without introducing runtime public
-  download dependencies.
+1. Run `Update-ImageArtifacts.ps1` to package and upload the artifact ZIP.
+2. Declare the package, immutable version, lifecycle commands, and replication regions in
+   `customer/parameters/imageManagement/vmApplications.json`.
+3. Run `Publish-VMApplications.ps1`. It creates only the declared Gallery application definitions
+   and versions, uses the Image Management identity for private blob access, waits for regional
+   replication, and returns each application-version `packageReferenceId`.
+4. Add those IDs to the automated host pool's ordered `sessionHostVmApplications` parameter and
+  redeploy this solution. To track the newest eligible version, replace the final semantic version
+  with `latest`, for example `<applicationResourceId>/versions/latest`. The portal form offers both
+  specific versions and `latest` for each application.
+5. Create an intentional Azure Policy remediation task or update existing VMs after changing the
+  assignment or publishing a newer version selected through `latest`. Future hosts receive the
+  policy-owned declaration during creation.
+
+```powershell
+$publishedApplications = .\deployments\Publish-VMApplications.ps1 `
+    -ManifestPath '.\customer\parameters\imageManagement\vmApplications.json' `
+    -GalleryResourceId '<computeGalleryResourceId>' `
+    -StorageAccountResourceId '<artifactsStorageAccountResourceId>'
+```
+
+The host-pool deployment does not run the publisher and the publisher does not update
+`sessionHostVmApplications`. Keep these as distinct pipeline approval stages: package, publish,
+then assign. See the [end-to-end automation guide](../../docs/automation-guide.md#optional-step-3a-publish-vm-applications)
+and [host-pool management strategy](../../docs/host-pool-management.md#choose-application-delivery-separately)
+for the complete operating model.
 
 Configuration-only artifacts and packages without meaningful uninstall behavior should remain
 image-build or private-customization artifacts unless their VM Application lifecycle is explicitly

@@ -239,9 +239,9 @@ $params = @{
 ### Scenario 2: Application Installation
 
 **Artifacts:**
-- `Install-AzCLI.ps1`
+- `Deploy-AzCLI.ps1`
 - `Install-Git.ps1`
-- `Install-VSCode.ps1`
+- `Deploy-VSCode.ps1`
 
 **Parameters:**
 

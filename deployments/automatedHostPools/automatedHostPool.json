@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17896794249989805937"
+      "templateHash": "7425442071889179184"
     }
   },
   "definitions": {
@@ -1070,7 +1070,7 @@
       "minLength": 0,
       "maxLength": 25,
       "metadata": {
-        "description": "Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy. Azure supports at most 25 VM Applications per VM."
+        "description": "Optional. Authoritative ordered list of Azure Compute Gallery application version references assigned to automated session hosts through Azure Policy. References may select a specific version or use /versions/latest. Azure supports at most 25 VM Applications per VM."
       }
     },
     "updateMaxVmsRemoved": {
@@ -14190,7 +14190,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "4391685122526718545"
+              "templateHash": "7163300982516026539"
             }
           },
           "definitions": {
@@ -14474,7 +14474,7 @@
               "minLength": 0,
               "maxLength": 25,
               "metadata": {
-                "description": "Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy."
+                "description": "Optional. Authoritative ordered list of Azure Compute Gallery application version references assigned to automated session hosts through Azure Policy. References may select a specific version or use /versions/latest."
               }
             },
             "tags": {
@@ -16224,7 +16224,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "10926235443590790388"
+                      "templateHash": "10773589215474625294"
                     }
                   },
                   "parameters": {
@@ -16238,7 +16238,7 @@
                     },
                     "policyDefinitionDescription": {
                       "type": "string",
-                      "defaultValue": "Configures an authoritative ordered list of existing Azure Compute Gallery application versions on AVD session host virtual machines during resource creation or update."
+                      "defaultValue": "Configures an authoritative ordered list of Azure Compute Gallery application version references on AVD session host virtual machines during resource creation or update."
                     }
                   },
                   "resources": [
@@ -16261,7 +16261,7 @@
                             "type": "Array",
                             "metadata": {
                               "displayName": "Gallery applications",
-                              "description": "Authoritative ordered list of existing Gallery application versions assigned to each session host VM."
+                              "description": "Authoritative ordered list of Gallery application version references assigned to each session host VM. References may select a specific version or use /versions/latest."
                             }
                           },
                           "effect": {

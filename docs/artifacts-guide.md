@@ -186,7 +186,33 @@ When `Invoke-Customization.ps1` downloads and executes an artifact during deploy
 | **.exe** | Executed with `Start-Process` | Arguments string passed directly to executable |
 | **.msi** | Executed with `msiexec.exe /i` | Arguments string passed directly to msiexec |
 | **.bat** | Executed with `cmd.exe` | Arguments string passed directly to batch file |
-| **.zip** | Extracted, then finds first .ps1 in root and executes it | Arguments string parsed into named parameters and splatted to the PS1 |
+| **.zip** | Extracted, then finds the first `.ps1` in the ZIP root and executes it | Arguments string parsed into named parameters and splatted to the PS1 |
+
+ZIP artifacts must contain exactly one root-level PowerShell script. The runtime does not use a
+declared entry point and does not guarantee which script is selected when multiple root scripts
+exist. Put helper scripts in a subdirectory and invoke them explicitly from the root script.
+
+For application artifacts that can also be published as VM Applications, use the same root script
+for both lifecycle actions:
+
+```powershell
+param(
+   [ValidateSet('Install', 'Uninstall')]
+   [string]$DeploymentType = 'Install'
+)
+
+if ($DeploymentType -eq 'Install') {
+   # Silent, synchronous installation.
+}
+else {
+   # Silent, synchronous removal.
+}
+```
+
+Keeping `Install` as the default preserves image-build and session-host customization behavior.
+The VM Application manifest calls the same script with `-DeploymentType 'Install'` or
+`-DeploymentType 'Uninstall'`. Do not add a separate root-level `Uninstall-Application.ps1` because
+`Invoke-Customization.ps1` might select it as the ZIP entry point.
 
 ### Special Files
 
@@ -234,7 +260,8 @@ New-Item -Path ".\customer\artifacts\Chrome" -ItemType Directory
 
 #### Step 2: Create the Main PowerShell Script
 
-Every artifact package **must** contain exactly one PowerShell script that performs the installation or configuration.
+Every artifact package **must** contain exactly one root-level PowerShell script that performs the
+installation or configuration. Supporting PowerShell scripts are allowed only in subdirectories.
 
 **Important:** If you need parameters, use standard PowerShell named parameters. The `Invoke-Customization.ps1` orchestrator will parse the `Arguments` string and pass them to your script as named parameters.
 
@@ -256,7 +283,7 @@ Param(
 #region Initialization
 $SoftwareName = 'MyApplication'
 $LogPath = 'C:\Windows\Logs'
-$Script:Name = 'Install-MyApp'
+$Script:Name = 'Deploy-MyApp'
 #endregion
 
 #region Functions
@@ -357,9 +384,9 @@ When you define this customization in your deployment:
 The `Invoke-Customization.ps1` script will:
 
 1. Download and extract MyApp.zip
-2. Find Install-MyApp.ps1 inside
+2. Find Deploy-MyApp.ps1 inside
 3. Parse the arguments string: `-InstallMode Minimal -SkipShortcuts`
-4. Call the script: `& Install-MyApp.ps1 -InstallMode Minimal -SkipShortcuts`
+4. Call the script: `& Deploy-MyApp.ps1 -InstallMode Minimal -SkipShortcuts`
 
 Your script receives: `$InstallMode = "Minimal"` and `$SkipShortcuts = $true`
 
@@ -388,7 +415,7 @@ Place any required files in the same directory:
 
 ```text
 Chrome/
-├── Install-Chrome.ps1
+├── Deploy-Chrome.ps1
 └── GoogleChromeEnterpriseBundle64.msi
 ```
 
@@ -405,10 +432,10 @@ Before uploading, test your script locally:
 
 ```powershell
 # Test with no parameters
-.\customer\artifacts\Chrome\Install-Chrome.ps1
+.\customer\artifacts\Chrome\Deploy-Chrome.ps1
 
 # Test with named parameters
-.\customer\artifacts\Chrome\Install-Chrome.ps1 -InstallMode Full -SkipShortcuts
+.\customer\artifacts\Chrome\Deploy-Chrome.ps1 -InstallMode Full -SkipShortcuts
 ```
 
 #### Step 5: Upload with Update-ImageArtifacts.ps1
@@ -668,8 +695,8 @@ Parsed to hashtable:
 Called as:
 
 ```powershell
-& Install-MyApp.ps1 @params
-# Equivalent to: & Install-MyApp.ps1 -InstallMode "Full" -SkipShortcuts -LogPath "C:\Logs"
+& Deploy-MyApp.ps1 @params
+# Equivalent to: & Deploy-MyApp.ps1 -InstallMode "Full" -SkipShortcuts -LogPath "C:\Logs"
 ```
 
 **For EXE/MSI/BAT files:**
@@ -1045,8 +1072,8 @@ New-AzDeployment `
    ```
 
 2. **Verify ZIP structure:**
-   - ✅ Correct: `MyApp.zip\Install-MyApp.ps1`
-   - ❌ Wrong: `MyApp.zip\MyApp\Install-MyApp.ps1` (extra folder level)
+   - ✅ Correct: `MyApp.zip\Deploy-MyApp.ps1`
+   - ❌ Wrong: `MyApp.zip\MyApp\Deploy-MyApp.ps1` (extra folder level)
 
 3. **Check Invoke-Customization log:**
 
@@ -1125,7 +1152,7 @@ New-AzDeployment `
 
    ```powershell
    # Test exactly as Invoke-Customization will call it
-   & .\Install-MyApp.ps1 -InstallMode Minimal -SkipShortcuts
+   & .\Deploy-MyApp.ps1 -InstallMode Minimal -SkipShortcuts
    ```
 
 4. **Add debug logging:**
@@ -1220,7 +1247,7 @@ Alternatively, you can check logs directly on the build VM during or after the b
 ```powershell
 # On build VM during image build
 # Each customization creates its own log file
-Get-Content "C:\Windows\Logs\Install-MyApp.log"
+Get-Content "C:\Windows\Logs\Deploy-MyApp.log"
 
 # List all customization logs
 Get-ChildItem "C:\Windows\Logs\" -Filter "*.log" | 
@@ -1232,7 +1259,7 @@ Get-ChildItem "C:\Windows\Logs\" -Filter "*.log" |
 
 ```powershell
 # On session host, check individual customization logs
-Get-Content "C:\Windows\Logs\Install-MyApp.log"
+Get-Content "C:\Windows\Logs\Deploy-MyApp.log"
 
 # View all customization logs sorted by execution time
 Get-ChildItem "C:\Windows\Logs\" -Filter "*.log" | 
