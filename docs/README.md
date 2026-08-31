@@ -28,6 +28,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 | [Custom Image Build Guide](image-build.md) | Building custom session host images with Azure Image Builder — prerequisites, build process, deployment methods, and monitoring. |
 | [Artifacts and Image Management Guide](artifacts-guide.md) | Artifact packaging and image management infrastructure — how artifacts are uploaded, referenced, and executed in image builds and session host deployments. |
 | [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md) | Reference for the script that downloads, packages, and uploads software artifacts to the artifacts storage account. Covers all download methods including winget, GitHub Releases, and UWP/MSIX preserve-layout. |
+| [Publish Artifact Packages as VM Applications](vm-applications.md) | Explicitly publish selected artifact ZIPs as managed-identity-backed Azure Compute Gallery VM Applications and emit IDs ready for host-pool assignment. |
 | [End-to-End Automation Guide](automation-guide.md) | CI/CD pipeline patterns for automating the full deployment and image refresh lifecycle. |
 
 ---

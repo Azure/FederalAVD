@@ -1,3 +1,5 @@
+import { vmApplicationAssignmentType } from '../policy/modules/policy/bicep/vmApplicationTypes.bicep'
+
 targetScope = 'subscription'
 
 @description('Required. Resource group containing the AVD control-plane resources.')
@@ -66,6 +68,9 @@ param subnetResourceId string
 
 @description('Optional. Resource ID of the selected Compute Gallery image version.')
 param customImageResourceId string = ''
+
+@description('Optional. Compute Gallery application versions assigned to automated session hosts.')
+param sessionHostVmApplications vmApplicationAssignmentType[] = []
 
 @description('Required. Resource ID of the credential Key Vault.')
 param credentialsKeyVaultResourceId string
@@ -217,6 +222,7 @@ module hostPoolPermissions 'permissions.bicep' = {
     sessionHostResourceGroupName: sessionHostResourceGroupName
     subnetResourceId: subnetResourceId
     customImageResourceId: customImageResourceId
+    sessionHostVmApplications: sessionHostVmApplications
     credentialsKeyVaultResourceId: credentialsKeyVaultResourceId
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     avdServicePrincipalObjectId: avdServicePrincipalObjectId

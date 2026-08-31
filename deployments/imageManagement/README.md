@@ -30,14 +30,15 @@ Provide foundational resources for AVD image management:
 Subscription
 ├── Image Management Resource Group (Primary Region)
 │   ├── Azure Compute Gallery (always deployed)
-│   │   └── Image Definitions (created during image builds)
+│   │   ├── Image Definitions (created during image builds)
+│   │   └── Shared managed identity (when artifacts storage is deployed)
 │   ├── Storage Account (deployArtifactsStorageAccount = true, default)
 │   │   └── Artifacts Blob Container
 │   ├── Build Logs Storage Account (deployBuildLogsStorageAccount = true)
 │   │   ├── image-customization-logs Blob Container
 │   │   └── Lifecycle Policy (auto-delete blobs after 7 days)
 │   ├── User-Assigned Managed Identity (deployArtifactsStorageAccount = true OR deployBuildLogsStorageAccount = true)
-│   │   ├── RBAC: Storage Blob Data Reader on artifacts storage account
+│   │   ├── RBAC: Storage Blob Data Contributor on artifacts storage account
 │   │   └── RBAC: Storage Blob Data Contributor on build logs storage account
 │   ├── CMK Encryption Identity (keyManagementStorageAccounts != PlatformManaged)
 │   │   └── RBAC: Key Vault Crypto Service Encryption User on storage encryption keys
@@ -53,9 +54,15 @@ Subscription
 
 The managed identity is automatically assigned:
 
-- **Storage Blob Data Reader** on the artifacts storage account (when `deployArtifactsStorageAccount = true`)
+- **Storage Blob Data Contributor** on the artifacts storage account (when `deployArtifactsStorageAccount = true`)
 - **Storage Blob Data Contributor** on the build logs storage account (when `deployBuildLogsStorageAccount = true`)
+- Attached to the Compute Gallery for VM Application package ingestion without SAS tokens
 - Used by image build VMs to download artifacts and write customization logs without storage account keys
+
+Image Management also enables the storage account's `AzureServices` network bypass. Azure Compute
+Gallery is a trusted Microsoft service and requires this exception to ingest a private VM
+Application package through the Gallery identity. Storage remains deny-by-default when network
+restrictions are configured; the exception does not enable anonymous blob access or shared keys.
 
 ## Prerequisites
 
@@ -65,7 +72,7 @@ The Azure identity running this deployment needs:
 
 | Role | Scope | Why |
 | --- | --- | --- |
-| Owner **or** Contributor + User Access Administrator | Subscription | Creates resource groups; assigns Contributor to the managed identity on the image build RG, Storage Blob Data Reader on the artifacts storage account, and Storage Blob Data Contributor on the build logs storage account |
+| Owner **or** Contributor + User Access Administrator | Subscription | Creates resource groups; assigns Contributor to the managed identity on the image build RG and Storage Blob Data Contributor on artifact and build-log storage accounts. The artifact role supports both image-build reads and managed-identity-backed Gallery VM Application publication. |
 
 ### Required Information
 
@@ -525,7 +532,8 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
 - Managed identity uses **RBAC** (Role-Based Access Control)
 - No storage account keys stored or transmitted
 - Audit access through Azure Activity logs
-- Principle of least privilege (Storage Blob Data Reader only)
+- Storage data roles are scoped to the account that needs them; artifact storage uses Contributor
+    because managed-identity-backed Gallery VM Application ingestion requires it
 
 ### Artifact Security
 
@@ -565,7 +573,7 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
 ### Storage Account Access Issues
 
 **"403 Forbidden" when accessing storage**
-- Verify managed identity has **Storage Blob Data Reader** role
+- Verify managed identity has **Storage Blob Data Contributor** on artifact storage
 - Check firewall rules allow source IP or subnet
 - Confirm private endpoint DNS resolution (if using private endpoint)
 

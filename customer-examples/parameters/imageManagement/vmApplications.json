@@ -1,0 +1,23 @@
+{
+  "applications": [
+    {
+      "name": "Microsoft-AzCLI",
+      "version": "1.0.0",
+      "packageBlob": "Microsoft-AzCLI.zip",
+      "packageFileName": "Microsoft-AzCLI.zip",
+      "supportedOSType": "Windows",
+      "description": "Azure CLI packaged from the FederalAVD Microsoft-AzCLI customer example.",
+      "install": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath '.\\Microsoft-AzCLI.zip' -DestinationPath '.\\package' -Force; & '.\\package\\Deploy-AzCLI.ps1' -DeploymentType 'Install'\"",
+      "remove": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath '.\\Microsoft-AzCLI.zip' -DestinationPath '.\\package' -Force; & '.\\package\\Deploy-AzCLI.ps1' -DeploymentType 'Uninstall'\"",
+      "targetRegions": [
+        {
+          "name": "eastus2",
+          "regionalReplicaCount": 1,
+          "storageAccountType": "Standard_LRS"
+        }
+      ],
+      "excludeFromLatest": false,
+      "scriptBehaviorAfterReboot": "Rerun"
+    }
+  ]
+}

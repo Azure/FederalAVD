@@ -348,6 +348,7 @@ module imageGallery '../shared/modules/resourceModules/compute/galleries/deploy.
     name: galleryName
     location: location
     tags: tags[?'Microsoft.Compute/galleries'] ?? {}
+    userAssignedIdentityResourceIds: deployArtifactsStorageAccount ? [managedIdentity!.outputs.resourceId] : []
   }
   dependsOn: [resourceGroup]
 }
@@ -455,14 +456,14 @@ module confidentialVmCmk '../shared/modules/orchestration/customerManagedKeys/cu
 }
 
 // Network ACLs applied to all storage accounts in this deployment.
-// bypass:'None' is intentional — image management storage does not require Azure service access.
+// Azure Compute Gallery requires trusted-service access to ingest private VM Application packages.
 // defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
 var effectiveStoragePermittedIPs = filter(storagePermittedIPs, ip => !empty(trim(ip)))
 var storageHasNetworkRestrictions = !empty(effectiveStoragePermittedIPs) || !empty(storageServiceEndpointSubnetResourceIds) || storageNetworkAccess == 'PrivateEndpoint'
 var storageIpRules = [for ip in effectiveStoragePermittedIPs: { value: ip, action: 'Allow' }]
 var storageVnetRules = [for id in storageServiceEndpointSubnetResourceIds: { id: id, action: 'Allow' }]
 var storageNetworkAcls = {
-  bypass: 'None'
+  bypass: 'AzureServices'
   defaultAction: storageHasNetworkRestrictions ? 'Deny' : 'Allow'
   ipRules: storageIpRules
   virtualNetworkRules: storageVnetRules
@@ -533,14 +534,14 @@ module assetsStoragePrivateEndpoint '../shared/modules/resourceModules/network/p
   }
 }
 
-module assetsStorageBlobReaderAssignment '../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
+module assetsStorageBlobContributorAssignment '../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = if (deployArtifactsStorageAccount) {
   scope: az.resourceGroup(resourceGroupName)
   params: {
     storageAccountName: artifactsStorageAccountName
     assignments: [
       {
         principalId: managedIdentity!.outputs.principalId
-        roleDefinitionId: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1' // Storage Blob Data Reader
+        roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
         principalType: 'ServicePrincipal'
       }
     ]

@@ -5,86 +5,6 @@
 )
 
 #region Supporting Functions
-Function Get-InternetFile {
-    [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [uri]$Url,
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$OutputDirectory,
-        [Parameter(Mandatory = $false, Position = 2)]
-        [string]$OutputFileName
-    )
-
-    Begin {
-        ## Get the name of this function and write header
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Log -Message "Starting ${CmdletName}"
-    }
-    Process {
-
-        $start_time = Get-Date
-
-        If (!$OutputFileName) {
-            Write-Log -Message "${CmdletName}: No OutputFileName specified. Trying to get file name from URL."
-            If ((split-path -path $Url -leaf).Contains('.')) {
-
-                $OutputFileName = split-path -path $url -leaf
-                Write-Log -Message "${CmdletName}: Url contains file name - '$OutputFileName'."
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
-                $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect = $false
-                $response = $request.GetResponse()
-                $Location = $response.GetResponseHeader("Location")
-                If ($Location) {
-                    $OutputFileName = [System.IO.Path]::GetFileName($Location)
-                    Write-Log -Message "${CmdletName}: File Name from 'Location' Response Header is '$OutputFileName'."
-                }
-                Else {
-                    Write-Log -Message "${CmdletName}: No 'Location' Response Header returned. Trying 'Content-Disposition' Response Header."
-                    $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
-                    $contentDisposition = $result.Headers.'Content-Disposition'
-                    If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
-                        Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
-                    }
-                }
-            }
-        }
-
-        If ($OutputFileName) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
-            $wc = New-Object System.Net.WebClient
-            $OutputFile = Join-Path $OutputDirectory $OutputFileName
-            Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."
-            Try {
-                $wc.DownloadFile($url, $OutputFile)
-                $time = (Get-Date).Subtract($start_time).Seconds
-                
-                Write-Log -Message "${CmdletName}: Time taken: '$time' seconds."
-                if (Test-Path -Path $outputfile) {
-                    $totalSize = (Get-Item $outputfile).Length / 1MB
-                    Write-Log -Message "${CmdletName}: Download was successful. Final file size: '$totalsize' mb"
-                    Return $OutputFile
-                }
-            }
-            Catch {
-                Write-Log -Category Error -Message "${CmdletName}: Error downloading file. Please check url."
-                Return $Null
-            }
-        }
-        Else {
-            Write-Log -Category Error -Message "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Return $Null
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
-}
-
 Function Get-InstalledApplication {
     [CmdletBinding()]
     Param (
@@ -109,6 +29,8 @@ Function Get-InstalledApplication {
         [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
         Write-Log -Message "Starting ${CmdletName}"
         [string[]]$regKeyApplications = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+        [string]$MSIProductCodeRegExPattern = '^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$'
+        [boolean]$is64Bit = [Environment]::Is64BitOperatingSystem
     }
     Process {
         If ($name) {
@@ -344,25 +266,21 @@ function Wait-MsiexecIdle {
     }
 }
 #endregion
-[string]$Script:Name = "Install-AzureCLI"
+[string]$Script:Name = 'Deploy-AzCLI'
 $SoftwareName = 'Microsoft Azure CLI'
-$DownloadUrl = 'https://aka.ms/installazurecliwindowsx64'
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Software')
 If ($DeploymentType -eq 'Install') {
     Wait-MsiexecIdle
     Remove-MSIApplication -Name $SoftwareName
-    $pathMsi = (Get-ChildItem -Path $PSScriptRoot -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-    If (!$pathMsi) {
-        Write-Log -Message "Downloading '$SoftwareName' from '$DownloadUrl'."
-        $TempDir = Join-Path $env:Temp -ChildPath $Script:Name
-        New-Item -Path $TempDir -ItemType Directory -Force | Out-Null
-        $pathMsi = Get-InternetFile -Url $DownloadUrl -OutputDirectory $TempDir
-    }
-    Write-Log -Message "Starting '$SoftwareName' installation and configuration."         
+    $installerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.msi' -File)
+    if ($installerFiles.Count -eq 0) { throw "No MSI installer found for '$SoftwareName' in '$PSScriptRoot'." }
+    if ($installerFiles.Count -gt 1) { throw "Expected one MSI installer for '$SoftwareName', but found: $($installerFiles.Name -join ', ')" }
+    $pathMsi = $installerFiles[0].FullName
+    Write-Log -Message "Starting '$SoftwareName' installation and configuration."
     Write-Log -Message "Installing '$SoftwareName' via cmdline:"
-    Write-Log -Message "     'msiexec.exe /i `"$pathMSI`" /quiet'"
+    Write-Log -Message "     'msiexec.exe /i `"$pathMSI`" /qn /norestart'"
     $InstallerTimeoutMs = 600000 # 10 minutes
-    $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$pathMSI`" /quiet" -PassThru
+    $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$pathMSI`" /qn /norestart" -PassThru
     if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
         $Installer.Kill()
         Write-Log -Category Error -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
@@ -376,7 +294,6 @@ If ($DeploymentType -eq 'Install') {
         Write-Log -Category Error -Message "'$SoftwareName' installer failed with exit code $($Installer.ExitCode)."
         exit $Installer.ExitCode
     }
-    If ($TempDir) { Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Log -Message "Completed '$SoftwareName' Installation."
 }
 Else {

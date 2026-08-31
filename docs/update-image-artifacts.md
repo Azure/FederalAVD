@@ -10,6 +10,10 @@
 
 > **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. To upload artifacts, deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step. To create packages locally without an Azure subscription or storage account, use `-PackageOnly -OutputPath <folder>`.
 
+To publish selected uploaded ZIP files as Azure Compute Gallery VM Applications, continue with the
+[VM Application publishing guide](vm-applications.md). Uploading artifacts alone does not publish
+applications.
+
 ## Notes
 
 - In air-gapped clouds (Secret/Top Secret), the script auto-detects the environment and downloads from air-gapped cloud endpoints — no special switch is required. For artifacts with no configured download URL (WebView2, etc.), manually place the files in the `artifacts/` subdirectory of your customer root (default: `customer/artifacts/`; or `<CustomerRootPath>\artifacts\` when `-CustomerRootPath` is specified) before running. See the [Air-Gapped Cloud Guide](air-gapped-clouds.md) for details.

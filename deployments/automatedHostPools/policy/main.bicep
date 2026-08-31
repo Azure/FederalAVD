@@ -99,7 +99,7 @@ param sessionHostCustomizations artifactCustomizationType[] = []
 
 @minLength(0)
 @maxLength(25)
-@description('Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy.')
+@description('Optional. Authoritative ordered list of Azure Compute Gallery application version references assigned to automated session hosts through Azure Policy. References may select a specific version or use /versions/latest.')
 param sessionHostVmApplications vmApplicationAssignmentType[] = []
 
 @description('Optional. Tags applied to resources created by this policy stage.')

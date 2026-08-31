@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17896794249989805937"
+      "templateHash": "638523659711965260"
     }
   },
   "definitions": {
@@ -1070,7 +1070,7 @@
       "minLength": 0,
       "maxLength": 25,
       "metadata": {
-        "description": "Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy. Azure supports at most 25 VM Applications per VM."
+        "description": "Optional. Authoritative ordered list of Azure Compute Gallery application version references assigned to automated session hosts through Azure Policy. References may select a specific version or use /versions/latest. Azure supports at most 25 VM Applications per VM."
       }
     },
     "updateMaxVmsRemoved": {
@@ -4827,6 +4827,9 @@
           "customImageResourceId": {
             "value": "[parameters('customImageResourceId')]"
           },
+          "sessionHostVmApplications": {
+            "value": "[parameters('sessionHostVmApplications')]"
+          },
           "credentialsKeyVaultResourceId": "[if(if(and(equals(reference('credentialsKeyVault').enableRbacAuthorization, true()), equals(reference('credentialsKeyVault').enabledForTemplateDeployment, true())), true(), fail('The credentials Key Vault must use Azure RBAC and allow Azure Resource Manager template deployment.')), createObject('value', parameters('credentialsKeyVaultResourceId')), createObject('value', parameters('credentialsKeyVaultResourceId')))]",
           "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('diskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
           "avdServicePrincipalObjectId": "[if(parameters('deployDynamicScalingPlan'), createObject('value', parameters('avdServicePrincipalObjectId')), createObject('value', ''))]",
@@ -4944,7 +4947,29 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "9867315995546361660"
+              "templateHash": "7913455233344631549"
+            }
+          },
+          "definitions": {
+            "vmApplicationAssignmentType": {
+              "type": "object",
+              "properties": {
+                "packageReferenceId": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "int",
+                  "minValue": 0
+                },
+                "treatFailureAsDeploymentFailure": {
+                  "type": "bool"
+                }
+              },
+              "metadata": {
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../policy/modules/policy/bicep/vmApplicationTypes.bicep"
+                }
+              }
             }
           },
           "functions": [
@@ -5124,6 +5149,16 @@
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the selected Compute Gallery image version."
+              }
+            },
+            "sessionHostVmApplications": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/vmApplicationAssignmentType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Compute Gallery application versions assigned to automated session hosts."
               }
             },
             "credentialsKeyVaultResourceId": {
@@ -5695,6 +5730,9 @@
                   "customImageResourceId": {
                     "value": "[parameters('customImageResourceId')]"
                   },
+                  "sessionHostVmApplications": {
+                    "value": "[parameters('sessionHostVmApplications')]"
+                  },
                   "credentialsKeyVaultResourceId": {
                     "value": "[parameters('credentialsKeyVaultResourceId')]"
                   },
@@ -5716,7 +5754,29 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "12879253513123326476"
+                      "templateHash": "9906478918132407590"
+                    }
+                  },
+                  "definitions": {
+                    "vmApplicationAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "packageReferenceId": {
+                          "type": "string"
+                        },
+                        "order": {
+                          "type": "int",
+                          "minValue": 0
+                        },
+                        "treatFailureAsDeploymentFailure": {
+                          "type": "bool"
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../policy/modules/policy/bicep/vmApplicationTypes.bicep"
+                        }
+                      }
                     }
                   },
                   "parameters": {
@@ -5751,6 +5811,16 @@
                         "description": "Optional. Resource ID of the selected Compute Gallery image version."
                       }
                     },
+                    "sessionHostVmApplications": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/vmApplicationAssignmentType"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Compute Gallery application versions assigned to automated session hosts."
+                      }
+                    },
                     "credentialsKeyVaultResourceId": {
                       "type": "string",
                       "metadata": {
@@ -5780,7 +5850,9 @@
                   },
                   "variables": {
                     "desktopVirtualizationVirtualMachineContributorRoleId": "a959dbd1-f747-45e3-8ba6-dd80f235f97c",
-                    "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
+                    "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
+                    "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+                    "vmApplicationGalleryResourceIds": "[union(map(parameters('sessionHostVmApplications'), lambda('application', substring(lambdaVariables('application').packageReferenceId, 0, lastIndexOf(toLower(lambdaVariables('application').packageReferenceId), '/applications/')))), createArray())]"
                   },
                   "resources": {
                     "sessionHostResourceGroupRole": {
@@ -6066,6 +6138,156 @@
                             "resourceId": {
                               "type": "string",
                               "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "vmApplicationGalleryReaderRoles": {
+                      "copy": {
+                        "name": "vmApplicationGalleryReaderRoles",
+                        "count": "[length(variables('vmApplicationGalleryResourceIds'))]"
+                      },
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('vmApplicationGalleryReaderRoles-{0}-{1}', copyIndex(), uniqueString('vmApplicationGalleryReaderRoles', deployment().name))]",
+                      "subscriptionId": "[split(variables('vmApplicationGalleryResourceIds')[copyIndex()], '/')[2]]",
+                      "resourceGroup": "[split(variables('vmApplicationGalleryResourceIds')[copyIndex()], '/')[4]]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "galleryName": {
+                            "value": "[last(split(variables('vmApplicationGalleryResourceIds')[copyIndex()], '/'))]"
+                          },
+                          "assignments": {
+                            "value": [
+                              {
+                                "principalId": "[parameters('principalId')]",
+                                "principalType": "ServicePrincipal",
+                                "roleDefinitionId": "[variables('readerRoleId')]",
+                                "description": "Allows the automated host pool identity to read VM Applications linked from session host VM requests."
+                              }
+                            ]
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "languageVersion": "2.0",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.46.1.21595",
+                              "templateHash": "11685605297839319140"
+                            }
+                          },
+                          "definitions": {
+                            "roleAssignmentType": {
+                              "type": "object",
+                              "properties": {
+                                "roleDefinitionId": {
+                                  "type": "string",
+                                  "metadata": {
+                                    "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                                  }
+                                },
+                                "principalId": {
+                                  "type": "string",
+                                  "metadata": {
+                                    "description": "Object (principal) ID of the identity receiving the role."
+                                  }
+                                },
+                                "principalType": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "",
+                                    "Device",
+                                    "ForeignGroup",
+                                    "Group",
+                                    "ServicePrincipal",
+                                    "User"
+                                  ],
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                                  }
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Optional human-readable description for the assignment."
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "description": "A single role assignment to apply to a specific resource.",
+                                "__bicep_imported_from!": {
+                                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                                }
+                              }
+                            }
+                          },
+                          "parameters": {
+                            "galleryName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the existing compute gallery."
+                              }
+                            },
+                            "assignments": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/roleAssignmentType"
+                              },
+                              "metadata": {
+                                "description": "Role assignments to apply to this gallery."
+                              }
+                            }
+                          },
+                          "variables": {
+                            "copy": [
+                              {
+                                "name": "formattedAssignments",
+                                "count": "[length(parameters('assignments'))]",
+                                "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+                              }
+                            ]
+                          },
+                          "resources": {
+                            "gallery": {
+                              "existing": true,
+                              "type": "Microsoft.Compute/galleries",
+                              "apiVersion": "2022-03-03",
+                              "name": "[parameters('galleryName')]"
+                            },
+                            "roleAssignment": {
+                              "copy": {
+                                "name": "roleAssignment",
+                                "count": "[length(variables('formattedAssignments'))]"
+                              },
+                              "type": "Microsoft.Authorization/roleAssignments",
+                              "apiVersion": "2022-04-01",
+                              "scope": "[resourceId('Microsoft.Compute/galleries', parameters('galleryName'))]",
+                              "name": "[guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+                              "properties": {
+                                "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                                "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                                "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                                "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+                              }
+                            }
+                          },
+                          "outputs": {
+                            "resourceIds": {
+                              "type": "array",
+                              "copy": {
+                                "count": "[length(variables('formattedAssignments'))]",
+                                "input": "[extensionResourceId(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+                              }
                             }
                           }
                         }
@@ -14190,7 +14412,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "4391685122526718545"
+              "templateHash": "7163300982516026539"
             }
           },
           "definitions": {
@@ -14474,7 +14696,7 @@
               "minLength": 0,
               "maxLength": 25,
               "metadata": {
-                "description": "Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy."
+                "description": "Optional. Authoritative ordered list of Azure Compute Gallery application version references assigned to automated session hosts through Azure Policy. References may select a specific version or use /versions/latest."
               }
             },
             "tags": {
@@ -16224,7 +16446,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "10926235443590790388"
+                      "templateHash": "10773589215474625294"
                     }
                   },
                   "parameters": {
@@ -16238,7 +16460,7 @@
                     },
                     "policyDefinitionDescription": {
                       "type": "string",
-                      "defaultValue": "Configures an authoritative ordered list of existing Azure Compute Gallery application versions on AVD session host virtual machines during resource creation or update."
+                      "defaultValue": "Configures an authoritative ordered list of Azure Compute Gallery application version references on AVD session host virtual machines during resource creation or update."
                     }
                   },
                   "resources": [
@@ -16261,7 +16483,7 @@
                             "type": "Array",
                             "metadata": {
                               "displayName": "Gallery applications",
-                              "description": "Authoritative ordered list of existing Gallery application versions assigned to each session host VM."
+                              "description": "Authoritative ordered list of Gallery application version references assigned to each session host VM. References may select a specific version or use /versions/latest."
                             }
                           },
                           "effect": {

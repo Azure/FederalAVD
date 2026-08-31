@@ -1947,28 +1947,24 @@
                 {
                   "name": "availability",
                   "type": "Microsoft.Common.DropDown",
-                  "defaultValue": "[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), 'No infrastructure redundancy required', 'Availability Zones')]",
+                  "defaultValue": "[if(empty(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone)))), 'No infrastructure redundancy required', 'Availability Zones')]",
                   "label": "Availability Options",
                   "toolTip": "Select the redundancy / resiliency for the virtual machines.",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
+                    "allowedValues": "[if(empty(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone)))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
                   }
                 },
                 {
                   "name": "availabilityZones",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Select Availability Zones",
-                  "defaultValue": [
-                    "Zone 1",
-                    "Zone 2",
-                    "Zone 3"
-                  ],
+                  "defaultValue": "[map(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone))), (zone) => concat('Zone ', zone))]",
                   "multiselect": true,
                   "selectAll": true,
                   "toolTip": "Select the desired Availability Zones",
                   "constraints": {
-                    "allowedValues": "[map(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones)), (zone) => parse(concat('{\"label\":\"Zone ', zone, '\",\"value\":\"', zone, '\"}')))]",
+                    "allowedValues": "[map(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone))), (zone) => parse(concat('{\"label\":\"Zone ', zone, '\",\"value\":\"', zone, '\"}')))]",
                     "required": true
                   },
                   "visible": "[equals(steps('hosts').availability.availability, 'AvailabilityZones')]"

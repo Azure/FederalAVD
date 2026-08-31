@@ -427,7 +427,7 @@ param sessionHostCustomizations artifactCustomizationType[] = []
 
 @minLength(0)
 @maxLength(25)
-@description('Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy. Azure supports at most 25 VM Applications per VM.')
+@description('Optional. Authoritative ordered list of Azure Compute Gallery application version references assigned to automated session hosts through Azure Policy. References may select a specific version or use /versions/latest. Azure supports at most 25 VM Applications per VM.')
 param sessionHostVmApplications vmApplicationAssignmentType[] = []
 
 @description('Optional. Maximum VMs replaced concurrently during a Session Host Configuration update.')
@@ -763,6 +763,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
     sessionHostResourceGroupName: naming.outputs.resourceGroupHosts
     subnetResourceId: virtualMachineSubnetResourceId
     customImageResourceId: customImageResourceId
+    sessionHostVmApplications: sessionHostVmApplications
     credentialsKeyVaultResourceId: credentialsKeyVaultConfigurationIsValid ? credentialsKeyVaultResourceId : credentialsKeyVaultResourceId
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     avdServicePrincipalObjectId: deployDynamicScalingPlan ? avdServicePrincipalObjectId : ''
