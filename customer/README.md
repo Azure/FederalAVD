@@ -27,8 +27,10 @@ customer/
       GoogleChromeEnterpriseBundle64.msi
 ```
 
-Sample files to use as starting points are in each deployment's `parameters/` folder. Copy them
-into the matching child folder under `customer/parameters/` before customizing them:
+For every first deployment, use the component's Template Spec portal form and download the working
+parameter file from **Review + create** into the matching child folder under
+`customer/parameters/`. Use the samples in each deployment's `parameters/` folder as references or
+as fallbacks only when the Template Spec UI is unavailable:
 
 - `deployments/hostpools/parameters/`
 - `deployments/imageBuild/parameters/`

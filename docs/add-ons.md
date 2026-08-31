@@ -27,9 +27,14 @@ All add-ons support three deployment methods:
 
 | Method | Availability | Best For |
 | --- | --- | --- |
-| **Blue Button (Azure Portal)** | Commercial and Government | First deployment with guided form |
-| **Template Spec** | All clouds including air-gapped | Repeatable deployments; air-gapped clouds |
-| **PowerShell / Azure CLI** | All clouds | Scripted or CI/CD deployments |
+| **Template Spec** | All clouds including air-gapped | Every first deployment; guided configuration and parameter generation |
+| **Blue Button (Azure Portal)** | Commercial and Government | Portal fallback when publishing a Template Spec is not practical |
+| **PowerShell / Azure CLI** | All clouds | Subsequent scripted or CI/CD deployments using exported parameters |
+
+Use the Template Spec portal form for the first deployment of an add-on. On **Review + create**,
+select **Download template and parameters** and retain the working parameter file for subsequent
+PowerShell or CI/CD deployments. Hand-author parameters only when the Template Spec UI is
+unavailable.
 
 ### Template Spec — All Add-Ons
 
@@ -37,10 +42,18 @@ All add-ons support three deployment methods:
 .\tools\New-TemplateSpecs.ps1 `
   -ResourceGroupName 'rg-avd-operations-p-eus2' `
   -Location 'eastus2' `
+  -createSharedServices $false `
+  -createNetwork $false `
+  -createImageManagement $false `
+  -createCustomImage $false `
+  -createHostPool $false `
+  -createAutomatedHostPool $false `
   -CreateAddOns $true
 ```
 
-This publishes all add-on templates as Template Specs in the specified resource group.
+This publishes all add-on templates as Template Specs in the specified resource group. Publishing
+does not deploy the add-ons. In the Azure portal, open **Template Specs**, select the required
+add-on, and choose **Deploy**.
 
 ---
 

@@ -14,7 +14,15 @@ session host, policy assignment, Key Vault, Log Analytics workspace, Recovery Se
 backup policy. Those shared resources are supplied by resource ID or name. AVD Shared Services can
 create the regional FSLogix vault and policy before this add-on is deployed.
 
-## Portal Deployment
+## Deployment
+
+Use the Template Spec portal form for the first deployment. Publish the add-on Template Specs with
+[`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
+Azure portal and deploy **AVD FSLogix Storage**. On **Review + create**, select **Download template
+and parameters** before submitting, then retain the working parameter file for subsequent
+PowerShell or CI/CD deployments.
+
+### Portal Form Behavior
 
 Use `uiFormDefinition.json` with the subscription-scoped `main.bicep` template. The form uses the
 standard deployment scope control for subscription and region selection, then lets you select an

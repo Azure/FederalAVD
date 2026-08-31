@@ -133,6 +133,20 @@ Use explicit `dependsOn` entries when policy enforcement depends on RBAC propaga
 assignment being present first. Keep policy definition, initiative, assignment, and role-assignment
 names stable because changing them can replace governance resources.
 
+## Managed Identity API Compatibility
+
+Automated host-pool private customization uses the documented IMDS managed identity API version
+`2018-02-01` in every environment. Do not restore the legacy `USN` fallback to `2017-08-01` here
+without a confirmed Secret or Top Secret compatibility requirement.
+
+The legacy fallback remains in the image-build, standard session-host customization, and Run
+Commands add-on Bicep sources. Before removing it from those paths, test in both Secret and Top
+Secret that a newly provisioned VM or image-builder VM can use a user-assigned identity to obtain a
+Storage token with `client_id`, then download a private blob with that token. Record the tested cloud
+and date, replace the conditional with `2018-02-01` in the source Bicep, and regenerate every tracked
+ARM template that embeds the changed module. Search the repository for `2017-08-01` to locate all
+remaining source and generated occurrences; never edit generated JSON directly.
+
 ## Build Order
 
 Build changed nested remediation templates before compiling a policy definition that loads their

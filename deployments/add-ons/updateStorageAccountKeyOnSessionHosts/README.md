@@ -11,11 +11,19 @@ This solution will update the FSLogix Storage Account Key on Session Hosts to su
 
 ## Deployment Options
 
-### Azure portal UI
+### Template Spec Portal Form (First Deployment)
+
+Publish the add-on Template Specs with
+[`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
+Azure portal and deploy **AVD Update Storage Account Key on Session Hosts**. On **Review + create**,
+select **Download template and parameters** before submitting, then retain the working parameter
+file for subsequent rotations.
+
+### Blue Button (Azure Commercial / Government Alternative)
 
 [![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Ffederalavd%2Fmain%2Fdeployments%2Fadd-ons%2FupdateStorageAccountKeyOnSessionHosts%2FuiFormDefinition.json)
 
-### PowerShell
+### PowerShell (Subsequent Deployments)
 
 ```powershell
 New-AzResourceGroupDeployment `

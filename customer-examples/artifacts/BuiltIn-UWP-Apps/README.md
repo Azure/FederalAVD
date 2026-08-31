@@ -42,7 +42,6 @@ retained after sysprep".
 | `WebMediaExtensions` | Web Media Extensions | `9N5TDP8VCMHS` |
 | `WebpImageExtension` | WebP Image Extension | `9PG2DK419DRG` |
 | `AV1VideoExtension` | AV1 Video Extension | `9MVZQVXJBQ9V` |
-| `AVCEncoderVideoExtension` | AVC Encoder Video Extension | `9PB0TRCNRHFX` |
 | `MPEG2VideoExtension` | MPEG-2 Video Extension | `9N95Q1ZZPMH4` |
 | `HEIFImageExtension` | HEIF Image Extension | `9PMMSR1CGPWG` |
 
@@ -50,9 +49,10 @@ Add or remove entries from `downloads.json` to change which apps are staged thro
 pipeline. To build a standalone transfer zip from an explicit array of Store IDs, use the local
 builder described below.
 
-The AVC Encoder Video Extension enables applications to encode H.264 video through Windows media
-APIs, using DirectX 12 hardware encoding when available. Azure Virtual Desktop RDP hardware
-encoding does not depend on this package; RDP uses the supported GPU driver directly.
+The AVC Encoder Video Extension (`9PB0TRCNRHFX`) is intentionally excluded. Microsoft Store
+resolves the product ID but reports that the package does not support download, so it cannot be
+staged with `winget download`. Azure Virtual Desktop RDP hardware encoding does not depend on this
+package; RDP uses the supported GPU driver directly.
 
 The HEIF Image Extension uses the AV1 Video Extension to display AVIF images. Displaying HEIC and
 other HEVC-compressed HEIF images also requires the separately licensed HEVC Video Extensions

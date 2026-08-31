@@ -5,8 +5,6 @@ param runCommandName string
 param userAssignedIdentityResourceId string
 param virtualMachineName string
 
-var apiVersion = startsWith(environment().name, 'USN') ? '2017-08-01' : '2018-02-01'
-
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' existing = {
   name: virtualMachineName
 }
@@ -27,7 +25,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' =
     parameters: [
       {
         name: 'APIVersion'
-        value: apiVersion
+        value: '2018-02-01'
       }
       {
         name: 'Arguments'

@@ -55,7 +55,6 @@ $DefaultFolderNames = @{
     '9N5TDP8VCMHS' = 'WebMediaExtensions'
     '9PG2DK419DRG' = 'WebpImageExtension'
     '9MVZQVXJBQ9V' = 'AV1VideoExtension'
-    '9PB0TRCNRHFX' = 'AVCEncoderVideoExtension'
     '9N95Q1ZZPMH4' = 'MPEG2VideoExtension'
     '9PMMSR1CGPWG' = 'HEIFImageExtension'
 }

@@ -21,7 +21,8 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
 
 @batchSize(1)
 module applyCustomizations 'applyCustomization.bicep' = [
-  for customization in customizations: {
+  for (customization, customizationIndex) in customizations: {
+    name: 'apply-${batchContext}-${batchIndex}-${customizationIndex}-${take(customization.name, 20)}-${uniqueString(deployment().name)}'
     params: {
       customization: customization
       location: location

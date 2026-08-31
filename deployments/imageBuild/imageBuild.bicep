@@ -197,6 +197,9 @@ param logContainerName string = 'image-customization-logs'
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its diskEncryptionSetResourceId output here to share the same DES across all image builds.')
 param diskEncryptionSetResourceId string = ''
 
+@description('Optional. Resource ID of an existing Disk Encryption Set in the remote Compute Gallery region. Required to encrypt remote gallery image version replicas with a customer-managed key.')
+param remoteDiskEncryptionSetResourceId string = ''
+
 @description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported.')
 @allowed([
   ''
@@ -208,6 +211,9 @@ param galleryImageVersionConfidentialVMEncryptionType string = ''
 
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for Confidential VM guest state encryption in gallery image version replicas. When provided, no new DES is created. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
 param confidentialVMDiskEncryptionSetResourceId string = ''
+
+@description('Optional. Resource ID of an existing Confidential VM Disk Encryption Set in the remote Compute Gallery region. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
+param remoteConfidentialVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = false
@@ -469,12 +475,56 @@ var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConf
   ? confidentialVMDiskEncryptionSetResourceId
   : ''
 
-var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResourceId)
+var effectiveRemoteConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
+  ? remoteConfidentialVMDiskEncryptionSetResourceId
+  : ''
+
+var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResourceId) && empty(remoteDiskEncryptionSetResourceId)
   ? imageVersionReplicationRegions
   : map(
       imageVersionReplicationRegions,
       region =>
-        union(region, {
+        empty(toLower(region.name) == toLower(remoteLocation) ? remoteDiskEncryptionSetResourceId : diskEncryptionSetResourceId)
+          ? region
+          : union(region, {
+              encryption: {
+                osDiskImage: union(
+                  {
+                    diskEncryptionSetId: toLower(region.name) == toLower(remoteLocation)
+                      ? remoteDiskEncryptionSetResourceId
+                      : diskEncryptionSetResourceId
+                  },
+                  !empty(galleryImageVersionConfidentialVMEncryptionType)
+                    ? {
+                        securityProfile: union(
+                          { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+                          !empty(toLower(region.name) == toLower(remoteLocation)
+                            ? effectiveRemoteConfidentialVmDiskEncryptionSetResourceId
+                            : effectiveConfidentialVmDiskEncryptionSetResourceId)
+                            ? {
+                                secureVMDiskEncryptionSetId: toLower(region.name) == toLower(remoteLocation)
+                                  ? effectiveRemoteConfidentialVmDiskEncryptionSetResourceId
+                                  : effectiveConfidentialVmDiskEncryptionSetResourceId
+                              }
+                            : {}
+                        )
+                      }
+                    : {}
+                )
+              }
+            })
+    )
+
+var remoteImageVersionTargetRegions = [
+  union(
+    {
+      name: computeLocation
+      excludeFromLatest: remoteImageVersionExcludeFromLatest
+      regionalReplicaCount: remoteImageVersionDefaultReplicaCount
+      storageAccountType: remoteImageVersionStorageAccountType
+    },
+    !empty(diskEncryptionSetResourceId)
+      ? {
           encryption: {
             osDiskImage: union(
               { diskEncryptionSetId: diskEncryptionSetResourceId },
@@ -490,8 +540,37 @@ var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResour
                 : {}
             )
           }
-        })
-    )
+        }
+      : {}
+  )
+  union(
+    {
+      name: remoteLocation
+      excludeFromLatest: remoteImageVersionExcludeFromLatest
+      regionalReplicaCount: remoteImageVersionDefaultReplicaCount
+      storageAccountType: remoteImageVersionStorageAccountType
+    },
+    !empty(remoteDiskEncryptionSetResourceId)
+      ? {
+          encryption: {
+            osDiskImage: union(
+              { diskEncryptionSetId: remoteDiskEncryptionSetResourceId },
+              !empty(galleryImageVersionConfidentialVMEncryptionType)
+                ? {
+                    securityProfile: union(
+                      { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+                      !empty(effectiveRemoteConfidentialVmDiskEncryptionSetResourceId)
+                        ? { secureVMDiskEncryptionSetId: effectiveRemoteConfidentialVmDiskEncryptionSetResourceId }
+                        : {}
+                    )
+                  }
+                : {}
+            )
+          }
+        }
+      : {}
+  )
+]
 
 var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
   ? dateTimeAdd(buildTimestamp, 'P${imageVersionEOLinDays}D')
@@ -846,12 +925,15 @@ module removeImageBuildResources '../shared/modules/resourceModules/compute/virt
       { name: 'ManagementVmResourceId', value: orchestrationVm.outputs.resourceId }
     ]
   }
+  dependsOn: [
+    remoteImageVersion
+  ]
 }
 
 module remoteImageVersion '../shared/modules/resourceModules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
-    location: location
+    location: computeLocation
     name: imageVersionName
     galleryName: last(split(remoteComputeGalleryResourceId, '/'))
     imageDefinitionName: remoteImageDefinition!.outputs.name
@@ -859,7 +941,9 @@ module remoteImageVersion '../shared/modules/resourceModules/compute/galleries/i
     excludeFromLatest: remoteImageVersionExcludeFromLatest
     replicaCount: remoteImageVersionDefaultReplicaCount
     storageAccountType: remoteImageVersionStorageAccountType
-    sourceId: captureImage.outputs.imageVersionId
+    sourceId: contains(effectiveGalleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : ''
+    virtualMachineId: !contains(effectiveGalleryImageDefinitionSecurityType, 'Supported') ? imageVm.outputs.resourceId : ''
+    targetRegions: remoteImageVersionTargetRegions
     tags: tags[?'Microsoft.Compute/galleries/images/versions'] ?? {}
   }
 }

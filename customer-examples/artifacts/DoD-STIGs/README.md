@@ -16,9 +16,9 @@ This PowerShell script automates the application of Defense Information Systems 
 
 ### `ApplicationsToSTIG`
 
-- **Type:** String (JSON array)
-- **Default:** `'["Adobe Acrobat Pro", "Adobe Acrobat Reader", "Google Chrome", "Mozilla Firefox"]'`
-- **Description:** JSON string array defining third-party applications to apply STIGs to
+- **Type:** String array
+- **Default:** `@('Adobe Acrobat Pro', 'Adobe Acrobat Reader', 'Google Chrome', 'Mozilla Firefox')`
+- **Description:** Third-party applications to apply STIGs to
 
 ### `SearchForApplications`
 
@@ -71,7 +71,15 @@ This PowerShell script automates the application of Defense Information Systems 
 ### Custom Application List
 
 ```powershell
-.\Apply-STIGsAVD.ps1 -ApplicationsToSTIG '["Google Chrome", "Mozilla Firefox"]'
+.\Apply-STIGsAVD.ps1 -ApplicationsToSTIG @('Google Chrome', 'Mozilla Firefox')
+```
+
+When passing the same parameter through an image-build or session-host customization, keep the
+native PowerShell array syntax inside the JSON `arguments` string. `Invoke-Customization.ps1`
+converts it to a string array before splatting the parameters into this script:
+
+```json
+"arguments": "-ApplicationsToSTIG @('Google Chrome','Mozilla Firefox') -SearchForApplications"
 ```
 
 ### Allow Local User Logon

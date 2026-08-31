@@ -771,11 +771,13 @@ Replacer independently handles image-driven replacement.
 
 <a id="poc-fast-path"></a>
 <details>
-<summary><b>PowerShell-only PoC alternative using the starter parameter file</b></summary>
+<summary><b>Fallback when the Template Spec UI is unavailable</b></summary>
 
-If you want a working **standard-management** AVD host pool to evaluate - existing VNet,
-marketplace images, no CMK, no custom software - you can skip Steps 0-3 entirely. This is all you
-need. For an automated-pool evaluation, use the starter file and deployment command in the
+Use this PowerShell-only path only when the Template Spec UI cannot be used. It hand-configures the
+starter parameter file instead of benefiting from the portal form's resource pickers, conditional
+fields, and validation. For a **standard-management** evaluation with an existing VNet,
+marketplace image, no CMK, and no custom software, Steps 0-3 can still be skipped. For an
+automated-pool evaluation, use the fallback commands in the
 [automated host-pool guide](../deployments/automatedHostPools/README.md#deploy), which deploys the
 required Shared Services credentials Key Vault before the host pool.
 

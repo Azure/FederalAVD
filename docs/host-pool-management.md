@@ -84,6 +84,8 @@ Choose an **automated host pool** when all of these statements are true:
 - A persistent, service-managed VM configuration is preferable to maintaining your own VM
   deployment and replacement automation.
 - You can stop using external tools that create, register, replace, or delete VMs in this host pool.
+- Your readiness process accounts for asynchronous Azure Policy remediation and does not assume
+  that an AVD `Available` host has completed every post-provisioning customization.
 
 If you are uncertain, use a standard host pool. It supports the broadest cloud and workload set and
 preserves direct control. Choose automated management intentionally when reducing customer-owned VM
@@ -106,7 +108,7 @@ determine prerequisites, which forms to publish, deployment order, and the ongoi
 | FSLogix storage ownership | Host-pool-specific storage, existing storage, or independently deployed shared storage | Step 4 can deploy storage for its host pool or use existing storage. Use the FSLogix Storage add-on before Step 4 when profile storage is shared across host pools. The add-on requires existing Key Vault, monitoring, and backup resources for those selected capabilities. |
 | Standard-pool replacement method | Session Host Replacer, manual drain and replace, or existing automation | Session Host Replacer is a post-host-pool add-on; manual and existing automation require an owned runbook or pipeline. |
 | Capacity management | Fixed/manual count, AVD power-management scaling, or dynamic create/delete scaling | Dynamic create/delete scaling requires an automated host pool; standard scaling plans start and stop existing VMs. |
-| Runtime configuration owner | Image, Intune, policy, configuration management, or FederalAVD customizations | Determines whether software must be baked into the image and which runtime endpoints and identities are required. |
+| Runtime configuration owner | Image, Azure VM Applications, Intune, policy, configuration management, or FederalAVD customizations | Determines whether software must be baked into the image and which runtime endpoints and identities are required. Direct VM Application assignments are instance-specific; policy or automation is required to target future automated hosts. |
 | Existing prerequisites | VNet/subnet, private DNS, Key Vault, Log Analytics, Compute Gallery, and artifact storage | Existing approved services can replace optional FederalAVD Steps 0-2 when their resource IDs and permissions are available. |
 | Security requirements | CMK, private endpoints, centralized monitoring, backup, and compliance policy prerequisites | Can make Shared Services and Networking prerequisites even when the image path alone would not require them. |
 

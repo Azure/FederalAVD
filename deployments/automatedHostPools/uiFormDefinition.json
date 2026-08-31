@@ -335,7 +335,7 @@
                         "width": "2fr",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "Weekdays",
+                          "placeholder": "Weekdays",
                           "constraints": {
                             "required": true,
                             "regex": "^[A-Za-z0-9@._ -]{1,64}$",
@@ -351,7 +351,7 @@
                           "type": "Microsoft.Common.DropDown",
                           "multiselect": true,
                           "selectAll": false,
-                          "defaultValue": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                          "placeholder": "Select days...",
                           "constraints": {
                             "required": true,
                             "allowedValues": [
@@ -371,7 +371,7 @@
                         "header": "Ramp-up",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "06:30",
+                          "placeholder": "06:30",
                           "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm." }
                         }
                       },
@@ -380,7 +380,7 @@
                         "header": "Ramp-up Balancing",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
-                          "defaultValue": "Breadth-First",
+                          "placeholder": "Breadth-First",
                           "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       },
@@ -389,7 +389,7 @@
                         "header": "Peak",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "08:30",
+                          "placeholder": "08:30",
                           "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm." }
                         }
                       },
@@ -398,7 +398,7 @@
                         "header": "Peak Balancing",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
-                          "defaultValue": "Breadth-First",
+                          "placeholder": "Breadth-First",
                           "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       },
@@ -407,7 +407,7 @@
                         "header": "Ramp-down",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "17:00",
+                          "placeholder": "17:00",
                           "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm." }
                         }
                       },
@@ -416,7 +416,7 @@
                         "header": "Ramp-down Balancing",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
-                          "defaultValue": "Depth-First",
+                          "placeholder": "Depth-First",
                           "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       },
@@ -425,7 +425,7 @@
                         "header": "Off-peak",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "20:00",
+                          "placeholder": "20:00",
                           "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm." }
                         }
                       },
@@ -434,7 +434,7 @@
                         "header": "Ramp-up Min %",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "20",
+                          "placeholder": "20",
                           "constraints": { "required": true, "regex": "^(100|[1-9]?[0-9])$", "validationMessage": "Enter 0-100." }
                         }
                       },
@@ -443,7 +443,7 @@
                         "header": "Ramp-up Threshold %",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "60",
+                          "placeholder": "60",
                           "constraints": { "required": true, "regex": "^(100|[1-9][0-9]?)$", "validationMessage": "Enter 1-100." }
                         }
                       },
@@ -452,7 +452,7 @@
                         "header": "Ramp-up Min Hosts",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "2",
+                          "placeholder": "2",
                           "constraints": { "required": true, "regex": "^([0-9]|[1-5][0-9])$", "validationMessage": "Enter 0-59." }
                         }
                       },
@@ -461,7 +461,7 @@
                         "header": "Ramp-up Max Hosts",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "10",
+                          "placeholder": "10",
                           "constraints": { "required": true, "regex": "^[1-9][0-9]*$", "validationMessage": "Enter a positive whole number." }
                         }
                       },
@@ -470,7 +470,7 @@
                         "header": "Ramp-down Min %",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "10",
+                          "placeholder": "10",
                           "constraints": { "required": true, "regex": "^(100|[1-9]?[0-9])$", "validationMessage": "Enter 0-100." }
                         }
                       },
@@ -479,7 +479,7 @@
                         "header": "Ramp-down Threshold %",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "90",
+                          "placeholder": "90",
                           "constraints": { "required": true, "regex": "^(100|[1-9][0-9]?)$", "validationMessage": "Enter 1-100." }
                         }
                       },
@@ -488,7 +488,7 @@
                         "header": "Ramp-down Min Hosts",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "1",
+                          "placeholder": "1",
                           "constraints": { "required": true, "regex": "^([0-9]|[1-5][0-9])$", "validationMessage": "Enter 0-59." }
                         }
                       },
@@ -497,7 +497,7 @@
                         "header": "Ramp-down Max Hosts",
                         "element": {
                           "type": "Microsoft.Common.TextBox",
-                          "defaultValue": "5",
+                          "placeholder": "5",
                           "constraints": { "required": true, "regex": "^[1-9][0-9]*$", "validationMessage": "Enter a positive whole number." }
                         }
                       },
@@ -506,7 +506,7 @@
                         "header": "Force Logoff",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
-                          "defaultValue": "No",
+                          "placeholder": "No",
                           "constraints": { "required": true, "allowedValues": [{ "label": "Yes", "value": true }, { "label": "No", "value": false }] }
                         }
                       },
@@ -516,7 +516,7 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "30",
-                          "constraints": { "required": "[last(take(steps('controlPlane').dynamicScaling.schedules, $rowIndex)).rampDownForceLogoffUsers]", "regex": "^(?:[0-9]|[1-9][0-9]|1[01][0-9]|120)$", "validationMessage": "Enter 0-120 minutes." }
+                          "constraints": { "required": false, "regex": "^(?:[0-9]|[1-9][0-9]|1[01][0-9]|120)$", "validationMessage": "Enter 0-120 minutes." }
                         }
                       },
                       {
@@ -526,7 +526,7 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "Save your work and sign out. This session host is being removed by autoscale.",
-                          "constraints": { "required": "[last(take(steps('controlPlane').dynamicScaling.schedules, $rowIndex)).rampDownForceLogoffUsers]" }
+                          "constraints": { "required": false }
                         }
                       },
                       {
@@ -534,7 +534,7 @@
                         "header": "Stop Hosts When",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
-                          "defaultValue": "Zero Sessions",
+                          "placeholder": "Zero Sessions",
                           "constraints": { "required": true, "allowedValues": [{ "label": "Zero Sessions", "value": "ZeroSessions" }, { "label": "Zero Active Sessions", "value": "ZeroActiveSessions" }] }
                         }
                       },
@@ -543,7 +543,7 @@
                         "header": "Off-peak Balancing",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
-                          "defaultValue": "Depth-First",
+                          "placeholder": "Depth-First",
                           "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       }
@@ -650,7 +650,7 @@
             {
               "name": "identity",
               "type": "Microsoft.Common.Section",
-              "label": "Identity and Domain Join",
+              "label": "Virtual Machine Identity",
               "elements": [
                 {
                   "name": "machineIdentity",
@@ -1574,6 +1574,157 @@
                   }
                 }
               ]
+            },
+            {
+              "name": "vmApplications",
+              "type": "Microsoft.Common.Section",
+              "label": "VM Applications",
+              "elements": [
+                {
+                  "name": "enableVmApplications",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Assign Azure Compute Gallery VM Applications",
+                  "toolTip": "Use Azure Policy to maintain an authoritative ordered list of existing Gallery application versions on every automated session host.",
+                  "defaultValue": false
+                },
+                {
+                  "name": "gallerySubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Compute Gallery Subscription",
+                  "defaultValue": "[steps('controlPlane').scope.subscription.displayName]",
+                  "visible": "[steps('hosts').vmApplications.enableVmApplications]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "galleriesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('hosts').vmApplications.enableVmApplications, not(empty(steps('hosts').vmApplications.gallerySubscription.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('hosts').vmApplications.gallerySubscription.id, '/providers/Microsoft.Compute/galleries?api-version=2024-03-03')]"
+                  }
+                },
+                {
+                  "name": "gallery",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Compute Gallery",
+                  "multiLine": true,
+                  "visible": "[steps('hosts').vmApplications.enableVmApplications]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('hosts').vmApplications.galleriesApi.value, (gallery) => parse(concat('{\"label\":\"', gallery.name, '\",\"description\":\"Resource Group: ', first(skip(split(gallery.id, '/'), 4)), '\",\"value\":\"', gallery.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "applicationVersionsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('hosts').vmApplications.enableVmApplications, not(empty(steps('hosts').vmApplications.gallery)))]",
+                  "request": {
+                    "method": "POST",
+                    "path": "/providers/Microsoft.ResourceGraph/resources?api-version=2022-10-01",
+                    "body": {
+                      "subscriptions": [
+                        "[steps('hosts').vmApplications.gallerySubscription.subscriptionId]"
+                      ],
+                      "query": "[concat('resources | where type =~ ''microsoft.compute/galleries/applications/versions'' | where id startswith ''', steps('hosts').vmApplications.gallery, '/applications/'' | project label = strcat(tostring(split(id, ''/'')[10]), '' / '', name), value = id | order by label asc')]",
+                      "options": {
+                        "resultFormat": "objectArray"
+                      }
+                    },
+                    "transforms": {
+                      "list": "data"
+                    }
+                  }
+                },
+                {
+                  "name": "noApplicationsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('hosts').vmApplications.enableVmApplications, not(empty(steps('hosts').vmApplications.gallery)), empty(steps('hosts').vmApplications.applicationVersionsApi.transformed.list))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "This Compute Gallery has no published VM Application versions. Publish and replicate an application version before enabling this option."
+                  }
+                },
+                {
+                  "name": "applicationInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[steps('hosts').vmApplications.enableVmApplications]",
+                  "options": {
+                    "style": "Info",
+                    "text": "The selected list is authoritative for these session hosts. Application versions must already be published and replicated to the session-host region. Azure supports up to 25 VM Applications per VM. Choosing Yes for Fail VM if App Fails makes an application install, update, or removal error mark both the VM Application extension and VM provisioning as failed."
+                  }
+                },
+                {
+                  "name": "applications",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Ordered VM Applications",
+                  "ariaLabel": "Ordered Azure Compute Gallery VM Applications",
+                  "visible": "[and(steps('hosts').vmApplications.enableVmApplications, not(empty(steps('hosts').vmApplications.applicationVersionsApi.transformed.list)))]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 1,
+                        "max": 25
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "packageReferenceId",
+                        "header": "Application / Version",
+                        "width": "3fr",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "multiLine": true,
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": "[steps('hosts').vmApplications.applicationVersionsApi.transformed.list]"
+                          }
+                        }
+                      },
+                      {
+                        "id": "order",
+                        "header": "Order",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[1-9]|1[0-9]|2[0-5])$",
+                            "validationMessage": "Enter an installation order from 1 through 25. Duplicate values install as the same order group."
+                          }
+                        }
+                      },
+                      {
+                        "id": "treatFailureAsDeploymentFailure",
+                        "header": "Fail VM if App Fails",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.DropDown",
+                          "toolTip": "Yes reports application install, update, or removal errors as VM provisioning failures. No keeps VM provisioning successful even when an application command fails.",
+                          "defaultValue": "Yes",
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "Yes",
+                                "value": true
+                              },
+                              {
+                                "label": "No",
+                                "value": false
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },
@@ -1659,11 +1810,11 @@
               "name": "managedIdentity",
               "type": "Microsoft.Solutions.ResourceSelector",
               "label": "User Assigned Identity",
+              "toolTip": "Select an existing User Assigned Identity with Microsoft Graph Application.ReadWrite.All and DelegatedPermissionGrant.ReadWrite.All application permissions. Identities from any Azure region in the selected subscription are supported.",
               "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
               "visible": "[and(contains(steps('profiles').userIdentity, 'EntraKerberos'), steps('profiles').deployStorage, steps('profiles').automateEntraKerberosTasks)]",
               "scope": {
-                "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
-                "location": "[steps('hosts').location.name]"
+                "subscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]"
               },
               "constraints": {
                 "required": true
@@ -3298,6 +3449,7 @@
         "artifactsContainerUri": "[if(steps('hosts').customizations.enableCustomizations, concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container), '')]",
         "artifactsUserAssignedIdentityResourceId": "[if(steps('hosts').customizations.enableCustomizations, steps('hosts').customizations.artifactsIdentity.id, '')]",
         "sessionHostCustomizations": "[if(steps('hosts').customizations.enableCustomizations, steps('hosts').customizations.customizations, parse('[]'))]",
+        "sessionHostVmApplications": "[if(and(steps('hosts').vmApplications.enableVmApplications, not(empty(steps('hosts').vmApplications.applicationVersionsApi.transformed.list))), map(steps('hosts').vmApplications.applications, (application) => parse(concat('{\"packageReferenceId\":\"', application.packageReferenceId, '\",\"order\":', application.order, ',\"treatFailureAsDeploymentFailure\":', string(application.treatFailureAsDeploymentFailure), '}'))), parse('[]'))]",
         "updateMaxVmsRemoved": "[steps('operationsAndMonitoring').updates.maxVmsRemoved]",
         "updateLogOffDelayMinutes": "[steps('operationsAndMonitoring').updates.logOffDelayMinutes]",
         "updateLogOffMessage": "[steps('operationsAndMonitoring').updates.logOffMessage]",

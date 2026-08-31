@@ -77,12 +77,16 @@ function Get-WebFailureDetail {
 }
 
 function Test-TransientManagedIdentityFailure {
-  param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+  param(
+    [System.Management.Automation.ErrorRecord]$ErrorRecord,
+    [string]$FailureDetail
+  )
 
   $exception = Get-WebException -ErrorRecord $ErrorRecord
   $response = $exception.Response
   $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }
-  if ($statusCode -in @(400, 408, 429, 500, 502, 503, 504)) { return $true }
+  if ($statusCode -eq 400 -and $FailureDetail -match '"error_description"\s*:\s*"Identity not found"') { return $true }
+  if ($statusCode -in @(404, 408, 410, 429, 500, 502, 503, 504)) { return $true }
   if ($exception -is [System.Net.WebException]) {
     return $exception.Status -in @(
       'ConnectFailure',
@@ -98,6 +102,12 @@ function Test-TransientManagedIdentityFailure {
     )
   }
   return $false
+}
+
+function Get-ManagedIdentityRetryDelaySeconds {
+  param([int]$Attempt)
+
+  return [int]([math]::Pow(2, $Attempt + 1) - 2)
 }
 
 function Test-TransientDownloadFailure {
@@ -124,65 +134,85 @@ function Test-TransientDownloadFailure {
   return $false
 }
 
-function Get-ManagedIdentityAccessToken {
+function Get-ManagedIdentityTokenResponse {
   param(
     [string]$TokenUri,
-    [int]$MaxAttempts = 12,
-    [int]$RetryDelaySeconds = 10
+    [int]$MaxAttempts = 5
   )
 
   for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
     $responseReceived = $false
+    $imdsClient = New-Object System.Net.WebClient
     try {
-      $response = Invoke-WebRequest -Headers @{Metadata = $true} -Uri $TokenUri -UseBasicParsing
+      $imdsClient.Proxy = $null
+      $imdsClient.Headers.Add('Metadata', 'true')
+      $responseContent = $imdsClient.DownloadString($TokenUri)
       $responseReceived = $true
-      $accessToken = ($response.Content | ConvertFrom-Json).access_token
-      if ([string]::IsNullOrWhiteSpace($accessToken)) {
+      $tokenResponse = $responseContent | ConvertFrom-Json
+      if ([string]::IsNullOrWhiteSpace($tokenResponse.access_token)) {
         throw 'Managed identity endpoint returned an empty access token.'
       }
-      return $accessToken
+      return $tokenResponse
     }
     catch {
       $failureDetail = Get-WebFailureDetail -ErrorRecord $_ -Operation ManagedIdentity
-      $isTransient = $responseReceived -or (Test-TransientManagedIdentityFailure -ErrorRecord $_)
+      $isTransient = $responseReceived -or (Test-TransientManagedIdentityFailure -ErrorRecord $_ -FailureDetail $failureDetail)
       if (-not $isTransient) {
         throw "Managed identity token request failed without retry. $failureDetail"
       }
       if ($attempt -eq $MaxAttempts) {
         throw "Managed identity token request failed after $MaxAttempts attempts. $failureDetail"
       }
-      Write-Log "Managed identity token request attempt $attempt of $MaxAttempts failed. $failureDetail Retrying in $RetryDelaySeconds seconds."
-      Start-Sleep -Seconds $RetryDelaySeconds
+      $retryDelaySeconds = Get-ManagedIdentityRetryDelaySeconds -Attempt $attempt
+      Write-Log "Managed identity token request attempt $attempt of $MaxAttempts failed. $failureDetail Retrying in $retryDelaySeconds seconds."
+      Start-Sleep -Seconds $retryDelaySeconds
+    }
+    finally {
+      $imdsClient.Dispose()
     }
   }
 }
 
 function Invoke-ArtifactDownload {
   param(
-    $WebClient,
     [string]$Uri,
     [string]$DestinationPath,
+    [string]$TokenUri = '',
     [int]$MaxAttempts = 6,
     [int]$RetryDelaySeconds = 10
   )
 
   for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    $webClient = New-Object System.Net.WebClient
     try {
-      $WebClient.DownloadFile($Uri, $DestinationPath)
-      return
+      if (-not [string]::IsNullOrWhiteSpace($TokenUri)) {
+        Write-Log "Getting access token for artifact download attempt $attempt of $MaxAttempts."
+        $tokenResponse = Get-ManagedIdentityTokenResponse -TokenUri $TokenUri
+        Write-Log "Managed identity token acquired. Resource=$($tokenResponse.resource); NotBefore=$($tokenResponse.not_before); ExpiresOn=$($tokenResponse.expires_on)"
+        $webClient.Headers.Add('x-ms-version', '2017-11-09')
+        $webClient.Headers.Add('Authorization', "Bearer $($tokenResponse.access_token)")
+      }
+
+      try {
+        $webClient.DownloadFile($Uri, $DestinationPath)
+        return
+      }
+      catch {
+        $failureDetail = Get-WebFailureDetail -ErrorRecord $_ -Operation Download
+        $isTransient = Test-TransientDownloadFailure -ErrorRecord $_
+        Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue
+        if (-not $isTransient) {
+          throw "Artifact download failed without retry. $failureDetail"
+        }
+        if ($attempt -eq $MaxAttempts) {
+          throw "Artifact download failed after $MaxAttempts attempts. $failureDetail"
+        }
+        Write-Log "Artifact download attempt $attempt of $MaxAttempts failed. $failureDetail Retrying with a newly requested token in $RetryDelaySeconds seconds."
+        Start-Sleep -Seconds $RetryDelaySeconds
+      }
     }
-    catch {
-      $failureDetail = Get-WebFailureDetail -ErrorRecord $_ -Operation Download
-      $isTransient = Test-TransientDownloadFailure -ErrorRecord $_
-      Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue
-      if (-not $isTransient) {
-        throw "Artifact download failed without retry. $failureDetail"
-      }
-      if ($attempt -eq $MaxAttempts) {
-        throw "Artifact download failed after $MaxAttempts attempts. $failureDetail"
-      }
-      Write-Log "Artifact download attempt $attempt of $MaxAttempts failed. $failureDetail Retrying in $RetryDelaySeconds seconds."
-      Start-Sleep -Seconds $RetryDelaySeconds
+    finally {
+      $webClient.Dispose()
     }
   }
 }
@@ -389,20 +419,16 @@ try {
   # Force TLS 1.2  -  fresh marketplace images default to TLS 1.0/1.1 which Azure Storage rejects.
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-  $WebClient = New-Object System.Net.WebClient
+  $TokenUri = ''
   If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {
-    Write-Log "Getting access token for '$Uri' using User Assigned Identity."
     $StorageEndpoint = ($Uri -split '://')[0] + '://' + ($Uri -split '/')[2] + '/'
     $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId"
-    $AccessToken = Get-ManagedIdentityAccessToken -TokenUri $TokenUri
-    $WebClient.Headers.Add('x-ms-version', '2017-11-09')
-    $WebClient.Headers.Add('Authorization', "Bearer $AccessToken")
   }
 
   $SourceFileName = ($Uri -split '/')[-1]
   Write-Log "Downloading '$Uri' to '$TempDir'."
   $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName
-  Invoke-ArtifactDownload -WebClient $WebClient -Uri $Uri -DestinationPath $DestFile
+  Invoke-ArtifactDownload -Uri $Uri -DestinationPath $DestFile -TokenUri $TokenUri
   Start-Sleep -Seconds 10
 
   If (!(Test-Path -Path $DestFile)) {

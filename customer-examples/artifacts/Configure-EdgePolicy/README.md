@@ -82,15 +82,15 @@ registry (no ADMX-backed Group Policy).
 
 ### `SmartScreenAllowListDomains`
 
-- **Type:** String (JSON array)
-- **Default:** `'["portal.azure.com", "core.windows.net", "portal.azure.us", "usgovcloudapi.net"]'`
+- **Type:** String array
+- **Default:** `@('portal.azure.com', 'core.windows.net', 'portal.azure.us', 'usgovcloudapi.net')`
 - **Description:** Domains exempted from Microsoft Defender SmartScreen warnings
 - **Policy Reference:** [SmartScreenAllowListDomains](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#smartscreenallowlistdomains)
 
 ### `PopupsAllowedForUrls`
 
-- **Type:** String (JSON array)
-- **Default:** `'["[*.]mil","[*.]gov","[*.]portal.azure.us","[*.]usgovcloudapi.net","[*.]azure.com","[*.]azure.net"]'`
+- **Type:** String array
+- **Default:** `@('[*.]mil', '[*.]gov', '[*.]portal.azure.us', '[*.]usgovcloudapi.net', '[*.]azure.com', '[*.]azure.net')`
 - **Description:** URL patterns allowed to display popup windows
 - **Policy Reference:** [PopupsAllowedForUrls](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#popupsallowedforurls)
 
@@ -133,14 +133,14 @@ registry (no ADMX-backed Group Policy).
 ### Custom SmartScreen Allowlist
 
 ```powershell
-$domains = '["portal.azure.com", "portal.azure.us", "contoso.com"]'
+$domains = @('portal.azure.com', 'portal.azure.us', 'contoso.com')
 .\Configure-EdgePolicy.ps1 -SmartScreenAllowListDomains $domains
 ```
 
 ### Custom Popup Allowlist
 
 ```powershell
-$popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
+$popups = @('[*.]mil', '[*.]gov', '[*.]contoso.com')
 .\Configure-EdgePolicy.ps1 -PopupsAllowedForUrls $popups
 ```
 
@@ -149,8 +149,8 @@ $popups = '["[*.]mil", "[*.]gov", "[*.]contoso.com"]'
 ```powershell
 .\Configure-EdgePolicy.ps1 `
     -AllowDeveloperTools $false `
-    -SmartScreenAllowListDomains '["portal.azure.us", "contoso.gov"]' `
-    -PopupsAllowedForUrls '["[*.]mil", "[*.]gov"]'
+  -SmartScreenAllowListDomains @('portal.azure.us', 'contoso.gov') `
+  -PopupsAllowedForUrls @('[*.]mil', '[*.]gov')
 ```
 
 ### Enforce a Single Managed Search Engine

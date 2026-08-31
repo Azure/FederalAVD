@@ -1,6 +1,10 @@
 ﻿# AVD Host Pool Deployment Template
 
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
+>
+> **First deployment:** Use the Host Pool Template Spec portal form and download the generated
+> parameter file from **Review + create**. Use the PowerShell and parameter examples below for
+> subsequent deployments, or as a fallback when the Template Spec UI is unavailable.
 
 This template uses Azure Virtual Desktop **standard management**. You own session-host creation,
 registration, update, and replacement. Compare it with the Commercial-only
@@ -553,7 +557,9 @@ New-AzSubscriptionDeployment `
 
 ## Examples — Parameter Files
 
-Ready-to-use sample parameter files are in `parameters\`. Copy and rename one into `customer\parameters\hostpools\` for your environment. The following annotated examples show the key patterns.
+Export the working first-deployment parameter file from the Template Spec UI into
+`customer\parameters\hostpools\`. The sample files in `parameters\` and the annotated examples below
+are references and a fallback when the Template Spec UI is unavailable.
 
 ### Minimal Pooled Desktop (Entra ID, Marketplace Image)
 

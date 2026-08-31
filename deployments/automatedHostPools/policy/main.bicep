@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { vmApplicationAssignmentType } from 'modules/policy/bicep/vmApplicationTypes.bicep'
 
 type fslogixConfigurationType = {
   identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid'
@@ -96,6 +97,11 @@ param artifactsUserAssignedIdentityResourceId string = ''
 @description('Optional. Ordered, idempotent customizations applied to automated session hosts. Uses the same object shape and execution order as the host pool and session hosts add-on.')
 param sessionHostCustomizations artifactCustomizationType[] = []
 
+@minLength(0)
+@maxLength(25)
+@description('Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy.')
+param sessionHostVmApplications vmApplicationAssignmentType[] = []
+
 @description('Optional. Tags applied to resources created by this policy stage.')
 param tags object = {}
 
@@ -118,6 +124,13 @@ var relativeSessionHostCustomizations = filter(sessionHostCustomizations, custom
 var sessionHostCustomizationConfigurationIsValid = empty(sessionHostCustomizations) || (!empty(artifactsUserAssignedIdentityResourceId) && (empty(relativeSessionHostCustomizations) || !empty(artifactsContainerUri)))
   ? true
   : fail('artifactsUserAssignedIdentityResourceId is required for sessionHostCustomizations, and artifactsContainerUri is required when any blobNameOrUri is relative.')
+var validVmApplications = filter(sessionHostVmApplications, application => contains(toLower(application.packageReferenceId), '/providers/microsoft.compute/galleries/') && contains(toLower(application.packageReferenceId), '/applications/') && contains(toLower(application.packageReferenceId), '/versions/'))
+var vmApplicationDefinitionResourceIds = map(sessionHostVmApplications, application => contains(toLower(application.packageReferenceId), '/versions/')
+  ? substring(application.packageReferenceId, 0, lastIndexOf(toLower(application.packageReferenceId), '/versions/'))
+  : application.packageReferenceId)
+var vmApplicationConfigurationIsValid = length(validVmApplications) == length(sessionHostVmApplications) && length(union(vmApplicationDefinitionResourceIds, [])) == length(vmApplicationDefinitionResourceIds)
+  ? true
+  : fail('sessionHostVmApplications must contain valid Gallery application version resource IDs and cannot contain more than one version of the same application.')
 var normalizedArtifactsContainerUri = endsWith(artifactsContainerUri, '/')
   ? take(artifactsContainerUri, max(length(artifactsContainerUri) - 1, 0))
   : artifactsContainerUri
@@ -174,6 +187,10 @@ module sessionHostComputePolicyDefinition 'modules/policy/bicep/sessionHostCompu
 }
 
 module sessionHostSystemAssignedIdentityPolicyDefinition 'modules/policy/bicep/sessionHostSystemAssignedIdentity.policyDefinition.bicep' = {
+  params: {}
+}
+
+module sessionHostVmApplicationPolicyDefinition 'modules/policy/bicep/sessionHostVmApplication.policyDefinition.bicep' = if (!empty(sessionHostVmApplications)) {
   params: {}
 }
 
@@ -420,6 +437,30 @@ module guestAttestationPolicyAssignment 'modules/policyAssignment.bicep' = if (i
   ]
 }
 
+module sessionHostVmApplicationPolicyAssignment 'modules/policyAssignment.bicep' = if (!empty(sessionHostVmApplications)) {
+  scope: resourceGroup(sessionHostResourceGroupName)
+  params: {
+    name: 'avd-sh-vm-applications'
+    location: location
+    policyIdentityResourceId: policyIdentity.outputs.resourceId
+    policyDefinitionResourceId: sessionHostVmApplicationPolicyDefinition!.outputs.policyDefinitionResourceId
+    displayName: 'Configure VM Applications on automated AVD session hosts'
+    description: 'Configures the selected ordered Azure Compute Gallery application versions as the authoritative VM Application list on every automated session host.'
+    parameters: {
+      effect: {
+        value: 'Modify'
+      }
+      galleryApplications: {
+        value: vmApplicationConfigurationIsValid ? sessionHostVmApplications : []
+      }
+    }
+    nonComplianceMessage: 'The session host must use the selected ordered Azure Compute Gallery application versions.'
+  }
+  dependsOn: [
+    policyIdentityVirtualMachineContributor
+  ]
+}
+
 module sessionHostConfigurationPolicyAssignment 'modules/policyAssignment.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
@@ -544,4 +585,7 @@ output resourceOwnershipTagPolicyAssignmentResourceId string = !empty(hostPoolRe
 output sessionHostCustomizationPolicyAssignmentResourceIds array = !empty(sessionHostCustomizations)
   ? [privateCustomizationPolicyAssignment!.outputs.resourceId]
   : []
+output sessionHostVmApplicationPolicyAssignmentResourceId string = !empty(sessionHostVmApplications)
+  ? sessionHostVmApplicationPolicyAssignment!.outputs.resourceId
+  : ''
 output sessionHostComputePolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId

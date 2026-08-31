@@ -96,9 +96,13 @@ Custom images are built by executing **artifacts** during the image build proces
 
 ### Required - Parameter Files
 
-Use the sample files in `deployments/imageBuild/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/imageBuild/`:
+Export the working parameter file from the Template Spec UI and store it under
+`customer/parameters/imageBuild/`. Remove the generated `timeStamp` parameter before reuse.
 
-> **⚠️ Common mistake — editing sample files directly:** Files under `deployments/imageBuild/parameters/` are shared reference samples and will be overwritten on `git pull`. Always copy a sample to `customer/parameters/imageBuild/` before editing. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+> **Fallback:** If the Template Spec UI is unavailable, copy a sample from
+> `deployments/imageBuild/parameters/` to `customer/parameters/imageBuild/` before editing it. Never
+> edit shared samples directly because repository updates overwrite them. See
+> [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
 **One parameter file is required per image build:**
 
@@ -320,11 +324,14 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
 
 ### CMK Encryption Reference
 
-Gallery image version encryption is managed by the **imageManagement** template. Deploy imageManagement with `keyManagement = CustomerManaged` or `CustomerManagedHSM` to create one Disk Encryption Set for the gallery, then pass its `diskEncryptionSetResourceId` output here. This avoids creating a new DES on every build.
+Gallery image version encryption is managed by the **imageManagement** template. Deploy imageManagement with `keyManagement = CustomerManaged` or `CustomerManagedHSM` to create a Disk Encryption Set (DES) for each target region. A DES is regional, and Azure requires it to be in the same subscription as the image. Pass the primary region's `diskEncryptionSetResourceId` output to the image build. When using a remote Compute Gallery, also pass a DES created in the remote region.
 
 | Parameter | Description | Example |
 | --- | --- | --- |
 | **diskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
+| **remoteDiskEncryptionSetResourceId** | Resource ID of a standard DES in the remote Compute Gallery region. Required by the form when remote Gallery CMK is enabled. | `/subscriptions/{sub}/resourceGroups/{remote-rg}/providers/Microsoft.Compute/diskEncryptionSets/{remote-des}` |
+| **confidentialVMDiskEncryptionSetResourceId** | Resource ID of the primary-region Confidential VM DES when guest-state encryption uses CMK. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{cvm-des}` |
+| **remoteConfidentialVMDiskEncryptionSetResourceId** | Resource ID of the remote-region Confidential VM DES when a remote Gallery is configured and guest-state encryption uses CMK. | `/subscriptions/{sub}/resourceGroups/{remote-rg}/providers/Microsoft.Compute/diskEncryptionSets/{remote-cvm-des}` |
 
 ### Image Management Resource References
 
@@ -366,19 +373,41 @@ The image build process includes automatic timestamp-based versioning:
 
 ## Building Custom Images
 
-### Method 1: Azure Portal (Deploy Button)
+### Method 1: Template Spec Portal Form (First Deployment)
 
-**Best for:** Quick deployments without local tooling
+Use the Template Spec portal form for the first deployment so the guided selections and validation
+produce a working image-build parameter file:
+
+```powershell
+.\tools\New-TemplateSpecs.ps1 `
+  -Location '<region>' `
+  -createSharedServices $false `
+  -createNetwork $false `
+  -createImageManagement $false `
+  -createCustomImage $true `
+  -createHostPool $false `
+  -createAutomatedHostPool $false `
+  -CreateAddOns $false
+```
+
+In the Azure portal, open **Template Specs**, select **AVD Custom Image**, and choose **Deploy**.
+On **Review + create**, select **Download template and parameters** before submitting. Store the
+working parameter file under `customer\parameters\imageBuild\` for subsequent builds, and remove
+the generated `timeStamp` parameter before reusing the file.
+
+### Method 2: Azure Portal Blue Button (Alternative)
+
+**Best for:** Portal deployment when publishing a Template Spec is not practical
 
 Click the button for your target cloud to open the deployment UI in Azure Portal:
 
 [![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FuiFormDefinition.json) [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FimageBuild.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageBuild%2FuiFormDefinition.json)
 
-**⚠️ Note:** For Air-Gapped clouds (Secret/Top Secret), create Template Specs using [`New-TemplateSpecs.ps1`](../tools/New-TemplateSpecs.ps1) or use PowerShell deployment methods below.
+**⚠️ Note:** Blue Button is unavailable in air-gapped clouds. Use the Template Spec method above.
 
-### Method 2: Using the PowerShell Helper Script
+### Method 3: Using the PowerShell Helper Script
 
-**Best for:** Automation and building multiple images
+**Best for:** Repeatable builds using a parameter file exported from the Template Spec UI
 
 The `Invoke-ImageBuilds.ps1` script automates the image build deployment process.
 
@@ -412,7 +441,7 @@ Build multiple images simultaneously:
 | **ParameterFilePrefixes** | Array | Yes | List of parameter file prefixes to process |
 | **SubscriptionId** | String | No | Target subscription (uses current context if not specified) |
 
-### Method 3: Manual Deployment with Azure CLI or PowerShell
+### Method 4: Manual Deployment with Azure CLI or PowerShell
 
 **Best for:** CI/CD pipelines and advanced automation
 

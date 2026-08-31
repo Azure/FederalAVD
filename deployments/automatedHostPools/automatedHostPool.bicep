@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { vmApplicationAssignmentType } from 'policy/modules/policy/bicep/vmApplicationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
 
@@ -424,6 +425,11 @@ param artifactsUserAssignedIdentityResourceId string = ''
 @description('Optional. Ordered, idempotent policy-based session-host customizations.')
 param sessionHostCustomizations artifactCustomizationType[] = []
 
+@minLength(0)
+@maxLength(25)
+@description('Optional. Authoritative ordered list of existing Azure Compute Gallery application versions assigned to automated session hosts through Azure Policy. Azure supports at most 25 VM Applications per VM.')
+param sessionHostVmApplications vmApplicationAssignmentType[] = []
+
 @description('Optional. Maximum VMs replaced concurrently during a Session Host Configuration update.')
 @minValue(1)
 param updateMaxVmsRemoved int = 1
@@ -607,6 +613,7 @@ var parentResourceTag = { 'cm-resource-parent': hostPoolResourceId }
 var hostPoolCustomTags = union(
   {
     hostsResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupHosts}'
+    hostPoolManagementType: 'Automated'
     hpIdentifier: hpBaseName
     hpNamingConvention: string({
       components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
@@ -1012,6 +1019,7 @@ module sessionHostPolicy 'policy/main.bicep' = {
     artifactsContainerUri: artifactsContainerUri
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     sessionHostCustomizations: sessionHostCustomizations
+    sessionHostVmApplications: sessionHostVmApplications
     tags: tags
   }
   dependsOn: [sessionHostResourceGroup]

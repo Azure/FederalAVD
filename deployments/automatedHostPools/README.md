@@ -37,8 +37,9 @@ in parallel; dependencies exist only where one phase consumes another phase's re
   zero-host state. The API does not accept an explicit `instanceCount: 0`.
 6. In parallel, deploys optional FSLogix storage, registers newly created Azure Files shares with
   an optional existing shared Recovery Services vault and policy, and deploys the policy/RBAC
-  required for settings the native service does not expose. Policy completion is required before
-  VM creation.
+  required for settings the native service does not expose. Policy definitions, assignments, and
+  RBAC are deployed before VM creation; policy evaluation and guest remediation remain
+  asynchronous.
 7. Updates `sessionHostManagements/default` with the requested `instanceCount` only after the
   zero-host resource, storage-dependent policy inputs, and policy assignments are ready.
 8. Removes the temporary deployment helper after final session-host provisioning is submitted.
@@ -130,6 +131,10 @@ currently exposed as a separate portal control.
   `DomainJoinUserPrincipalName` and `DomainJoinUserPassword`.
 - When monitoring is enabled, an existing AVD Insights Data Collection Rule and optional Data
   Collection Endpoint.
+- When VM Applications are enabled, existing application versions in an Azure Compute Gallery.
+  Each selected version must be replicated to the session-host region. Azure supports at most 25
+  VM Applications per VM, one version of each application, 2 GB per application package, and 50 GB
+  total across all application packages.
 - When Azure Files private endpoints are enabled, the private DNS zone resource ID.
 - To register newly deployed FSLogix Azure Files shares for backup, an existing Recovery Services
   vault and Azure Files snapshot backup policy in the session-host region. Shared Services can
@@ -180,9 +185,70 @@ which includes AVD Agent installation and registration.
 
 ## Deploy
 
-An automated host pool always requires a pre-existing credentials Key Vault. For the PoC path,
-deploy the secrets-vault-only Shared Services starter first. Supply credentials at deployment time;
-do not add them to the parameter file:
+An automated host pool always requires a pre-existing credentials Key Vault. The preferred path for
+every first deployment is the Template Spec portal UI. Its resource pickers, conditional fields,
+and validation guide the administrator to a working deployment and produce the parameter file used
+for subsequent PowerShell or CI/CD deployments. Do not start a first deployment by hand-authoring a
+parameter file unless the Template Spec UI is unavailable.
+
+### First Deployment: Template Spec Portal Forms
+
+From the repository root, connect to the target Azure Commercial subscription and publish the
+Shared Services and automated host-pool Template Specs:
+
+```powershell
+Connect-AzAccount
+Set-AzContext -Subscription '<subscription-id>'
+
+.\tools\New-TemplateSpecs.ps1 `
+  -Location '<region>' `
+  -createSharedServices $true `
+  -createNetwork $false `
+  -createImageManagement $false `
+  -createCustomImage $false `
+  -createHostPool $false `
+  -createAutomatedHostPool $true `
+  -CreateAddOns $false
+```
+
+Publishing makes the guided forms available; it does not deploy either workload. In the Azure
+portal, open **Template Specs** and deploy them in this order:
+
+1. Deploy **AVD Shared Services** with the Secrets Key Vault enabled. On the form's credentials
+  step, supply the VM administrator credentials and any domain-join credentials required by the
+  selected join type.
+2. Deploy **AVD Automated Host Pool**. Select the credentials Key Vault created in step 1, then
+  select the existing subnet, image, and any optional monitoring, encryption, backup, or private
+  endpoint resources.
+3. On **Review + create**, select **Download template and parameters** before creating the host
+  pool. Save the generated automated-host-pool parameter file under
+  `customer\parameters\automatedHostPools\`; this folder is intentionally excluded from git.
+
+The automated Template Spec is opt-in because the preview resource API is available only in Azure
+Commercial. The form uses the default secret names listed in Prerequisites unless **Customize
+credential secret names** is selected. Optional picker overrides submit the selected versionless
+secret URI and never retrieve secret values. The deploying user needs Key Vault Reader on the
+credentials vault and browser-side data-plane network access to list secret metadata. Users who
+cannot reach the vault can leave the overrides disabled and use the default names.
+
+### Blue Button (Azure Commercial Alternative)
+
+Use this only when publishing a Template Spec is not practical. The Template Spec portal form
+remains the preferred path for every first deployment because it provides a durable, versioned form
+and a working parameter file for later automation.
+
+[![Deploy to Azure](../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FautomatedHostPools%2FautomatedHostPool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FautomatedHostPools%2FuiFormDefinition.json)
+
+The button targets files on the repository's `main` branch and becomes usable after this automated
+host-pool feature is merged. There is no Azure Government button because the required preview API
+is available only in Azure Commercial.
+
+### Subsequent Deployments: PowerShell or CI/CD
+
+Use the working parameter files exported from the Template Spec forms as the inputs for repeatable
+deployments. Supply credentials at deployment time; do not add them to the parameter file. The
+following commands also document the direct deployment sequence for environments where the
+Template Spec UI is unavailable:
 
 ```powershell
 New-Item -ItemType Directory -Force customer\parameters\sharedServices | Out-Null
@@ -234,26 +300,10 @@ Omit the two backup parameters when the Shared Services backup vault is not depl
 registration applies only to newly deployed Azure Files storage; existing storage selected for
 FSLogix configuration is not modified by this deployment.
 
-To deploy through the Azure portal, publish the automated host-pool Template Spec and its form:
-
-```powershell
-.\tools\New-TemplateSpecs.ps1 `
-  -Location eastus `
-  -createHostPool $false `
-  -createAutomatedHostPool $true `
-  -CreateAddOns $false
-```
-
-The automated Template Spec is opt-in because the preview resource API is available only in Azure
-Commercial. The portal form selects existing network, Key Vault, image, monitoring, and encryption
-resources. It can also select an existing shared Recovery Services vault and identify its Azure
-Files snapshot backup policy. Network selection is limited to the virtual network and subnet so
-subnet-level NSG configuration remains authoritative. The form uses the default secret names
-listed in Prerequisites unless **Customize credential secret names** is selected. Optional picker
-overrides submit the selected versionless secret URI and never retrieve secret values. The
-deploying user needs Key Vault Reader on the credentials vault and browser-side data-plane network
-access to list secret metadata; users who cannot reach the vault can leave the overrides disabled
-and use the default names.
+The Template Spec form and direct deployment expose the same resource selections. Network
+selection is limited to the virtual network and subnet so subnet-level NSG configuration remains
+authoritative. Both methods can select an existing shared Recovery Services vault and identify its
+Azure Files snapshot backup policy.
 
 Azure Files share soft delete and Azure Backup retention are separate. Soft delete retains an
 accidentally deleted share for 14 days by default. The shared snapshot policy retains scheduled
@@ -289,6 +339,7 @@ capabilities are therefore available and are not feature gaps:
 | FSLogix Azure Files backup registration | Newly deployed shares can be registered with an existing shared-services Recovery Services vault and Azure Files snapshot backup policy. |
 | Disk Encryption Set and managed-disk network isolation | The DES is created before the temporary deployment helper and directly encrypts its OS disk. Policy injects the same DES into service-created session hosts and disables managed-disk public and export access when selected. |
 | Ordered private customizations | Policy attaches the artifact identity and runs customizations from the private artifact source in input order. |
+| Compute Gallery VM Applications | Select up to 25 existing Gallery application versions and their installation order. One resource-group-scoped policy assignment maintains the complete ordered array on every session host. |
 
 The remaining feature parity gaps are explicit boundaries of the automated management model:
 
@@ -440,6 +491,106 @@ policy-readiness resource. The five-minute delay reduces the chance that initial
 before the assignments are effective, but it is not a policy-compliance probe. After deployment,
 verify that the provisioned hosts received the required policy settings before placing the host pool
 into production.
+
+The optional VM Applications policy uses one assignment to own the complete ordered
+`applicationProfile.galleryApplications` array. Updating the selected list can add, remove, reorder,
+or replace application versions. It also replaces VM Applications added manually or by another
+tool, so do not use another owner for this property in the dedicated session-host resource group.
+The deployment does not publish applications or create policy remediation tasks. New hosts receive
+the array during creation; run an Azure Policy remediation task or update an existing VM to apply a
+changed list to existing hosts. Application installation remains asynchronous, so verify extension
+state and application readiness before admitting users.
+
+### Logon Availability And Asynchronous Configuration
+
+> **Warning:** A successful automated-host-pool deployment, a successfully provisioned VM, or an
+> AVD session host with status `Available` does not prove that post-provisioning Azure Policy has
+> finished. `DeployIfNotExists` evaluation, identity attachment, Run Command creation, artifact
+> download, and guest execution occur asynchronously for each host. A user can therefore be routed
+> to a new host before its policy-deployed configuration and private customizations complete.
+
+Private customizations run serially in the order supplied, but that ordering applies only after
+Azure Policy starts the nested deployment on a host. It does not block AVD registration or user
+logon, and hosts created together can reach the same customization at different times. ARM
+deployment success confirms that the host-pool configuration and policy infrastructure were
+submitted successfully; it is not a fleet-readiness signal.
+
+Use runtime private customizations for host-pool-specific software or settings that can tolerate a
+short convergence window and a clearly defined failure or retry procedure. Noncritical inventory,
+support, or management agents can be good candidates when delayed startup does not affect users or
+violate an operational requirement. The same type of agent might not be appropriate when security
+policy, user monitoring, audit collection, licensing, or workload support requires it to be running
+before users connect. Classify each customization by its actual readiness requirement rather than
+by software category alone.
+
+[Azure VM Applications](https://learn.microsoft.com/azure/virtual-machines/vm-applications) are
+another option for software that should remain outside the base image. Publish a versioned package
+to Azure Compute Gallery, then assign it to an existing VM through the VM's **Extensions +
+applications** page, Azure CLI, PowerShell, REST, or ARM. VM Applications support install, update,
+and remove commands, application ordering, regional package replication, and per-VM deployment
+status. They are useful for targeted or independently versioned software and do not require a new
+image version.
+
+Treat a direct VM Application assignment as instance-specific on an automated host pool. It does
+not update Session Host Configuration, automatically target later autoscale hosts, or survive VM
+replacement as an intended fleet declaration. Use Azure Policy or owned automation when every
+current and future host must receive the VM Application, and validate that workflow against the
+service-managed VM lifecycle. VM Application installation is also asynchronous. Setting
+`treatFailureAsDeploymentFailure` reports installation failure through VM provisioning, but it does
+not by itself prove that AVD will withhold the host from user routing. Apply the same readiness and
+access controls used for private customizations when the application is required before logon.
+
+### Future Enhancement: Publish Artifact Packages as VM Applications
+
+A future image-management workflow can publish selected FederalAVD artifact packages as Azure
+Compute Gallery VM Applications. This workflow should remain separate from host-pool deployment
+and should not publish every artifact automatically. The proposed implementation should:
+
+1. Read a customer-owned `customer/parameters/imageManagement/vmApplications.json` manifest.
+2. Reuse ZIP packages produced and uploaded by `Update-ImageArtifacts.ps1`.
+3. Require explicit application name, semantic version, supported OS, install command, remove
+  command, optional update command, and target regions for each published package.
+4. Create the Gallery application definition when absent and publish only explicitly declared
+  immutable versions.
+5. Use managed-identity access from the Compute Gallery to private artifact blobs instead of
+  durable SAS tokens.
+6. Wait for regional replication and return application-version resource IDs that can be selected
+  by the automated host-pool form.
+7. Support connected and pre-staged air-gapped packaging flows without introducing runtime public
+  download dependencies.
+
+Configuration-only artifacts and packages without meaningful uninstall behavior should remain
+image-build or private-customization artifacts unless their VM Application lifecycle is explicitly
+defined.
+
+Do not make a critical logon prerequisite depend only on asynchronous customization unless another
+control prevents user access until configuration is verified. Examples include profile-container
+access, security controls required before user access, authentication dependencies, and software
+without which the assigned workload cannot function.
+
+FSLogix illustrates this boundary. This deployment provisions FSLogix storage before host creation,
+but the session-host registry configuration is applied later by a policy-deployed Run Command. A
+user who reaches a host before that command succeeds can encounter a blocked or inconsistent logon.
+After the policy applies, this solution enables FSLogix `PreventLoginWithFailure` and
+`PreventLoginWithTempProfile`, so a profile attachment failure blocks logon instead of falling back
+to a temporary or local profile. Those settings protect profile integrity, but they do not prevent
+an early connection attempt before asynchronous FSLogix configuration has converged.
+
+For production environments, consider managing FSLogix and similarly critical settings through
+Intune or another continuously enforced configuration-management platform. Bake stable
+prerequisites into the image when practical. Intune is also asynchronous, so align device
+enrollment, compliance, application assignment, and access controls with the organization's host
+readiness process rather than assuming enrollment alone blocks logon.
+
+Before enabling broad user access or treating newly created capacity as ready:
+
+1. Confirm every expected session host is registered and healthy in AVD.
+2. Confirm the relevant policy assignments report each host compliant.
+3. Confirm `ConfigureSessionHost` and every required private-customization Run Command completed
+  successfully on each host.
+4. Review `C:\Windows\Logs\<customization-name>.log` for artifact or guest-configuration failures.
+5. Define monitoring and an operational response for hosts that remain noncompliant, fail a Run
+  Command, or become available before configuration converges.
 
 The FSLogix storage template remains independently deployable. Automated session-host policy is an
 internal part of this deployment and is not published or supported as a separate deployment.

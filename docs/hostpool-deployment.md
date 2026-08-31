@@ -116,40 +116,48 @@ If building custom images with pre-installed software:
 
 ## Deployment Methods
 
-Choose the deployment method that best fits your workflow:
+Use the Template Spec portal form for every first deployment. The form guides resource selection
+and validation, then provides the working parameter file used for subsequent PowerShell, Azure CLI,
+or CI/CD deployments.
 
-### Method 1: Azure Portal (Template Specs)
+### Method 1: Template Spec Portal Form (First Deployment)
 
 **Best for:** GUI-based deployments with built-in validation
 
-#### Steps:
+#### Steps
 
 1. **Create Template Spec** (one-time setup):
 
    ```powershell
-   cd C:\repos\FederalAVD\tools
-   .\New-TemplateSpecs.ps1 -Location "East US 2"
+   .\tools\New-TemplateSpecs.ps1 `
+     -Location 'eastus2' `
+     -createSharedServices $false `
+     -createNetwork $false `
+     -createImageManagement $false `
+     -createCustomImage $false `
+     -createHostPool $true `
+     -createAutomatedHostPool $false `
+     -CreateAddOns $false
    ```
 
-2. **Deploy from Azure Portal**:
-   - Navigate to **Template Specs** in Azure Portal
-   - Find `ts-avd-hostpool-<region>`
-   - Click **Deploy**
-   - Fill out the deployment form
-   - Click **Review + Create**
+2. In the Azure portal, open **Template Specs**.
+3. Select **AVD Host Pool** and choose **Deploy**.
+4. Complete the guided deployment form.
+5. On **Review + create**, select **Download template and parameters**.
+6. Save the working file under `customer\parameters\hostpools\` before creating the deployment.
 
 **Benefits:**
 
 - Interactive UI form with parameter descriptions
 - Built-in parameter validation
 - Visual deployment progress
-- No local tooling required
+- Produces a validated parameter file for repeatable deployments
 
-### Method 2: PowerShell/Azure CLI
+### Method 2: PowerShell/Azure CLI (Subsequent Deployments)
 
-**Best for:** Automation, CI/CD pipelines, repeatable deployments
+**Best for:** Automation and CI/CD using a parameter file exported from the Template Spec UI
 
-#### PowerShell Example:
+#### PowerShell Example
 
 ```powershell
 # Connect to Azure
@@ -167,7 +175,7 @@ New-AzSubscriptionDeployment `
     -Name $deploymentName
 ```
 
-#### Azure CLI Example:
+#### Azure CLI Example
 
 ```bash
 # Login to Azure
@@ -186,9 +194,9 @@ az deployment sub create \
     --name $DEPLOYMENT_NAME
 ```
 
-### Method 3: GitHub Deploy Button
+### Method 3: GitHub Deploy Button (Alternative)
 
-**Best for:** Quick testing and demos
+**Best for:** Portal testing when publishing a Template Spec is not practical
 
 [![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2Fhostpool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2Fhostpool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2FuiFormDefinition.json)
@@ -201,7 +209,8 @@ az deployment sub create \
 
 ### Parameter Files
 
-Use the sample files in `deployments/hostpools/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/hostpools/`:
+Export the working parameter file from the Template Spec UI and store it under
+`customer/parameters/hostpools/`:
 
 ```text
 customer/parameters/hostpools/
@@ -210,7 +219,10 @@ customer/parameters/hostpools/
 └── test.hostpool.parameters.json
 ```
 
-> **⚠️ Common mistake — editing `customer-examples/` or `deployments/hostpools/parameters/` directly:** Sample files under `deployments/` are shared and will be overwritten when you pull repo updates. Always copy a sample to `customer/parameters/hostpools/` before editing. The `customer/` folder is git-ignored by design — your environment-specific files stay local and safe. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
+> **Fallback:** If the Template Spec UI is unavailable, copy a sample from
+> `deployments/hostpools/parameters/` to `customer/parameters/hostpools/` before editing it. Never
+> edit shared samples directly because repository updates overwrite them. See
+> [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
 ### Key Parameters
 
@@ -391,11 +403,12 @@ graph TD
 
 > **CMK timing:** Disk Encryption Sets and the storage encryption User-Assigned Identity are created in the same phase as Monitoring and Control Plane (~5–15 minutes before VMs and storage accounts deploy). This gives Azure RBAC propagation time to complete before the resources that depend on those role assignments are created, without requiring any polling or deployment VM dependency.
 
-### Step-by-Step Deployment
+### PowerShell Deployment After Parameter Export
 
-#### 1. Prepare Parameter File
+#### 1. Select the Exported Parameter File
 
-Copy and customize a parameter file:
+Use the working file downloaded from the Template Spec form. If the form is unavailable, copy and
+customize a reference file instead:
 
 ```powershell
 # Copy example parameter file
@@ -1281,23 +1294,22 @@ The solution includes an automated networking deployment for creating spoke VNet
 
 **Deploy networking infrastructure:**
 
-**Option 1: Azure Portal**
+#### Option 1: Template Spec Portal Form
+
+1. In the Azure portal, open **Template Specs**.
+2. Select **AVD Network Spoke** and choose **Deploy**.
+3. Configure the virtual network address space, subnets, optional hub peering, routing, and private
+  DNS zones.
+4. On **Review + create**, select **Download template and parameters** before submitting, then save
+  the working parameter file under `customer\parameters\networking\`.
+
+#### Option 2: Blue Button (Azure Commercial / Government Alternative)
 
 [![Deploy Networking](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json)
 
-**Option 2: Template Spec**
-1. Navigate to **Template Specs** in Azure Portal
-2. Select **Azure Virtual Desktop Networking**
-3. Click **Deploy**
-4. Configure:
-   - Virtual network address space
-   - Subnet configurations
-   - Hub VNet for peering (optional)
-   - Private DNS zones to create
-5. Deploy
+#### What Gets Deployed
 
-**What gets deployed:**
 - Virtual network with configurable address space
 - Subnets (session hosts, private endpoints, etc.)
 - VNet peering to hub (optional)

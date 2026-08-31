@@ -63,6 +63,45 @@ body:
       required: true
 
   - type: textarea
+    id: scope
+    attributes:
+      label: Scope and Non-Goals
+      description: State what the feature should cover and what should remain outside this work.
+      placeholder: |
+        In scope:
+        - ...
+
+        Out of scope:
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: List observable outcomes that would make this feature complete.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and Related Work
+      description: Link related issues or documentation and identify required Azure resources, APIs, or deployment steps.
+
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and Air-Gapped Considerations
+      description: Describe identity, network, secret, compliance, and disconnected-cloud implications, or state that none are known.
+    validations:
+      required: true
+
+  - type: textarea
     id: alternatives
     attributes:
       label: Alternatives Considered

@@ -26,6 +26,8 @@ lifecycle:
 - Optionally install Azure Monitor Agent and associate each session host with a DCR and DCE.
 - Optionally configure FSLogix after independently provisioned profile storage is available.
 - Run ordered customizations from a private artifact location by using managed identities.
+- Optionally maintain one authoritative ordered array of existing Azure Compute Gallery VM
+   Application versions.
 - Optionally create or reuse a Disk Encryption Set and assign it when service-managed hosts are
    created.
 - Optionally disable managed-disk public network access with `networkAccessPolicy: DenyAll`.
@@ -51,8 +53,15 @@ Required outputs are:
 
 The policy module deploys policy definitions at subscription scope and assigns
 them to the dedicated session host resource group. The assignment must exist before Session Host
-Management provisions VMs so new hosts are evaluated immediately. Existing hosts are reported as
-noncompliant but are not remediated by this module.
+Management provisions VMs so new hosts are eligible for post-provisioning evaluation. Azure Policy
+evaluation and `DeployIfNotExists` remediation are asynchronous and do not gate AVD registration or
+user logon. Existing hosts are reported as noncompliant but are not remediated by this module.
+
+Deployment of the policy definition, assignment, remediation identity, and RBAC is a control-plane
+prerequisite, not proof that a host has converged. Run Command policies determine compliance only
+after their named command reaches successful provisioning. Operators must not infer guest
+configuration readiness from ARM deployment success, VM provisioning success, or AVD session-host
+availability.
 
 The assignments use a user-assigned policy remediation identity with the roles required by the selected
 policies. Resource-group scope is the enforcement boundary, so the target resource group must be
@@ -187,6 +196,7 @@ size remains enforceable independently.
 | Ownership tags | Inherit `cm-resource-parent` from the dedicated resource group | Built-in policy `cd3aa116-8754-49c9-a813-ad46512ece54` | Implemented |
 | FSLogix registry settings | Configure FSLogix conditionally within the unified session-host configuration Run Command | `configureFSLogix` and `fslogixConfiguration` | Implemented |
 | Private customizations | Union the artifact UAI into the existing VM identity map, then deploy Run Commands serially | `sessionHostCustomizations` | Implemented with input order preserved and resource-scoped Managed Identity Operator |
+| Compute Gallery VM Applications | Replace `applicationProfile.galleryApplications` with one authoritative ordered array through one resource-group-scoped `Modify` assignment | `sessionHostVmApplications` | Implemented; up to 25 existing versions |
 | Disk Encryption Set | Create a key and DES or reuse an existing DES, then inject its resource ID into each VM creation request | `keyManagementDisks` | Implemented |
 | Managed-disk public access | Set `publicNetworkAccess: Disabled` and `networkAccessPolicy: DenyAll`; no Disk Access resource is used | `disableManagedDiskPublicNetworkAccess` | Implemented |
 
@@ -227,6 +237,10 @@ are explicit platform boundaries rather than silent policy gaps:
 2. Do not copy a built-in policy into this repository solely to change assignment parameters.
 3. Run Command policies determine compliance from the successful state of the named Run Command.
    They configure newly created hosts once and do not use version changes to target existing hosts.
+   Because evaluation and remediation are asynchronous, pair critical profile, security,
+   authentication, monitoring, or workload prerequisites with a readiness or access control that
+   prevents user access until the required state is verified. Noncritical agents and software that
+   tolerate delayed convergence remain appropriate customization candidates.
 4. Customization artifacts must be reachable without public network access and authenticated by a
    managed identity. SAS tokens, storage keys, and embedded credentials are not permitted.
 5. The policy assignment identity deploys remediation resources; the artifact UAI retrieves private
@@ -242,6 +256,9 @@ are explicit platform boundaries rather than silent policy gaps:
    automated host-pool dependency graph.
 8. Built-in policy availability must be validated per Azure cloud. Unsupported built-ins need an
    explicit deployment blocker or a reviewed custom equivalent.
+9. The VM Application assignment is the sole owner of the complete
+   `applicationProfile.galleryApplications` array. Do not combine it with manual or external
+   management of that property in the dedicated session-host resource group.
 
 The automated host-pool deployment currently blocks non-Commercial clouds. The custom monitoring
 initiative is therefore deployed only where its Azure Monitor Agent extension and association
@@ -271,6 +288,15 @@ provided. The supplied array order is preserved with serial nested deployments.
 The policy module does not create remediation tasks. Existing hosts that lack a successful named Run
 Command are reported as noncompliant during periodic evaluation but are not changed automatically.
 Use the `runCommandsOnVms` add-on for intentional updates or reruns on existing hosts.
+
+VM Applications are selected from versions already published in an Azure Compute Gallery; this
+module does not create galleries, application definitions, versions, or replication targets. Each
+version must be replicated to the VM region. Azure permits up to 25 applications per VM, only one
+version of an application, packages up to 2 GB each, and 50 GB total package size. The single
+`avd-sh-vm-applications` assignment replaces the full ordered array, including additions, removals,
+version changes, and order changes. New hosts are modified during creation. For existing hosts,
+create an intentional Azure Policy remediation task or update the VM after changing the array;
+application installation and policy convergence are asynchronous.
 
 ## Authoritative References
 

@@ -1,6 +1,10 @@
 ﻿# AVD Networking Infrastructure Template
 
 > **📖 User Guide:** For deployment instructions and scenarios, see the [Quick Start Guide - Networking](../../docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield)
+>
+> **First deployment:** Use the Networking Template Spec portal form and download the generated
+> parameter file from **Review + create**. Use the examples below only after that guided deployment,
+> or as a fallback when the Template Spec UI is unavailable.
 
 ## Overview
 

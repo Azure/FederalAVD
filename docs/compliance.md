@@ -550,11 +550,14 @@ Pass arguments to override defaults — for example, to target only specific app
 ```json
 {
   "blobNameOrUri": "DoD-STIGs.zip",
-  "arguments": "-CloudOnly 'True' -ApplicationsToSTIG '[\"Google Chrome\",\"Mozilla Firefox\"]'"
+  "arguments": "-ApplicationsToSTIG @('Google Chrome','Mozilla Firefox') -SearchForApplications"
 }
 ```
 
-Use `-CloudOnly 'False'` for hybrid (domain-joined) session hosts. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for all parameters.
+For PowerShell artifacts, use native PowerShell values in the `arguments` string: `@()` for string
+arrays, `$true` or `$false` for booleans, and a parameter name without a value for a switch.
+`Invoke-Customization.ps1` converts these values to typed named parameters before invoking the
+artifact. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for all parameters.
 
 **Deploy at VM runtime:** To apply STIGs to an existing fleet without rebuilding the image — for example, after a quarterly STIG package update — add the same artifact reference to the `sessionHostCustomizations` parameter in the host pool deployment instead of `customizations` in the image build. The mechanism is identical; only the parameter name differs.
 
@@ -563,7 +566,7 @@ Use `-CloudOnly 'False'` for hybrid (domain-joined) session hosts. See [`custome
   "value": [
     {
       "blobNameOrUri": "DoD-STIGs.zip",
-      "arguments": "-Upgrade 'True' -Version '2025.10'"
+      "arguments": "-Upgrade -Version '2026.07'"
     }
   ]
 }

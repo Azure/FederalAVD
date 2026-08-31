@@ -97,7 +97,15 @@ The full `hostpool.bicep` template (`targetScope = 'subscription'`) additionally
 
 ## Deployment
 
-### Azure Portal (UI Form)
+### Template Spec Portal Form (First Deployment)
+
+Publish the add-on Template Specs with
+[`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
+Azure portal and deploy **AVD Session Hosts**. On **Review + create**, select **Download template
+and parameters** before submitting, then retain the working parameter file for subsequent
+PowerShell, Azure CLI, or Session Host Replacer deployments.
+
+### Blue Button (Azure Commercial / Government Alternative)
 
 [![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2FuiFormDefinition.json)
@@ -111,7 +119,7 @@ The portal form walks through four steps:
 | **Session Hosts** | Subscription/region/resource group, naming, network, image, VM size, availability, security, FSLogix, monitoring, customizations |
 | **Review + Create** | ARM template validation and deployment |
 
-### PowerShell / Azure CLI
+### PowerShell / Azure CLI (Subsequent Deployments)
 
 Deploy `main.json` (the compiled ARM template) with your parameter values directly:
 
@@ -128,10 +136,6 @@ New-AzResourceGroupDeployment `
   -sessionHostCount 2 `
   -sessionHostIndex 1
 ```
-
-### Template Spec (Air-Gapped / All Clouds)
-
-Publish `main.json` as an Azure Template Spec and deploy from there. This is the recommended approach for Secret and Top Secret clouds and is required by the Session Host Replacer function app. See [New-TemplateSpecs.ps1](../../../tools/New-TemplateSpecs.ps1) for the publishing helper script.
 
 ---
 

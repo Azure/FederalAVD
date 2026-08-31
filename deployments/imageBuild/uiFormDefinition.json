@@ -1959,6 +1959,19 @@
                                     }
                                 },
                                 {
+                                    "name": "existingRemoteDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Remote Standard Disk Encryption Set",
+                                    "placeholder": "Select a standard Disk Encryption Set in the remote region...",
+                                    "toolTip": "Required. Select a standard DES in the same subscription and region as the remote Compute Gallery. It encrypts the remote-region gallery image replicas.",
+                                    "visible": "[and(steps('imageDest').encryption.enableCmk, steps('imageDest').disasterRecovery.specifyRemoteGallery)]",
+                                    "multiLine": true,
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location)), not(equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                    }
+                                },
+                                {
                                     "name": "confidentialVMEncryptionType",
                                     "type": "Microsoft.Common.DropDown",
                                     "label": "Confidential VM Guest State Encryption",
@@ -1993,6 +2006,19 @@
                                     "constraints": {
                                         "required": true,
                                         "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), and(equals(toLower(first(skip(split(des.id, '/'), 4))), toLower(first(skip(split(steps('prereqs').gallery.gallery.id, '/'), 4)))), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "existingRemoteConfidentialVMDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Remote Confidential VM Disk Encryption Set",
+                                    "placeholder": "Select a Confidential VM Disk Encryption Set in the remote region...",
+                                    "toolTip": "Required. Select a Confidential VM DES in the same subscription and region as the remote Compute Gallery. This DES must have CVM Orchestrator key release permissions pre-configured.",
+                                    "visible": "[and(steps('imageDest').disasterRecovery.specifyRemoteGallery, and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')))]",
+                                    "multiLine": true,
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location)), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey'))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
                                     }
                                 }
                             ]
@@ -2181,8 +2207,10 @@
                 "logStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
                 "logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",
                 "diskEncryptionSetResourceId": "[if(steps('imageDest').encryption.enableCmk, coalesce(steps('imageDest').encryption.existingDiskEncryptionSetResourceId, ''), '')]",
+                "remoteDiskEncryptionSetResourceId": "[if(and(steps('imageDest').encryption.enableCmk, steps('imageDest').disasterRecovery.specifyRemoteGallery), coalesce(steps('imageDest').encryption.existingRemoteDiskEncryptionSetResourceId, ''), '')]",
                 "galleryImageVersionConfidentialVMEncryptionType": "[if(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), coalesce(steps('imageDest').encryption.confidentialVMEncryptionType, ''), '')]",
                 "confidentialVMDiskEncryptionSetResourceId": "[if(and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')), coalesce(steps('imageDest').encryption.existingConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
+                "remoteConfidentialVMDiskEncryptionSetResourceId": "[if(and(steps('imageDest').disasterRecovery.specifyRemoteGallery, and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk'))), coalesce(steps('imageDest').encryption.existingRemoteConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
                 "imageDefinitionResourceId": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, true), steps('imageDest').imageDefinition.existingImageDefinition.id, '')]",
                 "customImageDefinitionName": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.customImageDefinitionName, '')]",
                 "imageDefinitionPublisher": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.imageDefinitionPublisher, '')]",

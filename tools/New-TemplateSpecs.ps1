@@ -31,10 +31,17 @@ $resourceAbbreviations = Get-Content -Path $resourceAbbreviationsPath -Raw | Con
 
 # Determine cloud environment and get location abbreviation
 $cloud = $Context.Environment.Name
-$locationsEnvProperty = if ($cloud -like 'US*') { 'other' } else { $cloud }
+$isAirGappedCloud = $cloud -like 'US*'
+$locationsEnvProperty = if ($isAirGappedCloud) { 'other' } else { $cloud }
 $locationProperty = $locations.$locationsEnvProperty
+$locationForLookup = if ($isAirGappedCloud -and $Location.Length -gt 5) {
+    $Location.Substring(5)
+}
+else {
+    $Location
+}
 
-$locationAbbr = $locationProperty.$Location.abbreviation
+$locationAbbr = $locationProperty.$locationForLookup.abbreviation
 
 if ($null -eq $locationAbbr) {
     Write-Warning "Could not find abbreviation for location '$Location'. Using full location name."

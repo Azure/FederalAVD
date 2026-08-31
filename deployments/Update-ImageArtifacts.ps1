@@ -877,15 +877,31 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     } else {
                         'x64'
                     }
-                    $WingetLogFilter = '^Found |[Dd]ownloaded:|[Ee]rror|[Ff]ailed|[Cc]ould not'
-                    if ($WingetArch -eq 'neutral') {
+                    $WingetArguments = @(
+                        'download', '--id', $Download.WingetId, '--exact',
+                        '--download-directory', $TempSoftwareDownloadDir,
+                        '--skip-license', '--accept-source-agreements', '--accept-package-agreements',
+                        '--disable-interactivity'
+                    )
+                    If ($PreserveLayout) {
+                        $WingetArguments += @('--source', 'msstore')
+                    }
+                    If ($WingetArch -eq 'neutral') {
                         Write-Output "[$SoftwareName] Architecture : (omitted - neutral/multi-arch)"
-                        & winget download --id $Download.WingetId --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
-                            Where-Object { $_ -match $WingetLogFilter } | ForEach-Object { Write-Output "[$SoftwareName]  $_" }
-                    } else {
+                    }
+                    Else {
                         Write-Output "[$SoftwareName] Architecture : $WingetArch"
-                        & winget download --id $Download.WingetId --architecture $WingetArch --download-directory $TempSoftwareDownloadDir --skip-license --accept-source-agreements --accept-package-agreements |
-                            Where-Object { $_ -match $WingetLogFilter } | ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                        $WingetArguments += @('--architecture', $WingetArch)
+                    }
+
+                    $WingetOutput = @(& winget @WingetArguments 2>&1)
+                    $WingetExitCode = $LASTEXITCODE
+                    $WingetLogFilter = '^Found |[Dd]ownloaded:|[Ee]rror|[Ff]ailed|[Cc]ould not|[Dd]oes not support'
+                    $WingetOutput | Where-Object { $_ -match $WingetLogFilter } |
+                        ForEach-Object { Write-Output "[$SoftwareName]  $_" }
+                    If ($WingetExitCode -ne 0) {
+                        $WingetFailureDetail = ($WingetOutput | Select-Object -Last 1).ToString().Trim()
+                        Throw "winget download failed for '$SoftwareName' with exit code $WingetExitCode. $WingetFailureDetail"
                     }
                     If ($PreserveLayout) {
                         # Preserve the full downloaded layout (bundle + Dependencies subfolder).
