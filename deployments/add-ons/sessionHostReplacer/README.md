@@ -1272,6 +1272,7 @@ INFO: All 2 pending host(s) successfully registered - clearing mappings
 The Session Host Replacer includes a critical safety mechanism that **prevents capacity loss** when new session hosts fail to register properly with the host pool.
 
 **Problem Scenario**:
+
 - New session hosts are deployed successfully (ARM deployment succeeds)
 - However, the hosts fail to become "Available" in AVD (bad image, config issues, VM extensions fail)
 - Without protection, the function would proceed to delete/shutdown old working hosts
