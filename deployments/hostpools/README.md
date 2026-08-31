@@ -1,6 +1,15 @@
 ﻿# AVD Host Pool Deployment Template
 
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
+>
+> **First deployment:** Use the Host Pool Template Spec portal form and download the generated
+> parameter file from **Review + create**. Use the PowerShell and parameter examples below for
+> subsequent deployments, or as a fallback when the Template Spec UI is unavailable.
+
+This template uses Azure Virtual Desktop **standard management**. You own session-host creation,
+registration, update, and replacement. Compare it with the Commercial-only
+[automated host pool](../automatedHostPools/README.md) before deployment; the management approach
+can't be changed later. See the [management decision guide](../../docs/host-pool-management.md).
 
 ## Overview
 
@@ -163,7 +172,7 @@ Subscription
 
 - **Type:** Object
 - **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
-- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (securityAndMonitoring, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (sharedServices, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
 
 ### Identity & Authentication
 
@@ -399,11 +408,30 @@ Subscription
 - **Default:** `LocallyRedundant`
 - **Description:** Storage redundancy for backup recovery points in the Recovery Services vault. Independent of storage account SKU. When set to `GeoRedundant`, Cross-Region Restore (CRR) is automatically enabled — no separate parameter is needed. GRS storage costs the same whether CRR is on or off; without CRR the geo-redundant copy provides passive data durability only with no recovery capability in the secondary region. See [bcdr.md](../../docs/bcdr.md#personal-host-pool-vm-backup) for CP-6/CP-7 mapping and the Azure Policy gap note.
 
-#### `existingRecoveryServicesVaultResourceId`
+#### `existingVmBackupVaultResourceId`
 
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of an existing Recovery Services vault. Required when `recoveryServices` is `true` and **Use Existing Recovery Services Vault** is selected (or `existingRecoveryServicesVaultResourceId` is provided in a parameter file).
+- **Description:** Resource ID of an existing Recovery Services vault for personal host-pool VM backup.
+
+#### `existingFilesBackupVaultResourceId`
+
+- **Type:** String
+- **Optional**
+- **Description:** Resource ID of the shared Recovery Services vault for pooled FSLogix Azure Files backup. Use the `fslogixBackupVaultResourceId` output from AVD Shared Services. When empty, the host-pool deployment retains the compatibility behavior of creating the shared vault inline.
+
+#### `existingFilesBackupPolicyName`
+
+- **Type:** String
+- **Default:** `filesharepolicy`
+- **Description:** Name of the Azure Files snapshot backup policy already present in `existingFilesBackupVaultResourceId`. Use the `fslogixBackupPolicyName` output from AVD Shared Services. Host-pool deployments register their shares but do not modify an existing shared policy.
+
+#### `backupRetentionDays`
+
+- **Type:** Integer
+- **Default:** `30`
+- **Allowed:** `1` through `365`
+- **Description:** Retention used when this host-pool deployment creates a VM backup policy or uses the inline FSLogix vault fallback. Ignored for an existing shared FSLogix vault because AVD Shared Services owns that policy.
 
 ### Networking
 
@@ -423,7 +451,7 @@ Subscription
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed Security & Monitoring deployment.
+- **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed AVD Shared Services deployment.
 
 #### `secretsKeyVaultEnableSoftDelete`
 
@@ -529,7 +557,9 @@ New-AzSubscriptionDeployment `
 
 ## Examples — Parameter Files
 
-Ready-to-use sample parameter files are in `parameters\`. Copy and rename one into `customer\parameters\hostpools\` for your environment. The following annotated examples show the key patterns.
+Export the working first-deployment parameter file from the Template Spec UI into
+`customer\parameters\hostpools\`. The sample files in `parameters\` and the annotated examples below
+are references and a fallback when the Template Spec UI is unavailable.
 
 ### Minimal Pooled Desktop (Entra ID, Marketplace Image)
 

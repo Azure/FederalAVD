@@ -23,7 +23,6 @@ param virtualNetworkGatewayOnHub bool
 param vnetResourceGroupName string
 param location string
 param tags object
-param timeStamp string
 
 resource vNetResourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' = if (deployVnetResourceGroup) {
   name: vnetResourceGroupName
@@ -33,7 +32,6 @@ resource vNetResourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' = if 
 
 module vnetResources 'vnetResources.bicep' = {
   scope: resourceGroup(vnetResourceGroupName)
-  name: 'VNet-Resources-${timeStamp}'
   params: {
     vnetName: vnetName
     vnetAddressPrefixes: vnetAddressPrefixes
@@ -56,7 +54,6 @@ module vnetResources 'vnetResources.bicep' = {
     virtualNetworkGatewayOnHub: virtualNetworkGatewayOnHub
     location: location
     tags: tags
-    timeStamp: timeStamp
   }
   dependsOn: [
     vNetResourceGroup
@@ -64,3 +61,4 @@ module vnetResources 'vnetResources.bicep' = {
 }
 
 output vNetResourceId string = vnetResources.outputs.vnetResourceId
+output subnetResourceIds array = vnetResources.outputs.subnetResourceIds

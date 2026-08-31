@@ -329,20 +329,20 @@
                                     "visible": "[equals(steps('prereqs').resGroup.useExResGroup, false)]",
                                     "options": {
                                         "style": "Warning",
-                                        "text": "The image build resource group is TEMPORARY. A new uniquely-named resource group is created at the start of each build (timestamp suffix appended automatically) and is deleted along with all its contents when the build completes. Do not place resources you want to keep in this resource group."
+                                        "text": "The image build resource group is TEMPORARY. A new uniquely-named resource group is created at the start of each build (timestamp and deployment-specific suffix appended automatically) and is deleted along with all its contents when the build completes. Do not place resources you want to keep in this resource group."
                                     }
                                 },
                                 {
                                     "name": "customBuildResourceGroupName",
                                     "type": "Microsoft.Common.TextBox",
                                     "label": "Custom Build Resource Group Base Name",
-                                    "subLabel": "Optional. A deployment timestamp will be appended automatically to ensure uniqueness. Leave blank to use the default CAF-compliant name.",
+                                    "subLabel": "Optional. A timestamp and deployment-specific ID will be appended automatically. Leave blank to use the default CAF-compliant name.",
                                     "placeholder": "rg-image-build-resources-<environment>-<location>",
-                                    "toolTip": "Optional base name for the temporary image build resource group. A timestamp suffix (yyyyMMddHHmmss) is always appended. The resource group is deleted automatically when the build completes.",
+                                    "toolTip": "Optional base name for the temporary image build resource group. A build-run suffix (yyyyMMddHHmmss-xxxxxx) is always appended. The resource group is deleted automatically when the build completes.",
                                     "constraints": {
                                         "required": false,
-                                        "regex": "^[a-z0-9A-Z-]{2,75}$",
-                                        "validationMessage": "If provided the value must be between 2 and 75 characters (a 14-character timestamp suffix will be appended)."
+                                        "regex": "^[a-z0-9A-Z-]{2,68}$",
+                                        "validationMessage": "If provided the value must be between 2 and 68 characters (a 21-character build-run suffix will be appended)."
                                     },
                                     "visible": "[equals(steps('prereqs').resGroup.useExResGroup, false)]"
                                 }
@@ -580,7 +580,7 @@
                                         }
                                     ],
                                     "multiselect": true,
-                                    "toolTip": "Select the Office 365 ProPlus apps to install. Outlook is new Outlook for Windows; Outlook (Classic) is the desktop Outlook client.",
+                                    "toolTip": "Select the list of Office 365 ProPlus apps you wish to install.",
                                     "constraints": {
                                         "allowedValues": [
                                             {
@@ -596,12 +596,8 @@
                                                 "value": "OneNote"
                                             },
                                             {
-                                                "label": "Outlook (Classic)",
-                                                "value": "Outlook"
-                                            },
-                                            {
                                                 "label": "Outlook",
-                                                "value": "OutlookForWindows"
+                                                "value": "Outlook"
                                             },
                                             {
                                                 "label": "PowerPoint",
@@ -616,7 +612,7 @@
                                                 "value": "Publisher"
                                             },
                                             {
-                                                "label": "Skype For Business",
+                                                "label": "SkypeForBusiness",
                                                 "value": "SkypeForBusiness"
                                             },
                                             {
@@ -1089,7 +1085,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addCustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments (for arrays use @() syntax - e.g. -Param @('val1','val2')), and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments, and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
                                     }
                                 },
                                 {
@@ -1192,7 +1188,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addVDICustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments; for arrays use @() syntax - e.g. -Param @('val1','val2')."
+                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments."
                                     }
                                 },
                                 {
@@ -1963,6 +1959,19 @@
                                     }
                                 },
                                 {
+                                    "name": "existingRemoteDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Remote Standard Disk Encryption Set",
+                                    "placeholder": "Select a standard Disk Encryption Set in the remote region...",
+                                    "toolTip": "Required. Select a standard DES in the same subscription and region as the remote Compute Gallery. It encrypts the remote-region gallery image replicas.",
+                                    "visible": "[and(steps('imageDest').encryption.enableCmk, steps('imageDest').disasterRecovery.specifyRemoteGallery)]",
+                                    "multiLine": true,
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location)), not(equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                    }
+                                },
+                                {
                                     "name": "confidentialVMEncryptionType",
                                     "type": "Microsoft.Common.DropDown",
                                     "label": "Confidential VM Guest State Encryption",
@@ -1997,6 +2006,19 @@
                                     "constraints": {
                                         "required": true,
                                         "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), and(equals(toLower(first(skip(split(des.id, '/'), 4))), toLower(first(skip(split(steps('prereqs').gallery.gallery.id, '/'), 4)))), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "existingRemoteConfidentialVMDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Remote Confidential VM Disk Encryption Set",
+                                    "placeholder": "Select a Confidential VM Disk Encryption Set in the remote region...",
+                                    "toolTip": "Required. Select a Confidential VM DES in the same subscription and region as the remote Compute Gallery. This DES must have CVM Orchestrator key release permissions pre-configured.",
+                                    "visible": "[and(steps('imageDest').disasterRecovery.specifyRemoteGallery, and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')))]",
+                                    "multiLine": true,
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location)), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey'))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
                                     }
                                 }
                             ]
@@ -2185,8 +2207,10 @@
                 "logStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
                 "logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",
                 "diskEncryptionSetResourceId": "[if(steps('imageDest').encryption.enableCmk, coalesce(steps('imageDest').encryption.existingDiskEncryptionSetResourceId, ''), '')]",
+                "remoteDiskEncryptionSetResourceId": "[if(and(steps('imageDest').encryption.enableCmk, steps('imageDest').disasterRecovery.specifyRemoteGallery), coalesce(steps('imageDest').encryption.existingRemoteDiskEncryptionSetResourceId, ''), '')]",
                 "galleryImageVersionConfidentialVMEncryptionType": "[if(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), coalesce(steps('imageDest').encryption.confidentialVMEncryptionType, ''), '')]",
                 "confidentialVMDiskEncryptionSetResourceId": "[if(and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')), coalesce(steps('imageDest').encryption.existingConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
+                "remoteConfidentialVMDiskEncryptionSetResourceId": "[if(and(steps('imageDest').disasterRecovery.specifyRemoteGallery, and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk'))), coalesce(steps('imageDest').encryption.existingRemoteConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
                 "imageDefinitionResourceId": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, true), steps('imageDest').imageDefinition.existingImageDefinition.id, '')]",
                 "customImageDefinitionName": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.customImageDefinitionName, '')]",
                 "imageDefinitionPublisher": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.imageDefinitionPublisher, '')]",
@@ -2203,7 +2227,7 @@
                 "imageVersionExcludeFromLatest": "[steps('imageDest').imageVersion.excludeFromLatest]",
                 "imageVersionDefaultReplicaCount": "[steps('imageDest').imageVersion.replicaCount]",
                 "imageVersionDefaultStorageAccountType": "[steps('imageDest').imageVersion.storageAccountType]",
-                "imageVersionTargetRegions": "[if(equals(steps('imageDest').imageVersion.specifyReplicationRegions, true), steps('imageDest').imageVersion.replicationRegions, parse('[]'))]",
+                "imageVersionTargetRegions": "[if(equals(steps('imageDest').imageVersion.specifyReplicationRegions, true), map(steps('imageDest').imageVersion.replicationRegions, (region) => parse(concat('{\"name\":\"', region.name, '\",\"storageAccountType\":\"', if(empty(region.storageAccountType), steps('imageDest').imageVersion.storageAccountType, region.storageAccountType), '\",\"regionalReplicaCount\":', if(empty(region.regionalReplicaCount), string(steps('imageDest').imageVersion.replicaCount), region.regionalReplicaCount), '}'))), parse('[]'))]",
                 "remoteComputeGalleryResourceId": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.remoteComputeGallery.id, '')]",
                 "remoteImageVersionStorageAccountType": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.storageAccountType , 'Standard_LRS')]",
                 "remoteImageVersionDefaultReplicaCount": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.replicaCount, 1)]",

@@ -105,6 +105,9 @@ pool they monitor.
   Enable diagnostics on each host pool: **Host Pool → Diagnostic settings → Send to Log Analytics**.
 - An existing **Action Group** at the **global** location in the same subscription.
   Service Health activity log alerts require a global action group.
+  AVD Shared Services intentionally does not create this resource: notification receivers,
+  webhooks, and incident-routing configuration should remain owned by the central operations or
+  incident-response team.
   See [Creating a Global Action Group](#creating-a-global-action-group) below.
 - **Permissions** to deploy resources and assign RBAC roles at the subscription scope.
 
@@ -159,16 +162,24 @@ az monitor action-group create \
 
 ## Deployment Methods
 
-### Template Spec (Recommended)
+### Template Spec Portal Form (First Deployment)
 
 ```powershell
 .\tools\New-TemplateSpecs.ps1 `
   -ResourceGroupName 'rg-avd-operations-p-eus2' `
   -Location 'eastus2' `
+  -createSharedServices $false `
+  -createNetwork $false `
+  -createImageManagement $false `
+  -createCustomImage $false `
+  -createHostPool $false `
+  -createAutomatedHostPool $false `
   -CreateAddOns $true
 ```
 
-Then open the published spec `ts-avd-alerts-{region}` in the Azure Portal.
+In the Azure portal, open **Template Specs**, select **AVD Alerts**, and choose **Deploy**. On
+**Review + create**, select **Download template and parameters** before submitting, then retain the
+working parameter file for subsequent PowerShell or CI/CD deployments.
 
 ### Blue Button (Azure Commercial / Government only)
 
@@ -176,7 +187,7 @@ Then open the published spec `ts-avd-alerts-{region}` in the Azure Portal.
 
 [![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FavdAlerts%2FuiFormDefinition.json)
 
-### PowerShell
+### PowerShell (Subsequent Deployments)
 
 ```powershell
 New-AzSubscriptionDeployment `
@@ -195,7 +206,7 @@ New-AzSubscriptionDeployment `
   )
 ```
 
-### Azure CLI
+### Azure CLI (Subsequent Deployments)
 
 ```bash
 az deployment sub create \

@@ -162,10 +162,6 @@
         "azureQueuePrivateDnsZoneResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.usgovcloudapi.net"
         },
-        "deployDiskAccessPolicy": {
-            "value": true
-        },
-
         // ── AVD Private Link ───────────────────────────────────────────────────
         "avdPrivateLinkPrivateRoutes": {
             "value": "FeedAndHostPool"

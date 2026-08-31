@@ -464,7 +464,8 @@
 							"elements": [
 								{
 									"name": "enable",
-									"type": "Microsoft.Common.CheckBox",								"defaultValue": false,									"label": "Enable Script Logging"
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Script Logging"
 								},
 								{
 									"name": "storageAccount",

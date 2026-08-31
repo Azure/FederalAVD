@@ -1,0 +1,60 @@
+targetScope = 'subscription'
+
+param azureMonitorPrivateLinkScopeResourceId string
+param dataCollectionEndpointName string
+param location string
+param logAnalyticsWorkspaceName string
+param logAnalyticsWorkspaceRetention int = 30
+param logAnalyticsWorkspaceSku string = 'PerGB2018'
+param resourceGroupMonitoring string
+param tags object
+
+// ─── Log Analytics Workspace ───────────────────────────────────────────────────
+module logAnalyticsWorkspace '../../resourceModules/operationalInsights/workspaces/deploy.bicep' = {
+  scope: resourceGroup(resourceGroupMonitoring)
+  params: {
+    name: logAnalyticsWorkspaceName
+    location: location
+    tags: tags[?'Microsoft.OperationalInsights/workspaces'] ?? {}
+    sku: logAnalyticsWorkspaceSku
+    retentionInDays: logAnalyticsWorkspaceRetention
+  }
+}
+
+// ─── Data Collection Endpoint ──────────────────────────────────────────────────
+module dataCollectionEndpoint '../../resourceModules/insights/dataCollectionEndpoints/deploy.bicep' = {
+  scope: resourceGroup(resourceGroupMonitoring)
+  params: {
+    name: dataCollectionEndpointName
+    location: location
+    tags: tags[?'Microsoft.Insights/dataCollectionEndpoints'] ?? {}
+    publicNetworkAccess: empty(azureMonitorPrivateLinkScopeResourceId) ? 'Enabled' : 'Disabled'
+  }
+}
+
+// ─── AVD Insights Data Collection Rule ────────────────────────────────────────
+module avdInsightsDataCollectionRule '../../resourceModules/monitoring/avdInsightsDataCollectionRule.bicep' = {
+  scope: resourceGroup(resourceGroupMonitoring)
+  params: {
+    location: location
+    tags: tags[?'Microsoft.Insights/dataCollectionRules'] ?? {}
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspace.outputs.resourceId
+    dataCollectionEndpointId: dataCollectionEndpoint.outputs.resourceId
+  }
+}
+
+// ─── Azure Monitor Private Link Scope ─────────────────────────────────────────
+module updatePrivateLinkScope '../../resourceModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (!empty(azureMonitorPrivateLinkScopeResourceId)) {
+  params: {
+    privateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
+    scopedResourceIds: [
+      logAnalyticsWorkspace.outputs.resourceId
+      dataCollectionEndpoint.outputs.resourceId
+    ]
+  }
+}
+
+output avdInsightsDataCollectionRuleResourceId string = avdInsightsDataCollectionRule.outputs.resourceId
+output avdInsightsDataCollectionRulesResourceId string = avdInsightsDataCollectionRule.outputs.resourceId
+output dataCollectionEndpointResourceId string = dataCollectionEndpoint.outputs.resourceId
+output logAnalyticsWorkspaceResourceId string = logAnalyticsWorkspace.outputs.resourceId

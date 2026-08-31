@@ -17,8 +17,8 @@ customer/
       win11-m365.imageBuild.parameters.json
     imageManagement/
       prod.imageManagement.parameters.json
-    securityAndMonitoring/
-      prod.securityAndMonitoring.parameters.json
+    sharedServices/
+      prod.sharedServices.parameters.json
     networking/
       prod.networking.parameters.json
   artifacts/
@@ -27,13 +27,15 @@ customer/
       GoogleChromeEnterpriseBundle64.msi
 ```
 
-Sample files to use as starting points are in each deployment's `parameters/` folder. Copy them
-into the matching child folder under `customer/parameters/` before customizing them:
+For every first deployment, use the component's Template Spec portal form and download the working
+parameter file from **Review + create** into the matching child folder under
+`customer/parameters/`. Use the samples in each deployment's `parameters/` folder as references or
+as fallbacks only when the Template Spec UI is unavailable:
 
 - `deployments/hostpools/parameters/`
 - `deployments/imageBuild/parameters/`
 - `deployments/imageManagement/parameters/`
-- `deployments/securityAndMonitoring/parameters/`
+- `deployments/sharedServices/parameters/`
 - `deployments/networking/parameters/`
 
 Put your artifact packages in `customer/artifacts/`. `deployments/Update-ImageArtifacts.ps1`

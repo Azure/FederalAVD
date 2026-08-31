@@ -108,7 +108,7 @@ The diagram illustrates the following resource group distribution. In the table 
 | ------- | :-------: | ------------ | ----- |
 | Global Feed | global feed workspace | rg-avd-global-feed | One per Tenant |
 | Monitoring | Log Analytics Workspace<br>AVD Insights Data Collection Rule<br>Data Collection Endpoint | rg-avd-monitoring-va | One per region |
-| Operations | Secrets Key Vault<br>Encryption Key Vault<br>Recovery Services Vault (Azure Files backup, pooled host pools) | rg-avd-operations-va | One per region. Created by the standalone Security & Monitoring deployment or inline by the host pool deployment. Shared across all host pools in the same region. The Recovery Services Vault here is for FSLogix Azure Files backup on pooled host pools — it is shared across pooled deployments in the region. VM backup vaults for personal host pools are deployed per-host-pool to the Hosts resource group. |
+| Operations | Secrets Key Vault<br>Encryption Key Vault<br>Recovery Services Vault (Azure Files backup, pooled host pools) | rg-avd-operations-va | One per region. AVD Shared Services owns the shared FSLogix vault and Azure Files backup policy. Host pools and standalone FSLogix storage deployments register their own shares as protected items. Inline host-pool creation remains a compatibility fallback. VM backup vaults for personal host pools remain per-host-pool resources in the Hosts resource group. |
 | Control Plane | feed workspace<br>application groups<br>hostpools<br>scaling plans | rg-avd-control-plane-va | One per region |
 | Hosts | virtual machines<br>disk encryption set<br>Recovery Services Vault (VM backup, personal host pools only) | rg-hr-01-hosts-va<br>rg-hr-02-hosts-va | One per identifier or per index (if specified). Disk Encryption Set is created here when CMK is used for VM disks. Recovery Services Vault for VM backup is deployed here when `recoveryServices = true` on a personal host pool — one vault per host pool, not shared. |
 | Storage | NetApp Storage Accounts<br>Storage Account(s)<br>function app<br>storage encryption UAI | rg-hr-01-storage-va<br>rg-hr-02-storage-va | One per identifier or per index (if specified). Storage encryption User-Assigned Identity is created here when CMK is used for FSLogix storage. |
@@ -133,6 +133,7 @@ All resource names are assembled from an ordered array of **components** — nam
 | purpose | Per-resource differentiator (e.g., \vd-01\, \sec\, \control-plane\) — set automatically by the engine for each resource; no direct CAF equivalent |
 | RT-first | esourceType\ is the first non-one\ component — produces \dpool-avd-use\ style names |
 | RT-last | esourceType\ is the last non-one\ component — produces \vd-use-vdpool\ style names |
+
 ### CAF-aligned default
 
 The default `namingConvention` value produces names following `{resourceType}-avd-{purpose}-{location}` via the same `cnv()` user-defined function used for all resources. This is CAF-aligned but not a strict CAF implementation: CAF does not define a `purpose` component.
@@ -147,4 +148,4 @@ The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) 
 
 ### Implementation location
 
-The full naming engine lives in [deployments/hostpools/modules/naming.bicep](../deployments/hostpools/modules/naming.bicep) (user-defined functions: `resolveSegment`, `buildCustomName`, `cnv`, `stripSeps`, `kvSanitize`). Security & Monitoring and imageManagement solutions use the same functions inline.
+The host-pool naming engine lives in [deployments/shared/modules/orchestration/naming/hostPool.bicep](../deployments/shared/modules/orchestration/naming/hostPool.bicep) and is shared by standard host pools, automated host pools, and standalone FSLogix storage. AVD Shared Services and Image Management use the same convention shape in their solution-specific naming logic.

@@ -9,7 +9,7 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 ## Contents
 
 1. [How naming works](#how-naming-works)
-2. [The built-in CAF default](#the-built-in-caf-default)
+2. [The built-in CAF-aligned default](#the-built-in-caf-aligned-default)
 3. [The `namingConvention` parameter](#the-namingconvention-parameter)
 4. [The eight naming components](#the-eight-naming-components)
 5. [The `purpose` component](#the-purpose-component)
@@ -17,7 +17,6 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 7. [Aligning naming across solutions](#aligning-naming-across-solutions)
 8. [Add-on naming](#add-on-naming)
 9. [Examples](#examples)
-10. [Scenario test results](#scenario-test-results)
 
 ---
 
@@ -244,6 +243,7 @@ You never set `purpose` manually. The Bicep engine assigns the correct purpose s
 | RG (Control Plane) | `control-plane` |
 | RG (Hosts) | `{identifier}-hosts` |
 | RG (Storage) | `{identifier}-storage` |
+| RG (Standalone shared FSLogix storage) | `fslogix-storage` by default |
 | RG (Operations) | `operations` |
 | RG (Monitoring) | `monitoring` |
 | Key Vault (Secrets) | `sec-{unique}` — the 6-char `uniqueString()` is **embedded in the purpose slot** |
@@ -275,14 +275,14 @@ Key Vault names are capped at **24 characters**. The unique suffix is **embedded
 - RT-first default: `kv-avd-sec-d527e9-use` (unique is the 3rd component, before location)
 - RT-last: `avd-sec-d527e9-use2-kv` (unique is part of the 2nd component, before location and RT)
 
-The full name is assembled from `purpose = 'sec-{unique}'` or `'enc-{unique}'`, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. For longer conventions (e.g., with a `freeform1` org prefix), the name may be truncated — the portal shows a warning and a live name preview.
+The full name is assembled from `purpose = 'sec-{unique}'` or `'enc-{unique}'`, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
 
 The `uniqueString()` seed is:
 
 - With a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName)`
 - Without a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
 
-> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `securityAndMonitoring.bicep` deployment. Deploy `securityAndMonitoring.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
+> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `sharedServices.bicep` deployment. Deploy `sharedServices.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
 
 ### Storage Account — alphanumeric only, max 24
 
@@ -316,9 +316,10 @@ To produce a **consistent naming convention** across all solutions, pass the **s
 | Solution | Parameter name | Notes |
 | --- | --- | --- |
 | `hostpools/hostpool.bicep` | `namingConvention` | Full object; naming resolved in `modules/naming.bicep` |
-| `securityAndMonitoring/securityAndMonitoring.bicep` | `namingConvention` | Inline naming; fixed identifiers `operations` (Key Vaults) and `monitoring` (Log Analytics Workspace) |
+| `sharedServices/sharedServices.bicep` | `namingConvention` | Inline naming; fixed identifiers `operations` (Key Vaults) and `monitoring` (Log Analytics Workspace) |
 | `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
 | `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
+| `add-ons/fslogixStorage/main.bicep` | `namingConvention`, `identifier` | Shared storage defaults to fixed identifier `fslogix`; persona-specific storage uses the matching host-pool persona |
 | `add-ons/sessionHostReplacer/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
 | `add-ons/sessionHosts/main.bicep` | *(none)* | VM/disk/NIC patterns via per-resource params; no top-level convention object |
 | `add-ons/storageQuotaManager/main.bicep` | `namingConvention`, `identifier`, `namingResourceTypeCodes` | Pass same values as host pool; Portal pre-fills from host pool tags |
@@ -467,7 +468,7 @@ contoso-avd-sec-9ef5b1-u
 SHNAME-vm  →  avdhost001-vm
 ```
 
-> **Note:** The KV name is truncated to 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). The `location` and `resourceType` suffix are lost to truncation. If you use long org prefixes, consider keeping `location` before `resourceType` and keeping the total component length short.
+> **Note:** The generated KV name exceeds 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). Portal deployments require complete Key Vault name overrides so meaningful trailing components are not silently lost.
 
 ### Example 5 — Underscore delimiter (no hyphens in names)
 
@@ -489,7 +490,7 @@ kv-avd-prod-sec-f0485a-u
 vm-SHNAME  (VM/disk/NIC always use hyphens in the SHNAME pattern)
 ```
 
-> **Note:** `kvSanitize()` converts underscores and dots to hyphens in Key Vault names, so the KV name always uses `-` regardless of the convention delimiter. The KV name is also truncated to 24 characters here.
+> **Note:** `kvSanitize()` converts underscores and dots to hyphens in generated Key Vault names, so the generated KV name always uses `-` regardless of the convention delimiter. Complete overrides must independently satisfy Azure Key Vault naming rules.
 
 ### Example 6 — Abbreviation override
 
@@ -515,23 +516,4 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ---
 
-## Scenario test results
-
-See **[naming-convention-test-results.md](naming-convention-test-results.md)** for a full matrix of 8 scenarios run against the naming engine simulation. All scenarios pass KV name parity between the hostpool inline deployment and the standalone `securityAndMonitoring.bicep` deployment.
-
-The 8 scenarios cover:
-
-| # | Scenario |
-| --- | --- |
-| 1 | CAF default, single region |
-| 2 | CAF default, split CP / VMs regions |
-| 3 | Custom RT-first, 4 components, workload + environment |
-| 4 | Custom RT-last, 4 components |
-| 5 | Custom with org prefix in `freeform1`, RT-last |
-| 6 | Custom with `environment` component, underscore delimiter |
-| 7 | Custom with no `location` component (tests KV seed fallback) |
-| 8 | Custom with RT in mid-position (not first, not last) |
-
----
-
-*Last updated: 2026-06-17*
+Last updated: 2026-06-17

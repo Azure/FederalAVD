@@ -47,9 +47,9 @@
               "type": "Microsoft.Common.DropDown",
               "label": "Host Pool",
               "multiLine": true,
-              "toolTip": "Select the host pool to automate with Session Host Replacer.",
+              "toolTip": "Select a standard host pool to automate with Session Host Replacer. Automated host pools are managed by Azure Virtual Desktop and are excluded.",
               "constraints": {
-                "allowedValues": "[map(steps('basics').hostPoolsApi.value, (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Resource Group: ', first(skip(split(hp.id, '/'), 4)), '\",\"value\":{\"id\":\"', hp.id, '\",\"name\":\"', hp.name, '\"}}')))]",
+                "allowedValues": "[map(filter(steps('basics').hostPoolsApi.value, (hp) => not(equals(toLower(coalesce(hp.tags.hostPoolManagementType, '')), 'automated'))), (hp) => parse(concat('{\"label\":\"', hp.name, '\",\"description\":\"Resource Group: ', first(skip(split(hp.id, '/'), 4)), '\",\"value\":{\"id\":\"', hp.id, '\",\"name\":\"', hp.name, '\"}}')))]",
                 "required": true
               }
             },
@@ -60,6 +60,15 @@
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('basics').hostPool.id, '?api-version=2024-04-03')]"
+              }
+            },
+            {
+              "name": "hostsRGProps",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(empty(steps('basics').hostPool)), not(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
               }
             },
             {
@@ -77,20 +86,12 @@
             {
               "name": "location",
               "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('basics').locationsApi.value, (loc) => equals(loc.name, coalesce(steps('basics').hostPoolProps, parse('{\"location\":\"\"}')).location)), (loc) => loc.displayName))]",
-              "label": "Deployment Region",
-              "toolTip": "Select the region where you want to deploy the function app.",
+              "defaultValue": "[if(empty(steps('basics').hostsRGProps), '', first(map(filter(steps('basics').locationsApi.value, (loc) => equals(loc.name, steps('basics').hostsRGProps.location)), (loc) => loc.displayName)))]",
+              "label": "Session Host and Function App Region",
+              "toolTip": "Select the region for the session host VMs and Function App. Defaults to the tagged session hosts resource group location. If the host pool does not identify that resource group, select the existing session hosts region.",
               "constraints": {
-                "allowedValues": "[steps('basics').locationsApi.transformed.list]"
-              }
-            },
-            {
-              "name": "hostsRGProps",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('basics').hostPool)), not(empty(steps('basics').hostPoolProps.tags.hostsResourceGroupId)))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('basics').hostPoolProps.tags.hostsResourceGroupId, '?api-version=2021-04-01')]"
+                "allowedValues": "[steps('basics').locationsApi.transformed.list]",
+                "required": true
               }
             }
           ]
@@ -813,13 +814,24 @@
               }
             },
             {
+              "name": "sessionHostReplacerUserAssignedIdentitiesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location)), or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
+              }
+            },
+            {
               "name": "sessionHostReplacerUserAssignedIdentity",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+              "type": "Microsoft.Common.DropDown",
               "label": "User-Assigned Managed Identity",
-              "toolTip": "Select the pre-existing User-Assigned Managed Identity that has been granted the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All).",
-              "resourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "filter": true,
+              "multiLine": true,
+              "visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+              "toolTip": "Select a User-Assigned Managed Identity in the Function App deployment region that has the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All). Microsoft.Web cannot attach an identity from another region.",
               "constraints": {
+                "allowedValues": "[map(filter(steps('replacerConfig').sessionHostReplacerUserAssignedIdentitiesApi.value, (identity) => equals(toLower(identity.location), toLower(steps('basics').location.name))), (identity) => parse(concat('{\"label\":\"', identity.name, '\",\"description\":\"Resource Group: ', first(skip(split(identity.id, '/'), 4)), ', Location: ', identity.location, '\",\"value\":\"', identity.id, '\"}')))]",
                 "required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]"
               }
             }
@@ -829,97 +841,6 @@
           "name": "hosts",
           "label": "Session Hosts",
           "elements": [
-            {
-              "name": "identity",
-              "type": "Microsoft.Common.Section",
-              "label": "Identity",
-              "elements": [
-                {
-                  "name": "machineIdentity",
-                  "type": "Microsoft.Common.DropDown",
-                  "multiLine": true,
-                  "label": "Session Host Join Type",
-                  "defaultValue": "[if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'DomainServices'), if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Active'), 'Active Directory Domain Services (ADDS)', 'Entra Domain Services'), 'Microsoft Entra joined')]",
-                  "toolTip": "How session host VMs are joined to a directory. Pre-populated from the existing deployment tags. Determines group policy application, Kerberos realm, and whether VMs need line-of-sight to a domain controller.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": [
-                      {
-                        "label": "Active Directory Domain Services (ADDS)",
-                        "value": "ActiveDirectoryDomainServices",
-                        "description": "Session hosts are domain-joined to on-premises Active Directory Domain Services. Requires line-of-sight to a domain controller. VMs become Microsoft Entra hybrid joined when synced via Entra Connect. FSLogix uses AD Kerberos for Azure Files."
-                      },
-                      {
-                        "label": "Entra Domain Services",
-                        "value": "EntraDomainServices",
-                        "description": "Session hosts are domain-joined to a Microsoft Entra Domain Services managed domain. No on-premises domain controller required. Users authenticate with Entra ID credentials. FSLogix uses Entra Domain Services Kerberos for Azure Files."
-                      },
-                      {
-                        "label": "Microsoft Entra joined",
-                        "value": "EntraID",
-                        "description": "Session hosts are Microsoft Entra joined with no domain controller. Fully cloud-native; no line-of-sight requirements. The FSLogix Azure Files authentication method is configured on the User Profiles step."
-                      }
-                    ]
-                  }
-                },
-                {
-                  "name": "domainName",
-                  "type": "Microsoft.Common.TextBox",
-                  "visible": "[contains(steps('hosts').identity.machineIdentity, 'DomainServices')]",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmDomain, '')]",
-                  "label": "Domain Name",
-                  "toolTip": "Provide domain name for the selected Virtual Machine Identity solution.",
-                  "placeholder": "Example: contoso.com",
-                  "constraints": {
-                    "regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
-                    "required": true,
-                    "validationMessage": "Provide a valid fully qualified domain name."
-                  }
-                },
-                {
-                  "name": "ouPath",
-                  "type": "Microsoft.Common.TextBox",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmOUPath , '')]",
-                  "visible": "[or(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('hosts').identity.machineIdentity, 'EntraDomainServices'))]",
-                  "label": "OU Path",
-                  "toolTip": "Input the distinguished name of the desired organization unit for the AVD session hosts.",
-                  "placeholder": "Example: OU=pooled,OU=avd,DC=contoso,DC=com",
-                  "constraints": {
-                    "regex": "^(?:\\s*[Oo][Uu]\\s*=\\s*[^,]+\\s*,\\s*)+[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*(?:,\\s*[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*)+$",
-                    "required": true,
-                    "validationMessage": "Provide a valid OU path in Distinguished Name format."
-                  }
-                },
-                {
-                  "name": "secretsInfoBox1",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[not(contains(steps('hosts').identity.machineIdentity, 'DomainServices'))]",
-                  "options": {
-                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below:\n\n1. VirtualMachineAdminUserName: The virtual machine administrator username\n2. VirtualMachineAdminPassword: The virtual machine administrator password.",
-                    "style": "Info"
-                  }
-                },
-                {
-                  "name": "secretsInfoBox2",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[contains(steps('hosts').identity.machineIdentity, 'DomainServices')]",
-                  "options": {
-                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below:\n\n1. DomainJoinUserPrincipalName: The domain join account UserPrincipalName (i.e., domjoin@contoso.local)\n2. DomainJoinUserPassword: The password associated with the domain join user account\n3. VirtualMachineAdminUserName: The virtual machine administrator username\n4. VirtualMachineAdminPassword: The virtual machine administrator password.",
-                    "style": "Info"
-                  }
-                },
-                {
-                  "name": "keyVault",
-                  "type": "Microsoft.Solutions.ResourceSelector",
-                  "label": "Select Keyvault containing workload secrets",
-                  "resourceType": "Microsoft.KeyVault/vaults",
-                  "toolTip": "Select Keyvault which contains the virtual machine secrets",
-                  "constraints": {
-                    "required": true
-                  }
-                }
-              ]
-            },
             {
               "name": "scope",
               "type": "Microsoft.Common.Section",
@@ -973,10 +894,10 @@
                   "name": "location",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Region",
-                  "toolTip": "Select the region where you want to deploy the virtual machines.",
-                  "defaultValue": "[first(map(filter(steps('hosts').scope.locationsApi.value, (loc) => equals(loc.name, coalesce(steps('hosts').scope.resourceGroup, parse('{\"location\":\"\"}')).location)), (loc) => loc.displayName))]",
+                  "toolTip": "The session host VMs are deployed in the region selected on the Deployment Basics step.",
+                  "defaultValue": "[steps('basics').location.displayName]",
                   "constraints": {
-                    "allowedValues": "[steps('hosts').scope.locationsApi.transformed.list]"
+                    "allowedValues": "[filter(steps('hosts').scope.locationsApi.transformed.list, (loc) => equals(loc.value.name, steps('basics').location.name))]"
                   }
                 },
                 {
@@ -1067,6 +988,97 @@
                     "required": true
                   },
                   "visible": true
+                }
+              ]
+            },
+            {
+              "name": "identity",
+              "type": "Microsoft.Common.Section",
+              "label": "Virtual Machine Identity",
+              "elements": [
+                {
+                  "name": "machineIdentity",
+                  "type": "Microsoft.Common.DropDown",
+                  "multiLine": true,
+                  "label": "Session Host Join Type",
+                  "defaultValue": "[if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'DomainServices'), if(contains(steps('basics').hostsRGProps.tags.vmIdentityType, 'Active'), 'Active Directory Domain Services (ADDS)', 'Entra Domain Services'), 'Microsoft Entra joined')]",
+                  "toolTip": "How session host VMs are joined to a directory. Pre-populated from the existing deployment tags. Determines group policy application, Kerberos realm, and whether VMs need line-of-sight to a domain controller.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Active Directory Domain Services (ADDS)",
+                        "value": "ActiveDirectoryDomainServices",
+                        "description": "Session hosts are domain-joined to on-premises Active Directory Domain Services. Requires line-of-sight to a domain controller. VMs become Microsoft Entra hybrid joined when synced via Entra Connect. FSLogix uses AD Kerberos for Azure Files."
+                      },
+                      {
+                        "label": "Entra Domain Services",
+                        "value": "EntraDomainServices",
+                        "description": "Session hosts are domain-joined to a Microsoft Entra Domain Services managed domain. No on-premises domain controller required. Users authenticate with Entra ID credentials. FSLogix uses Entra Domain Services Kerberos for Azure Files."
+                      },
+                      {
+                        "label": "Microsoft Entra joined",
+                        "value": "EntraID",
+                        "description": "Session hosts are Microsoft Entra joined with no domain controller. Fully cloud-native; no line-of-sight requirements. The FSLogix Azure Files authentication method is configured on the User Profiles step."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "domainName",
+                  "type": "Microsoft.Common.TextBox",
+                  "visible": "[contains(steps('hosts').identity.machineIdentity, 'DomainServices')]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmDomain, '')]",
+                  "label": "Domain Name",
+                  "toolTip": "Provide domain name for the selected Virtual Machine Identity solution.",
+                  "placeholder": "Example: contoso.com",
+                  "constraints": {
+                    "regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
+                    "required": true,
+                    "validationMessage": "Provide a valid fully qualified domain name."
+                  }
+                },
+                {
+                  "name": "ouPath",
+                  "type": "Microsoft.Common.TextBox",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmOUPath , '')]",
+                  "visible": "[or(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('hosts').identity.machineIdentity, 'EntraDomainServices'))]",
+                  "label": "OU Path",
+                  "toolTip": "Input the distinguished name of the desired organization unit for the AVD session hosts.",
+                  "placeholder": "Example: OU=pooled,OU=avd,DC=contoso,DC=com",
+                  "constraints": {
+                    "regex": "^(?:\\s*[Oo][Uu]\\s*=\\s*[^,]+\\s*,\\s*)+[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*(?:,\\s*[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*)+$",
+                    "required": true,
+                    "validationMessage": "Provide a valid OU path in Distinguished Name format."
+                  }
+                },
+                {
+                  "name": "secretsInfoBox1",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(contains(steps('hosts').identity.machineIdentity, 'DomainServices'))]",
+                  "options": {
+                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below:\n\n1. VirtualMachineAdminUserName: The virtual machine administrator username\n2. VirtualMachineAdminPassword: The virtual machine administrator password.",
+                    "style": "Info"
+                  }
+                },
+                {
+                  "name": "secretsInfoBox2",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[contains(steps('hosts').identity.machineIdentity, 'DomainServices')]",
+                  "options": {
+                    "text": "This add-on requires that the following secret names and values are stored in a key vault that you will select below:\n\n1. DomainJoinUserPrincipalName: The domain join account UserPrincipalName (i.e., domjoin@contoso.local)\n2. DomainJoinUserPassword: The password associated with the domain join user account\n3. VirtualMachineAdminUserName: The virtual machine administrator username\n4. VirtualMachineAdminPassword: The virtual machine administrator password.",
+                    "style": "Info"
+                  }
+                },
+                {
+                  "name": "keyVault",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Select Keyvault containing workload secrets",
+                  "resourceType": "Microsoft.KeyVault/vaults",
+                  "toolTip": "Select Keyvault which contains the virtual machine secrets",
+                  "constraints": {
+                    "required": true
+                  }
                 }
               ]
             },
@@ -1219,37 +1231,13 @@
                   }
                 },
                 {
-                  "name": "publisher",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Publisher",
-                  "multiLine": true,
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.vmImagePublisher, 'MicrosoftWindowsDesktop')]",
-                  "toolTip": "Select the marketplace image publisher. Defaults to the publisher already used by this host pool's existing session hosts (from the 'vmImagePublisher' tag on the hosts resource group) when available.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": [
-                      {
-                        "label": "MicrosoftWindowsDesktop",
-                        "description": "Windows 10/11 desktop images (single- or multi-session), including AVD-specific offers such as 'office-365'. Session hosts are licensed as Windows_Client.",
-                        "value": "MicrosoftWindowsDesktop"
-                      },
-                      {
-                        "label": "MicrosoftWindowsServer",
-                        "description": "Windows Server images. Session hosts are licensed as Windows_Server.",
-                        "value": "MicrosoftWindowsServer"
-                      }
-                    ]
-                  },
-                  "visible": "[equals(steps('hosts').image.source, 'marketplace')]"
-                },
-                {
                   "name": "offer",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Offer",
-                  "defaultValue": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), 'WindowsServer', if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer))]",
+                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageOffer), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'Windows-11', 'Office-365'), steps('basics').hostsRGProps.tags.vmImageOffer)]",
                   "toolTip": "Select the desired marketplace image offer.",
                   "constraints": {
-                    "allowedValues": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), parse('[{\"label\":\"WindowsServer\",\"value\":\"WindowsServer\"}]'), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]')))]",
+                    "allowedValues": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), parse('[{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"},{\"label\":\"Windows Enterprise CPC\",\"value\":\"windows-ent-cpc\"}]'), parse('[{\"label\":\"Office-365\",\"value\":\"Office-365\"},{\"label\":\"Windows-10\",\"value\":\"Windows-10\"},{\"label\":\"Windows-11\",\"value\":\"Windows-11\"}]'))]",
                     "required": true
                   },
                   "visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1260,11 +1248,10 @@
                   "condition": "[and(not(empty(steps('hosts').scope.subscription.id)), not(empty(steps('hosts').scope.location)), not(empty(steps('hosts').image.offer)), equals(steps('hosts').image.source, 'marketplace'))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/', steps('hosts').image.publisher, '/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
+                    "path": "[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('hosts').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/', steps('hosts').image.offer, '/skus?api-version=2022-08-01')]",
                     "transforms": {
                       "personal": "[?starts_with(name, `win`) && contains(name, `ent`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
-                      "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}",
-                      "server": "[*].{label: name, value: name}"
+                      "pooled": "[?starts_with(name, `win`) && (contains(name, `ent`) || contains(name, `avd`)) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].{label: name, value: name}"
                     }
                   }
                 },
@@ -1272,10 +1259,10 @@
                   "name": "sku",
                   "type": "Microsoft.Common.DropDown",
                   "label": "SKU",
-                  "defaultValue": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), '2025-datacenter-azure-edition', if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku))]",
+                  "defaultValue": "[if(empty(steps('basics').hostsRGProps.tags.vmImageSku), if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), 'win11-25h2-ent', 'win11-25h2-avd-m365'), steps('basics').hostsRGProps.tags.vmImageSku)]",
                   "toolTip": "Select the desired marketplace image SKU.",
                   "constraints": {
-                    "allowedValues": "[if(equals(steps('hosts').image.publisher, 'MicrosoftWindowsServer'), steps('hosts').image.skuApi.transformed.server, if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled))]",
+                    "allowedValues": "[if(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), steps('hosts').image.skuApi.transformed.personal, steps('hosts').image.skuApi.transformed.pooled)]",
                     "required": true
                   },
                   "visible": "[equals(steps('hosts').image.source, 'marketplace')]"
@@ -1345,31 +1332,9 @@
                     "transforms": {
                       "IsHibernateSupported": "properties.features[?name=='IsHibernateSupported'].value | [0]",
                       "IsAcceleratedNetworkSupported": "properties.features[?name=='IsAcceleratedNetworkSupported'].value | [0]",
-                      "SecurityType": "properties.features[?name=='SecurityType'].value | [0]",
-                      "SourceImagePublisher": "tags.sourceImagePublisher"
+                      "SecurityType": "properties.features[?name=='SecurityType'].value | [0]"
                     }
                   }
-                },
-                {
-                  "name": "licenseType",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Session Host Operating System Type",
-                  "toolTip": "Select whether this custom image is based on a Windows desktop (10/11) or Windows Server operating system. This determines the correct licensing (Azure Hybrid Benefit / AVD per-user entitlement) applied to session hosts. Defaults automatically from the image definition's 'sourceImagePublisher' tag (set by the Image Build deployment) when available. Not applicable to marketplace images, which are detected automatically.",
-                  "defaultValue": "[if(equals(steps('hosts').image.imageDefinitionApi.transformed.SourceImagePublisher, 'MicrosoftWindowsServer'), 'Windows Server', 'Windows Client')]",
-                  "constraints": {
-                    "required": "[equals(steps('hosts').image.source, 'gallery')]",
-                    "allowedValues": [
-                      {
-                        "label": "Windows Client",
-                        "value": "Windows_Client"
-                      },
-                      {
-                        "label": "Windows Server",
-                        "value": "Windows_Server"
-                      }
-                    ]
-                  },
-                  "visible": "[equals(steps('hosts').image.source, 'gallery')]"
                 }
               ]
             },
@@ -1909,7 +1874,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('hosts').customizations.addCustomScripts]",
                   "options": {
-                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments. For array parameters, use @() syntax - e.g. -Domains @('site1.gov','site2.com')."
+                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments."
                   }
                 },
                 {
@@ -2536,6 +2501,25 @@
           "name": "infrastructure",
           "label": "Infrastructure",
           "elements": [
+            {
+              "name": "functionAppStacksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "GET",
+                "path": "[concat('/providers/Microsoft.Web/locations/', steps('basics').location.name, '/functionAppStacks?api-version=2022-03-01')]"
+              }
+            },
+            {
+              "name": "powerShellVersion",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Function App PowerShell Version",
+              "defaultValue": "PowerShell 7.4",
+              "toolTip": "Select a supported PowerShell worker available for Azure Functions runtime v4 in this region. Preview versions are included. The Function App remains pinned to this version until this template is redeployed with a different selection.",
+              "constraints": {
+                "allowedValues": "[map(filter(first(map(filter(first(map(filter(steps('infrastructure').functionAppStacksApi.value, (stack) => equals(stack.name, 'powershell')), (stack) => stack.properties.majorVersions)), (major) => equals(major.value, '7')), (major) => major.minorVersions)), (version) => and(or(equals(version.stackSettings.windowsRuntimeSettings.isDefault, true), equals(version.stackSettings.windowsRuntimeSettings.isPreview, true)), not(equals(version.stackSettings.windowsRuntimeSettings.isHidden, true)), not(equals(version.stackSettings.windowsRuntimeSettings.isDeprecated, true)), contains(version.stackSettings.windowsRuntimeSettings.supportedFunctionsExtensionVersions, '~4'))), (version) => parse(concat('{\"label\":\"', version.displayText, '\",\"value\":\"', version.stackSettings.windowsRuntimeSettings.siteConfigPropertiesDictionary.powerShellVersion, '\"}')))]",
+                "required": true
+              }
+            },
             {
               "name": "useExistingHostingPlan",
               "type": "Microsoft.Common.CheckBox",
@@ -3413,7 +3397,7 @@
                   "visible": "[not(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv))]",
                   "options": {
                     "style": "Info",
-                    "text": "Session host naming conventions have been pre-populated from the host pool resource group tags. Review the values below and modify only if they do not match your existing VM naming."
+                    "text": "Session host naming conventions are sourced from the resource group tags set during host pool deployment. No changes needed."
                   }
                 },
                 {
@@ -3444,7 +3428,7 @@
                 {
                   "name": "virtualMachineNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Virtual Machine Naming Convention",
                   "placeholder": "vm-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'vm-SHNAME')]",
@@ -3458,7 +3442,7 @@
                 {
                   "name": "diskNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "OS Disk Naming Convention",
                   "placeholder": "disk-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'disk-SHNAME')]",
@@ -3472,7 +3456,7 @@
                 {
                   "name": "networkInterfaceNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Network Interface Naming Convention",
                   "placeholder": "nic-SHNAME",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'nic-SHNAME')]",
@@ -3486,7 +3470,7 @@
                 {
                   "name": "availabilitySetNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "visible": true,
+                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
                   "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
@@ -3556,7 +3540,8 @@
         "initialDeploymentPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').initialDeploymentPercentage, 10)]",
         "scaleUpIncrementPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').scaleUpIncrementPercentage, 20)]",
         "successfulRunsBeforeScaleUp": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').successfulRunsBeforeScaleUp, 1)]",
-        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity.id, '')]",
+        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
+        "powerShellVersion": "[steps('infrastructure').powerShellVersion]",
         "existingAppServicePlanResourceId": "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]",
         "appServicePlanResourceGroupName": "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]",
         "appServicePlanSku": "[if(not(steps('infrastructure').useExistingHostingPlan), steps('infrastructure').planSku, 'PremiumV3_P0v3')]",
@@ -3580,8 +3565,7 @@
         "sessionHostNameIndexLength": "[steps('hosts').naming.indexPadding]",
         "virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
         "enableIPv6": "[steps('hosts').network.enableIPv6]",
-        "imageReference": "[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"', steps('hosts').image.publisher, '\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\",\"version\":\"latest\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
-        "customImageLicenseType": "[if(equals(steps('hosts').image.source, 'gallery'), steps('hosts').image.licenseType, 'Windows_Client')]",
+        "imageReference": "[if(equals(steps('hosts').image.source, 'marketplace'), parse(concat('{\"publisher\":\"MicrosoftWindowsDesktop\",\"offer\":\"', steps('hosts').image.offer, '\",\"sku\":\"', steps('hosts').image.sku, '\"}')), parse(concat('{\"id\":\"', steps('hosts').image.imageDefinition, '\"}')))]",
         "securityType": "[steps('hosts').security.securityType]",
         "secureBootEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.secureBootEnabled)]",
         "vTpmEnabled": "[if(equals(steps('hosts').security.securityType, 'Standard'), false, steps('hosts').security.vTpmEnabled)]",
@@ -3625,10 +3609,10 @@
         "storageEncryptionIdentityNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
         "applicationInsightsNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
         "appServicePlanNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
-        "virtualMachineNameConv": "[steps('advanced').sessionHostNaming.virtualMachineNameConvOverride]",
-        "virtualMachineDiskNameConv": "[steps('advanced').sessionHostNaming.diskNameConvOverride]",
-        "virtualMachineNicNameConv": "[steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride]",
-        "availabilitySetNameConv": "[steps('advanced').sessionHostNaming.availabilitySetNameConvOverride]",
+        "virtualMachineNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv), steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
+        "virtualMachineDiskNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv), steps('advanced').sessionHostNaming.diskNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv)]",
+        "virtualMachineNicNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv), steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNicNameConv)]",
+        "availabilitySetNameConv": "[if(empty(steps('basics').hostsRGProps.tags.availabilitySetNameConv), steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, steps('basics').hostsRGProps.tags.availabilitySetNameConv)]",
         "tags": "[steps('advanced').tagsSection.tags]"
       },
       "kind": "Subscription",

@@ -25,17 +25,37 @@ The FSLogix Storage Quota Manager is an Azure Automation Account runbook that mo
 
 ## Deployment Methods
 
-### Quick Deploy
+### Template Spec Portal Form (First Deployment)
+
+From the repository root, publish the add-on Template Specs:
+
+```powershell
+.\tools\New-TemplateSpecs.ps1 `
+  -ResourceGroupName 'rg-avd-operations-p-eus2' `
+  -Location 'eastus2' `
+  -createSharedServices $false `
+  -createNetwork $false `
+  -createImageManagement $false `
+  -createCustomImage $false `
+  -createHostPool $false `
+  -createAutomatedHostPool $false `
+  -CreateAddOns $true
+```
+
+In the Azure portal, open **Template Specs**, select **Azure Files Premium Quota Manager**, and
+choose **Deploy**. On **Review + create**, select **Download template and parameters** before
+submitting, then retain the working parameter file for subsequent deployments.
+
+### Blue Button (Azure Commercial / Government Alternative)
 
 Click the button for your target cloud to open the deployment UI in Azure Portal:
 
 [![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json)
 
-> For air-gapped clouds (Secret / Top Secret) or internet-restricted environments, see
-> [Air-Gapped Deployment](#air-gapped-deployment) below. For Template Specs, use
-> [`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1) with `-CreateAddOns $true`.
+> Blue Button is unavailable in air-gapped clouds. Use the Template Spec form above and see
+> [Air-Gapped Deployment](#air-gapped-deployment) for artifact staging requirements.
 
-### Azure CLI
+### Azure CLI (Subsequent Deployments)
 
 ```bash
 az deployment group create \
@@ -46,7 +66,7 @@ az deployment group create \
     location='usgovvirginia'
 ```
 
-### Azure PowerShell
+### Azure PowerShell (Subsequent Deployments)
 
 ```powershell
 New-AzResourceGroupDeployment `

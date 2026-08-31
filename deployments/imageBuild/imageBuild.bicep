@@ -1,5 +1,14 @@
 targetScope = 'subscription'
 
+import { artifactCustomizationType, restartableArtifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
+
+type imageVersionTargetRegionInputType = {
+  name: string
+  storageAccountType: ('Standard_LRS' | 'Standard_ZRS' | 'Premium_LRS' | 'PremiumV2_LRS')?
+  regionalReplicaCount: int?
+  excludeFromLatest: bool?
+}
+
 // Builds a custom Windows image for Azure Virtual Desktop using a zero-trust architecture.
 // Creates a temporary build VM, applies software customizations, captures the result to an Azure Compute Gallery,
 // and cleans up all temporary resources. Does not require the Azure VM Image Builder service.
@@ -32,6 +41,7 @@ param imageBuildResourceGroupId string = ''
 
 // Optional Custom Naming
 @description('The custom name of the resource group where the image build vm and orchestration vm will be created. Leave blank to create a new resource group based on Cloud Adoption Framework naming principals.')
+@maxLength(68)
 param customBuildResourceGroupName string = ''
 
 // Source Image Properties
@@ -66,7 +76,7 @@ param diskSizeGB int = 0
 
 // Image customizers
 @description('Optional. List of Appx Apps to Remove. Default is [].')
-param appsToRemove array = []
+param appsToRemove string[] = []
 
 @description('Optional. Always download the newest bits from the web for FSLogix, Microsoft 365, OneDrive, and Teams. Overrides the default behavior of using the storage account.')
 param downloadLatestMicrosoftContent bool = false
@@ -75,7 +85,7 @@ param downloadLatestMicrosoftContent bool = false
 param installFsLogix bool = false
 
 @description('Optional. List of Microsoft 365 Apps to install. Use Outlook for classic Outlook and OutlookForWindows for new Outlook. Default is [].')
-param office365AppsToInstall array = []
+param office365AppsToInstall string[] = []
 
 @description('Optional. Install OneDrive Per Machine.')
 param installOneDrive bool = false
@@ -147,7 +157,7 @@ JSON example:
   }
 ]
 ''')
-param customizations array = []
+param customizations restartableArtifactCustomizationType[] = []
 
 @description('''An array of image customization objects that are executed just before sysprep. These customizations are applications that
 generate unique identifiers that should be removed before the image is generalized. Therefore, these customizations are executed without
@@ -170,7 +180,7 @@ JSON example:
   }
 ]
 ''')
-param vdiCustomizations array = []
+param vdiCustomizations artifactCustomizationType[] = []
 
 @description('Optional. Remove all links from the public desktop.')
 param cleanupDesktop bool = false
@@ -187,6 +197,9 @@ param logContainerName string = 'image-customization-logs'
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its diskEncryptionSetResourceId output here to share the same DES across all image builds.')
 param diskEncryptionSetResourceId string = ''
 
+@description('Optional. Resource ID of an existing Disk Encryption Set in the remote Compute Gallery region. Required to encrypt remote gallery image version replicas with a customer-managed key.')
+param remoteDiskEncryptionSetResourceId string = ''
+
 @description('Optional. Confidential VM encryption type applied to each image version replication target region. Only relevant when the image definition SecurityType is ConfidentialVM or ConfidentialVMSupported.')
 @allowed([
   ''
@@ -198,6 +211,9 @@ param galleryImageVersionConfidentialVMEncryptionType string = ''
 
 @description('Optional. Resource ID of an existing Disk Encryption Set to use for Confidential VM guest state encryption in gallery image version replicas. When provided, no new DES is created. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
 param confidentialVMDiskEncryptionSetResourceId string = ''
+
+@description('Optional. Resource ID of an existing Confidential VM Disk Encryption Set in the remote Compute Gallery region. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
+param remoteConfidentialVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Determines if the latest updates from the specified update service will be installed.')
 param installUpdates bool = false
@@ -290,7 +306,7 @@ param imageVersionDefaultStorageAccountType string = 'Standard_LRS'
 param imageVersionExcludeFromLatest bool = false
 
 @description('Optional. The regions to which the image version will be replicated. (Default: deployment location with Standard_LRS storage and 1 replica.)')
-param imageVersionTargetRegions array = []
+param imageVersionTargetRegions imageVersionTargetRegionInputType[] = []
 
 @description('Optional. The resource Id of the remote compute gallery.')
 param remoteComputeGalleryResourceId string = ''
@@ -314,9 +330,10 @@ param tags object = {}
 
 // * VARIABLE DECLARATIONS * //
 
-var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-')
+var buildTimestamp = startsWith(deployment().name, 'Microsoft.Template-')
   ? substring(deployment().name, 19, 14)
   : timeStamp
+var buildRunId = uniqueString(subscription().subscriptionId, deployment().name, buildTimestamp)
 
 // Function to ensure unique names in customization arrays by appending index to duplicates
 var uniqueCustomizers = map(range(0, length(customizations)), i => {
@@ -354,13 +371,13 @@ var artifactsContainerUriNormalized = endsWith(artifactsContainerUri, '/')
 
 var computeLocation = vnet.location
 var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
-// The auto-generated and custom names include the deployment timestamp so each build gets a unique
-// resource group name. This allows parallel builds and prevents naming conflicts.
+// The auto-generated and custom names include the deployment timestamp and build run ID so each
+// build gets a unique resource group name. This allows parallel builds and prevents naming conflicts.
 // The orchestration VM deletes the entire resource group at the end of the build.
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
-      ? '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${deploymentSuffix}'
-      : '${customBuildResourceGroupName}-${deploymentSuffix}')
+      ? '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${buildTimestamp}-${take(buildRunId, 6)}'
+      : '${customBuildResourceGroupName}-${buildTimestamp}-${take(buildRunId, 6)}')
   : last(split(imageBuildResourceGroupId, '/'))
 
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
@@ -409,7 +426,7 @@ var effectiveGalleryImageDefinitionSecurityType = empty(imageDefinitionResourceI
       : 'Standard'
 var effectiveGalleryImageDefinitionSku = !empty(imageDefinitionSku) ? replace(imageDefinitionSku, ' ', '') : mpSku
 // build an image version from the ISO 8601 timestamp
-var autoImageVersionName = '${substring(deploymentSuffix, 0, 4)}.${substring(deploymentSuffix, 4, 4)}.${substring(deploymentSuffix, 8, 4)}'
+var autoImageVersionName = '${substring(buildTimestamp, 0, 4)}.${substring(buildTimestamp, 4, 4)}.${substring(buildTimestamp, 8, 4)}'
 var imageVersionName = imageMajorVersion != -1 && imageMajorVersion != -1 && imagePatch != -1
   ? '${imageMajorVersion}.${imageMinorVersion}.${imagePatch}'
   : autoImageVersionName
@@ -432,10 +449,17 @@ var defaultRemoteImageVersionTargetRegions = [
   }
 ]
 
-var localImageVersionTargetRegions = !empty(imageVersionTargetRegions)
-  ? empty(filter(imageVersionTargetRegions, region => region.name == computeLocation))
-      ? union(defaultLocalImageVersionTargetRegions, imageVersionTargetRegions)
-      : imageVersionTargetRegions
+var normalizedImageVersionTargetRegions = map(imageVersionTargetRegions, region => {
+  name: region.name
+  excludeFromLatest: region.?excludeFromLatest ?? imageVersionExcludeFromLatest
+  regionalReplicaCount: region.?regionalReplicaCount ?? imageVersionDefaultReplicaCount
+  storageAccountType: region.?storageAccountType ?? imageVersionDefaultStorageAccountType
+})
+
+var localImageVersionTargetRegions = !empty(normalizedImageVersionTargetRegions)
+  ? empty(filter(normalizedImageVersionTargetRegions, region => region.name == computeLocation))
+      ? union(defaultLocalImageVersionTargetRegions, normalizedImageVersionTargetRegions)
+      : normalizedImageVersionTargetRegions
   : defaultLocalImageVersionTargetRegions
 
 var imageVersionReplicationRegions = empty(remoteComputeGalleryResourceId)
@@ -451,12 +475,56 @@ var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConf
   ? confidentialVMDiskEncryptionSetResourceId
   : ''
 
-var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResourceId)
+var effectiveRemoteConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
+  ? remoteConfidentialVMDiskEncryptionSetResourceId
+  : ''
+
+var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResourceId) && empty(remoteDiskEncryptionSetResourceId)
   ? imageVersionReplicationRegions
   : map(
       imageVersionReplicationRegions,
       region =>
-        union(region, {
+        empty(toLower(region.name) == toLower(remoteLocation) ? remoteDiskEncryptionSetResourceId : diskEncryptionSetResourceId)
+          ? region
+          : union(region, {
+              encryption: {
+                osDiskImage: union(
+                  {
+                    diskEncryptionSetId: toLower(region.name) == toLower(remoteLocation)
+                      ? remoteDiskEncryptionSetResourceId
+                      : diskEncryptionSetResourceId
+                  },
+                  !empty(galleryImageVersionConfidentialVMEncryptionType)
+                    ? {
+                        securityProfile: union(
+                          { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+                          !empty(toLower(region.name) == toLower(remoteLocation)
+                            ? effectiveRemoteConfidentialVmDiskEncryptionSetResourceId
+                            : effectiveConfidentialVmDiskEncryptionSetResourceId)
+                            ? {
+                                secureVMDiskEncryptionSetId: toLower(region.name) == toLower(remoteLocation)
+                                  ? effectiveRemoteConfidentialVmDiskEncryptionSetResourceId
+                                  : effectiveConfidentialVmDiskEncryptionSetResourceId
+                              }
+                            : {}
+                        )
+                      }
+                    : {}
+                )
+              }
+            })
+    )
+
+var remoteImageVersionTargetRegions = [
+  union(
+    {
+      name: computeLocation
+      excludeFromLatest: remoteImageVersionExcludeFromLatest
+      regionalReplicaCount: remoteImageVersionDefaultReplicaCount
+      storageAccountType: remoteImageVersionStorageAccountType
+    },
+    !empty(diskEncryptionSetResourceId)
+      ? {
           encryption: {
             osDiskImage: union(
               { diskEncryptionSetId: diskEncryptionSetResourceId },
@@ -472,15 +540,44 @@ var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResour
                 : {}
             )
           }
-        })
-    )
+        }
+      : {}
+  )
+  union(
+    {
+      name: remoteLocation
+      excludeFromLatest: remoteImageVersionExcludeFromLatest
+      regionalReplicaCount: remoteImageVersionDefaultReplicaCount
+      storageAccountType: remoteImageVersionStorageAccountType
+    },
+    !empty(remoteDiskEncryptionSetResourceId)
+      ? {
+          encryption: {
+            osDiskImage: union(
+              { diskEncryptionSetId: remoteDiskEncryptionSetResourceId },
+              !empty(galleryImageVersionConfidentialVMEncryptionType)
+                ? {
+                    securityProfile: union(
+                      { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+                      !empty(effectiveRemoteConfidentialVmDiskEncryptionSetResourceId)
+                        ? { secureVMDiskEncryptionSetId: effectiveRemoteConfidentialVmDiskEncryptionSetResourceId }
+                        : {}
+                    )
+                  }
+                : {}
+            )
+          }
+        }
+      : {}
+  )
+]
 
 var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
-  ? dateTimeAdd(deploymentSuffix, 'P${imageVersionEOLinDays}D')
+  ? dateTimeAdd(buildTimestamp, 'P${imageVersionEOLinDays}D')
   : ''
 
-var imageVmName = take('${depPrefix}vmimg-${uniqueString(deploymentSuffix)}', 15)
-var orchestrationVmName = take('${depPrefix}vmorc-${uniqueString(deploymentSuffix)}', 15)
+var imageVmName = '${depPrefix}vmimg-${buildRunId}'
+var orchestrationVmName = '${depPrefix}vmorc-${buildRunId}'
 
 var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
@@ -510,7 +607,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' existing = {
 // * Resource Group * //
 
 // imageBuildRg is intentionally ephemeral — a new uniquely-named resource group is
-// created for every build run (the name includes deploymentSuffix, which is derived
+// created for every build run (the name includes buildTimestamp, which is derived
 // from utcNow). This emulates the Azure Image Builder pattern: the build infrastructure
 // (image VM, orchestration VM, storage) is isolated per run, and the orchestration VM
 // deletes the entire resource group at the end of the build, leaving no residual
@@ -542,8 +639,7 @@ resource existingImageDefinition 'Microsoft.Compute/galleries/images@2024-03-03'
   )
 }
 
-module imageDefinition '../shared/modules/compute/galleries/images/deploy.bicep' = if (empty(imageDefinitionResourceId)) {
-  name: '${depPrefix}Gallery-Image-Definition-${deploymentSuffix}'
+module imageDefinition '../shared/modules/resourceModules/compute/galleries/images/deploy.bicep' = if (empty(imageDefinitionResourceId)) {
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
     location: location
@@ -569,8 +665,7 @@ resource remoteComputeGallery 'Microsoft.Compute/galleries@2024-03-03' existing 
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
 }
 
-module remoteImageDefinition '../shared/modules/compute/galleries/images/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
-  name: '${depPrefix}Remote-Gallery-Image-Definition-${deploymentSuffix}'
+module remoteImageDefinition '../shared/modules/resourceModules/compute/galleries/images/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
     galleryName: last(split(remoteComputeGalleryResourceId, '/'))
@@ -605,8 +700,7 @@ module remoteImageDefinition '../shared/modules/compute/galleries/images/deploy.
 // on the build RG. Contributor allows the cleanup script to delete the entire RG after the build.
 // When an existing resource group is provided, all required roles must be pre-granted on the supplied UAI
 // (use the imageManagement deployment with deployImageBuildResourceGroup=true to pre-stage this).
-module roleAssignmentContributorBuildRg '../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (empty(imageBuildResourceGroupId)) {
-  name: '${depPrefix}RA-OrchVM-Contributor-BuildRG-${deploymentSuffix}'
+module roleAssignmentContributorBuildRg '../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (empty(imageBuildResourceGroupId)) {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     principalId: orchestrationVm.outputs.principalId
@@ -617,8 +711,7 @@ module roleAssignmentContributorBuildRg '../shared/modules/authorization/roleAss
 
 // * Orchestration VM * //
 
-module orchestrationVm '../shared/modules/compute/virtualMachines/deploy.bicep' = {
-  name: '${depPrefix}Orchestration-VM-${deploymentSuffix}'
+module orchestrationVm '../shared/modules/resourceModules/compute/virtualMachines/deploy.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: computeLocation
@@ -653,8 +746,7 @@ module orchestrationVm '../shared/modules/compute/virtualMachines/deploy.bicep' 
 
 // * Image VM * //
 
-module imageVm '../shared/modules/compute/virtualMachines/deploy.bicep' = {
-  name: '${depPrefix}Image-VM-${deploymentSuffix}'
+module imageVm '../shared/modules/resourceModules/compute/virtualMachines/deploy.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     hibernationEnabled: !empty(filter(imageDefinitionFeatures, feature => feature.name == 'IsHibernateSupported'))
@@ -700,14 +792,13 @@ module imageVm '../shared/modules/compute/virtualMachines/deploy.bicep' = {
 
 // * Resize OS Disk Partition * //
 
-module resizeDisk '../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
-  name: '${depPrefix}Resize-ImageVM-OSDisk-${deploymentSuffix}'
+module resizeDisk '../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (diskSizeGB != 0 && diskSizeGB != 128) {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     location: computeLocation
     name: 'ResizeDisk'
     virtualMachineName: imageVm.outputs.name
-    script: loadTextContent('../shared/scripts/Resize-Disk.ps1')
+    script: loadTextContent('scripts/Resize-Disk.ps1')
     treatFailureAsDeploymentFailure: true
   }
 }
@@ -715,7 +806,6 @@ module resizeDisk '../shared/modules/compute/virtualMachines/runCommands/deploy.
 // * Image Customizations * //
 
 module customizeImage 'modules/customizeImage.bicep' = {
-  name: '${depPrefix}Customize-Image-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     cloud: cloud
@@ -723,7 +813,7 @@ module customizeImage 'modules/customizeImage.bicep' = {
     location: computeLocation
     cleanupDesktop: cleanupDesktop
     customizations: uniqueCustomizers
-    deploymentSuffix: deploymentSuffix
+    buildTimestamp: buildTimestamp
     installFsLogix: installFsLogix
     installOneDrive: installOneDrive
     installTeams: installTeams
@@ -754,11 +844,10 @@ module customizeImage 'modules/customizeImage.bicep' = {
 // * VM Generalization * //
 
 module generalizeImageVM 'modules/generalizeVm.bicep' = {
-  name: '${depPrefix}Generalize-ImageVM-${deploymentSuffix}'
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     adminPw: adminPw
-    deploymentSuffix: deploymentSuffix
+    buildTimestamp: buildTimestamp
     imageVmName: imageVm.outputs.name
     location: location
     logBlobContainerUri: logContainerUri
@@ -775,11 +864,8 @@ module generalizeImageVM 'modules/generalizeVm.bicep' = {
 // * Capture Image * //
 
 module captureImage 'modules/captureImage.bicep' = {
-  name: '${depPrefix}Capture-Image-${deploymentSuffix}'
   params: {
     computeGalleryResourceId: computeGalleryResourceId
-    depPrefix: depPrefix
-    deploymentSuffix: deploymentSuffix
     hyperVGeneration: galleryImageDefinitionHyperVGeneration
     imageBuildResourceGroupName: imageBuildResourceGroupName
     imageDefinitionSecurityType: effectiveGalleryImageDefinitionSecurityType
@@ -806,15 +892,14 @@ module captureImage 'modules/captureImage.bicep' = {
 
 // * Cleanup Temporary Resources * //
 
-module removeImageBuildResources '../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: '${depPrefix}Remove-Image-Image-Build-Resources-${deploymentSuffix}'
+module removeImageBuildResources '../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   scope: resourceGroup(imageBuildResourceGroupName)
   params: {
     asyncExecution: true
     location: computeLocation
     name: 'RemoveImageBuildResources'
     virtualMachineName: orchestrationVm.outputs.name
-    script: loadTextContent('../shared/scripts/Remove-ImageBuildResources.ps1')
+    script: loadTextContent('scripts/Remove-ImageBuildResources.ps1')
     treatFailureAsDeploymentFailure: false
     parameters: [
       { name: 'ResourceManagerUri', value: environment().resourceManager }
@@ -840,13 +925,15 @@ module removeImageBuildResources '../shared/modules/compute/virtualMachines/runC
       { name: 'ManagementVmResourceId', value: orchestrationVm.outputs.resourceId }
     ]
   }
+  dependsOn: [
+    remoteImageVersion
+  ]
 }
 
-module remoteImageVersion '../shared/modules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
-  name: '${depPrefix}Remote-ImageVersion-${deploymentSuffix}'
+module remoteImageVersion '../shared/modules/resourceModules/compute/galleries/images/versions/deploy.bicep' = if (!empty(remoteComputeGalleryResourceId)) {
   scope: resourceGroup(split(remoteComputeGalleryResourceId, '/')[2], split(remoteComputeGalleryResourceId, '/')[4])
   params: {
-    location: location
+    location: computeLocation
     name: imageVersionName
     galleryName: last(split(remoteComputeGalleryResourceId, '/'))
     imageDefinitionName: remoteImageDefinition!.outputs.name
@@ -854,7 +941,9 @@ module remoteImageVersion '../shared/modules/compute/galleries/images/versions/d
     excludeFromLatest: remoteImageVersionExcludeFromLatest
     replicaCount: remoteImageVersionDefaultReplicaCount
     storageAccountType: remoteImageVersionStorageAccountType
-    sourceId: captureImage.outputs.imageVersionId
+    sourceId: contains(effectiveGalleryImageDefinitionSecurityType, 'Supported') ? captureImage.outputs.managedImageId : ''
+    virtualMachineId: !contains(effectiveGalleryImageDefinitionSecurityType, 'Supported') ? imageVm.outputs.resourceId : ''
+    targetRegions: remoteImageVersionTargetRegions
     tags: tags[?'Microsoft.Compute/galleries/images/versions'] ?? {}
   }
 }

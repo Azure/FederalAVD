@@ -3,6 +3,16 @@
         "Test-Path": true,
         "Get-Item": true,
         "Get-Content": true,
-        "Get-ChildItem": true
+        "Get-ChildItem": true,
+        "/^& \\.github/skills/federalavd-bicep-maintenance/scripts/Test-BicepArmSync\\.ps1 -BicepPath deployments/add-ons/fslogixStorage/main\\.bicep$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "&": true,
+        "az": true,
+        "/^& \\.github/skills/federalavd-bicep-maintenance/scripts/Test-BicepArmSync\\.ps1 -BicepPath deployments/hostpools/hostpool\\.bicep -ArmPath deployments/hostpools/hostpool\\.json$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

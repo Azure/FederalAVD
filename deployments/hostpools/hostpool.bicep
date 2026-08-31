@@ -1,8 +1,63 @@
 targetScope = 'subscription'
 
+import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
+import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
+
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
 // Subscription-scoped; creates and manages multiple resource groups for compute, storage, and operations resources.
+
+type pooledScalingScheduleInputType = {
+  name: string
+  daysOfWeek: scalingDayType[]
+  rampUpStartTime: string
+  rampUpLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  rampUpMinimumHostsPct: string
+  rampUpCapacityThresholdPct: string
+  peakStartTime: string
+  peakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  rampDownStartTime: string
+  rampDownLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  rampDownMinimumHostsPct: string
+  rampDownCapacityThresholdPct: string
+  rampDownForceLogoffUsers: bool
+  rampDownWaitTimeMinutes: string?
+  rampDownNotificationMessage: string?
+  rampDownStopHostsWhen: 'ZeroSessions' | 'ZeroActiveSessions'
+  offPeakStartTime: string
+  offPeakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+}
+
+type personalScalingScheduleInputType = {
+  name: string
+  daysOfWeek: scalingDayType[]
+  rampUpStartTime: string
+  rampUpAutoStartHosts: 'None' | 'WithAssignedUser' | 'All'
+  rampUpStartVMOnConnect: 'Enable' | 'Disable'
+  rampUpMinutesToWaitOnDisconnect: string
+  rampUpActionOnDisconnect: 'None' | 'Deallocate' | 'Hibernate'
+  rampUpMinutesToWaitOnLogoff: string
+  rampUpActionOnLogoff: 'None' | 'Deallocate' | 'Hibernate'
+  peakStartTime: string
+  peakStartVMOnConnect: 'Enable' | 'Disable'
+  peakMinutesToWaitOnDisconnect: string
+  peakActionOnDisconnect: 'None' | 'Deallocate' | 'Hibernate'
+  peakMinutesToWaitOnLogoff: string
+  peakActionOnLogoff: 'None' | 'Deallocate' | 'Hibernate'
+  rampDownStartTime: string
+  rampDownStartVMOnConnect: 'Enable' | 'Disable'
+  rampDownMinutesToWaitOnDisconnect: string
+  rampDownActionOnDisconnect: 'None' | 'Deallocate' | 'Hibernate'
+  rampDownMinutesToWaitOnLogoff: string
+  rampDownActionOnLogoff: 'None' | 'Deallocate' | 'Hibernate'
+  offPeakStartTime: string
+  offPeakStartVMOnConnect: 'Enable' | 'Disable'
+  offPeakMinutesToWaitOnDisconnect: string
+  offPeakActionOnDisconnect: 'None' | 'Deallocate' | 'Hibernate'
+  offPeakMinutesToWaitOnLogoff: string
+  offPeakActionOnLogoff: 'None' | 'Deallocate' | 'Hibernate'
+}
 
 // Basics
 
@@ -38,6 +93,15 @@ param namingConvention object = {
   delimiter: '-'
   workload: 'avd'
 }
+
+@description('Optional. Complete name override for the inline-created Secrets Key Vault. When empty, the name is generated from namingConvention.')
+@maxLength(24)
+#disable-next-line secure-secrets-in-params
+param secretsKeyVaultNameOverride string = ''
+
+@description('Optional. Complete name override for the inline-created Encryption Key Vault. When empty, the name is generated from namingConvention.')
+@maxLength(24)
+param encryptionKeyVaultNameOverride string = ''
 
 @description('''Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding
 default from .common/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.
@@ -142,10 +206,16 @@ Each object must contain the following properties from the Entra Id group:
   name: DisplayName
 If the 'fslogixShardGroups' is not defined, the value of this parameter is used to determine the number of storage accounts and permissions for each.
 ''')
-param appGroupSecurityGroups array = []
+param appGroupSecurityGroups entraGroupType[] = []
 
 @description('Optional. Determines if the scaling plan is deployed to the host pool.')
 param deployScalingPlan bool = false
+
+@description('Required for a Pooled host pool when deployScalingPlan is true. Complete Pooled scaling plan schedules.')
+param scalingPlanPooledSchedules pooledScalingScheduleInputType[] = []
+
+@description('Required for a Personal host pool when deployScalingPlan is true. Complete Personal scaling plan schedules.')
+param scalingPlanPersonalSchedules personalScalingScheduleInputType[] = []
 
 @description('''Optional.
 The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.
@@ -156,40 +226,6 @@ param avdObjectId string = ''
 
 @description('Optional. The tag used to exclude virtual machines from the scaling plan.')
 param scalingPlanExclusionTag string = ''
-
-@description('Optional. The scaling plan weekday ramp up schedule')
-param scalingPlanRampUpSchedule object = {
-  startTime: '8:00'
-  minimumHostsPct: 20
-  capacityThresholdPct: 60
-  loadBalancingAlgorithm: 'DepthFirst'
-}
-
-@description('Optional. The scaling plan weekday peak schedule.')
-param scalingPlanPeakSchedule object = {
-  startTime: '9:00'
-  loadBalancingAlgorithm: 'DepthFirst'
-}
-
-@description('Optional. The scaling plan weekday rampdown schedule.')
-param scalingPlanRampDownSchedule object = {
-  startTime: '17:00'
-  minimumHostsPct: 10
-  capacityThresholdPct: 90
-  loadBalancingAlgorithm: 'DepthFirst'
-}
-
-@description('Optional. The scaling plan weakday off peak schedule.')
-param scalingPlanOffPeakSchedule object = {
-  startTime: '20:00'
-  loadBalancingAlgorithm: 'DepthFirst'
-}
-
-@description('Optional. Determines if the scaling plan will forcefully log off users when scaling down.')
-param scalingPlanForceLogoff bool = false
-
-@description('Optional. The number of minutes to wait before forcefully logging off users when scaling down.')
-param scalingPlanMinsBeforeLogoff int = 0
 
 // Session Hosts
 
@@ -324,7 +360,7 @@ param hibernationEnabled bool = false
 param availability string = 'AvailabilityZones'
 
 @description('Conditional. The availability zones allowed for the AVD session hosts deployment location. Used when "availability" is set to "availabilityZones".')
-param availabilityZones array = []
+param availabilityZones string[] = []
 
 @description('Optional. Offer for the virtual machine image')
 param imageOffer string = 'office-365'
@@ -378,7 +414,7 @@ JSON example:
   }
 ]
 ''')
-param sessionHostCustomizations array = []
+param sessionHostCustomizations artifactCustomizationType[] = []
 
 @description('Optional. The URL to download the AVD Agent Boot Loader. If not provided, the URL is determined based on the cloud environment.')
 param agentBootLoaderDownloadUrl string = ''
@@ -425,7 +461,7 @@ Each object must contain the following properties from the Entra Id group:
   id: Id
   name: DisplayName
 ''')
-param fslogixAdminGroups array = []
+param fslogixAdminGroups entraGroupType[] = []
 
 @description('''Optional.
 An array of objects, defining the user groups that are assigned permissions to each share.
@@ -433,12 +469,12 @@ Each object must contain the following properties from the Entra Id group:
   id: Id
   name: DisplayName
 ''')
-param fslogixUserGroups array = []
+param fslogixUserGroups entraGroupType[] = []
 
 @description('''Optional.
-The resource Id of the User Assigned Identity that has been granted the Application Admnistrator Entra ID role in order to add tags
-to the enterprise application created when the storage account is enabled for Entra Kerberos Authentication. Required in order to
-automate the configuration of least priveledge permissions on the file share(s) in the Entra Kerberos (Cloud Only Identity) configuration.
+The resource ID of a user-assigned identity with the required Microsoft Graph application permissions. The identity updates and grants
+consent to storage account enterprise applications for Entra Kerberos. Cloud-only group-scoped NTFS access also requires this identity
+to enable cloud group SID support.
 ''')
 param fslogixAppUpdateUserAssignedIdentityResourceId string = ''
 
@@ -478,25 +514,25 @@ param fslogixConfigureSessionHosts bool = false
 @description('''Optional. Existing local (in the same region as the session host VMs) NetApp Files Volume Resource Ids.
 If Office Containers are used, then list the FSLogix Profile Container Volume first and the Office Container Volume second.
 ''')
-param fslogixExistingLocalNetAppVolumeResourceIds array = []
+param fslogixExistingLocalNetAppVolumeResourceIds string[] = []
 
 @description('''Optional. Existing local (in the same region as the session host VMs) FSLogix Storage Account Resource Ids.
 Only used when fslogixConfigureSessionHosts = true and deployFSLogixStorage = false.
 If "identitySolution" is set to "EntraId" then only the first storage account listed will be used.
 ''')
-param fslogixExistingLocalStorageAccountResourceIds array = []
+param fslogixExistingLocalStorageAccountResourceIds string[] = []
 
 @description('''Optional. Existing remote (not in the same region as the session host VMs) NetApp Files Volume Resource Ids.
 If Office Containers are used, then list the FSLogix Profile Container Volume first and the Office Container Volume second.
 ''')
-param fslogixExistingRemoteNetAppVolumeResourceIds array = []
+param fslogixExistingRemoteNetAppVolumeResourceIds string[] = []
 
 @description('''Optional. Existing remote (not in the same region as the session host VMs) FSLogix Storage Account Resource Ids.
 Only used when fslogixConfigureSessionHosts = true.
 This list will be added to any storage accounts created when setting "fslogixStorageService" to any of the AzureFiles options. 
 If "identitySolution" is set to "EntraId" then only the first storage account listed will be used.
 ''')
-param fslogixExistingRemoteStorageAccountResourceIds array = []
+param fslogixExistingRemoteStorageAccountResourceIds string[] = []
 
 @allowed([
   'AES256'
@@ -527,16 +563,16 @@ param keyManagementStorage string = 'PlatformManaged'
 param keyManagementRecoveryServicesVault string = 'PlatformManaged'
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
-param permittedIPs array = []
+param permittedIPs string[] = []
 
-@description('Optional. Enable VM backups via a Recovery Services Vault. Only applies to Personal host pools. For pooled host pools, Azure Files storage protection uses soft delete and snapshots configured directly on the storage accounts.')
+@description('Optional. Enable Azure Backup. Personal host pools protect session host VMs. Pooled host pools protect newly deployed FSLogix Azure Files shares through a shared Recovery Services vault and snapshot policy.')
 param recoveryServices bool = false
 
 @description('Optional. Storage redundancy for the Recovery Services vault. Controls how backup recovery points are stored — independently of the storage account redundancy.')
 @allowed(['LocallyRedundant', 'ZoneRedundant', 'GeoRedundant'])
 param recoveryServicesVaultStorageRedundancy string = 'LocallyRedundant'
 
-@description('Optional. Number of daily recovery points or snapshots to retain (1–365). Used for VM backup on Personal host pools and Azure Files snapshot backup on pooled host pools — never both in the same deployment.')
+@description('Optional. Number of daily recovery points or snapshots to retain. Supports 1-365 days for Personal VM backup and 1-200 days for pooled Azure Files snapshot backup.')
 @minValue(1)
 @maxValue(365)
 param backupRetentionDays int = 30
@@ -546,6 +582,9 @@ param existingVmBackupVaultResourceId string = ''
 
 @description('Optional. Resource ID of an existing Azure Files backup Recovery Services Vault (pooled host pools). When provided with recoveryServices = true and Azure Files storage, uses this vault instead of creating a new one.')
 param existingFilesBackupVaultResourceId string = ''
+
+@description('Optional. Name of the Azure Files backup policy in the existing shared Recovery Services vault.')
+param existingFilesBackupPolicyName string = 'filesharepolicy'
 
 @description('Optional. The resource ID of an existing Encryption Key Vault containing customer-managed keys. When provided, the deployment uses this vault for CMK instead of creating one inline.')
 param existingEncryptionKeyVaultResourceId string = ''
@@ -612,9 +651,6 @@ param azureKeyVaultPrivateDnsZoneResourceId string = ''
 @description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
 param azureQueuePrivateDnsZoneResourceId string = ''
 
-@description('Optional. Deploy the Zero Trust Compliant Disk Access Policy to deny Public Access to the Virtual Machine Managed Disks.')
-param deployDiskAccessPolicy bool = false
-
 @description('Optional. The resource Id of the Azure Monitor Private Link Scope to which monitoring resources should be linked. There should only be one Azure Monitor Private Link Scope per network that shares the same DNS.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
 
@@ -677,14 +713,7 @@ param tags object = {}
 @description('Optional. The vm size of the management VM.')
 param deploymentVmSize string = 'Standard_B2s'
 
-@description('DO NOT MODIFY THIS VALUE! The timeStamp is needed to differentiate deployments for certain Azure resources and must be set using a parameter.')
-param timeStamp string = utcNow('yyyyMMddHHmmss')
-
 // Variables
-
-var deploymentSuffix = startsWith(deployment().name, 'Microsoft.Template-')
-  ? substring(deployment().name, 19, 14)
-  : timeStamp
 
 var effectiveControlPlaneSubscription = empty(controlPlaneSubscriptionId)
   ? subscription().subscriptionId
@@ -702,6 +731,7 @@ var virtualMachinesRegion = vmVirtualNetwork.location
 var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 
 var createDeploymentVm = deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
+var hybridDomainCredentialsRequired = deployFSLogixStorage && identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups)
 
 // deployKeyVaults controls inline KV creation within this deployment.
 //   (a) deploySecretsKeyVault = true: user explicitly requested a secrets KV deployed inline
@@ -744,60 +774,168 @@ var hostPoolVmTemplate = {
 
 // Conditional Host Resource Group Tags
 
-var scalingPlanSchedules = deployScalingPlan
-  ? [
-      {
-        rampUpStartTime: {
-          hour: first(split(scalingPlanRampUpSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanRampUpSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanRampUpSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanRampUpSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanRampUpSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanRampUpSchedule.startTime, ':')[1])
-        }
-        peakStartTime: {
-          hour: first(split(scalingPlanPeakSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanPeakSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanPeakSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanPeakSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanPeakSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanPeakSchedule.startTime, ':')[1])
-        }
-        rampDownStartTime: {
-          hour: first(split(scalingPlanRampDownSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanRampDownSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanRampDownSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanRampDownSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanRampDownSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanRampDownSchedule.startTime, ':')[1])
-        }
-        offPeakStartTime: {
-          hour: first(split(scalingPlanOffPeakSchedule.startTime, ':')[0]) == '0'
-            ? int(last(split(scalingPlanOffPeakSchedule.startTime, ':')[0]))
-            : int(split(scalingPlanOffPeakSchedule.startTime, ':')[0])
-          minute: first(split(scalingPlanOffPeakSchedule.startTime, ':')[1]) == '0'
-            ? int(last(split(scalingPlanOffPeakSchedule.startTime, ':')[1]))
-            : int(split(scalingPlanOffPeakSchedule.startTime, ':')[1])
-        }
-        name: 'weekdays_schedule'
-        daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-        rampUpLoadBalancingAlgorithm: scalingPlanRampUpSchedule.loadBalancingAlgorithm
-        rampUpMinimumHostsPct: scalingPlanRampUpSchedule.minimumHostsPct
-        rampUpCapacityThresholdPct: scalingPlanRampUpSchedule.capacityThresholdPct
-        peakLoadBalancingAlgorithm: scalingPlanPeakSchedule.loadBalancingAlgorithm
-        rampDownLoadBalancingAlgorithm: scalingPlanRampDownSchedule.loadBalancingAlgorithm
-        rampDownMinimumHostsPct: scalingPlanRampDownSchedule.minimumHostsPct
-        rampDownCapacityThresholdPct: scalingPlanRampDownSchedule.capacityThresholdPct
-        rampDownForceLogoffUsers: scalingPlanForceLogoff
-        rampDownWaitTimeMinutes: scalingPlanMinsBeforeLogoff
-        rampDownNotificationMessage: scalingPlanForceLogoff
-          ? 'You will be logged off in ${scalingPlanMinsBeforeLogoff} minutes. Make sure to save your work.'
-          : null
-        rampDownStopHostsWhen: 'ZeroSessions'
-        offPeakLoadBalancingAlgorithm: scalingPlanOffPeakSchedule.loadBalancingAlgorithm
-      }
-    ]
-  : []
+var scalingPlanSchedulesCustom = [
+  for schedule in scalingPlanPooledSchedules: {
+    name: string(schedule.name)
+    daysOfWeek: schedule.daysOfWeek
+    rampUpStartTime: {
+      hour: first(split(string(schedule.rampUpStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.rampUpStartTime), ':')[0]))
+        : int(split(string(schedule.rampUpStartTime), ':')[0])
+      minute: first(split(string(schedule.rampUpStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.rampUpStartTime), ':')[1]))
+        : int(split(string(schedule.rampUpStartTime), ':')[1])
+    }
+    peakStartTime: {
+      hour: first(split(string(schedule.peakStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.peakStartTime), ':')[0]))
+        : int(split(string(schedule.peakStartTime), ':')[0])
+      minute: first(split(string(schedule.peakStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.peakStartTime), ':')[1]))
+        : int(split(string(schedule.peakStartTime), ':')[1])
+    }
+    rampDownStartTime: {
+      hour: first(split(string(schedule.rampDownStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.rampDownStartTime), ':')[0]))
+        : int(split(string(schedule.rampDownStartTime), ':')[0])
+      minute: first(split(string(schedule.rampDownStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.rampDownStartTime), ':')[1]))
+        : int(split(string(schedule.rampDownStartTime), ':')[1])
+    }
+    offPeakStartTime: {
+      hour: first(split(string(schedule.offPeakStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.offPeakStartTime), ':')[0]))
+        : int(split(string(schedule.offPeakStartTime), ':')[0])
+      minute: first(split(string(schedule.offPeakStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.offPeakStartTime), ':')[1]))
+        : int(split(string(schedule.offPeakStartTime), ':')[1])
+    }
+    rampUpLoadBalancingAlgorithm: schedule.rampUpLoadBalancingAlgorithm
+    rampUpMinimumHostsPct: int(schedule.rampUpMinimumHostsPct)
+    rampUpCapacityThresholdPct: int(schedule.rampUpCapacityThresholdPct)
+    peakLoadBalancingAlgorithm: schedule.peakLoadBalancingAlgorithm
+    rampDownLoadBalancingAlgorithm: schedule.rampDownLoadBalancingAlgorithm
+    rampDownMinimumHostsPct: int(schedule.rampDownMinimumHostsPct)
+    rampDownCapacityThresholdPct: int(schedule.rampDownCapacityThresholdPct)
+    rampDownForceLogoffUsers: schedule.rampDownForceLogoffUsers
+    rampDownWaitTimeMinutes: schedule.rampDownForceLogoffUsers
+      ? (empty(schedule.?rampDownWaitTimeMinutes ?? '') ? 30 : int(schedule.rampDownWaitTimeMinutes!))
+      : 0
+    rampDownNotificationMessage: schedule.rampDownForceLogoffUsers
+      ? (empty(schedule.?rampDownNotificationMessage ?? '') ? 'Save your work and sign out. This session host is being removed by autoscale.' : schedule.rampDownNotificationMessage!)
+      : null
+    rampDownStopHostsWhen: schedule.rampDownStopHostsWhen
+    offPeakLoadBalancingAlgorithm: schedule.offPeakLoadBalancingAlgorithm
+  }
+]
+
+var scalingPlanSchedules = scalingPlanSchedulesCustom
+
+var scalingPlanPersonalSchedulesCustom = [
+  for schedule in scalingPlanPersonalSchedules: {
+    name: string(schedule.name)
+    daysOfWeek: schedule.daysOfWeek
+    rampUpStartTime: {
+      hour: first(split(string(schedule.rampUpStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.rampUpStartTime), ':')[0]))
+        : int(split(string(schedule.rampUpStartTime), ':')[0])
+      minute: first(split(string(schedule.rampUpStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.rampUpStartTime), ':')[1]))
+        : int(split(string(schedule.rampUpStartTime), ':')[1])
+    }
+    rampUpAutoStartHosts: schedule.rampUpAutoStartHosts
+    rampUpStartVMOnConnect: schedule.rampUpStartVMOnConnect
+    rampUpMinutesToWaitOnDisconnect: int(schedule.rampUpMinutesToWaitOnDisconnect)
+    rampUpActionOnDisconnect: schedule.rampUpActionOnDisconnect
+    rampUpMinutesToWaitOnLogoff: int(schedule.rampUpMinutesToWaitOnLogoff)
+    rampUpActionOnLogoff: schedule.rampUpActionOnLogoff
+    peakStartTime: {
+      hour: first(split(string(schedule.peakStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.peakStartTime), ':')[0]))
+        : int(split(string(schedule.peakStartTime), ':')[0])
+      minute: first(split(string(schedule.peakStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.peakStartTime), ':')[1]))
+        : int(split(string(schedule.peakStartTime), ':')[1])
+    }
+    peakStartVMOnConnect: schedule.peakStartVMOnConnect
+    peakMinutesToWaitOnDisconnect: int(schedule.peakMinutesToWaitOnDisconnect)
+    peakActionOnDisconnect: schedule.peakActionOnDisconnect
+    peakMinutesToWaitOnLogoff: int(schedule.peakMinutesToWaitOnLogoff)
+    peakActionOnLogoff: schedule.peakActionOnLogoff
+    rampDownStartTime: {
+      hour: first(split(string(schedule.rampDownStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.rampDownStartTime), ':')[0]))
+        : int(split(string(schedule.rampDownStartTime), ':')[0])
+      minute: first(split(string(schedule.rampDownStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.rampDownStartTime), ':')[1]))
+        : int(split(string(schedule.rampDownStartTime), ':')[1])
+    }
+    rampDownStartVMOnConnect: schedule.rampDownStartVMOnConnect
+    rampDownMinutesToWaitOnDisconnect: int(schedule.rampDownMinutesToWaitOnDisconnect)
+    rampDownActionOnDisconnect: schedule.rampDownActionOnDisconnect
+    rampDownMinutesToWaitOnLogoff: int(schedule.rampDownMinutesToWaitOnLogoff)
+    rampDownActionOnLogoff: schedule.rampDownActionOnLogoff
+    offPeakStartTime: {
+      hour: first(split(string(schedule.offPeakStartTime), ':')[0]) == '0'
+        ? int(last(split(string(schedule.offPeakStartTime), ':')[0]))
+        : int(split(string(schedule.offPeakStartTime), ':')[0])
+      minute: first(split(string(schedule.offPeakStartTime), ':')[1]) == '0'
+        ? int(last(split(string(schedule.offPeakStartTime), ':')[1]))
+        : int(split(string(schedule.offPeakStartTime), ':')[1])
+    }
+    offPeakStartVMOnConnect: schedule.offPeakStartVMOnConnect
+    offPeakMinutesToWaitOnDisconnect: int(schedule.offPeakMinutesToWaitOnDisconnect)
+    offPeakActionOnDisconnect: schedule.offPeakActionOnDisconnect
+    offPeakMinutesToWaitOnLogoff: int(schedule.offPeakMinutesToWaitOnLogoff)
+    offPeakActionOnLogoff: schedule.offPeakActionOnLogoff
+  }
+]
+
+var pooledScalingScheduleNames = map(scalingPlanSchedules, schedule => toLower(schedule.name))
+var pooledScalingScheduleDays = flatten(map(scalingPlanSchedules, schedule => schedule.daysOfWeek))
+var pooledScalingSchedulesAreValid = !deployScalingPlan || contains(hostPoolType, 'Personal') || !empty(scalingPlanSchedules) && length(pooledScalingScheduleNames) == length(union(pooledScalingScheduleNames, pooledScalingScheduleNames)) && length(pooledScalingScheduleDays) == length(union(pooledScalingScheduleDays, pooledScalingScheduleDays))
+  ? true
+  : fail('Pooled scaling requires at least one schedule, unique schedule names, and each day assigned to no more than one schedule.')
+var invalidPooledScalingRampDownSettings = filter(scalingPlanSchedules, schedule => schedule.rampDownWaitTimeMinutes < 0 || schedule.rampDownWaitTimeMinutes > 120 || schedule.rampDownForceLogoffUsers && empty(schedule.?rampDownNotificationMessage))
+var pooledScalingRampDownSettingsAreValid = !deployScalingPlan || contains(hostPoolType, 'Personal') || empty(invalidPooledScalingRampDownSettings)
+  ? true
+  : fail('Pooled scaling ramp-down waits must be between 0 and 120 minutes, and force logoff requires a notification message.')
+
+var personalScalingScheduleNames = map(scalingPlanPersonalSchedulesCustom, schedule => toLower(schedule.name))
+var personalScalingScheduleDays = flatten(map(scalingPlanPersonalSchedulesCustom, schedule => schedule.daysOfWeek))
+var personalScalingSchedulesAreValid = !deployScalingPlan || !contains(hostPoolType, 'Personal') || !empty(scalingPlanPersonalSchedulesCustom) && length(personalScalingScheduleNames) == length(union(personalScalingScheduleNames, personalScalingScheduleNames)) && length(personalScalingScheduleDays) == length(union(personalScalingScheduleDays, personalScalingScheduleDays))
+  ? true
+  : fail('Personal scaling requires at least one schedule, unique schedule names, and each day assigned to no more than one schedule.')
+
+var personalScalingWaitValues = flatten(map(scalingPlanPersonalSchedulesCustom, schedule => [
+  schedule.rampUpMinutesToWaitOnDisconnect
+  schedule.rampUpMinutesToWaitOnLogoff
+  schedule.peakMinutesToWaitOnDisconnect
+  schedule.peakMinutesToWaitOnLogoff
+  schedule.rampDownMinutesToWaitOnDisconnect
+  schedule.rampDownMinutesToWaitOnLogoff
+  schedule.offPeakMinutesToWaitOnDisconnect
+  schedule.offPeakMinutesToWaitOnLogoff
+]))
+var personalScalingWaitValuesAreValid = !deployScalingPlan || !contains(hostPoolType, 'Personal') || empty(filter(personalScalingWaitValues, wait => wait < 0 || wait > 360))
+  ? true
+  : fail('Personal scaling disconnect and logoff wait values must be between 0 and 360 minutes.')
+
+var personalScalingActions = flatten(map(scalingPlanPersonalSchedulesCustom, schedule => [
+  schedule.rampUpActionOnDisconnect
+  schedule.rampUpActionOnLogoff
+  schedule.peakActionOnDisconnect
+  schedule.peakActionOnLogoff
+  schedule.rampDownActionOnDisconnect
+  schedule.rampDownActionOnLogoff
+  schedule.offPeakActionOnDisconnect
+  schedule.offPeakActionOnLogoff
+]))
+var personalScalingHibernateIsValid = !deployScalingPlan || !contains(hostPoolType, 'Personal') || !contains(personalScalingActions, 'Hibernate') || hibernationEnabled && !deployFSLogixStorage && !fslogixConfigureSessionHosts
+  ? true
+  : fail('Personal scaling Hibernate actions require VM hibernation and are not supported when FSLogix is deployed or configured.')
+
+var scalingPlanConfigurationIsValid = pooledScalingSchedulesAreValid && pooledScalingRampDownSettingsAreValid && personalScalingSchedulesAreValid && personalScalingWaitValuesAreValid && personalScalingHibernateIsValid
 
 var exclusionTag = !empty(scalingPlanExclusionTag) && deployScalingPlan
   ? {
@@ -856,11 +994,12 @@ var hpBaseName = toLower(identifier)
 // Merge namingResourceTypeCodes into namingConvention before passing to the naming module.
 var effectiveNamingConvention = union(
   namingConvention,
-  !empty(namingResourceTypeCodes) ? { resourceTypeCodes: namingResourceTypeCodes } : {}
+  !empty(namingResourceTypeCodes) ? { resourceTypeCodes: namingResourceTypeCodes } : {},
+  !empty(secretsKeyVaultNameOverride) ? { secretsKeyVaultNameOverride: secretsKeyVaultNameOverride } : {},
+  !empty(encryptionKeyVaultNameOverride) ? { encryptionKeyVaultNameOverride: encryptionKeyVaultNameOverride } : {}
 )
 
-module naming './modules/naming.bicep' = {
-  name: 'Naming-${deploymentSuffix}'
+module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
   scope: subscription()
   params: {
     namingConvention: effectiveNamingConvention
@@ -910,6 +1049,25 @@ var storageResourceGroupIdTag = deployFSLogixStorage
 // FSLogix storage configuration
 var fslogixFileShareNames = fslogixShareNamesLookup[fslogixContainerType]
 var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
+var effectiveFslogixExistingLocalStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixExistingLocalStorageAccountResourceIds, 1)
+  : fslogixExistingLocalStorageAccountResourceIds
+var effectiveFslogixExistingRemoteStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(fslogixExistingRemoteStorageAccountResourceIds, 1)
+  : fslogixExistingRemoteStorageAccountResourceIds
+var fslogixShardingConfigurationIsValid = (!deployFSLogixStorage && !fslogixConfigureSessionHosts) || identitySolution == 'EntraId' || fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
+  ? true
+  : fail('fslogixUserGroups must contain at least one group when sharding is enabled.')
+var fslogixExistingLocalStorageConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || !startsWith(fslogixStorageService, 'AzureFiles') || length(effectiveFslogixExistingLocalStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingRemoteStorageConfigurationIsValid = !fslogixConfigureSessionHosts || !startsWith(fslogixStorageService, 'AzureFiles') || empty(effectiveFslogixExistingRemoteStorageAccountResourceIds) || length(effectiveFslogixExistingRemoteStorageAccountResourceIds) == fslogixStorageCount
+var fslogixExistingStorageConfigurationIsValid = fslogixExistingLocalStorageConfigurationIsValid && fslogixExistingRemoteStorageConfigurationIsValid
+  ? true
+  : fail('Existing FSLogix Azure Files storage must include one local account, and when supplied one remote account, per shard. Storage Account Keys use one account per location.')
+var fslogixExistingLocalNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || !startsWith(fslogixStorageService, 'AzureNetAppFiles') || length(fslogixExistingLocalNetAppVolumeResourceIds) == length(fslogixFileShareNames)
+var fslogixExistingRemoteNetAppConfigurationIsValid = !fslogixConfigureSessionHosts || !startsWith(fslogixStorageService, 'AzureNetAppFiles') || empty(fslogixExistingRemoteNetAppVolumeResourceIds) || length(fslogixExistingRemoteNetAppVolumeResourceIds) == length(fslogixFileShareNames)
+var fslogixExistingNetAppConfigurationIsValid = fslogixExistingLocalNetAppConfigurationIsValid && fslogixExistingRemoteNetAppConfigurationIsValid
+  ? true
+  : fail('Existing Azure NetApp Files storage must include one volume per FSLogix share, in profile-then-Office order. Remote volumes are optional but must follow the same rule when supplied.')
 
 // NOTE: the name formula below must stay in sync with azureFiles.bicep: '${storageAccountNamePrefix}${padLeft(i + storageIndex, 2, '0')}'
 var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
@@ -919,18 +1077,18 @@ var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStor
         i => '${naming.outputs.fslogixStorageAccountNamePrefix}${padLeft(i + fslogixStorageIndex, 2, '0')}'
       ))
     }
-  : !empty(fslogixExistingLocalStorageAccountResourceIds)
+  : !empty(effectiveFslogixExistingLocalStorageAccountResourceIds)
       ? {
           fslLocalStorageAccountNames: string(map(
-            fslogixExistingLocalStorageAccountResourceIds,
+            effectiveFslogixExistingLocalStorageAccountResourceIds,
             id => last(split(id, '/'))
           ))
         }
       : {}
-var fslRemoteStorageAccountNames = !empty(fslogixExistingRemoteStorageAccountResourceIds)
+var fslRemoteStorageAccountNames = !empty(effectiveFslogixExistingRemoteStorageAccountResourceIds)
   ? {
       fslRemoteStorageAccountNames: string(map(
-        fslogixExistingRemoteStorageAccountResourceIds,
+        effectiveFslogixExistingRemoteStorageAccountResourceIds,
         id => last(split(id, '/'))
       ))
     }
@@ -1025,8 +1183,7 @@ var vmConfigurationTags = union(
 )
 
 // Resource Groups
-module deploymentResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
-  name: 'Resource-Group-Deployment-${deploymentSuffix}'
+module deploymentResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
   params: {
     location: virtualMachinesRegion
     name: naming.outputs.resourceGroupDeployment
@@ -1036,8 +1193,7 @@ module deploymentResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
-  name: 'Resource-Group-Monitoring-${deploymentSuffix}'
+module monitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
   scope: subscription(effectiveMonitoringSubscription)
   params: {
     location: virtualMachinesRegion
@@ -1046,8 +1202,7 @@ module monitoringResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module controlPlaneResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (empty(existingFeedWorkspaceResourceId)) {
-  name: 'Resource-Group-Control-Plane-${deploymentSuffix}'
+module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (empty(existingFeedWorkspaceResourceId)) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     location: effectiveControlPlaneRegion
@@ -1056,8 +1211,7 @@ module controlPlaneResourceGroup '../shared/modules/resources/resourceGroups/dep
   }
 }
 
-module globalFeedResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
-  name: 'Resource-Group-Global-Feed-${deploymentSuffix}'
+module globalFeedResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateEndpointSubnetResourceId) && empty(existingGlobalFeedResourceId)) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     location: globalFeedRegion!
@@ -1066,8 +1220,7 @@ module globalFeedResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module hostsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = {
-  name: 'Resource-Group-Hosts-${deploymentSuffix}'
+module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
     location: virtualMachinesRegion
     name: naming.outputs.resourceGroupHosts
@@ -1077,8 +1230,7 @@ module hostsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bic
   }
 }
 
-module operationsResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || deployRecoveryServicesAzureFiles) {
-  name: 'Resource-Group-Operations-${deploymentSuffix}'
+module operationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployKeyVaults || deployRecoveryServicesAzureFiles) {
   params: {
     location: virtualMachinesRegion
     name: naming.outputs.resourceGroupOperations
@@ -1086,8 +1238,7 @@ module operationsResourceGroup '../shared/modules/resources/resourceGroups/deplo
   }
 }
 
-module storageResourceGroup '../shared/modules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
-  name: 'Resource-Group-FSLogix-Storage-${deploymentSuffix}'
+module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   params: {
     location: virtualMachinesRegion
     name: naming.outputs.resourceGroupStorage
@@ -1098,13 +1249,12 @@ module storageResourceGroup '../shared/modules/resources/resourceGroups/deploy.b
 }
 
 // PowerOn/PowerOff/Restart VM Run Command permissions for AVD Service Principal
-module avdServicePrincipalRbac 'modules/rbac/avdServicePrincipalRbac.bicep' = [
+module avdServicePrincipalRbac '../shared/modules/orchestration/avdServicePrincipalRbac.bicep' = [
   for (subId, i) in rbacSubs: if (!empty(avdObjectId) && (deployScalingPlan || startVMOnConnect)) {
-    name: 'Subscription-Role-Assignment-${i}-${deploymentSuffix}'
     scope: subscription(subId)
     params: {
-      avdObjectId: avdObjectId
-      deployScalingPlan: deployScalingPlan
+      avdServicePrincipalObjectId: avdObjectId
+      scalingMethod: deployScalingPlan ? 'PowerManage' : 'None'
       startVMOnConnect: startVMOnConnect
     }
   }
@@ -1112,11 +1262,9 @@ module avdServicePrincipalRbac 'modules/rbac/avdServicePrincipalRbac.bicep' = [
 
 // VM User Login — required for Entra ID-joined session hosts so users can sign in
 module roleAssignment_VirtualMachineUserLogin 'modules/rbac/vmUserLoginAssignments.bicep' = if (!contains(identitySolution, 'DomainServices')) {
-  name: 'RA-Hosts-VMLoginUser-${deploymentSuffix}'
   params: {
     resourceGroupHosts: naming.outputs.resourceGroupHosts
     appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
-    deploymentSuffix: deploymentSuffix
   }
   dependsOn: [
     hostsResourceGroup
@@ -1124,27 +1272,27 @@ module roleAssignment_VirtualMachineUserLogin 'modules/rbac/vmUserLoginAssignmen
 }
 
 // Deployment VM for Prerequisites
-module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeploymentVm) {
-  name: 'Deployment-Prereqs-${deploymentSuffix}'
+module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy.bicep' = if (createDeploymentVm) {
   params: {
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
-    deploymentSuffix: deploymentSuffix
     deploymentVmSize: deploymentVmSize
     desktopFriendlyName: desktopFriendlyName
     diskSku: diskSku
+    diskEncryptionSetResourceId: deployDiskCmk ? diskCmk!.outputs.diskEncryptionSetResourceId : ''
     #disable-next-line BCP422
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
+    domainJoinDeploymentVirtualMachine: split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
@@ -1166,14 +1314,6 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
     resourceGroupStorage: naming.outputs.resourceGroupStorage
     tags: tags
     userAssignedIdentityNameConv: naming.outputs.userAssignedIdentityNameConv
-    #disable-next-line BCP422
-    virtualMachineAdminPassword: !empty(existingCredentialsKeyVaultResourceId)
-      ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
-      : virtualMachineAdminPassword
-    #disable-next-line BCP422
-    virtualMachineAdminUserName: !empty(existingCredentialsKeyVaultResourceId)
-      ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
-      : virtualMachineAdminUserName
     virtualMachineName: naming.outputs.depVirtualMachineName
     virtualMachineNICName: naming.outputs.depVirtualMachineNicName
     virtualMachineDiskName: naming.outputs.depVirtualMachineDiskName
@@ -1187,11 +1327,9 @@ module deploymentPrereqs 'modules/deployment/deployment.bicep' = if (createDeplo
 // KeyVaults: Inline Key Vault creation — only runs when Security KVs were not provided.
 // For all-in-one portal deployments: deploys encryption KV when CMK is requested, secrets KV when deploySecretsKeyVault=true.
 // For Security-first deployments: skipped entirely because encryptionKeyVaultResourceId will be non-empty.
-module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
-  name: 'KeyVaults-${deploymentSuffix}'
+module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = if (deployKeyVaults) {
   params: {
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
-    deploymentSuffix: deploymentSuffix
     encryptionKeyVaultName: naming.outputs.keyVaultNameEncryption
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
@@ -1227,6 +1365,9 @@ module keyVaults '../shared/modules/keyVaults/keyVaults.bicep' = if (deployKeyVa
 var effectiveEncryptionKeyVaultResourceId = !empty(existingEncryptionKeyVaultResourceId)
   ? existingEncryptionKeyVaultResourceId
   : (deployInlineEncryptionKv ? keyVaults!.outputs.encryptionKeyVaultResourceId : '')
+var effectiveCredentialsKeyVaultResourceId = !empty(existingCredentialsKeyVaultResourceId)
+  ? existingCredentialsKeyVaultResourceId
+  : (deploySecretsKeyVault ? keyVaults!.outputs.secretsKeyVaultResourceId : '')
 #disable-next-line BCP318
 var effectiveEncryptionKeyVaultUri = !empty(existingEncryptionKeyVaultResourceId)
   ? kvEncryption!.properties.vaultUri
@@ -1235,8 +1376,7 @@ var effectiveEncryptionKeyVaultUri = !empty(existingEncryptionKeyVaultResourceId
 // Disk CMK: DES + key + role assignment — runs in parallel with monitoring/controlPlane,
 // giving sufficient RBAC propagation buffer before sessionHosts needs the DES.
 // Confidential VM disk encryption is handled separately by cvmDiskCmk below.
-module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployDiskCmk) {
-  name: 'Disk-CMK-${deploymentSuffix}'
+module diskCmk '../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskCmk) {
   params: {
     resourceGroupName: naming.outputs.resourceGroupHosts
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
@@ -1246,7 +1386,7 @@ module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployDiskCmk) {
     keyExpirationInDays: keyExpirationInDays
     location: virtualMachinesRegion
     tags: tags
-    deploymentSuffix: deploymentSuffix
+    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
     keyName: naming.outputs.encryptionKeyNameVMs
     diskEncryptionSetName: !contains(keyManagementDisks, 'Platform')
       ? naming.outputs.diskEncryptionSetNameCustomerManaged
@@ -1259,10 +1399,9 @@ module diskCmk 'modules/cmk/diskCmk.bicep' = if (deployDiskCmk) {
 
 // CVM CMK: two-step flow — Run Command creates the key with a release policy (Key Vault data plane),
 // then the shared CMK module creates the DES + role assignments (ARM, skipKeyCreation=true).
-// Must run after deploymentPrereqs so the deployment VM and its Key Vault Crypto Officer role
+// Must run after deploymentHelper so the deployment VM and its Key Vault Crypto Officer role
 // assignment are in place before the Run Command executes.
 module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
-  name: 'CVM-Disk-CMK-${deploymentSuffix}'
   params: {
     resourceGroupHosts: naming.outputs.resourceGroupHosts
     resourceGroupDeployment: naming.outputs.resourceGroupDeployment
@@ -1271,12 +1410,11 @@ module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
     keyName: naming.outputs.encryptionKeyNameConfidentialVMs
     diskEncryptionSetName: naming.outputs.diskEncryptionSetNameConfidentialVMs
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
-    deploymentVirtualMachineName: deploymentPrereqs!.outputs.virtualMachineName
-    deploymentUserAssignedIdentityClientId: deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    deploymentUserAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
     location: virtualMachinesRegion
     tags: tags
     hostPoolResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
-    deploymentSuffix: deploymentSuffix
   }
   dependsOn: [
     hostsResourceGroup
@@ -1290,8 +1428,7 @@ var effectiveDiskEncryptionSetResourceId = deployDiskCmk
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.
 // Runs in parallel with monitoring/controlPlane so role assignments propagate before azureFiles deploys.
-module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
-  name: 'Storage-CMK-${deploymentSuffix}'
+module storageCmk '../shared/modules/orchestration/customerManagedKeys/storageCmk.bicep' = if (deployStorageCmk) {
   params: {
     resourceGroupName: naming.outputs.resourceGroupStorage
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
@@ -1299,7 +1436,7 @@ module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
     keyExpirationInDays: keyExpirationInDays
     location: virtualMachinesRegion
     tags: tags
-    deploymentSuffix: deploymentSuffix
+    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
     storageKeyNames: [
       for i in range(0, fslogixStorageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
     ]
@@ -1311,13 +1448,11 @@ module storageCmk 'modules/cmk/storageCmk.bicep' = if (deployStorageCmk) {
 }
 
 // Monitoring: Log Analytics Workspace, Data Collection Endpoint, Data Collection Rules, Automation Account
-module monitoring 'modules/monitoring/monitoring.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
-  name: 'Monitoring-${deploymentSuffix}'
+module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)) {
   scope: subscription(effectiveMonitoringSubscription)
   params: {
     azureMonitorPrivateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
     dataCollectionEndpointName: naming.outputs.dataCollectionEndpointName
-    deploymentSuffix: deploymentSuffix
     location: virtualMachinesRegion
     logAnalyticsWorkspaceName: naming.outputs.logAnalyticsWorkspaceName
     resourceGroupMonitoring: naming.outputs.resourceGroupMonitoring
@@ -1328,9 +1463,24 @@ module monitoring 'modules/monitoring/monitoring.bicep' = if (enableMonitoring &
   ]
 }
 
+var effectiveLogAnalyticsWorkspaceResourceId = enableMonitoring
+  ? (empty(existingLogAnalyticsWorkspaceResourceId)
+      ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
+      : existingLogAnalyticsWorkspaceResourceId)
+  : ''
+var effectiveAvdInsightsDataCollectionRuleResourceId = enableMonitoring
+  ? (empty(existingAVDInsightsDataCollectionRuleResourceId)
+      ? monitoring!.outputs.avdInsightsDataCollectionRuleResourceId
+      : existingAVDInsightsDataCollectionRuleResourceId)
+  : ''
+var effectiveDataCollectionEndpointResourceId = enableMonitoring
+  ? (empty(existingDataCollectionEndpointResourceId)
+      ? monitoring!.outputs.dataCollectionEndpointResourceId
+      : existingDataCollectionEndpointResourceId)
+  : ''
+
 // AVD Control Plane Resources: workspace, host pool, and desktop application group
 module controlPlane 'modules/control-plane/controlPlane.bicep' = {
-  name: 'ControlPlane-${deploymentSuffix}'
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
@@ -1338,11 +1488,10 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     avdPrivateLinkPrivateRoutes: avdPrivateLinkPrivateRoutes
     controlPlaneRegion: effectiveControlPlaneRegion
     deployScalingPlan: deployScalingPlan
-    deploymentSuffix: deploymentSuffix
     deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
     desktopApplicationGroupName: naming.outputs.desktopApplicationGroupName
     desktopFriendlyName: desktopFriendlyName
     enableMonitoring: enableMonitoring
@@ -1381,17 +1530,19 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     resourceGroupGlobalFeed: naming.outputs.globalFeedResourceGroupName
     resourceGroupDeployment: naming.outputs.resourceGroupDeployment
     scalingPlanName: naming.outputs.scalingPlanName
-    scalingPlanSchedules: scalingPlanSchedules
+    scalingPlanPooledSchedules: scalingPlanSchedules
+    scalingPlanPersonalSchedules: scalingPlanPersonalSchedulesCustom
     scalingPlanExclusionTag: scalingPlanExclusionTag
     startVMOnConnect: startVMOnConnect
     tags: tags
-    virtualMachinesTimeZone: virtualMachinesTimeZone
+    virtualMachinesTimeZone: scalingPlanConfigurationIsValid ? virtualMachinesTimeZone : virtualMachinesTimeZone
     workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
     workspaceFriendlyName: workspaceFriendlyName
     workspaceName: naming.outputs.workspaceName
     workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
   }
   dependsOn: [
+    avdServicePrincipalRbac
     controlPlaneResourceGroup
   ]
 }
@@ -1399,19 +1550,23 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
 // VM Recovery Services: vault deployment is handled inside modules/hosts/hosts.bicep.
 var deployRecoveryServices = recoveryServices && contains(hostPoolType, 'Personal')
 
-var recoveryServicesFileSharePolicyName = 'filesharepolicy'
+var recoveryServicesFileSharePolicyName = empty(existingFilesBackupVaultResourceId)
+  ? 'filesharepolicy'
+  : existingFilesBackupPolicyName
+var filesBackupRetentionIsValid = !deployRecoveryServicesAzureFiles || !empty(existingFilesBackupVaultResourceId) || backupRetentionDays <= 200
+  ? true
+  : fail('backupRetentionDays cannot exceed 200 when creating an Azure Files snapshot backup policy.')
 
 // Azure Files Recovery Services Vault — shared vault in the Operations RG for pooled host pool FSLogix snapshot backup.
 // No CMK required: vault holds only metadata; snapshot data stays in the storage account.
-module recoveryServicesAzureFilesModule 'modules/operations/recoveryServices.bicep' = if (deployRecoveryServicesAzureFiles) {
-  name: 'RecoveryServices-AzureFiles-${deploymentSuffix}'
+module recoveryServicesAzureFilesModule '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deployRecoveryServicesAzureFiles) {
   params: {
     createVault: empty(existingFilesBackupVaultResourceId)
+    manageBackupPolicy: empty(existingFilesBackupVaultResourceId)
     existingRecoveryServicesVaultResourceId: existingFilesBackupVaultResourceId
     vaultName: naming.outputs.recoveryServicesVaultNameFSLogix
     resourceGroupOperations: naming.outputs.resourceGroupOperations
     location: virtualMachinesRegion
-    deploymentSuffix: deploymentSuffix
     logAnalyticsWorkspaceResourceId: enableMonitoring
       ? (empty(existingLogAnalyticsWorkspaceResourceId)
           ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
@@ -1427,7 +1582,7 @@ module recoveryServicesAzureFilesModule 'modules/operations/recoveryServices.bic
     tags: tags
     timeZone: virtualMachinesTimeZone
     fileSharePolicyName: recoveryServicesFileSharePolicyName
-    backupRetentionDays: backupRetentionDays
+    backupRetentionDays: filesBackupRetentionIsValid ? min(backupRetentionDays, 200) : 30
   }
   dependsOn: [
     operationsResourceGroup
@@ -1439,26 +1594,29 @@ var effectiveFilesBackupVaultResourceId = deployRecoveryServicesAzureFiles
       ? recoveryServicesAzureFilesModule!.outputs.recoveryServicesVaultResourceId
       : existingFilesBackupVaultResourceId)
   : ''
+var effectiveFilesBackupPolicyName = deployRecoveryServicesAzureFiles ? recoveryServicesFileSharePolicyName : ''
+var effectiveFilesBackupPolicyResourceId = deployRecoveryServicesAzureFiles
+  ? '${effectiveFilesBackupVaultResourceId}/backupPolicies/${effectiveFilesBackupPolicyName}'
+  : ''
 
 // FSLogix Storage
-module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
-  name: 'FSLogix-${deploymentSuffix}'
+module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled') {
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
     appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
     azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
     #disable-next-line BCP422
-    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
-    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || identitySolution == 'EntraKerberos-Hybrid'
+    domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
@@ -1493,14 +1651,13 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
     shareSizeInGB: fslogixShareSizeInGB
     smbServerLocation: naming.outputs.vmsLocAbbr
     storageAccountNamePrefix: naming.outputs.fslogixStorageAccountNamePrefix
-    storageCount: fslogixStorageCount
+    storageCount: fslogixShardingConfigurationIsValid ? fslogixStorageCount : fslogixStorageCount
     storageIndex: fslogixStorageIndex
     storageSku: fslogixStorageService == 'None' ? 'None' : split(fslogixStorageService, ' ')[1]
     fslogixStorageRedundancy: fslogixStorageRedundancy
     storageSolution: split(fslogixStorageService, ' ')[0]
     permittedIPs: permittedIPs
     tags: tags
-    deploymentSuffix: deploymentSuffix
     encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageEncryptionIdentityResourceId : ''
     fslogixSoftDeleteRetentionDays: fslogixSoftDeleteRetentionDays
     recoveryServicesVaultResourceId: deployRecoveryServicesAzureFiles ? effectiveFilesBackupVaultResourceId : ''
@@ -1513,13 +1670,11 @@ module fslogix 'modules/fslogix-storage/fslogix.bicep' = if (deployFSLogixStorag
 
 // Session Hosts
 module diskAccess 'modules/hosts/modules/diskAccess.bicep' = if (deployDiskAccessResource) {
-  name: 'DiskAccess-${deploymentSuffix}'
   params: {
     resourceGroupHosts: naming.outputs.resourceGroupHosts
     diskAccessName: naming.outputs.diskAccessName
     location: virtualMachinesRegion
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
-    deploymentSuffix: deploymentSuffix
     tags: tags
     deployPrivateEndpoint: deployPrivateEndpoints
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
@@ -1529,17 +1684,7 @@ module diskAccess 'modules/hosts/modules/diskAccess.bicep' = if (deployDiskAcces
   }
 }
 
-module diskAccessPolicy 'modules/hosts/modules/diskNetworkAccessPolicy.bicep' = if (deployDiskAccessPolicy) {
-  name: 'ManagedDisks-NetworkAccess-Policy-${deploymentSuffix}'
-  params: {
-    diskAccessId: deployDiskAccessResource ? diskAccess!.outputs.diskAccessId : ''
-    location: virtualMachinesRegion
-    resourceGroupName: naming.outputs.resourceGroupHosts
-  }
-}
-
 module sessionHosts 'modules/hosts/hosts.bicep' = {
-  name: 'Hosts-${deploymentSuffix}'
   params: {
     resourceGroupHosts: naming.outputs.resourceGroupHosts
     agentBootLoaderDownloadUrl: agentBootLoaderDownloadUrl
@@ -1587,18 +1732,20 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
-    fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
+    fslogixConfigureSessionHosts: fslogixShardingConfigurationIsValid && fslogixExistingStorageConfigurationIsValid && fslogixExistingNetAppConfigurationIsValid
+      ? fslogixConfigureSessionHosts
+      : fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
     fslogixLocalStorageAccountResourceIds: deployFSLogixStorage
       ? fslogix!.outputs.storageAccountResourceIds
-      : fslogixExistingLocalStorageAccountResourceIds
+      : effectiveFslogixExistingLocalStorageAccountResourceIds
     fslogixLocalNetAppVolumeResourceIds: deployFSLogixStorage
       ? fslogix!.outputs.netAppVolumeResourceIds
       : fslogixExistingLocalNetAppVolumeResourceIds
     fslogixOSSGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
     fslogixRemoteNetAppVolumeResourceIds: fslogixExistingRemoteNetAppVolumeResourceIds
-    fslogixRemoteStorageAccountResourceIds: fslogixExistingRemoteStorageAccountResourceIds
+    fslogixRemoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: split(fslogixStorageService, ' ')[0]
     hibernationEnabled: hibernationEnabled
@@ -1621,7 +1768,6 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     vmNameIndexLength: vmNameIndexLength
     subnetResourceId: virtualMachineSubnetResourceId
     tags: hostTags
-    deploymentSuffix: deploymentSuffix
     timeZone: virtualMachinesTimeZone
     #disable-next-line BCP422
     virtualMachineAdminPassword: !empty(existingCredentialsKeyVaultResourceId)
@@ -1666,25 +1812,20 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
 }
 
 // Clean Up Deployment VM and Role Assignments
-module cleanUp 'modules/clean-up/cleanUp.bicep' = if (createDeploymentVm) {
-  name: 'CleanUp-${deploymentSuffix}'
+module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (createDeploymentVm) {
   params: {
     location: virtualMachinesRegion
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentPrereqs!.outputs.virtualMachineName : ''
     resourceGroupDeployment: naming.outputs.resourceGroupDeployment
     resourceGroupHosts: naming.outputs.resourceGroupHosts
-    roleAssignmentIds: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
-      : []
-    deploymentSuffix: deploymentSuffix
     userAssignedIdentityClientId: createDeploymentVm
-      ? deploymentPrereqs!.outputs.deploymentUserAssignedIdentityClientId
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
+    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
+    roleAssignmentIds: createDeploymentVm
+      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
+      : []
     virtualMachineNames: sessionHosts.outputs.virtualMachineNames
   }
-  dependsOn: [
-    deploymentResourceGroup
-  ]
 }
 
 // Outputs
@@ -1692,8 +1833,16 @@ output hostPoolResourceId string = controlPlane!.outputs.hostPoolResourceId
 output workspaceResourceId string = empty(existingFeedWorkspaceResourceId)
   ? controlPlane!.outputs.workspaceResourceId
   : existingFeedWorkspaceResourceId
+output credentialsKeyVaultResourceId string = effectiveCredentialsKeyVaultResourceId
+output encryptionKeyVaultResourceId string = effectiveEncryptionKeyVaultResourceId
+output logAnalyticsWorkspaceResourceId string = effectiveLogAnalyticsWorkspaceResourceId
+output avdInsightsDataCollectionRuleResourceId string = effectiveAvdInsightsDataCollectionRuleResourceId
+output dataCollectionEndpointResourceId string = effectiveDataCollectionEndpointResourceId
+output fslogixBackupVaultResourceId string = effectiveFilesBackupVaultResourceId
+output fslogixBackupPolicyName string = effectiveFilesBackupPolicyName
+output fslogixBackupPolicyResourceId string = effectiveFilesBackupPolicyResourceId
 output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage
   ? fslogix!.outputs.storageAccountResourceIds
-  : fslogixExistingLocalStorageAccountResourceIds
+  : effectiveFslogixExistingLocalStorageAccountResourceIds
 output hostResouceGroupId string = hostsResourceGroup!.outputs.resourceId
 output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames

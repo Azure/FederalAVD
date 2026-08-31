@@ -20,7 +20,7 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' 
   location: location
   properties: {
     source: {
-      script: loadTextContent('../functions/Execute-Script.ps1')
+      script: loadTextContent('../scripts/Execute-Script.ps1')
     }
     parameters: [
       { name: 'APIVersion', value: apiVersion }

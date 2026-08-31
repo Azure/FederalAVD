@@ -3,6 +3,8 @@
 
 targetScope = 'subscription'
 
+import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
 // ========== //
 // Parameters //
 // ========== //
@@ -84,7 +86,7 @@ param appServicePlanNameOverride string = ''
 // security, encryption, and monitoring capabilities.
 // ================================================================================================
 
-@description('Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). If not provided, the function app will use its system-assigned managed identity.')
+@description('Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). The identity must be in the same Azure region as the Function App because Microsoft.Web enforces regional identity isolation. If not provided, the function app will use its system-assigned managed identity.')
 param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
@@ -144,6 +146,9 @@ param privateLinkScopeResourceId string = ''
 // These parameters control the behavior and execution logic of the session host replacer function,
 // including lifecycle policies, tagging strategies, device cleanup, and execution schedule.
 // ================================================================================================
+
+@description('Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted. Existing Function Apps change versions only when this template is redeployed with a different value.')
+param powerShellVersion string = '7.4'
 
 @description('Required. The resource ID of the Key Vault containing session host credential secrets (VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, DomainJoinUserPrincipalName).')
 param credentialsKeyVaultResourceId string
@@ -326,7 +331,7 @@ param timeZone string = 'Eastern Standard Time'
 param availability string = 'None'
 
 @description('Optional. Availability zones for session hosts.')
-param availabilityZones array = []
+param availabilityZones string[] = []
 
 @description('Optional. Security type for session hosts.')
 @allowed([
@@ -405,19 +410,19 @@ param fslogixSizeInMBs int = 30720
 param fslogixStorageService string = 'AzureFiles'
 
 @description('Optional. FSLogix local storage account resource IDs.')
-param fslogixLocalStorageAccountResourceIds array = []
+param fslogixLocalStorageAccountResourceIds string[] = []
 
 @description('Optional. FSLogix remote storage account resource IDs.')
-param fslogixRemoteStorageAccountResourceIds array = []
+param fslogixRemoteStorageAccountResourceIds string[] = []
 
-@description('Optional. FSLogix local NetApp volume resource IDs.')
-param fslogixLocalNetAppVolumeResourceIds array = []
+@description('Optional. FSLogix local NetApp volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
+param fslogixLocalNetAppVolumeResourceIds string[] = []
 
-@description('Optional. FSLogix remote NetApp volume resource IDs.')
-param fslogixRemoteNetAppVolumeResourceIds array = []
+@description('Optional. FSLogix remote NetApp volume resource IDs. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
+param fslogixRemoteNetAppVolumeResourceIds string[] = []
 
 @description('Optional. FSLogix OSS groups for sharding.')
-param fslogixOSSGroups array = []
+param fslogixOSSGroups string[] = []
 
 @description('Optional. Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds).')
 param agentBootLoaderDownloadUrl string = ''
@@ -450,13 +455,12 @@ JSON example:
   }
 ]
 ''')
-param sessionHostCustomizations array = []
+param sessionHostCustomizations artifactCustomizationType[] = []
 
 // ========== //
 // Variables  //
 // ========== //
 
-var deploymentSuffix = uniqueString(subscription().subscriptionId, functionAppResourceGroupName, deployment().name)
 var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var hostPoolName = last(split(hostPoolResourceId, '/'))
 var hostPoolResourceGroupName = split(hostPoolResourceId, '/')[4]
@@ -503,7 +507,6 @@ var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingCo
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {
-  name: 'SHR-Naming-${deploymentSuffix}'
   params: {
     namingConvention: effectiveNamingConvention
     identifier: effectiveIdentifier
@@ -642,8 +645,7 @@ var sessionHostParameters = union(
 )
 
 // Conditional Template Spec for Session Host Deployment
-module templateSpec '../../shared/modules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
-  name: 'SessionHostTemplateSpec-${deploymentSuffix}'
+module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = if (empty(sessionHostTemplateSpecResourceId)) {
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     name: templateSpecNameFinal
@@ -658,8 +660,7 @@ module templateSpec '../../shared/modules/resources/templateSpecs/deploy.bicep' 
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../shared/modules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
-  name: 'FunctionAppHostingPlan-${deploymentSuffix}'
+module hostingPlan '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
   scope: resourceGroup(aspResourceGroupName)
   params: {
     functionAppKind: 'functionApp'
@@ -708,8 +709,7 @@ var roleAssignmentsResourceGroups = union(
     : []
 )
 
-module roleAssignmentsKeyVault '../../shared/modules/keyVault/vaults/roleAssignment.bicep' = {
-  name: 'RoleAssign-KeyVault-KVCont-${deploymentSuffix}'
+module roleAssignmentsKeyVault '../../shared/modules/resourceModules/keyVault/vaults/roleAssignment.bicep' = {
   scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
   params: {
     assignments: [
@@ -723,8 +723,7 @@ module roleAssignmentsKeyVault '../../shared/modules/keyVault/vaults/roleAssignm
   }
 }
 
-module roleAssignmentVirtualMachinesSubscription '../../shared/modules/authorization/roleAssignments/subscription/deploy.bicep' = {
-  name: 'RoleAssign-Sub-VirtMachCont-${deploymentSuffix}'
+module roleAssignmentVirtualMachinesSubscription '../../shared/modules/resourceModules/authorization/roleAssignments/subscription/deploy.bicep' = {
   scope: subscription(virtualMachinesSubscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
@@ -733,8 +732,7 @@ module roleAssignmentVirtualMachinesSubscription '../../shared/modules/authoriza
   }
 }
 
-module roleAssignmentHostPoolSubscription '../../shared/modules/authorization/roleAssignments/subscription/deploy.bicep' = {
-  name: 'RoleAssign-Sub-Reader-${deploymentSuffix}'
+module roleAssignmentHostPoolSubscription '../../shared/modules/resourceModules/authorization/roleAssignments/subscription/deploy.bicep' = {
   scope: subscription(hostPoolSubscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
@@ -743,9 +741,8 @@ module roleAssignmentHostPoolSubscription '../../shared/modules/authorization/ro
   }
 }
 
-module roleAssignmentsRGs '../../shared/modules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
+module roleAssignmentsRGs '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
-    name: 'RoleAssign-${last(split(rgRole.resourceGroupId, '/'))}-${rgRole.roleDescription}-${deploymentSuffix}'
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
     params: {
       principalId: functionApp.outputs.functionAppPrincipalId
@@ -755,8 +752,7 @@ module roleAssignmentsRGs '../../shared/modules/authorization/roleAssignments/re
   }
 ]
 
-module roleAssignmentTemplateSpec '../../shared/modules/resources/templateSpecs/roleAssignment.bicep' = {
-  name: 'RoleAssign-TemplateSpec-Reader-${deploymentSuffix}'
+module roleAssignmentTemplateSpec '../../shared/modules/resourceModules/resources/templateSpecs/roleAssignment.bicep' = {
   scope: resourceGroup(templateSpecSubscriptionId, templateSpecResourceGroupName)
   params: {
     templateSpecName: !empty(sessionHostTemplateSpecResourceId)
@@ -772,8 +768,7 @@ module roleAssignmentTemplateSpec '../../shared/modules/resources/templateSpecs/
   }
 }
 
-module roleAssignmentComputeGallery '../../shared/modules/compute/galleries/roleAssignment.bicep' = if (contains(imageReference, 'id')) {
-  name: 'RoleAssign-ComputeGallery-Reader-${deploymentSuffix}'
+module roleAssignmentComputeGallery '../../shared/modules/resourceModules/compute/galleries/roleAssignment.bicep' = if (contains(imageReference, 'id')) {
   scope: resourceGroup(split(computeGalleryResourceId, '/')[2], split(computeGalleryResourceId, '/')[4])
   params: {
     galleryName: empty(computeGalleryResourceId) ? '' : last(split(computeGalleryResourceId, '/'))
@@ -787,8 +782,7 @@ module roleAssignmentComputeGallery '../../shared/modules/compute/galleries/role
   }
 }
 
-module roleAssignmentUaiArtifacts '../../shared/modules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
-  name: 'RoleAssign-UAI-Artifacts-MngdIdOperator-${deploymentSuffix}'
+module roleAssignmentUaiArtifacts '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
     split(artifactsUserAssignedIdentityResourceId, '/')[4]
@@ -807,8 +801,7 @@ module roleAssignmentUaiArtifacts '../../shared/modules/managedIdentity/userAssi
   }
 }
 
-module functionApp '../../shared/modules/functionApp/functionApp.bicep' = {
-  name: 'SessionHostReplacerFunctionApp-${deploymentSuffix}'
+module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     location: location
@@ -816,7 +809,6 @@ module functionApp '../../shared/modules/functionApp/functionApp.bicep' = {
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
-    deploymentSuffix: deploymentSuffix
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     enableQueueStorage: false
     enableTableStorage: true
@@ -1013,6 +1005,7 @@ module functionApp '../../shared/modules/functionApp/functionApp.bicep' = {
     privateEndpointNICNameConv: privateEndpointNICNameConv
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
+    powerShellVersion: powerShellVersion
     serverFarmId: !empty(existingAppServicePlanResourceId) ? existingAppServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
     storageAccountName: storageAccountName
     storageAccountRoleDefinitionIds: [
@@ -1024,8 +1017,7 @@ module functionApp '../../shared/modules/functionApp/functionApp.bicep' = {
   }
 }
 
-module functionCode '../../shared/modules/functionApp/function.bicep' = {
-  name: 'SessionHostReplacerFunction-${deploymentSuffix}'
+module functionCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: {
@@ -1049,7 +1041,6 @@ module functionCode '../../shared/modules/functionApp/function.bicep' = {
 }
 
 module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
-  name: 'SessionHostReplacerWorkbook-${deploymentSuffix}'
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     workbookName: workbookName

@@ -49,6 +49,27 @@ configuration only) or require manually staged files (such as patch files for
 > See [customer/README.md](../../customer/README.md) for full copy commands,
 > `-CustomerRootPath` usage for external customer repos, and source control options.
 
+### Passing arguments to PowerShell artifacts
+
+Image-build and session-host customizations pass one `arguments` string through the shared
+`Invoke-Customization.ps1` orchestrator. For every `.ps1` artifact, including a `.ps1` inside a
+ZIP package, the orchestrator converts that string to typed named parameters and splats them into
+the artifact script.
+
+- Strings: `-Mode Full` or `-Mode 'Value with spaces'`
+- Booleans: `-Enabled $true` or `-Enabled $false`
+- Switches: `-Force` with no value
+- String arrays: `-Domains @('a.com','b.com')`
+
+Use native `@()` syntax for string arrays inside JSON parameter files; single quotes require no
+JSON escaping. The shared parser does not evaluate `@{}` hashtables or arbitrary PowerShell
+objects. If an artifact accepts structured data as a string, serialize that payload in the format
+the artifact documents, such as the JSON string accepted by Edge `ManagedSearchEngines`.
+
+See [Artifact Development Guide](../../docs/artifacts-guide.md#passing-parameters-to-artifacts) for
+the complete shared argument contract. EXE, MSI, and BAT artifacts use their executable's own
+command-line syntax instead of PowerShell parameter splatting.
+
 ---
 
 ## Available packages

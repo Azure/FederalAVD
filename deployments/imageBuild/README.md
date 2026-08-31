@@ -1,6 +1,11 @@
 ﻿# AVD Custom Image Build Template
 
 > **📖 User Guide:** For deployment instructions and getting started, see the [Image Build Guide](../../docs/image-build.md)
+>
+> **First deployment:** Use the Custom Image Template Spec portal form and download the generated
+> parameter file from **Review + create**. Remove its generated `timeStamp` parameter before reuse.
+> Use the PowerShell and parameter examples below for subsequent builds, or as a fallback when the
+> Template Spec UI is unavailable.
 
 ## Overview
 
@@ -132,7 +137,9 @@ The Azure identity running this deployment needs different rights depending on w
 
 ### Deploy Prerequisites
 
-Use the included PowerShell script to automate prerequisite deployment:
+Deploy Image Management through its Template Spec portal form first. The included PowerShell script
+is the repeatable alternative after a working parameter file has been exported, or a fallback when
+the Template Spec UI is unavailable:
 
 ```powershell
 .\Deploy-ImageManagement.ps1 `
@@ -165,16 +172,16 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 #### `imageBuildResourceGroupId`
 
 - **Type:** String
-- **Description:** Resource ID of an existing resource group to use as the persistent build workspace. Leave empty to have this deployment create a **temporary** resource group that is automatically deleted when the build completes. Each deployment that creates a new resource group generates a unique timestamp-suffixed name to support parallel builds.
+- **Description:** Resource ID of an existing resource group to use as the persistent build workspace. Leave empty to have this deployment create a **temporary** resource group that is automatically deleted when the build completes. Each deployment that creates a new resource group generates a unique name containing the build timestamp and a deployment-specific run ID to support parallel builds.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/rg-image-build`
 
 #### `customBuildResourceGroupName`
 
 - **Type:** String
-- **Description:** Optional base name for the temporary build resource group (only used when `imageBuildResourceGroupId` is empty). A deployment timestamp suffix (`yyyyMMddHHmmss`) is always appended to ensure uniqueness. Leave empty to use the default CAF-compliant name. **The resource group is temporary — it is deleted automatically when the build completes.**
-- **Example:** `rg-avd-image-builds-prod` → becomes `rg-avd-image-builds-prod-20260515143022`
+- **Description:** Optional base name for the temporary build resource group (only used when `imageBuildResourceGroupId` is empty). A build-run suffix (`yyyyMMddHHmmss-xxxxxx`) is always appended to ensure uniqueness. Leave empty to use the default CAF-compliant name. **The resource group is temporary — it is deleted automatically when the build completes.**
+- **Example:** `rg-avd-image-builds-prod` becomes `rg-avd-image-builds-prod-20260515143022-a1b2c3`
 
-### Prerequisites
+### Required Resources
 
 #### `computeGalleryResourceId`
 
@@ -305,7 +312,7 @@ portal selects Outlook (Classic) and leaves new Outlook unchecked by default. Wh
 
 > **Replaces:** the former `applyWindowsDesktopOptimizations` (boolean) and `disableSoftwareUpdates` (array) parameters.
 
-**What gets optimized**
+#### What Gets Optimized
 
 The script applies up to 11 sections depending on the selected profile. No LGPO.exe required — group policy values are written directly to `Registry.pol` (MS-GPREG format).
 
@@ -452,6 +459,13 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 - **Description:** Resource ID of an existing Disk Encryption Set for gallery image version encryption. Created by the imageManagement template; pass its `diskEncryptionSetResourceId` output here. When empty, gallery image versions use platform-managed keys.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}`
 
+#### `remoteDiskEncryptionSetResourceId`
+
+- **Type:** String
+- **Default:** `''`
+- **Description:** Resource ID of an existing standard Disk Encryption Set in the remote Compute Gallery region. Required when a remote gallery is configured and its image replicas use customer-managed keys. The DES must be in the same subscription as the remote image and in the remote target region.
+- **Example:** `/subscriptions/{sub-id}/resourceGroups/{remote-rg}/providers/Microsoft.Compute/diskEncryptionSets/{remote-des}`
+
 #### `galleryImageVersionConfidentialVMEncryptionType`
 
 - **Type:** String
@@ -465,6 +479,13 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 - **Default:** `''`
 - **Description:** Required when `galleryImageVersionConfidentialVMEncryptionType` is `EncryptedWithCmk`. Must be a Confidential VM DES of type `ConfidentialVmEncryptedWithCustomerKey`. Created by the imageManagement template; pass its `confidentialVmDiskEncryptionSetResourceId` output here.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{cvm-des}`
+
+#### `remoteConfidentialVMDiskEncryptionSetResourceId`
+
+- **Type:** String
+- **Default:** `''`
+- **Description:** Required for a remote gallery when `galleryImageVersionConfidentialVMEncryptionType` is `EncryptedWithCmk`. Must be a Confidential VM DES of type `ConfidentialVmEncryptedWithCustomerKey` in the remote target region and the same subscription as the remote image.
+- **Example:** `/subscriptions/{sub-id}/resourceGroups/{remote-rg}/providers/Microsoft.Compute/diskEncryptionSets/{remote-cvm-des}`
 
 ### Image Definition
 
@@ -806,6 +827,7 @@ module imageBuild './imageBuild.bicep' = {
     
     // Disaster recovery to west region
     remoteComputeGalleryResourceId: '/subscriptions/{sub}/resourceGroups/rg-gallery-west/providers/Microsoft.Compute/galleries/gal-avd-west'
+    remoteDiskEncryptionSetResourceId: '/subscriptions/{sub}/resourceGroups/rg-gallery-west/providers/Microsoft.Compute/diskEncryptionSets/des-avd-west'
     remoteImageVersionStorageAccountType: 'Standard_ZRS'
     remoteImageVersionDefaultReplicaCount: 2
     remoteImageVersionExcludeFromLatest: false
@@ -867,7 +889,9 @@ module imageBuild './imageBuild.bicep' = {
 
 ### Parameter File Examples (PowerShell / CLI)
 
-Use these JSON parameter files with `Invoke-ImageBuilds.ps1` or `New-AzDeployment` directly.
+Use the parameter file exported from the Template Spec UI with `Invoke-ImageBuilds.ps1` or
+`New-AzDeployment`. The JSON files below illustrate the supported shapes and serve as fallbacks
+when the Template Spec UI is unavailable.
 
 #### Required Parameters Only
 
@@ -1051,18 +1075,21 @@ CompanyApp.zip
 ### Zero Trust Implementation
 
 **Storage Account:**
+
 - Private endpoint or service endpoint required
 - Public access disabled
 - User-assigned managed identity authentication
 - RBAC: "Storage Blob Data Reader" role
 
 **Networking:**
+
 - VM deployed to secure subnet
 - Private DNS resolution for storage endpoints
 - Service endpoint pinning (if used)
 - No direct internet access required (except downloads)
 
 **Identity:**
+
 - User-assigned managed identity for storage access
 - Automatic role assignments to build resource group
 - No access keys stored or transmitted
@@ -1096,6 +1123,7 @@ CompanyApp.zip
 When `collectCustomizationLogs` is enabled:
 
 **Log Storage:**
+
 - Storage account created: `sa<prefix>log<uniquestring>`
 - Container: `image-customization-logs`
 - Retention: 7 days (lifecycle management)
@@ -1117,6 +1145,7 @@ image-customization-logs/
 
 **Symptoms:** Deployment fails with VM size not available
 **Solution:**
+
 - Check regional availability: [Azure VM Products by Region](https://azure.microsoft.com/global-infrastructure/services/?products=virtual-machines)
 - Verify quota limits: Azure Portal > Subscriptions > Usage + quotas
 - Use recommended sizes: `Standard_D4ads_v6` or `Standard_D4ads_v5`
@@ -1125,6 +1154,7 @@ image-customization-logs/
 
 **Symptoms:** VM fails to deploy with NVMe support
 **Solution:**
+
 - Use v6 VM series (Dadsv6, Easv6, Eadsv6) and set `imageDefinitionIsHigherStoragePerformanceSupported: true`
 - Check [NVMe VM list](https://learn.microsoft.com/azure/virtual-machines/nvme-overview)
 - For SCSI-only environments (v5 and older VM sizes), leave `imageDefinitionIsHigherStoragePerformanceSupported` at its default (`false`)
@@ -1133,6 +1163,7 @@ image-customization-logs/
 
 **Symptoms:** Customization fails, logs show HTTP 403/404
 **Solution:**
+
 - Verify `artifactsContainerUri` ends with `/`
 - Check blob name is correct (case-sensitive)
 - Confirm managed identity has "Storage Blob Data Reader" role
@@ -1143,6 +1174,7 @@ image-customization-logs/
 
 **Symptoms:** Build exceeds expected time, update installation hanging
 **Solution:**
+
 - Check WSUS server accessibility (if used)
 - Verify VM has internet access (if using WU/MU)
 - Review `updateService` parameter
@@ -1152,6 +1184,7 @@ image-customization-logs/
 
 **Symptoms:** Image capture fails, sysprep errors in logs  
 **Solution:**
+
 - Review VDI customizations (must support sysprep)
 - Check for running services (stop before sysprep)
 - Avoid `/norestart` in final customizations
@@ -1161,6 +1194,7 @@ image-customization-logs/
 ### Monitoring Deployment
 
 **Azure Portal:**
+
 1. Navigate to Subscriptions > Deployments
 2. Find deployment: `<prefix>-imageBuild-<timestamp>`
 3. Review deployment status and output
@@ -1357,6 +1391,7 @@ Major.Minor.Patch
 ```
 
 **Examples:**
+
 - `2024.1.0` - Windows 11 24H2, initial release
 - `2024.1.1` - Same base, security patches applied
 - `2024.2.0` - Same base, added new application
@@ -1371,6 +1406,7 @@ yyyy.MMdd.HHmm
 ```
 
 **Examples:**
+
 - `2024.1211.1430` - Built on Dec 11, 2024 at 2:30 PM
 - `2024.1215.0900` - Built on Dec 15, 2024 at 9:00 AM
 
@@ -1391,23 +1427,27 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 ### Build Resources
 
 **During Build (2-3 hours):**
+
 - 2x VMs: ~$0.50-1.50/hour (D4ads_v6)
 - Storage transactions: ~$0.01
 - Network egress: ~$0.05
 - **Total per build:** ~$1.00-5.00
 
 **Post Build (no cost):**
+
 - Build resources automatically deleted
 - Only image version storage remains
 
 ### Image Storage Costs
 
 **Compute Gallery:**
+
 - Image definitions: Free
 - Image versions: ~$0.10/GB/month (Standard LRS)
 - Replication: Additional cost per region/replica
 
 **Example:**
+
 - 40 GB image
 - 3 regions
 - 2 replicas per region

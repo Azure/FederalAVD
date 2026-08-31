@@ -16,8 +16,8 @@ $ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath))
 
 $DeploymentJobs = @()
 ForEach ($Prefix in $ParameterFilePrefixes) {
-    $CustomerParameterFile = Join-Path -Path $ResolvedCustomerRootPath -ChildPath "parameters\imageBuild\$Prefix.imagebuild.parameters.json"
-    $RepoParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageBuild\parameters\$Prefix.imagebuild.parameters.json"
+    $CustomerParameterFile = Join-Path -Path $ResolvedCustomerRootPath -ChildPath "parameters\imageBuild\$Prefix.parameters.json"
+    $RepoParameterFile = Join-Path -Path $PSScriptRoot -ChildPath "imageBuild\parameters\$Prefix.parameters.json"
     $ParameterFile = if (Test-Path -Path $CustomerParameterFile) { $CustomerParameterFile } else { $RepoParameterFile }
     If (Test-Path -Path $ParameterFile) {
         Write-Output "Using parameter file: $ParameterFile"

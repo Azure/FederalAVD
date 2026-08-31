@@ -1,0 +1,35 @@
+{
+    // Secrets-vault prerequisite for the automated host-pool PoC.
+    // Supply the VM administrator username and password as secure deployment parameters.
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": "eastus"
+        },
+        "deploySecretsKeyVault": {
+            "value": true
+        },
+        "secretsKeyVaultEnableSoftDelete": {
+            "value": true
+        },
+        "secretsKeyVaultEnablePurgeProtection": {
+            "value": false
+        },
+        "secretsKeyVaultRetentionInDays": {
+            "value": 7
+        },
+        "deployEncryptionKeyVault": {
+            "value": false
+        },
+        "privateEndpoint": {
+            "value": false
+        },
+        "deployMonitoring": {
+            "value": false
+        },
+        "deployFSLogixBackupVault": {
+            "value": false
+        }
+    }
+}

@@ -21,13 +21,11 @@ param deploymentUserAssignedIdentityClientId string
 param location string
 param tags object = {}
 param hostPoolResourceId string
-param deploymentSuffix string
 
 // Step 1: Create the CVM key with a key release policy via the Key Vault data plane.
 // The release policy is immutable once set; this run command is idempotent — it skips
 // creation if the key already exists.
-module setEncryptionKeyRunCommand '../../../shared/modules/compute/virtualMachines/runCommands/deploy.bicep' = {
-  name: 'Set-EncryptionKey-ConfidentialVM-${deploymentSuffix}'
+module setEncryptionKeyRunCommand '../../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
   scope: resourceGroup(resourceGroupDeployment)
   params: {
     name: 'Set-ConfidentialVM-Key-Disks'
@@ -39,15 +37,14 @@ module setEncryptionKeyRunCommand '../../../shared/modules/compute/virtualMachin
       { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
       { name: 'VaultUri', value: keyVaultUri }
     ]
-    script: loadTextContent('../../../shared/scripts/Set-ConfidentialVMOSDiskEncryptionKey.ps1')
+    script: loadTextContent('../../scripts/Set-ConfidentialVMOSDiskEncryptionKey.ps1')
     treatFailureAsDeploymentFailure: true
   }
 }
 
 // Step 2: Create the DiskEncryptionSet and role assignments.
 // skipKeyCreation: true — the key was already created by the Run Command above.
-module cmk '../../../shared/modules/customerManagedKeys/customerManagedKeys.bicep' = {
-  name: 'CVM-DiskCMK-${deploymentSuffix}'
+module cmk '../../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
   scope: resourceGroup(resourceGroupHosts)
   params: {
     keyVaultResourceId: keyVaultResourceId
@@ -55,7 +52,6 @@ module cmk '../../../shared/modules/customerManagedKeys/customerManagedKeys.bice
     keyManagementType: 'CustomerManagedHSM'
     location: location
     tags: tags
-    deploymentSuffix: deploymentSuffix
     parentResourceId: hostPoolResourceId
     diskEncryptionConfigs: [
       {

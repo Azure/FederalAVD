@@ -6,6 +6,9 @@ param
     [Parameter(Mandatory = $true)]
     [String]$DomainJoinUserPrincipalName,
 
+    [Parameter(Mandatory = $true)]
+    [String]$DomainName,
+
     [Parameter(Mandatory = $false)]
     [String]$HostPoolName,
 
@@ -57,15 +60,24 @@ try {
         Install-WindowsFeature -Name 'RSAT-AD-PowerShell' | Out-Null
     }
     
+    $DomainName = $DomainName.Replace('\"', '"').Trim()
+
     # Create credential object for domain operations
     Write-Output "Creating domain credentials..."
-    $DomainJoinUserName = $DomainJoinUserPrincipalName.Split('@')[0]  # Extract username from UPN
     $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force
-    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserName, $DomainPassword)
+    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserPrincipalName, $DomainPassword)
 
-    # Retrieve Active Directory domain information
+    # Discover an ADWS-capable domain controller through DC Locator and DNS SRV records.
+    Write-Output "Discovering a domain controller for $DomainName..."
+    $DomainController = Get-ADDomainController -Discover -DomainName $DomainName -Service ADWS -Writable -ForceDiscover
+    [string]$DomainControllerHostName = ($DomainController.HostName | Select-Object -First 1)
+    if ([string]::IsNullOrWhiteSpace($DomainControllerHostName)) {
+        throw "Domain controller discovery returned no usable hostname for $DomainName."
+    }
+    Write-Output "Using domain controller: $DomainControllerHostName"
+
     Write-Output "Getting Active Directory domain information..."
-    $Domain = Get-ADDomain -Credential $DomainCredential -Current 'LocalComputer'
+    $Domain = Get-ADDomain -Identity $DomainName -Server $DomainControllerHostName -Credential $DomainCredential
     Write-Output "Domain: $($Domain.DNSRoot)"
     Write-Output "NetBIOS Name: $($Domain.NetBIOSName)"
     
@@ -76,6 +88,7 @@ try {
     
     # Clean escaped characters from string parameters
     $OuPath = $OuPath.Replace('\"', '"')  # Target OU for computer accounts
+    $ComputerObjectPath = if ([string]::IsNullOrWhiteSpace($OuPath)) { $Domain.ComputersContainer } else { $OuPath }
     $ResourceManagerUri = $ResourceManagerUri.Replace('\"', '"')  # Azure Resource Manager endpoint
     $StorageAccountPrefix = $StorageAccountPrefix.ToLower().replace('\"', '"')  # Storage account name prefix
     $StorageAccountResourceGroupName = $StorageAccountResourceGroupName.Replace('\"', '"')
@@ -86,7 +99,7 @@ try {
     Write-Output "  Storage Account Prefix: $StorageAccountPrefix"
     Write-Output "  Resource Group: $StorageAccountResourceGroupName"
     Write-Output "  Subscription ID: $SubscriptionId"
-    Write-Output "  Target OU: $OuPath"
+    Write-Output "  Target OU: $ComputerObjectPath"
     
     # Build Azure Files endpoint suffix (e.g., ".file.core.windows.net")
     $FilesSuffix = ".file.$($StorageSuffix.Replace('\"', '"'))"
@@ -156,10 +169,10 @@ try {
 
         # Check for existing computer account and clean up if necessary
         Write-Output "Checking for existing computer account in Active Directory..."
-        $Computer = Get-ADComputer -Credential $DomainCredential -Filter { Name -eq $StorageAccountName } -ErrorAction SilentlyContinue
+        $Computer = Get-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Filter { Name -eq $StorageAccountName } -ErrorAction SilentlyContinue
         if ($Computer) {
             Write-Output "Existing computer account found. Removing to ensure clean setup..."
-            Remove-ADComputer -Credential $DomainCredential -Identity $StorageAccountName -Confirm:$false
+            Remove-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Identity $Computer.DistinguishedName -Confirm:$false
         }
         else {
             Write-Output "No existing computer account found."
@@ -167,10 +180,10 @@ try {
         
         # Create new computer account in Active Directory
         Write-Output "Creating new computer account in AD..."
-        Write-Output "  Target OU: $OuPath"
+        Write-Output "  Target OU: $ComputerObjectPath"
         Write-Output "  SPN: $SPN"
         try {
-            $ComputerObject = New-ADComputer -Credential $DomainCredential -Name $StorageAccountName -Path $OuPath -ServicePrincipalNames $SPN -AccountPassword $ComputerPassword -Description $Description -PassThru
+            $ComputerObject = New-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Name $StorageAccountName -Path $ComputerObjectPath -ServicePrincipalNames $SPN -AccountPassword $ComputerPassword -Description $Description -PassThru
             Write-Output "Computer account created successfully with SID: $($ComputerObject.SID.Value)"
         }
         catch {
@@ -226,9 +239,8 @@ try {
             Write-Output "Configuring AES256 Kerberos encryption (enhanced security)..."
             
             # Set Kerberos encryption type on the computer account in AD
-            $DistinguishedName = 'CN=' + $StorageAccountName + ',' + $OuPath
             try {
-                Set-ADComputer -Credential $DomainCredential -Identity $DistinguishedName -KerberosEncryptionType 'AES256' | Out-Null
+                Set-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Identity $ComputerObject.DistinguishedName -KerberosEncryptionType 'AES256' | Out-Null
                 Write-Output "AES256 encryption type set on computer account"
             }
             catch {
@@ -284,7 +296,7 @@ try {
             Write-Output "Updating computer account password with new AES256-compatible key..."
             try {
                 $NewPassword = ConvertTo-SecureString -String $Key -AsPlainText -Force
-                Set-ADAccountPassword -Credential $DomainCredential -Identity $DistinguishedName -Reset -NewPassword $NewPassword | Out-Null
+                Set-ADAccountPassword -Credential $DomainCredential -Server $DomainControllerHostName -Identity $ComputerObject.DistinguishedName -Reset -NewPassword $NewPassword | Out-Null
                 Write-Output "Computer account password updated successfully"
             }
             catch {
@@ -301,7 +313,7 @@ try {
     Write-Output "`n=== AD DS Integration Process Completed Successfully ==="
     Write-Output "Summary:"
     Write-Output "  - Processed $StCount storage accounts"
-    Write-Output "  - Created computer accounts in OU: $OuPath"
+    Write-Output "  - Created computer accounts in OU: $ComputerObjectPath"
     Write-Output "  - Configured Azure Files for AD DS authentication"
     if ($KerberosEncryptionType -eq 'AES256') {
         Write-Output "  - Applied AES256 Kerberos encryption for enhanced security"

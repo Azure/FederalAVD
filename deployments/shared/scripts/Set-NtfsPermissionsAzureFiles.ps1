@@ -1,5 +1,11 @@
 param 
 (
+    [String]$DomainJoinUserPrincipalName,
+
+    [String]$DomainJoinUserPwd,
+
+    [String]$DomainName,
+
     [String]$Shares,
 
     [string]$ShardAzureFilesStorage,    
@@ -42,23 +48,54 @@ Function Convert-DomainGroupToSid {
         [Parameter(Mandatory = $true)]
         [string]$DomainName,
 
-        [Parameter(Mandatory = $true)]    
-        [string]$GroupName
+        [Parameter(Mandatory = $true)]
+        [pscredential]$Credential,
+
+        [Parameter(Mandatory = $true)]
+        [string]$GroupName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Server
     )
-    [string]$DomainSid = ''
     Try {
-        $DomainSid = (New-Object System.Security.Principal.NTAccount("$GroupName")).Translate([System.Security.Principal.SecurityIdentifier]).Value           
+        return (Get-ADGroup -Identity $GroupName -Server $Server -Credential $Credential).SID.Value
     }
     Catch {
-        Try {
-            $DomainSid = (New-Object System.Security.Principal.NTAccount($DomainName, "$GroupName")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-        }
-        Catch {
-            throw "Failed to convert group name $GroupName' to SID."
-        }
-    }          
-    Return $DomainSid
+        throw "Failed to resolve group '$GroupName' in domain '$DomainName' through '$Server'."
+    }
 }    
+
+Function Invoke-WithRetry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$ScriptBlock,
+
+        [Parameter(Mandatory = $true)]
+        [string]$OperationName,
+
+        [int]$MaxAttempts = 8,
+        [int]$DelaySeconds = 15
+    )
+
+    $attempt = 1
+    while ($true) {
+        try {
+            return & $ScriptBlock
+        }
+        catch {
+            if ($attempt -ge $MaxAttempts) {
+                Write-Output "[$OperationName]: Failed after $attempt attempts."
+                throw
+            }
+
+            Write-Output "[$OperationName]: Attempt $attempt failed: $($_.Exception.Message)"
+            Write-Output "[$OperationName]: Waiting $DelaySeconds seconds before retrying..."
+            Start-Sleep -Seconds $DelaySeconds
+            $attempt++
+        }
+    }
+}
 
 Function Set-AzureFileSharePermissions {
     param(
@@ -75,7 +112,9 @@ Function Set-AzureFileSharePermissions {
         Write-Output "[Set-AzureFileSharePermissions]: Resource URL: $ResourceUrl"
         # Get access token for Azure Files
         Write-Output "[Set-AzureFileSharePermissions]: Getting access token for Azure File Storage Account"
-        $AccessToken = (Invoke-RestMethod -Headers @{Metadata = "true" } -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceUrl + '&client_id=' + $ClientId)).access_token
+        $AccessToken = (Invoke-WithRetry -OperationName 'ManagedIdentityTokenRequest' -ScriptBlock {
+            Invoke-RestMethod -Headers @{ Metadata = 'true' } -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceUrl + '&client_id=' + $ClientId)
+        }).access_token
 
         # Step 1: Create Permission - Convert SDDL to permission key
         Write-Output "[Set-AzureFileSharePermissions]: Creating permission key from SDDL"
@@ -95,7 +134,9 @@ Function Set-AzureFileSharePermissions {
         $Uri = $($ResourceUrl + $FileShareName + '?restype=share&comp=filepermission')
         Write-Output "[Set-AzureFileSharePermissions]: Creating permission with URI: $Uri"
 
-        $Response = Invoke-WebRequest -Body $Body -Headers $Headers -Method 'PUT' -Uri $Uri -UseBasicParsing
+        $Response = Invoke-WithRetry -OperationName 'CreateFileSharePermission' -ScriptBlock {
+            Invoke-WebRequest -Body $Body -Headers $Headers -Method 'PUT' -Uri $Uri -UseBasicParsing
+        }
         $PermissionKey = $Response.Headers["x-ms-file-permission-key"]
         
         if (-not $PermissionKey) {
@@ -115,7 +156,9 @@ Function Set-AzureFileSharePermissions {
         
         $GetUri = $($ResourceUrl + $FileShareName + '?restype=directory')
         try {
-            Invoke-WebRequest -Headers $Headers -Method 'GET' -Uri $GetUri -UseBasicParsing | Out-Null
+            Invoke-WithRetry -OperationName 'GetDirectoryProperties' -ScriptBlock {
+                Invoke-WebRequest -Headers $Headers -Method 'GET' -Uri $GetUri -UseBasicParsing | Out-Null
+            }
             Write-Output "[Set-AzureFileSharePermissions]: Directory properties retrieved successfully"
         }
         catch {
@@ -137,7 +180,9 @@ Function Set-AzureFileSharePermissions {
         
         $SetUri = $($ResourceUrl + $FileShareName + '?restype=directory&comp=properties')
         Write-Output "[Set-AzureFileSharePermissions]: Setting properties with URI: $SetUri"        
-        Invoke-WebRequest -Headers $Headers -Method 'PUT' -Uri $SetUri -UseBasicParsing | Out-Null
+        Invoke-WithRetry -OperationName 'SetDirectoryProperties' -ScriptBlock {
+            Invoke-WebRequest -Headers $Headers -Method 'PUT' -Uri $SetUri -UseBasicParsing | Out-Null
+        }
         Write-Output "[Set-AzureFileSharePermissions]: Successfully set NTFS permissions on file share root"
     }
     catch {
@@ -153,14 +198,33 @@ Function Set-AzureFileSharePermissions {
 Start-Transcript -Path "c:\Windows\Logs\Set-NtfsPermissionsAzureFiles-$(Get-Date -Format 'yyyyMMdd-HHmm').log" -Force
 try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $DefaultDomain = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty Domain
-    Write-Output "Default Domain: $DefaultDomain"
+    $DomainName = $DomainName.Replace('\"', '"').Trim()
+    $DomainControllerHostName = ''
+    $DomainCredential = $null
    
     # Convert User Groups to SIDs if provided
     [array]$UserGroupSids = @()
     if ($UserGroups -and $UserGroups -ne '[]') {
         [array]$UserGroupsArray = $UserGroups.replace('\"', '"') | ConvertFrom-Json
         Write-Output "Processing User Groups..."
+        $DomainGroups = @($UserGroupsArray | Where-Object { -not [guid]::TryParse($_, [ref]([guid]::Empty)) })
+        if ($DomainGroups.Count -gt 0) {
+            if ([string]::IsNullOrWhiteSpace($DomainName) -or [string]::IsNullOrWhiteSpace($DomainJoinUserPrincipalName) -or [string]::IsNullOrWhiteSpace($DomainJoinUserPwd)) {
+                throw 'Domain name and domain credentials are required to resolve domain group names.'
+            }
+            $RsatInstalled = (Get-WindowsFeature -Name 'RSAT-AD-PowerShell').Installed
+            if (!$RsatInstalled) {
+                Install-WindowsFeature -Name 'RSAT-AD-PowerShell' | Out-Null
+            }
+            $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force
+            $DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserPrincipalName, $DomainPassword)
+            $DomainController = Get-ADDomainController -Discover -DomainName $DomainName -Service ADWS -ForceDiscover
+            [string]$DomainControllerHostName = ($DomainController.HostName | Select-Object -First 1)
+            if ([string]::IsNullOrWhiteSpace($DomainControllerHostName)) {
+                throw "Domain controller discovery returned no usable hostname for $DomainName."
+            }
+            Write-Output "Using domain controller '$DomainControllerHostName' to resolve domain groups."
+        }
         ForEach ($UserGroup in $UserGroupsArray) {
             Write-Output "User Group: $UserGroup"
             $output = [guid]::Empty
@@ -171,8 +235,7 @@ try {
                 $UserGroupSids += $sid
             }
             Else {
-                # Not a GUID, treat as group name
-                $sid = Convert-DomainGroupToSID -DomainName $DefaultDomain -GroupName $UserGroup
+                $sid = Convert-DomainGroupToSID -DomainName $DomainName -Credential $DomainCredential -GroupName $UserGroup -Server $DomainControllerHostName
                 Write-Output "Converted User Group with GroupName '$UserGroup' to SID '$sid'"
                 $UserGroupSids += $sid
             }

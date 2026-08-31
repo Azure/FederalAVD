@@ -1,6 +1,10 @@
 ﻿# AVD Networking Infrastructure Template
 
 > **📖 User Guide:** For deployment instructions and scenarios, see the [Quick Start Guide - Networking](../../docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield)
+>
+> **First deployment:** Use the Networking Template Spec portal form and download the generated
+> parameter file from **Review + create**. Use the examples below only after that guided deployment,
+> or as a fallback when the Template Spec UI is unavailable.
 
 ## Overview
 
@@ -224,7 +228,7 @@ Subscription
 - **Default:** `false`
 - **Description:** Whether hub VNet has a virtual network gateway (VPN/ExpressRoute)
 
-### Security & Monitoring
+### AVD Shared Services
 
 #### `deployDDoSNetworkProtection`
 
@@ -323,12 +327,6 @@ If zones already exist, provide their resource IDs:
     "CostCenter": "IT-12345"
   }
   ```
-
-#### `timeStamp`
-
-- **Type:** String
-- **Default:** `utcNow('yyyyMMddhhmmss')`
-- **Description:** Timestamp for deployment uniqueness (DO NOT MODIFY)
 
 ### Air-Gapped Cloud Specific
 
@@ -446,6 +444,22 @@ az deployment sub create \
 ## Outputs
 
 ### `vnetResourceId`
+
+Resource ID of the virtual network created by this deployment. Empty when `deployVnet` is `false`.
+
+### `subnetResourceIds`
+
+Names, purposes, and resource IDs of the subnets actually created in the new virtual network. Empty
+when `deployVnet` is `false`. Select records by `purpose` (`hosts`, `privateEndpoints`, or
+`functionApp`) when wiring downstream deployments rather than relying on array position.
+
+### `privateDnsZoneResourceIds`
+
+Object containing the effective private DNS zone resource IDs, whether each zone was created by
+this deployment or supplied as an existing zone. Properties are `azureBackup`, `azureBlob`,
+`azureFiles`, `azureQueue`, `azureTable`, `azureKeyVault`, `avdFeed`, `avdGlobalFeed`, and
+`azureWebApp`. Pass these values to the corresponding private DNS parameters in AVD Shared
+Services, Image Management, Host Pool, and add-on deployments.
 
 - **Type:** String
 - **Description:** Resource ID of the deployed virtual network

@@ -4,7 +4,7 @@ param location string = resourceGroup().location
 param logBlobContainerUri string
 param orchestrationVmName string
 param imageVmName string
-param deploymentSuffix string = utcNow('yyMMddhhmm')
+param buildTimestamp string = utcNow('yyyyMMddHHmmss')
 param userAssignedIdentityClientId string
 
 resource imageVm 'Microsoft.Compute/virtualMachines@2022-11-01' existing = {
@@ -28,7 +28,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Sysprep-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Sysprep-${buildTimestamp}.log'
     protectedParameters: [
       {
         name: 'AdminPassword'
@@ -36,7 +36,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Invoke-Sysprep.ps1')
+      script: loadTextContent('../scripts/Invoke-Sysprep.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -63,7 +63,7 @@ resource generalizeVm 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Generalize-Vm.ps1')
+      script: loadTextContent('../scripts/Generalize-Vm.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }

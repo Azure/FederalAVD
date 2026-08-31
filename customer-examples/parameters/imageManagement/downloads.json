@@ -263,14 +263,6 @@
             "BuiltIn-UWP-Apps\\AV1VideoExtension"
         ]
     },
-    "AVCEncoderVideoExtension": {
-        "Description": "AVC Encoder Video Extension - enables applications to encode H.264 video using DirectX 12 Encode APIs when available",
-        "WingetId": "9PB0TRCNRHFX",
-        "WingetPreserveLayout": true,
-        "DestinationFolders": [
-            "BuiltIn-UWP-Apps\\AVCEncoderVideoExtension"
-        ]
-    },
     "MPEG2VideoExtension": {
         "Description": "MPEG-2 Video Extension - adds MPEG-1 and MPEG-2 video playback support",
         "WingetId": "9N95Q1ZZPMH4",

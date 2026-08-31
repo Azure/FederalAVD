@@ -20,8 +20,9 @@ The components must be deployed in this order on first deployment:
 
 ```text
 Step 0 (optional): Networking      — VNet, subnets, NSGs, route tables, private DNS zones
-Step 1 (optional): Security & Monitoring — Key Vaults (required only for Customer-Managed Keys (CMK) or
-                                     Key Vault-sourced credentials) and/or a Log Analytics Workspace
+Step 1 (optional): AVD Shared Services — Key Vaults (required before Image Management CMK and for
+                                     automated host-pool credentials; optional shared resources for
+                                     standard host pools) and/or a Log Analytics Workspace
                                      (optional, for diagnostic settings on Key Vaults, Image
                                      Management storage accounts, and host pool monitoring)
 Step 2 (optional): Image Management — Storage account, compute gallery, managed identity for artifacts
@@ -31,9 +32,17 @@ Step 4 (required): Host Pool        — AVD host pool, session hosts, FSLogix st
 
 Steps 0-3 are optional depending on your scenario:
 
-- **PoC / marketplace images**: Skip to Step 4 only. A VNet and subnet are the only hard prerequisites.
+- **Standard host-pool PoC / marketplace images**: Skip to Step 4 only. A VNet and subnet are the only hard prerequisites.
+- **Multiple standard host pools**: The first Step 4 deployment can create shared Key Vaults,
+  monitoring, and the FSLogix backup vault/policy; later Step 4 deployments can select those
+  existing resources. Step 1 is optional unless another component needs them first.
+- **Automated host-pool PoC**: Steps 1 → 4. Deploy the Shared Services secrets Key Vault first and pass `secretsKeyVaultResourceId` to the automated host pool's required `credentialsKeyVaultResourceId` parameter.
 - **Custom software, no CMK**: Steps 2 → (3 optional) → 4
-- **Custom software + CMK**: Steps 1 → 2 → (3 optional) → 4
+- **Runtime artifacts + CMK**: Steps 1 → 2 → 4
+- **Custom image + CMK**: Steps 1 → 2 → 3 → 4
+- **Shared FSLogix profile storage**: Deploy the FSLogix Storage add-on before consuming host pools.
+  If CMK, diagnostics, or Azure Files backup are selected, supply existing Key Vault, Log Analytics,
+  and backup vault/policy resources; deploy Step 1 first only when those resources do not yet exist.
 - **Centralized diagnostics/monitoring**: Deploy Step 1 with `deployMonitoring: true`
   first, then pass its output resource ID as `logAnalyticsWorkspaceResourceId` (Image Management)
   and `existingLogAnalyticsWorkspaceResourceId` (Host Pool) so every step shares one workspace.
@@ -58,7 +67,7 @@ customer/
     hostpools/
     imageBuild/
     imageManagement/
-    securityAndMonitoring/
+    sharedServices/
     networking/
   artifacts/          ← your custom software packages (scripts, installers, configs)
 ```
@@ -115,7 +124,7 @@ deployments/
   hostpools/          ← host pool Bicep template + parameters
   imageBuild/         ← image build Bicep template + parameters
   imageManagement/    ← image management Bicep template + parameters
-  securityAndMonitoring/ ← Key Vaults + Log Analytics Workspace Bicep template + parameters
+  sharedServices/     ← Key Vaults, monitoring, and shared FSLogix backup Bicep template
   networking/         ← networking Bicep template + parameters
   add-ons/            ← optional lifecycle automation (sessionHostReplacer, storageQuotaManager, etc.)
   Update-ImageArtifacts.ps1   ← downloads and uploads software artifacts to blob storage
@@ -128,7 +137,7 @@ customer-examples/
   artifacts/          ← reference artifact packages; copy to customer/artifacts/ before use
   parameters/         ← reference parameter files; copy to customer/parameters/ before use
 docs/                 ← all documentation
-policy/               ← Azure Policy definitions and assignments
+deployments/automatedHostPools/policy/modules/policy/ ← Policy definitions used by automated host pools
 tools/                ← utility scripts
 ```
 
@@ -208,6 +217,11 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
 
 - **Do not modify files under `deployments/`** without understanding the full template — many
   parameters have cross-solution dependencies.
+- **Prefer shared-module reuse when behavior is cross-solution.** If the same capability is
+  implemented in multiple deployment entry points, prefer composing or extending
+  `deployments/shared/modules/orchestration/*` and `deployments/shared/modules/resourceModules/*`
+  instead of duplicating orchestration under a solution folder. Keep solution-local wrappers only
+  for scope adapters, sequencing differences, or API-specific workflow constraints.
 - **`customer/` content is git-ignored** by design. Don't suggest committing files from
   `customer/parameters/` or `customer/artifacts/` to this repo.
 - **Example files in `customer-examples/`** are reference implementations — suggest copying them
@@ -247,3 +261,12 @@ authoritative source. Deviations are intentional and documented in
 ## Notes about UIFormDefinition files
 
 - the default value you specify for Drop Downs must reference the label not the value.
+- In `deployments/hostpools/uiFormDefinition.json`, avoid complex expression-valued
+  `TextBlock.options.text` (especially nested `if(...)` with quoted string branches) for
+  explanatory text. This exact pattern caused Azure Portal runtime failure in
+  `CustomHtmlField` with `text is not a function`.
+- Prefer literal `TextBlock.options.text` for explanatory copy. If text must vary by condition,
+  use separate text blocks with visibility conditions instead of computing one dynamic text
+  expression.
+- After changing any text binding in UI form blocks, require a live portal render smoke test of
+  the affected step; JSON parse/schema validation alone is not sufficient.

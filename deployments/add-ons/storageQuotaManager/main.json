@@ -1,11 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "10052846206641231821"
+      "templateHash": "9107884193169573578"
     }
   },
   "parameters": {
@@ -386,14 +387,13 @@
     "regionAbbr": "[variables('locations')[parameters('location')].abbreviation]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), if(not(empty(parameters('identifier'))), format('{0}-sqm-{1}-{2}', variables('resourceAbbreviations').automationAccounts, parameters('identifier'), variables('regionAbbr')), format('{0}-sqm-{1}', variables('resourceAbbreviations').automationAccounts, variables('regionAbbr'))))]",
-    "resolvedTags": "[if(not(empty(parameters('hostPoolResourceId'))), union(parameters('tags'), createObject('cm-resource-parent', parameters('hostPoolResourceId'))), parameters('tags'))]",
-    "deploymentSuffix": "[take(uniqueString(resourceGroup().id, deployment().name), 8)]"
+    "resolvedTags": "[if(not(empty(parameters('hostPoolResourceId'))), union(parameters('tags'), createObject('cm-resource-parent', parameters('hostPoolResourceId'))), parameters('tags'))]"
   },
-  "resources": [
-    {
+  "resources": {
+    "automation": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('SqmAutomation-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('automation-{0}', uniqueString('automation', deployment().name))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -679,10 +679,10 @@
         }
       }
     },
-    {
+    "roleAssignment": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RA-StorageAccounts-StorageContributor-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('roleAssignment-{0}', uniqueString('roleAssignment', deployment().name))]",
       "subscriptionId": "[variables('storageSubscriptionId')]",
       "resourceGroup": "[variables('storageResourceGroupName')]",
       "properties": {
@@ -692,7 +692,7 @@
         "mode": "Incremental",
         "parameters": {
           "principalId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('SqmAutomation-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+            "value": "[reference('automation').outputs.principalId.value]"
           },
           "roleDefinitionId": {
             "value": "17d1049b-9a84-46fb-8f53-869881c3d3ab"
@@ -772,24 +772,24 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('SqmAutomation-{0}', variables('deploymentSuffix')))]"
+        "automation"
       ]
     }
-  ],
+  },
   "outputs": {
     "automationAccountName": {
       "type": "string",
       "metadata": {
         "description": "Name of the deployed Automation Account."
       },
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('SqmAutomation-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.automationAccountName.value]"
+      "value": "[reference('automation').outputs.automationAccountName.value]"
     },
     "automationAccountPrincipalId": {
       "type": "string",
       "metadata": {
         "description": "Principal ID of the Automation Account managed identity."
       },
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('SqmAutomation-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+      "value": "[reference('automation').outputs.principalId.value]"
     }
   }
 }

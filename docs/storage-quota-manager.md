@@ -24,22 +24,30 @@ The FSLogix Storage Quota Manager is an Azure Automation runbook that monitors A
 
 ## Deployment
 
-### Blue Button (Azure Commercial / Government)
-
-[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json) [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json)
-
-### Template Spec (All Clouds Including Air-Gapped)
+### Template Spec Portal Form (First Deployment)
 
 ```powershell
 .\tools\New-TemplateSpecs.ps1 `
   -ResourceGroupName 'rg-avd-operations-p-eus2' `
   -Location 'eastus2' `
+  -createSharedServices $false `
+  -createNetwork $false `
+  -createImageManagement $false `
+  -createCustomImage $false `
+  -createHostPool $false `
+  -createAutomatedHostPool $false `
   -CreateAddOns $true
 ```
 
-Then open `ts-sqm-{region}` in the Azure Portal.
+In the Azure portal, open **Template Specs**, select **Azure Files Premium Quota Manager**, and
+choose **Deploy**. On **Review + create**, select **Download template and parameters** before
+submitting, then retain the working parameter file for subsequent PowerShell or CI/CD deployments.
 
-### PowerShell
+### Blue Button (Azure Commercial / Government Alternative)
+
+[![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json) [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FstorageQuotaManager%2FuiFormDefinition.json)
+
+### PowerShell (Subsequent Deployments)
 
 ```powershell
 New-AzResourceGroupDeployment `

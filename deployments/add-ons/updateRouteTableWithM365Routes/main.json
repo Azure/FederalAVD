@@ -1,11 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17764513556500510434"
+      "templateHash": "14398328856507863001"
     }
   },
   "parameters": {
@@ -385,14 +386,13 @@
     "regionAbbr": "[variables('locations')[parameters('location')].abbreviation]",
     "resourceAbbreviations": "[variables('$fxv#1')]",
     "uniqueStringUrt": "[take(uniqueString(resourceGroup().id, parameters('routeTableResourceId')), 6)]",
-    "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), format('{0}-urt-{1}-{2}', variables('resourceAbbreviations').automationAccounts, variables('uniqueStringUrt'), variables('regionAbbr')))]",
-    "deploymentSuffix": "[take(uniqueString(resourceGroup().id, deployment().name), 8)]"
+    "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), format('{0}-urt-{1}-{2}', variables('resourceAbbreviations').automationAccounts, variables('uniqueStringUrt'), variables('regionAbbr')))]"
   },
-  "resources": [
-    {
+  "resources": {
+    "automation": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('UrtAutomation-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('automation-{0}', uniqueString('automation', deployment().name))]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -678,10 +678,10 @@
         }
       }
     },
-    {
+    "roleAssignment": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('RA-RouteTable-NetworkContributor-{0}', variables('deploymentSuffix'))]",
+      "name": "[format('roleAssignment-{0}', uniqueString('roleAssignment', deployment().name))]",
       "resourceGroup": "[variables('routeTableResourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -690,7 +690,7 @@
         "mode": "Incremental",
         "parameters": {
           "principalId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('UrtAutomation-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+            "value": "[reference('automation').outputs.principalId.value]"
           },
           "roleDefinitionId": {
             "value": "4d97b98b-1d4f-4787-a291-c67834d212e7"
@@ -770,24 +770,24 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', format('UrtAutomation-{0}', variables('deploymentSuffix')))]"
+        "automation"
       ]
     }
-  ],
+  },
   "outputs": {
     "automationAccountName": {
       "type": "string",
       "metadata": {
         "description": "Name of the deployed Automation Account."
       },
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('UrtAutomation-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.automationAccountName.value]"
+      "value": "[reference('automation').outputs.automationAccountName.value]"
     },
     "automationAccountPrincipalId": {
       "type": "string",
       "metadata": {
         "description": "Principal ID of the Automation Account managed identity."
       },
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('UrtAutomation-{0}', variables('deploymentSuffix'))), '2025-04-01').outputs.principalId.value]"
+      "value": "[reference('automation').outputs.principalId.value]"
     }
   }
 }

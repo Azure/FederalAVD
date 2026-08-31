@@ -19,7 +19,6 @@ param hubVnetSubscriptionId string
 param virtualNetworkGatewayOnHub bool
 param location string
 param tags object
-param timeStamp string
 
 var azureCloud = environment().name
 
@@ -220,6 +219,7 @@ var snetFunctionApp = !empty(faSubnetsList)
   : []
 
 var allSubnets = union(snetHosts, snetPrivateEndpoints, snetFunctionApp)
+var effectiveSubnetDefinitions = concat(hostsSubnetsList, take(peSubnetsList, 1), take(faSubnetsList, 1))
 
 resource ddosProtectionPlan 'Microsoft.Network/ddosProtectionPlans@2023-04-01' = if (deployDDoSNetworkProtection) {
   name: 'default'
@@ -345,7 +345,6 @@ resource snets 'Microsoft.Network/virtualNetworks/subnets@2022-05-01' = [
 ]
 
 module localVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetName)) {
-  name: 'localVnetPeering-${timeStamp}'
   params: {
     allowForwardedTraffic: true
     allowVirtualNetworkAccess: true
@@ -359,7 +358,6 @@ module localVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetNa
 }
 
 module remoteVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetName)) {
-  name: 'remoteVnetPeering-${timeStamp}'
   scope: resourceGroup(hubVnetSubscriptionId, hubVnetResourceGroup)
   params: {
     allowForwardedTraffic: true
@@ -374,3 +372,9 @@ module remoteVnetPeering './virtual-network-peering.bicep' = if (!empty(hubVnetN
 }
 
 output vnetResourceId string = vnet.id
+
+output subnetResourceIds array = [for (subnet, index) in effectiveSubnetDefinitions: {
+  name: subnet.name
+  purpose: subnet.purpose
+  resourceId: snets[index].id
+}]

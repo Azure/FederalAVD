@@ -7,12 +7,10 @@ param (
     [Parameter(Mandatory = $false)]
     [string]$StorageSuffix,
 
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory = $false)]
     [string]$RegistrationToken,
     
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory = $false)]
     [string]$AgentBootLoaderUrl,
     
     [Parameter(Mandatory = $false)]
@@ -670,7 +668,7 @@ try {
                 For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
                     $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -message "Local storage [$i]: $SAFQDN"
-                    
+
                     If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {
                         Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
                         Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$SAFQDN /user:localhost\$($LocalStorageAccountNamesArray[$i]) /pass:$($LocalStorageAccountKeysArray[$i])" -NoNewWindow -Wait
@@ -690,7 +688,7 @@ try {
                     For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
                         $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
                         Write-Log -message "Remote storage [$i]: $SAFQDN"
-                        
+
                         If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {
                             Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
                             Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$($SAFQDN) /user:localhost\$($RemoteStorageAccountNamesArray[$i]) /pass:$($RemoteStorageAccountKeysArray[$i])" -NoNewWindow -Wait
@@ -743,7 +741,7 @@ try {
         $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 3 })
         $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = $SizeInMBsInt })
         $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'String'; Value = 'VHDX' })
-        
+
         If ($LocalStorageAccountKeysArray.Count -gt 0) {
             $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
         }
@@ -764,7 +762,7 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 3 })
             $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = $SizeInMBsInt })
             $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'String'; Value = 'VHDX' })
-            
+
             If ($LocalStorageAccountKeysArray.Count -gt 0) {
                 $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
             }
@@ -1031,6 +1029,14 @@ try {
     Write-Log -Message "Phase 1: Session Host Configuration Complete"
     
     #endregion Phase 1: Session Host Configuration
+
+    If ([string]::IsNullOrWhiteSpace($RegistrationToken)) {
+        Throw 'RegistrationToken is required.'
+    }
+
+    If ([string]::IsNullOrWhiteSpace($AgentBootLoaderUrl)) {
+        Throw 'AgentBootLoaderUrl is required.'
+    }
     
     #region Phase 2: AVD Agent Installation and Registration
     

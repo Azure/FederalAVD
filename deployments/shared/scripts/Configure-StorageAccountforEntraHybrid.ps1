@@ -9,6 +9,9 @@ param
     [Parameter(Mandatory = $true)]
     [String]$DomainJoinUserPrincipalName,
 
+    [Parameter(Mandatory = $true)]
+    [String]$DomainName,
+
     [Parameter(Mandatory = $false)]
     [string]$ResourceManagerUri,
 
@@ -50,15 +53,24 @@ try {
         Install-WindowsFeature -Name 'RSAT-AD-PowerShell' | Out-Null
     }
     
+    $DomainName = $DomainName.Replace('\"', '"').Trim()
+
     # Create credential object for domain operations
     Write-Output "Creating domain credentials..."
-    $DomainJoinUserName = $DomainJoinUserPrincipalName.Split('@')[0]  # Extract username from UPN
     $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force
-    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserName, $DomainPassword)
+    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserPrincipalName, $DomainPassword)
 
-    # Retrieve Active Directory domain information
+    # Discover an ADWS-capable domain controller through DC Locator and DNS SRV records.
+    Write-Output "Discovering a domain controller for $DomainName..."
+    $DomainController = Get-ADDomainController -Discover -DomainName $DomainName -Service ADWS -ForceDiscover
+    [string]$DomainControllerHostName = ($DomainController.HostName | Select-Object -First 1)
+    if ([string]::IsNullOrWhiteSpace($DomainControllerHostName)) {
+        throw "Domain controller discovery returned no usable hostname for $DomainName."
+    }
+    Write-Output "Using domain controller: $DomainControllerHostName"
+
     Write-Output "Getting Active Directory domain information..."
-    $Domain = Get-ADDomain -Credential $DomainCredential -Current 'LocalComputer'
+    $Domain = Get-ADDomain -Identity $DomainName -Server $DomainControllerHostName -Credential $DomainCredential
     Write-Output "Domain: $($Domain.DNSRoot)"
     Write-Output "NetBIOS Name: $($Domain.NetBIOSName)"
      
@@ -79,7 +91,6 @@ try {
     Write-Output "  Storage Account Prefix: $StorageAccountPrefix"
     Write-Output "  Resource Group: $StorageAccountResourceGroupName"
     Write-Output "  Subscription ID: $SubscriptionId"
-    Write-Output "  Target OU: $OuPath"
     
     # Build Azure Files endpoint suffix (e.g., ".file.core.windows.net")
     $FilesSuffix = ".file.$($StorageSuffix.Replace('\"', '"'))"
@@ -139,8 +150,7 @@ try {
     Write-Output "`n=== Entra Kerberos for Hybrid Identities Process Completed Successfully ==="
     Write-Output "Summary:"
     Write-Output "  - Processed $StCount storage accounts"
-    Write-Output "  - Created computer accounts in OU: $OuPath"
-    Write-Output "  - Configured Azure Files for AD DS authentication"
+    Write-Output "  - Configured Azure Files for Entra Kerberos authentication"
     Write-Output "`nStorage accounts are now ready for identity-based authentication!"
 }
 catch {

@@ -4,11 +4,12 @@ param (
     [Parameter(Mandatory=$true)]
     [string]$Location,
     [bool]$createResourceGroup = $true,
-    [bool]$createSecurityAndMonitoring = $false,
+    [bool]$createSharedServices = $false,
     [bool]$createNetwork = $false,
     [bool]$createCustomImage = $true,
     [bool]$createImageManagement = $false,
     [bool]$createHostPool = $true,
+    [bool]$createAutomatedHostPool = $false,
     [bool]$CreateAddOns = $true,
     [bool]$nameConvResTypeAtEnd = $false,
     [bool]$incrementVersion = $true
@@ -30,10 +31,17 @@ $resourceAbbreviations = Get-Content -Path $resourceAbbreviationsPath -Raw | Con
 
 # Determine cloud environment and get location abbreviation
 $cloud = $Context.Environment.Name
-$locationsEnvProperty = if ($cloud -like 'US*') { 'other' } else { $cloud }
+$isAirGappedCloud = $cloud -like 'US*'
+$locationsEnvProperty = if ($isAirGappedCloud) { 'other' } else { $cloud }
 $locationProperty = $locations.$locationsEnvProperty
+$locationForLookup = if ($isAirGappedCloud -and $Location.Length -gt 5) {
+    $Location.Substring(5)
+}
+else {
+    $Location
+}
 
-$locationAbbr = $locationProperty.$Location.abbreviation
+$locationAbbr = $locationProperty.$locationForLookup.abbreviation
 
 if ($null -eq $locationAbbr) {
     Write-Warning "Could not find abbreviation for location '$Location'. Using full location name."
@@ -64,13 +72,13 @@ if ($createResourceGroup) {
 # Build collection of template specs to create
 $templateSpecs = @()
 
-if ($createSecurityAndMonitoring) {
+if ($createSharedServices) {
     $templateSpecs += @{
-        Name = 'avd-security-monitoring'
-        DisplayName = 'AVD Security & Monitoring'
-        Description = 'Deploys optional AVD prerequisites: Key Vaults (credentials/CMK) and a Log Analytics Workspace, DCR, and DCE for diagnostics/monitoring'
-        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\securityAndMonitoring\securityAndMonitoring.json'
-        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\securityAndMonitoring\uiFormDefinition.json'
+        Name = 'avd-shared-services'
+        DisplayName = 'AVD Shared Services'
+        Description = 'Deploys optional shared AVD services: Key Vaults, monitoring resources, and an FSLogix Recovery Services vault and policy'
+        TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\sharedServices.json'
+        UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\uiFormDefinition.json'
     }
 }
 
@@ -114,10 +122,21 @@ if ($createHostPool) {
     }
 }
 
+if ($createAutomatedHostPool) {
+    $templateSpecs += @{
+        Name = 'avd-automated-hostpool'
+        DisplayName = 'AVD Automated Host Pool'
+        Description = 'Deploys an Azure Commercial AVD pooled host pool with automated session host management'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\automatedHostPools\automatedHostPool.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\automatedHostPools\uiFormDefinition.json'
+    }
+}
+
 if ($CreateAddOns) {
     $addOns = @(
         @{ Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
         @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
+        @{ Name = 'avd-fslogix-storage'; DisplayName = 'AVD FSLogix Storage'; Description = 'Deploys standalone Azure Files or Azure NetApp Files storage for FSLogix profile containers'; FolderName = 'fslogixStorage' },
         @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
         @{ Name = 'avd-session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
         @{ Name = 'avd-session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }

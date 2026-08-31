@@ -12,7 +12,7 @@ The most common errors on a first FederalAVD deployment. Each links to a full sy
 2. [Key Vault Crypto Officer missing — CMK deployment fails with Forbidden](#key-vault-crypto-officer-missing)
 3. [timeStamp in parameter file causes stale versions or naming conflicts](#timestamp-in-parameter-file-causes-stale-image-versions)
 4. [Editing `customer-examples/` instead of `customer/parameters/` — changes disappear on git pull](#editing-customerexamples-or-missing-customer-changes)
-5. [Image Management deployed before Security & Monitoring — CMK encryption fails](#cmk-deployment-fails-image-management-deployed-before-key-vaults)
+5. [Image Management deployed before AVD Shared Services — CMK encryption fails](#cmk-deployment-fails-image-management-deployed-before-key-vaults)
 
 ---
 
@@ -180,6 +180,88 @@ Simply redeploy. The role assignments are already in place from the first run an
 
 If the failure recurs consistently, check that the managed identity being used is the correct one — a mismatch between the identity expected by the deployment and the one that holds the role is a common cause of persistent 403 errors.
 
+## Managed Identity Token Request Fails with HTTP 400
+
+### Symptom
+
+A private customization or artifact download fails and its log contains messages such as:
+
+```text
+Category=IdentityUnavailable; HTTP=400
+Managed identity token request failed after 12 attempts.
+```
+
+### Problem
+
+HTTP 400 from the Azure Instance Metadata Service (IMDS) is ambiguous. It can mean that the
+requested user-assigned identity is not attached to the VM, the supplied client ID is wrong, or a
+newly attached identity has not propagated to IMDS yet. This happens before Storage RBAC is
+evaluated, so adding a Storage role does not correct an IMDS HTTP 400.
+
+FederalAVD private customizations retry transient IMDS failures for up to 12 attempts with a
+10-second delay. A failure after all attempts usually indicates an attachment or client-ID problem
+rather than a short propagation delay.
+
+### Solution
+
+Confirm that the expected user-assigned identity is attached to the affected VM:
+
+```powershell
+az vm identity show `
+    --resource-group '<session-host-resource-group>' `
+    --name '<vm-name>' `
+    --output json
+```
+
+Compare the attached identity's `clientId` with the customization deployment's
+`UserAssignedIdentityClientId`. Also confirm that VM routing or proxy configuration does not send
+the link-local IMDS address `169.254.169.254` through a proxy or virtual appliance.
+
+For a newly attached identity, wait several minutes and rerun the failed customization or policy
+remediation. If the identity is absent, correct the policy or deployment parameters that supply
+`artifactsUserAssignedIdentityResourceId` and redeploy.
+
+Customization logs are written to `C:\Windows\Logs\<customization-name>.log` on the VM.
+
+## LinkedAuthorizationFailed for DES, DCR, or DCE
+
+### Symptom
+
+Deployment or Azure Policy remediation fails with `LinkedAuthorizationFailed`. The message names a
+principal that can modify the target VM or association but cannot read or use a linked resource
+such as a Disk Encryption Set (DES), Data Collection Rule (DCR), or Data Collection Endpoint (DCE).
+
+### Problem
+
+Authorization on the session-host resource group does not automatically grant access to resources
+linked from a VM or monitoring association. The identity named in the error needs permission at the
+linked resource scope, which can be in another resource group or subscription.
+
+For automated host pools, the relevant identities and minimum linked-resource roles are:
+
+| Identity | Linked resource | Required role |
+| --- | --- | --- |
+| Automated host-pool managed identity | Existing DES | Reader |
+| Automated policy assignment identity | DCR | Reader |
+| Automated policy assignment identity | DCE | Monitoring Contributor |
+
+### Solution
+
+Read the error's `client` or principal object ID and `linked scope`; do not assume the deployment
+operator is the failing identity. Verify the assignment directly on the linked resource:
+
+```powershell
+Get-AzRoleAssignment `
+    -ObjectId '<principal-object-id-from-error>' `
+    -Scope '<linked-resource-id-from-error>' |
+    Format-Table RoleDefinitionName, Scope
+```
+
+Redeploy the current automated host-pool template to create the expected assignments. If approved
+existing resources are supplied from a scope where the deployment cannot create role assignments,
+have the resource owner grant the role shown above and then rerun the failed deployment or policy
+remediation.
+
 ## vCPU Quota Exhaustion
 
 ### Symptom
@@ -224,6 +306,51 @@ Get-AzVMUsage -Location 'usgovvirginia' |
 To request a quota increase, go to **Azure Portal → Subscriptions → [your subscription] → Usage + quotas**, filter by the region and VM family, and select **Request Increase**. In government cloud, quota increase requests may require coordination with your cloud broker or sponsor.
 
 As a short-term workaround, reduce `sessionHostCount` or switch to a smaller `virtualMachineSize` that uses fewer vCPUs per VM. Run `tools/Get-AvailableVMSkus.ps1 -Region <location>` to see all VM sizes available in the region.
+
+### Automated scaling plan is absent after a failed deployment
+
+An automated host-pool deployment can have `deployDynamicScalingPlan: true` while the overall
+deployment fails on another parallel branch. Inspect deployment operations before diagnosing the
+scaling configuration itself. `SkuNotAvailable` on the temporary FSLogix deployment helper, for
+example, is a VM capacity failure rather than a scaling-plan failure.
+
+Current automated templates deploy scaling as a control-plane branch after the host pool and AVD
+service-principal RBAC. It does not depend on FSLogix, policy, or session-host provisioning. For
+older Template Spec versions that serialized scaling after provisioning, publish the current
+template and redeploy. Select an available deployment-helper size when the failed operation reports
+`SkuNotAvailable`.
+
+## Automated Hosts Remain Non-Compliant After Creation
+
+### Symptom
+
+New dynamically created session hosts appear in the host pool, but one or more expected settings
+are temporarily absent, including monitoring associations, private customizations, managed-disk
+network restrictions, or other automated-host policy settings.
+
+### Problem
+
+Automated host-pool policies use `AfterProvisioningSuccess` evaluation delay. Azure first completes
+VM provisioning, then evaluates DeployIfNotExists or Modify assignments. Policy evaluation,
+managed-identity role propagation, and remediation deployments are asynchronous, so the VM can be
+visible before all settings are applied.
+
+### Solution
+
+In the Azure portal, open **Policy > Compliance**, select the assignment scoped to the automated
+session-host resource group, and inspect the component policy state and latest deployment. Allow an
+initial evaluation interval before treating the host as failed.
+
+If the resource remains non-compliant, trigger a resource-group compliance scan:
+
+```powershell
+Start-AzPolicyComplianceScan -ResourceGroupName '<session-host-resource-group>'
+```
+
+After the scan completes, create a remediation task for the non-compliant assignment in the portal.
+Inspect the nested remediation deployment before retrying; an authorization, identity attachment,
+artifact download, or VM provisioning error requires correcting that cause rather than repeatedly
+starting remediation.
 
 ## Host Pool Registration Token Expired
 
@@ -362,6 +489,69 @@ New-AzRoleAssignment -ObjectId $principalId `
 
 After assigning the role, wait a few minutes for RBAC propagation (see [RBAC Propagation Delay](#rbac-propagation-delay)) then retry.
 
+## Entra Kerberos Private-Endpoint Configuration Fails with HTTP 404
+
+### Symptom
+
+Azure Files storage deployment reaches NTFS permission configuration but fails with HTTP 404 when
+Entra ID Kerberos and a private endpoint are enabled.
+
+### Problem
+
+The storage account enterprise application's identifier URIs must include the private-link FQDN
+before NTFS permission configuration authenticates through that endpoint. FederalAVD updates the
+application manifest before setting NTFS permissions and grants application consent afterward.
+
+### Solution
+
+Confirm the managed Run Commands executed in this order:
+
+1. Storage application manifest update
+2. NTFS permission configuration
+3. Storage application consent grant
+
+Review these logs on the temporary deployment VM:
+
+```text
+C:\Windows\Logs\Update-StorageAccountApplicationManifest-*.log
+C:\Windows\Logs\Set-NtfsPermissionsAzureFiles-*.log
+C:\Windows\Logs\Grant-StorageAccountApplicationConsent-*.log
+```
+
+If the manifest update failed, verify that the deployment identity has the documented Microsoft
+Graph permissions and that the private endpoint FQDN resolves from the deployment VM. Correct that
+failure and redeploy; do not run NTFS permission configuration before the manifest update succeeds.
+
+## Dynamic Scaling Cannot Create Session Hosts
+
+### Symptom
+
+An automated host pool deploys successfully, but its dynamic scaling plan cannot create new session
+hosts or retrieve the domain-join credentials.
+
+### Problem
+
+Dynamic creation runs as the Azure Virtual Desktop enterprise application, not as the deployment
+operator. The enterprise application needs subscription-level VM lifecycle roles and Key Vault
+secret access. Its application ID is `9cdead84-a844-4324-93f2-b2e6bb768d07`; its object ID is
+tenant-specific and must not be copied from another tenant.
+
+### Solution
+
+Resolve the enterprise application's object ID in the deployment tenant:
+
+```powershell
+$avdServicePrincipalObjectId = az ad sp list `
+    --filter "appId eq '9cdead84-a844-4324-93f2-b2e6bb768d07'" `
+    --query '[0].id' `
+    --output tsv
+```
+
+Supply that value as `avdServicePrincipalObjectId` and redeploy. For create/delete dynamic scaling,
+the template assigns **Desktop Virtualization Power On Off Contributor** and **Desktop
+Virtualization Virtual Machine Contributor** at subscription scope, plus **Key Vault Secrets User**
+on the credentials Key Vault. Verify those assignments if host creation still fails.
+
 ---
 
 ## Key Vault Crypto Officer Missing — CMK Deployment Fails with Forbidden {#key-vault-crypto-officer-missing}
@@ -402,15 +592,15 @@ For service principals or managed identities used in automation pipelines, assig
 
 ### Symptom
 
-A new image build or host pool deployment runs but the resulting image gallery version or deployment resource name reuses a value from a previous run. Subsequent deployments may fail with a naming conflict, or image versions are not auto-incremented as expected.
+A new image build runs but the resulting image gallery version or temporary build resource name reuses a value from a previous run. Subsequent builds may fail with a naming conflict, or image versions are not auto-incremented as expected.
 
 ### Problem
 
-The `timeStamp` parameter is intentionally excluded from example parameter files — it is generated fresh on every deployment run by the calling script or at deploy time. If you export a parameter file from a Template Spec UI deployment or from an ARM deployment history, the exported file includes the `timeStamp` value that was used in that specific run. Saving and reusing that file causes every subsequent deployment to supply the same fixed timestamp.
+The Image Build `timeStamp` parameter is intentionally excluded from example parameter files - it is generated fresh on every build by the calling script or at deploy time. If you export an Image Build parameter file from a Template Spec UI deployment or ARM deployment history, the exported file includes the `timeStamp` value used for that run. Saving and reusing that file causes every subsequent build to supply the same fixed timestamp. Other deployment templates no longer expose this parameter.
 
 ### Solution
 
-After generating or exporting a parameter file, **remove the `timeStamp` entry** before saving it for reuse:
+After generating or exporting an Image Build parameter file, **remove the `timeStamp` entry** before saving it for reuse:
 
 1. Open the parameter file in a text editor.
 2. Delete the line that contains `"timeStamp"` (and its associated `"value"` pair).
@@ -453,7 +643,7 @@ Copy-Item customer-examples/parameters/hostpools/hostpool.parameters.example.jso
 
 ---
 
-## CMK Deployment Fails — Image Management Deployed Before Security & Monitoring {#cmk-deployment-fails-image-management-deployed-before-key-vaults}
+## CMK Deployment Fails — Image Management Deployed Before AVD Shared Services {#cmk-deployment-fails-image-management-deployed-before-key-vaults}
 
 ### Symptom
 
@@ -463,18 +653,27 @@ The Image Management deployment (`Deploy-ImageManagement.ps1` / Step 2) fails wi
 Resource 'kv-avd-enc-…' was not found.
 ```
 
-or the compute gallery or storage account is created without CMK encryption even though `customerManagedKeys: true` was set in the parameters.
+or Image Management storage is created without the intended CMK, or the expected gallery Disk
+Encryption Set is not created, even though `keyManagementStorageAccounts` or
+`keyManagementGalleryImageVersions` selects a customer-managed option.
 
 ### Problem
 
-When using Customer-Managed Keys, the Image Management template needs the Key Vault resource ID at deployment time to configure encryption on the compute gallery and storage account. If the Key Vault does not yet exist, the resource reference fails. Deploying Step 2 before Step 1 is the most common cause.
+When using Customer-Managed Keys, Image Management needs the encryption Key Vault resource ID at
+deployment time. `keyManagementStorageAccounts` applies CMK to the artifacts and build-log storage
+accounts. `keyManagementGalleryImageVersions` creates the Disk Encryption Set that Image Build uses
+for build VM disks and published gallery image versions. If the Key Vault does not yet exist, the
+resource reference fails. Deploying Step 2 before Step 1 is the most common cause.
 
 ### Solution
 
-Follow the documented deployment sequence when using CMK:
+Follow the documented deployment sequence when Image Management uses CMK:
 
 ```text
-Step 1 (securityAndMonitoring)  →  Step 2 (imageManagement)  →  Step 3 (imageBuild, optional)  →  Step 4 (hostpool)
+Step 1 (sharedServices)  →  Step 2 (imageManagement)  →  Step 3 (imageBuild, optional)  →  Step 4 (hostpool)
 ```
 
-Deploy Security & Monitoring (Step 1) first, wait for it to succeed, then proceed to Image Management (Step 2). If you have already deployed Image Management without CMK and want to enable it, redeploy Image Management after Step 1 is complete — the template is idempotent and will update the encryption settings.
+Deploy AVD Shared Services (Step 1) first, wait for it to succeed, then proceed to Image Management
+(Step 2). Run Image Build (Step 3) only when publishing a custom image. If you already deployed
+Image Management without CMK, deploy Step 1 and then redeploy Step 2 with the required storage or
+gallery image-version key-management options.

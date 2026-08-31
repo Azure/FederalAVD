@@ -11,25 +11,25 @@ Parameter documentation lives alongside each deployment template. Find the secti
 | Solution | Parameters | Examples |
 | --- | --- | --- |
 | 🌐 **Networking** | [networking/README.md](../deployments/networking/README.md) | [parameter files](../deployments/networking/README.md) |
-| 🔒 **Security & Monitoring (Key Vaults & Log Analytics)** | [securityAndMonitoring/uiFormDefinition.json](../deployments/securityAndMonitoring/uiFormDefinition.json) *(see Quick Start Step 1)* | — |
+| 🔒 **AVD Shared Services (Key Vaults, Monitoring, and FSLogix Backup)** | [sharedServices/uiFormDefinition.json](../deployments/sharedServices/uiFormDefinition.json) *(see Quick Start Step 1)* | — |
 | 📦 **Image Management** | [imageManagement/README.md — Parameters](../deployments/imageManagement/README.md#parameters) | [imageManagement/README.md — Examples](../deployments/imageManagement/README.md#examples) |
 | 🎨 **Image Build** | [imageBuild/README.md — Parameters](../deployments/imageBuild/README.md#parameters) | [imageBuild/README.md — Examples](../deployments/imageBuild/README.md#examples) |
-| 🏢 **Host Pool** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
+| 🏢 **Host Pool (standard management)** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
+| 🏢 **Automated Host Pool (Session Host Configuration)** | [automatedHostPools/README.md](../deployments/automatedHostPools/README.md) | [PoC parameters](../customer-examples/parameters/automatedHostPools/poc.automatedHostPool.parameters.json) |
 
 ---
 
 ## Naming Convention
 
-All resource names across solutions are controlled by the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, the same parameter object should be passed to every solution for a consistent enterprise naming strategy.
+FederalAVD-created resource names across solutions are controlled by the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, the same parameter object should be passed to every solution for a consistent enterprise naming strategy. Azure Virtual Desktop owns automated session-host VM, OS disk, and NIC names and exposes only a VM name prefix; see [Solution Limitations](limitations.md#automated-host-pool-limitations).
 
 See the **[Naming Convention guide](naming-convention.md)** for:
 
 - Full `namingConvention` parameter schema and property descriptions
 - How the built-in CAF default works
 - The eight naming segments and how `purpose` drives per-resource uniqueness
-- How to align naming across hostpool, securityAndMonitoring, imageManagement, and add-ons
+- How to align naming across hostpool, sharedServices, imageManagement, and add-ons
 - Named examples for six common conventions
-- [Scenario test results](naming-convention-test-results.md) for 8 scenarios across all solutions
 
 ---
 
@@ -51,13 +51,20 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 
 | Source | Output | Destination | Parameter |
 | --- | --- | --- | --- |
-| **securityAndMonitoring** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
-| **securityAndMonitoring** | `encryptionKeyVaultResourceId` | **imageManagement** | `encryptionKeyVaultResourceId` |
-| **securityAndMonitoring** | `encryptionKeyVaultResourceId` | **hostpool** | `existingEncryptionKeyVaultResourceId` |
-| **securityAndMonitoring** | `logAnalyticsWorkspaceResourceId` | **imageManagement** | `logAnalyticsWorkspaceResourceId` |
-| **securityAndMonitoring** | `logAnalyticsWorkspaceResourceId` | **hostpool** | `existingLogAnalyticsWorkspaceResourceId` |
-| **securityAndMonitoring** | `avdInsightsDataCollectionRuleResourceId` | **hostpool** | `existingAVDInsightsDataCollectionRuleResourceId` |
-| **securityAndMonitoring** | `dataCollectionEndpointResourceId` | **hostpool** | `existingDataCollectionEndpointResourceId` |
+| **sharedServices** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
+| **sharedServices** | `secretsKeyVaultResourceId` | **automatedHostPool** | `credentialsKeyVaultResourceId` (required) |
+| **sharedServices** | `encryptionKeyVaultResourceId` | **imageManagement** | `encryptionKeyVaultResourceId` |
+| **sharedServices** | `encryptionKeyVaultResourceId` | **hostpool** | `existingEncryptionKeyVaultResourceId` |
+| **sharedServices** | `logAnalyticsWorkspaceResourceId` | **imageManagement** | `logAnalyticsWorkspaceResourceId` |
+| **sharedServices** | `logAnalyticsWorkspaceResourceId` | **hostpool** | `existingLogAnalyticsWorkspaceResourceId` |
+| **sharedServices** | `avdInsightsDataCollectionRuleResourceId` | **hostpool** | `existingAVDInsightsDataCollectionRuleResourceId` |
+| **sharedServices** | `dataCollectionEndpointResourceId` | **hostpool** | `existingDataCollectionEndpointResourceId` |
+| **sharedServices** | `azureMonitorAgentIdentityResourceId` | **automatedHostPool** | `monitoringUserAssignedIdentityResourceId` |
+| **sharedServices** | `azureMonitorPrivateLinkScopeResourceId` | **hostpool** | `azureMonitorPrivateLinkScopeResourceId` |
+| **sharedServices** | `fslogixBackupVaultResourceId` | **hostpool** | `existingFilesBackupVaultResourceId` |
+| **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |
+| **sharedServices** | `fslogixBackupVaultResourceId` | **fslogixStorage** | `recoveryServicesVaultResourceId` |
+| **sharedServices** | `fslogixBackupPolicyName` | **fslogixStorage** | `fileSharePolicyName` |
 | **imageManagement** | `computeGalleryResourceId` | **imageBuild** | `computeGalleryResourceId` |
 | **imageManagement** | `artifactsBlobContainerUrl` | **imageBuild** | `artifactsContainerUri` |
 | **imageManagement** | `managedIdentityResourceId` | **imageBuild** | `userAssignedIdentityResourceId` |

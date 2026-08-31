@@ -93,7 +93,7 @@ The Azure identity running this deployment needs:
 
 - **Type:** Object
 - **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
-- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (securityAndMonitoring, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (sharedServices, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
 
 ### Storage Configuration
 
@@ -204,7 +204,7 @@ Image version replication to a remote region is configured per imageBuild deploy
 
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of an existing Log Analytics Workspace for storage account diagnostic logs. When provided, diagnostic settings are enabled on both the artifacts and build logs storage accounts. Leave empty to skip diagnostic settings. See the [Security & Monitoring deployment](../securityAndMonitoring/) for an option to deploy a new shared workspace (`deployMonitoring`), then pass its `logAnalyticsWorkspaceResourceId` output here.
+- **Description:** Resource ID of an existing Log Analytics Workspace for storage account diagnostic logs. When provided, diagnostic settings are enabled on both the artifacts and build logs storage accounts. Leave empty to skip diagnostic settings. See the [AVD Shared Services deployment](../sharedServices/) for an option to deploy a new shared workspace (`deployMonitoring`), then pass its `logAnalyticsWorkspaceResourceId` output here.
 - **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-monitoring-va/providers/Microsoft.OperationalInsights/workspaces/law-avd-va`
 
 ### Build Logs Storage Account
@@ -225,7 +225,9 @@ Image version replication to a remote region is configured per imageBuild deploy
 
 ## Parameter Files
 
-Example parameter files are provided in the `parameters\` directory. Copy and rename one to match your environment, then fill in the placeholder values (`<...>`).
+For the first deployment, export the working parameter file from the Template Spec portal form and
+store it under `customer\parameters\imageManagement\`. Example files in the `parameters\` directory
+are references and a fallback when the Template Spec UI is unavailable.
 
 | File | Description |
 | :--- | :---------- |
@@ -238,16 +240,37 @@ Naming convention for custom files: `<prefix>.imageManagement.parameters.json`
 
 ## Deployment
 
-### Azure Portal (Blue Button)
+### Template Spec Portal Form (First Deployment)
+
+Publish the Image Management Template Spec from the repository root:
+
+```powershell
+.\tools\New-TemplateSpecs.ps1 `
+    -Location '<region>' `
+    -createSharedServices $false `
+    -createNetwork $false `
+    -createImageManagement $true `
+    -createCustomImage $false `
+    -createHostPool $false `
+    -createAutomatedHostPool $false `
+    -CreateAddOns $false
+```
+
+In the Azure portal, open **Template Specs**, select **AVD Image Management**, and choose **Deploy**.
+On **Review + create**, select **Download template and parameters** and store the working file under
+`customer\parameters\imageManagement\` before submitting the deployment.
+
+### Azure Portal Blue Button (Alternative)
 
 Commercial and Government clouds only:
 
 [![Deploy to Azure](../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FimageManagement.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FimageManagement%2FuiFormDefinition.json)
 
-> **Air-gapped clouds (Azure Secret/Top Secret):** Use the PowerShell script below.
+> **Air-gapped clouds (Azure Secret/Top Secret):** Blue Button is unavailable. Use the Template
+> Spec portal form above.
 
-### Deploy-ImageManagement.ps1 (Recommended)
+### Deploy-ImageManagement.ps1 (Subsequent Deployments)
 
 Use the provided `Deploy-ImageManagement.ps1` script in the `deployments\` folder. It prefers customer-owned parameter files in `customer\parameters\imageManagement\<Prefix>.imageManagement.parameters.json` and falls back to the repo examples in `imageManagement\parameters\<Prefix>.imageManagement.parameters.json`.
 

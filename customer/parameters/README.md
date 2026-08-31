@@ -15,7 +15,8 @@ one deployment template.
 | `hostpools/` | `deployments/hostpools/hostpool.bicep` | `deployments/hostpools/parameters/` |
 | `imageBuild/` | `deployments/imageBuild/imageBuild.bicep` | `deployments/imageBuild/parameters/` |
 | `imageManagement/` | `deployments/imageManagement/imageManagement.bicep` | `deployments/imageManagement/parameters/` |
-| `securityAndMonitoring/` | `deployments/securityAndMonitoring/securityAndMonitoring.bicep` | (no samples; use template defaults as a guide) |
+| `sharedServices/` | `deployments/sharedServices/sharedServices.bicep` | `customer-examples/parameters/sharedServices/` |
+| `automatedHostPools/` | `deployments/automatedHostPools/automatedHostPool.bicep` | `customer-examples/parameters/automatedHostPools/` |
 | `networking/` | `deployments/networking/networking.bicep` | `deployments/networking/parameters/` |
 
 ## Getting started
@@ -30,13 +31,15 @@ generated parameter file in the matching folder:
 | Template Spec | Save the generated parameters under |
 | --- | --- |
 | AVD Network Spoke | `networking/<environment>.networking.parameters.json` |
-| AVD Security & Monitoring | `securityAndMonitoring/<environment>.securityAndMonitoring.parameters.json` |
+| AVD Shared Services | `sharedServices/<environment>.sharedServices.parameters.json` |
 | AVD Image Management | `imageManagement/<environment>.imageManagement.parameters.json` |
 | AVD Custom Image | `imageBuild/<image>.imageBuild.parameters.json` |
 | AVD Host Pool | `hostpools/<hostpool>.hostpool.parameters.json` |
+| AVD Automated Host Pool | `automatedHostPools/<hostpool>.automatedHostPool.parameters.json` |
 
-Remove `timeStamp` from every generated file so the template creates a fresh value on each
-deployment. Do not add passwords, secrets, tokens, or other credentials to these files. After the
+Remove `timeStamp` from generated Image Build files so every build receives fresh resource and
+image-version identities. Other deployment templates no longer expose this parameter. Do not add
+passwords, secrets, tokens, or other credentials to these files. After the
 first successful UI deployment, use the saved files for repeat PowerShell, Azure CLI, or CI/CD
 deployments.
 

@@ -60,7 +60,7 @@ No subnet or private endpoint is required. `publicNetworkAccess: false` only blo
 
 ## Deployment
 
-### Template Spec (Recommended)
+### Template Spec Portal Form (First Deployment)
 
 Publish the template spec using the `New-TemplateSpecs.ps1` tool or publish manually, then deploy from the Azure Portal. The guided form covers all required and optional parameters.
 
@@ -74,9 +74,12 @@ New-AzTemplateSpec `
     -UIFormDefinitionFile '.\uiFormDefinition.json'
 ```
 
+On **Review + create**, select **Download template and parameters** before submitting, then retain
+the working parameter file for subsequent PowerShell or CI/CD deployments.
+
 > For air-gapped clouds (Secret/Top Secret), Blue Button is not available. Use Template Specs or PowerShell.
 
-### Azure PowerShell
+### Azure PowerShell (Subsequent Deployments)
 
 ```powershell
 New-AzResourceGroupDeployment `
@@ -86,7 +89,7 @@ New-AzResourceGroupDeployment `
     -m365EndpointInstance 'worldwide'
 ```
 
-### Azure CLI
+### Azure CLI (Subsequent Deployments)
 
 ```bash
 az deployment group create \

@@ -13,8 +13,8 @@ The RSV is shared across host pools. Backup storage cost is billed to the vault 
 | Resource | Tag | Set by |
 | --- | --- | --- |
 | `protectedItems` (VM) | `cm-resource-parent: <hostPoolResourceId>` | `vmBackupItems.bicep` |
-| `protectionContainers` (file share) | `cm-resource-parent: <hostPoolResourceId>` | `fslogixBackupItems.bicep` |
-| `protectedItems` (file share) | `cm-resource-parent: <hostPoolResourceId>` | `fslogixBackupItems.bicep` |
+| `protectionContainers` (file share) | `cm-resource-parent: <hostPoolResourceId>` | `shared/modules/fslogix/modules/fslogixBackupItems.bicep` |
+| `protectedItems` (file share) | `cm-resource-parent: <hostPoolResourceId>` | `shared/modules/fslogix/modules/fslogixBackupItems.bicep` |
 
 Tags on protected items are ARM metadata only — they do **not** redirect charges in Azure Cost Management. The vault resource itself bears all cost.
 

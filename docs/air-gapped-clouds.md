@@ -4,7 +4,27 @@
 
 # Air-Gapped Cloud Considerations
 
-The air-gapped clouds, Azure Government Secret and Azure Government Top Secret, offer unique challenges because not all software is available for download via http and where it is it may not be available to all enclaves on the networks these clouds service.
+Use this guide for Azure Government Secret and Azure Government Top Secret. Begin by choosing the
+deployment path, then inventory every build-time and session-host runtime dependency. Software and
+service endpoints available in one enclave might not be reachable from another.
+
+Use a **standard host pool** in these clouds. FederalAVD's automated host pool uses a Commercial-only
+preview service. See [Choose a Host Pool Management Approach](host-pool-management.md) before
+deploying Step 4.
+
+## Choose the Image Path
+
+A custom image is not universally required. Choose the smallest path that meets the workload:
+
+| Workload | Image path | Required FederalAVD steps |
+| --- | --- | --- |
+| Windows only; suitable marketplace SKU is available; no additional software or image-time configuration | Verified marketplace image | Standard Host Pool; add Networking and Shared Services when the architecture requires them |
+| Microsoft 365 Apps, Teams, OneDrive, software unavailable in the target cloud, or substantial preconfiguration | Custom Compute Gallery image | Image Management, Image Build, then Standard Host Pool |
+
+Marketplace-image suitability does not prove session-host readiness. In either path, verify the
+target enclave can reach the authoritative AVD service endpoints and can obtain the AVD Agent and
+Boot Loader from cloud-native or internally hosted sources. Verify the exact marketplace publisher,
+offer, and SKU in the target cloud before selecting the shorter path.
 
 ## Configure and Connect With Azure PowerShell
 
@@ -50,27 +70,32 @@ inventories and parameter details for each step.
 
    ```powershell
    .\tools\New-TemplateSpecs.ps1 `
-       -Location '<region>' `
-       -createNetwork $true `
-       -createSecurityAndMonitoring $true `
-       -createImageManagement $true `
-       -createCustomImage $true `
-       -createHostPool $true `
-       -CreateAddOns $false
+      -Location '<region>' `
+      -createNetwork $true `
+      -createSharedServices $true `
+      -createImageManagement $true `
+      -createCustomImage $true `
+      -createHostPool $true `
+      -CreateAddOns $false
    ```
 
+   Set `-createImageManagement` and `-createCustomImage` to `$false` when the verified marketplace
+   image path meets the workload. Automated host pools are not supported in these clouds.
+
 4. **Deploy prerequisites through Template Specs.** Deploy Networking only when an existing VNet
-   and subnet are unavailable. For IL6 and IL7, deploy Security and Monitoring by default to
+   and subnet are unavailable. For IL6 and IL7, deploy AVD Shared Services by default to
    establish centralized audit collection, operational monitoring, secrets protection, and key
    management before workload resources are created. Omit it only when the approved architecture
    already provides equivalent Key Vault, Log Analytics Workspace, DCR, DCE, diagnostic-settings,
    and key-management capabilities, and the control owners have documented how those shared
-   services satisfy the applicable requirements. Security and Monitoring is a hard sequencing
-   dependency before Image Management when using CMK or a policy-required Log Analytics Workspace.
+   services satisfy the applicable requirements. AVD Shared Services is a hard sequencing
+   dependency before Image Management when artifact/build-log storage or gallery image versions
+   use CMK, or when policy requires an existing Log Analytics Workspace.
    At **Review + create**, download each generated parameter file and save it under the matching
    `customer/parameters/` folder as described in the
    [Quick Start workflow](quick-start.md#recommended-first-deployment-workflow).
-5. **Deploy Image Management.** Retain its `artifactsStorageAccountResourceId` output along with
+5. **Deploy Image Management when a custom image is required.** Retain its
+   `artifactsStorageAccountResourceId` output along with
    these output-to-input values required by Image Build:
 
    | Image Management output | Image Build parameter |
@@ -81,7 +106,7 @@ inventories and parameter details for each step.
    | `buildLogsStorageAccountResourceId` | `logStorageAccountResourceId` |
    | `imageBuildResourceGroupResourceId` | `imageBuildResourceGroupId` |
 
-6. **Complete the artifact inventory and upload.** Review the
+6. **For a custom image, complete the artifact inventory and upload.** Review the
    [manual items](#items-that-must-be-placed-manually), the
    [air-gapped URL items](#items-downloaded-automatically-from-air-gapped-network-urls), and any
    copied customer-example artifacts. Upload the staged content:
@@ -93,13 +118,14 @@ inventories and parameter details for each step.
 
    Add `-SkipDownloadingNewSources` when the management workstation cannot reach the approved
    air-gapped software distribution endpoints.
-7. **Build the custom image.** In the Custom Image Template Spec form, use the outputs from Image
+7. **Build the custom image when required.** In the Custom Image Template Spec form, use the outputs from Image
    Management. On **Image Customizations**, set **Download Microsoft Sources from Web** to **No**
    (`downloadLatestMicrosoftContent = false`). Under **VDI Optimizations**, select **Air-gapped /
    restricted network** (`vdiOptimizationAirGapped = true`). Install all software from the uploaded
    artifacts, save the generated parameters under `customer/parameters/imageBuild/`, and retain
    `customImageResourceId`.
-8. **Deploy the host pool.** Select the custom gallery image, provide internally hosted
+8. **Deploy the standard host pool.** Select either the verified marketplace image or the custom
+   gallery image. Provide internally hosted
    `agentDownloadUrl` and `agentBootLoaderDownloadUrl` values when the default cloud endpoints are
    unavailable as described under [Session Host Deployment](#session-host-deployment), save the
    generated parameters under `customer/parameters/hostpools/`, and deploy.
@@ -141,8 +167,32 @@ network requirements, required URLs, and installer permalinks:
 
 ### Private Endpoint DNS
 
-Use the cloud-specific Private Link references for the authoritative private DNS zone values. Do not
-reuse Azure Commercial or Azure Government zone names in Secret or Top Secret:
+The FederalAVD Networking Template Spec is the supported way to create missing private DNS zones.
+Its Bicep derives cloud-specific names from the connected Azure environment and maintained mappings,
+so operators do not need to reproduce protected Secret or Top Secret values. In the form, select
+existing enterprise zones or choose **Deploy any missing Private DNS Zones**, link them to the new
+or existing VNet, and retain the `privateDnsZoneResourceIds` output for later deployments.
+
+Create or select only the zones required by enabled features:
+
+| Networking parameter | Required when |
+| --- | --- |
+| `createAzureBackupZone` | Azure Backup uses a private endpoint |
+| `createAzureBlobZone` | Blob storage uses a private endpoint |
+| `createAzureFilesZone` | Azure Files, including FSLogix storage, uses a private endpoint |
+| `createAzureQueueZone` | Queue storage uses a private endpoint |
+| `createAzureTableZone` | Table storage uses a private endpoint |
+| `createAzureKeyVaultZone` | Key Vault uses a private endpoint |
+| `createAvdFeedZone` | AVD Private Link is enabled for the workspace feed or connections |
+| `createAvdGlobalFeedZone` | AVD Private Link is enabled for global feed discovery |
+| `createAzureWebAppZone` | Function Apps or Web Apps use a private endpoint |
+
+Every private endpoint needs a matching zone linked to the workload VNet or to the DNS resolver
+serving that VNet. Private endpoints are not a substitute for DNS configuration.
+
+The employee-only Microsoft references below remain authoritative for validating the resulting
+zone values and target-cloud behavior. Do not reuse Azure Commercial or Azure Government zone names
+in Secret or Top Secret:
 
 - **[Azure Government Secret private endpoint DNS](https://review.learn.microsoft.com/microsoft-government-secret/azure/azure-government-secret/services/networking/private-link/private-endpoint-dns)**
 - **[Azure Government Top Secret private endpoint DNS](https://review.learn.microsoft.com/microsoft-government-topsecret/azure/azure-government-top-secret/services/networking/private-link/private-endpoint-dns)**
@@ -180,7 +230,12 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 ## Custom Image Build
 
-> **A custom image is required for air-gapped deployments.** Software cannot be downloaded from the internet at session host runtime in air-gapped clouds. Microsoft 365 Apps, Teams, OneDrive, and all other software must be pre-installed in the golden image. The sections below cover how to prepare the required artifacts and configure the image build. For details on M365-specific requirements, see [Microsoft 365 Apps, Teams, and OneDrive](#microsoft-365-apps-teams-and-onedrive-air-gapped) below.
+> **Use this section when the workload requires a custom image.** Microsoft 365 Apps, Teams,
+> OneDrive, software unavailable in the target cloud, and substantial preconfiguration should be
+> installed in the golden image because public internet downloads are unavailable at session-host
+> runtime. A plain Windows workload may instead use a marketplace image after its SKU and AVD
+> bootstrap dependencies are verified in the target cloud. For M365-specific requirements, see
+> [Microsoft 365 Apps, Teams, and OneDrive](#microsoft-365-apps-teams-and-onedrive-air-gapped).
 
 ### How the Downloads Configuration Works
 

@@ -1,0 +1,98 @@
+{
+    // FederalAVD automated pooled host-pool starter configuration.
+    // Azure Commercial only. Copy this file to customer/parameters/automatedHostPools before use.
+    // Deploy customer-examples/parameters/sharedServices/poc.automatedHostPoolPrerequisites.sharedServices.parameters.json first,
+    // then replace credentialsKeyVaultResourceId below with its secretsKeyVaultResourceId output.
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "identifier": {
+            "value": "autodev"
+        },
+        "location": {
+            "value": "eastus"
+        },
+        // Marketplace versions vary by region. Confirm this version remains available in the selected location.
+        "imageVersion": {
+            "value": "26200.9168.260811"
+        },
+        "identitySolution": {
+            "value": "EntraKerberos-CloudOnly"
+        },
+        "virtualMachineNamePrefix": {
+            "value": "avdauto"
+        },
+        "sessionHostCount": {
+            "value": 1
+        },
+        "useEphemeralOsDisk": {
+            "value": true
+        },
+        "ephemeralOsDiskPlacement": {
+            "value": "ResourceDisk"
+        },
+        "deployDynamicScalingPlan": {
+            "value": true
+        },
+        "avdServicePrincipalObjectId": {
+            "value": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        },
+        "dynamicScalingSchedules": {
+            "value": [
+                {
+                    "name": "Weekdays",
+                    "daysOfWeek": [
+                        "Monday",
+                        "Tuesday",
+                        "Wednesday",
+                        "Thursday",
+                        "Friday"
+                    ],
+                    "rampUpStartTime": "06:30",
+                    "rampUpLoadBalancingAlgorithm": "BreadthFirst",
+                    "rampUpMinimumHostsPct": "20",
+                    "rampUpCapacityThresholdPct": "60",
+                    "rampUpMinimumHostPoolSize": "2",
+                    "rampUpMaximumHostPoolSize": "10",
+                    "peakStartTime": "08:30",
+                    "peakLoadBalancingAlgorithm": "BreadthFirst",
+                    "rampDownStartTime": "17:00",
+                    "rampDownLoadBalancingAlgorithm": "DepthFirst",
+                    "rampDownMinimumHostsPct": "10",
+                    "rampDownCapacityThresholdPct": "90",
+                    "rampDownMinimumHostPoolSize": "1",
+                    "rampDownMaximumHostPoolSize": "5",
+                    "rampDownForceLogoffUsers": false,
+                    "rampDownWaitTimeMinutes": "30",
+                    "rampDownNotificationMessage": "Save your work and sign out. This session host is being removed by autoscale.",
+                    "rampDownStopHostsWhen": "ZeroSessions",
+                    "offPeakStartTime": "20:00",
+                    "offPeakLoadBalancingAlgorithm": "DepthFirst"
+                }
+            ]
+        },
+        "virtualMachineSubnetResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking/providers/Microsoft.Network/virtualNetworks/vnet-hub/subnets/snet-avd-hosts"
+        },
+        "credentialsKeyVaultResourceId": {
+            "value": "<secretsKeyVaultResourceId output from AVD Shared Services>"
+        },
+        "appGroupSecurityGroupIds": {
+            "value": [
+                "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            ]
+        },
+        "deployFSLogixStorage": {
+            "value": true
+        },
+        "fslogixPrivateEndpoint": {
+            "value": true
+        },
+        "azureFilePrivateDnsZoneResourceId": {
+            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
+        },
+        "enableMonitoring": {
+            "value": false
+        }
+    }
+}

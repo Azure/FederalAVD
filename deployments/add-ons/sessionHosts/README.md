@@ -2,7 +2,13 @@
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Host Pool Deployment Guide](../../../docs/hostpool-deployment.md) | [Session Host Replacer](../sessionHostReplacer/README.md)
 
-Deploy additional session hosts into an existing Azure Virtual Desktop host pool without modifying any host pool infrastructure.
+Deploy additional session hosts into an existing standard-management Azure Virtual Desktop host
+pool without modifying any host pool infrastructure.
+
+> **Standard host pools only.** This add-on creates VMs and registers them with a host-pool token.
+> Don't use it with an automated host pool that has Session Host Configuration, where Azure Virtual
+> Desktop exclusively owns session-host creation and lifecycle. See
+> [Choose a Host Pool Management Approach](../../../docs/host-pool-management.md).
 
 ## Table of Contents
 
@@ -11,7 +17,7 @@ Deploy additional session hosts into an existing Azure Virtual Desktop host pool
 - [Prerequisites](#prerequisites)
 - [Deployment](#deployment)
 - [Parameters](#parameters)
-- [Naming Convention Auto-Detection](#naming-convention-auto-detection)
+- [Naming Convention](#naming-convention)
 - [Key Vault Secrets](#key-vault-secrets)
 - [Session Host Replacer Integration](#session-host-replacer-integration)
 
@@ -91,7 +97,15 @@ The full `hostpool.bicep` template (`targetScope = 'subscription'`) additionally
 
 ## Deployment
 
-### Azure Portal (UI Form)
+### Template Spec Portal Form (First Deployment)
+
+Publish the add-on Template Specs with
+[`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
+Azure portal and deploy **AVD Session Hosts**. On **Review + create**, select **Download template
+and parameters** before submitting, then retain the working parameter file for subsequent
+PowerShell, Azure CLI, or Session Host Replacer deployments.
+
+### Blue Button (Azure Commercial / Government Alternative)
 
 [![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FsessionHosts%2FuiFormDefinition.json)
@@ -105,7 +119,7 @@ The portal form walks through four steps:
 | **Session Hosts** | Subscription/region/resource group, naming, network, image, VM size, availability, security, FSLogix, monitoring, customizations |
 | **Review + Create** | ARM template validation and deployment |
 
-### PowerShell / Azure CLI
+### PowerShell / Azure CLI (Subsequent Deployments)
 
 Deploy `main.json` (the compiled ARM template) with your parameter values directly:
 
@@ -122,10 +136,6 @@ New-AzResourceGroupDeployment `
   -sessionHostCount 2 `
   -sessionHostIndex 1
 ```
-
-### Template Spec (Air-Gapped / All Clouds)
-
-Publish `main.json` as an Azure Template Spec and deploy from there. This is the recommended approach for Secret and Top Secret clouds and is required by the Session Host Replacer function app. See [New-TemplateSpecs.ps1](../../../tools/New-TemplateSpecs.ps1) for the publishing helper script.
 
 ---
 
@@ -203,9 +213,9 @@ Publish `main.json` as an Azure Template Spec and deploy from there. This is the
 | `fslogixContainerType` | string | `ProfileContainer` | FSLogix container type: `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` | string | `AzureFiles` | Storage backend: `AzureFiles`, `AzureNetAppFiles` |
 | `fslogixLocalStorageAccountResourceIds` | array | `[]` | Local Azure Files storage account resource IDs |
-| `fslogixLocalNetAppVolumeResourceIds` | array | `[]` | Local Azure NetApp Files volume resource IDs |
+| `fslogixLocalNetAppVolumeResourceIds` | array | `[]` | Local Azure NetApp Files volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
 | `fslogixRemoteStorageAccountResourceIds` | array | `[]` | Remote Azure Files storage account resource IDs (cloud cache failover) |
-| `fslogixRemoteNetAppVolumeResourceIds` | array | `[]` | Remote Azure NetApp Files volume resource IDs (cloud cache failover) |
+| `fslogixRemoteNetAppVolumeResourceIds` | array | `[]` | Remote Azure NetApp Files volume resource IDs for cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
 | `fslogixOSSGroups` | array | `[]` | Entra ID group object IDs for Office container separation |
 | `fslogixSizeInMBs` | int | `30720` | Maximum FSLogix VHD/VHDX size in megabytes |
 

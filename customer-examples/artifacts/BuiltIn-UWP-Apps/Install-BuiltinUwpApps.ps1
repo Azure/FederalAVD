@@ -110,7 +110,7 @@ Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | ForEach-Objec
 Write-Log "Provisioned packages snapshot: $($SnapshotBefore.Count) package(s) recorded."
 
 $AppFolders = Get-ChildItem -Path $PSScriptRoot -Directory -ErrorAction Stop |
-    Where-Object { $_.Name -ne 'SharedDependencies' } |
+    Where-Object { $_.Name -ne 'SharedDependencies' -and -not $_.Name.StartsWith('_') } |
     Sort-Object Name
 
 if ($AppFolders.Count -eq 0) {

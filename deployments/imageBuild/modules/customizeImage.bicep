@@ -1,18 +1,20 @@
 targetScope = 'resourceGroup'
 
+import { artifactCustomizationType, restartableArtifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
 @description('The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (AirGapped still applies).')
 @allowed(['None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent'])
 param vdiOptimizationProfile string
 
 @description('When true, applies settings for air-gapped or internet-restricted environments: disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and DiagTrack telemetry. Applies independently of vdiOptimizationProfile, including when profile is None.')
 param vdiOptimizationAirGapped bool = false
-param appsToRemove array
+param appsToRemove string[]
 param cloud string
 param downloads object
 param downloadLatestMicrosoftContent bool
 param location string = resourceGroup().location
 param artifactsContainerUri string
-param customizations array
+param customizations restartableArtifactCustomizationType[]
 param cleanupDesktop bool
 param logBlobContainerUri string
 param orchestrationVmName string
@@ -21,12 +23,12 @@ param installFsLogix bool
 param installOneDrive bool
 param installTeams bool
 param installUpdates bool
-param office365AppsToInstall array
+param office365AppsToInstall string[]
 param teamsCloudType string
-param deploymentSuffix string
+param buildTimestamp string
 param updateService string
 param userAssignedIdentityClientId string
-param vdiCustomizations array
+param vdiCustomizations artifactCustomizationType[]
 param wsusServer string
 
 var apiVersion = startsWith(cloud, 'usn') ? '2017-08-01' : '2018-02-01'
@@ -35,7 +37,7 @@ var apiVersion = startsWith(cloud, 'usn') ? '2017-08-01' : '2018-02-01'
 var envSuffix = substring(environment().suffixes.storage, 5, length(environment().suffixes.storage) - 5)
 
 var buildDir = 'c:\\BuildDir'
-var restartVmScript = loadTextContent('../../shared/scripts/Restart-Vm.ps1')
+var restartVmScript = loadTextContent('../scripts/Restart-Vm.ps1')
 
 var customizers = [
   for customization in customizations: {
@@ -164,14 +166,13 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
 // issues, and unpredictable customization behaviour. This step costs ~60s in the
 // clean case and a full reboot only when the marketplace image actually needs it.
 module conditionalRestartPreBuild 'conditionalRestart.bicep' = {
-  name: 'cbs-status-conditional-restart-pre-build-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location
     logBlobContainerUri: logBlobContainerUri
     orchestrationVmName: orchestrationVmName
     userAssignedIdentityClientId: userAssignedIdentityClientId
-    deploymentSuffix: deploymentSuffix
+    buildTimestamp: buildTimestamp
     context: 'PreBuild'
   }
 }
@@ -214,7 +215,7 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Remove-AppxPackages-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Remove-AppxPackages-${buildTimestamp}.log'
     parameters: [
       {
         name: 'AppsToRemove'
@@ -222,7 +223,7 @@ resource removeAppxPackages 'Microsoft.Compute/virtualMachines/runCommands@2024-
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Remove-AppXPackages.ps1')
+      script: loadTextContent('../scripts/Remove-AppXPackages.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -244,7 +245,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-FSLogix-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-FSLogix-${buildTimestamp}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
@@ -258,7 +259,7 @@ resource fslogix 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = if
       }
     ])
     source: {
-      script: loadTextContent('../../shared/scripts/Install-FSLogix.ps1')
+      script: loadTextContent('../scripts/Install-FSLogix.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -282,7 +283,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Office-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Office-${buildTimestamp}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Environment'
@@ -304,7 +305,7 @@ resource office 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if 
       }
     ])
     source: {
-      script: loadTextContent('../../shared/scripts/Install-M365Applications.ps1')
+      script: loadTextContent('../scripts/Install-M365Applications.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -328,7 +329,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-OneDrive-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-OneDrive-${buildTimestamp}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
@@ -342,7 +343,7 @@ resource onedrive 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01' = i
       }
     ])
     source: {
-      script: loadTextContent('../../shared/scripts/Install-OneDrive.ps1')
+      script: loadTextContent('../scripts/Install-OneDrive.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -367,7 +368,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Teams-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Teams-${buildTimestamp}.log'
     parameters: union(commonScriptParams, [
       {
         name: 'Name'
@@ -387,7 +388,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
       }
     ])
     source: {
-      script: loadTextContent('../../shared/scripts/Install-Teams.ps1')
+      script: loadTextContent('../scripts/Install-Teams.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -429,7 +430,7 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Remove-ImageBuildRunCommands.ps1')
+      script: loadTextContent('../scripts/Remove-ImageBuildRunCommands.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -469,7 +470,6 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
 @batchSize(1)
 module customizationBatches 'applyCustomizationsBatch.bicep' = [
   for i in range(0, batchCount): {
-    name: 'customization-batch-${i}-${deploymentSuffix}'
     params: {
       batchIndex: i
       batchContext: 'custom'
@@ -483,7 +483,7 @@ module customizationBatches 'applyCustomizationsBatch.bicep' = [
           restart: customizers[i * customizationBatchSize + j].restart
         }
       )
-      deploymentSuffix: deploymentSuffix
+      buildTimestamp: buildTimestamp
       imageVmName: imageVmName
       location: location
       logBlobContainerUri: logBlobContainerUri
@@ -532,7 +532,7 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Install-Updates-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Install-Updates-${buildTimestamp}.log'
     parameters: updateService == 'WSUS'
       ? [
           {
@@ -551,7 +551,7 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
           }
         ]
     source: {
-      script: loadTextContent('../../shared/scripts/Invoke-WindowsUpdate.ps1')
+      script: loadTextContent('../scripts/Invoke-WindowsUpdate.ps1')
     }
     timeoutInSeconds: 3600
     treatFailureAsDeploymentFailure: false
@@ -582,14 +582,13 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
 }
 
 module conditionalRestartPostUpdates 'conditionalRestart.bicep' = if (installUpdates) {
-  name: 'conditional-restart-post-updates-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location
     logBlobContainerUri: logBlobContainerUri
     orchestrationVmName: orchestrationVmName
     userAssignedIdentityClientId: userAssignedIdentityClientId
-    deploymentSuffix: deploymentSuffix
+    buildTimestamp: buildTimestamp
     context: 'PostUpdates'
   }
   dependsOn: [
@@ -600,7 +599,6 @@ module conditionalRestartPostUpdates 'conditionalRestart.bicep' = if (installUpd
 @batchSize(1)
 module vdiCustomizationBatches 'applyCustomizationsBatch.bicep' = [
   for i in range(0, vdiBatchCount): {
-    name: 'vdi-customization-batch-${i}-${deploymentSuffix}'
     params: {
       batchIndex: i
       batchContext: 'vdi'
@@ -614,7 +612,7 @@ module vdiCustomizationBatches 'applyCustomizationsBatch.bicep' = [
           restart: false
         }
       )
-      deploymentSuffix: deploymentSuffix
+      buildTimestamp: buildTimestamp
       imageVmName: imageVmName
       location: location
       logBlobContainerUri: logBlobContainerUri
@@ -670,7 +668,7 @@ resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Optimize-AVDImage-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Optimize-AVDImage-${buildTimestamp}.log'
     parameters: [
       {
         name: 'OptimizationProfile'
@@ -682,7 +680,7 @@ resource optimizeImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Optimize-AVDImage.ps1')
+      script: loadTextContent('../scripts/Optimize-AVDImage.ps1')
     }
     timeoutInSeconds: 1800
     treatFailureAsDeploymentFailure: true
@@ -709,7 +707,7 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Cleanup-Image-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Cleanup-Image-${buildTimestamp}.log'
     parameters: [
       {
         name: 'BuildDir'
@@ -717,7 +715,7 @@ resource cleanupImage 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01'
       }
     ]
     source: {
-      script: loadTextContent('../../shared/scripts/Invoke-DiskCleanup.ps1')
+      script: loadTextContent('../scripts/Invoke-DiskCleanup.ps1')
     }
     treatFailureAsDeploymentFailure: false
   }
@@ -747,9 +745,9 @@ resource imageManifest 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01
         }
     outputBlobUri: empty(logBlobContainerUri)
       ? null
-      : '${logBlobContainerUri}${imageVmName}-Image-Manifest-${deploymentSuffix}.log'
+      : '${logBlobContainerUri}${imageVmName}-Image-Manifest-${buildTimestamp}.log'
     source: {
-      script: loadTextContent('../../shared/scripts/Get-ImageManifest.ps1')
+      script: loadTextContent('../scripts/Get-ImageManifest.ps1')
     }
     treatFailureAsDeploymentFailure: true
   }
@@ -765,14 +763,13 @@ resource imageManifest 'Microsoft.Compute/virtualMachines/runCommands@2023-07-01
 // write step and CBS is checked to ensure sysprep runs on a settled system.
 
 module conditionalRestartPostCleanup 'conditionalRestart.bicep' = if (empty(vdiCustomizers)) {
-  name: 'conditional-restart-post-cleanup-${deploymentSuffix}'
   params: {
     imageVmName: imageVmName
     location: location
     logBlobContainerUri: logBlobContainerUri
     orchestrationVmName: orchestrationVmName
     userAssignedIdentityClientId: userAssignedIdentityClientId
-    deploymentSuffix: deploymentSuffix
+    buildTimestamp: buildTimestamp
     context: 'PostCleanup'
   }
   dependsOn: [

@@ -2,11 +2,21 @@
 
 > **🔧 Technical Reference:** [Host Pool Template Documentation](../deployments/hostpools/README.md) - Complete parameter catalog and advanced scenarios
 
+**Management approach:** This guide covers the **standard management** deployment, where you own
+the session-host VM lifecycle. Before creating a host pool, compare it with the Commercial-only
+[automated host pool](../deployments/automatedHostPools/README.md), where Azure Virtual Desktop
+owns VM creation, updates, scaling, and deletion. The management approach can't be changed after
+creation. See [Choose a Host Pool Management Approach](host-pool-management.md).
+
 # 🏢 Host Pool Deployment Guide
 
 ## Overview
 
-This guide covers deploying complete Azure Virtual Desktop (AVD) host pool environments including session hosts, storage, networking, monitoring, and security resources. The solution supports both pooled and personal host pools with enterprise-grade features and Zero Trust security controls.
+This guide covers deploying complete standard-management Azure Virtual Desktop (AVD) host pool
+environments including session hosts, storage, networking, monitoring, and security resources. The
+solution supports both pooled and personal host pools with enterprise-grade features and Zero Trust
+security controls. FederalAVD or your own tooling creates and registers the VMs; for pooled custom
+image fleets, the optional Session Host Replacer can automate recurring drain-and-replace updates.
 
 ### What Gets Deployed
 
@@ -106,40 +116,48 @@ If building custom images with pre-installed software:
 
 ## Deployment Methods
 
-Choose the deployment method that best fits your workflow:
+Use the Template Spec portal form for every first deployment. The form guides resource selection
+and validation, then provides the working parameter file used for subsequent PowerShell, Azure CLI,
+or CI/CD deployments.
 
-### Method 1: Azure Portal (Template Specs)
+### Method 1: Template Spec Portal Form (First Deployment)
 
 **Best for:** GUI-based deployments with built-in validation
 
-#### Steps:
+#### Steps
 
 1. **Create Template Spec** (one-time setup):
 
    ```powershell
-   cd C:\repos\FederalAVD\tools
-   .\New-TemplateSpecs.ps1 -Location "East US 2"
+   .\tools\New-TemplateSpecs.ps1 `
+     -Location 'eastus2' `
+     -createSharedServices $false `
+     -createNetwork $false `
+     -createImageManagement $false `
+     -createCustomImage $false `
+     -createHostPool $true `
+     -createAutomatedHostPool $false `
+     -CreateAddOns $false
    ```
 
-2. **Deploy from Azure Portal**:
-   - Navigate to **Template Specs** in Azure Portal
-   - Find `ts-avd-hostpool-<region>`
-   - Click **Deploy**
-   - Fill out the deployment form
-   - Click **Review + Create**
+2. In the Azure portal, open **Template Specs**.
+3. Select **AVD Host Pool** and choose **Deploy**.
+4. Complete the guided deployment form.
+5. On **Review + create**, select **Download template and parameters**.
+6. Save the working file under `customer\parameters\hostpools\` before creating the deployment.
 
 **Benefits:**
 
 - Interactive UI form with parameter descriptions
 - Built-in parameter validation
 - Visual deployment progress
-- No local tooling required
+- Produces a validated parameter file for repeatable deployments
 
-### Method 2: PowerShell/Azure CLI
+### Method 2: PowerShell/Azure CLI (Subsequent Deployments)
 
-**Best for:** Automation, CI/CD pipelines, repeatable deployments
+**Best for:** Automation and CI/CD using a parameter file exported from the Template Spec UI
 
-#### PowerShell Example:
+#### PowerShell Example
 
 ```powershell
 # Connect to Azure
@@ -157,7 +175,7 @@ New-AzSubscriptionDeployment `
     -Name $deploymentName
 ```
 
-#### Azure CLI Example:
+#### Azure CLI Example
 
 ```bash
 # Login to Azure
@@ -176,9 +194,9 @@ az deployment sub create \
     --name $DEPLOYMENT_NAME
 ```
 
-### Method 3: GitHub Deploy Button
+### Method 3: GitHub Deploy Button (Alternative)
 
-**Best for:** Quick testing and demos
+**Best for:** Portal testing when publishing a Template Spec is not practical
 
 [![Deploy to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2Fhostpool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2Fhostpool.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fhostpools%2FuiFormDefinition.json)
@@ -191,7 +209,8 @@ az deployment sub create \
 
 ### Parameter Files
 
-Use the sample files in `deployments/hostpools/parameters/` as starting points, then store your environment-specific copies in `customer/parameters/hostpools/`:
+Export the working parameter file from the Template Spec UI and store it under
+`customer/parameters/hostpools/`:
 
 ```text
 customer/parameters/hostpools/
@@ -200,15 +219,24 @@ customer/parameters/hostpools/
 └── test.hostpool.parameters.json
 ```
 
-> **⚠️ Common mistake — editing `customer-examples/` or `deployments/hostpools/parameters/` directly:** Sample files under `deployments/` are shared and will be overwritten when you pull repo updates. Always copy a sample to `customer/parameters/hostpools/` before editing. The `customer/` folder is git-ignored by design — your environment-specific files stay local and safe. See [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
-
-> **⚠️ Common mistake — `timeStamp` in a saved parameter file:** If you export a parameter file from the Template Spec UI or from ARM deployment history, delete the `timeStamp` entry before saving the file for reuse. Leaving it causes all subsequent deployments to reuse the same timestamp, resulting in stale image version names and potential resource naming conflicts. See [troubleshooting](troubleshooting.md#timestamp-in-parameter-file-causes-stale-image-versions).
+> **Fallback:** If the Template Spec UI is unavailable, copy a sample from
+> `deployments/hostpools/parameters/` to `customer/parameters/hostpools/` before editing it. Never
+> edit shared samples directly because repository updates overwrite them. See
+> [troubleshooting](troubleshooting.md#editing-customerexamples-or-missing-customer-changes).
 
 ### Key Parameters
 
 #### Deployment Scope
 
 The host pool deployment always creates all resources — resource groups, AVD control plane, session hosts, monitoring, Key Vaults — based on the options you select. Use individual **Use Existing** toggles (portal) or pre-populated resource ID parameters (automation) to reuse shared infrastructure instead of creating new resources:
+
+In a standard-host-pool-only environment, the first deployment can create Key Vaults, monitoring,
+and the FSLogix Azure Files backup vault and policy. Later host-pool portal forms can discover and
+select those resources. Automation can pass the first deployment's shared-resource outputs to the
+parameters below.
+Use AVD Shared Services instead when the resources must exist before the first host pool, such as
+for automated host-pool credentials, Image Management CMK, or a standalone FSLogix Storage add-on
+that enables CMK, diagnostics, or Azure Files backup.
 
 | Shared resource | "Use Existing" control | Parameter to supply |
 | --- | --- | --- |
@@ -217,6 +245,13 @@ The host pool deployment always creates all resources — resource groups, AVD c
 | Credentials Key Vault | **Credentials source → Key Vault** (Identity step) | `existingCredentialsKeyVaultResourceId` |
 | Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
+
+The deployment returns the effective resource IDs whether it created the resource or reused an
+existing one. Use `credentialsKeyVaultResourceId`, `encryptionKeyVaultResourceId`,
+`logAnalyticsWorkspaceResourceId`, `avdInsightsDataCollectionRuleResourceId`,
+`dataCollectionEndpointResourceId`, `fslogixBackupVaultResourceId`, and
+`fslogixBackupPolicyName` to configure later standard host pools. It also returns
+`fslogixBackupPolicyResourceId` for consumers that accept the complete policy resource ID.
 
 To deploy all host pool infrastructure without creating session host VMs, set `sessionHostCount: 0`. This lets you validate storage, networking, and control plane configuration before committing to VM costs. Add hosts later using the **Session Hosts** add-on.
 
@@ -368,11 +403,12 @@ graph TD
 
 > **CMK timing:** Disk Encryption Sets and the storage encryption User-Assigned Identity are created in the same phase as Monitoring and Control Plane (~5–15 minutes before VMs and storage accounts deploy). This gives Azure RBAC propagation time to complete before the resources that depend on those role assignments are created, without requiring any polling or deployment VM dependency.
 
-### Step-by-Step Deployment
+### PowerShell Deployment After Parameter Export
 
-#### 1. Prepare Parameter File
+#### 1. Select the Exported Parameter File
 
-Copy and customize a parameter file:
+Use the working file downloaded from the Template Spec form. If the form is unavailable, copy and
+customize a reference file instead:
 
 ```powershell
 # Copy example parameter file
@@ -533,6 +569,85 @@ Get-AzRecoveryServicesBackupItem -WorkloadType AzureStorage -VaultId $vaultId
 ---
 
 ## Scaling and Management
+
+### Scaling Plans
+
+Set `deployScalingPlan` to `true` to create an Azure Virtual Desktop scaling plan for either a
+Pooled or Personal host pool. Portal deployments show controls appropriate to the selected host
+pool type. Pooled and Personal host pools support up to seven named schedules, and each schedule can
+select multiple days of the week. Each grid row is one complete schedule: phase times, balancing
+algorithms, capacity settings, and ramp-down behavior belong to that schedule rather than to the
+scaling plan as a whole. Schedule names are case-insensitively unique, and a weekday can belong to
+only one schedule. Days not explicitly assigned continue using the preceding schedule's off-peak
+behavior until another schedule enters ramp-up.
+
+For Pooled schedules, `rampDownForceLogoffUsers`, `rampDownWaitTimeMinutes`, the notification
+message, and `rampDownStopHostsWhen` apply only during that schedule's ramp-down phase. Personal
+schedules instead define disconnect and logoff actions independently for each phase. The Pooled
+wait and notification fields are required only when force logoff is enabled. Editable Grid does not
+populate column defaults, so the portal shows placeholders instead. If a direct deployment omits
+these fields while enabling force logoff, the template uses a 30-minute wait and "Save your work and
+sign out. This session host is being removed by autoscale." When force logoff is disabled, the
+template submits a zero-minute wait and no notification message.
+
+For PowerShell or Azure CLI deployments, provide `scalingPlanPooledSchedules` or
+`scalingPlanPersonalSchedules` when scaling is enabled. Each schedule object must contain every
+field for its host-pool type except the conditionally applicable Pooled wait and notification
+fields. The template does not create a default schedule.
+
+```json
+{
+  "deployScalingPlan": {
+    "value": true
+  },
+  "scalingPlanExclusionTag": {
+    "value": "ScalingPlanExclusion"
+  },
+  "scalingPlanPersonalSchedules": {
+    "value": [
+      {
+        "name": "Weekdays",
+        "daysOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        "rampUpStartTime": "08:00",
+        "rampUpAutoStartHosts": "WithAssignedUser",
+        "rampUpStartVMOnConnect": "Enable",
+        "rampUpMinutesToWaitOnDisconnect": "0",
+        "rampUpActionOnDisconnect": "None",
+        "rampUpMinutesToWaitOnLogoff": "0",
+        "rampUpActionOnLogoff": "None",
+        "peakStartTime": "09:00",
+        "peakStartVMOnConnect": "Enable",
+        "peakMinutesToWaitOnDisconnect": "0",
+        "peakActionOnDisconnect": "None",
+        "peakMinutesToWaitOnLogoff": "0",
+        "peakActionOnLogoff": "None",
+        "rampDownStartTime": "17:00",
+        "rampDownStartVMOnConnect": "Disable",
+        "rampDownMinutesToWaitOnDisconnect": "30",
+        "rampDownActionOnDisconnect": "Deallocate",
+        "rampDownMinutesToWaitOnLogoff": "30",
+        "rampDownActionOnLogoff": "Deallocate",
+        "offPeakStartTime": "20:00",
+        "offPeakStartVMOnConnect": "Disable",
+        "offPeakMinutesToWaitOnDisconnect": "30",
+        "offPeakActionOnDisconnect": "Deallocate",
+        "offPeakMinutesToWaitOnLogoff": "30",
+        "offPeakActionOnLogoff": "Deallocate"
+      }
+    ]
+  }
+}
+```
+
+Use strict 24-hour `HH:mm` values for all phase times. Valid start-on-connect values are `Enable`
+and `Disable`. Valid disconnect and logoff actions are `None`, `Deallocate`, and `Hibernate`.
+`rampUpAutoStartHosts` accepts `None`, `WithAssignedUser`, or `All`. Disconnect and logoff waits
+must be between 0 and 360 minutes.
+
+A Personal schedule can use `Hibernate` only when `hibernationEnabled` is `true` and both the image
+and VM size support hibernation. Microsoft does not support Personal autoscale hibernation with
+FSLogix or App Attach. The template rejects Hibernate schedules when it is configuring FSLogix;
+verify that no external App Attach configuration is associated with the host pool.
 
 ### Adding Session Hosts
 
@@ -839,23 +954,8 @@ The easiest way to create parameter files for PowerShell/CLI deployments:
    - Save the `parameters.json` file
 
 3. **Prepare for PowerShell use:**
-   - Open the parameters file
-   - **Remove the `timeStamp` parameter** (if present)
-
-     ```json
-     // REMOVE THIS PARAMETER:
-     "timeStamp": {
-       "value": "20260210143522"
-     }
-     ```
-
-     **Why remove it?**
-     - The `timeStamp` parameter is auto-generated on each deployment using `utcNow()`
-     - Provides automatic uniqueness for deployment names and nested resource deployments
-     - For image builds, generates automatic version numbers (e.g., `2026.0210.1435`)
-     - If included in parameter files, it would reuse the old timestamp, defeating uniqueness
-     - Each new deployment should generate a fresh timestamp
-   - Save the file
+   - Save the file under `customer/parameters/hostpools/`.
+   - Keep passwords and other secrets out of the saved file.
 
 4. **Use for future deployments:**
 
@@ -961,7 +1061,11 @@ Ensure your firewall, NSGs, and proxy configurations allow access to the require
 
 #### Azure Resource Manager (ARM) API
 
-The hostpool deployment uses Run Commands executed on a temporary deployment VM to perform domain join validation and other orchestration tasks. These scripts call the **Azure Resource Manager API** using the VM's managed identity.
+The host pool deployment uses Run Commands on a temporary deployment VM for storage identity
+registration, NTFS configuration, validation, and other orchestration tasks. For Azure Files, this
+VM remains in a workgroup and uses explicit directory credentials when AD operations are required.
+Only the Azure NetApp Files workflow domain-joins the temporary VM. These scripts call the
+**Azure Resource Manager API** using the VM's managed identity.
 
 **Required outbound access from the session host subnet:**
 
@@ -1190,23 +1294,22 @@ The solution includes an automated networking deployment for creating spoke VNet
 
 **Deploy networking infrastructure:**
 
-**Option 1: Azure Portal**
+#### Option 1: Template Spec Portal Form
+
+1. In the Azure portal, open **Template Specs**.
+2. Select **AVD Network Spoke** and choose **Deploy**.
+3. Configure the virtual network address space, subnets, optional hub peering, routing, and private
+  DNS zones.
+4. On **Review + create**, select **Download template and parameters** before submitting, then save
+  the working parameter file under `customer\parameters\networking\`.
+
+#### Option 2: Blue Button (Azure Commercial / Government Alternative)
 
 [![Deploy Networking](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json)
 [![Deploy to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2Fnetworking.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fnetworking%2FuiFormDefinition.json)
 
-**Option 2: Template Spec**
-1. Navigate to **Template Specs** in Azure Portal
-2. Select **Azure Virtual Desktop Networking**
-3. Click **Deploy**
-4. Configure:
-   - Virtual network address space
-   - Subnet configurations
-   - Hub VNet for peering (optional)
-   - Private DNS zones to create
-5. Deploy
+#### What Gets Deployed
 
-**What gets deployed:**
 - Virtual network with configurable address space
 - Subnets (session hosts, private endpoints, etc.)
 - VNet peering to hub (optional)
