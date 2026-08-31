@@ -43,9 +43,6 @@ use the `federalavd-bicep-maintenance` skill.
     - Verify every output maps to an ARM/Bicep parameter.
     - Verify grid column IDs match the corresponding typed input object.
     - Run `git diff --check` on the changed form.
-11. Run a live Azure Portal render smoke test through the affected step when an authenticated portal
-    session is available. If authentication prevents the test, report that limitation explicitly;
-    JSON and schema validation do not prove runtime rendering behavior.
 
 See [UI form rules](./references/ui-form-rules.md) for repository-specific failure modes.
 
@@ -58,4 +55,3 @@ See [UI form rules](./references/ui-form-rules.md) for repository-specific failu
 - Editable Grid rows do not depend on unsupported defaults.
 - All outputs map to entry-template parameters with compatible types.
 - Related Bicep and generated ARM templates are synchronized when their contract changed.
-- Portal rendering was tested or the authentication limitation was documented.
