@@ -61,6 +61,49 @@ For detailed guidance on implementing Zero Trust for AVD, refer to Microsoft's c
 
 > **Federal Zero Trust mandates:** For federal deployments, Zero Trust is not optional — it is required by [OMB M-22-09](https://www.whitehouse.gov/wp-content/uploads/2022/01/M-22-09.pdf) (Federal Zero Trust Strategy) and the [CISA Zero Trust Maturity Model v2.0](https://www.cisa.gov/resources-tools/resources/zero-trust-maturity-model) for civilian agencies, and by the [DoD Zero Trust Strategy](https://dodcio.defense.gov/Portals/0/Documents/Library/ZTStrategy.pdf) for DoD components. This solution provides capabilities across all five CISA ZTMM pillars (Identity, Devices, Networks, Applications & Workloads, Data). See the **[Compliance Control Mapping](compliance.md)** page for the full federal ZT standard mapping, control-by-control NIST SP 800-53 / FedRAMP High and DoD SRG IL4/IL5 coverage, and the exact parameters required for each framework.
 
+## Host Pool Management Approaches
+
+FederalAVD supports two Azure Virtual Desktop host-pool management approaches. Choose the approach
+before deployment because Azure Virtual Desktop does not support converting an existing host pool
+between them.
+
+| Capability | Standard host pool | Automated host pool |
+| --- | --- | --- |
+| Session-host lifecycle owner | FederalAVD, Session Host Replacer, or customer automation | Azure Virtual Desktop |
+| Supported pool types | Pooled and personal | Pooled only |
+| Supported clouds | Commercial, Government, Secret, and Top Secret | Commercial only |
+| API status | Generally available APIs | Preview `2025-11-01-preview` API |
+| VM configuration | Supplied whenever VMs are deployed or replaced | Persisted in Session Host Configuration |
+| Image updates | Customer-owned replacement process or Session Host Replacer | Native Session Host Update |
+| Capacity scaling | Fixed capacity or power-management scaling | Fixed capacity, power management, or dynamic create/delete scaling |
+| Availability | Zones, Availability Sets, or no infrastructure redundancy | Zones or no infrastructure redundancy; Availability Sets are not exposed by the preview API |
+
+### Standard Host Pools
+
+Standard host pools preserve direct control of VM creation, naming, extensions, replacement timing,
+and rollback. They support persistent hosts maintained in place or image-managed fleets whose VMs
+are replaced manually, through customer automation, or with Session Host Replacer.
+
+### Automated Host Pools
+
+Automated host pools use Azure Virtual Desktop Session Host Configuration and Session Host
+Management to create, update, scale, and delete session-host VMs from persistent desired state.
+FederalAVD supplements the preview service with resource-group-scoped Azure Policy for settings such
+as disk controls, monitoring, FSLogix configuration, private customizations, and ordered VM
+Application assignments.
+
+Dynamic autoscaling can use `CreateDeletePowerManage` schedules to create and delete hosts as demand
+changes instead of only starting and stopping an existing fleet. Policy assignment is eventually
+consistent, so an AVD host reporting `Available` does not by itself prove that every policy-deployed
+configuration has completed. Validate policy compliance before admitting users.
+
+Do not attach Session Host Replacer or external VM lifecycle automation to an automated host pool;
+Azure Virtual Desktop must remain the sole owner of its managed VMs.
+
+See [Choose a Host Pool Management Approach](host-pool-management.md) and the
+[Automated Host Pool deployment guide](../deployments/automatedHostPools/README.md) for the complete
+decision matrix, prerequisites, parity boundaries, and operating model.
+
 ## Multi-Subscription Support
 
 This solution supports deploying Azure Virtual Desktop resources across multiple Azure subscriptions, enabling flexible resource organization, cost management, and adherence to organizational governance policies. You can separate the control plane, monitoring infrastructure, and compute resources into different subscriptions based on your requirements.
@@ -533,6 +576,47 @@ Supported GPU VM families:
   - NvidiaGpuDriverWindows
   - CustomScriptExtension
 
+## Azure Compute Gallery VM Applications
+
+FederalAVD can publish selected artifact ZIP packages as immutable Azure Compute Gallery VM
+Application versions. VM Applications keep independently versioned software outside the session-host
+image and provide explicit install, optional update, and remove behavior.
+
+The workflow deliberately separates four controls:
+
+1. **Prepare:** `Update-ImageArtifacts.ps1` packages and uploads artifacts to Image Management
+  storage.
+2. **Publish:** `Publish-VMApplications.ps1` publishes only applications declared in
+  `vmApplications.json` and returns immutable application-version resource IDs.
+3. **Assign:** Host-pool parameters, Azure Policy, direct assignment, or customer automation select
+  the versions and installation order.
+4. **Converge:** Azure VM Applications asynchronously executes the declared lifecycle commands on
+  assigned VMs.
+
+Uploading an artifact does not publish or install it, and publishing a version does not assign it.
+This separation prevents ordinary artifact refreshes from silently changing session hosts.
+
+**Key capabilities:**
+
+- Manifest-driven publication with semantic `Major.Minor.Patch` versions
+- Managed-identity-backed package access without persisted SAS tokens
+- Regional replication and an optional `latest` version selector
+- Idempotency checks that reject attempts to mutate an existing version
+- Install, update, and remove lifecycle commands
+- Ordered assignment of up to 25 applications to current and future automated session hosts
+
+For automated host pools, FederalAVD policy owns the complete ordered VM Application declaration.
+New hosts receive that declaration during creation. Assignment changes and newly published versions
+selected through `latest` require an intentional policy remediation or VM update for existing hosts.
+For standard host pools, use direct assignment or customer-owned fleet automation.
+
+Use an image instead when software must be present before logon or changes with the OS baseline. Keep
+policy, configuration, security onboarding, and shared host dependencies in their existing image,
+customization, or endpoint-management workflows.
+
+See [Publish Artifact Packages as VM Applications](vm-applications.md) for package eligibility,
+manifest fields, publication, versioning, assignment, and air-gapped considerations.
+
 ## Add-Ons
 
 This solution includes optional add-ons that extend the base AVD deployment with advanced lifecycle management and automation capabilities. Add-ons are deployed separately after the main hostpool deployment and can be enabled or disabled independently.
@@ -542,6 +626,7 @@ This solution includes optional add-ons that extend the base AVD deployment with
 Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage to prevent capacity exhaustion.
 
 **Key Features:**
+
 - Monitors all file shares in a specified storage resource group
 - Smart tiered scaling: 100GB increments for shares <500GB, 500GB increments for larger shares
 - Automatic discovery of storage configuration
@@ -550,6 +635,7 @@ Automatically monitors and increases Azure Files Premium file share quotas for F
 - Support for private endpoints and customer-managed encryption
 
 **Use Cases:**
+
 - Production AVD environments with FSLogix profiles on Azure Files Premium
 - Growing user populations requiring proactive storage capacity management
 - Compliance scenarios requiring automated capacity management
@@ -558,17 +644,28 @@ Automatically monitors and increases Azure Files Premium file share quotas for F
 
 ### Session Host Replacer
 
-Automatically replaces session hosts when new images are available with zero-downtime rolling updates.
+Automatically detects new Compute Gallery image versions and performs controlled replacement of
+session hosts in standard host pools.
 
 **Key Features:**
 
 - Image version tracking and automatic updates
-- Automatic capacity management (host pool can temporarily double during replacements)
+- `SideBySide` mode adds and validates replacement hosts before removing old hosts for zero-downtime
+  updates; capacity can temporarily double
+- `DeleteFirst` mode removes eligible hosts before adding replacements to reduce temporary cost,
+  quota, and subnet requirements at the expense of a temporary capacity reduction
 - Graceful session draining with configurable grace period (default: 24 hours)
-- Flexible deployment velocity (progressive scale-up with configurable batch size ceiling)
+- Progressive scale-up, configurable batch ceilings, and per-cycle deletion limits
+- Availability safety floor with phase-aware scaling-plan integration
+- Optional shutdown retention for rapid rollback in `SideBySide` mode
+- Auto-detected target capacity or an explicit target session-host count
+- Dedicated-host assignment and hostname preservation in `DeleteFirst` mode
 - Tag-based opt-in model for controlled automation
 - Optional Entra ID and Intune device cleanup
 - Template Spec integration for consistent deployments
+
+Session Host Replacer does not support automated host pools because Azure Virtual Desktop owns the
+VM lifecycle for those pools. Use native Session Host Update instead.
 
 **Use Cases:**
 
@@ -592,6 +689,7 @@ Execute one or multiple scripts on selected virtual machines from a resource gro
 - Minimal permissions required (Virtual Machine Contributor)
 
 **Use Cases:**
+
 - Batch configuration changes across session hosts
 - Emergency troubleshooting and remediation
 - Software deployment or updates outside of normal imaging process
@@ -659,6 +757,8 @@ Azure Files storage accounts for FSLogix can be configured with Zone-Redundant S
 **`fslogixStorageRedundancy` is an independent parameter** — it is not automatically derived from the session host `availability` setting. The default is `LocallyRedundant`. For production deployments where session hosts are deployed across availability zones, explicitly set `fslogixStorageRedundancy = 'ZoneRedundant'` to align storage resilience with compute resilience.
 
 > **Azure Files Premium and GRS:** Azure Files Premium does not support Geo-Redundant Storage (GRS). ZRS is the highest redundancy tier available for production-grade (Premium) FSLogix storage. This is a platform constraint — cross-region profile redundancy requires FSLogix Cloud Cache or an accepted per-region profile strategy. See [BCDR — Profile Strategy](bcdr.md#profile-strategy-for-cross-region-deployments).
+
+<!-- Separate related callouts to satisfy Markdown blockquote parsing. -->
 
 > **Compliance guidance:** Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS for FSLogix storage in zone-enabled regions. ZRS satisfies the expectation that primary profile storage can survive a datacenter-level failure without data loss. It does not substitute for CP-6 (Alternate Storage Site), which requires geographic separation — addressable through Cloud Cache or per-region profiles with OneDrive Known Folder Move. Microsoft's [Secure Future Initiative (SFI)](https://www.microsoft.com/en-us/security/blog/2024/05/03/security-above-all-else-expanding-microsofts-secure-future-initiative/) similarly emphasizes resilience of data at every layer as a core security principle.
 
