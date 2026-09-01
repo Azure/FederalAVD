@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "3222463884236818835"
+      "templateHash": "10689702941994119414"
     }
   },
   "definitions": {
@@ -352,7 +352,7 @@
       "type": "string",
       "maxLength": 10,
       "metadata": {
-        "description": "Required. Prefix used by Azure Virtual Desktop when naming session-host VMs. Maximum 11 characters."
+        "description": "Required. Prefix used by Azure Virtual Desktop when naming session-host VMs. Maximum 10 characters."
       }
     },
     "virtualMachineSize": {

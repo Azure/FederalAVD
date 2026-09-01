@@ -88,7 +88,7 @@ param domainJoinPasswordSecretUri string = ''
 @description('Optional. Enroll Entra-joined session hosts in Microsoft Intune.')
 param intuneEnrollment bool = false
 
-@description('Required. Prefix used by Azure Virtual Desktop when naming session-host VMs. Maximum 11 characters.')
+@description('Required. Prefix used by Azure Virtual Desktop when naming session-host VMs. Maximum 10 characters.')
 @maxLength(10)
 param virtualMachineNamePrefix string
 
