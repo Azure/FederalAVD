@@ -289,6 +289,15 @@
 									"defaultValue": false
 								},
 								{
+									"name": "ephemeralOsDiskRecommendation",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Autoscaling is optional. This solution offers only dynamic create/delete autoscaling; it does not offer a power-management-only scaling plan. If you use this dynamic plan with ephemeral OS disks, set Ramp-up Min % and Ramp-down Min % to 100 in every schedule. This keeps the minimum percentage of active hosts at 100% in every phase so autoscale creates and deletes hosts instead of attempting unsupported deallocation operations. Do not attach a separate power-management-only scaling plan to the host pool.",
+										"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/deploy/session-hosts/ephemeral-os-disks?tabs=portal#dynamic-autoscaling-recommendations"
+									}
+								},
+								{
 									"name": "prerequisites",
 									"type": "Microsoft.Common.InfoBox",
 									"visible": "[steps('controlPlane').dynamicScaling.deploy]",
@@ -1467,6 +1476,16 @@
 									"defaultValue": false,
 									"toolTip": "Stores the OS disk on local VM storage instead of Azure Storage. This option is available only when the selected VM size has a supported placement with enough capacity for the source image OS disk.",
 									"visible": "[and(not(empty(steps('hosts').capacity.virtualMachineSize)), equals(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskSupported)), 'True'), or(and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'ResourceDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.maxResourceVolumeMB)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1024))), and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'CacheDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.cachedDiskBytes)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1073741824)))))]"
+								},
+								{
+									"name": "ephemeralOsDiskAutoscalingWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[steps('hosts').capacity.useEphemeralOsDisk]",
+									"options": {
+										"style": "Warning",
+										"text": "Ephemeral OS disk session hosts cannot be deallocated. Autoscaling is optional. This solution offers only Dynamic Create/Delete Autoscaling, not power-management-only scaling. If you enable it on Deployment Basics, set both Ramp-up Min % and Ramp-down Min % to 100 for every schedule. These settings keep all phases at 100% minimum active hosts and make autoscale create and delete hosts instead of starting and deallocating them. Do not attach a separate power-management-only scaling plan.",
+										"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/deploy/session-hosts/ephemeral-os-disks?tabs=portal#dynamic-autoscaling-recommendations"
+									}
 								},
 								{
 									"name": "ephemeralOsDiskPlacement",

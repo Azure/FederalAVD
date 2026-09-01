@@ -429,6 +429,16 @@ disk type and submits `StandardSSD_LRS`; it ignores persistent-disk expansion by
 Trusted Launch or Confidential VMs, must fit the selected VM size's cache or resource-disk
 capacity. Data that must survive host replacement belongs in FSLogix or another durable service.
 
+Ephemeral OS disk session hosts cannot be deallocated. Autoscaling is optional. This solution only
+offers dynamic create/delete autoscaling and does not offer a power-management-only scaling-plan
+selection. Do not attach a separate power-management-only scaling plan to the host pool. If dynamic
+autoscaling is used, follow Microsoft's
+[Dynamic Autoscaling recommendations for ephemeral OS disks](https://learn.microsoft.com/en-us/azure/virtual-desktop/deploy/session-hosts/ephemeral-os-disks?tabs=portal#dynamic-autoscaling-recommendations):
+set `deployDynamicScalingPlan` to `true`, and set both `rampUpMinimumHostsPct` and
+`rampDownMinimumHostsPct` to `100` in every `dynamicScalingSchedules` entry. Together, those two
+schedule settings keep the minimum percentage of active hosts at 100% in every phase, making
+autoscale create and delete hosts instead of attempting to start and deallocate them.
+
 ## Dynamic Autoscaling
 
 Provide `avdServicePrincipalObjectId` for the Azure/Windows Virtual Desktop application (application
@@ -448,6 +458,10 @@ creates preview pooled schedules with `scalingMethod: CreateDeletePowerManage`. 
 times, load-balancing algorithms, capacity thresholds, create/delete minimum and maximum host-pool
 sizes, and ramp-down behavior. Schedule names are case-insensitively unique, and a weekday can
 belong to only one schedule.
+
+The `CreateDeletePowerManage` API method can perform both capacity and power operations. Setting
+the minimum active-host percentage to 100% in every phase is what prevents the plan from trying to
+deallocate ephemeral OS disk hosts and limits its capacity changes to creating and deleting hosts.
 
 Ramp-down force logoff, wait time, notification message, and stop condition are schedule-specific
 and apply during that schedule's ramp-down phase. The wait and notification fields are required in
