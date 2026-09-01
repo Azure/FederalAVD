@@ -16,6 +16,7 @@ Add-ons extend the core FederalAVD deployment with operational automation, monit
 | [**Storage Quota Manager**](storage-quota-manager.md) | Automatically expands Azure Files Premium share quotas before they fill up | Environments using Azure Files for FSLogix profile containers |
 | [**M365 Route Table Updater**](m365-route-table-updater.md) | Keeps an Azure Route Table current with the latest Microsoft 365 IP ranges | Force-tunneled environments where M365 traffic must bypass the NVA |
 | [**Deploy Additional Session Hosts**](../deployments/add-ons/sessionHosts/README.md) | Deploys additional VMs into an existing host pool without modifying host pool infrastructure | Scaling up capacity in an existing host pool |
+| [**Session Host Policy**](../deployments/add-ons/sessionHostPolicy/README.md) | Applies shared VM Applications, AVD Insights monitoring, Guest Attestation, and managed-disk isolation policies | Standard or externally managed session hosts in a dedicated VM resource group |
 | [**Run Commands on VMs**](../deployments/add-ons/runCommandsOnVms/README.md) | Executes one or more scripts on selected VMs in a resource group via ARM Run Commands | Ad-hoc patching, configuration, or diagnostics on session hosts |
 | [**Update FSLogix Storage Key**](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md) | Rotates the FSLogix storage account key on all session hosts | Environments using Entra ID-only identities with FSLogix key-based auth that require periodic key rotation |
 

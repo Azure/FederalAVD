@@ -1,13 +1,15 @@
 ---
 name: federalavd-policy-authoring
-description: "Create, modify, review, and validate FederalAVD automated host-pool Azure Policy definitions, initiatives, assignments, remediation templates, and policy RBAC. Use when changing Modify or DeployIfNotExists policies, nested deployment templates, policy sets, policy assignment parameters, compliance conditions, or policy deployment sequencing."
+description: "Create, modify, review, and validate FederalAVD session-host Azure Policy definitions, initiatives, assignments, remediation templates, and policy RBAC. Use when changing Modify or DeployIfNotExists policies, nested deployment templates, policy sets, policy assignment parameters, compliance conditions, or policy deployment sequencing."
 argument-hint: "[policy capability or file]"
 ---
 
 # FederalAVD Policy Authoring
 
-Use this workflow for policy resources under `deployments/automatedHostPools/policy/`. Read
-`deployments/automatedHostPools/policy/AUTHORING.md` before changing the policy structure.
+Use this workflow for policy resources under
+`deployments/shared/modules/orchestration/sessionHostPolicy/`. Read its `AUTHORING.md` before
+changing policy structure. Consumer entry points such as `deployments/automatedHostPools/policy/`
+adapt and sequence these canonical modules but do not own policy implementations.
 
 ## Procedure
 
@@ -21,6 +23,9 @@ Use this workflow for policy resources under `deployments/automatedHostPools/pol
        -> remediation identity and role assignments
    ```
 
+    Trace every affected consumer to the canonical shared orchestration. Keep one definition and
+    deterministic assignment implementation; do not copy policy resources into consumer entry points.
+
 2. Classify the behavior before editing:
 
    - Use `Modify` for properties changed on the evaluated VM, NIC, identity, or disk request.
@@ -33,13 +38,13 @@ Use this workflow for policy resources under `deployments/automatedHostPools/pol
    type being changed. For policy fields, effects, and aliases, verify current Microsoft Azure
    Policy documentation rather than inferring behavior from existing generated JSON.
 
-4. Treat files under `policy/modules/policy/bicep/` as direct deployment sources. Policy definition
+4. Treat policy definition and initiative files under the shared `modules/` directory as direct deployment sources. Policy definition
    modules must declare `Microsoft.Authorization/policyDefinitions`; initiative modules must
    declare `Microsoft.Authorization/policySetDefinitions`. Do not generate standalone ARM files for
    these modules for another Bicep file to ingest.
 
-5. For a `DeployIfNotExists` policy, maintain its nested remediation template under
-   `policy/modules/policy/templates/`:
+5. For a `DeployIfNotExists` policy, maintain its nested remediation template under the shared
+  `modules/templates/` directory:
 
    - Prefer Bicep for new remediation templates.
    - When a sibling `.bicep` exists, edit it and regenerate its adjacent `.json`; never hand-edit
@@ -106,7 +111,7 @@ Use this workflow for policy resources under `deployments/automatedHostPools/pol
     - Every `roleDefinitionIds` entry is matched by deployed RBAC.
     - Conditional definitions, initiatives, assignments, and RBAC use the same feature condition.
     - Generated JSON changes are expected and `git diff --check` passes.
-    - Documentation in `policy/AUTHORING.md` and `policy/README.md` remains accurate.
+    - The shared `AUTHORING.md` and affected consumer documentation remain accurate.
 
 Do not deploy policy resources as a separate repository-level stack. They are an internal stage of
 the automated host-pool dependency graph.

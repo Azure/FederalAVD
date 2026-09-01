@@ -96,9 +96,10 @@ The automated `sessionHostConfiguration.bicep` and `sessionHostManagement.bicep`
 adapters around shared AVD API modules. Keep them local because their subscription-scoped wrapper
 is required to bridge runtime resource-group names and automated-host sequencing.
 
-The automated `policy` directory is also intentionally local. Its policy definitions and policy
-orchestration implement the automated session-host provisioning boundary and should not be treated
-as generic resource modules.
+Session-host policy implementation is centralized under `orchestration/sessionHostPolicy`. This
+domain directory owns all related definitions, initiatives, assignment and remediation helpers,
+nested templates, and reusable capability orchestration, including policies currently used only by
+Automated Host Pools. Consumer-local policy entry points remain thin scope and sequencing adapters.
 
 ## Naming Rules
 
@@ -115,8 +116,8 @@ as generic resource modules.
 When adding or moving a module:
 
 1. Search all Bicep callers before changing its path.
-2. Confirm the module is reusable across at least two deployment surfaces before placing it under
-   `orchestration`.
+2. Place cross-solution behavior and domain-owned implementations under `orchestration`; current
+  consumer count does not determine ownership.
 3. Preserve resource-group and subscription scope explicitly.
 4. Build every affected entry template.
 5. Run the ARM synchronization check for each tracked entry template.

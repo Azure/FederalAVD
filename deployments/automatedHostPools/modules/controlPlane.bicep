@@ -1,4 +1,4 @@
-import { vmApplicationAssignmentType } from '../policy/modules/policy/bicep/vmApplicationTypes.bicep'
+import { vmApplicationAssignmentType } from '../../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 
 targetScope = 'subscription'
 
