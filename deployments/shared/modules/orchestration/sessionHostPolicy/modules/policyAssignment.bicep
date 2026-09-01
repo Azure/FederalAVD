@@ -8,6 +8,7 @@ param displayName string
 param description string
 param parameters object = {}
 param nonComplianceMessage string = ''
+param ownerId string
 
 resource policyAssignment 'Microsoft.Authorization/policyAssignments@2024-05-01' = {
   name: name
@@ -22,15 +23,14 @@ resource policyAssignment 'Microsoft.Authorization/policyAssignments@2024-05-01'
     displayName: displayName
     description: description
     enforcementMode: 'Default'
+    metadata: {
+      category: 'Azure Virtual Desktop'
+      managedBy: 'FederalAVD'
+      ownerId: ownerId
+    }
     policyDefinitionId: policyDefinitionResourceId
     parameters: parameters
-    nonComplianceMessages: !empty(nonComplianceMessage)
-      ? [
-          {
-            message: nonComplianceMessage
-          }
-        ]
-      : []
+    nonComplianceMessages: empty(nonComplianceMessage) ? [] : [{ message: nonComplianceMessage }]
   }
 }
 

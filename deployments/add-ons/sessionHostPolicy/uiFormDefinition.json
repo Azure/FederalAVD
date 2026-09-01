@@ -1,0 +1,308 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "AVD Session Host Policy Add-On",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "Target",
+          "elements": [
+            {
+              "name": "intro",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Applies selected Azure Policy capabilities to every applicable resource in one dedicated session-host resource group. Do not select a resource group containing unrelated VMs or disks."
+              }
+            },
+            {
+              "name": "resourceScope",
+              "type": "Microsoft.Common.ResourceScope",
+              "subscription": {
+                "resourceProviders": [
+                  "Microsoft.Authorization/policyAssignments",
+                  "Microsoft.Compute/disks",
+                  "Microsoft.Compute/virtualMachines",
+                  "Microsoft.Insights/dataCollectionEndpoints",
+                  "Microsoft.Insights/dataCollectionRules",
+                  "Microsoft.ManagedIdentity/userAssignedIdentities",
+                  "Microsoft.PolicyInsights/remediations"
+                ]
+              },
+              "location": {
+                "label": "Policy identity region",
+                "resourceTypes": [
+                  "Microsoft.ManagedIdentity/userAssignedIdentities"
+                ]
+              }
+            },
+            {
+              "name": "subscriptionsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "GET",
+                "path": "/subscriptions?api-version=2022-12-01"
+              }
+            },
+            {
+              "name": "resourceGroupsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').resourceScope.subscription))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').resourceScope.subscription.id, '/resourcegroups?api-version=2024-03-01')]"
+              }
+            },
+            {
+              "name": "targetResourceGroupName",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Dedicated session-host resource group",
+              "toolTip": "Every VM in this resource group is governed by the assignment.",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(steps('basics').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"', rg.location, '\",\"value\":\"', rg.name, '\"}')))]"
+              }
+            },
+            {
+              "name": "policyIdentityName",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Policy remediation identity name",
+              "placeholder": "id-avd-policy-prod-eus2",
+              "constraints": {
+                "required": false,
+                "regex": "^[A-Za-z0-9-_]{3,128}$",
+                "validationMessage": "Use 3-128 letters, numbers, hyphens, or underscores. Leave empty for a deterministic generated name."
+              }
+            }
+          ]
+        },
+        {
+          "name": "applications",
+          "label": "Policy Capabilities",
+          "elements": [
+            {
+              "name": "guidance",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Select one or more independent policy capabilities. Session-host configuration and private customizations are intentionally not exposed by this add-on."
+              }
+            },
+            {
+              "name": "enableVmApplications",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Assign Azure Compute Gallery VM Applications",
+              "toolTip": "Preferred for software with install and remove behavior. Azure Policy maintains an authoritative ordered list of Gallery application version references on every session host in the target resource group.",
+              "defaultValue": false
+            },
+            {
+              "name": "gallerySubscription",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Compute Gallery Subscription",
+              "defaultValue": "[steps('basics').resourceScope.subscription.displayName]",
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+              }
+            },
+            {
+              "name": "galleriesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(equals(steps('applications').enableVmApplications, true), not(empty(steps('applications').gallerySubscription.id)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('applications').gallerySubscription.id, '/providers/Microsoft.Compute/galleries?api-version=2024-03-03')]"
+              }
+            },
+            {
+              "name": "gallery",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Compute Gallery",
+              "multiLine": true,
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(steps('applications').galleriesApi.value, (gallery) => parse(concat('{\"label\":\"', gallery.name, '\",\"description\":\"Resource Group: ', first(skip(split(gallery.id, '/'), 4)), '\",\"value\":\"', gallery.id, '\"}')))]"
+              }
+            },
+            {
+              "name": "vmApplicationsGuidance",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
+              "options": {
+                "style": "Info",
+                "text": "Use VM Applications for independently installable software. The portal assigns latest, which resolves the newest eligible version; versions with excludeFromLatest enabled are not eligible. Use a parameter file to pin a specific version. The selected list is authoritative, and versions must be replicated to each session-host region. After publishing a newer version, remediate the policy to apply it to existing hosts; publishing alone does not update existing hosts. Azure supports up to 25 VM Applications per VM. Choosing Yes for Fail VM if App Fails makes an application install, update, or removal error mark both the VM Application extension and VM provisioning as failed."
+              }
+            },
+            {
+              "name": "applicationsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(equals(steps('applications').enableVmApplications, true), not(empty(steps('applications').gallery)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('applications').gallery, '/applications?api-version=2024-03-03')]",
+                "transforms": {
+                  "list": "value|[*].{label:name, value:id}"
+                }
+              }
+            },
+            {
+              "name": "vmApplications",
+              "type": "Microsoft.Common.EditableGrid",
+              "label": "Ordered VM Applications",
+              "ariaLabel": "Ordered Azure Compute Gallery VM Applications",
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
+              "constraints": {
+                "width": "Full",
+                "rows": {
+                  "count": {
+                    "min": 1,
+                    "max": 25
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "packageReferenceId",
+                    "header": "Application / latest",
+                    "width": "3fr",
+                    "element": {
+                      "type": "Microsoft.Common.DropDown",
+                      "constraints": {
+                        "required": true,
+                        "allowedValues": "[map(steps('applications').applicationsApi.transformed.list, (application) => parse(concat('{\"label\":\"', application.label, '\",\"value\":\"', application.value, '/versions/latest\"}')))]"
+                      }
+                    }
+                  },
+                  {
+                    "id": "order",
+                    "header": "Order",
+                    "width": "1fr",
+                    "element": {
+                      "type": "Microsoft.Common.DropDown",
+                      "constraints": {
+                        "required": true,
+                        "allowedValues": [
+                          { "label": "1", "value": 1 }, { "label": "2", "value": 2 }, { "label": "3", "value": 3 }, { "label": "4", "value": 4 }, { "label": "5", "value": 5 },
+                          { "label": "6", "value": 6 }, { "label": "7", "value": 7 }, { "label": "8", "value": 8 }, { "label": "9", "value": 9 }, { "label": "10", "value": 10 },
+                          { "label": "11", "value": 11 }, { "label": "12", "value": 12 }, { "label": "13", "value": 13 }, { "label": "14", "value": 14 }, { "label": "15", "value": 15 },
+                          { "label": "16", "value": 16 }, { "label": "17", "value": 17 }, { "label": "18", "value": 18 }, { "label": "19", "value": 19 }, { "label": "20", "value": 20 },
+                          { "label": "21", "value": 21 }, { "label": "22", "value": 22 }, { "label": "23", "value": 23 }, { "label": "24", "value": 24 }, { "label": "25", "value": 25 }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "id": "treatFailureAsDeploymentFailure",
+                    "header": "Fail VM if App Fails",
+                    "width": "1fr",
+                    "element": {
+                      "type": "Microsoft.Common.DropDown",
+                      "constraints": {
+                        "required": true,
+                        "allowedValues": [
+                          {
+                            "label": "Yes",
+                            "value": true
+                          },
+                          {
+                            "label": "No",
+                            "value": false
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Azure Monitor Agent and AVD Insights associations",
+              "defaultValue": false
+            },
+            {
+              "name": "dataCollectionRule",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "AVD Insights Data Collection Rule",
+              "resourceType": "Microsoft.Insights/dataCollectionRules",
+              "visible": "[steps('applications').enableMonitoring]",
+              "options": {
+                "filter": {
+                  "subscription": "onBasics"
+                }
+              },
+              "constraints": {
+                "required": true
+              }
+            },
+            {
+              "name": "dataCollectionEndpoint",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Data Collection Endpoint (optional)",
+              "resourceType": "Microsoft.Insights/dataCollectionEndpoints",
+              "visible": "[steps('applications').enableMonitoring]",
+              "options": {
+                "filter": {
+                  "subscription": "onBasics"
+                }
+              },
+              "constraints": {
+                "required": false
+              }
+            },
+            {
+              "name": "enableGuestAttestation",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Deploy Guest Attestation to Trusted Launch and Confidential VMs",
+              "defaultValue": false
+            },
+            {
+              "name": "enableManagedDiskNetworkAccess",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Disable public and export network access on managed disks",
+              "defaultValue": false
+            },
+            {
+              "name": "createRemediation",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Create remediation tasks for existing noncompliant resources",
+              "defaultValue": false,
+              "toolTip": "Creates deterministic remediation tasks for the selected capabilities. Policy evaluation and changes are asynchronous."
+            },
+            {
+              "name": "ownerId",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Assignment owner label",
+              "defaultValue": "FederalAVD-StandaloneSessionHostPolicy",
+              "constraints": {
+                "required": true,
+                "regex": "^[A-Za-z0-9._:/-]{3,256}$",
+                "validationMessage": "Use 3-256 letters, numbers, periods, underscores, colons, slashes, or hyphens."
+              }
+            }
+          ]
+        }
+      ]
+    },
+      "outputs": {
+        "parameters": {
+          "location": "[steps('basics').resourceScope.location.name]",
+          "targetResourceGroupName": "[steps('basics').targetResourceGroupName]",
+          "policyIdentityName": "[steps('basics').policyIdentityName]",
+          "vmApplications": "[if(steps('applications').enableVmApplications, steps('applications').vmApplications, parse('[]'))]",
+          "enableMonitoring": "[steps('applications').enableMonitoring]",
+          "dataCollectionRuleResourceId": "[if(steps('applications').enableMonitoring, steps('applications').dataCollectionRule.id, '')]",
+          "dataCollectionEndpointResourceId": "[if(and(steps('applications').enableMonitoring, not(empty(steps('applications').dataCollectionEndpoint))), steps('applications').dataCollectionEndpoint.id, '')]",
+          "enableGuestAttestation": "[steps('applications').enableGuestAttestation]",
+          "enableManagedDiskNetworkAccess": "[steps('applications').enableManagedDiskNetworkAccess]",
+          "createRemediation": "[steps('applications').createRemediation]",
+          "ownerId": "[steps('applications').ownerId]"
+        },
+        "kind": "Subscription",
+        "location": "[steps('basics').resourceScope.location.name]",
+        "subscriptionId": "[steps('basics').resourceScope.subscription.id]"
+      }
+  }
+}

@@ -6,8 +6,8 @@ argument-hint: "[deployment folder or Bicep file]"
 
 # FederalAVD Bicep Maintenance
 
-Use this workflow for templates under `deployments/`, including policy definitions under
-`deployments/automatedHostPools/policy/modules/policy/bicep/`.
+Use this workflow for templates under `deployments/`, including all session-host policy definitions
+and nested templates under `deployments/shared/modules/orchestration/sessionHostPolicy/`.
 
 For automated host-pool policy definitions, initiatives, assignments, nested remediation templates,
 or policy RBAC, also use the `federalavd-policy-authoring` skill.
@@ -33,7 +33,7 @@ also use the `federalavd-ui-form-maintenance` skill.
     Build generated-template dependencies before the entry points that load them. Known required
     orderings are:
 
-    - `policy/templates/RunCommand/PrivateCustomization.bicep` before
+   - `shared/modules/orchestration/sessionHostPolicy/modules/templates/RunCommand/PrivateCustomization.bicep` before
        `automatedHostPools/automatedHostPool.bicep`.
     - `add-ons/sessionHosts/main.bicep` before `add-ons/sessionHostReplacer/main.bicep`.
 

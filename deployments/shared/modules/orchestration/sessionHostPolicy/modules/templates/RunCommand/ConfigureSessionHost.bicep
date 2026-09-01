@@ -14,7 +14,6 @@ param timeZone string
 param profileSizeInMBs int
 param virtualMachineName string
 
-// Storage Accounts
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixRemoteStorageAccountNames = [for id in fslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
 
@@ -82,9 +81,9 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
       }
     ]
     source: {
-      script: loadTextContent('../../../../../scripts/Initialize-SessionHost.ps1')
+      script: loadTextContent('../../../../../../../automatedHostPools/scripts/Initialize-SessionHost.ps1')
     }
     timeoutInSeconds: 900
-    treatFailureAsDeploymentFailure: true    
+    treatFailureAsDeploymentFailure: true
   }
 }

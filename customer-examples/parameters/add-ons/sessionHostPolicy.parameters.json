@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus2"
+    },
+    "targetResourceGroupName": {
+      "value": "rg-avd-hosts-example-eus2"
+    },
+    "policyIdentityName": {
+      "value": "id-avd-policy-example-eus2"
+    },
+    "vmApplications": {
+      "value": [
+        {
+          "packageReferenceId": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Compute/galleries/<gallery>/applications/Microsoft-AzCLI/versions/1.0.0",
+          "order": 1,
+          "treatFailureAsDeploymentFailure": true
+        }
+      ]
+    },
+    "enableMonitoring": {
+      "value": true
+    },
+    "dataCollectionRuleResourceId": {
+      "value": "/subscriptions/<subscription-id>/resourceGroups/<monitoring-resource-group>/providers/Microsoft.Insights/dataCollectionRules/<data-collection-rule>"
+    },
+    "dataCollectionEndpointResourceId": {
+      "value": "/subscriptions/<subscription-id>/resourceGroups/<monitoring-resource-group>/providers/Microsoft.Insights/dataCollectionEndpoints/<data-collection-endpoint>"
+    },
+    "enableGuestAttestation": {
+      "value": true
+    },
+    "enableManagedDiskNetworkAccess": {
+      "value": true
+    },
+    "createRemediation": {
+      "value": false
+    },
+    "ownerId": {
+      "value": "FederalAVD-StandaloneSessionHostPolicy"
+    }
+  }
+}

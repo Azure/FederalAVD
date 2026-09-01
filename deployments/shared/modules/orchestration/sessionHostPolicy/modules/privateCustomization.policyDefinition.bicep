@@ -4,7 +4,7 @@ param policyDefinitionName string = 'avdSessionHostPrivateCustomization-DeployIf
 param policyDefinitionDisplayName string = 'Run private customizations on automated AVD session hosts'
 param policyDefinitionDescription string = 'Preserves existing VM identities, attaches a private artifact identity, and deploys ordered customization Run Commands when the final command has not succeeded.'
 
-var customizationTemplate = loadJsonContent('../templates/RunCommand/PrivateCustomization.json')
+var customizationTemplate = loadJsonContent('templates/RunCommand/PrivateCustomization.json')
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
   name: policyDefinitionName

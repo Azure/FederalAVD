@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
-import { vmApplicationAssignmentType } from 'policy/modules/policy/bicep/vmApplicationTypes.bicep'
+import { vmApplicationAssignmentType } from '../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
 

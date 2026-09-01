@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
-import { vmApplicationAssignmentType } from 'modules/policy/bicep/vmApplicationTypes.bicep'
+import { vmApplicationAssignmentType } from '../../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 
 type fslogixConfigurationType = {
   identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid'
@@ -108,11 +108,7 @@ param tags object = {}
 var virtualMachineContributorRoleDefinitionId = '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
 var tagContributorRoleDefinitionId = '4a9ae827-6dc8-4573-8ac7-8239d42aa03f'
 var managedIdentityOperatorRoleDefinitionId = 'f1a07417-d97a-45cb-824c-7a7467783830'
-var readerRoleDefinitionId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
-var monitoringContributorRoleDefinitionId = '749f88d5-cbae-40b8-bcfc-e573ddc772fa'
-var monitoringPolicyRoleDefinitionIds = [
-  monitoringContributorRoleDefinitionId
-]
+var policyOwnerId = empty(hostPoolResourceId) ? 'FederalAVD-AutomatedHostPool' : hostPoolResourceId
 var inheritResourceGroupTagPolicyResourceId = tenantResourceId(
   'Microsoft.Authorization/policyDefinitions',
   'cd3aa116-8754-49c9-a813-ad46512ece54'
@@ -138,7 +134,9 @@ var finalSessionHostCustomizationName = !empty(sessionHostCustomizations)
   ? replace(last(sessionHostCustomizations)!.name, ' ', '-')
   : 'PrivateCustomization-Final'
 var parentResourceTags = empty(hostPoolResourceId) ? {} : { 'cm-resource-parent': hostPoolResourceId }
-var resourceGroupTags = union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTags)
+var resourceGroupTags = union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTags, empty(hostPoolResourceId) ? {} : {
+  'FederalAVD-SessionHostPolicy-Owner': hostPoolResourceId
+})
 var managedIdentityTags = union(tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}, parentResourceTags)
 
 resource existingSessionHostResourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' existing = {
@@ -162,58 +160,35 @@ module policyIdentity '../../shared/modules/resourceModules/managedIdentity/user
   }
 }
 
-module diskEncryptionSetPolicyDefinition 'modules/policy/bicep/virtualMachine-diskEncryptionSet.policyDefinition.bicep' = {
+module diskEncryptionSetPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/virtualMachine-diskEncryptionSet.policyDefinition.bicep' = {
   params: {}
 }
 
-module sessionHostConfigurationPolicyDefinition 'modules/policy/bicep/configureSessionHost.policyDefinition.bicep' = {
+module sessionHostConfigurationPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/configureSessionHost.policyDefinition.bicep' = {
   params: {}
 }
 
-module privateCustomizationPolicyDefinition 'modules/policy/bicep/privateCustomization.policyDefinition.bicep' = if (!empty(sessionHostCustomizations)) {
+module privateCustomizationPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/privateCustomization.policyDefinition.bicep' = if (!empty(sessionHostCustomizations)) {
   params: {}
 }
 
-module guestAttestationPolicyDefinition 'modules/policy/bicep/guestAttestation.policyDefinition.bicep' = if (integrityMonitoring) {
+module managedDiskNetworkAccessPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/managedDiskNetworkAccess.policyDefinition.bicep' = {
   params: {}
 }
 
-module managedDiskNetworkAccessPolicyDefinition 'modules/policy/bicep/managedDiskNetworkAccess.policyDefinition.bicep' = {
+module sessionHostComputePolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/sessionHostCompute.policyDefinition.bicep' = {
   params: {}
 }
 
-module sessionHostComputePolicyDefinition 'modules/policy/bicep/sessionHostCompute.policyDefinition.bicep' = {
+module sessionHostSystemAssignedIdentityPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/systemAssignedIdentity.policyDefinition.bicep' = {
   params: {}
 }
 
-module sessionHostSystemAssignedIdentityPolicyDefinition 'modules/policy/bicep/sessionHostSystemAssignedIdentity.policyDefinition.bicep' = {
+module acceleratedNetworkingPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/networkInterfaceAcceleratedNetworking.policyDefinition.bicep' = {
   params: {}
 }
 
-module sessionHostVmApplicationPolicyDefinition 'modules/policy/bicep/sessionHostVmApplication.policyDefinition.bicep' = if (!empty(sessionHostVmApplications)) {
-  params: {}
-}
-
-module azureMonitorAgentPolicyDefinition 'modules/policy/bicep/azureMonitorAgent.policyDefinition.bicep' = if (enableMonitoring) {
-  params: {}
-}
-
-module monitoringAssociationPolicyDefinition 'modules/policy/bicep/monitoringAssociation.policyDefinition.bicep' = if (enableMonitoring) {
-  params: {}
-}
-
-module sessionHostMonitoringPolicySetDefinition 'modules/policy/bicep/sessionHostMonitoring.policySetDefinition.bicep' = if (enableMonitoring) {
-  params: {
-    azureMonitorAgentPolicyDefinitionResourceId: azureMonitorAgentPolicyDefinition!.outputs.policyDefinitionResourceId
-    monitoringAssociationPolicyDefinitionResourceId: monitoringAssociationPolicyDefinition!.outputs.policyDefinitionResourceId
-  }
-}
-
-module acceleratedNetworkingPolicyDefinition 'modules/policy/bicep/networkInterfaceAcceleratedNetworking.policyDefinition.bicep' = {
-  params: {}
-}
-
-module sessionHostCreationSettingsPolicySetDefinition 'modules/policy/bicep/sessionHostCreationSettings.policySetDefinition.bicep' = {
+module sessionHostCreationSettingsPolicySetDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/sessionHostCreationSettings.policySetDefinition.bicep' = {
   params: {
     diskEncryptionSetPolicyDefinitionResourceId: diskEncryptionSetPolicyDefinition.outputs.policyDefinitionResourceId
     sessionHostComputePolicyDefinitionResourceId: sessionHostComputePolicyDefinition.outputs.policyDefinitionResourceId
@@ -263,42 +238,6 @@ module policyIdentityDiskPoolOperator '../../shared/modules/resourceModules/auth
   }
 }
 
-module monitoringPolicyRoleAssignments '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
-  for roleDefinitionId in monitoringPolicyRoleDefinitionIds: if (enableMonitoring) {
-    scope: resourceGroup(sessionHostResourceGroupName)
-    params: {
-      roleDefinitionId: roleDefinitionId
-      principalId: policyIdentity.outputs.principalId
-      principalType: 'ServicePrincipal'
-      assignmentDescription: 'Allows Azure Policy to deploy monitoring resources on automated AVD session hosts.'
-    }
-  }
-]
-
-module policyIdentityDataCollectionRuleReader 'modules/dataCollectionRuleReader.bicep' = if (enableMonitoring) {
-  scope: resourceGroup(
-    split(dataCollectionRuleResourceId, '/')[2],
-    split(dataCollectionRuleResourceId, '/')[4]
-  )
-  params: {
-    dataCollectionRuleName: last(split(dataCollectionRuleResourceId, '/'))!
-    principalId: policyIdentity.outputs.principalId
-    readerRoleDefinitionId: readerRoleDefinitionId
-  }
-}
-
-module policyIdentityDataCollectionEndpointContributor 'modules/dataCollectionEndpointContributor.bicep' = if (enableMonitoring && !empty(dataCollectionEndpointResourceId)) {
-  scope: resourceGroup(
-    split(dataCollectionEndpointResourceId, '/')[2],
-    split(dataCollectionEndpointResourceId, '/')[4]
-  )
-  params: {
-    dataCollectionEndpointName: last(split(dataCollectionEndpointResourceId, '/'))!
-    principalId: policyIdentity.outputs.principalId
-    monitoringContributorRoleDefinitionId: monitoringContributorRoleDefinitionId
-  }
-}
-
 module policyIdentityArtifactManagedIdentityOperator '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(sessionHostCustomizations)) {
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
@@ -317,7 +256,7 @@ module policyIdentityArtifactManagedIdentityOperator '../../shared/modules/resou
   }
 }
 
-module sessionHostCreationSettingsPolicyAssignment 'modules/policyAssignment.bicep' = {
+module sessionHostCreationSettingsPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     name: 'avd-sh-creation-settings'
@@ -353,6 +292,7 @@ module sessionHostCreationSettingsPolicyAssignment 'modules/policyAssignment.bic
       }
     }
     nonComplianceMessage: 'Session host resources must use the selected creation-time compute, identity, networking, encryption, and managed-disk settings.'
+    ownerId: policyOwnerId
   }
   dependsOn: [
     policyIdentityVirtualMachineContributor
@@ -361,7 +301,7 @@ module sessionHostCreationSettingsPolicyAssignment 'modules/policyAssignment.bic
   ]
 }
 
-module resourceOwnershipTagPolicyAssignment 'modules/policyAssignment.bicep' = if (!empty(hostPoolResourceId)) {
+module resourceOwnershipTagPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = if (!empty(hostPoolResourceId)) {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     name: 'avd-sh-parent-tag'
@@ -376,6 +316,7 @@ module resourceOwnershipTagPolicyAssignment 'modules/policyAssignment.bicep' = i
       }
     }
     nonComplianceMessage: 'Session host resources must inherit the cm-resource-parent tag from their resource group.'
+    ownerId: policyOwnerId
   }
   dependsOn: [
     policyIdentityTagContributor
@@ -383,85 +324,55 @@ module resourceOwnershipTagPolicyAssignment 'modules/policyAssignment.bicep' = i
   ]
 }
 
-module monitoringPolicyAssignment 'modules/policyAssignment.bicep' = if (enableMonitoring) {
-  scope: resourceGroup(sessionHostResourceGroupName)
+module monitoringPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/monitoring.bicep' = if (enableMonitoring) {
   params: {
-    name: 'avd-sh-monitor'
     location: location
+    targetResourceGroupName: sessionHostResourceGroupName
     policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: sessionHostMonitoringPolicySetDefinition!.outputs.policySetDefinitionResourceId
-    displayName: 'Deploy Azure Monitor Agent and DCR association to automated AVD session hosts'
-    description: 'Deploys Azure Monitor Agent with system-assigned identity authentication and associates the selected Data Collection Rule and optional Data Collection Endpoint.'
-    parameters: {
-      effect: {
-        value: 'DeployIfNotExists'
-      }
-      dataCollectionRuleResourceId: {
-        value: monitoringConfigurationIsValid ? dataCollectionRuleResourceId : dataCollectionRuleResourceId
-      }
-      dataCollectionEndpointResourceId: {
-        value: dataCollectionEndpointResourceId
-      }
-      dataCollectionEndpointEffect: {
-        value: empty(dataCollectionEndpointResourceId) ? 'Disabled' : 'DeployIfNotExists'
-      }
-    }
-    nonComplianceMessage: 'The session host must run Azure Monitor Agent using system-assigned identity and have the selected monitoring associations.'
+    policyIdentityPrincipalId: policyIdentity.outputs.principalId
+    systemIdentityPolicyDefinitionResourceId: sessionHostSystemAssignedIdentityPolicyDefinition.outputs.policyDefinitionResourceId
+    dataCollectionRuleResourceId: monitoringConfigurationIsValid ? dataCollectionRuleResourceId : dataCollectionRuleResourceId
+    dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
+    assignSystemIdentityPolicy: false
+    createRemediation: false
+    ownerId: policyOwnerId
   }
   dependsOn: [
     sessionHostCreationSettingsPolicyAssignment
-    monitoringPolicyRoleAssignments
-    policyIdentityDataCollectionRuleReader
-    policyIdentityDataCollectionEndpointContributor
   ]
 }
 
-module guestAttestationPolicyAssignment 'modules/policyAssignment.bicep' = if (integrityMonitoring) {
-  scope: resourceGroup(sessionHostResourceGroupName)
+module guestAttestationPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/guestAttestation.bicep' = if (integrityMonitoring) {
   params: {
-    name: 'avd-sh-attest'
     location: location
+    targetResourceGroupName: sessionHostResourceGroupName
     policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: guestAttestationPolicyDefinition!.outputs.policyDefinitionResourceId
-    displayName: 'Deploy Guest Attestation on automated AVD session hosts'
-    description: 'Deploys Guest Attestation to Trusted Launch and Confidential VM session hosts for boot integrity monitoring.'
-    parameters: {
-      effect: {
-        value: 'DeployIfNotExists'
-      }
-    }
-    nonComplianceMessage: 'Trusted Launch and Confidential VM session hosts must run the Guest Attestation extension.'
+    policyIdentityPrincipalId: policyIdentity.outputs.principalId
+    createRemediation: false
+    ownerId: policyOwnerId
   }
   dependsOn: [
     policyIdentityVirtualMachineContributor
   ]
 }
 
-module sessionHostVmApplicationPolicyAssignment 'modules/policyAssignment.bicep' = if (!empty(sessionHostVmApplications)) {
-  scope: resourceGroup(sessionHostResourceGroupName)
+module sessionHostVmApplicationPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/vmApplications.bicep' = if (!empty(sessionHostVmApplications)) {
   params: {
-    name: 'avd-sh-vm-applications'
     location: location
+    targetResourceGroupName: sessionHostResourceGroupName
     policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: sessionHostVmApplicationPolicyDefinition!.outputs.policyDefinitionResourceId
-    displayName: 'Configure VM Applications on automated AVD session hosts'
-    description: 'Configures the selected ordered Azure Compute Gallery application versions as the authoritative VM Application list on every automated session host.'
-    parameters: {
-      effect: {
-        value: 'Modify'
-      }
-      galleryApplications: {
-        value: vmApplicationConfigurationIsValid ? sessionHostVmApplications : []
-      }
-    }
-    nonComplianceMessage: 'The session host must use the selected ordered Azure Compute Gallery application versions.'
+    policyIdentityPrincipalId: policyIdentity.outputs.principalId
+    vmApplications: vmApplicationConfigurationIsValid ? sessionHostVmApplications : []
+    createRemediation: false
+    manageVirtualMachineContributorRole: false
+    ownerId: policyOwnerId
   }
   dependsOn: [
     policyIdentityVirtualMachineContributor
   ]
 }
 
-module sessionHostConfigurationPolicyAssignment 'modules/policyAssignment.bicep' = {
+module sessionHostConfigurationPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
     name: 'avd-sh-config'
@@ -515,13 +426,14 @@ module sessionHostConfigurationPolicyAssignment 'modules/policyAssignment.bicep'
       }
     }
     nonComplianceMessage: 'The session host must have successfully completed the FederalAVD session host configuration.'
+    ownerId: policyOwnerId
   }
   dependsOn: [
     policyIdentityVirtualMachineContributor
   ]
 }
 
-module privateCustomizationPolicyAssignment 'modules/policyAssignment.bicep' = if (!empty(sessionHostCustomizations)) {
+module privateCustomizationPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = if (!empty(sessionHostCustomizations)) {
     scope: resourceGroup(sessionHostResourceGroupName)
     params: {
       name: 'avd-sh-customize'
@@ -553,6 +465,7 @@ module privateCustomizationPolicyAssignment 'modules/policyAssignment.bicep' = i
         }
       }
       nonComplianceMessage: 'The session host must have successfully completed the ordered private customization sequence.'
+      ownerId: policyOwnerId
     }
     dependsOn: [
       policyIdentityVirtualMachineContributor
@@ -566,17 +479,17 @@ output diskEncryptionSetPolicyAssignmentResourceId string = !empty(diskEncryptio
 output diskEncryptionSetResourceId string = diskEncryptionSetResourceId
 output acceleratedNetworkingPolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
 output dataCollectionEndpointPolicyAssignmentResourceId string = enableMonitoring && !empty(dataCollectionEndpointResourceId)
-  ? monitoringPolicyAssignment!.outputs.resourceId
+  ? monitoringPolicyAssignment!.outputs.monitoringPolicyAssignmentResourceId
   : ''
 output sessionHostConfigurationPolicyAssignmentResourceId string = sessionHostConfigurationPolicyAssignment.outputs.resourceId
 output guestAttestationPolicyAssignmentResourceId string = integrityMonitoring
-  ? guestAttestationPolicyAssignment!.outputs.resourceId
+  ? guestAttestationPolicyAssignment!.outputs.policyAssignmentResourceId
   : ''
 output managedDiskNetworkAccessPolicyAssignmentResourceId string = disableManagedDiskPublicNetworkAccess
   ? sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
   : ''
-output monitoringPolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.resourceId : ''
-output dataCollectionRulePolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.resourceId : ''
+output monitoringPolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.monitoringPolicyAssignmentResourceId : ''
+output dataCollectionRulePolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.monitoringPolicyAssignmentResourceId : ''
 output sessionHostIdentityPolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
 output policyIdentityResourceId string = policyIdentity.outputs.resourceId
 output resourceOwnershipTagPolicyAssignmentResourceId string = !empty(hostPoolResourceId)
@@ -586,6 +499,6 @@ output sessionHostCustomizationPolicyAssignmentResourceIds array = !empty(sessio
   ? [privateCustomizationPolicyAssignment!.outputs.resourceId]
   : []
 output sessionHostVmApplicationPolicyAssignmentResourceId string = !empty(sessionHostVmApplications)
-  ? sessionHostVmApplicationPolicyAssignment!.outputs.resourceId
+  ? sessionHostVmApplicationPolicyAssignment!.outputs.policyAssignmentResourceId
   : ''
 output sessionHostComputePolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId

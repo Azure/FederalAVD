@@ -5,8 +5,8 @@ Configuration management approach (`managementType: Automated`). It is intended 
 the service-managed VM configuration cannot express or cannot deliver through a private,
 managed-identity-based path.
 
-See [Automated Host-Pool Policy Authoring](AUTHORING.md) for the contributor workflow, directory
-layout, source-of-truth rules, and validation commands.
+See [Session Host Policy Authoring](../../shared/modules/orchestration/sessionHostPolicy/AUTHORING.md)
+for the contributor workflow, directory layout, source-of-truth rules, and validation commands.
 
 > This feature is under active development on the `feature/automated-hostpool-policy` branch.
 
@@ -89,9 +89,11 @@ Encryption Set. Existing tags on the session-host resource group are
 preserved. A built-in inheritance policy copies the tag to service-created VMs, NICs, and managed
 disks. Policy definitions, policy assignments, and role assignments do not support tags.
 
-All custom policy definitions and nested deployment templates used by this module are owned under
-`modules/policy`. They are deployed only through the automated host-pool deployment; there is no separate repository-level
-policy deployment stack.
+All session-host policy definitions, initiatives, assignment helpers, and nested deployment
+templates are owned under `deployments/shared/modules/orchestration/sessionHostPolicy`, including
+capabilities currently consumed only by Automated Host Pools. This directory contains only the
+automated adapter that translates its inputs and sequences the canonical policy modules. There is
+no second consumer-local policy implementation.
 
 ### Why Custom Policies and Initiatives
 
@@ -306,6 +308,11 @@ version changes, and order changes. New hosts are modified during creation. For 
 create an intentional Azure Policy remediation task or update the VM after changing the array or
 publishing a newer version selected through `latest`; publication alone does not update an existing
 host. Application installation and policy convergence are asynchronous.
+
+The VM Application, monitoring, Guest Attestation, system-assigned identity, and managed-disk
+network isolation implementations are shared with the standalone Session Host Policy add-on under
+`deployments/shared/modules/orchestration/sessionHostPolicy/`. This automated policy stage remains
+a thin adapter that supplies its dedicated session-host resource group and existing policy identity.
 
 ## Authoritative References
 

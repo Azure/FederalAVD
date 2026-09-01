@@ -46,6 +46,12 @@ instead when software must be ready before logon or changes with the OS baseline
 configuration, security onboarding, OS servicing, and shared host dependencies in their existing
 image, customization, or endpoint-management workflows.
 
+FederalAVD also provides the standalone
+[Session Host Policy add-on](../deployments/add-ons/sessionHostPolicy/README.md) for standard or
+externally managed session hosts. It applies the same deterministic VM Application policy used by
+Automated Host Pools to every VM in one dedicated target resource group and can optionally create
+an intentional remediation task for existing hosts.
+
 See [Choose a Host Pool Management Approach](host-pool-management.md#choose-application-delivery-separately),
 the [end-to-end automation guide](automation-guide.md#optional-step-3a-publish-vm-applications), and
 the [automated host-pool deployment guide](../deployments/automatedHostPools/README.md#publish-and-assign-federalavd-artifacts-as-vm-applications).

@@ -4,7 +4,7 @@ param policyDefinitionName string = 'avdSessionHostConfiguration-DeployIfNotExis
 param policyDefinitionDisplayName string = 'Configure automated AVD session host virtual machines'
 param policyDefinitionDescription string = 'Deploys a VM Run Command that configures the time zone, enables time zone redirection, optionally configures FSLogix, and expands the OS partition.'
 
-var configureSessionHostTemplate = loadJsonContent('../templates/RunCommand/ConfigureSessionHost.json')
+var configureSessionHostTemplate = loadJsonContent('templates/RunCommand/ConfigureSessionHost.json')
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
   name: policyDefinitionName

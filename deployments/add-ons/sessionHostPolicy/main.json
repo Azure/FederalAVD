@@ -1,0 +1,3667 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "17492738959720638605"
+    }
+  },
+  "definitions": {
+    "vmApplicationAssignmentType": {
+      "type": "object",
+      "properties": {
+        "packageReferenceId": {
+          "type": "string",
+          "metadata": {
+            "description": "Required. Azure Compute Gallery application version resource ID. Use an immutable semantic version or /versions/latest."
+          }
+        },
+        "order": {
+          "type": "int",
+          "minValue": 1,
+          "maxValue": 25,
+          "metadata": {
+            "description": "Required. Application installation order."
+          }
+        },
+        "treatFailureAsDeploymentFailure": {
+          "type": "bool",
+          "metadata": {
+            "description": "Required. Whether an application lifecycle failure causes VM provisioning to report failure."
+          }
+        }
+      },
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep"
+        }
+      }
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure region for the policy assignment managed identity."
+      }
+    },
+    "targetResourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Dedicated resource group containing the session host VMs to govern. Every VM in this resource group is in scope."
+      }
+    },
+    "policyIdentityName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Name of the user-assigned identity used for Azure Policy remediation. A deterministic name is generated when empty."
+      }
+    },
+    "vmApplications": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/vmApplicationAssignmentType"
+      },
+      "defaultValue": [],
+      "maxLength": 25,
+      "metadata": {
+        "description": "Optional. Authoritative ordered VM Application list assigned to every VM in the target resource group. Leave empty to omit this capability."
+      }
+    },
+    "enableMonitoring": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Deploy Azure Monitor Agent and associate the selected Data Collection Rule and optional Data Collection Endpoint."
+      }
+    },
+    "dataCollectionRuleResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. Data Collection Rule resource ID. Required when enableMonitoring is true."
+      }
+    },
+    "dataCollectionEndpointResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Data Collection Endpoint resource ID associated when monitoring is enabled."
+      }
+    },
+    "enableGuestAttestation": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Deploy Guest Attestation to eligible Trusted Launch and Confidential VMs."
+      }
+    },
+    "enableManagedDiskNetworkAccess": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Disable public network and export access on managed disks in the target resource group."
+      }
+    },
+    "createRemediation": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Create or update a deterministic policy remediation task for existing noncompliant VMs."
+      }
+    },
+    "ownerId": {
+      "type": "string",
+      "defaultValue": "FederalAVD-StandaloneSessionHostPolicy",
+      "metadata": {
+        "description": "Optional. Stable owner label recorded on the shared deterministic policy assignment."
+      }
+    }
+  },
+  "variables": {
+    "atLeastOneCapabilityEnabled": "[if(or(or(or(not(empty(parameters('vmApplications'))), parameters('enableMonitoring')), parameters('enableGuestAttestation')), parameters('enableManagedDiskNetworkAccess')), true(), fail('Select at least one policy capability: VM Applications, monitoring, Guest Attestation, or managed-disk network isolation.'))]",
+    "monitoringConfigurationIsValid": "[if(or(not(parameters('enableMonitoring')), not(empty(parameters('dataCollectionRuleResourceId')))), true(), fail('dataCollectionRuleResourceId is required when enableMonitoring is true.'))]",
+    "ownershipTagName": "FederalAVD-SessionHostPolicy-Owner",
+    "resolvedPolicyIdentityName": "[if(empty(parameters('policyIdentityName')), take(format('{0}-policy-remediation', parameters('targetResourceGroupName')), 128), parameters('policyIdentityName'))]"
+  },
+  "resources": {
+    "targetResourceGroup": {
+      "existing": true,
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('targetResourceGroupName')]"
+    },
+    "policyOwnershipTag": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('policyOwnershipTag-{0}', uniqueString('policyOwnershipTag', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[parameters('targetResourceGroupName')]"
+          },
+          "location": {
+            "value": "[reference('targetResourceGroup', '2024-03-01', 'full').location]"
+          },
+          "tags": {
+            "value": "[union(coalesce(reference('targetResourceGroup', '2024-03-01', 'full').tags, createObject()), createObject(format('{0}', variables('ownershipTagName')), if(and(if(or(empty(coalesce(tryGet(reference('targetResourceGroup', '2024-03-01', 'full').tags, variables('ownershipTagName')), '')), equals(coalesce(tryGet(reference('targetResourceGroup', '2024-03-01', 'full').tags, variables('ownershipTagName')), ''), parameters('ownerId'))), true(), fail(format('The target resource group is already managed by session-host policy owner \"{0}\". Use that ownerId or remove the existing policy deployment before assigning a new owner.', coalesce(tryGet(reference('targetResourceGroup', '2024-03-01', 'full').tags, variables('ownershipTagName')), '')))), variables('atLeastOneCapabilityEnabled')), parameters('ownerId'), parameters('ownerId'))))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "9672734252890707801"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/resourceGroups",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "targetResourceGroup"
+      ]
+    },
+    "policyIdentity": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('policyIdentity-{0}', uniqueString('policyIdentity', deployment().name))]",
+      "resourceGroup": "[parameters('targetResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[variables('resolvedPolicyIdentityName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "92643184089507860"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "clientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').clientId]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').principalId]"
+            }
+          }
+        }
+      }
+    },
+    "systemIdentityPolicyDefinition": {
+      "condition": "[parameters('enableMonitoring')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('systemIdentityPolicyDefinition-{0}', uniqueString('systemIdentityPolicyDefinition', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {},
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "8731312306607228401"
+            }
+          },
+          "parameters": {
+            "policyDefinitionName": {
+              "type": "string",
+              "defaultValue": "avdSessionHostSystemAssignedIdentity-Modify"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/policyDefinitions",
+              "apiVersion": "2024-05-01",
+              "name": "[parameters('policyDefinitionName')]",
+              "properties": {
+                "displayName": "Configure system-assigned identity on AVD session hosts",
+                "description": "Enables system-assigned managed identity on AVD session host virtual machines while preserving existing user-assigned identities.",
+                "mode": "Indexed",
+                "metadata": {
+                  "category": "Azure Virtual Desktop",
+                  "solution": "AVD Session Host Governance",
+                  "component": "Monitoring",
+                  "version": "1.0.0"
+                },
+                "parameters": {
+                  "effect": {
+                    "type": "String",
+                    "allowedValues": [
+                      "Modify",
+                      "Disabled"
+                    ],
+                    "defaultValue": "Modify"
+                  }
+                },
+                "policyRule": {
+                  "if": {
+                    "allOf": [
+                      {
+                        "field": "type",
+                        "equals": "Microsoft.Compute/virtualMachines"
+                      },
+                      {
+                        "field": "identity.type",
+                        "notContains": "SystemAssigned"
+                      }
+                    ]
+                  },
+                  "then": {
+                    "effect": "[[parameters('effect')]",
+                    "details": {
+                      "conflictEffect": "audit",
+                      "roleDefinitionIds": [
+                        "/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+                      ],
+                      "operations": [
+                        {
+                          "operation": "AddOrReplace",
+                          "field": "identity.type",
+                          "value": "[[if(contains(field('identity.type'), 'UserAssigned'), concat(field('identity.type'), ',SystemAssigned'), 'SystemAssigned')]"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "policyDefinitionResourceId": {
+              "type": "string",
+              "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+            }
+          }
+        }
+      }
+    },
+    "vmApplicationPolicy": {
+      "condition": "[not(empty(parameters('vmApplications')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('vmApplicationPolicy-{0}', uniqueString('vmApplicationPolicy', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "targetResourceGroupName": {
+            "value": "[parameters('targetResourceGroupName')]"
+          },
+          "policyIdentityResourceId": {
+            "value": "[reference('policyIdentity').outputs.resourceId.value]"
+          },
+          "policyIdentityPrincipalId": {
+            "value": "[reference('policyIdentity').outputs.principalId.value]"
+          },
+          "vmApplications": {
+            "value": "[parameters('vmApplications')]"
+          },
+          "createRemediation": {
+            "value": "[parameters('createRemediation')]"
+          },
+          "manageVirtualMachineContributorRole": {
+            "value": true
+          },
+          "ownerId": {
+            "value": "[parameters('ownerId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "5480657240490984096"
+            }
+          },
+          "definitions": {
+            "vmApplicationAssignmentType": {
+              "type": "object",
+              "properties": {
+                "packageReferenceId": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Required. Azure Compute Gallery application version resource ID. Use an immutable semantic version or /versions/latest."
+                  }
+                },
+                "order": {
+                  "type": "int",
+                  "minValue": 1,
+                  "maxValue": 25,
+                  "metadata": {
+                    "description": "Required. Application installation order."
+                  }
+                },
+                "treatFailureAsDeploymentFailure": {
+                  "type": "bool",
+                  "metadata": {
+                    "description": "Required. Whether an application lifecycle failure causes VM provisioning to report failure."
+                  }
+                }
+              },
+              "metadata": {
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "vmApplicationTypes.bicep"
+                }
+              }
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the policy assignment managed identity."
+              }
+            },
+            "targetResourceGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource group containing only the session host virtual machines governed by this assignment."
+              }
+            },
+            "policyIdentityResourceId": {
+              "type": "string",
+              "metadata": {
+                "strongType": "Microsoft.ManagedIdentity/userAssignedIdentities",
+                "description": "Required. Resource ID of the user-assigned identity used by Azure Policy."
+              }
+            },
+            "policyIdentityPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Principal ID of the policy user-assigned identity."
+              }
+            },
+            "vmApplications": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/vmApplicationAssignmentType"
+              },
+              "maxLength": 25,
+              "metadata": {
+                "description": "Required. Authoritative ordered list of Azure Compute Gallery application version references. References may select an immutable semantic version or use /versions/latest."
+              }
+            },
+            "createRemediation": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Create or update a deterministic remediation task for existing noncompliant VMs."
+              }
+            },
+            "manageVirtualMachineContributorRole": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Grant Virtual Machine Contributor to the policy identity at the target resource group. Disable when the caller already owns this role assignment."
+              }
+            },
+            "ownerId": {
+              "type": "string",
+              "defaultValue": "FederalAVD",
+              "metadata": {
+                "description": "Optional. Stable ownership label recorded in policy assignment metadata. Deployments targeting the same resource group jointly manage the same deterministic assignment."
+              }
+            }
+          },
+          "variables": {
+            "virtualMachineContributorRoleDefinitionId": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
+            "readerRoleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+            "validVmApplications": "[filter(parameters('vmApplications'), lambda('application', and(and(contains(toLower(lambdaVariables('application').packageReferenceId), '/providers/microsoft.compute/galleries/'), contains(toLower(lambdaVariables('application').packageReferenceId), '/applications/')), contains(toLower(lambdaVariables('application').packageReferenceId), '/versions/'))))]",
+            "applicationDefinitionResourceIds": "[map(parameters('vmApplications'), lambda('application', substring(lambdaVariables('application').packageReferenceId, 0, lastIndexOf(toLower(lambdaVariables('application').packageReferenceId), '/versions/'))))]",
+            "configurationIsValid": "[if(and(and(not(empty(parameters('vmApplications'))), equals(length(variables('validVmApplications')), length(parameters('vmApplications')))), equals(length(union(variables('applicationDefinitionResourceIds'), createArray())), length(variables('applicationDefinitionResourceIds')))), true(), fail('vmApplications must contain 1-25 valid Gallery application version resource IDs and cannot contain more than one version of the same application.'))]",
+            "galleryResourceIds": "[union(map(parameters('vmApplications'), lambda('application', substring(lambdaVariables('application').packageReferenceId, 0, lastIndexOf(toLower(lambdaVariables('application').packageReferenceId), '/applications/')))), createArray())]",
+            "ownershipTagName": "FederalAVD-SessionHostPolicy-Owner"
+          },
+          "resources": {
+            "targetResourceGroup": {
+              "existing": true,
+              "type": "Microsoft.Resources/resourceGroups",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('targetResourceGroupName')]"
+            },
+            "policyOwnershipTag": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('policyOwnershipTag-{0}', uniqueString('policyOwnershipTag', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[parameters('targetResourceGroupName')]"
+                  },
+                  "location": {
+                    "value": "[reference('targetResourceGroup', '2024-03-01', 'full').location]"
+                  },
+                  "tags": {
+                    "value": "[union(coalesce(reference('targetResourceGroup', '2024-03-01', 'full').tags, createObject()), createObject(format('{0}', variables('ownershipTagName')), if(if(or(empty(coalesce(tryGet(reference('targetResourceGroup', '2024-03-01', 'full').tags, variables('ownershipTagName')), '')), equals(coalesce(tryGet(reference('targetResourceGroup', '2024-03-01', 'full').tags, variables('ownershipTagName')), ''), parameters('ownerId'))), true(), fail(format('The target resource group is already managed by session-host policy owner \"{0}\". Use that ownerId or remove the existing policy deployment before assigning a new owner.', coalesce(tryGet(reference('targetResourceGroup', '2024-03-01', 'full').tags, variables('ownershipTagName')), '')))), parameters('ownerId'), parameters('ownerId'))))]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "9672734252890707801"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Resources/resourceGroups",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "targetResourceGroup"
+              ]
+            },
+            "policyDefinition": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('policyDefinition-{0}', uniqueString('policyDefinition', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "10773589215474625294"
+                    }
+                  },
+                  "parameters": {
+                    "policyDefinitionName": {
+                      "type": "string",
+                      "defaultValue": "avdSessionHostVmApplication-Modify"
+                    },
+                    "policyDefinitionDisplayName": {
+                      "type": "string",
+                      "defaultValue": "Configure VM Applications on AVD session hosts"
+                    },
+                    "policyDefinitionDescription": {
+                      "type": "string",
+                      "defaultValue": "Configures an authoritative ordered list of Azure Compute Gallery application version references on AVD session host virtual machines during resource creation or update."
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyDefinitions",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('policyDefinitionName')]",
+                      "properties": {
+                        "description": "[parameters('policyDefinitionDescription')]",
+                        "displayName": "[parameters('policyDefinitionDisplayName')]",
+                        "mode": "Indexed",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "solution": "AVD Session Host Governance",
+                          "component": "VM Applications",
+                          "version": "1.0.0"
+                        },
+                        "parameters": {
+                          "galleryApplications": {
+                            "type": "Array",
+                            "metadata": {
+                              "displayName": "Gallery applications",
+                              "description": "Authoritative ordered list of Gallery application version references assigned to each session host VM. References may select a specific version or use /versions/latest."
+                            }
+                          },
+                          "effect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "Modify",
+                              "Disabled"
+                            ],
+                            "defaultValue": "Modify"
+                          }
+                        },
+                        "policyRule": {
+                          "if": {
+                            "allOf": [
+                              {
+                                "field": "type",
+                                "equals": "Microsoft.Compute/virtualMachines"
+                              },
+                              {
+                                "anyOf": [
+                                  {
+                                    "count": {
+                                      "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*]"
+                                    },
+                                    "notEquals": "[[length(parameters('galleryApplications'))]"
+                                  },
+                                  {
+                                    "count": {
+                                      "value": "[[parameters('galleryApplications')]",
+                                      "name": "configuredApplication",
+                                      "where": {
+                                        "count": {
+                                          "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*]",
+                                          "where": {
+                                            "allOf": [
+                                              {
+                                                "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].packageReferenceId",
+                                                "equals": "[[current('configuredApplication').packageReferenceId]"
+                                              },
+                                              {
+                                                "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].order",
+                                                "equals": "[[current('configuredApplication').order]"
+                                              },
+                                              {
+                                                "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].treatFailureAsDeploymentFailure",
+                                                "equals": "[[current('configuredApplication').treatFailureAsDeploymentFailure]"
+                                              }
+                                            ]
+                                          }
+                                        },
+                                        "equals": 0
+                                      }
+                                    },
+                                    "greater": 0
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "then": {
+                            "effect": "[[parameters('effect')]",
+                            "details": {
+                              "conflictEffect": "audit",
+                              "roleDefinitionIds": [
+                                "/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+                              ],
+                              "operations": [
+                                {
+                                  "operation": "AddOrReplace",
+                                  "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications",
+                                  "value": "[[parameters('galleryApplications')]"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "policyDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+                    }
+                  }
+                }
+              }
+            },
+            "policyIdentityVirtualMachineContributor": {
+              "condition": "[parameters('manageVirtualMachineContributorRole')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('policyIdentityVirtualMachineContributor-{0}', uniqueString('policyIdentityVirtualMachineContributor', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "roleDefinitionId": {
+                    "value": "[variables('virtualMachineContributorRoleDefinitionId')]"
+                  },
+                  "principalId": {
+                    "value": "[parameters('policyIdentityPrincipalId')]"
+                  },
+                  "principalType": {
+                    "value": "ServicePrincipal"
+                  },
+                  "assignmentDescription": {
+                    "value": "Allows Azure Policy to maintain the authoritative VM Application list on targeted session hosts."
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "4327984477459593833"
+                    }
+                  },
+                  "parameters": {
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Principal ID of the identity receiving the role."
+                      }
+                    },
+                    "principalType": {
+                      "type": "string",
+                      "defaultValue": "ServicePrincipal",
+                      "allowedValues": [
+                        "ServicePrincipal",
+                        "Group",
+                        "User",
+                        "ForeignGroup",
+                        "Device",
+                        ""
+                      ],
+                      "metadata": {
+                        "description": "Principal type of the assigned principal."
+                      }
+                    },
+                    "assignmentDescription": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional description for the assignment."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                    }
+                  }
+                }
+              }
+            },
+            "policyIdentityGalleryReaders": {
+              "copy": {
+                "name": "policyIdentityGalleryReaders",
+                "count": "[length(variables('galleryResourceIds'))]"
+              },
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('policyIdentityGalleryReaders-{0}-{1}', copyIndex(), uniqueString('policyIdentityGalleryReaders', deployment().name))]",
+              "subscriptionId": "[split(variables('galleryResourceIds')[copyIndex()], '/')[2]]",
+              "resourceGroup": "[split(variables('galleryResourceIds')[copyIndex()], '/')[4]]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "galleryName": {
+                    "value": "[last(split(variables('galleryResourceIds')[copyIndex()], '/'))]"
+                  },
+                  "assignments": {
+                    "value": [
+                      {
+                        "roleDefinitionId": "[variables('readerRoleDefinitionId')]",
+                        "principalId": "[parameters('policyIdentityPrincipalId')]",
+                        "principalType": "ServicePrincipal",
+                        "description": "Allows Azure Policy to resolve VM Application versions while updating session hosts."
+                      }
+                    ]
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "11685605297839319140"
+                    }
+                  },
+                  "definitions": {
+                    "roleAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "roleDefinitionId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                          }
+                        },
+                        "principalId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Object (principal) ID of the identity receiving the role."
+                          }
+                        },
+                        "principalType": {
+                          "type": "string",
+                          "allowedValues": [
+                            "",
+                            "Device",
+                            "ForeignGroup",
+                            "Group",
+                            "ServicePrincipal",
+                            "User"
+                          ],
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                          }
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional human-readable description for the assignment."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "description": "A single role assignment to apply to a specific resource.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "galleryName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Name of the existing compute gallery."
+                      }
+                    },
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/roleAssignmentType"
+                      },
+                      "metadata": {
+                        "description": "Role assignments to apply to this gallery."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "formattedAssignments",
+                        "count": "[length(parameters('assignments'))]",
+                        "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "gallery": {
+                      "existing": true,
+                      "type": "Microsoft.Compute/galleries",
+                      "apiVersion": "2022-03-03",
+                      "name": "[parameters('galleryName')]"
+                    },
+                    "roleAssignment": {
+                      "copy": {
+                        "name": "roleAssignment",
+                        "count": "[length(variables('formattedAssignments'))]"
+                      },
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.Compute/galleries', parameters('galleryName'))]",
+                      "name": "[guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                        "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                        "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                        "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "resourceIds": {
+                      "type": "array",
+                      "copy": {
+                        "count": "[length(variables('formattedAssignments'))]",
+                        "input": "[extensionResourceId(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "policyAssignment": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('policyAssignment-{0}', uniqueString('policyAssignment', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[parameters('policyIdentityResourceId')]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[reference('policyDefinition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "vmApplications": "[if(variables('configurationIsValid'), createObject('value', parameters('vmApplications')), createObject('value', createArray()))]",
+                  "createRemediation": {
+                    "value": "[parameters('createRemediation')]"
+                  },
+                  "ownerId": {
+                    "value": "[parameters('ownerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "15909032788858433822"
+                    }
+                  },
+                  "definitions": {
+                    "vmApplicationAssignmentType": {
+                      "type": "object",
+                      "properties": {
+                        "packageReferenceId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Azure Compute Gallery application version resource ID. Use an immutable semantic version or /versions/latest."
+                          }
+                        },
+                        "order": {
+                          "type": "int",
+                          "minValue": 1,
+                          "maxValue": 25,
+                          "metadata": {
+                            "description": "Required. Application installation order."
+                          }
+                        },
+                        "treatFailureAsDeploymentFailure": {
+                          "type": "bool",
+                          "metadata": {
+                            "description": "Required. Whether an application lifecycle failure causes VM provisioning to report failure."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../vmApplicationTypes.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "vmApplications": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/vmApplicationAssignmentType"
+                      }
+                    },
+                    "createRemediation": {
+                      "type": "bool",
+                      "defaultValue": false
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": {
+                    "policyAssignment": {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "avd-sh-vm-applications",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "Configure VM Applications on AVD session hosts",
+                        "description": "Configures the selected ordered Azure Compute Gallery application versions as the authoritative VM Application list on every VM in the dedicated target resource group.",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "component": "VM Applications",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": {
+                          "effect": {
+                            "value": "Modify"
+                          },
+                          "galleryApplications": {
+                            "value": "[parameters('vmApplications')]"
+                          }
+                        },
+                        "nonComplianceMessages": [
+                          {
+                            "message": "The session host must use the selected ordered Azure Compute Gallery application versions."
+                          }
+                        ]
+                      }
+                    },
+                    "remediation": {
+                      "condition": "[parameters('createRemediation')]",
+                      "type": "Microsoft.PolicyInsights/remediations",
+                      "apiVersion": "2021-10-01",
+                      "name": "avd-sh-vm-applications",
+                      "properties": {
+                        "policyAssignmentId": "[resourceId('Microsoft.Authorization/policyAssignments', 'avd-sh-vm-applications')]",
+                        "resourceDiscoveryMode": "ReEvaluateCompliance"
+                      },
+                      "dependsOn": [
+                        "policyAssignment"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "policyAssignmentResourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', 'avd-sh-vm-applications')]"
+                    },
+                    "remediationResourceId": {
+                      "type": "string",
+                      "value": "[if(parameters('createRemediation'), resourceId('Microsoft.PolicyInsights/remediations', 'avd-sh-vm-applications'), '')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "policyDefinition",
+                "policyIdentityGalleryReaders",
+                "policyIdentityVirtualMachineContributor",
+                "policyOwnershipTag"
+              ]
+            }
+          },
+          "outputs": {
+            "policyDefinitionResourceId": {
+              "type": "string",
+              "value": "[reference('policyDefinition').outputs.policyDefinitionResourceId.value]"
+            },
+            "policyAssignmentResourceId": {
+              "type": "string",
+              "value": "[reference('policyAssignment').outputs.policyAssignmentResourceId.value]"
+            },
+            "policyIdentityResourceId": {
+              "type": "string",
+              "value": "[parameters('policyIdentityResourceId')]"
+            },
+            "remediationResourceId": {
+              "type": "string",
+              "value": "[reference('policyAssignment').outputs.remediationResourceId.value]"
+            },
+            "targetResourceGroupResourceId": {
+              "type": "string",
+              "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('targetResourceGroupName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "policyIdentity",
+        "policyOwnershipTag"
+      ]
+    },
+    "monitoringPolicy": {
+      "condition": "[parameters('enableMonitoring')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('monitoringPolicy-{0}', uniqueString('monitoringPolicy', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "targetResourceGroupName": {
+            "value": "[parameters('targetResourceGroupName')]"
+          },
+          "policyIdentityResourceId": {
+            "value": "[reference('policyIdentity').outputs.resourceId.value]"
+          },
+          "policyIdentityPrincipalId": {
+            "value": "[reference('policyIdentity').outputs.principalId.value]"
+          },
+          "systemIdentityPolicyDefinitionResourceId": {
+            "value": "[reference('systemIdentityPolicyDefinition').outputs.policyDefinitionResourceId.value]"
+          },
+          "dataCollectionRuleResourceId": "[if(variables('monitoringConfigurationIsValid'), createObject('value', parameters('dataCollectionRuleResourceId')), createObject('value', parameters('dataCollectionRuleResourceId')))]",
+          "dataCollectionEndpointResourceId": {
+            "value": "[parameters('dataCollectionEndpointResourceId')]"
+          },
+          "assignSystemIdentityPolicy": {
+            "value": true
+          },
+          "createRemediation": {
+            "value": "[parameters('createRemediation')]"
+          },
+          "ownerId": {
+            "value": "[parameters('ownerId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "6530621621173945202"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "targetResourceGroupName": {
+              "type": "string"
+            },
+            "policyIdentityResourceId": {
+              "type": "string"
+            },
+            "policyIdentityPrincipalId": {
+              "type": "string"
+            },
+            "systemIdentityPolicyDefinitionResourceId": {
+              "type": "string"
+            },
+            "dataCollectionRuleResourceId": {
+              "type": "string"
+            },
+            "dataCollectionEndpointResourceId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "assignSystemIdentityPolicy": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "createRemediation": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "ownerId": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "virtualMachineContributorRoleId": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
+            "monitoringContributorRoleId": "749f88d5-cbae-40b8-bcfc-e573ddc772fa"
+          },
+          "resources": {
+            "agentDefinition": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('agentDefinition-{0}', uniqueString('agentDefinition', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "12019150802888863876"
+                    }
+                  },
+                  "parameters": {
+                    "policyDefinitionName": {
+                      "type": "string",
+                      "defaultValue": "avdSessionHostAzureMonitorAgent-DeployIfNotExists"
+                    }
+                  },
+                  "variables": {
+                    "$fxv#0": {
+                      "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                      "contentVersion": "1.0.0.0",
+                      "metadata": {
+                        "_generator": {
+                          "name": "bicep",
+                          "version": "0.46.1.21595",
+                          "templateHash": "5763277511451240335"
+                        }
+                      },
+                      "parameters": {
+                        "location": {
+                          "type": "string"
+                        },
+                        "virtualMachineName": {
+                          "type": "string"
+                        }
+                      },
+                      "resources": [
+                        {
+                          "type": "Microsoft.Compute/virtualMachines/extensions",
+                          "apiVersion": "2024-07-01",
+                          "name": "[[format('{0}/{1}', parameters('virtualMachineName'), 'AzureMonitorWindowsAgent')]",
+                          "location": "[[parameters('location')]",
+                          "properties": {
+                            "publisher": "Microsoft.Azure.Monitor",
+                            "type": "AzureMonitorWindowsAgent",
+                            "typeHandlerVersion": "1.1",
+                            "autoUpgradeMinorVersion": true,
+                            "enableAutomaticUpgrade": true
+                          }
+                        }
+                      ]
+                    },
+                    "deploymentTemplate": "[variables('$fxv#0')]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyDefinitions",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('policyDefinitionName')]",
+                      "properties": {
+                        "displayName": "Deploy Azure Monitor Agent on AVD session hosts",
+                        "description": "Deploys Azure Monitor Agent on AVD session host virtual machines that use a system-assigned managed identity.",
+                        "mode": "Indexed",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "solution": "AVD Session Host Governance",
+                          "component": "Monitoring",
+                          "version": "1.0.0"
+                        },
+                        "parameters": {
+                          "effect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "DeployIfNotExists",
+                              "Disabled"
+                            ],
+                            "defaultValue": "DeployIfNotExists"
+                          }
+                        },
+                        "policyRule": {
+                          "if": {
+                            "allOf": [
+                              {
+                                "field": "type",
+                                "equals": "Microsoft.Compute/virtualMachines"
+                              },
+                              {
+                                "field": "identity.type",
+                                "contains": "SystemAssigned"
+                              }
+                            ]
+                          },
+                          "then": {
+                            "effect": "[[parameters('effect')]",
+                            "details": {
+                              "type": "Microsoft.Compute/virtualMachines/extensions",
+                              "name": "[[concat(field('name'), '/AzureMonitorWindowsAgent')]",
+                              "evaluationDelay": "AfterProvisioningSuccess",
+                              "roleDefinitionIds": [
+                                "/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+                              ],
+                              "existenceCondition": {
+                                "allOf": [
+                                  {
+                                    "field": "Microsoft.Compute/virtualMachines/extensions/type",
+                                    "equals": "AzureMonitorWindowsAgent"
+                                  },
+                                  {
+                                    "field": "Microsoft.Compute/virtualMachines/extensions/publisher",
+                                    "equals": "Microsoft.Azure.Monitor"
+                                  },
+                                  {
+                                    "field": "Microsoft.Compute/virtualMachines/extensions/provisioningState",
+                                    "equals": "Succeeded"
+                                  }
+                                ]
+                              },
+                              "deployment": {
+                                "properties": {
+                                  "mode": "Incremental",
+                                  "parameters": {
+                                    "location": {
+                                      "value": "[[field('location')]"
+                                    },
+                                    "virtualMachineName": {
+                                      "value": "[[field('name')]"
+                                    }
+                                  },
+                                  "template": "[variables('deploymentTemplate')]"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "policyDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+                    }
+                  }
+                }
+              }
+            },
+            "associationDefinition": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('associationDefinition-{0}', uniqueString('associationDefinition', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "17383755443359706025"
+                    }
+                  },
+                  "parameters": {
+                    "policyDefinitionName": {
+                      "type": "string",
+                      "defaultValue": "avdSessionHostMonitoringAssociation-DeployIfNotExists"
+                    }
+                  },
+                  "variables": {
+                    "$fxv#0": {
+                      "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                      "contentVersion": "1.0.0.0",
+                      "metadata": {
+                        "_generator": {
+                          "name": "bicep",
+                          "version": "0.46.1.21595",
+                          "templateHash": "14413757828628509241"
+                        }
+                      },
+                      "parameters": {
+                        "associationType": {
+                          "type": "string"
+                        },
+                        "monitoringResourceId": {
+                          "type": "string"
+                        },
+                        "virtualMachineName": {
+                          "type": "string"
+                        }
+                      },
+                      "variables": {
+                        "dcrAssociationName": "[[format('assoc-{0}', uniqueString(parameters('virtualMachineName'), parameters('monitoringResourceId')))]",
+                        "dceAssociationName": "configurationAccessEndpoint"
+                      },
+                      "resources": [
+                        {
+                          "condition": "[[equals(parameters('associationType'), 'DataCollectionRule')]",
+                          "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+                          "apiVersion": "2023-03-11",
+                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachineName'))]",
+                          "name": "[[variables('dcrAssociationName')]",
+                          "properties": {
+                            "dataCollectionRuleId": "[[parameters('monitoringResourceId')]"
+                          }
+                        },
+                        {
+                          "condition": "[[equals(parameters('associationType'), 'DataCollectionEndpoint')]",
+                          "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+                          "apiVersion": "2023-03-11",
+                          "scope": "[[resourceId('Microsoft.Compute/virtualMachines', parameters('virtualMachineName'))]",
+                          "name": "[[variables('dceAssociationName')]",
+                          "properties": {
+                            "dataCollectionEndpointId": "[[parameters('monitoringResourceId')]"
+                          }
+                        }
+                      ]
+                    },
+                    "deploymentTemplate": "[variables('$fxv#0')]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyDefinitions",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('policyDefinitionName')]",
+                      "properties": {
+                        "displayName": "Associate AVD session hosts with a DCR or DCE",
+                        "description": "Associates AVD session host virtual machines with a selected Data Collection Rule or Data Collection Endpoint.",
+                        "mode": "Indexed",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "solution": "AVD Session Host Governance",
+                          "component": "Monitoring",
+                          "version": "1.0.0"
+                        },
+                        "parameters": {
+                          "effect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "DeployIfNotExists",
+                              "Disabled"
+                            ],
+                            "defaultValue": "DeployIfNotExists"
+                          },
+                          "associationType": {
+                            "type": "String",
+                            "allowedValues": [
+                              "DataCollectionRule",
+                              "DataCollectionEndpoint"
+                            ]
+                          },
+                          "monitoringResourceId": {
+                            "type": "String"
+                          }
+                        },
+                        "policyRule": {
+                          "if": {
+                            "field": "type",
+                            "equals": "Microsoft.Compute/virtualMachines"
+                          },
+                          "then": {
+                            "effect": "[[parameters('effect')]",
+                            "details": {
+                              "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+                              "evaluationDelay": "AfterProvisioningSuccess",
+                              "roleDefinitionIds": [
+                                "/providers/Microsoft.Authorization/roleDefinitions/749f88d5-cbae-40b8-bcfc-e573ddc772fa"
+                              ],
+                              "existenceCondition": {
+                                "anyOf": [
+                                  {
+                                    "field": "Microsoft.Insights/dataCollectionRuleAssociations/dataCollectionRuleId",
+                                    "equals": "[[parameters('monitoringResourceId')]"
+                                  },
+                                  {
+                                    "field": "Microsoft.Insights/dataCollectionRuleAssociations/dataCollectionEndpointId",
+                                    "equals": "[[parameters('monitoringResourceId')]"
+                                  }
+                                ]
+                              },
+                              "deployment": {
+                                "properties": {
+                                  "mode": "Incremental",
+                                  "parameters": {
+                                    "associationType": {
+                                      "value": "[[parameters('associationType')]"
+                                    },
+                                    "monitoringResourceId": {
+                                      "value": "[[parameters('monitoringResourceId')]"
+                                    },
+                                    "virtualMachineName": {
+                                      "value": "[[field('name')]"
+                                    }
+                                  },
+                                  "template": "[variables('deploymentTemplate')]"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "policyDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+                    }
+                  }
+                }
+              }
+            },
+            "monitoringInitiative": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('monitoringInitiative-{0}', uniqueString('monitoringInitiative', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "azureMonitorAgentPolicyDefinitionResourceId": {
+                    "value": "[reference('agentDefinition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "monitoringAssociationPolicyDefinitionResourceId": {
+                    "value": "[reference('associationDefinition').outputs.policyDefinitionResourceId.value]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "5076792954559767527"
+                    }
+                  },
+                  "parameters": {
+                    "policySetDefinitionName": {
+                      "type": "string",
+                      "defaultValue": "avdSessionHostMonitoring"
+                    },
+                    "azureMonitorAgentPolicyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "monitoringAssociationPolicyDefinitionResourceId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policySetDefinitions",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('policySetDefinitionName')]",
+                      "properties": {
+                        "displayName": "Configure monitoring on AVD session hosts",
+                        "description": "Enables Azure Monitor Agent and associates AVD session hosts with the selected DCR and optional DCE.",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "solution": "AVD Session Host Governance",
+                          "component": "Monitoring",
+                          "version": "1.0.0"
+                        },
+                        "parameters": {
+                          "effect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "DeployIfNotExists",
+                              "Disabled"
+                            ],
+                            "defaultValue": "DeployIfNotExists"
+                          },
+                          "dataCollectionRuleResourceId": {
+                            "type": "String"
+                          },
+                          "dataCollectionEndpointResourceId": {
+                            "type": "String",
+                            "defaultValue": ""
+                          },
+                          "dataCollectionEndpointEffect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "DeployIfNotExists",
+                              "Disabled"
+                            ],
+                            "defaultValue": "Disabled"
+                          }
+                        },
+                        "policyDefinitions": [
+                          {
+                            "policyDefinitionReferenceId": "deployAzureMonitorAgent",
+                            "policyDefinitionId": "[parameters('azureMonitorAgentPolicyDefinitionResourceId')]",
+                            "parameters": {
+                              "effect": {
+                                "value": "[[parameters('effect')]"
+                              }
+                            }
+                          },
+                          {
+                            "policyDefinitionReferenceId": "associateDataCollectionRule",
+                            "policyDefinitionId": "[parameters('monitoringAssociationPolicyDefinitionResourceId')]",
+                            "parameters": {
+                              "effect": {
+                                "value": "[[parameters('effect')]"
+                              },
+                              "associationType": {
+                                "value": "DataCollectionRule"
+                              },
+                              "monitoringResourceId": {
+                                "value": "[[parameters('dataCollectionRuleResourceId')]"
+                              }
+                            }
+                          },
+                          {
+                            "policyDefinitionReferenceId": "associateDataCollectionEndpoint",
+                            "policyDefinitionId": "[parameters('monitoringAssociationPolicyDefinitionResourceId')]",
+                            "parameters": {
+                              "effect": {
+                                "value": "[[parameters('dataCollectionEndpointEffect')]"
+                              },
+                              "associationType": {
+                                "value": "DataCollectionEndpoint"
+                              },
+                              "monitoringResourceId": {
+                                "value": "[[parameters('dataCollectionEndpointResourceId')]"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "policySetDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', parameters('policySetDefinitionName'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "agentDefinition",
+                "associationDefinition"
+              ]
+            },
+            "vmContributor": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('vmContributor-{0}', uniqueString('vmContributor', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "roleDefinitionId": {
+                    "value": "[variables('virtualMachineContributorRoleId')]"
+                  },
+                  "principalId": {
+                    "value": "[parameters('policyIdentityPrincipalId')]"
+                  },
+                  "principalType": {
+                    "value": "ServicePrincipal"
+                  },
+                  "assignmentDescription": {
+                    "value": "Allows Azure Policy to configure session host identity and monitoring extensions."
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "4327984477459593833"
+                    }
+                  },
+                  "parameters": {
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Principal ID of the identity receiving the role."
+                      }
+                    },
+                    "principalType": {
+                      "type": "string",
+                      "defaultValue": "ServicePrincipal",
+                      "allowedValues": [
+                        "ServicePrincipal",
+                        "Group",
+                        "User",
+                        "ForeignGroup",
+                        "Device",
+                        ""
+                      ],
+                      "metadata": {
+                        "description": "Principal type of the assigned principal."
+                      }
+                    },
+                    "assignmentDescription": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional description for the assignment."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                    }
+                  }
+                }
+              }
+            },
+            "monitoringContributor": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('monitoringContributor-{0}', uniqueString('monitoringContributor', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "roleDefinitionId": {
+                    "value": "[variables('monitoringContributorRoleId')]"
+                  },
+                  "principalId": {
+                    "value": "[parameters('policyIdentityPrincipalId')]"
+                  },
+                  "principalType": {
+                    "value": "ServicePrincipal"
+                  },
+                  "assignmentDescription": {
+                    "value": "Allows Azure Policy to deploy session host monitoring associations."
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "4327984477459593833"
+                    }
+                  },
+                  "parameters": {
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Principal ID of the identity receiving the role."
+                      }
+                    },
+                    "principalType": {
+                      "type": "string",
+                      "defaultValue": "ServicePrincipal",
+                      "allowedValues": [
+                        "ServicePrincipal",
+                        "Group",
+                        "User",
+                        "ForeignGroup",
+                        "Device",
+                        ""
+                      ],
+                      "metadata": {
+                        "description": "Principal type of the assigned principal."
+                      }
+                    },
+                    "assignmentDescription": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional description for the assignment."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                    }
+                  }
+                }
+              }
+            },
+            "dcrReader": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('dcrReader-{0}', uniqueString('dcrReader', deployment().name))]",
+              "subscriptionId": "[split(parameters('dataCollectionRuleResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('dataCollectionRuleResourceId'), '/')[4]]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "dataCollectionRuleName": {
+                    "value": "[last(split(parameters('dataCollectionRuleResourceId'), '/'))]"
+                  },
+                  "principalId": {
+                    "value": "[parameters('policyIdentityPrincipalId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "15048751448252139066"
+                    }
+                  },
+                  "parameters": {
+                    "dataCollectionRuleName": {
+                      "type": "string"
+                    },
+                    "principalId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]",
+                      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName')), parameters('principalId'), 'acdd72a7-3385-48ef-bd42-f606fba81ae7')]",
+                      "properties": {
+                        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "ServicePrincipal",
+                        "description": "Allows Azure Policy to read the Data Collection Rule linked from session host associations."
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "dceContributor": {
+              "condition": "[not(empty(parameters('dataCollectionEndpointResourceId')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('dceContributor-{0}', uniqueString('dceContributor', deployment().name))]",
+              "subscriptionId": "[split(parameters('dataCollectionEndpointResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('dataCollectionEndpointResourceId'), '/')[4]]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "dataCollectionEndpointName": {
+                    "value": "[last(split(parameters('dataCollectionEndpointResourceId'), '/'))]"
+                  },
+                  "principalId": {
+                    "value": "[parameters('policyIdentityPrincipalId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "748117610762690948"
+                    }
+                  },
+                  "parameters": {
+                    "dataCollectionEndpointName": {
+                      "type": "string"
+                    },
+                    "principalId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
+                      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName')), parameters('principalId'), '749f88d5-cbae-40b8-bcfc-e573ddc772fa')]",
+                      "properties": {
+                        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '749f88d5-cbae-40b8-bcfc-e573ddc772fa')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "ServicePrincipal",
+                        "description": "Allows Azure Policy to manage the Data Collection Endpoint linked from session host associations."
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "identityAssignment": {
+              "condition": "[parameters('assignSystemIdentityPolicy')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('identityAssignment-{0}', uniqueString('identityAssignment', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-monitor-identity"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[parameters('policyIdentityResourceId')]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[parameters('systemIdentityPolicyDefinitionResourceId')]"
+                  },
+                  "displayName": {
+                    "value": "Enable system-assigned identity on AVD session hosts"
+                  },
+                  "description": {
+                    "value": "Enables the VM identity required by Azure Monitor Agent identity authentication."
+                  },
+                  "parameters": {
+                    "value": {
+                      "effect": {
+                        "value": "Modify"
+                      }
+                    }
+                  },
+                  "nonComplianceMessage": {
+                    "value": "The session host must have a system-assigned managed identity for monitoring."
+                  },
+                  "ownerId": {
+                    "value": "[parameters('ownerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "319370662275706130"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "nonComplianceMessage": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "[parameters('displayName')]",
+                        "description": "[parameters('description')]",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": "[parameters('parameters')]",
+                        "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "vmContributor"
+              ]
+            },
+            "monitoringAssignment": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('monitoringAssignment-{0}', uniqueString('monitoringAssignment', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-monitor"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[parameters('policyIdentityResourceId')]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[reference('monitoringInitiative').outputs.policySetDefinitionResourceId.value]"
+                  },
+                  "displayName": {
+                    "value": "Deploy monitoring on AVD session hosts"
+                  },
+                  "description": {
+                    "value": "Deploys Azure Monitor Agent and associates the selected Data Collection Rule and optional Data Collection Endpoint."
+                  },
+                  "parameters": {
+                    "value": {
+                      "effect": {
+                        "value": "DeployIfNotExists"
+                      },
+                      "dataCollectionRuleResourceId": {
+                        "value": "[parameters('dataCollectionRuleResourceId')]"
+                      },
+                      "dataCollectionEndpointResourceId": {
+                        "value": "[parameters('dataCollectionEndpointResourceId')]"
+                      },
+                      "dataCollectionEndpointEffect": {
+                        "value": "[if(empty(parameters('dataCollectionEndpointResourceId')), 'Disabled', 'DeployIfNotExists')]"
+                      }
+                    }
+                  },
+                  "nonComplianceMessage": {
+                    "value": "The session host must run Azure Monitor Agent and have the selected monitoring associations."
+                  },
+                  "ownerId": {
+                    "value": "[parameters('ownerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "319370662275706130"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "nonComplianceMessage": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "[parameters('displayName')]",
+                        "description": "[parameters('description')]",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": "[parameters('parameters')]",
+                        "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "dceContributor",
+                "dcrReader",
+                "identityAssignment",
+                "monitoringContributor",
+                "monitoringInitiative",
+                "vmContributor"
+              ]
+            },
+            "identityRemediation": {
+              "condition": "[and(parameters('createRemediation'), parameters('assignSystemIdentityPolicy'))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('identityRemediation-{0}', uniqueString('identityRemediation', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-monitor-identity"
+                  },
+                  "policyAssignmentId": {
+                    "value": "[reference('identityAssignment').outputs.resourceId.value]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "3597061517120723013"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "policyAssignmentId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionReferenceId": {
+                      "type": "string",
+                      "defaultValue": ""
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.PolicyInsights/remediations",
+                      "apiVersion": "2021-10-01",
+                      "name": "[parameters('name')]",
+                      "properties": {
+                        "policyAssignmentId": "[parameters('policyAssignmentId')]",
+                        "policyDefinitionReferenceId": "[if(empty(parameters('policyDefinitionReferenceId')), null(), parameters('policyDefinitionReferenceId'))]",
+                        "resourceDiscoveryMode": "ReEvaluateCompliance"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "identityAssignment"
+              ]
+            },
+            "agentRemediation": {
+              "condition": "[parameters('createRemediation')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('agentRemediation-{0}', uniqueString('agentRemediation', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-monitor-agent"
+                  },
+                  "policyAssignmentId": {
+                    "value": "[reference('monitoringAssignment').outputs.resourceId.value]"
+                  },
+                  "policyDefinitionReferenceId": {
+                    "value": "deployAzureMonitorAgent"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "3597061517120723013"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "policyAssignmentId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionReferenceId": {
+                      "type": "string",
+                      "defaultValue": ""
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.PolicyInsights/remediations",
+                      "apiVersion": "2021-10-01",
+                      "name": "[parameters('name')]",
+                      "properties": {
+                        "policyAssignmentId": "[parameters('policyAssignmentId')]",
+                        "policyDefinitionReferenceId": "[if(empty(parameters('policyDefinitionReferenceId')), null(), parameters('policyDefinitionReferenceId'))]",
+                        "resourceDiscoveryMode": "ReEvaluateCompliance"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "identityRemediation",
+                "monitoringAssignment"
+              ]
+            },
+            "dcrRemediation": {
+              "condition": "[parameters('createRemediation')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('dcrRemediation-{0}', uniqueString('dcrRemediation', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-monitor-dcr"
+                  },
+                  "policyAssignmentId": {
+                    "value": "[reference('monitoringAssignment').outputs.resourceId.value]"
+                  },
+                  "policyDefinitionReferenceId": {
+                    "value": "associateDataCollectionRule"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "3597061517120723013"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "policyAssignmentId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionReferenceId": {
+                      "type": "string",
+                      "defaultValue": ""
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.PolicyInsights/remediations",
+                      "apiVersion": "2021-10-01",
+                      "name": "[parameters('name')]",
+                      "properties": {
+                        "policyAssignmentId": "[parameters('policyAssignmentId')]",
+                        "policyDefinitionReferenceId": "[if(empty(parameters('policyDefinitionReferenceId')), null(), parameters('policyDefinitionReferenceId'))]",
+                        "resourceDiscoveryMode": "ReEvaluateCompliance"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "agentRemediation",
+                "monitoringAssignment"
+              ]
+            },
+            "dceRemediation": {
+              "condition": "[and(parameters('createRemediation'), not(empty(parameters('dataCollectionEndpointResourceId'))))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('dceRemediation-{0}', uniqueString('dceRemediation', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-monitor-dce"
+                  },
+                  "policyAssignmentId": {
+                    "value": "[reference('monitoringAssignment').outputs.resourceId.value]"
+                  },
+                  "policyDefinitionReferenceId": {
+                    "value": "associateDataCollectionEndpoint"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "3597061517120723013"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "policyAssignmentId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionReferenceId": {
+                      "type": "string",
+                      "defaultValue": ""
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.PolicyInsights/remediations",
+                      "apiVersion": "2021-10-01",
+                      "name": "[parameters('name')]",
+                      "properties": {
+                        "policyAssignmentId": "[parameters('policyAssignmentId')]",
+                        "policyDefinitionReferenceId": "[if(empty(parameters('policyDefinitionReferenceId')), null(), parameters('policyDefinitionReferenceId'))]",
+                        "resourceDiscoveryMode": "ReEvaluateCompliance"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "agentRemediation",
+                "monitoringAssignment"
+              ]
+            }
+          },
+          "outputs": {
+            "monitoringPolicyAssignmentResourceId": {
+              "type": "string",
+              "value": "[reference('monitoringAssignment').outputs.resourceId.value]"
+            },
+            "identityPolicyAssignmentResourceId": {
+              "type": "string",
+              "value": "[if(parameters('assignSystemIdentityPolicy'), reference('identityAssignment').outputs.resourceId.value, '')]"
+            },
+            "remediationResourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "value": "[if(parameters('createRemediation'), concat(if(parameters('assignSystemIdentityPolicy'), createArray(reference('identityRemediation').outputs.resourceId.value), createArray()), createArray(reference('agentRemediation').outputs.resourceId.value, reference('dcrRemediation').outputs.resourceId.value), if(not(empty(parameters('dataCollectionEndpointResourceId'))), createArray(reference('dceRemediation').outputs.resourceId.value), createArray())), createArray())]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "policyIdentity",
+        "policyOwnershipTag",
+        "systemIdentityPolicyDefinition"
+      ]
+    },
+    "guestAttestationPolicy": {
+      "condition": "[parameters('enableGuestAttestation')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('guestAttestationPolicy-{0}', uniqueString('guestAttestationPolicy', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "targetResourceGroupName": {
+            "value": "[parameters('targetResourceGroupName')]"
+          },
+          "policyIdentityResourceId": {
+            "value": "[reference('policyIdentity').outputs.resourceId.value]"
+          },
+          "policyIdentityPrincipalId": {
+            "value": "[reference('policyIdentity').outputs.principalId.value]"
+          },
+          "createRemediation": {
+            "value": "[parameters('createRemediation')]"
+          },
+          "ownerId": {
+            "value": "[parameters('ownerId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "15230097123546185902"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "targetResourceGroupName": {
+              "type": "string"
+            },
+            "policyIdentityResourceId": {
+              "type": "string"
+            },
+            "policyIdentityPrincipalId": {
+              "type": "string"
+            },
+            "createRemediation": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "ownerId": {
+              "type": "string"
+            }
+          },
+          "resources": {
+            "definition": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('definition-{0}', uniqueString('definition', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "6063839764390554017"
+                    }
+                  },
+                  "parameters": {
+                    "policyDefinitionName": {
+                      "type": "string",
+                      "defaultValue": "avdSessionHostGuestAttestation-DeployIfNotExists"
+                    }
+                  },
+                  "variables": {
+                    "$fxv#0": {
+                      "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                      "contentVersion": "1.0.0.0",
+                      "metadata": {
+                        "_generator": {
+                          "name": "bicep",
+                          "version": "0.46.1.21595",
+                          "templateHash": "18041353220687360778"
+                        }
+                      },
+                      "parameters": {
+                        "location": {
+                          "type": "string"
+                        },
+                        "virtualMachineName": {
+                          "type": "string"
+                        }
+                      },
+                      "resources": [
+                        {
+                          "type": "Microsoft.Compute/virtualMachines/extensions",
+                          "apiVersion": "2024-03-01",
+                          "name": "[[format('{0}/{1}', parameters('virtualMachineName'), 'GuestAttestation')]",
+                          "location": "[[parameters('location')]",
+                          "properties": {
+                            "publisher": "Microsoft.Azure.Security.WindowsAttestation",
+                            "type": "GuestAttestation",
+                            "typeHandlerVersion": "1.0",
+                            "autoUpgradeMinorVersion": true,
+                            "enableAutomaticUpgrade": true,
+                            "settings": {
+                              "AttestationConfig": {
+                                "MaaSettings": {
+                                  "maaEndpoint": "",
+                                  "maaTenantName": "GuestAttestation"
+                                },
+                                "AscSettings": {
+                                  "ascReportingEndpoint": "",
+                                  "ascReportingFrequency": ""
+                                },
+                                "useCustomToken": "false",
+                                "disableAlerts": "false"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "deploymentTemplate": "[variables('$fxv#0')]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyDefinitions",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('policyDefinitionName')]",
+                      "properties": {
+                        "displayName": "Deploy Guest Attestation on AVD session hosts",
+                        "description": "Deploys the Guest Attestation extension required for Trusted Launch and Confidential VM integrity monitoring.",
+                        "mode": "All",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "solution": "AVD Session Host Governance",
+                          "component": "Guest Attestation",
+                          "version": "1.0.0"
+                        },
+                        "parameters": {
+                          "effect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "DeployIfNotExists",
+                              "Disabled"
+                            ],
+                            "defaultValue": "DeployIfNotExists"
+                          }
+                        },
+                        "policyRule": {
+                          "if": {
+                            "allOf": [
+                              {
+                                "field": "type",
+                                "equals": "Microsoft.Compute/virtualMachines"
+                              },
+                              {
+                                "field": "Microsoft.Compute/virtualMachines/securityProfile.securityType",
+                                "in": [
+                                  "TrustedLaunch",
+                                  "ConfidentialVM"
+                                ]
+                              }
+                            ]
+                          },
+                          "then": {
+                            "effect": "[[parameters('effect')]",
+                            "details": {
+                              "type": "Microsoft.Compute/virtualMachines/extensions",
+                              "name": "[[concat(field('name'), '/GuestAttestation')]",
+                              "evaluationDelay": "AfterProvisioningSuccess",
+                              "roleDefinitionIds": [
+                                "/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+                              ],
+                              "existenceCondition": {
+                                "allOf": [
+                                  {
+                                    "field": "Microsoft.Compute/virtualMachines/extensions/publisher",
+                                    "equals": "Microsoft.Azure.Security.WindowsAttestation"
+                                  },
+                                  {
+                                    "field": "Microsoft.Compute/virtualMachines/extensions/type",
+                                    "equals": "GuestAttestation"
+                                  },
+                                  {
+                                    "field": "Microsoft.Compute/virtualMachines/extensions/provisioningState",
+                                    "equals": "Succeeded"
+                                  }
+                                ]
+                              },
+                              "deployment": {
+                                "properties": {
+                                  "mode": "Incremental",
+                                  "parameters": {
+                                    "location": {
+                                      "value": "[[field('location')]"
+                                    },
+                                    "virtualMachineName": {
+                                      "value": "[[field('name')]"
+                                    }
+                                  },
+                                  "template": "[variables('deploymentTemplate')]"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "policyDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+                    }
+                  }
+                }
+              }
+            },
+            "vmContributor": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('vmContributor-{0}', uniqueString('vmContributor', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "roleDefinitionId": {
+                    "value": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+                  },
+                  "principalId": {
+                    "value": "[parameters('policyIdentityPrincipalId')]"
+                  },
+                  "principalType": {
+                    "value": "ServicePrincipal"
+                  },
+                  "assignmentDescription": {
+                    "value": "Allows Azure Policy to deploy Guest Attestation on eligible session hosts."
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "4327984477459593833"
+                    }
+                  },
+                  "parameters": {
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Principal ID of the identity receiving the role."
+                      }
+                    },
+                    "principalType": {
+                      "type": "string",
+                      "defaultValue": "ServicePrincipal",
+                      "allowedValues": [
+                        "ServicePrincipal",
+                        "Group",
+                        "User",
+                        "ForeignGroup",
+                        "Device",
+                        ""
+                      ],
+                      "metadata": {
+                        "description": "Principal type of the assigned principal."
+                      }
+                    },
+                    "assignmentDescription": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional description for the assignment."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                    }
+                  }
+                }
+              }
+            },
+            "assignment": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('assignment-{0}', uniqueString('assignment', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-attest"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[parameters('policyIdentityResourceId')]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[reference('definition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "displayName": {
+                    "value": "Deploy Guest Attestation on AVD session hosts"
+                  },
+                  "description": {
+                    "value": "Deploys Guest Attestation to Trusted Launch and Confidential VM session hosts."
+                  },
+                  "parameters": {
+                    "value": {
+                      "effect": {
+                        "value": "DeployIfNotExists"
+                      }
+                    }
+                  },
+                  "nonComplianceMessage": {
+                    "value": "Trusted Launch and Confidential VM session hosts must run Guest Attestation."
+                  },
+                  "ownerId": {
+                    "value": "[parameters('ownerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "319370662275706130"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "nonComplianceMessage": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "[parameters('displayName')]",
+                        "description": "[parameters('description')]",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": "[parameters('parameters')]",
+                        "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "definition",
+                "vmContributor"
+              ]
+            },
+            "remediation": {
+              "condition": "[parameters('createRemediation')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('remediation-{0}', uniqueString('remediation', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-attest"
+                  },
+                  "policyAssignmentId": {
+                    "value": "[reference('assignment').outputs.resourceId.value]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "3597061517120723013"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "policyAssignmentId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionReferenceId": {
+                      "type": "string",
+                      "defaultValue": ""
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.PolicyInsights/remediations",
+                      "apiVersion": "2021-10-01",
+                      "name": "[parameters('name')]",
+                      "properties": {
+                        "policyAssignmentId": "[parameters('policyAssignmentId')]",
+                        "policyDefinitionReferenceId": "[if(empty(parameters('policyDefinitionReferenceId')), null(), parameters('policyDefinitionReferenceId'))]",
+                        "resourceDiscoveryMode": "ReEvaluateCompliance"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "assignment"
+              ]
+            }
+          },
+          "outputs": {
+            "policyAssignmentResourceId": {
+              "type": "string",
+              "value": "[reference('assignment').outputs.resourceId.value]"
+            },
+            "remediationResourceId": {
+              "type": "string",
+              "value": "[if(parameters('createRemediation'), reference('remediation').outputs.resourceId.value, '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "policyIdentity",
+        "policyOwnershipTag"
+      ]
+    },
+    "managedDiskNetworkAccessPolicy": {
+      "condition": "[parameters('enableManagedDiskNetworkAccess')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('managedDiskNetworkAccessPolicy-{0}', uniqueString('managedDiskNetworkAccessPolicy', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "targetResourceGroupName": {
+            "value": "[parameters('targetResourceGroupName')]"
+          },
+          "policyIdentityResourceId": {
+            "value": "[reference('policyIdentity').outputs.resourceId.value]"
+          },
+          "policyIdentityPrincipalId": {
+            "value": "[reference('policyIdentity').outputs.principalId.value]"
+          },
+          "createAssignment": {
+            "value": true
+          },
+          "createRemediation": {
+            "value": "[parameters('createRemediation')]"
+          },
+          "ownerId": {
+            "value": "[parameters('ownerId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "1864469326325678141"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "targetResourceGroupName": {
+              "type": "string"
+            },
+            "policyIdentityResourceId": {
+              "type": "string"
+            },
+            "policyIdentityPrincipalId": {
+              "type": "string"
+            },
+            "createAssignment": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "createRemediation": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "ownerId": {
+              "type": "string"
+            }
+          },
+          "resources": {
+            "definition": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('definition-{0}', uniqueString('definition', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "7389546299358214529"
+                    }
+                  },
+                  "parameters": {
+                    "policyDefinitionName": {
+                      "type": "string",
+                      "defaultValue": "avdSessionHostManagedDiskNetworkAccess-Modify"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyDefinitions",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('policyDefinitionName')]",
+                      "properties": {
+                        "displayName": "Disable public access on AVD session host managed disks",
+                        "description": "Disables public network access and denies all network export access on managed disks in the session host resource group.",
+                        "mode": "Indexed",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "solution": "AVD Session Host Governance",
+                          "component": "Managed Disk Network Access",
+                          "version": "1.0.0"
+                        },
+                        "parameters": {
+                          "effect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "Modify",
+                              "Disabled"
+                            ],
+                            "defaultValue": "Modify"
+                          }
+                        },
+                        "policyRule": {
+                          "if": {
+                            "allOf": [
+                              {
+                                "field": "type",
+                                "equals": "Microsoft.Compute/disks"
+                              },
+                              {
+                                "anyOf": [
+                                  {
+                                    "field": "Microsoft.Compute/disks/publicNetworkAccess",
+                                    "notEquals": "Disabled"
+                                  },
+                                  {
+                                    "field": "Microsoft.Compute/disks/networkAccessPolicy",
+                                    "notEquals": "DenyAll"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "then": {
+                            "effect": "[[parameters('effect')]",
+                            "details": {
+                              "conflictEffect": "audit",
+                              "roleDefinitionIds": [
+                                "/providers/Microsoft.Authorization/roleDefinitions/60fc6e62-5479-42d4-8bf4-67625fcc2840"
+                              ],
+                              "operations": [
+                                {
+                                  "operation": "AddOrReplace",
+                                  "field": "Microsoft.Compute/disks/publicNetworkAccess",
+                                  "value": "Disabled"
+                                },
+                                {
+                                  "operation": "AddOrReplace",
+                                  "field": "Microsoft.Compute/disks/networkAccessPolicy",
+                                  "value": "DenyAll"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "policyDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+                    }
+                  }
+                }
+              }
+            },
+            "diskOperator": {
+              "condition": "[parameters('createAssignment')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('diskOperator-{0}', uniqueString('diskOperator', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "roleDefinitionId": {
+                    "value": "60fc6e62-5479-42d4-8bf4-67625fcc2840"
+                  },
+                  "principalId": {
+                    "value": "[parameters('policyIdentityPrincipalId')]"
+                  },
+                  "principalType": {
+                    "value": "ServicePrincipal"
+                  },
+                  "assignmentDescription": {
+                    "value": "Allows Azure Policy to disable public and export access on session host managed disks."
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "4327984477459593833"
+                    }
+                  },
+                  "parameters": {
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                      }
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Principal ID of the identity receiving the role."
+                      }
+                    },
+                    "principalType": {
+                      "type": "string",
+                      "defaultValue": "ServicePrincipal",
+                      "allowedValues": [
+                        "ServicePrincipal",
+                        "Group",
+                        "User",
+                        "ForeignGroup",
+                        "Device",
+                        ""
+                      ],
+                      "metadata": {
+                        "description": "Principal type of the assigned principal."
+                      }
+                    },
+                    "assignmentDescription": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional description for the assignment."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                      "properties": {
+                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                    }
+                  }
+                }
+              }
+            },
+            "assignment": {
+              "condition": "[parameters('createAssignment')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('assignment-{0}', uniqueString('assignment', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-managed-disk-network"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[parameters('policyIdentityResourceId')]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[reference('definition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "displayName": {
+                    "value": "Disable public access on AVD session host managed disks"
+                  },
+                  "description": {
+                    "value": "Disables public network access and denies network export access on managed disks in the target resource group."
+                  },
+                  "parameters": {
+                    "value": {
+                      "effect": {
+                        "value": "Modify"
+                      }
+                    }
+                  },
+                  "nonComplianceMessage": {
+                    "value": "Session host managed disks must disable public and export network access."
+                  },
+                  "ownerId": {
+                    "value": "[parameters('ownerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "319370662275706130"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "nonComplianceMessage": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "[parameters('displayName')]",
+                        "description": "[parameters('description')]",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": "[parameters('parameters')]",
+                        "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "definition",
+                "diskOperator"
+              ]
+            },
+            "remediation": {
+              "condition": "[and(parameters('createAssignment'), parameters('createRemediation'))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('remediation-{0}', uniqueString('remediation', deployment().name))]",
+              "resourceGroup": "[parameters('targetResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-managed-disk-network"
+                  },
+                  "policyAssignmentId": {
+                    "value": "[reference('assignment').outputs.resourceId.value]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "3597061517120723013"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "policyAssignmentId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionReferenceId": {
+                      "type": "string",
+                      "defaultValue": ""
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.PolicyInsights/remediations",
+                      "apiVersion": "2021-10-01",
+                      "name": "[parameters('name')]",
+                      "properties": {
+                        "policyAssignmentId": "[parameters('policyAssignmentId')]",
+                        "policyDefinitionReferenceId": "[if(empty(parameters('policyDefinitionReferenceId')), null(), parameters('policyDefinitionReferenceId'))]",
+                        "resourceDiscoveryMode": "ReEvaluateCompliance"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "assignment"
+              ]
+            }
+          },
+          "outputs": {
+            "policyDefinitionResourceId": {
+              "type": "string",
+              "value": "[reference('definition').outputs.policyDefinitionResourceId.value]"
+            },
+            "policyAssignmentResourceId": {
+              "type": "string",
+              "value": "[if(parameters('createAssignment'), reference('assignment').outputs.resourceId.value, '')]"
+            },
+            "remediationResourceId": {
+              "type": "string",
+              "value": "[if(and(parameters('createAssignment'), parameters('createRemediation')), reference('remediation').outputs.resourceId.value, '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "policyIdentity",
+        "policyOwnershipTag"
+      ]
+    }
+  },
+  "outputs": {
+    "policyIdentityResourceId": {
+      "type": "string",
+      "value": "[reference('policyIdentity').outputs.resourceId.value]"
+    },
+    "vmApplicationPolicyDefinitionResourceId": {
+      "type": "string",
+      "value": "[if(not(empty(parameters('vmApplications'))), reference('vmApplicationPolicy').outputs.policyDefinitionResourceId.value, '')]"
+    },
+    "vmApplicationPolicyAssignmentResourceId": {
+      "type": "string",
+      "value": "[if(not(empty(parameters('vmApplications'))), reference('vmApplicationPolicy').outputs.policyAssignmentResourceId.value, '')]"
+    },
+    "vmApplicationRemediationResourceId": {
+      "type": "string",
+      "value": "[if(not(empty(parameters('vmApplications'))), reference('vmApplicationPolicy').outputs.remediationResourceId.value, '')]"
+    },
+    "monitoringPolicyAssignmentResourceId": {
+      "type": "string",
+      "value": "[if(parameters('enableMonitoring'), reference('monitoringPolicy').outputs.monitoringPolicyAssignmentResourceId.value, '')]"
+    },
+    "monitoringRemediationResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "value": "[if(parameters('enableMonitoring'), reference('monitoringPolicy').outputs.remediationResourceIds.value, createArray())]"
+    },
+    "guestAttestationPolicyAssignmentResourceId": {
+      "type": "string",
+      "value": "[if(parameters('enableGuestAttestation'), reference('guestAttestationPolicy').outputs.policyAssignmentResourceId.value, '')]"
+    },
+    "guestAttestationRemediationResourceId": {
+      "type": "string",
+      "value": "[if(parameters('enableGuestAttestation'), reference('guestAttestationPolicy').outputs.remediationResourceId.value, '')]"
+    },
+    "managedDiskNetworkAccessPolicyAssignmentResourceId": {
+      "type": "string",
+      "value": "[if(parameters('enableManagedDiskNetworkAccess'), reference('managedDiskNetworkAccessPolicy').outputs.policyAssignmentResourceId.value, '')]"
+    },
+    "managedDiskNetworkAccessRemediationResourceId": {
+      "type": "string",
+      "value": "[if(parameters('enableManagedDiskNetworkAccess'), reference('managedDiskNetworkAccessPolicy').outputs.remediationResourceId.value, '')]"
+    },
+    "targetResourceGroupResourceId": {
+      "type": "string",
+      "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('targetResourceGroupName'))]"
+    }
+  }
+}
