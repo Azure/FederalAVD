@@ -38,6 +38,14 @@
               }
             },
             {
+              "name": "subscriptionsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "GET",
+                "path": "/subscriptions?api-version=2022-12-01"
+              }
+            },
+            {
               "name": "resourceGroupsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('basics').resourceScope.subscription))]",
@@ -84,22 +92,67 @@
               "name": "enableVmApplications",
               "type": "Microsoft.Common.CheckBox",
               "label": "Assign Azure Compute Gallery VM Applications",
+              "toolTip": "Preferred for software with install and remove behavior. Azure Policy maintains an authoritative ordered list of Gallery application version references on every session host in the target resource group.",
               "defaultValue": false
             },
             {
+              "name": "gallerySubscription",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Compute Gallery Subscription",
+              "defaultValue": "[steps('basics').resourceScope.subscription.displayName]",
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]"
+              }
+            },
+            {
+              "name": "galleriesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(equals(steps('applications').enableVmApplications, true), not(empty(steps('applications').gallerySubscription.id)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('applications').gallerySubscription.id, '/providers/Microsoft.Compute/galleries?api-version=2024-03-03')]"
+              }
+            },
+            {
+              "name": "gallery",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Compute Gallery",
+              "multiLine": true,
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(steps('applications').galleriesApi.value, (gallery) => parse(concat('{\"label\":\"', gallery.name, '\",\"description\":\"Resource Group: ', first(skip(split(gallery.id, '/'), 4)), '\",\"value\":\"', gallery.id, '\"}')))]"
+              }
+            },
+            {
               "name": "vmApplicationsGuidance",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('applications').enableVmApplications]",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
               "options": {
-                "text": "Paste immutable application-version resource IDs returned by Publish-VMApplications.ps1. Use /versions/latest only when intentional remediation should advance existing hosts to the newest eligible version."
+                "style": "Info",
+                "text": "Use VM Applications for independently installable software. The portal assigns latest, which resolves the newest eligible version; versions with excludeFromLatest enabled are not eligible. Use a parameter file to pin a specific version. The selected list is authoritative, and versions must be replicated to each session-host region. After publishing a newer version, remediate the policy to apply it to existing hosts; publishing alone does not update existing hosts. Azure supports up to 25 VM Applications per VM. Choosing Yes for Fail VM if App Fails makes an application install, update, or removal error mark both the VM Application extension and VM provisioning as failed."
+              }
+            },
+            {
+              "name": "applicationsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(equals(steps('applications').enableVmApplications, true), not(empty(steps('applications').gallery)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('applications').gallery, '/applications?api-version=2024-03-03')]",
+                "transforms": {
+                  "list": "value|[*].{label:name, value:id}"
+                }
               }
             },
             {
               "name": "vmApplications",
               "type": "Microsoft.Common.EditableGrid",
-              "label": "Authoritative ordered applications",
-              "ariaLabel": "Authoritative ordered VM Applications",
-              "visible": "[steps('applications').enableVmApplications]",
+              "label": "Ordered VM Applications",
+              "ariaLabel": "Ordered Azure Compute Gallery VM Applications",
+              "visible": "[equals(steps('applications').enableVmApplications, true)]",
               "constraints": {
                 "width": "Full",
                 "rows": {
@@ -111,14 +164,13 @@
                 "columns": [
                   {
                     "id": "packageReferenceId",
-                    "header": "Gallery application version resource ID",
-                    "width": "6fr",
+                    "header": "Application / latest",
+                    "width": "3fr",
                     "element": {
-                      "type": "Microsoft.Common.TextBox",
+                      "type": "Microsoft.Common.DropDown",
                       "constraints": {
                         "required": true,
-                        "regex": "^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.Compute/galleries/[^/]+/applications/[^/]+/versions/[^/]+$",
-                        "validationMessage": "Enter a complete Azure Compute Gallery application version resource ID."
+                        "allowedValues": "[map(steps('applications').applicationsApi.transformed.list, (application) => parse(concat('{\"label\":\"', application.label, '\",\"value\":\"', application.value, '/versions/latest\"}')))]"
                       }
                     }
                   },
@@ -142,8 +194,8 @@
                   },
                   {
                     "id": "treatFailureAsDeploymentFailure",
-                    "header": "Fail VM deployment",
-                    "width": "2fr",
+                    "header": "Fail VM if App Fails",
+                    "width": "1fr",
                     "element": {
                       "type": "Microsoft.Common.DropDown",
                       "constraints": {

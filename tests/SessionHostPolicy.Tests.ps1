@@ -120,7 +120,7 @@ Describe 'Shared session-host policy orchestration' {
             'treatFailureAsDeploymentFailure'
         )
         @($grid.constraints.columns.element.type | Select-Object -Unique) |
-            Should Be @('Microsoft.Common.TextBox', 'Microsoft.Common.DropDown')
+            Should Be 'Microsoft.Common.DropDown'
 
         @($applicationsStep.elements | Where-Object { $_.type -eq 'Microsoft.Common.CheckBox' } | ForEach-Object { $_.name }) |
             Should Be @(
@@ -132,6 +132,25 @@ Describe 'Shared session-host policy orchestration' {
             )
         ($applicationsStep.elements | Where-Object { $_.name -eq 'dataCollectionRule' }).constraints.required |
             Should Be $true
+    }
+
+    It 'selects latest VM Applications from an Azure Compute Gallery' {
+        $basicsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'basics' }
+        $applicationsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'applications' }
+        $subscriptionsApi = $basicsStep.elements | Where-Object { $_.name -eq 'subscriptionsApi' }
+        $gallerySubscription = $applicationsStep.elements | Where-Object { $_.name -eq 'gallerySubscription' }
+        $galleriesApi = $applicationsStep.elements | Where-Object { $_.name -eq 'galleriesApi' }
+        $applicationsApi = $applicationsStep.elements | Where-Object { $_.name -eq 'applicationsApi' }
+        $grid = $applicationsStep.elements | Where-Object { $_.name -eq 'vmApplications' }
+
+        $subscriptionsApi.request.path | Should Be '/subscriptions?api-version=2022-12-01'
+        $gallerySubscription.defaultValue | Should Be "[steps('basics').resourceScope.subscription.displayName]"
+        $gallerySubscription.constraints.allowedValues | Should Match "steps\('basics'\)\.subscriptionsApi\.value"
+        $galleriesApi.request.path | Should Match '/providers/Microsoft\.Compute/galleries\?api-version=2024-03-03'
+        $applicationsApi.request.path | Should Match '/applications\?api-version=2024-03-03'
+        $applicationsApi.request.transforms.list | Should Be 'value|[*].{label:name, value:id}'
+        $grid.constraints.columns[0].element.constraints.allowedValues | Should Match "steps\('applications'\)\.applicationsApi\.transformed\.list"
+        $grid.constraints.columns[0].element.constraints.allowedValues | Should Match '/versions/latest'
     }
 
     It 'maps all four capabilities in the direct deployment example' {
