@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "5249527188910724890"
+      "templateHash": "11478617058726596041"
     }
   },
   "definitions": {
@@ -434,13 +434,13 @@
     },
     "ephemeralOsDiskPlacement": {
       "type": "string",
-      "defaultValue": "ResourceDisk",
+      "defaultValue": "TempDisk",
       "allowedValues": [
         "CacheDisk",
-        "ResourceDisk"
+        "TempDisk"
       ],
       "metadata": {
-        "description": "Optional. Local storage used for the ephemeral OS disk."
+        "description": "Optional. Local storage used for the ephemeral OS disk. Use TempDisk for VM resource-disk placement."
       }
     },
     "securityType": {

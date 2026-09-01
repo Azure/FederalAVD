@@ -29,7 +29,7 @@
             "value": true
         },
         "ephemeralOsDiskPlacement": {
-            "value": "ResourceDisk"
+            "value": "TempDisk"
         },
         "deployDynamicScalingPlan": {
             "value": true

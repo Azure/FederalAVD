@@ -131,10 +131,10 @@ param useEphemeralOsDisk bool = false
 
 @allowed([
   'CacheDisk'
-  'ResourceDisk'
+  'TempDisk'
 ])
-@description('Optional. Local storage used for the ephemeral OS disk.')
-param ephemeralOsDiskPlacement string = 'ResourceDisk'
+@description('Optional. Local storage used for the ephemeral OS disk. Use TempDisk for VM resource-disk placement.')
+param ephemeralOsDiskPlacement string = 'TempDisk'
 
 @allowed([
   'Standard'
@@ -776,7 +776,8 @@ module controlPlane 'modules/controlPlane.bicep' = {
         diffDiskSettings: useEphemeralOsDisk
           ? {
               option: 'Local'
-              placement: ephemeralOsDiskPlacement
+              // Compute SKU capabilities call this placement ResourceDisk, but the AVD API enum is TempDisk.
+              placement: any(ephemeralOsDiskPlacement)
             }
           : null
       }

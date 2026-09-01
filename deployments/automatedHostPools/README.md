@@ -421,10 +421,12 @@ Compute Gallery images continue to use the selected gallery image-version resour
 
 ## Ephemeral OS Disks
 
-Set `useEphemeralOsDisk` to `true` and select `CacheDisk` or `ResourceDisk` with
-`ephemeralOsDiskPlacement`. The template sends `diffDiskSettings.option: Local` through Session
-Host Configuration. During the AVD preview, the portal form displays a read-only Standard SSD OS
-disk type and submits `StandardSSD_LRS`; it ignores persistent-disk expansion by submitting
+Set `useEphemeralOsDisk` to `true` and select `CacheDisk` or `TempDisk` with
+`ephemeralOsDiskPlacement`. The Compute SKU capability reports temporary-disk support as
+`ResourceDisk`, but the AVD Session Host Configuration API requires `TempDisk`; the portal form
+performs this translation. The template sends `diffDiskSettings.option: Local` through Session Host
+Configuration. During the AVD preview, the portal form displays a read-only Standard SSD OS disk
+type and submits `StandardSSD_LRS`; it ignores persistent-disk expansion by submitting
 `diskSizeGB` as `0`. The source image OS disk size, plus the 1 GiB VM guest-state reservation for
 Trusted Launch or Confidential VMs, must fit the selected VM size's cache or resource-disk
 capacity. Data that must survive host replacement belongs in FSLogix or another durable service.
