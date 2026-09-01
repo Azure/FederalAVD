@@ -89,7 +89,7 @@ param domainJoinPasswordSecretUri string = ''
 param intuneEnrollment bool = false
 
 @description('Required. Prefix used by Azure Virtual Desktop when naming session-host VMs. Maximum 11 characters.')
-@maxLength(11)
+@maxLength(10)
 param virtualMachineNamePrefix string
 
 @description('Optional. VM size used by automated session hosts.')

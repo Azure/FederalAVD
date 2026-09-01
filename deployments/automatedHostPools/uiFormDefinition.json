@@ -1112,8 +1112,8 @@
 												"message": "Use letters, numbers, and dashes; do not begin with a dash or use only numbers."
 											},
 											{
-												"isValid": "[lessOrEquals(length(steps('hosts').hostDetails.virtualMachineNamePrefix), 11)]",
-												"message": "The prefix cannot exceed 11 characters."
+												"isValid": "[lessOrEquals(length(steps('hosts').hostDetails.virtualMachineNamePrefix), 10)]",
+												"message": "The prefix cannot exceed 10 characters."
 											}
 										]
 									}
