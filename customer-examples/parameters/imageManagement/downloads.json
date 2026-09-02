@@ -72,6 +72,55 @@
             "Microsoft-Edge-Enterprise"
         ]
     },
+    "MicrosoftWSL2": {
+        "Description": "Latest stable Microsoft Windows Subsystem for Linux x64 MSI.",
+        "GitHubRepo": "microsoft/WSL",
+        "GitHubFileNamePattern": "wsl.*.x64.msi",
+        "DestinationFileName": "WSL-x64.msi",
+        "DestinationFolders": [
+            "Microsoft-WSL2"
+        ]
+    },
+    "WSLUbuntu2404": {
+        "Description": "Ubuntu 24.04 LTS distribution package for Microsoft WSL 2.",
+        "DownloadUrl": "https://wslstorestorage.blob.core.windows.net/wslblob/Ubuntu2404-240425.AppxBundle",
+        "DestinationFileName": "Ubuntu-24.04.AppxBundle",
+        "DestinationFolders": [
+            "Microsoft-WSL2\\DistributionPackages\\Ubuntu-24.04"
+        ]
+    },
+    "WSLUbuntu2204": {
+        "Description": "Ubuntu 22.04 LTS distribution package for Microsoft WSL 2.",
+        "DownloadUrl": "https://aka.ms/wslubuntu2204",
+        "DestinationFileName": "Ubuntu-22.04.AppxBundle",
+        "DestinationFolders": [
+            "Microsoft-WSL2\\DistributionPackages\\Ubuntu-22.04"
+        ]
+    },
+    "WSLDebian": {
+        "Description": "Debian GNU/Linux distribution package for Microsoft WSL 2.",
+        "DownloadUrl": "https://aka.ms/wsl-debian-gnulinux",
+        "DestinationFileName": "Debian.AppxBundle",
+        "DestinationFolders": [
+            "Microsoft-WSL2\\DistributionPackages\\Debian"
+        ]
+    },
+    "WSLKaliLinux": {
+        "Description": "Kali Linux Rolling distribution package for Microsoft WSL 2.",
+        "DownloadUrl": "https://aka.ms/wsl-kali-linux-new",
+        "DestinationFileName": "Kali-Linux.AppxBundle",
+        "DestinationFolders": [
+            "Microsoft-WSL2\\DistributionPackages\\Kali-Linux"
+        ]
+    },
+    "WSLRockyLinux9": {
+        "Description": "Official Rocky Linux 9 x86_64 installable image for Microsoft WSL 2.",
+        "DownloadUrl": "https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-WSL-Base.latest.x86_64.wsl",
+        "DestinationFileName": "Rocky-9-WSL-Base.latest.x86_64.wsl",
+        "DestinationFolders": [
+            "Microsoft-WSL2\\DistributionPackages\\Rocky-Linux-9"
+        ]
+    },
     "FSLogix": {
         "Description": "FSLogix",
         "DownloadUrl": "https://aka.ms/fslogix_download",
