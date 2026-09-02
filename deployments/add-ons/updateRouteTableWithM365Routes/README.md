@@ -74,8 +74,9 @@ New-AzTemplateSpec `
     -UIFormDefinitionFile '.\uiFormDefinition.json'
 ```
 
-On **Review + create**, select **Download template and parameters** before submitting, then retain
-the working parameter file for subsequent PowerShell or CI/CD deployments.
+On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+template and parameters** and retain the working parameter file for subsequent PowerShell or CI/CD
+deployments.
 
 > For air-gapped clouds (Secret/Top Secret), Blue Button is not available. Use Template Specs or PowerShell.
 

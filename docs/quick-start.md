@@ -139,9 +139,9 @@ host-pool form.
 
 ### 3. Save Each Generated Parameter File
 
-After completing a form, go to **Review + create** and select **Download template and parameters**
-before submitting the deployment. Rename the downloaded parameter file and save it in the matching
-customer folder:
+After completing a form, go to **Review + create** and select **Create**. After the deployment is
+submitted, select **Download template and parameters**. Rename the downloaded parameter file and
+save it in the matching customer folder:
 
 | Template Spec | Save the generated parameters under |
 | --- | --- |
@@ -373,9 +373,10 @@ For advanced publishing options and RBAC, see
     the environment. For Secret and Top Secret, let this deployment create missing zones instead
     of manually reproducing protected zone names. The template derives the correct names from the
     connected Azure environment and its maintained cloud mappings.
-3. At **Review + create**, download the generated parameters and save them as
+3. At **Review + create**, select **Create**. After submission, select **Download template and
+    parameters** and save them as
     `customer\parameters\networking\<environment>.networking.parameters.json`.
-4. Deploy, then retain the VNet, subnet, and `privateDnsZoneResourceIds` output needed by later
+4. Retain the VNet, subnet, and `privateDnsZoneResourceIds` output needed by later
     forms. Every private endpoint must use a matching zone linked to the VNet or its DNS resolver.
 
 <details>
@@ -490,9 +491,10 @@ resources instead and later Step 4 deployments can select them as existing resou
 1. In the Azure portal, open **Template Specs** and deploy **AVD Shared Services**.
 2. Use the form to choose credential and encryption Key Vaults, centralized monitoring, FSLogix
     backup, and private connectivity. Fields that do not apply remain hidden.
-3. At **Review + create**, download the generated parameters and save them as
+3. At **Review + create**, select **Create**. After submission, select **Download template and
+    parameters** and save them as
     `customer\parameters\sharedServices\<environment>.sharedServices.parameters.json`.
-4. Deploy, then retain the Key Vault, monitoring, FSLogix backup vault, and policy outputs required
+4. Retain the Key Vault, monitoring, FSLogix backup vault, and policy outputs required
     by downstream forms.
 
 <details>
@@ -595,9 +597,10 @@ new image.
 1. In the Azure portal, open **Template Specs** and deploy **AVD Image Management**.
 2. Use the form to select storage, gallery, build infrastructure, networking, monitoring, and CMK
     options. Supply Step 1 outputs only when those features are enabled.
-3. At **Review + create**, download the generated parameters and save them as
+3. At **Review + create**, select **Create**. After submission, select **Download template and
+    parameters** and save them as
     `customer\parameters\imageManagement\<environment>.imageManagement.parameters.json`.
-4. Deploy, then retain the gallery, artifact storage, managed identity, build resource group, log
+4. Retain the gallery, artifact storage, managed identity, build resource group, log
     storage, and encryption outputs needed by artifact upload and Image Build.
 
 <details>
@@ -708,9 +711,11 @@ This enables least-privilege: the person running imageBuild needs no rights to c
 1. In the Azure portal, open **Template Specs** and deploy **AVD Custom Image**.
 2. Use the form to select the source image, gallery definition, customizations, update source, and
     build infrastructure. Supply the outputs retained from Image Management.
-3. At **Review + create**, download the generated parameters and save them as
+3. At **Review + create**, select **Create**. After submission, select **Download template and
+    parameters** and save them as
     `customer\parameters\imageBuild\<image>.imageBuild.parameters.json`.
-4. Remove `timeStamp`, deploy the image, and retain `customImageResourceId` for the Host Pool form.
+4. Remove `timeStamp` before reusing the file, and retain `customImageResourceId` for the Host Pool
+    form.
 
 <details>
 <summary><b>Blue Button and PowerShell alternatives</b></summary>
@@ -763,11 +768,12 @@ Replacer independently handles image-driven replacement.
     **AVD Automated Host Pool**, according to the decision above.
 2. Use the form to select identity, image, session hosts, FSLogix, monitoring, backup, security, and
     private connectivity. Supply outputs from earlier steps only when those components were deployed.
-3. At **Review + create**, download the generated parameters and save them as
+3. At **Review + create**, select **Create**. After submission, select **Download template and
+    parameters** and save them as
     `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` for standard management or
     `customer\parameters\automatedHostPools\<hostpool>.automatedHostPool.parameters.json` for
     automated management.
-4. Deploy and verify that the session hosts report **Available**.
+4. Verify that the session hosts report **Available**.
 
 <a id="poc-fast-path"></a>
 <details>
@@ -936,7 +942,11 @@ Assign these roles so each team can deploy their components without subscription
 | **Session Hosts add-on** | `Contributor` on hosts RG + `Desktop Virtualization Host Pool Contributor` on control plane RG | Resource group scoped — no subscription-level rights needed |
 | **hostpool — Complete** | `Owner` or `Contributor + User Access Administrator` at subscription scope | Creates RGs and assigns roles at subscription scope |
 
-> **Generating parameter files for each team:** The easiest way to create a parameter file is to deploy once using the Template Spec portal form, then **download the generated parameter file** before submitting. For Image Build files, remove the `timeStamp` parameter before saving for reuse. See the [recommended first-deployment workflow](#recommended-first-deployment-workflow) for details.
+> **Generating parameter files for each team:** The easiest way to create a parameter file is to
+> deploy once using the Template Spec portal form. Select **Create** on **Review + create**, then
+> select **Download template and parameters** after submission. For Image Build files, remove the
+> `timeStamp` parameter before saving for reuse. See the
+> [recommended first-deployment workflow](#recommended-first-deployment-workflow) for details.
 
 </details>
 

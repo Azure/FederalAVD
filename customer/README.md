@@ -28,7 +28,7 @@ customer/
 ```
 
 For every first deployment, use the component's Template Spec portal form and download the working
-parameter file from **Review + create** into the matching child folder under
+parameter file after selecting **Create** on **Review + create** into the matching child folder under
 `customer/parameters/`. Use the samples in each deployment's `parameters/` folder as references or
 as fallbacks only when the Template Spec UI is unavailable:
 

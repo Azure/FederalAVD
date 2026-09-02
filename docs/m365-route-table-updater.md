@@ -56,8 +56,9 @@ An Azure Automation Account is deployed with a PowerShell 7.2 runbook and a recu
 ```
 
 In the Azure portal, open **Template Specs**, select **M365 Route Table Updater**, and choose
-**Deploy**. On **Review + create**, select **Download template and parameters** before submitting,
-then retain the working parameter file for subsequent PowerShell or CI/CD deployments.
+**Deploy**. On **Review + create**, select **Create**. After the deployment is submitted, select
+**Download template and parameters** and retain the working parameter file for subsequent
+PowerShell or CI/CD deployments.
 
 ### Blue Button (Azure Commercial / Government Alternative)
 

@@ -17,6 +17,33 @@ Update and autoscale instead.
 > `Microsoft.DesktopVirtualization/hostPools@2025-11-01-preview` API. Use the standard
 > `deployments/hostpools` solution for sovereign clouds, personal host pools, and directly managed
 > session-host VMs.
+>
+> **First deployment:** Use the Automated Host Pool Template Spec portal form. The guided form
+> explains conditional settings, validates compatible choices, and shows how the deployment inputs
+> fit together. On **Review + create**, select **Create**. After the deployment is submitted, select
+> **Download template and parameters** and save the generated parameter file for repeatable
+> PowerShell or CI/CD deployments.
+
+## Deploy
+
+The recommended first-deployment workflow is:
+
+1. Publish the **AVD Shared Services** and **AVD Automated Host Pool** Template Specs with
+  `tools\New-TemplateSpecs.ps1`.
+2. Deploy Shared Services first when a credentials Key Vault is not already available. Capture its
+  `secretsKeyVaultResourceId` output.
+3. Open **AVD Automated Host Pool** under **Template Specs** in the Azure portal and select the
+  credentials Key Vault, subnet, image, availability model, storage, monitoring, and other optional
+  capabilities.
+4. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+  template and parameters** and store the generated parameter file under
+  `customer\parameters\automatedHostPools\`, which is intentionally excluded from git.
+5. Use that validated parameter file for subsequent deployments. Avoid hand-authoring the first
+  parameter file unless the Template Spec UI is unavailable.
+
+Publishing a Template Spec makes its guided form available but does not deploy resources. See
+[Detailed Deployment Instructions](#detailed-deployment-instructions) for the publication command,
+prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflow.
 
 ## Deployment Flow
 
@@ -188,7 +215,7 @@ register the AVD Agent because Azure Virtual Desktop performs agent provisioning
 session hosts. The directly managed host-pool solutions continue to use the shared initializer,
 which includes AVD Agent installation and registration.
 
-## Deploy
+## Detailed Deployment Instructions
 
 An automated host pool always requires a pre-existing credentials Key Vault. The preferred path for
 every first deployment is the Template Spec portal UI. Its resource pickers, conditional fields,
@@ -230,8 +257,8 @@ portal, open **Template Specs** and deploy them in this order:
 2. Deploy **AVD Automated Host Pool**. Select the credentials Key Vault created in step 1, then
   select the existing subnet, image, and any optional monitoring, encryption, backup, or private
   endpoint resources.
-3. On **Review + create**, select **Download template and parameters** before creating the host
-  pool. Save the generated automated-host-pool parameter file under
+3. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+  template and parameters** and save the generated automated-host-pool parameter file under
   `customer\parameters\automatedHostPools\`; this folder is intentionally excluded from git.
 
 The automated Template Spec is opt-in because the preview resource API is available only in Azure

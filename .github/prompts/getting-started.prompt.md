@@ -17,7 +17,7 @@ deploy successfully, and retain the generated parameter files for later PowerShe
 
 Once I answer, give me **exactly one next step** - not a menu. Route me as follows:
 
-- **Existing VNet + marketplace images -> standard PoC:** Start with the standard Host Pool Template Spec portal form. Tell me to download its generated parameter file and save it under `customer/parameters/hostpools/`. Do not start with PowerShell or hand-edited JSON.
+- **Existing VNet + marketplace images -> standard PoC:** Start with the standard Host Pool Template Spec portal form. Tell me to select **Create** on **Review + create**, then download its generated template and parameters after submission and save the parameter file under `customer/parameters/hostpools/`. Do not start with PowerShell or hand-edited JSON.
 - **Multiple standard host pools with shared supporting resources:** The first Step 4 deployment can create Key Vaults, monitoring, and the FSLogix backup vault/policy. Later standard host-pool forms should select those existing resources. Do not require Step 1 unless the resources must exist before the first host pool.
 - **Automated host-pool PoC:** Deploy AVD Shared Services with the Secrets Key Vault enabled first, then pass its `secretsKeyVaultResourceId` output to `credentialsKeyVaultResourceId` in the automated Host Pool deployment.
 - **Need networking:** Start with Step 0, then continue to the appropriate next step.
@@ -33,7 +33,8 @@ For each required component:
 
 1. Tell me which Template Spec to deploy.
 2. Explain only the decisions visible in that form that affect my selected path.
-3. Tell me to download the generated parameters before submitting the deployment.
+3. Tell me to select **Create** on **Review + create**, then download the generated template and
+   parameters after submission.
 4. Give me the exact destination under `customer/parameters/`. For Image Build files, remind me to remove `timeStamp`.
 5. Identify only the deployment outputs needed by the next form.
 

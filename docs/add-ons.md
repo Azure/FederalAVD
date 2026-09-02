@@ -33,9 +33,9 @@ All add-ons support three deployment methods:
 | **PowerShell / Azure CLI** | All clouds | Subsequent scripted or CI/CD deployments using exported parameters |
 
 Use the Template Spec portal form for the first deployment of an add-on. On **Review + create**,
-select **Download template and parameters** and retain the working parameter file for subsequent
-PowerShell or CI/CD deployments. Hand-author parameters only when the Template Spec UI is
-unavailable.
+select **Create**. After the deployment is submitted, select **Download template and parameters**
+and retain the working parameter file for subsequent PowerShell or CI/CD deployments. Hand-author
+parameters only when the Template Spec UI is unavailable.
 
 ### Template Spec — All Add-Ons
 

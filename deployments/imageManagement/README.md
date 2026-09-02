@@ -264,8 +264,9 @@ Publish the Image Management Template Spec from the repository root:
 ```
 
 In the Azure portal, open **Template Specs**, select **AVD Image Management**, and choose **Deploy**.
-On **Review + create**, select **Download template and parameters** and store the working file under
-`customer\parameters\imageManagement\` before submitting the deployment.
+On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+template and parameters** and store the working file under
+`customer\parameters\imageManagement\`.
 
 ### Azure Portal Blue Button (Alternative)
 

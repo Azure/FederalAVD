@@ -25,8 +25,8 @@ For the first deployment, use the Template Spec portal form for each required co
 dynamic fields, supported-value lookups, and validation make the parameter relationships easier to
 understand than hand-editing JSON.
 
-At **Review + create**, select **Download template and parameters**, then rename and save the
-generated parameter file in the matching folder:
+At **Review + create**, select **Create**. After the deployment is submitted, select **Download
+template and parameters**, then rename and save the generated parameter file in the matching folder:
 
 | Template Spec | Save the generated parameters under |
 | --- | --- |
