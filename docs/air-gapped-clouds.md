@@ -281,9 +281,10 @@ management systems. This affects every example artifact you copy from
 | [Configure-EdgePolicy](../customer-examples/artifacts/Configure-EdgePolicy/README.md) | `MicrosoftEdgePolicyTemplates.cab` | Edge Updates API; use the README's PowerShell resolver because the API endpoint is not the CAB URL |
 | [Configure-ChromePolicy](../customer-examples/artifacts/Configure-ChromePolicy/README.md) | Chrome Enterprise ADMX/ADML ZIP | `https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip` |
 | [Configure-Office365Policy](../customer-examples/artifacts/Configure-Office365Policy/README.md) | `AdminTemplates_x64.exe` | Microsoft Download Center; use the current direct URL and PowerShell command in the README |
+| [Microsoft-WSL2](../customer-examples/artifacts/Microsoft-WSL2/README.md) | `WSL-x64.msi` and exactly one distribution package; Rocky Linux 9 uses `Rocky-9-WSL-Base.latest.x86_64.wsl` | Microsoft WSL GitHub release plus the selected distribution's Microsoft or Rocky Linux source; use the artifact README's exact staging and checksum instructions |
 
 The example `downloads.json` is the maintained inventory of public sources and destination
-filenames. On a connected management system, it can download and package all three items
+filenames. On a connected management system, it can download and package these items
 automatically. Do not run those public download entries from an air-gapped management system.
 Instead, use each artifact README to download the package on a connected workstation, transfer
 it into the matching `customer/artifacts/Configure-*Policy/` folder, and run

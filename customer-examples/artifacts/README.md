@@ -104,6 +104,7 @@ command-line syntax instead of PowerShell parameter splatting.
 | [Microsoft-Power-BI-Desktop](Microsoft-Power-BI-Desktop/) | Power BI Desktop | `PowerBIDesktop` |
 | [Microsoft-PowerShell-7](Microsoft-PowerShell-7/) | PowerShell 7 | `PowerShell7` |
 | [Microsoft-VSCode](Microsoft-VSCode/) | Visual Studio Code | `VSCode` |
+| [Microsoft-WSL2](Microsoft-WSL2/) | Install WSL 2 and prepare one selected Linux distribution in two image-build phases | `MicrosoftWSL2` and one of `WSLUbuntu2404`, `WSLUbuntu2204`, `WSLDebian`, `WSLKaliLinux`, `WSLRockyLinux9` |
 | [Notepad-PlusPlus](Notepad-PlusPlus/) | Notepad++ | `NotepadPlusPlus` |
 | [PuTTY](PuTTY/) | PuTTY SSH client | `PuTTY` |
 | [Use-KeyVault-Secret](Use-KeyVault-Secret/) | Retrieve an Azure Key Vault secret from a Run Command using a user-assigned managed identity | — |
