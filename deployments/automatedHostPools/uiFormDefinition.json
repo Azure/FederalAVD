@@ -3252,7 +3252,7 @@
 									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), not(steps('controlPlane').dynamicScaling.deploy), greater(add(steps('hosts').hostDetails.sessionHostCount, steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))]",
 									"options": {
 										"style": "Error",
-										"text": "Availability Set capacity is exceeded. Reduce Initial Session Host Count or Maximum Concurrent VM Replacements until their sum is 200 or less."
+										"text": "Availability Set capacity is exceeded. Reduce Initial Session Host Count or Maximum Concurrent VM Replacements until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
 									}
 								},
 								{
@@ -3261,7 +3261,7 @@
 									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), steps('controlPlane').dynamicScaling.deploy, not(empty(filter(steps('controlPlane').dynamicScaling.schedules, (schedule) => or(greater(add(int(if(empty(schedule.rampUpMaximumHostPoolSize), '0', schedule.rampUpMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200), greater(add(int(if(empty(schedule.rampDownMaximumHostPoolSize), '0', schedule.rampDownMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))))))]",
 									"options": {
 										"style": "Error",
-										"text": "Availability Set capacity is exceeded. Reduce the largest Ramp-up Max Hosts or Ramp-down Max Hosts value, or Maximum Concurrent VM Replacements, until their sum is 200 or less."
+										"text": "Availability Set capacity is exceeded. Reduce the largest Ramp-up Max Hosts or Ramp-down Max Hosts value, or Maximum Concurrent VM Replacements, until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
 									}
 								},
 								{

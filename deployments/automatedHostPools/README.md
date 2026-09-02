@@ -349,7 +349,9 @@ also require `deleteOriginalVm: true`; otherwise retained original VMs permanent
 capacity. Failed VMs retained by `failedSessionHostCleanupPolicy` consume capacity as well and should
 be included in operational headroom. The policy uses a `deny` conflict effect because Availability Set
 membership is immutable after VM creation; requests where Azure cannot apply the set fail instead of
-silently creating a host outside it.
+silently creating a host outside it. When required capacity exceeds 200 VMs, continue using the
+automated host pool and select Availability Zones when supported, or select no infrastructure
+redundancy. Availability Set capacity alone does not require switching to a standard host pool.
 
 ## Feature Parity with Standard Host Pools
 

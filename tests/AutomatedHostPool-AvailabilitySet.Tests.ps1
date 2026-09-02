@@ -86,6 +86,7 @@ Describe 'Automated host-pool Availability Set placement' {
         $bicep | Should Match 'var availabilitySetCapacityIsValid'
         $bicep | Should Match 'maximumSessionHostCapacity \+ updateMaxVmsRemoved <= 200'
         $bicep | Should Match "Availability Sets require deleteOriginalVm to be true"
+        $bicep | Should Match 'use Availability Zones when supported or select no infrastructure redundancy'
         $bicep | Should Match 'dynamicScalingMaximumHostPoolSizes'
         $bicep | Should Match 'schedule.rampUpMaximumHostPoolSize'
         $bicep | Should Match 'schedule.rampDownMaximumHostPoolSize'
@@ -98,6 +99,7 @@ Describe 'Automated host-pool Availability Set placement' {
         $formJson | Should Match '"name": "availabilitySetCapacityWarning"'
         $formJson | Should Match 'Session Host Update creates replacement VMs before deleting the originals'
         $formJson | Should Match '"name": "availabilitySetStaticCapacityError"'
+        $formJson | Should Match 'select Availability Zones when supported or No infrastructure redundancy required'
         $formJson | Should Match "add\(steps\('hosts'\)\.hostDetails\.sessionHostCount, steps\('operationsAndMonitoring'\)\.updates\.maxVmsRemoved\)"
         $formJson | Should Match '"name": "availabilitySetDynamicCapacityError"'
         $formJson | Should Match "not\(empty\(filter\(steps\('controlPlane'\)\.dynamicScaling\.schedules"

@@ -737,7 +737,9 @@ session-host resource group and uses a resource-group-scoped creation-time `Modi
 it to each service-created VM request. The initial host count, or largest dynamic scaling maximum,
 plus the concurrent update replacement batch must not exceed the set's 200-VM limit. Availability
 Sets require deletion of original VMs after successful updates. Availability Zones and Availability
-Sets are mutually exclusive.
+Sets are mutually exclusive. For automated host pools requiring more than 200 total VMs, select
+Availability Zones when supported or no infrastructure redundancy; this Availability Set limit does
+not require switching to a standard host pool.
 
 **Reference:** [Availability options for Azure Virtual Machines](https://docs.microsoft.com/en-us/azure/virtual-machines/availability)
 

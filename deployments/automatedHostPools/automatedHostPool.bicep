@@ -547,7 +547,7 @@ var availabilitySetCapacityIsValid = availability != 'AvailabilitySets'
       ? fail('Availability Sets require deleteOriginalVm to be true so replaced VMs do not permanently consume the single Availability Set capacity.')
       : maximumSessionHostCapacity + updateMaxVmsRemoved <= 200
           ? true
-          : fail('Availability Set capacity is limited to 200 VMs. The initial sessionHostCount, or largest dynamic scaling maximum, plus updateMaxVmsRemoved must not exceed 200.')
+          : fail('Availability Set capacity is limited to 200 VMs. The initial sessionHostCount, or largest dynamic scaling maximum, plus updateMaxVmsRemoved must not exceed 200. For higher capacity, use Availability Zones when supported or select no infrastructure redundancy.')
 var deployAvailabilitySet = availability == 'AvailabilitySets' && availabilitySetCapacityIsValid
 var invalidDynamicScalingRampDownSettings = filter(effectiveDynamicScalingSchedules, schedule => schedule.rampDownWaitTimeMinutes < 0 || schedule.rampDownWaitTimeMinutes > 120 || schedule.rampDownForceLogoffUsers && empty(schedule.rampDownNotificationMessage))
 var dynamicScalingRampDownSettingsAreValid = !deployDynamicScalingPlan || empty(invalidDynamicScalingRampDownSettings)

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17051003248232485661"
+      "templateHash": "1054930396819323320"
     }
   },
   "definitions": {
@@ -1170,7 +1170,7 @@
     "dynamicScalingLimitsAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), empty(variables('invalidDynamicScalingLimits'))), true(), fail('Dynamic scaling minimum host-pool sizes cannot exceed their corresponding maximum sizes.'))]",
     "dynamicScalingMaximumHostPoolSizes": "[flatten(map(variables('effectiveDynamicScalingSchedules'), lambda('schedule', createArray(lambdaVariables('schedule').rampUpMaximumHostPoolSize, lambdaVariables('schedule').rampDownMaximumHostPoolSize))))]",
     "maximumSessionHostCapacity": "[if(parameters('deployDynamicScalingPlan'), max(concat(variables('dynamicScalingMaximumHostPoolSizes'), createArray(0))), parameters('sessionHostCount'))]",
-    "availabilitySetCapacityIsValid": "[if(not(equals(parameters('availability'), 'AvailabilitySets')), true(), if(not(parameters('deleteOriginalVm')), fail('Availability Sets require deleteOriginalVm to be true so replaced VMs do not permanently consume the single Availability Set capacity.'), if(lessOrEquals(add(variables('maximumSessionHostCapacity'), parameters('updateMaxVmsRemoved')), 200), true(), fail('Availability Set capacity is limited to 200 VMs. The initial sessionHostCount, or largest dynamic scaling maximum, plus updateMaxVmsRemoved must not exceed 200.'))))]",
+    "availabilitySetCapacityIsValid": "[if(not(equals(parameters('availability'), 'AvailabilitySets')), true(), if(not(parameters('deleteOriginalVm')), fail('Availability Sets require deleteOriginalVm to be true so replaced VMs do not permanently consume the single Availability Set capacity.'), if(lessOrEquals(add(variables('maximumSessionHostCapacity'), parameters('updateMaxVmsRemoved')), 200), true(), fail('Availability Set capacity is limited to 200 VMs. The initial sessionHostCount, or largest dynamic scaling maximum, plus updateMaxVmsRemoved must not exceed 200. For higher capacity, use Availability Zones when supported or select no infrastructure redundancy.'))))]",
     "deployAvailabilitySet": "[and(equals(parameters('availability'), 'AvailabilitySets'), variables('availabilitySetCapacityIsValid'))]",
     "invalidDynamicScalingRampDownSettings": "[filter(variables('effectiveDynamicScalingSchedules'), lambda('schedule', or(or(less(lambdaVariables('schedule').rampDownWaitTimeMinutes, 0), greater(lambdaVariables('schedule').rampDownWaitTimeMinutes, 120)), and(lambdaVariables('schedule').rampDownForceLogoffUsers, empty(lambdaVariables('schedule').rampDownNotificationMessage)))))]",
     "dynamicScalingRampDownSettingsAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), empty(variables('invalidDynamicScalingRampDownSettings'))), true(), fail('Dynamic scaling ramp-down waits must be between 0 and 120 minutes, and force logoff requires a notification message.'))]",
