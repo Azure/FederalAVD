@@ -91,7 +91,8 @@ inventories and parameter details for each step.
    services satisfy the applicable requirements. AVD Shared Services is a hard sequencing
    dependency before Image Management when artifact/build-log storage or gallery image versions
    use CMK, or when policy requires an existing Log Analytics Workspace.
-   At **Review + create**, download each generated parameter file and save it under the matching
+   At **Review + create**, select **Create**. After each deployment is submitted, select **Download
+   template and parameters** and save the generated parameter file under the matching
    `customer/parameters/` folder as described in the
    [Quick Start workflow](quick-start.md#recommended-first-deployment-workflow).
 5. **Deploy Image Management when a custom image is required.** Retain its

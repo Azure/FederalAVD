@@ -2,10 +2,10 @@
 
 > **📖 User Guide:** For deployment instructions and getting started, see the [Image Build Guide](../../docs/image-build.md)
 >
-> **First deployment:** Use the Custom Image Template Spec portal form and download the generated
-> parameter file from **Review + create**. Remove its generated `timeStamp` parameter before reuse.
-> Use the PowerShell and parameter examples below for subsequent builds, or as a fallback when the
-> Template Spec UI is unavailable.
+> **First deployment:** Use the Custom Image Template Spec portal form. On **Review + create**,
+> select **Create**, then download the generated template and parameters after submission. Remove
+> the generated `timeStamp` parameter before reuse. Use the PowerShell and parameter examples below
+> for subsequent builds, or as a fallback when the Template Spec UI is unavailable.
 
 ## Overview
 

@@ -391,9 +391,10 @@ produce a working image-build parameter file:
 ```
 
 In the Azure portal, open **Template Specs**, select **AVD Custom Image**, and choose **Deploy**.
-On **Review + create**, select **Download template and parameters** before submitting. Store the
-working parameter file under `customer\parameters\imageBuild\` for subsequent builds, and remove
-the generated `timeStamp` parameter before reusing the file.
+On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+template and parameters** and store the working parameter file under
+`customer\parameters\imageBuild\` for subsequent builds. Remove the generated `timeStamp` parameter
+before reusing the file.
 
 ### Method 2: Azure Portal Blue Button (Alternative)
 

@@ -18,7 +18,7 @@ param applicationGroupName string
 param workspaceName string
 
 @description('Optional. Resource ID of an existing workspace to update with the new application group.')
-param existingWorkspaceResourceId string = ''
+param existingFeedWorkspaceResourceId string = ''
 
 @description('Optional. Workspace friendly name.')
 param workspaceFriendlyName string = ''
@@ -156,13 +156,13 @@ param tags object = {}
 @description('Optional. Operational metadata tags applied to the automated host pool.')
 param hostPoolCustomTags object = {}
 
-resource existingWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = if (!empty(existingWorkspaceResourceId)) {
-  name: last(split(existingWorkspaceResourceId, '/'))
-  scope: resourceGroup(split(existingWorkspaceResourceId, '/')[2], split(existingWorkspaceResourceId, '/')[4])
+resource existingWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = if (!empty(existingFeedWorkspaceResourceId)) {
+  name: last(split(existingFeedWorkspaceResourceId, '/'))
+  scope: resourceGroup(split(existingFeedWorkspaceResourceId, '/')[2], split(existingFeedWorkspaceResourceId, '/')[4])
 }
 
-var effectiveWorkspaceName = !empty(existingWorkspaceResourceId) ? existingWorkspace!.name : workspaceName
-var existingApplicationGroupReferences = !empty(existingWorkspaceResourceId)
+var effectiveWorkspaceName = !empty(existingFeedWorkspaceResourceId) ? existingWorkspace!.name : workspaceName
+var existingApplicationGroupReferences = !empty(existingFeedWorkspaceResourceId)
   ? map(existingWorkspace!.properties.applicationGroupReferences, resourceId => toLower(resourceId))
   : []
 var diagnostics = !empty(logAnalyticsWorkspaceResourceId)
@@ -176,7 +176,7 @@ var deployWorkspaceFeedPrivateEndpoint = contains(['FeedAndHostPool', 'All'], av
 var deployGlobalWorkspace = avdPrivateLinkPrivateRoutes == 'All' && empty(existingGlobalWorkspaceResourceId) && !empty(globalFeedPrivateEndpointSubnetResourceId)
 var effectiveWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = deployWorkspaceFeedPrivateEndpoint
   ? workspacePublicNetworkAccess
-  : (!empty(existingWorkspaceResourceId) && existingWorkspace!.properties.publicNetworkAccess == 'Disabled' ? 'Disabled' : 'Enabled')
+  : (!empty(existingFeedWorkspaceResourceId) && existingWorkspace!.properties.publicNetworkAccess == 'Disabled' ? 'Disabled' : 'Enabled')
 
 resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (deployHostPoolPrivateEndpoint) {
   name: split(hostPoolPrivateEndpointSubnetResourceId, '/')[8]
@@ -321,16 +321,16 @@ module workspace '../../shared/modules/resourceModules/desktopVirtualization/wor
   scope: resourceGroup(resourceGroupName)
   params: {
     name: effectiveWorkspaceName
-    location: !empty(existingWorkspaceResourceId) ? existingWorkspace!.location : location
-    tags: !empty(existingWorkspaceResourceId)
+    location: !empty(existingFeedWorkspaceResourceId) ? existingWorkspace!.location : location
+    tags: !empty(existingFeedWorkspaceResourceId)
       ? existingWorkspace!.tags ?? {}
       : tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
-    friendlyName: !empty(existingWorkspaceResourceId)
+    friendlyName: !empty(existingFeedWorkspaceResourceId)
       ? existingWorkspace!.properties.friendlyName
       : workspaceFriendlyName
     publicNetworkAccess: effectiveWorkspacePublicNetworkAccess
     applicationGroupResourceIds: union(existingApplicationGroupReferences, [toLower(applicationGroup.outputs.resourceId)])
-    diagnosticSettings: !empty(existingWorkspaceResourceId) ? null : diagnostics
+    diagnosticSettings: !empty(existingFeedWorkspaceResourceId) ? null : diagnostics
   }
 }
 

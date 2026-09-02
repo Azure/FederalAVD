@@ -15,8 +15,9 @@ This solution will allow you to run one or multiple scripts on selected virtual 
 
 Publish the add-on Template Specs with
 [`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
-Azure portal and deploy **Run Commands on VMs**. On **Review + create**, select **Download template
-and parameters** before submitting, then retain the working parameter file for subsequent runs.
+Azure portal and deploy **Run Commands on VMs**. On **Review + create**, select **Create**. After the
+deployment is submitted, select **Download template and parameters** and retain the working
+parameter file for subsequent runs.
 
 ### Blue Button (Azure Commercial / Government Alternative)
 

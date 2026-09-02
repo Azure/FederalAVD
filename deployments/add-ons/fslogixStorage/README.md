@@ -18,9 +18,9 @@ create the regional FSLogix vault and policy before this add-on is deployed.
 
 Use the Template Spec portal form for the first deployment. Publish the add-on Template Specs with
 [`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
-Azure portal and deploy **AVD FSLogix Storage**. On **Review + create**, select **Download template
-and parameters** before submitting, then retain the working parameter file for subsequent
-PowerShell or CI/CD deployments.
+Azure portal and deploy **AVD FSLogix Storage**. On **Review + create**, select **Create**. After the
+deployment is submitted, select **Download template and parameters** and retain the working
+parameter file for subsequent PowerShell or CI/CD deployments.
 
 ### Portal Form Behavior
 

@@ -135,27 +135,27 @@
 								{
 									"name": "existingWorkspaceNotice",
 									"type": "Microsoft.Common.TextBlock",
-									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))))]",
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').controlPlaneLocation.name))))]",
 									"options": {
-										"text": "An existing AVD workspace was detected in the selected control plane region. The form defaults to reusing an existing workspace so the new desktop application group can be registered with it."
+										"text": "An existing AVD workspace was detected in the selected control plane region. Update an existing workspace to register the new desktop application group with it, or create a new workspace."
 									}
 								},
 								{
 									"name": "createOption",
 									"type": "Microsoft.Common.OptionsGroup",
-									"label": "Workspace Option",
-									"defaultValue": "Use an existing workspace",
-									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))))]",
+									"label": "Workspace Creation Option",
+									"defaultValue": "Update an existing Workspace",
+									"visible": "[not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').controlPlaneLocation.name))))]",
 									"constraints": {
 										"required": true,
 										"allowedValues": [
 											{
-												"label": "Create a new workspace",
+												"label": "Create a new Workspace",
 												"value": "new"
 											},
 											{
-												"label": "Use an existing workspace",
-												"value": "existing"
+												"label": "Update an existing Workspace",
+												"value": "update"
 											}
 										]
 									}
@@ -163,7 +163,7 @@
 								{
 									"name": "createWorkspaceWarning",
 									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'new'), not(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))))]",
+									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'new'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').controlPlaneLocation.name))))]",
 									"options": {
 										"style": "Warning",
 										"text": "Creating a workspace when one already exists in this control plane region can replace application group references if the generated workspace name matches an existing workspace. This can interrupt access for host pools and application groups already registered with that workspace."
@@ -175,10 +175,10 @@
 									"label": "Existing AVD Workspace",
 									"multiLine": true,
 									"toolTip": "Select the existing AVD workspace in the selected control plane region to register the new desktop application group.",
-									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'existing'), not(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))))]",
+									"visible": "[and(equals(steps('controlPlane').workspace.createOption, 'update'), not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').controlPlaneLocation.name)))))]",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[map(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name)), (workspace) => parse(concat('{\"label\":\"', workspace.name, '\",\"description\":\"Friendly Name: ', coalesce(workspace.properties.friendlyName, ''), ', Resource Group: ', first(skip(split(workspace.id, '/'), 4)), '\",\"value\":\"', workspace.id, '\"}')))]"
+										"allowedValues": "[map(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').controlPlaneLocation.name)), (vdws) => parse(concat('{\"label\":\"', vdws.name, '\",\"description\":\"Friendly Name: ', vdws.properties.friendlyName, ', Resource Group: ', first(skip(split(vdws.id, '/'), 4)), '\",\"value\":\"', vdws.id, '\"}')))]"
 									}
 								},
 								{
@@ -187,7 +187,7 @@
 									"label": "Workspace Friendly Name",
 									"defaultValue": "",
 									"toolTip": "Optionally provide the friendly name displayed for the new AVD workspace.",
-									"visible": "[or(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))), equals(steps('controlPlane').workspace.createOption, 'new'))]",
+									"visible": "[or(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => equals(ws.location, steps('controlPlane').controlPlaneLocation.name))), equals(steps('controlPlane').workspace.createOption, 'new'))]",
 									"constraints": {
 										"required": false,
 										"validations": [
@@ -227,7 +227,7 @@
 									"label": "Load Balancing Algorithm",
 									"defaultValue": "Depth-first",
 									"constraints": {
-										"required": true,
+												"required": false,
 										"allowedValues": [
 											{
 												"label": "Depth-first",
@@ -283,12 +283,6 @@
 							"label": "Dynamic Autoscaling",
 							"elements": [
 								{
-									"name": "deploy",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Enable Dynamic Create/Delete Autoscaling",
-									"defaultValue": false
-								},
-								{
 									"name": "ephemeralOsDiskRecommendation",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
@@ -296,6 +290,12 @@
 										"text": "Autoscaling is optional. This solution offers only dynamic create/delete autoscaling; it does not offer a power-management-only scaling plan. If you use this dynamic plan with ephemeral OS disks, set Ramp-up Min % and Ramp-down Min % to 100 in every schedule. This keeps the minimum percentage of active hosts at 100% in every phase so autoscale creates and deletes hosts instead of attempting unsupported deallocation operations. Do not attach a separate power-management-only scaling plan to the host pool.",
 										"uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/deploy/session-hosts/ephemeral-os-disks?tabs=portal#dynamic-autoscaling-recommendations"
 									}
+								},
+								{
+									"name": "deploy",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Enable Dynamic Create/Delete Autoscaling",
+									"defaultValue": false
 								},
 								{
 									"name": "prerequisites",
@@ -409,7 +409,7 @@
 													"type": "Microsoft.Common.DropDown",
 													"placeholder": "Breadth-First",
 													"constraints": {
-														"required": true,
+														"required": false,
 														"allowedValues": [
 															{
 																"label": "Breadth-First",
@@ -420,87 +420,6 @@
 																"value": "DepthFirst"
 															}
 														]
-													}
-												}
-											},
-											{
-												"id": "peakStartTime",
-												"header": "Peak",
-												"element": {
-													"type": "Microsoft.Common.TextBox",
-													"placeholder": "08:30",
-													"constraints": {
-														"required": true,
-														"regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-														"validationMessage": "Use HH:mm."
-													}
-												}
-											},
-											{
-												"id": "peakLoadBalancingAlgorithm",
-												"header": "Peak Balancing",
-												"element": {
-													"type": "Microsoft.Common.DropDown",
-													"placeholder": "Breadth-First",
-													"constraints": {
-														"required": true,
-														"allowedValues": [
-															{
-																"label": "Breadth-First",
-																"value": "BreadthFirst"
-															},
-															{
-																"label": "Depth-First",
-																"value": "DepthFirst"
-															}
-														]
-													}
-												}
-											},
-											{
-												"id": "rampDownStartTime",
-												"header": "Ramp-down",
-												"element": {
-													"type": "Microsoft.Common.TextBox",
-													"placeholder": "17:00",
-													"constraints": {
-														"required": true,
-														"regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-														"validationMessage": "Use HH:mm."
-													}
-												}
-											},
-											{
-												"id": "rampDownLoadBalancingAlgorithm",
-												"header": "Ramp-down Balancing",
-												"element": {
-													"type": "Microsoft.Common.DropDown",
-													"placeholder": "Depth-First",
-													"constraints": {
-														"required": true,
-														"allowedValues": [
-															{
-																"label": "Breadth-First",
-																"value": "BreadthFirst"
-															},
-															{
-																"label": "Depth-First",
-																"value": "DepthFirst"
-															}
-														]
-													}
-												}
-											},
-											{
-												"id": "offPeakStartTime",
-												"header": "Off-peak",
-												"element": {
-													"type": "Microsoft.Common.TextBox",
-													"placeholder": "20:00",
-													"constraints": {
-														"required": true,
-														"regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-														"validationMessage": "Use HH:mm."
 													}
 												}
 											},
@@ -553,6 +472,74 @@
 														"required": true,
 														"regex": "^[1-9][0-9]*$",
 														"validationMessage": "Enter a positive whole number."
+													}
+												}
+											},
+											{
+												"id": "peakStartTime",
+												"header": "Peak",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "08:30",
+													"constraints": {
+														"required": true,
+														"regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+														"validationMessage": "Use HH:mm."
+													}
+												}
+											},
+											{
+												"id": "peakLoadBalancingAlgorithm",
+												"header": "Peak Balancing",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"placeholder": "Breadth-First",
+													"constraints": {
+														"required": false,
+														"allowedValues": [
+															{
+																"label": "Breadth-First",
+																"value": "BreadthFirst"
+															},
+															{
+																"label": "Depth-First",
+																"value": "DepthFirst"
+															}
+														]
+													}
+												}
+											},
+											{
+												"id": "rampDownStartTime",
+												"header": "Ramp-down",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "17:00",
+													"constraints": {
+														"required": true,
+														"regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+														"validationMessage": "Use HH:mm."
+													}
+												}
+											},
+											{
+												"id": "rampDownLoadBalancingAlgorithm",
+												"header": "Ramp-down Balancing",
+												"element": {
+													"type": "Microsoft.Common.DropDown",
+													"placeholder": "Depth-First",
+													"constraints": {
+														"required": false,
+														"allowedValues": [
+															{
+																"label": "Breadth-First",
+																"value": "BreadthFirst"
+															},
+															{
+																"label": "Depth-First",
+																"value": "DepthFirst"
+															}
+														]
 													}
 												}
 											},
@@ -615,7 +602,7 @@
 													"type": "Microsoft.Common.DropDown",
 													"placeholder": "No",
 													"constraints": {
-														"required": true,
+														"required": false,
 														"allowedValues": [
 															{
 																"label": "Yes",
@@ -661,7 +648,7 @@
 													"type": "Microsoft.Common.DropDown",
 													"placeholder": "Zero Sessions",
 													"constraints": {
-														"required": true,
+														"required": false,
 														"allowedValues": [
 															{
 																"label": "Zero Sessions",
@@ -676,13 +663,26 @@
 												}
 											},
 											{
+												"id": "offPeakStartTime",
+												"header": "Off-peak",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "20:00",
+													"constraints": {
+														"required": true,
+														"regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+														"validationMessage": "Use HH:mm."
+													}
+												}
+											},
+											{
 												"id": "offPeakLoadBalancingAlgorithm",
 												"header": "Off-peak Balancing",
 												"element": {
 													"type": "Microsoft.Common.DropDown",
 													"placeholder": "Depth-First",
 													"constraints": {
-														"required": true,
+														"required": false,
 														"allowedValues": [
 															{
 																"label": "Breadth-First",
@@ -1124,7 +1124,7 @@
 									"label": "Initial Session Host Count",
 									"defaultValue": 1,
 									"min": 1,
-									"max": 100,
+									"max": "[if(equals(steps('hosts').availability.option, 'AvailabilitySets'), 200, 1000)]",
 									"showStepMarkers": false,
 									"visible": "[not(steps('controlPlane').dynamicScaling.deploy)]",
 									"toolTip": "The number of session hosts to provision when dynamic autoscaling is disabled. Dynamic autoscaling uses the active schedule to determine initial and ongoing capacity."
@@ -1490,14 +1490,14 @@
 								{
 									"name": "ephemeralOsDiskPlacement",
 									"type": "Microsoft.Common.DropDown",
-									"label": "Ephemeral OS Disk Placement",
-									"defaultValue": "[if(and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'ResourceDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.maxResourceVolumeMB)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1024))), 'Temp Disk placement', 'OS cache placement')]",
+									"label": "Ephemeral OS Disk Storage",
+									"defaultValue": "[if(and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'ResourceDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.maxResourceVolumeMB)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1024))), 'Temporary Disk', 'OS Cache')]",
 									"toolTip": "Select an eligible local placement for the source image OS disk. Only placements supported by the selected VM size with sufficient capacity are listed.",
 									"multiLine": true,
 									"visible": "[and(steps('hosts').capacity.useEphemeralOsDisk, not(empty(steps('hosts').capacity.virtualMachineSize)), equals(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskSupported)), 'True'), or(and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'ResourceDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.maxResourceVolumeMB)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1024))), and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'CacheDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.cachedDiskBytes)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1073741824)))))]",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[filter(parse('[{\"label\":\"Temp Disk placement\",\"value\":\"TempDisk\",\"description\":\"Uses the VM size temporary resource disk.\"},{\"label\":\"OS cache placement\",\"value\":\"CacheDisk\",\"description\":\"Uses the VM size local OS cache.\"}]'), (placement) => if(equals(placement.value, 'TempDisk'), and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'ResourceDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.maxResourceVolumeMB)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1024))), and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'CacheDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.cachedDiskBytes)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1073741824)))))]"
+										"allowedValues": "[filter(parse('[{\"label\":\"Temporary Disk\",\"value\":\"TempDisk\",\"description\":\"Uses the VM size temporary resource disk.\"},{\"label\":\"OS Cache\",\"value\":\"CacheDisk\",\"description\":\"Uses the VM size local OS cache.\"}]'), (placement) => if(equals(placement.value, 'TempDisk'), and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'ResourceDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.maxResourceVolumeMB)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1024))), and(contains(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.ephemeralOsDiskPlacements)), 'CacheDisk'), greaterOrEquals(int(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.cachedDiskBytes)), '0')), mul(add(if(equals(steps('hosts').image.source, 'marketplace'), 127, int(coalesce(steps('hosts').image.imageVersionDetailsApi.transformed.osDiskSizeGB, 0))), if(equals(steps('hosts').security.securityType, 'Standard'), 0, 1)), 1073741824)))))]"
 									}
 								},
 								{
@@ -1564,10 +1564,10 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Availability Options",
 									"toolTip": "Select the redundancy and resiliency for the session hosts.",
-									"defaultValue": "[if(empty(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone)))), 'No infrastructure redundancy required', 'Availability Zones')]",
+									"defaultValue": "[if(empty(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone)))), 'Availability Sets', 'Availability Zones')]",
 									"constraints": {
 										"required": true,
-										"allowedValues": "[if(empty(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone)))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
+										"allowedValues": "[if(empty(filter(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(steps('hosts').resourceSkusApi.transformed.vmSizes, (sku) => equals(sku.value, steps('hosts').capacity.virtualMachineSize)), (sku) => sku.restrictedZones)), parse('[]')), zone)))), parse('[{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
 									}
 								},
 								{
@@ -2059,7 +2059,7 @@
 							"options": {
 								"style": "Info",
 								"text": "Microsoft Entra Kerberos requires post-deployment application consent and configuration. A user-assigned identity with Application.ReadWrite.All and DelegatedPermissionGrant.ReadWrite.All can automate most tasks; multifactor authentication exclusions must still be completed manually.",
-								"uri": "https://github.com/Azure/FederalAVD/blob/main/docs/entra-kerberos-hybrid.md"
+								"uri": "[if(equals(steps('profiles').userIdentity, 'EntraKerberos-CloudOnly'), 'https://github.com/Azure/FederalAVD/blob/main/docs/entra-kerberos-cloud-only.md', 'https://github.com/Azure/FederalAVD/blob/main/docs/entra-kerberos-hybrid.md')]"
 							}
 						},
 						{
@@ -2093,7 +2093,7 @@
 									"name": "service",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Storage Service and SKU",
-									"defaultValue": "Azure Files Standard",
+									"defaultValue": "Azure Files Premium",
 									"constraints": {
 										"required": true,
 										"allowedValues": "[if(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), parse('[{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"},{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"},{\"label\":\"Azure NetApp Files Standard\",\"value\":\"AzureNetAppFiles Standard\"},{\"label\":\"Azure NetApp Files Premium\",\"value\":\"AzureNetAppFiles Premium\"}]'), parse('[{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"},{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"}]'))]"
@@ -3120,7 +3120,7 @@
 									"name": "enableMonitoring",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Enable AVD Insights Monitoring",
-									"defaultValue": false
+									"defaultValue": true
 								},
 								{
 									"name": "subscription",
@@ -3229,6 +3229,15 @@
 							"label": "Automated Updates and Cleanup",
 							"elements": [
 								{
+									"name": "availabilitySetCapacityWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('hosts').availability.option, 'AvailabilitySets')]",
+									"options": {
+										"style": "Warning",
+										"text": "A managed Availability Set supports 200 VMs. Session Host Update creates replacement VMs before deleting the originals, so the initial host count, or the largest dynamic autoscaling maximum, plus Maximum Concurrent VM Replacements must not exceed 200. The original VM must be deleted after a successful update."
+									}
+								},
+								{
 									"name": "maxVmsRemoved",
 									"type": "Microsoft.Common.Slider",
 									"label": "Maximum Concurrent VM Replacements",
@@ -3236,6 +3245,24 @@
 									"min": 1,
 									"max": 20,
 									"showStepMarkers": false
+								},
+								{
+									"name": "availabilitySetStaticCapacityError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), not(steps('controlPlane').dynamicScaling.deploy), greater(add(steps('hosts').hostDetails.sessionHostCount, steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))]",
+									"options": {
+										"style": "Error",
+										"text": "Availability Set capacity is exceeded. Reduce Initial Session Host Count or Maximum Concurrent VM Replacements until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
+									}
+								},
+								{
+									"name": "availabilitySetDynamicCapacityError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), steps('controlPlane').dynamicScaling.deploy, not(empty(filter(steps('controlPlane').dynamicScaling.schedules, (schedule) => or(greater(add(int(if(empty(schedule.rampUpMaximumHostPoolSize), '0', schedule.rampUpMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200), greater(add(int(if(empty(schedule.rampDownMaximumHostPoolSize), '0', schedule.rampDownMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))))))]",
+									"options": {
+										"style": "Error",
+										"text": "Availability Set capacity is exceeded. Reduce the largest Ramp-up Max Hosts or Ramp-down Max Hosts value, or Maximum Concurrent VM Replacements, until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
+									}
 								},
 								{
 									"name": "logOffDelayMinutes",
@@ -3259,7 +3286,8 @@
 									"name": "deleteOriginalVm",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "Delete the Original VM after a Successful Update",
-									"defaultValue": true
+									"defaultValue": true,
+									"visible": "[not(equals(steps('hosts').availability.option, 'AvailabilitySets'))]"
 								},
 								{
 									"name": "failedSessionHostCleanupPolicy",
@@ -3894,7 +3922,7 @@
 				"identifier": "[steps('basics').identifier]",
 				"location": "[steps('hosts').location.name]",
 				"controlPlaneLocation": "[steps('controlPlane').controlPlaneLocation.name]",
-				"existingWorkspaceResourceId": "[if(and(not(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name)))), equals(steps('controlPlane').workspace.createOption, 'existing')), steps('controlPlane').workspace.existingWorkspace, '')]",
+				"existingFeedWorkspaceResourceId": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), steps('controlPlane').workspace.existingWorkspace, '')]",
 				"workspaceFriendlyName": "[if(or(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))), equals(steps('controlPlane').workspace.createOption, 'new')), steps('controlPlane').workspace.workspaceFriendlyName, '')]",
 				"avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.privateRoutes, 'None')]",
 				"hostPoolPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostPoolSubnet.id, '')]",
@@ -3929,6 +3957,7 @@
 				"virtualMachineSubnetResourceId": "[steps('hosts').network.subnet.id]",
 				"virtualMachineNamePrefix": "[steps('hosts').hostDetails.virtualMachineNamePrefix]",
 				"sessionHostCount": "[steps('hosts').hostDetails.sessionHostCount]",
+				"availability": "[steps('hosts').availability.option]",
 				"virtualMachineSize": "[steps('hosts').capacity.virtualMachineSize]",
 				"diskSku": "[if(steps('hosts').capacity.useEphemeralOsDisk, 'StandardSSD_LRS', steps('hosts').capacity.diskSku)]",
 				"diskSizeGB": "[if(steps('hosts').capacity.useEphemeralOsDisk, 0, steps('hosts').capacity.diskSizeGB)]",
@@ -3949,7 +3978,7 @@
 				"availabilityZones": "[if(equals(steps('hosts').availability.option, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
 				"deployFSLogixStorage": "[and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage)]",
 				"fslogixConfigureSessionHosts": "[and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').configureSessionHosts)]",
-				"fslogixStorageService": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.service, 'AzureFiles Standard')]",
+				"fslogixStorageService": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.service, 'AzureFiles Premium')]",
 				"fslogixStorageRedundancy": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.storageRedundancy, 'LocallyRedundant')]",
 				"fslogixContainerType": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.containerType, 'ProfileContainer')]",
 				"fslogixShareSizeInGB": "[if(steps('profiles').deployStorage, steps('profiles').storage.shareSizeInGB, 100)]",
@@ -3992,7 +4021,7 @@
 				"updateMaxVmsRemoved": "[steps('operationsAndMonitoring').updates.maxVmsRemoved]",
 				"updateLogOffDelayMinutes": "[steps('operationsAndMonitoring').updates.logOffDelayMinutes]",
 				"updateLogOffMessage": "[steps('operationsAndMonitoring').updates.logOffMessage]",
-				"deleteOriginalVm": "[steps('operationsAndMonitoring').updates.deleteOriginalVm]",
+				"deleteOriginalVm": "[if(equals(steps('hosts').availability.option, 'AvailabilitySets'), true, steps('operationsAndMonitoring').updates.deleteOriginalVm)]",
 				"failedSessionHostCleanupPolicy": "[steps('operationsAndMonitoring').updates.failedSessionHostCleanupPolicy]",
 				"namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2), 'none', steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3), 'none', steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4), 'none', steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5), 'none', steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6), 'none', steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value), '', steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue), '', steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value), '', steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue), '', steps('tagsAndNaming').naming.workloadValue), '\",\"vmsLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '', steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '\",\"cpLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '', steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '\",\"fslogixStoragePrefix\":\"', if(and(steps('profiles').deployStorage, not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, ''), '\",\"resourceTypeCodes\":', if(steps('tagsAndNaming').naming.customizeAbbreviations, concat('{\"resourceGroups\":\"', steps('tagsAndNaming').naming.rtCodeRg, '\",\"hostPools\":\"', steps('tagsAndNaming').naming.rtCodeHp, '\",\"desktopApplicationGroups\":\"', steps('tagsAndNaming').naming.rtCodeDag, '\",\"workspaces\":\"', steps('tagsAndNaming').naming.rtCodeWs, '\",\"scalingPlans\":\"', steps('tagsAndNaming').naming.rtCodeSp, '\",\"diskEncryptionSets\":\"', steps('tagsAndNaming').naming.rtCodeDes, '\",\"storageAccounts\":\"', steps('tagsAndNaming').naming.rtCodeSa, '\",\"netAppAccounts\":\"', steps('tagsAndNaming').naming.rtCodeNaa, '\",\"netAppCapacityPools\":\"', steps('tagsAndNaming').naming.rtCodeNacp, '\",\"userAssignedIdentities\":\"', steps('tagsAndNaming').naming.rtCodeUai, '\",\"privateEndpoints\":\"', steps('tagsAndNaming').naming.rtCodePe, '\",\"networkInterfaces\":\"', steps('tagsAndNaming').naming.rtCodeNic, '\"}'), '{}'), '}'))]",
 				"tags": "[steps('tagsAndNaming').tags.tags]"

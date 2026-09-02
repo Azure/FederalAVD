@@ -143,8 +143,9 @@ or CI/CD deployments.
 2. In the Azure portal, open **Template Specs**.
 3. Select **AVD Host Pool** and choose **Deploy**.
 4. Complete the guided deployment form.
-5. On **Review + create**, select **Download template and parameters**.
-6. Save the working file under `customer\parameters\hostpools\` before creating the deployment.
+5. On **Review + create**, select **Create**.
+6. After the deployment is submitted, select **Download template and parameters** and save the
+  working file under `customer\parameters\hostpools\`.
 
 **Benefits:**
 
@@ -942,20 +943,15 @@ This creates template specs for:
 
 The easiest way to create parameter files for PowerShell/CLI deployments:
 
-1. **Deploy once using Template Spec UI:**
-   - Navigate to **Template Specs** in Azure Portal
-   - Select the desired template spec
-   - Click **Deploy**
-   - Fill out all parameters in the form
+1. **Deploy once using Template Spec UI:** Navigate to **Template Specs** in Azure Portal, select
+  the desired template spec, click **Deploy**, and fill out all parameters in the form.
 
-2. **Download the parameter file:**
-   - Before clicking **Create**, go to **Review + Create**
-   - Click **Download template and parameters**
-   - Save the `parameters.json` file
+2. **Submit and download the parameter file:** Go to **Review + Create**, click **Create**, and wait
+  for the deployment to be submitted. Click **Download template and parameters**, then save the
+  `parameters.json` file.
 
-3. **Prepare for PowerShell use:**
-   - Save the file under `customer/parameters/hostpools/`.
-   - Keep passwords and other secrets out of the saved file.
+3. **Prepare for PowerShell use:** Save the file under `customer/parameters/hostpools/` and keep
+  passwords and other secrets out of the saved file.
 
 4. **Use for future deployments:**
 
@@ -1300,8 +1296,9 @@ The solution includes an automated networking deployment for creating spoke VNet
 2. Select **AVD Network Spoke** and choose **Deploy**.
 3. Configure the virtual network address space, subnets, optional hub peering, routing, and private
   DNS zones.
-4. On **Review + create**, select **Download template and parameters** before submitting, then save
-  the working parameter file under `customer\parameters\networking\`.
+4. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+  template and parameters** and save the working parameter file under
+  `customer\parameters\networking\`.
 
 #### Option 2: Blue Button (Azure Commercial / Government Alternative)
 

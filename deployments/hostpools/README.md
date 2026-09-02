@@ -2,9 +2,10 @@
 
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 >
-> **First deployment:** Use the Host Pool Template Spec portal form and download the generated
-> parameter file from **Review + create**. Use the PowerShell and parameter examples below for
-> subsequent deployments, or as a fallback when the Template Spec UI is unavailable.
+> **First deployment:** Use the Host Pool Template Spec portal form. On **Review + create**, select
+> **Create**, then download the generated template and parameters after submission. Use the
+> PowerShell and parameter examples below for subsequent deployments, or as a fallback when the
+> Template Spec UI is unavailable.
 
 This template uses Azure Virtual Desktop **standard management**. You own session-host creation,
 registration, update, and replacement. Compare it with the Commercial-only

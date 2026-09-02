@@ -14,25 +14,25 @@ type dynamicScalingScheduleInputType = {
   name: string
   daysOfWeek: scalingDayType[]
   rampUpStartTime: string
-  rampUpLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  rampUpLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
   rampUpMinimumHostsPct: string
   rampUpCapacityThresholdPct: string
   rampUpMinimumHostPoolSize: string
   rampUpMaximumHostPoolSize: string
   peakStartTime: string
-  peakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  peakLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
   rampDownStartTime: string
-  rampDownLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  rampDownLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
   rampDownMinimumHostsPct: string
   rampDownCapacityThresholdPct: string
   rampDownMinimumHostPoolSize: string
   rampDownMaximumHostPoolSize: string
-  rampDownForceLogoffUsers: bool
+  rampDownForceLogoffUsers: bool?
   rampDownWaitTimeMinutes: string?
   rampDownNotificationMessage: string?
-  rampDownStopHostsWhen: 'ZeroSessions' | 'ZeroActiveSessions'
+  rampDownStopHostsWhen: ('ZeroSessions' | 'ZeroActiveSessions')?
   offPeakStartTime: string
-  offPeakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  offPeakLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
 }
 
 @maxLength(16)
@@ -150,7 +150,15 @@ param secureBootEnabled bool = true
 @description('Optional. Enable virtual TPM.')
 param vTpmEnabled bool = true
 
-@description('Optional. Availability zones used for new session hosts.')
+@allowed([
+  'AvailabilityZones'
+  'AvailabilitySets'
+  'None'
+])
+@description('Optional. Infrastructure redundancy for session hosts. AvailabilitySets creates one managed Availability Set and requires update headroom within its 200-VM limit.')
+param availability string = !empty(availabilityZones) ? 'AvailabilityZones' : 'None'
+
+@description('Optional. Availability zones used for new session hosts when availability is AvailabilityZones.')
 param availabilityZones int[] = []
 
 @description('Optional. Maximum concurrent sessions per session host.')
@@ -189,7 +197,7 @@ param scalingPlanTimeZone string = 'Eastern Standard Time'
 param dynamicScalingSchedules dynamicScalingScheduleInputType[] = []
 
 @description('Optional. Existing AVD workspace resource ID. When empty, a workspace is created.')
-param existingWorkspaceResourceId string = ''
+param existingFeedWorkspaceResourceId string = ''
 
 @allowed([
   'None'
@@ -266,7 +274,7 @@ param fslogixConfigureSessionHosts bool = deployFSLogixStorage
   'AzureNetAppFiles Standard'
 ])
 @description('Optional. FSLogix storage service and SKU.')
-param fslogixStorageService string = 'AzureFiles Standard'
+param fslogixStorageService string = 'AzureFiles Premium'
 
 @allowed([
   'LocallyRedundant'
@@ -498,34 +506,49 @@ var effectiveDynamicScalingSchedules = map(dynamicScalingSchedules, schedule => 
   name: schedule.name
   daysOfWeek: schedule.daysOfWeek
   rampUpStartTime: parseScalingTime(schedule.rampUpStartTime)
-  rampUpLoadBalancingAlgorithm: schedule.rampUpLoadBalancingAlgorithm
+  rampUpLoadBalancingAlgorithm: schedule.?rampUpLoadBalancingAlgorithm ?? 'BreadthFirst'
   rampUpMinimumHostsPct: int(schedule.rampUpMinimumHostsPct)
   rampUpCapacityThresholdPct: int(schedule.rampUpCapacityThresholdPct)
   rampUpMinimumHostPoolSize: int(schedule.rampUpMinimumHostPoolSize)
   rampUpMaximumHostPoolSize: int(schedule.rampUpMaximumHostPoolSize)
   peakStartTime: parseScalingTime(schedule.peakStartTime)
-  peakLoadBalancingAlgorithm: schedule.peakLoadBalancingAlgorithm
+  peakLoadBalancingAlgorithm: schedule.?peakLoadBalancingAlgorithm ?? 'BreadthFirst'
   rampDownStartTime: parseScalingTime(schedule.rampDownStartTime)
-  rampDownLoadBalancingAlgorithm: schedule.rampDownLoadBalancingAlgorithm
+  rampDownLoadBalancingAlgorithm: schedule.?rampDownLoadBalancingAlgorithm ?? 'DepthFirst'
   rampDownMinimumHostsPct: int(schedule.rampDownMinimumHostsPct)
   rampDownCapacityThresholdPct: int(schedule.rampDownCapacityThresholdPct)
   rampDownMinimumHostPoolSize: int(schedule.rampDownMinimumHostPoolSize)
   rampDownMaximumHostPoolSize: int(schedule.rampDownMaximumHostPoolSize)
-  rampDownForceLogoffUsers: schedule.rampDownForceLogoffUsers
-  rampDownWaitTimeMinutes: schedule.rampDownForceLogoffUsers
+  rampDownForceLogoffUsers: schedule.?rampDownForceLogoffUsers ?? false
+  rampDownWaitTimeMinutes: (schedule.?rampDownForceLogoffUsers ?? false)
     ? (empty(schedule.?rampDownWaitTimeMinutes ?? '') ? 30 : int(schedule.rampDownWaitTimeMinutes!))
     : 0
-  rampDownNotificationMessage: schedule.rampDownForceLogoffUsers
+  rampDownNotificationMessage: (schedule.?rampDownForceLogoffUsers ?? false)
     ? (empty(schedule.?rampDownNotificationMessage ?? '') ? 'Save your work and sign out. This session host is being removed by autoscale.' : schedule.rampDownNotificationMessage!)
     : ''
-  rampDownStopHostsWhen: schedule.rampDownStopHostsWhen
+  rampDownStopHostsWhen: schedule.?rampDownStopHostsWhen ?? 'ZeroSessions'
   offPeakStartTime: parseScalingTime(schedule.offPeakStartTime)
-  offPeakLoadBalancingAlgorithm: schedule.offPeakLoadBalancingAlgorithm
+  offPeakLoadBalancingAlgorithm: schedule.?offPeakLoadBalancingAlgorithm ?? 'DepthFirst'
 })
 var invalidDynamicScalingLimits = filter(effectiveDynamicScalingSchedules, schedule => schedule.rampUpMinimumHostPoolSize > schedule.rampUpMaximumHostPoolSize || schedule.rampDownMinimumHostPoolSize > schedule.rampDownMaximumHostPoolSize)
 var dynamicScalingLimitsAreValid = !deployDynamicScalingPlan || empty(invalidDynamicScalingLimits)
   ? true
   : fail('Dynamic scaling minimum host-pool sizes cannot exceed their corresponding maximum sizes.')
+var dynamicScalingMaximumHostPoolSizes = flatten(map(effectiveDynamicScalingSchedules, schedule => [
+  schedule.rampUpMaximumHostPoolSize
+  schedule.rampDownMaximumHostPoolSize
+]))
+var maximumSessionHostCapacity = deployDynamicScalingPlan
+  ? max(concat(dynamicScalingMaximumHostPoolSizes, [0]))
+  : sessionHostCount
+var availabilitySetCapacityIsValid = availability != 'AvailabilitySets'
+  ? true
+  : !deleteOriginalVm
+      ? fail('Availability Sets require deleteOriginalVm to be true so replaced VMs do not permanently consume the single Availability Set capacity.')
+      : maximumSessionHostCapacity + updateMaxVmsRemoved <= 200
+          ? true
+          : fail('Availability Set capacity is limited to 200 VMs. The initial sessionHostCount, or largest dynamic scaling maximum, plus updateMaxVmsRemoved must not exceed 200. For higher capacity, use Availability Zones when supported or select no infrastructure redundancy.')
+var deployAvailabilitySet = availability == 'AvailabilitySets' && availabilitySetCapacityIsValid
 var invalidDynamicScalingRampDownSettings = filter(effectiveDynamicScalingSchedules, schedule => schedule.rampDownWaitTimeMinutes < 0 || schedule.rampDownWaitTimeMinutes > 120 || schedule.rampDownForceLogoffUsers && empty(schedule.rampDownNotificationMessage))
 var dynamicScalingRampDownSettingsAreValid = !deployDynamicScalingPlan || empty(invalidDynamicScalingRampDownSettings)
   ? true
@@ -535,6 +558,9 @@ var dynamicScalingScheduleDays = flatten(map(effectiveDynamicScalingSchedules, s
 var dynamicScalingSchedulesAreValid = !deployDynamicScalingPlan || !empty(effectiveDynamicScalingSchedules) && length(dynamicScalingScheduleNames) == length(union(dynamicScalingScheduleNames, dynamicScalingScheduleNames)) && length(dynamicScalingScheduleDays) == length(union(dynamicScalingScheduleDays, dynamicScalingScheduleDays))
   ? true
   : fail('Dynamic scaling requires at least one schedule, unique schedule names, and each day assigned to no more than one schedule.')
+var availabilityConfigurationIsValid = availability == 'AvailabilityZones'
+  ? (!empty(availabilityZones) ? true : fail('Select at least one availability zone when availability is AvailabilityZones.'))
+  : (empty(availabilityZones) ? true : fail('Availability Zones and an Availability Set are mutually exclusive. Supply availabilityZones only when availability is AvailabilityZones.'))
 var hostPoolPrivateEndpointConfigurationIsValid = avdPrivateLinkPrivateRoutes == 'None' || !empty(hostPoolPrivateEndpointSubnetResourceId)
 var workspaceFeedPrivateEndpointConfigurationIsValid = !contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes) || !empty(workspaceFeedPrivateEndpointSubnetResourceId)
 var globalFeedPrivateEndpointConfigurationIsValid = avdPrivateLinkPrivateRoutes != 'All' || !empty(existingGlobalFeedResourceId) || !empty(globalFeedPrivateEndpointSubnetResourceId)
@@ -580,7 +606,7 @@ var effectiveDiskEncryptionSetName = contains(keyManagementDisks, 'PlatformManag
   ? naming.outputs.diskEncryptionSetNamePlatformAndCustomerManaged
   : naming.outputs.diskEncryptionSetNameCustomerManaged
 var effectiveDiskEncryptionSetResourceId = deployDiskEncryptionSet
-  ? diskCmk!.outputs.diskEncryptionSetResourceId
+  ? virtualMachinesDiskCmk!.outputs.diskEncryptionSetResourceId
   : diskEncryptionSetResourceId
 
 resource fslogixEncryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (deployFslogixStorageCmk && fslogixStorageCmkConfigurationIsValid) {
@@ -603,7 +629,7 @@ module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
     virtualMachinesRegion: location
     controlPlaneRegion: controlPlaneLocation
     globalFeedRegion: globalFeedRegion
-    existingFeedWorkspaceResourceId: existingWorkspaceResourceId
+    existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
     namingConvention: namingConvention
   }
 }
@@ -627,7 +653,7 @@ var hostPoolCustomTags = union(
     : {}
 )
 
-module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (empty(existingWorkspaceResourceId)) {
+module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (empty(existingFeedWorkspaceResourceId)) {
   params: {
     name: naming.outputs.resourceGroupControlPlane
     location: controlPlaneLocation
@@ -641,6 +667,17 @@ module sessionHostResourceGroup '../shared/modules/resourceModules/resources/res
     location: commercialCloudIsValid ? location : location
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTag)
   }
+}
+
+module availabilitySet 'modules/availabilitySet.bicep' = {
+  params: {
+    resourceGroupName: naming.outputs.resourceGroupHosts
+    nameConvention: naming.outputs.availabilitySetNameConv
+    deploy: deployAvailabilitySet
+    location: location
+    tags: union(parentResourceTag, tags[?'Microsoft.Compute/availabilitySets'] ?? {})
+  }
+  dependsOn: [sessionHostResourceGroup]
 }
 
 module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
@@ -677,7 +714,7 @@ module avdServicePrincipalRbac '../shared/modules/orchestration/avdServicePrinci
   }
 }
 
-module diskCmk '../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskEncryptionSet) {
+module virtualMachinesDiskCmk '../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskEncryptionSet) {
   params: {
     resourceGroupName: naming.outputs.resourceGroupHosts
     keyVaultResourceId: diskEncryptionSetConfigurationIsValid ? encryptionKeyVaultResourceId : encryptionKeyVaultResourceId
@@ -745,7 +782,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
     hostPoolName: naming.outputs.hostPoolName
     applicationGroupName: naming.outputs.desktopApplicationGroupName
     workspaceName: naming.outputs.workspaceName
-    existingWorkspaceResourceId: existingWorkspaceResourceId
+    existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
     workspaceFriendlyName: workspaceFriendlyName
     desktopFriendlyName: desktopFriendlyName
     deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
@@ -768,7 +805,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     avdServicePrincipalObjectId: deployDynamicScalingPlan ? avdServicePrincipalObjectId : ''
     sessionHostConfigurationProperties: {
-      availabilityZones: !empty(availabilityZones) ? availabilityZones : null
+      availabilityZones: availabilityConfigurationIsValid && availability == 'AvailabilityZones' ? availabilityZones : null
       diskInfo: {
         managedDisk: {
           type: diskSku
@@ -1003,6 +1040,7 @@ module sessionHostPolicy 'policy/main.bicep' = {
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
     policyIdentityName: naming.outputs.policyRemediationIdentityName
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
+    availabilitySetResourceId: availabilitySet.outputs.resourceId
     disableManagedDiskPublicNetworkAccess: disableManagedDiskPublicNetworkAccess
     enableMonitoring: monitoringConfigurationIsValid && monitoringIdentityConfigurationIsValid
       ? enableMonitoring

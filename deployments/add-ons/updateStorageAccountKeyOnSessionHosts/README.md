@@ -16,8 +16,8 @@ This solution will update the FSLogix Storage Account Key on Session Hosts to su
 Publish the add-on Template Specs with
 [`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
 Azure portal and deploy **AVD Update Storage Account Key on Session Hosts**. On **Review + create**,
-select **Download template and parameters** before submitting, then retain the working parameter
-file for subsequent rotations.
+select **Create**. After the deployment is submitted, select **Download template and parameters**
+and retain the working parameter file for subsequent rotations.
 
 ### Blue Button (Azure Commercial / Government Alternative)
 
