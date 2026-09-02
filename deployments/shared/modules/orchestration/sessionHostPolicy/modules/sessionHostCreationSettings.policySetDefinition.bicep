@@ -6,6 +6,7 @@ param sessionHostComputePolicyDefinitionResourceId string
 param sessionHostSystemAssignedIdentityPolicyDefinitionResourceId string
 param acceleratedNetworkingPolicyDefinitionResourceId string
 param managedDiskNetworkAccessPolicyDefinitionResourceId string
+param availabilitySetPolicyDefinitionResourceId string
 
 resource policySetDefinition 'Microsoft.Authorization/policySetDefinitions@2024-05-01' = {
   name: policySetDefinitionName
@@ -16,7 +17,7 @@ resource policySetDefinition 'Microsoft.Authorization/policySetDefinitions@2024-
       category: 'Azure Virtual Desktop'
       solution: 'AVD Session Host Governance'
       component: 'Creation Settings'
-      version: '1.0.0'
+      version: '1.1.0'
     }
     parameters: {
       effect: {
@@ -66,6 +67,22 @@ resource policySetDefinition 'Microsoft.Authorization/policySetDefinitions@2024-
           'Disabled'
         ]
         defaultValue: 'Disabled'
+      }
+      availabilitySetEffect: {
+        type: 'String'
+        allowedValues: [
+          'Modify'
+          'Disabled'
+        ]
+        defaultValue: 'Disabled'
+      }
+      availabilitySetResourceId: {
+        type: 'String'
+        defaultValue: ''
+        metadata: {
+          description: 'Resource ID of the managed Availability Set assigned to session host virtual machines.'
+          strongType: 'Microsoft.Compute/availabilitySets'
+        }
       }
     }
     policyDefinitions: [
@@ -123,6 +140,18 @@ resource policySetDefinition 'Microsoft.Authorization/policySetDefinitions@2024-
         parameters: {
           effect: {
             value: '[parameters(\'managedDiskNetworkAccessEffect\')]'
+          }
+        }
+      }
+      {
+        policyDefinitionReferenceId: 'configureAvailabilitySet'
+        policyDefinitionId: availabilitySetPolicyDefinitionResourceId
+        parameters: {
+          effect: {
+            value: '[parameters(\'availabilitySetEffect\')]'
+          }
+          availabilitySetResourceId: {
+            value: '[parameters(\'availabilitySetResourceId\')]'
           }
         }
       }

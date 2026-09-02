@@ -76,7 +76,7 @@ between them.
 | VM configuration | Supplied whenever VMs are deployed or replaced | Persisted in Session Host Configuration |
 | Image updates | Customer-owned replacement process or Session Host Replacer | Native Session Host Update |
 | Capacity scaling | Fixed capacity or power-management scaling | Fixed capacity, power management, or dynamic create/delete scaling |
-| Availability | Zones, Availability Sets, or no infrastructure redundancy | Zones or no infrastructure redundancy; Availability Sets are not exposed by the preview API |
+| Availability | Zones, Availability Sets, or no infrastructure redundancy | Zones, one managed Availability Set, or no infrastructure redundancy |
 
 ### Standard Host Pools
 
@@ -731,6 +731,13 @@ Deploy session hosts across Availability Zones or Availability Sets to provide i
 - **Availability Zones**: Physically separate datacenters within an Azure region (SLA: 99.99%)
 - **Availability Sets**: Logical grouping to protect against rack-level failures (SLA: 99.95%)
 - **No Redundancy**: Single virtual machine deployment (SLA: 99.9% with Premium SSD)
+
+For automated host pools, FederalAVD creates one managed Availability Set in the dedicated
+session-host resource group and uses a resource-group-scoped creation-time `Modify` policy to add
+it to each service-created VM request. The initial host count, or largest dynamic scaling maximum,
+plus the concurrent update replacement batch must not exceed the set's 200-VM limit. Availability
+Sets require deletion of original VMs after successful updates. Availability Zones and Availability
+Sets are mutually exclusive.
 
 **Reference:** [Availability options for Azure Virtual Machines](https://docs.microsoft.com/en-us/azure/virtual-machines/availability)
 

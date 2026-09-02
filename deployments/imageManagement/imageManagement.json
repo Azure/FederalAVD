@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "4053314636599341379"
+      "templateHash": "1008769826367619126"
     }
   },
   "functions": [
@@ -2499,11 +2499,11 @@
         "resourceGroup"
       ]
     },
-    "diskCmk": {
+    "imageManagementDiskCmk": {
       "condition": "[not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('diskCmk-{0}', uniqueString('diskCmk', deployment().name))]",
+      "name": "[format('imageManagementDiskCmk-{0}', uniqueString('imageManagementDiskCmk', deployment().name))]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -7183,7 +7183,7 @@
     },
     "diskEncryptionSetResourceId": {
       "type": "string",
-      "value": "[if(not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged')), reference('diskCmk').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
+      "value": "[if(not(equals(parameters('keyManagementGalleryImageVersions'), 'PlatformManaged')), reference('imageManagementDiskCmk').outputs.diskResults.value[0].diskEncryptionSetResourceId, '')]"
     },
     "confidentialVmDiskEncryptionSetResourceId": {
       "type": "string",

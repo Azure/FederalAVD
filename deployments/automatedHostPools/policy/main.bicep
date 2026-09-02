@@ -37,6 +37,12 @@ param policyIdentityName string
 })
 param diskEncryptionSetResourceId string = ''
 
+@description('Optional. Resource ID of the managed Availability Set enforced on session host virtual machines.')
+@metadata({
+  strongType: 'Microsoft.Compute/availabilitySets'
+})
+param availabilitySetResourceId string = ''
+
 @description('Optional. Deploy Azure Monitor Agent and associate automated session hosts with the selected Data Collection Rule.')
 param enableMonitoring bool = true
 
@@ -180,6 +186,10 @@ module sessionHostComputePolicyDefinition '../../shared/modules/orchestration/se
   params: {}
 }
 
+module availabilitySetPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/virtualMachine-availabilitySet.policyDefinition.bicep' = {
+  params: {}
+}
+
 module sessionHostSystemAssignedIdentityPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/systemAssignedIdentity.policyDefinition.bicep' = {
   params: {}
 }
@@ -195,6 +205,7 @@ module sessionHostCreationSettingsPolicySetDefinition '../../shared/modules/orch
     sessionHostSystemAssignedIdentityPolicyDefinitionResourceId: sessionHostSystemAssignedIdentityPolicyDefinition.outputs.policyDefinitionResourceId
     acceleratedNetworkingPolicyDefinitionResourceId: acceleratedNetworkingPolicyDefinition.outputs.policyDefinitionResourceId
     managedDiskNetworkAccessPolicyDefinitionResourceId: managedDiskNetworkAccessPolicyDefinition.outputs.policyDefinitionResourceId
+    availabilitySetPolicyDefinitionResourceId: availabilitySetPolicyDefinition.outputs.policyDefinitionResourceId
   }
 }
 
@@ -264,7 +275,7 @@ module sessionHostCreationSettingsPolicyAssignment '../../shared/modules/orchest
     policyIdentityResourceId: policyIdentity.outputs.resourceId
     policyDefinitionResourceId: sessionHostCreationSettingsPolicySetDefinition.outputs.policySetDefinitionResourceId
     displayName: 'Configure AVD session host creation settings'
-    description: 'Configures compute security, optional Disk Encryption Set, system-assigned identity, accelerated networking, and optional managed-disk network access during resource creation or update.'
+    description: 'Configures compute security, optional Disk Encryption Set and Availability Set placement, system-assigned identity, accelerated networking, and optional managed-disk network access during resource creation or update.'
     parameters: {
       effect: {
         value: 'Modify'
@@ -290,8 +301,14 @@ module sessionHostCreationSettingsPolicyAssignment '../../shared/modules/orchest
       managedDiskNetworkAccessEffect: {
         value: disableManagedDiskPublicNetworkAccess ? 'Modify' : 'Disabled'
       }
+      availabilitySetEffect: {
+        value: empty(availabilitySetResourceId) ? 'Disabled' : 'Modify'
+      }
+      availabilitySetResourceId: {
+        value: availabilitySetResourceId
+      }
     }
-    nonComplianceMessage: 'Session host resources must use the selected creation-time compute, identity, networking, encryption, and managed-disk settings.'
+    nonComplianceMessage: 'Session host resources must use the selected creation-time compute, identity, networking, availability, encryption, and managed-disk settings.'
     ownerId: policyOwnerId
   }
   dependsOn: [

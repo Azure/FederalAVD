@@ -1278,7 +1278,7 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
     deploymentVmSize: deploymentVmSize
     desktopFriendlyName: desktopFriendlyName
     diskSku: diskSku
-    diskEncryptionSetResourceId: deployDiskCmk ? diskCmk!.outputs.diskEncryptionSetResourceId : ''
+    diskEncryptionSetResourceId: deployDiskCmk ? virtualMachinesDiskCmk!.outputs.diskEncryptionSetResourceId : ''
     #disable-next-line BCP422
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
@@ -1376,7 +1376,7 @@ var effectiveEncryptionKeyVaultUri = !empty(existingEncryptionKeyVaultResourceId
 // Disk CMK: DES + key + role assignment — runs in parallel with monitoring/controlPlane,
 // giving sufficient RBAC propagation buffer before sessionHosts needs the DES.
 // Confidential VM disk encryption is handled separately by cvmDiskCmk below.
-module diskCmk '../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskCmk) {
+module virtualMachinesDiskCmk '../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskCmk) {
   params: {
     resourceGroupName: naming.outputs.resourceGroupHosts
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
@@ -1423,7 +1423,7 @@ module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
 
 // Effective DES resource ID: inline disk CMK or CVM CMK output, or empty when platform-managed.
 var effectiveDiskEncryptionSetResourceId = deployDiskCmk
-  ? diskCmk!.outputs.diskEncryptionSetResourceId
+  ? virtualMachinesDiskCmk!.outputs.diskEncryptionSetResourceId
   : deployCvmDiskCmk ? cvmDiskCmk!.outputs.diskEncryptionSetResourceId : ''
 
 // Storage CMK: UAI + keys + role assignments for FSLogix AzureFiles storage accounts.

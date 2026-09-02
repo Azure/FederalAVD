@@ -531,8 +531,9 @@ hosts or retrieve the domain-join credentials.
 
 ### Problem
 
-Dynamic creation runs as the Azure Virtual Desktop enterprise application, not as the deployment
-operator. The enterprise application needs subscription-level VM lifecycle roles and Key Vault
+The tested create/delete autoscale path submits Compute VM creation as the host-pool managed
+identity, not as the deployment operator or policy identity. The Azure Virtual Desktop enterprise
+application separately needs subscription-level scaling-plan orchestration roles and Key Vault
 secret access. Its application ID is `9cdead84-a844-4324-93f2-b2e6bb768d07`; its object ID is
 tenant-specific and must not be copied from another tenant.
 
@@ -551,6 +552,8 @@ Supply that value as `avdServicePrincipalObjectId` and redeploy. For create/dele
 the template assigns **Desktop Virtualization Power On Off Contributor** and **Desktop
 Virtualization Virtual Machine Contributor** at subscription scope, plus **Key Vault Secrets User**
 on the credentials Key Vault. Verify those assignments if host creation still fails.
+Also verify that the host-pool managed identity has its resource-scoped VM, network, image, host
+pool, credentials Key Vault, and optional Disk Encryption Set roles.
 
 ---
 

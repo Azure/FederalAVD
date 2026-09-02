@@ -407,7 +407,7 @@ module storageCmk '../shared/modules/orchestration/customerManagedKeys/customerM
 // DES for gallery image version encryption — created once here so imageBuild deployments
 // can pass `diskEncryptionSetResourceId` as `existingDiskEncryptionSetResourceId`,
 // suppressing per-build DES creation and KV dependency during image builds.
-module diskCmk '../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
+module imageManagementDiskCmk '../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementGalleryImageVersions != 'PlatformManaged') {
   scope: az.resourceGroup(resourceGroupName)
   params: {
     keyVaultResourceId: encryptionKeyVaultResourceId
@@ -672,7 +672,7 @@ output buildLogsContainerUri string = deployBuildLogsStorageAccount
   ? 'https://${logsStorageName}.blob.${environment().suffixes.storage}/${logsContainerName}'
   : ''
 output diskEncryptionSetResourceId string = keyManagementGalleryImageVersions != 'PlatformManaged'
-  ? diskCmk!.outputs.diskResults[0].diskEncryptionSetResourceId
+  ? imageManagementDiskCmk!.outputs.diskResults[0].diskEncryptionSetResourceId
   : ''
 output confidentialVmDiskEncryptionSetResourceId string = createConfidentialVmGalleryDes
   ? confidentialVmCmk!.outputs.diskResults[0].diskEncryptionSetResourceId

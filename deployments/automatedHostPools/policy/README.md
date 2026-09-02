@@ -200,6 +200,7 @@ size remains enforceable independently.
 | Private customizations | Union the artifact UAI into the existing VM identity map, then deploy provisioning-time configuration or bootstrap Run Commands serially | `sessionHostCustomizations` | Implemented with input order preserved and resource-scoped Managed Identity Operator; not the preferred application delivery path |
 | Compute Gallery VM Applications | Replace `applicationProfile.galleryApplications` with one authoritative ordered array through one resource-group-scoped `Modify` assignment | `sessionHostVmApplications` | Preferred for independently installable applications; implemented for up to 25 specific or `latest` version references |
 | Disk Encryption Set | Create a key and DES or reuse an existing DES, then inject its resource ID into each VM creation request | `keyManagementDisks` | Implemented |
+| Availability Set membership | Add the selected managed Availability Set resource ID to every VM creation request | `availability = 'AvailabilitySets'` | Implemented by the parent automated host-pool deployment with one set and update headroom within the 200-VM limit |
 | Managed-disk public access | Set `publicNetworkAccess: Disabled` and `networkAccessPolicy: DenyAll`; no Disk Access resource is used | `disableManagedDiskPublicNetworkAccess` | Implemented |
 
 ## Complete Parity Boundary
@@ -225,7 +226,7 @@ are explicit platform boundaries rather than silent policy gaps:
 
 | Standard option | Automated-host boundary |
 | --- | --- |
-| Availability sets and Dedicated Hosts | Session Host Configuration supports availability zones, not these placement models. |
+| Dedicated Hosts | Session Host Configuration does not expose this placement model, and the automated deployment does not inject dedicated-host placement through policy. |
 | IPv6 NIC configuration | The service creates the NIC and its IP configurations; Policy cannot safely add an IPv6 IP configuration. The standard default is disabled. |
 | Hibernation | Automated management supports pooled hosts; the standard option is applicable to personal hosts. |
 | Personal-session-host VM backup | Automated management supports pooled hosts whose lifecycle is service-managed. Protect FSLogix profile storage instead. |

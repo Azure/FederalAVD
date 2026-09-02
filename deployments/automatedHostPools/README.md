@@ -102,7 +102,8 @@ this repository, the automated deployment derives them from the selected naming 
 
 - When creating a workspace, the host pool, application group, and workspace are deployed to the
   generated control-plane resource group. When reusing a workspace, its resource group is reused
-  for the host pool and application group.
+  for the host pool and application group. Set `existingFeedWorkspaceResourceId` to the existing
+  workspace resource ID for direct deployments.
 - Session hosts are deployed to a generated, dedicated session-host resource group. That resource
   group is also the scope for session-host policy and RBAC, so unrelated virtual machines must not
   share it.
@@ -168,12 +169,15 @@ The deployment uses three identities for different operations:
 | Host-pool managed identity | Key Vault Secrets User on the credentials Key Vault | Always |
 | Azure Virtual Desktop enterprise application | Desktop Virtualization Power On Contributor, or Power On Off Contributor plus Desktop Virtualization Virtual Machine Contributor, at subscription scope | Start VM on Connect or dynamic autoscaling, respectively |
 | Azure Virtual Desktop enterprise application | Key Vault Secrets User on the credentials Key Vault | Dynamic autoscaling only, for session hosts created by the scaling plan |
+| Host-pool managed identity and Azure Virtual Desktop enterprise application | Reader on the selected Disk Encryption Set | Host-pool identity whenever a DES is selected; enterprise application additionally when dynamic autoscaling is enabled |
 | Policy user-assigned identity | VM, network, tag, monitoring, managed-identity, and disk permissions required by the enabled post-provisioning policies | Always created; optional permissions are assigned only when their features are enabled |
 
 The host-pool managed identity is what Azure Virtual Desktop uses for Session Host Management
 operations and their credential secrets. It is required even when no scaling plan is deployed.
-Create/delete autoscale operations run as the Azure Virtual Desktop enterprise application, so the
-deployment also grants that principal credential-secret access when dynamic scaling is enabled.
+The tested create/delete autoscale path submitted its Compute VM creation request as this same
+host-pool managed identity. The Azure Virtual Desktop enterprise application still requires the
+documented scaling-plan orchestration roles, and the deployment grants its dynamic-scaling access
+before the plan is enabled.
 
 ## Session Host Configuration Script
 
@@ -317,17 +321,35 @@ recovery points according to `fslogixBackupRetentionDays`, which defaults to 30 
 current policy uses snapshot-tier backup, recovery-point data remains in the source storage account;
 backup retention does not extend the period in which a deleted share can be undeleted.
 
+The Template Spec form and entry template default newly deployed FSLogix storage to **Azure Files
+Premium**. Direct deployments can select another supported service and SKU with the
+`fslogixStorageService` parameter.
+
 ## Session Host Availability
 
 Automated host pools support Availability Zones when the selected VM SKU exposes zones in the
-session-host region. Availability Sets are a feature parity gap because the preview AVD Session Host
-Configuration API does not expose Availability Set placement.
+session-host region. Where Availability Zones are unavailable or unsuitable, select **Availability
+Set** to create one managed Availability Set in the dedicated session-host resource group. The
+deployment uses one resource-group-scoped Azure Policy `Modify` assignment to add that set before the Compute
+resource provider processes each VM creation request.
 
-Azure Policy can add one specific Availability Set to a VM creation request, but it cannot query the
-number of VMs already assigned to each set. A managed Availability Set supports at most 200 VMs, and
-native Session Host Management does not expose a stable VM number that policy can safely use to
-distribute scale-out and replacement VMs across pre-created sets. Use Availability Zones, no
-infrastructure redundancy, or the standard host-pool deployment when Availability Sets are required.
+The `Modify` evaluation does not submit that creation request as the policy assignment's
+user-assigned identity. Azure Policy rewrites the in-flight request, and the principal that
+submitted the VM request remains the caller. Live validation showed both initial Session Host
+Management and create/delete autoscale VM creation using the host-pool managed identity. The policy
+identity is used for remediation operations, not creation-time request mutation. The VM-creation
+principal therefore needs access to every resource referenced by the resulting VM request.
+
+Availability Zones and managed Availability Sets are mutually exclusive. Azure supports at most 200
+VMs in one Availability Set. Session Host Update creates each replacement before deleting its
+original VM, so the deployment requires the initial `sessionHostCount`, or the largest ramp-up or
+ramp-down maximum from dynamic scaling schedules, plus `updateMaxVmsRemoved` to be no greater than
+200. For example, the default update batch of one permits at most 199 active hosts. Availability Sets
+also require `deleteOriginalVm: true`; otherwise retained original VMs permanently consume set
+capacity. Failed VMs retained by `failedSessionHostCleanupPolicy` consume capacity as well and should
+be included in operational headroom. The policy uses a `deny` conflict effect because Availability Set
+membership is immutable after VM creation; requests where Azure cannot apply the set fail instead of
+silently creating a host outside it.
 
 ## Feature Parity with Standard Host Pools
 
@@ -337,6 +359,7 @@ capabilities are therefore available and are not feature gaps:
 
 | Capability | Automated implementation |
 | --- | --- |
+| Availability Sets | Creates one managed Availability Set and uses a creation-time `Modify` policy assignment to place every host in it. The configured maximum plus update batch must not exceed 200. |
 | OS disk size and guest partition expansion | Policy modifies the VM creation request and the unified guest configuration expands the Windows partition. |
 | Encryption at host and accelerated networking | Policy modifies the VM or NIC creation request. The portal form capability-gates accelerated networking against the selected VM size and gallery image. |
 | Guest Attestation integrity monitoring | Policy deploys the Guest Attestation extension for Trusted Launch and Confidential VMs. |
@@ -351,7 +374,6 @@ The remaining feature parity gaps are explicit boundaries of the automated manag
 
 | Standard host-pool capability | Automated-host boundary or alternative |
 | --- | --- |
-| Availability Sets | The preview Session Host Configuration API supports Availability Zones but does not expose Availability Set placement. See [Session Host Availability](#session-host-availability). |
 | Azure Dedicated Hosts | The preview API does not expose dedicated host or host-group placement. Use the standard host-pool deployment when physical host isolation is required. |
 | IPv6 NIC configuration | Azure Virtual Desktop creates the NIC and its IP configurations. Policy cannot safely add the standard template's optional IPv6 configuration. |
 | Session-host VM, OS disk, and NIC naming | Native Session Host Management accepts only a VM name prefix. Azure Virtual Desktop owns the resulting VM, OS disk, and NIC names, so the standard deployment's `SHNAME` naming patterns, starting index, and index padding cannot be applied. FederalAVD-created supporting resources still use the shared naming module. |
@@ -451,8 +473,15 @@ Virtualization Virtual Machine Contributor.
 
 When Disk Encryption Set enforcement is enabled, the host pool permissions deployment assigns
 Reader on the selected Disk Encryption Set to the automated host pool's system-assigned identity.
-The identity is created with the host pool, so no principal input is required. This assignment
-completes before Session Host Configuration and the later request that creates the initial VMs.
+When dynamic scaling is also enabled, the current deployment additionally grants the same
+resource-scoped role to the Azure Virtual Desktop enterprise application. These assignments
+complete before Session Host Configuration and the later request that creates the initial VMs.
+
+Subscription-scoped Azure Virtual Desktop roles remain conditional. If dynamic scaling is added
+later, redeploy this template with `deployDynamicScalingPlan` enabled so its VM, power-management,
+credential-secret, and optional Disk Encryption Set permissions are granted before the scaling plan
+is created. Pregranting those subscription roles for an unused future feature would violate least
+privilege.
 
 Set `deployDynamicScalingPlan` to `true` to create a scaling plan. The deployment
 creates preview pooled schedules with `scalingMethod: CreateDeletePowerManage`. Each
@@ -467,12 +496,15 @@ deallocate ephemeral OS disk hosts and limits its capacity changes to creating a
 
 Ramp-down force logoff, wait time, notification message, and stop condition are schedule-specific
 and apply during that schedule's ramp-down phase. The wait and notification fields are required in
-the portal only when force logoff is enabled. Editable Grid does not populate column defaults, so
-the portal shows placeholders instead. If a direct deployment omits these fields while enabling
-force logoff, the template uses a 30-minute wait and "Save your work and sign out. This session host
-is being removed by autoscale." When force logoff is disabled, the template submits a zero-minute
-wait and an empty notification message. The template does not create a default schedule or supply
-fallback values for the other schedule behavior fields.
+the portal only when force logoff is enabled. Editable Grid placeholders do not populate row
+properties, so the template normalizes intentionally omitted dropdown values to the displayed
+behavior: `BreadthFirst` during ramp-up and peak, `DepthFirst` during ramp-down and off-peak, no
+forced logoff, and `ZeroSessions` for the ramp-down stop condition. If force logoff is enabled and
+its dependent fields are omitted in a direct deployment, the template uses a 30-minute wait and
+"Save your work and sign out. This session host is being removed by autoscale." When force logoff
+is disabled, the template submits a zero-minute wait and an empty notification message. The
+template does not create a schedule; schedule names, weekdays, times, percentages, and host-count
+limits remain required.
 
 The deployment creates the scaling plan and schedules in a disabled state during control-plane setup,
 then enables the host-pool assignment after the policy propagation wait. No separate initial

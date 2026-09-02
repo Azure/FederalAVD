@@ -57,6 +57,10 @@ Describe 'Automated host-pool ephemeral OS disk guidance' {
     }
 
     It 'translates the Compute resource-disk capability to the AVD TempDisk enum' {
+        $placement.label | Should Be 'Ephemeral OS Disk Storage'
+        $placement.defaultValue | Should Match "'Temporary Disk', 'OS Cache'"
+        $placement.constraints.allowedValues | Should Match '\"label\":\"Temporary Disk\"'
+        $placement.constraints.allowedValues | Should Match '\"label\":\"OS Cache\"'
         $placement.constraints.allowedValues | Should Match '\"value\":\"TempDisk\"'
         $placement.constraints.allowedValues | Should Match "equals\(placement.value, 'TempDisk'\)"
         $placement.constraints.allowedValues | Should Match "ephemeralOsDiskPlacements\)\), 'ResourceDisk'\)"

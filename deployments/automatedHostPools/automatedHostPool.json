@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "10689702941994119414"
+      "templateHash": "17051003248232485661"
     }
   },
   "definitions": {
@@ -41,7 +41,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         },
         "rampUpMinimumHostsPct": {
           "type": "string"
@@ -63,7 +64,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         },
         "rampDownStartTime": {
           "type": "string"
@@ -73,7 +75,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         },
         "rampDownMinimumHostsPct": {
           "type": "string"
@@ -88,7 +91,8 @@
           "type": "string"
         },
         "rampDownForceLogoffUsers": {
-          "type": "bool"
+          "type": "bool",
+          "nullable": true
         },
         "rampDownWaitTimeMinutes": {
           "type": "string",
@@ -103,7 +107,8 @@
           "allowedValues": [
             "ZeroActiveSessions",
             "ZeroSessions"
-          ]
+          ],
+          "nullable": true
         },
         "offPeakStartTime": {
           "type": "string"
@@ -113,7 +118,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         }
       }
     },
@@ -469,6 +475,18 @@
         "description": "Optional. Enable virtual TPM."
       }
     },
+    "availability": {
+      "type": "string",
+      "defaultValue": "[if(not(empty(parameters('availabilityZones'))), 'AvailabilityZones', 'None')]",
+      "allowedValues": [
+        "AvailabilityZones",
+        "AvailabilitySets",
+        "None"
+      ],
+      "metadata": {
+        "description": "Optional. Infrastructure redundancy for session hosts. AvailabilitySets creates one managed Availability Set and requires update headroom within its 200-VM limit."
+      }
+    },
     "availabilityZones": {
       "type": "array",
       "items": {
@@ -476,7 +494,7 @@
       },
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. Availability zones used for new session hosts."
+        "description": "Optional. Availability zones used for new session hosts when availability is AvailabilityZones."
       }
     },
     "hostPoolMaxSessionLimit": {
@@ -557,7 +575,7 @@
         "description": "Required when deployDynamicScalingPlan is true. Complete named dynamic scaling schedules. Days may be grouped when they share a schedule."
       }
     },
-    "existingWorkspaceResourceId": {
+    "existingFeedWorkspaceResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -719,7 +737,7 @@
     },
     "fslogixStorageService": {
       "type": "string",
-      "defaultValue": "AzureFiles Standard",
+      "defaultValue": "AzureFiles Premium",
       "allowedValues": [
         "AzureFiles Premium",
         "AzureFiles Standard",
@@ -1147,14 +1165,19 @@
     "monitoringIdentityConfigurationIsValid": "[if(empty(parameters('monitoringUserAssignedIdentityResourceId')), true(), fail('monitoringUserAssignedIdentityResourceId is no longer supported. Azure Monitor Agent uses each session host system-assigned identity.'))]",
     "marketplaceImageConfigurationIsValid": "[if(or(not(empty(parameters('customImageResourceId'))), and(not(empty(parameters('imageVersion'))), not(equals(toLower(parameters('imageVersion')), 'latest')))), true(), fail('Marketplace automated host pools require a concrete imageVersion. The latest sentinel is not supported by Session Host Configuration.'))]",
     "avdServicePrincipalIsValid": "[if(or(not(or(parameters('deployDynamicScalingPlan'), parameters('startVMOnConnect'))), not(empty(parameters('avdServicePrincipalObjectId')))), true(), fail('avdServicePrincipalObjectId is required when dynamic scaling or Start VM on Connect is enabled.'))]",
-    "effectiveDynamicScalingSchedules": "[map(parameters('dynamicScalingSchedules'), lambda('schedule', createObject('name', lambdaVariables('schedule').name, 'daysOfWeek', lambdaVariables('schedule').daysOfWeek, 'rampUpStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').rampUpStartTime), 'rampUpLoadBalancingAlgorithm', lambdaVariables('schedule').rampUpLoadBalancingAlgorithm, 'rampUpMinimumHostsPct', int(lambdaVariables('schedule').rampUpMinimumHostsPct), 'rampUpCapacityThresholdPct', int(lambdaVariables('schedule').rampUpCapacityThresholdPct), 'rampUpMinimumHostPoolSize', int(lambdaVariables('schedule').rampUpMinimumHostPoolSize), 'rampUpMaximumHostPoolSize', int(lambdaVariables('schedule').rampUpMaximumHostPoolSize), 'peakStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').peakStartTime), 'peakLoadBalancingAlgorithm', lambdaVariables('schedule').peakLoadBalancingAlgorithm, 'rampDownStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').rampDownStartTime), 'rampDownLoadBalancingAlgorithm', lambdaVariables('schedule').rampDownLoadBalancingAlgorithm, 'rampDownMinimumHostsPct', int(lambdaVariables('schedule').rampDownMinimumHostsPct), 'rampDownCapacityThresholdPct', int(lambdaVariables('schedule').rampDownCapacityThresholdPct), 'rampDownMinimumHostPoolSize', int(lambdaVariables('schedule').rampDownMinimumHostPoolSize), 'rampDownMaximumHostPoolSize', int(lambdaVariables('schedule').rampDownMaximumHostPoolSize), 'rampDownForceLogoffUsers', lambdaVariables('schedule').rampDownForceLogoffUsers, 'rampDownWaitTimeMinutes', if(lambdaVariables('schedule').rampDownForceLogoffUsers, if(empty(coalesce(tryGet(lambdaVariables('schedule'), 'rampDownWaitTimeMinutes'), '')), 30, int(lambdaVariables('schedule').rampDownWaitTimeMinutes)), 0), 'rampDownNotificationMessage', if(lambdaVariables('schedule').rampDownForceLogoffUsers, if(empty(coalesce(tryGet(lambdaVariables('schedule'), 'rampDownNotificationMessage'), '')), 'Save your work and sign out. This session host is being removed by autoscale.', lambdaVariables('schedule').rampDownNotificationMessage), ''), 'rampDownStopHostsWhen', lambdaVariables('schedule').rampDownStopHostsWhen, 'offPeakStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').offPeakStartTime), 'offPeakLoadBalancingAlgorithm', lambdaVariables('schedule').offPeakLoadBalancingAlgorithm)))]",
+    "effectiveDynamicScalingSchedules": "[map(parameters('dynamicScalingSchedules'), lambda('schedule', createObject('name', lambdaVariables('schedule').name, 'daysOfWeek', lambdaVariables('schedule').daysOfWeek, 'rampUpStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').rampUpStartTime), 'rampUpLoadBalancingAlgorithm', coalesce(tryGet(lambdaVariables('schedule'), 'rampUpLoadBalancingAlgorithm'), 'BreadthFirst'), 'rampUpMinimumHostsPct', int(lambdaVariables('schedule').rampUpMinimumHostsPct), 'rampUpCapacityThresholdPct', int(lambdaVariables('schedule').rampUpCapacityThresholdPct), 'rampUpMinimumHostPoolSize', int(lambdaVariables('schedule').rampUpMinimumHostPoolSize), 'rampUpMaximumHostPoolSize', int(lambdaVariables('schedule').rampUpMaximumHostPoolSize), 'peakStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').peakStartTime), 'peakLoadBalancingAlgorithm', coalesce(tryGet(lambdaVariables('schedule'), 'peakLoadBalancingAlgorithm'), 'BreadthFirst'), 'rampDownStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').rampDownStartTime), 'rampDownLoadBalancingAlgorithm', coalesce(tryGet(lambdaVariables('schedule'), 'rampDownLoadBalancingAlgorithm'), 'DepthFirst'), 'rampDownMinimumHostsPct', int(lambdaVariables('schedule').rampDownMinimumHostsPct), 'rampDownCapacityThresholdPct', int(lambdaVariables('schedule').rampDownCapacityThresholdPct), 'rampDownMinimumHostPoolSize', int(lambdaVariables('schedule').rampDownMinimumHostPoolSize), 'rampDownMaximumHostPoolSize', int(lambdaVariables('schedule').rampDownMaximumHostPoolSize), 'rampDownForceLogoffUsers', coalesce(tryGet(lambdaVariables('schedule'), 'rampDownForceLogoffUsers'), false()), 'rampDownWaitTimeMinutes', if(coalesce(tryGet(lambdaVariables('schedule'), 'rampDownForceLogoffUsers'), false()), if(empty(coalesce(tryGet(lambdaVariables('schedule'), 'rampDownWaitTimeMinutes'), '')), 30, int(lambdaVariables('schedule').rampDownWaitTimeMinutes)), 0), 'rampDownNotificationMessage', if(coalesce(tryGet(lambdaVariables('schedule'), 'rampDownForceLogoffUsers'), false()), if(empty(coalesce(tryGet(lambdaVariables('schedule'), 'rampDownNotificationMessage'), '')), 'Save your work and sign out. This session host is being removed by autoscale.', lambdaVariables('schedule').rampDownNotificationMessage), ''), 'rampDownStopHostsWhen', coalesce(tryGet(lambdaVariables('schedule'), 'rampDownStopHostsWhen'), 'ZeroSessions'), 'offPeakStartTime', __bicep.parseScalingTime(lambdaVariables('schedule').offPeakStartTime), 'offPeakLoadBalancingAlgorithm', coalesce(tryGet(lambdaVariables('schedule'), 'offPeakLoadBalancingAlgorithm'), 'DepthFirst'))))]",
     "invalidDynamicScalingLimits": "[filter(variables('effectiveDynamicScalingSchedules'), lambda('schedule', or(greater(lambdaVariables('schedule').rampUpMinimumHostPoolSize, lambdaVariables('schedule').rampUpMaximumHostPoolSize), greater(lambdaVariables('schedule').rampDownMinimumHostPoolSize, lambdaVariables('schedule').rampDownMaximumHostPoolSize))))]",
     "dynamicScalingLimitsAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), empty(variables('invalidDynamicScalingLimits'))), true(), fail('Dynamic scaling minimum host-pool sizes cannot exceed their corresponding maximum sizes.'))]",
+    "dynamicScalingMaximumHostPoolSizes": "[flatten(map(variables('effectiveDynamicScalingSchedules'), lambda('schedule', createArray(lambdaVariables('schedule').rampUpMaximumHostPoolSize, lambdaVariables('schedule').rampDownMaximumHostPoolSize))))]",
+    "maximumSessionHostCapacity": "[if(parameters('deployDynamicScalingPlan'), max(concat(variables('dynamicScalingMaximumHostPoolSizes'), createArray(0))), parameters('sessionHostCount'))]",
+    "availabilitySetCapacityIsValid": "[if(not(equals(parameters('availability'), 'AvailabilitySets')), true(), if(not(parameters('deleteOriginalVm')), fail('Availability Sets require deleteOriginalVm to be true so replaced VMs do not permanently consume the single Availability Set capacity.'), if(lessOrEquals(add(variables('maximumSessionHostCapacity'), parameters('updateMaxVmsRemoved')), 200), true(), fail('Availability Set capacity is limited to 200 VMs. The initial sessionHostCount, or largest dynamic scaling maximum, plus updateMaxVmsRemoved must not exceed 200.'))))]",
+    "deployAvailabilitySet": "[and(equals(parameters('availability'), 'AvailabilitySets'), variables('availabilitySetCapacityIsValid'))]",
     "invalidDynamicScalingRampDownSettings": "[filter(variables('effectiveDynamicScalingSchedules'), lambda('schedule', or(or(less(lambdaVariables('schedule').rampDownWaitTimeMinutes, 0), greater(lambdaVariables('schedule').rampDownWaitTimeMinutes, 120)), and(lambdaVariables('schedule').rampDownForceLogoffUsers, empty(lambdaVariables('schedule').rampDownNotificationMessage)))))]",
     "dynamicScalingRampDownSettingsAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), empty(variables('invalidDynamicScalingRampDownSettings'))), true(), fail('Dynamic scaling ramp-down waits must be between 0 and 120 minutes, and force logoff requires a notification message.'))]",
     "dynamicScalingScheduleNames": "[map(variables('effectiveDynamicScalingSchedules'), lambda('schedule', toLower(lambdaVariables('schedule').name)))]",
     "dynamicScalingScheduleDays": "[flatten(map(variables('effectiveDynamicScalingSchedules'), lambda('schedule', lambdaVariables('schedule').daysOfWeek)))]",
     "dynamicScalingSchedulesAreValid": "[if(or(not(parameters('deployDynamicScalingPlan')), and(and(not(empty(variables('effectiveDynamicScalingSchedules'))), equals(length(variables('dynamicScalingScheduleNames')), length(union(variables('dynamicScalingScheduleNames'), variables('dynamicScalingScheduleNames'))))), equals(length(variables('dynamicScalingScheduleDays')), length(union(variables('dynamicScalingScheduleDays'), variables('dynamicScalingScheduleDays')))))), true(), fail('Dynamic scaling requires at least one schedule, unique schedule names, and each day assigned to no more than one schedule.'))]",
+    "availabilityConfigurationIsValid": "[if(equals(parameters('availability'), 'AvailabilityZones'), if(not(empty(parameters('availabilityZones'))), true(), fail('Select at least one availability zone when availability is AvailabilityZones.')), if(empty(parameters('availabilityZones')), true(), fail('Availability Zones and an Availability Set are mutually exclusive. Supply availabilityZones only when availability is AvailabilityZones.')))]",
     "hostPoolPrivateEndpointConfigurationIsValid": "[or(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None'), not(empty(parameters('hostPoolPrivateEndpointSubnetResourceId'))))]",
     "workspaceFeedPrivateEndpointConfigurationIsValid": "[or(not(contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes'))), not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))))]",
     "globalFeedPrivateEndpointConfigurationIsValid": "[or(or(not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All')), not(empty(parameters('existingGlobalFeedResourceId')))), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))))]",
@@ -1242,7 +1265,7 @@
           },
           "globalFeedRegion": "[if(and(variables('deployGlobalFeed'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), createObject('value', reference('globalFeedPrivateEndpointVirtualNetwork', '2024-05-01', 'full').location), createObject('value', ''))]",
           "existingFeedWorkspaceResourceId": {
-            "value": "[parameters('existingWorkspaceResourceId')]"
+            "value": "[parameters('existingFeedWorkspaceResourceId')]"
           },
           "namingConvention": {
             "value": "[parameters('namingConvention')]"
@@ -2031,7 +2054,7 @@
       ]
     },
     "controlPlaneResourceGroup": {
-      "condition": "[empty(parameters('existingWorkspaceResourceId'))]",
+      "condition": "[empty(parameters('existingFeedWorkspaceResourceId'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('controlPlaneResourceGroup-{0}', uniqueString('controlPlaneResourceGroup', deployment().name))]",
@@ -2163,6 +2186,200 @@
       },
       "dependsOn": [
         "naming"
+      ]
+    },
+    "availabilitySet": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('availabilitySet-{0}', uniqueString('availabilitySet', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourceGroupName": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
+          "nameConvention": {
+            "value": "[reference('naming').outputs.availabilitySetNameConv.value]"
+          },
+          "deploy": {
+            "value": "[variables('deployAvailabilitySet')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[union(createObject('cm-resource-parent', format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().subscriptionId, reference('naming').outputs.resourceGroupControlPlane.value, reference('naming').outputs.hostPoolName.value)), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/availabilitySets'), createObject()))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "6173773888608193564"
+            }
+          },
+          "parameters": {
+            "resourceGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource group that contains the automated session hosts."
+              }
+            },
+            "nameConvention": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Availability Set naming convention. The trailing -## token is removed."
+              }
+            },
+            "deploy": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to deploy the managed Availability Set."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the Availability Set and session hosts."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the Availability Set."
+              }
+            }
+          },
+          "resources": {
+            "availabilitySet": {
+              "condition": "[parameters('deploy')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('availabilitySet-{0}', uniqueString('availabilitySet', deployment().name))]",
+              "resourceGroup": "[parameters('resourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[replace(parameters('nameConvention'), '-##', '')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "platformFaultDomainCount": {
+                    "value": 2
+                  },
+                  "platformUpdateDomainCount": {
+                    "value": 5
+                  },
+                  "skuName": {
+                    "value": "Aligned"
+                  },
+                  "tags": {
+                    "value": "[parameters('tags')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "5642845468218957165"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "platformFaultDomainCount": {
+                      "type": "int",
+                      "defaultValue": 2,
+                      "metadata": {
+                        "description": "Number of fault domains. Default is 2."
+                      }
+                    },
+                    "platformUpdateDomainCount": {
+                      "type": "int",
+                      "defaultValue": 5,
+                      "metadata": {
+                        "description": "Number of update domains. Default is 5."
+                      }
+                    },
+                    "skuName": {
+                      "type": "string",
+                      "defaultValue": "Aligned",
+                      "allowedValues": [
+                        "Aligned",
+                        "Classic"
+                      ],
+                      "metadata": {
+                        "description": "SKU name. Use Aligned for managed disks."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Compute/availabilitySets",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "sku": {
+                        "name": "[parameters('skuName')]"
+                      },
+                      "properties": {
+                        "platformFaultDomainCount": "[parameters('platformFaultDomainCount')]",
+                        "platformUpdateDomainCount": "[parameters('platformUpdateDomainCount')]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Compute/availabilitySets', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[if(parameters('deploy'), reference('availabilitySet').outputs.resourceId.value, '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "naming",
+        "sessionHostResourceGroup"
       ]
     },
     "storageResourceGroup": {
@@ -2460,11 +2677,11 @@
         }
       }
     },
-    "diskCmk": {
+    "virtualMachinesDiskCmk": {
       "condition": "[parameters('deployDiskEncryptionSet')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('diskCmk-{0}', uniqueString('diskCmk', deployment().name))]",
+      "name": "[format('virtualMachinesDiskCmk-{0}', uniqueString('virtualMachinesDiskCmk', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -3852,7 +4069,7 @@
           "diskSku": {
             "value": "StandardSSD_LRS"
           },
-          "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('diskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
+          "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('virtualMachinesDiskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
           "domainJoinUserPassword": "[if(variables('fslogixDomainCredentialsRequired'), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', last(split(variables('effectiveDomainJoinPasswordSecretUri'), '/')))), createObject('value', ''))]",
           "domainJoinUserPrincipalName": "[if(variables('fslogixDomainCredentialsRequired'), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', last(split(variables('effectiveDomainJoinUsernameSecretUri'), '/')))), createObject('value', ''))]",
           "domainName": {
@@ -4762,9 +4979,9 @@
       "dependsOn": [
         "controlPlaneResourceGroup",
         "deploymentResourceGroup",
-        "diskCmk",
         "naming",
-        "storageResourceGroup"
+        "storageResourceGroup",
+        "virtualMachinesDiskCmk"
       ]
     },
     "controlPlane": {
@@ -4793,8 +5010,8 @@
           "workspaceName": {
             "value": "[reference('naming').outputs.workspaceName.value]"
           },
-          "existingWorkspaceResourceId": {
-            "value": "[parameters('existingWorkspaceResourceId')]"
+          "existingFeedWorkspaceResourceId": {
+            "value": "[parameters('existingFeedWorkspaceResourceId')]"
           },
           "workspaceFriendlyName": {
             "value": "[parameters('workspaceFriendlyName')]"
@@ -4841,11 +5058,11 @@
             "value": "[parameters('sessionHostVmApplications')]"
           },
           "credentialsKeyVaultResourceId": "[if(if(and(equals(reference('credentialsKeyVault').enableRbacAuthorization, true()), equals(reference('credentialsKeyVault').enabledForTemplateDeployment, true())), true(), fail('The credentials Key Vault must use Azure RBAC and allow Azure Resource Manager template deployment.')), createObject('value', parameters('credentialsKeyVaultResourceId')), createObject('value', parameters('credentialsKeyVaultResourceId')))]",
-          "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('diskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
+          "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('virtualMachinesDiskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
           "avdServicePrincipalObjectId": "[if(parameters('deployDynamicScalingPlan'), createObject('value', parameters('avdServicePrincipalObjectId')), createObject('value', ''))]",
           "sessionHostConfigurationProperties": {
             "value": {
-              "availabilityZones": "[if(not(empty(parameters('availabilityZones'))), parameters('availabilityZones'), null())]",
+              "availabilityZones": "[if(and(variables('availabilityConfigurationIsValid'), equals(parameters('availability'), 'AvailabilityZones')), parameters('availabilityZones'), null())]",
               "diskInfo": {
                 "managedDisk": {
                   "type": "[parameters('diskSku')]"
@@ -4957,7 +5174,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "12452415272603179717"
+              "templateHash": "2263208452003835714"
             }
           },
           "definitions": {
@@ -5054,7 +5271,7 @@
                 "description": "Required. Workspace name."
               }
             },
-            "existingWorkspaceResourceId": {
+            "existingFeedWorkspaceResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
@@ -5382,7 +5599,7 @@
           },
           "variables": {
             "$fxv#0": "Param(\r\n    [string]$ApplicationGroupResourceId,\r\n    [string]$FriendlyName,\r\n    [string]$ResourceManagerUri,\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nfunction Update-AvdSessionDesktopName {\r\n    # Get an access token for Azure resources\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n            -Headers @{Metadata = \"true\" } `\r\n            -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    # Update the friendly name on the session desktop\r\n    Invoke-RestMethod `\r\n        -Body (@{properties = @{friendlyName = $FriendlyName.Replace('\"', '')}} | ConvertTo-Json) `\r\n        -Headers $AzureManagementHeader `\r\n        -Method 'PATCH' `\r\n        -Uri $($ResourceManagerUriFixed + $ApplicationGroupResourceId + '/desktops/SessionDesktop?api-version=2023-09-05') | Out-Null\r\n}\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }\r\n\r\ntry {\r\n    Update-AvdSessionDesktopName\r\n}\r\ncatch {\r\n    # Wait for role assignment propagation\r\n    Start-Sleep -Seconds 30\r\n    Update-AvdSessionDesktopName\r\n}",
-            "effectiveWorkspaceName": "[if(not(empty(parameters('existingWorkspaceResourceId'))), last(split(parameters('existingWorkspaceResourceId'), '/')), parameters('workspaceName'))]",
+            "effectiveWorkspaceName": "[if(not(empty(parameters('existingFeedWorkspaceResourceId'))), last(split(parameters('existingFeedWorkspaceResourceId'), '/')), parameters('workspaceName'))]",
             "diagnostics": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "deployHostPoolPrivateEndpoint": "[and(not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None')), not(empty(parameters('hostPoolPrivateEndpointSubnetResourceId'))))]",
             "deployWorkspaceFeedPrivateEndpoint": "[and(contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')), not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))))]",
@@ -5390,13 +5607,13 @@
           },
           "resources": {
             "existingWorkspace": {
-              "condition": "[not(empty(parameters('existingWorkspaceResourceId')))]",
+              "condition": "[not(empty(parameters('existingFeedWorkspaceResourceId')))]",
               "existing": true,
               "type": "Microsoft.DesktopVirtualization/workspaces",
               "apiVersion": "2023-09-05",
-              "subscriptionId": "[split(parameters('existingWorkspaceResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('existingWorkspaceResourceId'), '/')[4]]",
-              "name": "[last(split(parameters('existingWorkspaceResourceId'), '/'))]"
+              "subscriptionId": "[split(parameters('existingFeedWorkspaceResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('existingFeedWorkspaceResourceId'), '/')[4]]",
+              "name": "[last(split(parameters('existingFeedWorkspaceResourceId'), '/'))]"
             },
             "hostPoolPrivateEndpointVirtualNetwork": {
               "condition": "[variables('deployHostPoolPrivateEndpoint')]",
@@ -5774,7 +5991,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "14403311671221937972"
+                      "templateHash": "13331013390028530131"
                     }
                   },
                   "definitions": {
@@ -6479,14 +6696,7 @@
                             "value": "[last(split(parameters('diskEncryptionSetResourceId'), '/'))]"
                           },
                           "assignments": {
-                            "value": [
-                              {
-                                "principalId": "[parameters('principalId')]",
-                                "principalType": "ServicePrincipal",
-                                "roleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
-                                "description": "Allows the automated host pool identity to read the Disk Encryption Set linked from session host VM requests."
-                              }
-                            ]
+                            "value": "[concat(createArray(createObject('principalId', parameters('principalId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('readerRoleId'), 'description', 'Allows the automated host pool identity to read the Disk Encryption Set linked from Session Host Management VM requests.')), if(not(empty(parameters('avdServicePrincipalObjectId'))), createArray(createObject('principalId', parameters('avdServicePrincipalObjectId'), 'principalType', 'ServicePrincipal', 'roleDefinitionId', variables('readerRoleId'), 'description', 'Allows the Azure Virtual Desktop service principal to read the Disk Encryption Set linked from dynamic autoscale VM requests.')), createArray()))]"
                           }
                         },
                         "template": {
@@ -8089,14 +8299,14 @@
                   "name": {
                     "value": "[variables('effectiveWorkspaceName')]"
                   },
-                  "location": "[if(not(empty(parameters('existingWorkspaceResourceId'))), createObject('value', reference('existingWorkspace', '2023-09-05', 'full').location), createObject('value', parameters('location')))]",
-                  "tags": "[if(not(empty(parameters('existingWorkspaceResourceId'))), createObject('value', coalesce(reference('existingWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
-                  "friendlyName": "[if(not(empty(parameters('existingWorkspaceResourceId'))), createObject('value', reference('existingWorkspace').friendlyName), createObject('value', parameters('workspaceFriendlyName')))]",
-                  "publicNetworkAccess": "[if(variables('deployWorkspaceFeedPrivateEndpoint'), createObject('value', parameters('workspacePublicNetworkAccess')), if(and(not(empty(parameters('existingWorkspaceResourceId'))), equals(reference('existingWorkspace').publicNetworkAccess, 'Disabled')), createObject('value', 'Disabled'), createObject('value', 'Enabled')))]",
+                  "location": "[if(not(empty(parameters('existingFeedWorkspaceResourceId'))), createObject('value', reference('existingWorkspace', '2023-09-05', 'full').location), createObject('value', parameters('location')))]",
+                  "tags": "[if(not(empty(parameters('existingFeedWorkspaceResourceId'))), createObject('value', coalesce(reference('existingWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
+                  "friendlyName": "[if(not(empty(parameters('existingFeedWorkspaceResourceId'))), createObject('value', reference('existingWorkspace').friendlyName), createObject('value', parameters('workspaceFriendlyName')))]",
+                  "publicNetworkAccess": "[if(variables('deployWorkspaceFeedPrivateEndpoint'), createObject('value', parameters('workspacePublicNetworkAccess')), if(and(not(empty(parameters('existingFeedWorkspaceResourceId'))), equals(reference('existingWorkspace').publicNetworkAccess, 'Disabled')), createObject('value', 'Disabled'), createObject('value', 'Enabled')))]",
                   "applicationGroupResourceIds": {
-                    "value": "[union(if(not(empty(parameters('existingWorkspaceResourceId'))), map(reference('existingWorkspace').applicationGroupReferences, lambda('resourceId', toLower(lambdaVariables('resourceId')))), createArray()), createArray(toLower(reference('applicationGroup').outputs.resourceId.value)))]"
+                    "value": "[union(if(not(empty(parameters('existingFeedWorkspaceResourceId'))), map(reference('existingWorkspace').applicationGroupReferences, lambda('resourceId', toLower(lambdaVariables('resourceId')))), createArray()), createArray(toLower(reference('applicationGroup').outputs.resourceId.value)))]"
                   },
-                  "diagnosticSettings": "[if(not(empty(parameters('existingWorkspaceResourceId'))), createObject('value', null()), createObject('value', variables('diagnostics')))]"
+                  "diagnosticSettings": "[if(not(empty(parameters('existingFeedWorkspaceResourceId'))), createObject('value', null()), createObject('value', variables('diagnostics')))]"
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -9057,9 +9267,9 @@
         "controlPlaneResourceGroup",
         "credentialsKeyVault",
         "deploymentHelper",
-        "diskCmk",
         "globalFeedResourceGroup",
-        "naming"
+        "naming",
+        "virtualMachinesDiskCmk"
       ]
     },
     "fslogixStorageCmk": {
@@ -14390,7 +14600,10 @@
           "policyIdentityName": {
             "value": "[reference('naming').outputs.policyRemediationIdentityName.value]"
           },
-          "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('diskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
+          "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('virtualMachinesDiskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
+          "availabilitySetResourceId": {
+            "value": "[reference('availabilitySet').outputs.resourceId.value]"
+          },
           "disableManagedDiskPublicNetworkAccess": {
             "value": "[parameters('disableManagedDiskPublicNetworkAccess')]"
           },
@@ -14442,7 +14655,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "6890835982533917068"
+              "templateHash": "14220510345218913357"
             }
           },
           "definitions": {
@@ -14608,6 +14821,14 @@
               "metadata": {
                 "strongType": "Microsoft.Compute/diskEncryptionSets",
                 "description": "Optional. Resource ID of the Disk Encryption Set enforced on session host OS disks."
+              }
+            },
+            "availabilitySetResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "strongType": "Microsoft.Compute/availabilitySets",
+                "description": "Optional. Resource ID of the managed Availability Set enforced on session host virtual machines."
               }
             },
             "enableMonitoring": {
@@ -16171,6 +16392,116 @@
                 }
               }
             },
+            "availabilitySetPolicyDefinition": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('availabilitySetPolicyDefinition-{0}', uniqueString('availabilitySetPolicyDefinition', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "566696406559732937"
+                    }
+                  },
+                  "parameters": {
+                    "policyDefinitionName": {
+                      "type": "string",
+                      "defaultValue": "avdSessionHostAvailabilitySet-Modify"
+                    },
+                    "policyDefinitionDisplayName": {
+                      "type": "string",
+                      "defaultValue": "Assign AVD session hosts to managed availability sets"
+                    },
+                    "policyDefinitionDescription": {
+                      "type": "string",
+                      "defaultValue": "Assigns AVD session hosts to one managed Availability Set during virtual machine creation."
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyDefinitions",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('policyDefinitionName')]",
+                      "properties": {
+                        "description": "[parameters('policyDefinitionDescription')]",
+                        "displayName": "[parameters('policyDefinitionDisplayName')]",
+                        "mode": "Indexed",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "solution": "AVD Session Host Governance",
+                          "component": "Creation Settings",
+                          "version": "1.3.0"
+                        },
+                        "parameters": {
+                          "effect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "Modify",
+                              "Disabled"
+                            ],
+                            "defaultValue": "Disabled"
+                          },
+                          "availabilitySetResourceId": {
+                            "type": "String",
+                            "defaultValue": "",
+                            "metadata": {
+                              "description": "Resource ID of the managed Availability Set assigned to session host virtual machines.",
+                              "strongType": "Microsoft.Compute/availabilitySets"
+                            }
+                          }
+                        },
+                        "policyRule": {
+                          "if": {
+                            "allOf": [
+                              {
+                                "field": "type",
+                                "equals": "Microsoft.Compute/virtualMachines"
+                              },
+                              {
+                                "field": "Microsoft.Compute/virtualMachines/availabilitySet.id",
+                                "notEquals": "[[parameters('availabilitySetResourceId')]"
+                              }
+                            ]
+                          },
+                          "then": {
+                            "effect": "[[parameters('effect')]",
+                            "details": {
+                              "conflictEffect": "deny",
+                              "roleDefinitionIds": [
+                                "/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+                              ],
+                              "operations": [
+                                {
+                                  "operation": "AddOrReplace",
+                                  "field": "Microsoft.Compute/virtualMachines/availabilitySet.id",
+                                  "value": "[[parameters('availabilitySetResourceId')]"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "policyDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+                    }
+                  }
+                }
+              }
+            },
             "sessionHostSystemAssignedIdentityPolicyDefinition": {
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
@@ -16396,6 +16727,9 @@
                   },
                   "managedDiskNetworkAccessPolicyDefinitionResourceId": {
                     "value": "[reference('managedDiskNetworkAccessPolicyDefinition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "availabilitySetPolicyDefinitionResourceId": {
+                    "value": "[reference('availabilitySetPolicyDefinition').outputs.policyDefinitionResourceId.value]"
                   }
                 },
                 "template": {
@@ -16405,7 +16739,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "15006524653522859415"
+                      "templateHash": "5697389329918645724"
                     }
                   },
                   "parameters": {
@@ -16427,6 +16761,9 @@
                     },
                     "managedDiskNetworkAccessPolicyDefinitionResourceId": {
                       "type": "string"
+                    },
+                    "availabilitySetPolicyDefinitionResourceId": {
+                      "type": "string"
                     }
                   },
                   "resources": [
@@ -16441,7 +16778,7 @@
                           "category": "Azure Virtual Desktop",
                           "solution": "AVD Session Host Governance",
                           "component": "Creation Settings",
-                          "version": "1.0.0"
+                          "version": "1.1.0"
                         },
                         "parameters": {
                           "effect": {
@@ -16491,6 +16828,22 @@
                               "Disabled"
                             ],
                             "defaultValue": "Disabled"
+                          },
+                          "availabilitySetEffect": {
+                            "type": "String",
+                            "allowedValues": [
+                              "Modify",
+                              "Disabled"
+                            ],
+                            "defaultValue": "Disabled"
+                          },
+                          "availabilitySetResourceId": {
+                            "type": "String",
+                            "defaultValue": "",
+                            "metadata": {
+                              "description": "Resource ID of the managed Availability Set assigned to session host virtual machines.",
+                              "strongType": "Microsoft.Compute/availabilitySets"
+                            }
                           }
                         },
                         "policyDefinitions": [
@@ -16550,6 +16903,18 @@
                                 "value": "[[parameters('managedDiskNetworkAccessEffect')]"
                               }
                             }
+                          },
+                          {
+                            "policyDefinitionReferenceId": "configureAvailabilitySet",
+                            "policyDefinitionId": "[parameters('availabilitySetPolicyDefinitionResourceId')]",
+                            "parameters": {
+                              "effect": {
+                                "value": "[[parameters('availabilitySetEffect')]"
+                              },
+                              "availabilitySetResourceId": {
+                                "value": "[[parameters('availabilitySetResourceId')]"
+                              }
+                            }
                           }
                         ]
                       }
@@ -16565,6 +16930,7 @@
               },
               "dependsOn": [
                 "acceleratedNetworkingPolicyDefinition",
+                "availabilitySetPolicyDefinition",
                 "diskEncryptionSetPolicyDefinition",
                 "managedDiskNetworkAccessPolicyDefinition",
                 "sessionHostComputePolicyDefinition",
@@ -17140,7 +17506,7 @@
                     "value": "Configure AVD session host creation settings"
                   },
                   "description": {
-                    "value": "Configures compute security, optional Disk Encryption Set, system-assigned identity, accelerated networking, and optional managed-disk network access during resource creation or update."
+                    "value": "Configures compute security, optional Disk Encryption Set and Availability Set placement, system-assigned identity, accelerated networking, and optional managed-disk network access during resource creation or update."
                   },
                   "parameters": {
                     "value": {
@@ -17167,11 +17533,17 @@
                       },
                       "managedDiskNetworkAccessEffect": {
                         "value": "[if(parameters('disableManagedDiskPublicNetworkAccess'), 'Modify', 'Disabled')]"
+                      },
+                      "availabilitySetEffect": {
+                        "value": "[if(empty(parameters('availabilitySetResourceId')), 'Disabled', 'Modify')]"
+                      },
+                      "availabilitySetResourceId": {
+                        "value": "[parameters('availabilitySetResourceId')]"
                       }
                     }
                   },
                   "nonComplianceMessage": {
-                    "value": "Session host resources must use the selected creation-time compute, identity, networking, encryption, and managed-disk settings."
+                    "value": "Session host resources must use the selected creation-time compute, identity, networking, availability, encryption, and managed-disk settings."
                   },
                   "ownerId": {
                     "value": "[variables('policyOwnerId')]"
@@ -20520,12 +20892,13 @@
         }
       },
       "dependsOn": [
+        "availabilitySet",
         "controlPlane",
-        "diskCmk",
         "existingNetAppVolumeFqdns",
         "fslogixStorage",
         "naming",
-        "sessionHostResourceGroup"
+        "sessionHostResourceGroup",
+        "virtualMachinesDiskCmk"
       ]
     },
     "policyPropagationWait": {

@@ -120,14 +120,26 @@ module diskEncryptionSetReaderRole '../../shared/modules/resourceModules/compute
   )
   params: {
     diskEncryptionSetName: last(split(diskEncryptionSetResourceId, '/'))!
-    assignments: [
-      {
-        principalId: principalId
-        principalType: 'ServicePrincipal'
-        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
-        description: 'Allows the automated host pool identity to read the Disk Encryption Set linked from session host VM requests.'
-      }
-    ]
+    assignments: concat(
+      [
+        {
+          principalId: principalId
+          principalType: 'ServicePrincipal'
+          roleDefinitionId: readerRoleId
+          description: 'Allows the automated host pool identity to read the Disk Encryption Set linked from Session Host Management VM requests.'
+        }
+      ],
+      !empty(avdServicePrincipalObjectId)
+        ? [
+            {
+              principalId: avdServicePrincipalObjectId
+              principalType: 'ServicePrincipal'
+              roleDefinitionId: readerRoleId
+              description: 'Allows the Azure Virtual Desktop service principal to read the Disk Encryption Set linked from dynamic autoscale VM requests.'
+            }
+          ]
+        : []
+    )
   }
 }
 
