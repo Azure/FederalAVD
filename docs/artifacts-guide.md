@@ -1,19 +1,29 @@
 ﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 > **🔧 Technical References:**
+>
 > - [Image Management Template Documentation](../deployments/imageManagement/README.md) - Artifacts storage infrastructure
 > - [Image Build Template Documentation](../deployments/imageBuild/README.md) - Using artifacts in image builds
 > - [Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md) - Script parameters, download methods, usage examples, and troubleshooting
+> - [VM Applications Guide](vm-applications.md) - Publishing and assigning independently versioned applications
+>
 
-# Artifacts and Image Management Guide
+# Artifacts, Image Builds, and VM Applications Guide
 
 ## Overview
 
-The artifacts system in this AVD solution provides a flexible, Zero Trust-compliant method for deploying software and configurations to both custom images and session hosts. Artifacts are packages containing PowerShell scripts, installers, and supporting files that are:
+The artifacts system in this AVD solution provides a flexible, Zero Trust-compliant method for
+delivering software and configurations to custom images and session hosts. An artifact folder can
+be packaged once and used in either or both of these delivery models:
 
-1. Stored in Azure Blob Storage
-2. Downloaded and executed during image builds or session host deployments
-3. Deployed through the `Invoke-Customization.ps1` orchestration script
+1. **Image-build or session-host customization** - `Invoke-Customization.ps1` downloads the ZIP
+   and runs its root script during provisioning. This path installs or configures content once.
+2. **Azure Compute Gallery VM Application** - `Publish-VMApplications.ps1` publishes the ZIP with
+   explicit install and remove commands. Azure then applies the published version to assigned VMs.
+
+Every package is stored in Image Management artifact storage. Publishing is a separate, explicit
+step: uploading a ZIP does not create a VM Application, and publishing one does not assign it to a
+host pool.
 
 ### Key Concepts
 
@@ -24,10 +34,12 @@ The artifacts system in this AVD solution provides a flexible, Zero Trust-compli
 | **Invoke-Customization.ps1** | The orchestration script (`deployments/shared/scripts/Invoke-Customization.ps1`) that downloads and executes a single artifact |
 | **Customization** | A reference to an artifact package with optional arguments, defined in deployment parameters |
 | **Run Command** | Azure VM Run Command that executes `Invoke-Customization.ps1` for each artifact |
+| **VM Application manifest** | Customer-owned `vmApplications.json` that selects ZIPs and defines immutable versions, lifecycle commands, and replication regions |
+| **Package reference ID** | Gallery application-version resource ID returned by `Publish-VMApplications.ps1` and assigned to VMs |
 
 ### How It Works
 
-**Both image builds and session host deployments use the same mechanism:**
+**Image builds and standard session-host customizations use the same provisioning mechanism:**
 
 1. **Bicep/ARM deployment** loops through the customizations array
 2. For **each** customization, a separate VM Run Command is created
@@ -39,12 +51,23 @@ The artifacts system in this AVD solution provides a flexible, Zero Trust-compli
 4. `Invoke-Customization.ps1` downloads the artifact and executes it
 5. The `@batchSize(1)` decorator ensures customizations execute sequentially
 
+**VM Applications use a separate lifecycle mechanism:**
+
+1. `Update-ImageArtifacts.ps1` creates and uploads the same artifact ZIP.
+2. A customer-owned manifest defines install, remove, optional update, and target-region settings.
+3. `Publish-VMApplications.ps1` creates an immutable Gallery application version and returns its
+   `packageReferenceId`.
+4. The version is assigned through automated-host-pool parameters, the Session Host Policy add-on,
+   direct assignment, or customer automation.
+5. Azure executes the manifest lifecycle command asynchronously on each assigned VM.
+
 ### When Artifacts Are Used
 
 ```mermaid
 graph TD
-    A[Artifacts in Blob Storage] --> B[Image Build Process]
-    A --> C[Session Host Deployment]
+   A[Artifact ZIPs in Blob Storage] --> B[Image Build Process]
+   A --> C[Standard Session Host Customization]
+   A --> L[Publish VM Application Version]
     B --> D[Bicep loops through customizations array]
     C --> E[Bicep loops through sessionHostCustomizations array]
     D --> F[Creates Run Command per customization]
@@ -53,6 +76,8 @@ graph TD
     G --> I[Each runs Invoke-Customization.ps1]
     H --> J[Custom Image Created]
     I --> K[Session Hosts Configured]
+   L --> M[Assign packageReferenceId]
+   M --> N[Azure runs install or remove command]
 ```
 
 **Image Build Process:**
@@ -69,6 +94,33 @@ graph TD
 - Each Run Command executes `Invoke-Customization.ps1` once
 - Sequential execution via `@batchSize(1)`
 
+**VM Application Publication and Assignment:**
+
+- Uses `imageManagement/vmApplications.json` to select uploaded ZIPs
+- Publishes immutable semantic versions to the Image Management Compute Gallery
+- Assigns ordered `packageReferenceId` values to target VMs
+- Supports install, remove, and optional update behavior independent of the OS image
+- Runs asynchronously after VM creation; application readiness must be monitored separately
+
+### Choose the Delivery Model
+
+| Content type or requirement | Image build | Session-host customization | VM Application |
+| --- | --- | --- | --- |
+| Software must be ready before first logon | Preferred | Possible, but increases provisioning time | Not sufficient by itself because installation is asynchronous |
+| Independently versioned application with meaningful removal | Supported | Supported | Preferred |
+| Registry, policy, STIG, security onboarding, or bootstrap configuration | Preferred | Supported | Do not publish |
+| Environment-specific configuration | Avoid when possible | Preferred | Only when it is part of the application's lifecycle |
+| Automated host pool application delivery | Bake into image | Reserve private customizations for exceptions | Preferred for independently manageable software |
+
+Publish only software that installs and removes silently, synchronously, and independently. Keep
+`Configure-*`, `Set-*`, policy, security-baseline, and shared host-prerequisite packages as image or
+provisioning customizations unless they have a real, tested removal lifecycle.
+
+Choose one delivery model for each application on a given host. Do not both bake an application
+into the image and assign it as a VM Application unless its upgrade and removal logic explicitly
+supports that starting state. Otherwise, VM Application removal can remove software the image is
+expected to provide.
+
 ## Architecture
 
 ### Workflow Diagram
@@ -80,11 +132,11 @@ graph TD
 │ • Download software from internet (optional)                   │
 │ • Compress each artifact folder → ZIP files                    │
 │ • Upload to Azure Blob Storage                                 │
-└──────────────────┬─────────────────────────────────────────────┘
-                   │
-                   ▼
+└──────────────────────────────┬─────────────────────────────────┘
+                               │
+                               ▼
 ┌────────────────────────────────────────────────────────────────┐
-│ 2. Bicep/ARM Deployment (Looping Logic)                        │
+│ 2. Customization Deployment (Bicep/ARM Looping Logic)          │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
 │ Image Build:                    Session Host Deployment:       │
@@ -94,7 +146,7 @@ graph TD
 │ │ for each customization:  │    │ for each customization:    │ │
 │ │   Create Run Command     │    │   Create Run Command       │ │
 │ │   @batchSize(1)          │    │   @batchSize(1)            │ │
-│ └──────────┬───────────────┘    └──────────┬─────────────────┘ │
+│ └──────────┬───────────────┘    └───────────┬────────────────┘ │
 │            │                                │                  │
 │            ▼                                ▼                  │
 │ ┌──────────────────────────┐    ┌────────────────────────────┐ │
@@ -103,20 +155,20 @@ graph TD
 │ │ -Name "FSLogix"          │    │ -Name "Configure-Office"   │ │
 │ │ -Uri "https://..."       │    │ -Uri "https://..."         │ │
 │ │ -Arguments ""            │    │ -Arguments "-param value"  │ │
-│ └──────────┬───────────────┘    └──────────┬─────────────────┘ │
+│ └──────────┬───────────────┘    └───────────┬────────────────┘ │
 │            │                                │                  │
 │            ▼                                ▼                  │
 │ ┌──────────────────────────┐    ┌────────────────────────────┐ │
 │ │ VM Run Command #2        │    │ VM Run Command #2          │ │
 │ │ Invoke-Customization.ps1 │    │ Invoke-Customization.ps1   │ │
-│ └──────────┬───────────────┘    └──────────┬─────────────────┘ │
+│ └──────────┬───────────────┘    └───────────┬────────────────┘ │
 │            │                                │                  │
 │            ▼                                ▼                  │
 │        (continues...)                  (continues...)          │
 │                                                                │
-└────────────────────────────────────────────────────────────────┘
-                   │
-                   ▼
+└──────────────────────────────┬─────────────────────────────────┘
+                               │
+                               ▼
 ┌────────────────────────────────────────────────────────────────┐
 │ 3. Execution Phase (Invoke-Customization.ps1)                  │
 ├────────────────────────────────────────────────────────────────┤
@@ -129,9 +181,13 @@ graph TD
 └────────────────────────────────────────────────────────────────┘
 ```
 
+The text diagram details the customization path. The VM Application path branches after upload:
+`vmApplications.json` -> `Publish-VMApplications.ps1` -> Gallery application version -> VM
+assignment -> Azure-managed install, update, or removal.
+
 ### Key Implementation Details
 
-**Looping is handled by Bicep/ARM:**
+**Customization looping is handled by Bicep/ARM:**
 
 - Image builds: `deployments/imageBuild/modules/applyCustomizationsBatch.bicep`
 - Session hosts: `deployments/hostpools/modules/sessionHosts/modules/invokeCustomizations.bicep`
@@ -155,6 +211,7 @@ Arguments are passed as a single string to `Invoke-Customization.ps1`, which par
 | **String array** | `[string[]]$Domains` | `-Domains @('a.com','b.com')` |
 
 **Array syntax rules (JSON parameter files):**
+
 - Use `@()` with single quotes — no JSON escaping needed: `"arguments": "-Domains @('a.com','b.com')"`
 - Spaces after commas are fine: `@('a.com', 'b.com')` works
 - Comma-separated quoted values also work: `"a.com", "b.com"` (requires `\"` escaping in JSON)
@@ -265,132 +322,154 @@ installation or configuration. Supporting PowerShell scripts are allowed only in
 
 **Important:** If you need parameters, use standard PowerShell named parameters. The `Invoke-Customization.ps1` orchestrator will parse the `Arguments` string and pass them to your script as named parameters.
 
-**Script Template:**
+**Dual-use application script template:**
+
+Use `Deploy-[Name].ps1` for software that may also become a VM Application. The default
+`DeploymentType` must remain `Install` because image builds and session-host customizations do not
+pass that parameter. VM Application lifecycle commands pass it explicitly.
 
 ```powershell
-#region Parameters (Optional - only if you need them)
-Param(
-    [Parameter(Mandatory = $false)]
-    [string]$InstallMode = 'Full',
-    
-    [Parameter(Mandatory = $false)]
-    [switch]$SkipShortcuts,
-
+param(
+   [ValidateSet('Install', 'Uninstall')]
+   [string]$DeploymentType = 'Install',
     [int[]]$SuccessExitCodes = @(0, 3010)
 )
-#endregion
 
-#region Initialization
 $SoftwareName = 'MyApplication'
-$LogPath = 'C:\Windows\Logs'
-$Script:Name = 'Deploy-MyApp'
-#endregion
+$Script:Name = 'Deploy-MyApplication'
+$LogPath = Join-Path -Path $env:SystemRoot -ChildPath 'Logs\Software'
 
-#region Functions
-Function Write-Log {
-    Param (
-        [Parameter(Mandatory = $false)]
-        [ValidateSet("Info", "Warning", "Error")]
+function New-Log {
+   param([Parameter(Mandatory = $true)][string]$Path)
+
+   if (-not (Test-Path -LiteralPath $Path)) {
+      New-Item -Path $Path -ItemType Directory -Force | Out-Null
+   }
+   $script:Log = Join-Path -Path $Path -ChildPath "$Script:Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+}
+
+function Write-Log {
+   param(
+      [ValidateSet('Info', 'Warning', 'Error')]
         $Category = 'Info',
-        [Parameter(Mandatory = $true)]
-        $Message
+      [Parameter(Mandatory = $true)][string]$Message
     )
-    
-    $Date = Get-Date
-    $Content = "[$Date]`t$Category`t`t$Message`n"
-    Add-Content $Script:Log $Content -ErrorAction Stop
+
+   $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t$Message"
+   Add-Content -LiteralPath $script:Log -Value $Content -ErrorAction Stop
     Write-Host $Content
 }
 
-Function New-Log {
-    Param (
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-    
-    $Date = Get-Date -UFormat "%Y-%m-%d_%H-%M-%S"
-    $Script:LogFile = "$Script:Name-$Date.log"
-    
-    if (-not (Test-Path $Path)) {
-        New-Item -Path $Path -ItemType Directory -Force | Out-Null
-    }
-    
-    $Script:Log = Join-Path $Path $Script:LogFile
-    Add-Content $Script:Log "Date`t`t`tCategory`t`tDetails"
-}
-#endregion
+function Invoke-MsiProcess {
+   param(
+      [Parameter(Mandatory = $true)][string]$ArgumentList,
+      [Parameter(Mandatory = $true)][string]$Action,
+      [int]$TimeoutMilliseconds = 600000
+   )
 
-#region Main Script
+   $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -PassThru
+   if (-not $process.WaitForExit($TimeoutMilliseconds)) {
+      $process.Kill()
+      throw "$Action timed out after $($TimeoutMilliseconds / 60000) minutes."
+    }
+   if ($process.ExitCode -notin $SuccessExitCodes) {
+      throw "$Action failed with exit code $($process.ExitCode)."
+   }
+
+   Write-Log -Message "$Action completed with exit code $($process.ExitCode)."
+}
+
+function Get-InstalledProductCode {
+   param([Parameter(Mandatory = $true)][string]$DisplayName)
+
+   $uninstallPaths = @(
+      'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+      'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+   )
+
+   foreach ($path in $uninstallPaths) {
+      if (-not (Test-Path -LiteralPath $path)) {
+         continue
+      }
+      foreach ($key in Get-ChildItem -LiteralPath $path -ErrorAction SilentlyContinue) {
+         $application = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
+         if ($application.DisplayName -eq $DisplayName -and
+            $key.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$') {
+            $key.PSChildName
+         }
+      }
+   }
+}
+
+New-Log -Path $LogPath
 try {
-    # Initialize logging
-    New-Log -Path $LogPath
-    Write-Log -Category Info -Message "Starting $SoftwareName installation"
-    
-    # Log received parameters
-    Write-Log -Category Info -Message "InstallMode: $InstallMode"
-    Write-Log -Category Info -Message "SkipShortcuts: $SkipShortcuts"
-    
-    # Locate installer in script directory
-    $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $Installer = Get-ChildItem -Path $ScriptPath -Filter "*.msi" | Select-Object -First 1
-    
-    if (-not $Installer) {
-        throw "Installer not found in $ScriptPath"
+   Write-Log -Message "Starting $DeploymentType for $SoftwareName."
+
+   if ($DeploymentType -eq 'Install') {
+      $installerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.msi' -File)
+      if ($installerFiles.Count -ne 1) {
+         throw "Expected exactly one MSI in '$PSScriptRoot'; found $($installerFiles.Count)."
+      }
+
+      $arguments = "/i `"$($installerFiles[0].FullName)`" /qn /norestart"
+      Invoke-MsiProcess -ArgumentList $arguments -Action "$SoftwareName installation"
     }
-    
-    Write-Log -Category Info -Message "Found installer: $($Installer.Name)"
-    
-    # Build arguments based on parameters
-    $Arguments = "/i `"$($Installer.FullName)`" /qn /norestart"
-    
-    if ($InstallMode -eq 'Minimal') {
-        $Arguments += " ADDLOCAL=Core"
+   else {
+      $productCodes = @(Get-InstalledProductCode -DisplayName $SoftwareName)
+      if ($productCodes.Count -eq 0) {
+         Write-Log -Message "$SoftwareName is not installed; removal is already complete."
+      }
+      foreach ($productCode in $productCodes) {
+         Invoke-MsiProcess -ArgumentList "/x $productCode /qn /norestart" `
+            -Action "$SoftwareName removal"
+      }
     }
-    
-    # Execute installation
-    Write-Log -Category Info -Message "Executing: msiexec.exe $Arguments"
-    
-    $Process = Start-Process -FilePath "msiexec.exe" -ArgumentList $Arguments -Wait -PassThru
-    $ExitCode = $Process.ExitCode
-    
-    if ($ExitCode -in $SuccessExitCodes) {
-        Write-Log -Category Info -Message "Installation completed successfully. Exit code: $ExitCode"
-        exit 0
-    }
-    else {
-        Write-Log -Category Error -Message "Installation failed with exit code: $ExitCode"
-        exit $ExitCode
-    }
+
+   Write-Log -Message "$DeploymentType completed successfully for $SoftwareName."
+   exit 0
 }
 catch {
-    Write-Log -Category Error -Message "Error during installation: $_"
+   Write-Log -Category Error -Message $_.Exception.Message
     exit 1
 }
-#endregion
 ```
 
-**How Parameters Work:**
+This example is intentionally synchronous and idempotent: it waits for MSI completion, accepts
+`0` and `3010`, fails on timeout or a real installer error, and treats removal of an absent
+application as success. Match `$SoftwareName` to the installed application's exact display name,
+or adapt discovery to a stable MSI ProductCode. The
+[`Microsoft-AzCLI`](../customer-examples/artifacts/Microsoft-AzCLI/) example contains a complete,
+tested implementation with Windows Installer serialization handling.
 
-When you define this customization in your deployment:
+For configuration-only content, keep a single `Configure-[Name].ps1` root script and omit
+`DeploymentType`; such packages remain image-build or session-host customizations rather than VM
+Applications.
+
+**How the two callers invoke the script:**
+
+For an image build or standard session-host customization, reference the ZIP normally and omit
+`DeploymentType`:
 
 ```json
 {
-  "name": "MyApp",
-  "blobNameOrUri": "MyApp.zip",
-  "arguments": "-InstallMode Minimal -SkipShortcuts"
+   "name": "MyApplication",
+   "blobNameOrUri": "MyApplication.zip",
+   "arguments": ""
 }
 ```
 
 The `Invoke-Customization.ps1` script will:
 
-1. Download and extract MyApp.zip
-2. Find Deploy-MyApp.ps1 inside
-3. Parse the arguments string: `-InstallMode Minimal -SkipShortcuts`
-4. Call the script: `& Deploy-MyApp.ps1 -InstallMode Minimal -SkipShortcuts`
+1. Download and extract `MyApplication.zip`.
+2. Find `Deploy-MyApplication.ps1` in the ZIP root.
+3. Call the script without `DeploymentType`.
+4. Use the script's default `DeploymentType = 'Install'`.
 
-Your script receives: `$InstallMode = "Minimal"` and `$SkipShortcuts = $true`
+For a VM Application, the manifest command extracts the same ZIP and explicitly calls either
+`-DeploymentType 'Install'` or `-DeploymentType 'Uninstall'`. Azure does not use
+`Invoke-Customization.ps1` for this path.
 
-**More argument examples:**
+Add other named parameters to the root script when the customization needs them. For example:
 
 ```json
 // Boolean — explicit $true / $false
@@ -415,8 +494,8 @@ Place any required files in the same directory:
 
 ```text
 Chrome/
-├── Deploy-Chrome.ps1
-└── GoogleChromeEnterpriseBundle64.msi
+|-- Deploy-Chrome.ps1
+`-- GoogleChromeEnterpriseBundle64.msi
 ```
 
 **Best Practices for Supporting Files:**
@@ -431,11 +510,12 @@ Chrome/
 Before uploading, test your script locally:
 
 ```powershell
-# Test with no parameters
+# Image-build/customization behavior: no DeploymentType is passed
 .\customer\artifacts\Chrome\Deploy-Chrome.ps1
 
-# Test with named parameters
-.\customer\artifacts\Chrome\Deploy-Chrome.ps1 -InstallMode Full -SkipShortcuts
+# VM Application install and remove behavior
+.\customer\artifacts\Chrome\Deploy-Chrome.ps1 -DeploymentType Install
+.\customer\artifacts\Chrome\Deploy-Chrome.ps1 -DeploymentType Uninstall
 ```
 
 #### Step 5: Upload with Update-ImageArtifacts.ps1
@@ -443,17 +523,52 @@ Before uploading, test your script locally:
 Once tested, upload the artifact to blob storage:
 
 ```powershell
-cd deployments
-.\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "/subscriptions/.../storageAccounts/stabc123" `
-    -DeleteExistingBlobs
+.\deployments\Update-ImageArtifacts.ps1 `
+   -StorageAccountResourceId '/subscriptions/.../storageAccounts/stabc123'
 ```
+
+The script creates `Chrome.zip` for image builds, session-host customizations, and VM Application
+publication. Add `-DeleteExistingBlobs` only when intentionally replacing the complete contents of
+the artifacts container; omit it for a normal incremental upload.
+
+For local packaging or air-gapped transfer without Azure access:
+
+```powershell
+.\deployments\Update-ImageArtifacts.ps1 `
+      -PackageOnly `
+      -OutputPath 'C:\AirGapTransfer'
+```
+
+#### Step 6: Hand Off a Dual-Use Package for VM Application Publication
+
+Stop here for image-build and session-host customization packages. A dual-use application is ready
+for the separate publication workflow when all of these are true:
+
+- Its uploaded package name is known, such as `Chrome.zip`.
+- The ZIP contains exactly one root script, such as `Deploy-Chrome.ps1`.
+- Running the root script without `DeploymentType` installs the application.
+- Explicit `Install` and `Uninstall` modes are silent, synchronous, idempotent, and tested.
+- The package does not retrieve mutable application content from the internet at runtime.
+
+Continue with the [VM Applications Guide](vm-applications.md). It owns the operational procedure
+for Image Management prerequisites, `vmApplications.json`, lifecycle command construction,
+semantic versioning, validation, Gallery publication, host assignment, remediation, and air-gapped
+publication. The
+[`Microsoft-AzCLI`](../customer-examples/artifacts/Microsoft-AzCLI/) package and
+[example manifest](../customer-examples/parameters/imageManagement/vmApplications.json) are the
+tested reference implementation.
+
+Uploading the ZIP is the boundary between these guides. It does not publish or assign a VM
+Application.
 
 ### Advanced Script Patterns
 
 #### Pattern 1: Download Installer from Internet
 
-Some installers may be too large to store in the repo. Download them during execution:
+Prefer staging installers with `downloads.json` so the artifact ZIP is deterministic and portable.
+Use a runtime download only as a documented customization exception when the endpoint is reachable
+from the build or session-host network. Do not publish a VM Application whose immutable version
+depends on mutable internet content.
 
 ```powershell
 Param(
@@ -569,19 +684,35 @@ foreach ($Installer in $Installers) {
 
 ### Script Requirements Checklist
 
-- [ ] Script uses standard PowerShell named parameters (NOT DynParameters)
+- [ ] Script uses standard PowerShell named parameters
 - [ ] Script includes logging functionality
 - [ ] Script handles errors gracefully
 - [ ] Script exits non-zero when the installer fails (any exit code other than 0 or 3010)
+- [ ] Installer and uninstaller are silent, synchronous, and bounded by a timeout
 - [ ] Script uses relative paths for file access (`$PSScriptRoot` or `Split-Path`)
 - [ ] Script includes header comments explaining purpose
-- [ ] Script name follows convention: `Install-[Name].ps1` or `Configure-[Name].ps1`
+- [ ] Script contains ASCII characters only (U+0000 through U+007F)
+- [ ] Script name follows convention: `Deploy-[Name].ps1` for dual-use applications or
+   `Configure-[Name].ps1` for customization-only packages
+
+Before publishing the package as a VM Application, also verify:
+
+- [ ] `DeploymentType` accepts `Install` and `Uninstall`, with `Install` as the default
+- [ ] Running the script with no arguments performs the image-build install path
+- [ ] Explicit install and uninstall modes both work when run repeatedly
+- [ ] Uninstalling an absent application succeeds
+- [ ] The ZIP contains exactly one root-level PowerShell script
+- [ ] `vmApplications.json` references the exact ZIP filename and root script
+- [ ] The manifest passes `Publish-VMApplications.ps1 -ValidateOnly`
 
 ## The Invoke-Customization.ps1 Orchestrator
 
 ### Overview
 
-The `Invoke-Customization.ps1` script (`deployments/shared/scripts/Invoke-Customization.ps1`) is the core orchestration script used by both image builds and session host deployments. It handles **one** customization at a time.
+The `Invoke-Customization.ps1` script (`deployments/shared/scripts/Invoke-Customization.ps1`) is the
+core orchestration script used by image builds and standard session-host customizations. It handles
+**one** customization at a time. VM Applications do not use this orchestrator; Azure runs their
+manifest lifecycle commands.
 
 **Key Points:**
 
@@ -821,7 +952,7 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
 
 ### Image Build Integration
 
-**Step 1: Deploy infrastructure and upload artifacts**
+#### Step 1: Deploy Infrastructure and Upload Artifacts
 
 ```powershell
 # Deploy infrastructure only
@@ -840,7 +971,7 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' 
     -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
 ```
 
-**Step 2: Reference Artifacts in Image Build**
+#### Step 2: Reference Artifacts in Image Build
 
 Edit your image build parameters file:
 
@@ -894,7 +1025,7 @@ Edit your image build parameters file:
    - `Arguments` = arguments string
 4. Run Commands execute sequentially (`@batchSize(1)`)
 
-**Step 3: Deploy Image Build**
+#### Step 3: Deploy Image Build
 
 ```powershell
 New-AzDeployment `
@@ -903,13 +1034,13 @@ New-AzDeployment `
    -TemplateParameterFile ".\customer\parameters\imageBuild\production.imageBuild.parameters.json"
 ```
 
-### Session Host Integration
+### Standard Session Host Customization Integration
 
-**Step 1: Prepare Artifacts**
+#### Step 1: Prepare Artifacts
 
 Same as image build - artifacts must be uploaded to blob storage.
 
-**Step 2: Reference Artifacts in Host Pool Deployment**
+#### Step 2: Reference Artifacts in Host Pool Deployment
 
 Edit your host pool parameters file:
 
@@ -959,7 +1090,7 @@ Edit your host pool parameters file:
 3. Each Run Command executes `Invoke-Customization.ps1` with appropriate parameters
 4. Run Commands execute sequentially per VM (`@batchSize(1)`)
 
-**Step 3: Deploy Host Pool**
+#### Step 3: Deploy Host Pool
 
 ```powershell
 New-AzDeployment `
@@ -1002,7 +1133,8 @@ New-AzDeployment `
 1. **One Script Per Package**
    - Each artifact folder should have exactly one main .ps1 script
    - Use clear, descriptive names
-   - Follow naming convention: `Install-[Name].ps1` or `Configure-[Name].ps1`
+   - Use `Deploy-[Name].ps1` for dual-use applications or `Configure-[Name].ps1` for
+     customization-only packages
 
 2. **Keep Packages Small**
    - Don't include unnecessary files
@@ -1301,10 +1433,11 @@ If you encounter issues not covered here:
 ## Related Documentation
 
 - [Update-ImageArtifacts Script Guide](update-image-artifacts.md) - Detailed script documentation
+- [VM Applications Guide](vm-applications.md) - Manifest, publication, assignment, and remediation
 - [Quick Start Guide](quick-start.md) - Complete deployment walkthrough
 - [Parameters Reference](parameters.md) - All deployment parameters
 - [Air-Gapped Cloud Guide](air-gapped-clouds.md) - Special considerations for air-gapped environments
 
 ---
 
-**Last Updated:** December 2024
+**Last Updated:** September 2026
