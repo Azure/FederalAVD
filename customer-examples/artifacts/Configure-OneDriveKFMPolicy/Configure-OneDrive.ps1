@@ -27,9 +27,10 @@
     are written directly to the registry as a fallback.
 
 .PARAMETER TenantId
-    Azure Active Directory tenant ID (GUID) for the organization. Used as the value for
-    KFMSilentOptIn and SilentAccountConfig to scope KFM and auto sign-in to the correct
-    tenant. Required.
+    Microsoft Entra tenant ID (GUID) for the organization. Used as the value for
+    KFMSilentOptIn to scope KFM to the correct tenant. SilentAccountConfig is enabled
+    separately and uses the Microsoft Entra credential available in the user session.
+    Required.
 
 .PARAMETER EnableRemoteApp
     When specified, enables the enhanced shell experience required for OneDrive to launch
@@ -39,11 +40,11 @@
     Must be run during image build (as SYSTEM or local administrator) after OneDrive has
     been installed per-machine.
 
-    FSLogix interaction: KFM (KFMSilentOptIn) should only be used when FSLogix Profile
-    Containers are in place. On non-persistent VDI without FSLogix the local profile is
-    discarded on sign-out -- enabling KFM in that scenario would cause data loss because
-    the redirected Desktop/Documents/Pictures folder paths are stored in the local profile.
-    With FSLogix the profile is persisted in a VHD, so KFM works correctly.
+    FSLogix interaction: Use the latest FSLogix release for supported OneDrive operation
+    in non-persistent VDI. A Profile Container persists the OneDrive configuration,
+    placeholders, cache, and hydrated content between hosts. Without profile persistence,
+    account setup repeats and unsynchronized local changes can be lost when the local
+    profile is discarded. Content that has completed synchronization remains in OneDrive.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (

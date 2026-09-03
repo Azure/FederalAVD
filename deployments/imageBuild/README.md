@@ -2,6 +2,9 @@
 
 > **📖 User Guide:** For deployment instructions and getting started, see the [Image Build Guide](../../docs/image-build.md)
 >
+> **Script Reference:** See [Image Build PowerShell Scripts](scripts/README.md) for the scripts
+> embedded and executed by this solution.
+>
 > **First deployment:** Use the Custom Image Template Spec portal form. On **Review + create**,
 > select **Create**, then download the generated template and parameters after submission. Remove
 > the generated `timeStamp` parameter before reuse. Use the PowerShell and parameter examples below
@@ -319,7 +322,7 @@ The script applies up to 11 sections depending on the selected profile. No LGPO.
 | Section | Applies to | What it does |
 | --- | --- | --- |
 | **1 — System Services (All VDI)** | Full profiles | Disables ~15 services with no VDI value: Xbox services, cellular/hotspot, geolocation, maps, messaging, payments/NFC, Connected Devices Platform (CDP), Device Setup Manager, etc. |
-| **2 — System Services (NonPersistent)** | NonPersistent profiles | Disables Superfetch/SysMain, Optimize Drives, Windows Update, Windows Update Medic, VSS, WER, diagnostic services (DPS/DiagSvc/WdiSystemHost), DiagTrack telemetry, and Edge auto-update services. |
+| **2 — System Services (NonPersistent)** | NonPersistent profiles | Disables Superfetch/SysMain, Windows Update, Windows Update Medic, VSS, WER, diagnostic services (DPS/DiagSvc/WdiSystemHost), DiagTrack telemetry, and Edge auto-update services. Sets Optimize Drives (`defragsvc`) to Manual so FSLogix VHD disk compaction can run while scheduled OS-disk defragmentation remains disabled. |
 | **3 — Scheduled Tasks (All VDI)** | Full profiles | Disables ~20 tasks: CEIP, Application Experience, power efficiency diagnostics, MUI, Retail Demo, disk activity logging, Windows Error Reporting queue processing, disk footprint optimizer, and more. |
 | **4 — Scheduled Tasks (NonPersistent)** | NonPersistent profiles | Disables defrag, WinSAT, memory diagnostics, StartComponentCleanup, Windows Update scan tasks, and update-channel tasks for M365, OneDrive, Edge/WebView2, and Microsoft Store. |
 | **5 — Registry / Policy Settings (All VDI)** | Full profiles | Applies ~80 policy values covering: telemetry (Basic minimum), feedback notifications, AutoPlay, Windows Ink, advertising ID, location, Cortana, cloud content/Spotlight, search, privacy, Start/taskbar, Windows Error Reporting (queued only), System Restore, hibernation, power plan (High Performance), and more. |
@@ -334,13 +337,19 @@ All changes are logged to `C:\Windows\Logs\Optimize-AVDImage.log` with per-item 
 
 > **Replaces:** the former `applyWindowsDesktopOptimizations` (boolean) and `disableSoftwareUpdates` (array) parameters.
 
+For pooled and personal host guidance covering per-machine OneDrive, Known Folder Move (KFM),
+Files On-Demand, Storage Sense, and FSLogix profile containers, see
+[OneDrive, FSLogix, and Storage Sense](../../docs/image-build.md#onedrive-fslogix-and-storage-sense).
+The selected optimization profile describes the session-host lifecycle; it does not by itself
+install or configure OneDrive or FSLogix.
+
 Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
 #### `vdiOptimizationAirGapped`
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** When `true`, applies settings for air-gapped or internet-restricted environments: disables SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, activity history uploads, and the Connected Devices Platform (CDP). Applies independently of `vdiOptimizationProfile`, including when profile is `None`. Recommended for air-gapped or proxy-only government deployments. See [Optimize-AVDImage.ps1 - Air-Gapped Mode](../shared/scripts/README.md#air-gapped-mode--airgapped) for full details.
+- **Description:** When `true`, applies settings for air-gapped or internet-restricted environments: disables SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, activity history uploads, and the Connected Devices Platform (CDP). Applies independently of `vdiOptimizationProfile`, including when profile is `None`. Recommended for air-gapped or proxy-only government deployments. See [Optimize-AVDImage.ps1 - Air-Gapped Mode](scripts/README.md#air-gapped-mode) for full details.
 
 ### Image Customizations - AppX Removal
 
@@ -1508,7 +1517,7 @@ For issues, questions, or feature requests:
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](../../../LICENSE) for details.
+This project is licensed under the MIT License. See [LICENSE](../../LICENSE) for details.
 
 ## Authors
 

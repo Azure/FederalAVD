@@ -1,496 +1,157 @@
-﻿# Shared Deployment PowerShell Scripts
-
-This directory contains PowerShell implementation scripts embedded by deployment and policy Bicep
-templates with `loadTextContent()`. They execute through Azure VM Run Command or from inside an
-embedded runner. Interactive operator utilities belong under `tools/`; add-on-specific scripts
-belong with their add-on.
-
-## Script Categories
-
-### 📦 Application Installation
-
-#### [Install-FSLogix.ps1](Install-FSLogix.ps1)
-
-Installs FSLogix agent from Microsoft or custom location.
-
-- **Used by:** Image Management
-- **Parameters:** APIVersion, BlobStorageSuffix, BuildDir, UserAssignedIdentityClientId, Uri
-- **Output:** Installation log at `C:\Windows\Logs\Install-FSLogix.log`
-
-#### [Install-M365Applications.ps1](Install-M365Applications.ps1)
-
-Installs Microsoft 365 Applications (formerly Office 365) with customizable application selection.
-
-- **Used by:** Image Management
-- **Parameters:** APIVersion, AppsToInstall, BlobStorageSuffix, BuildDir, Environment, Uri, UserAssignedIdentityClientId
-- **Features:** Supports custom configuration XML for selecting specific Office apps
-- **Output:** Installation log at `C:\Windows\Logs\Install-Microsoft-365-Applications.log`
-
-#### [Install-OneDrive.ps1](Install-OneDrive.ps1)
-
-Installs OneDrive per-machine (all users) for AVD optimization.
-
-- **Used by:** Image Management
-- **Parameters:** APIVersion, BlobStorageSuffix, BuildDir, Uri, UserAssignedIdentityClientId
-- **Output:** Installation log at `C:\Windows\Logs\Install-OneDrive.log`
-
-#### [Install-Teams.ps1](Install-Teams.ps1)
-
-Installs Microsoft Teams optimized for Azure Virtual Desktop.
-
-- **Used by:** Image Management
-- **Parameters:** APIVersion, BlobStorageSuffix, BuildDir, UserAssignedIdentityClientId, TeamsCloudType, Uris, DestFileNames
-- **Features:** Supports multi-cloud environments, WebRTC redirector, and Teams machine-wide installer
-- **Output:** Installation log at `C:\Windows\Logs\Install-Teams.log`
+# Shared Deployment PowerShell Scripts
 
-### ⚙️ System Configuration
-
-#### [Initialize-SessionHost.ps1](Initialize-SessionHost.ps1)
-
-Unified session host initialization script that combines configuration and AVD agent installation into a single Run Command execution. This is the primary script executed on each directly managed session host after VM provisioning.
-
-- **Used by:** Host Pool Deployment and Session Hosts add-on
-- **Log:** `C:\Windows\Logs\Initialize-SessionHost.log`
-
-**Parameters:**
+This directory contains PowerShell implementation scripts reused by more than one deployment
+solution or by shared orchestration modules. Bicep templates embed these scripts with
+`loadTextContent()` and execute them through Azure VM Run Command.
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `RegistrationToken` | Yes | Host pool registration token |
-| `AgentBootLoaderUrl` | Yes | Direct URL to the RDAgentBootLoader MSI |
-| `TimeZone` | Yes | Windows time zone ID to configure (e.g. `Eastern Standard Time`) |
-| `AgentUrl` | No | Direct URL to the RDAgent MSI — used if the Azure broker endpoint is unreachable |
-| `AADJoin` | No | `'true'` if the VM is Entra ID (Azure AD) joined; default `'false'` |
-| `MdmId` | No | MDM enrollment ID for Intune auto-enrollment with Entra ID join |
-| `UserAssignedIdentityClientId` | No | Client ID of a managed identity for authenticating to Azure Storage |
-| `ApiVersion` | No | Azure IMDS API version for token requests |
-| `StorageSuffix` | No | Cloud-specific blob storage DNS suffix (e.g. `core.windows.net`) |
-| `AmdVmSize` | No | `'true'` to enable AMD GPU optimizations; default `'false'` |
-| `NvidiaVmSize` | No | `'true'` to enable NVIDIA GPU optimizations; default `'false'` |
-| `DisableUpdates` | No | `'true'` to disable Windows, Edge, OneDrive, M365, and Teams auto-updates; default `'false'` |
-| `ConfigureFSLogix` | No | `'true'` to configure FSLogix profile containers; default `'false'` |
-| `CloudCache` | No | `'true'` to enable FSLogix Cloud Cache; default `'false'` |
-| `IdentitySolution` | No | One of: `ActiveDirectoryDomainServices`, `EntraDomainServices`, `EntraKerberos-Hybrid`, `EntraKerberos-CloudOnly`, `EntraId` |
-| `StorageService` | No | `AzureFiles` or `AzureNetAppFiles` |
-| `Shares` | No | JSON array of file share names — index 0 = profile share, index 1 = ODFC share |
-| `SizeInMBs` | No | FSLogix container size in MB; default `30000` |
-| `LocalStorageAccountNames` | No | JSON array of local storage account names |
-| `LocalStorageAccountKeys` | No | JSON array of local storage account keys (stored in Credential Manager) |
-| `LocalNetAppServers` | No | JSON array of local NetApp server FQDNs |
-| `OSSGroups` | No | JSON array of AD groups for FSLogix Object Specific Settings |
-| `RemoteStorageAccountNames` | No | JSON array of remote (DR) storage account names |
-| `RemoteStorageAccountKeys` | No | JSON array of remote storage account keys |
-| `RemoteNetAppServers` | No | JSON array of remote NetApp server FQDNs |
+Solution-specific scripts are documented with their owning solutions:
 
-**Execution Phases:**
+- [Image Build scripts](../../imageBuild/scripts/README.md)
+- [Standard Host Pool scripts](../../hostpools/scripts/README.md)
+- [Automated Host Pool scripts](../../automatedHostPools/scripts/README.md)
+- Add-on scripts remain under their individual `deployments/add-ons/<name>/` folders.
 
-##### Phase 1 - Session Host Configuration
+## Session Host Provisioning
 
-- Sets the system time zone
-- Optionally disables Windows Update, Edge, OneDrive, M365, and Teams auto-updates
-- Enables time zone redirection registry policy
-- Configures AMD/NVIDIA GPU registry settings when applicable
-- Configures FSLogix profile and ODFC containers (VHDLocations or CCDLocations), including:
-  - Azure Files and Azure NetApp Files storage paths
-  - Object Specific Settings (per-group VHD locations)
-  - Cloud Cache support
-  - FSLogix Redirections XML for Teams and Azure CLI profile exclusions
-  - Entra Kerberos `CloudKerberosTicketRetrievalEnabled` registry value
-  - Microsoft Defender Antivirus path and process exclusions for FSLogix, dynamically written to Local Group Policy; centrally managed Defender policy can supersede local exclusions
-  - Local administrator added to FSLogix exclude lists
-- Applies all registry settings via `Set-RegistryValue`
-- Resizes the OS disk partition to its maximum supported size
+### [Initialize-SessionHost.ps1](Initialize-SessionHost.ps1)
 
-##### Phase 2 - AVD Agent Installation
+Initializes directly managed session hosts and installs the AVD agent in one Run Command.
 
-- Detects Server OS and installs `RDS-RD-Server` Windows Feature if needed
-- Skips installation if the VM is already registered (`RDInfraAgent` registry key)
-- Downloads the RDAgent MSI using a two-tier strategy:
-  1. Queries the AVD broker endpoint via the registration token JWT
-  2. Falls back to the explicit `AgentUrl` parameter
-- Downloads the RDAgentBootLoader MSI from `AgentBootLoaderUrl`
-- Installs RDAgentBootLoader and RDAgent via MSI with automatic retry on `ERROR_INSTALL_ALREADY_RUNNING` (exit code 1618)
-- Waits for the `RDAgentBootLoader` service to start
-- Cleans up the temporary download folder
+- **Used by:** Shared standard session-host orchestration
+- **Parameters:** `ApiVersion`, `StorageSuffix`, `RegistrationToken`, `AgentBootLoaderUrl`,
+  `AgentUrl`, `AADJoin`, `MdmId`, `UserAssignedIdentityClientId`, `TimeZone`, GPU flags, and
+  FSLogix storage settings
+- **Behavior:**
+  - Configures time zone, GPU settings, FSLogix Profile and ODFC containers, Cloud Cache, Object
+    Specific Settings, Defender exclusions, and Entra Kerberos policy as selected.
+  - Resizes the OS partition to the available disk size.
+  - Downloads and installs the AVD agent and boot loader, then waits for the service to start.
+- **Output:** `C:\Windows\Logs\Initialize-SessionHost.log`
 
-#### [Set-SessionHostConfiguration.ps1](Set-SessionHostConfiguration.ps1)
+The automated host pool policy workflow uses a different, solution-owned implementation that
+configures the host but does not install the AVD agent. See the
+[Automated Host Pool scripts reference](../../automatedHostPools/scripts/README.md).
 
-Comprehensive session host configuration including FSLogix, GPU drivers, time zone, and optional Windows Update disabling.
+## Customization Execution
 
-- **Used by:** Host Pool Deployment
-- **Parameters:** AmdVmSize, NvidiaVmSize, DisableUpdates, ConfigureFSLogix, CloudCache, IdentitySolution, LocalNetAppServers, LocalStorageAccountNames, LocalStorageAccountKeys, OSSGroups, RemoteNetAppServers, RemoteStorageAccountNames, RemoteStorageAccountKeys, Shares, SizeInMBs, StorageAccountDNSSuffix, StorageService, TimeZone
-- **Features:**
-  - FSLogix profile container configuration with Cloud Cache support
-  - GPU driver installation (AMD/NVIDIA)
-  - Time zone configuration
-  - Windows Update management
-  - Storage account configuration for profiles
-- **Output:** Session host configuration logs
+### [Invoke-Customization.ps1](Invoke-Customization.ps1)
 
-#### [Set-ConfidentialVMOSDiskEncryptionKey.ps1](Set-ConfidentialVMOSDiskEncryptionKey.ps1)
+Downloads and executes an artifact during image or session-host provisioning.
 
-Configures OS disk encryption keys for confidential VMs.
+- **Used by:** Image Build, standard host pools, and automated host pool policy orchestration
+- **Parameters:** `APIVersion`, `Arguments`, `BlobStorageSuffix`, `BuildDir`, `Name`, `Uri`,
+  `UserAssignedIdentityClientId`
+- **Behavior:** Downloads public or managed-identity-protected content, extracts ZIP packages,
+  discovers the package entry point, converts the arguments string to typed PowerShell parameters,
+  executes the customization, and reports actionable errors.
+- **Output:** Customization output and logs named for the supplied customization `Name`
 
-- **Used by:** Host Pool Deployment
-- **Purpose:** Secure boot and encryption key management for confidential compute
+## FSLogix Storage Configuration
 
-### 🗄️ Storage Configuration
+### [Configure-StorageAccountforADDS.ps1](Configure-StorageAccountforADDS.ps1)
 
-#### [Configure-StorageAccountforADDS.ps1](Configure-StorageAccountforADDS.ps1)
+Configures Azure Files storage accounts for Active Directory Domain Services authentication.
 
-Configures Azure Files storage account for Active Directory Domain Services authentication.
+- **Used by:** Shared FSLogix orchestration consumed by host pools and the FSLogix Storage add-on
+- **Parameters:** Domain join credentials and domain information, Kerberos encryption type,
+  storage account naming and indexing values, Azure endpoint values, subscription ID, and managed
+  identity client ID
+- **Behavior:** Discovers an AD Web Services-capable domain controller, creates or updates storage
+  account computer objects, and configures Kerberos encryption and service principal names.
 
-- **Used by:** Host Pool Deployment and FSLogix Storage add-on
-- **Parameters:** DomainJoinUserPwd, DomainJoinUserPrincipalName, DomainName, HostPoolName, KerberosEncryptionType, OuPath, ResourceManagerUri, StorageAccountPrefix, StorageAccountResourceGroupName, StorageCount
-- **Features:**
-  - Discover an ADWS-capable domain controller without requiring local domain membership
-  - Create and manage storage account computer objects without requiring local domain membership
-  - Configure Kerberos encryption (AES256/RC4)
-  - Set SPNs for file share access
-- **Output:** AD DS integration for FSLogix profile storage
+### [Configure-StorageAccountforEntraHybrid.ps1](Configure-StorageAccountforEntraHybrid.ps1)
 
-#### [Configure-StorageAccountforEntraHybrid.ps1](Configure-StorageAccountforEntraHybrid.ps1)
+Configures Azure Files storage accounts for Microsoft Entra Kerberos hybrid authentication.
 
-Configures Azure Files storage account for Entra ID Kerberos authentication (hybrid scenarios).
+- **Used by:** Shared FSLogix orchestration consumed by host pools and the FSLogix Storage add-on
+- **Parameters:** `DefaultSharePermission`, domain join credentials and domain name, storage account
+  naming and indexing values, Azure endpoint values, subscription ID, and managed identity client ID
+- **Behavior:** Discovers an AD Web Services-capable domain controller and configures Azure Files
+  identity-based authentication with domain information.
 
-- **Used by:** Host Pool Deployment and FSLogix Storage add-on
-- **Purpose:** Enable Entra ID Kerberos authentication for FSLogix storage
-- **Features:** Supports hybrid identity scenarios with on-premises AD sync and explicit ADWS discovery
+### [Update-StorageAccountApplicationManifest.ps1](Update-StorageAccountApplicationManifest.ps1)
 
-#### [Set-NtfsPermissionsAzureFiles.ps1](Set-NtfsPermissionsAzureFiles.ps1)
+Updates the Microsoft Entra application objects created for Azure Files Kerberos authentication.
 
-Sets NTFS permissions on Azure Files shares for FSLogix profiles.
+- **Used by:** Shared Azure Files orchestration for private-endpoint Entra Kerberos hybrid and Entra
+  Kerberos cloud-only configurations
+- **Parameters:** `AppDisplayNamePrefix`, `ClientId`, `GraphEndpoint`, `PrivateEndpoint`,
+  `EnableCloudGroupSids`
+- **Behavior:** Uses Microsoft Graph with managed identity, adds private-link identifier URIs when
+  required, and applies the `kdc_enable_cloud_group_sids` tag for cloud-only group authorization.
+- **Output:** `C:\Windows\Logs\Update-StorageAccountApplicationManifest-<timestamp>.log`
 
-- **Used by:** Host Pool Deployment and FSLogix Storage add-on
-- **Parameters:** DomainJoinUserPwd, DomainJoinUserPrincipalName, DomainName, Shares, ShardAzureFilesStorage, StorageAccountPrefix, StorageCount, StorageIndex, StorageSuffix, UserAssignedIdentityClientId, UserGroups
-- **Features:**
-  - Configure share-level and NTFS permissions
-  - Resolve domain groups through an explicitly discovered ADWS server
-  - Entra ID SID conversion for cloud-only identities
-- **Output:** Properly secured FSLogix profile shares
+### [Grant-StorageAccountApplicationConsent.ps1](Grant-StorageAccountApplicationConsent.ps1)
 
-#### [Set-NtfsPermissionsNetApp.ps1](Set-NtfsPermissionsNetApp.ps1)
+Grants the delegated permissions required by Azure Files Kerberos enterprise applications.
 
-Sets NTFS permissions on Azure NetApp Files volumes for FSLogix profiles.
+- **Used by:** Shared Azure Files orchestration after NTFS permissions are configured
+- **Parameters:** `AppDisplayNamePrefix`, `ClientId`, `GraphEndpoint`
+- **Behavior:** Finds matching storage account application and service principal objects through
+  Microsoft Graph, then creates or updates their delegated permission grants.
+- **Output:** `C:\Windows\Logs\Grant-StorageAccountApplicationConsent-<timestamp>.log`
 
-- **Used by:** Host Pool Deployment
-- **Purpose:** Configure NTFS ACLs for ANF-based profile storage
-- **Features:** Similar to Azure Files but optimized for NetApp storage
+### [Set-NtfsPermissionsAzureFiles.ps1](Set-NtfsPermissionsAzureFiles.ps1)
 
-#### [Update-StorageAccountApplications.ps1](Update-StorageAccountApplications.ps1)
+Sets NTFS permissions on Azure Files shares used by FSLogix.
 
-Updates Entra ID Kerberos application registrations for storage accounts.
+- **Used by:** Shared FSLogix orchestration consumed by host pools and the FSLogix Storage add-on
+- **Parameters:** Domain credentials and domain name, shares, sharding settings, storage account
+  naming and indexing values, storage suffix, managed identity client ID, and user groups
+- **Behavior:** Resolves AD groups through an explicitly selected domain controller or converts
+  Microsoft Entra object IDs to SIDs for cloud-only identity, mounts each share, and applies ACLs.
 
-- **Used by:** Host Pool Deployment
-- **Purpose:** Maintain Entra ID app registrations for Kerberos authentication
-- **Features:** Automate application credential rotation and updates
+### [Set-NtfsPermissionsNetApp.ps1](Set-NtfsPermissionsNetApp.ps1)
 
-### 🔄 Customization & Updates
+Sets NTFS permissions on Azure NetApp Files volumes used by FSLogix.
 
-#### [Invoke-Customization.ps1](Invoke-Customization.ps1)
+- **Used by:** Shared FSLogix orchestration for host pool deployments
+- **Parameters:** `AdminGroupNames`, `Shares`, domain join credentials, `NetAppServers`,
+  `UserGroupNames`
+- **Behavior:** Mounts the SMB volumes and applies the requested administrator and user ACLs.
 
-**[Shared Script]** - Executes custom scripts or commands from URLs or blob storage during deployment.
+## Deployment Helper Cleanup
 
-- **Used by:** Image Management, Host Pool Deployment
-- **Parameters:** APIVersion, Arguments, BlobStorageSuffix, BuildDir, Name, Uri, UserAssignedIdentityClientId
-- **Features:**
-  - Execute scripts from public URLs or private blob storage
-  - Support for PowerShell scripts (.ps1) and executables (.exe)
-  - Automatic argument parsing and handling
-  - Managed identity authentication for private storage
-- **Output:** Execution logs with timestamps
+### [Remove-RunCommands.ps1](Remove-RunCommands.ps1)
 
-#### [Invoke-WindowsUpdate.ps1](Invoke-WindowsUpdate.ps1)
+Removes Azure VM Run Command resources from one or more deployment VMs.
 
-Runs Windows Update during image build process.
+- **Used by:** Shared deployment-helper cleanup orchestration
+- **Parameters:** `ResourceManagerUri`, `SubscriptionId`, `UserAssignedIdentityClientId`,
+  `VirtualMachineNames`, `VirtualMachinesResourceGroup`
+- **Behavior:** Authenticates with managed identity, deletes each Run Command, and waits for removal.
 
-- **Used by:** Image Management
-- **Parameters:** AppName, Criteria, ExcludePreviewUpdates, Service, WSUSServer
-- **Features:**
-  - Support for Windows Update, Microsoft Update, WSUS
-  - Exclude preview/optional updates
-  - Installation result reporting
-- **Output:** Update installation logs and reboot management
+### [Remove-RoleAssignments.ps1](Remove-RoleAssignments.ps1)
 
-#### [Optimize-AVDImage.ps1](Optimize-AVDImage.ps1)
+Removes temporary Azure role assignments created for deployment orchestration.
 
-Applies VDI performance and resource optimizations to a Windows image for AVD deployment. Writes
-Group Policy settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe
-or internet access required. Configures default user profile settings, disables unnecessary services,
-scheduled tasks, autologgers, and optional Windows features.
+- **Used by:** Shared deployment-helper cleanup orchestration
+- **Parameters:** `ResourceManagerUri`, `RoleAssignmentIds`, `UserAssignedIdentityClientId`
 
-- **Used by:** Image Management
-- **Parameters:** `OptimizationProfile`, `AirGapped`
-- **Output:** `C:\Windows\Logs\Optimize-AVDImage.log`
+### [Remove-ResourceGroup.ps1](Remove-ResourceGroup.ps1)
 
-##### Optimization Profiles (`-OptimizationProfile`)
+Deletes the temporary deployment-helper resource group.
 
-| Value | Behavior |
-| --- | --- |
-| `None` | No optimization. Only `-AirGapped` takes effect when `None`. |
-| `NonPersistent-UpdatesOnly` | Locks down all software update channels only (Sections 2, 4, 6): OS, M365, Teams, OneDrive, Edge, WebView2, Store. |
-| `NonPersistent-Full` | Full optimization for pooled AVD host pools replaced on a regular cadence. |
-| `Persistent` | Full optimization minus update-channel lockdown. Update channels remain intact for SCCM/Intune. |
+- **Used by:** Shared deployment-helper cleanup orchestration
+- **Parameters:** `ResourceManagerUri`, `UserAssignedIdentityClientId`, `ResourceGroupResourceId`
 
-##### Air-Gapped Mode (`-AirGapped`)
+## AVD Control Plane
 
-When `true`, applies additional settings for environments with no outbound internet access (Section 7):
+### [Update-AvdSessionDesktopName.ps1](Update-AvdSessionDesktopName.ps1)
 
-| Setting | ADMX source | Rationale |
-| --- | --- | --- |
-| **SmartScreen** disabled (Explorer + Edge) | `SmartScreen.admx` | Cloud lookups time out, causing 10–30 s delays on every exe launch and URL navigation |
-| **Online font providers** disabled | `ICM.admx` | Prevents outbound calls to Microsoft font CDN |
-| **Teredo IPv6** disabled | `TCPIP.admx` | No internet-facing IPv6 tunnel needed in VDI |
-| **Defender cloud protection** (MAPS/BAFS) disabled | `WindowsDefender.admx` | Cloud lookups time out; SpynetReporting=0, SubmitSamplesConsent=2, DisableBlockAtFirstSeen=1 |
-| **Windows Error Reporting** policy disabled | `WindowsErrorReporting.admx` | Watson upload attempts time out in restricted networks (WerSvc also disabled for NonPersistent in Section 2) |
-| **DiagTrack** service disabled | — | Continuous telemetry upload attempts fail (already disabled for NonPersistent in Section 2; this covers Persistent+AirGapped) |
-| **OneSettings downloads** disabled | `DataCollection.admx` | Prevents DiagTrack from pulling dynamic telemetry config from Microsoft |
-| **Cross-device clipboard** disabled | `OSPolicy.admx` | Stops clipboard sync to Microsoft cloud |
-| **News and Interests / Widgets** disabled | `NewsAndInterests.admx` | Stops widget panel polling Microsoft news endpoints |
-| **Settings sync** disabled | `SettingSync.admx` | Stops cloud sync of Windows settings; competes with FSLogix as a second source of truth for profile state |
-| **Activity history upload** disabled | `OSPolicy.admx` | Stops upload to `activity.windows.com`; local feed (recent files, Jump Lists via FSLogix) is preserved |
-| **Connected Devices Platform (CDP)** disabled | `GroupPolicy.admx` | Disables cross-device handoff, Near Share, and Phone Link cloud coordination (`EnableCdp=0`) |
+Updates the friendly name of the session desktop in an AVD desktop application group.
 
-Applies independently of `-OptimizationProfile`, including when profile is `None`.
+- **Used by:** Standard and automated host pool control-plane modules
+- **Parameters:** `ApplicationGroupResourceId`, `FriendlyName`, `ResourceManagerUri`,
+  `UserAssignedIdentityClientId`
 
-##### Policy Registry Audit (W11 25H2)
+## Execution and Security Conventions
 
-All policy paths and value names are ADMX-backed, verified against `C:\Windows\PolicyDefinitions`
-on Windows 11 25H2. Settings appear under **Administrative Templates** in `gpresult` output rather
-than Extra Registry Settings. `gpupdate` is intentionally **not** called during image build — the
-build VM is about to be sysprepped. Policies take effect on deployed session hosts at first boot.
-
-**Exception:** `NetworkList\Signatures\EveryNetwork\CategoryReadOnly` has no ADMX backing by
-design (it is a Security Settings value) and is written via direct registry.
-
-##### Deliberate Deviations from the Microsoft VDI Optimization Article
-
-| Item | Article Recommendation | What This Script Does | Reason |
-| --- | --- | --- | --- |
-| **Storage Sense** | Disable | Enable and configure | FSLogix + OneDrive Files On-Demand caches files in the profile container. Without dehydration the container grows monotonically. Storage Sense is configured to dehydrate cloud content not opened in 30 days and clean temp files. |
-| **WSearch** | Evaluate / disable | Leave at default (Manual) | Disabling breaks Outlook and File Explorer search for all users for the entire VM lifetime. The OS search index persists across the VM's full lifecycle and the FSLogix Outlook search index lives in the profile container. |
-| **InstallService** | Disable on NonPersistent | Leave at default (Manual) | Disabling causes WinAppSDK-based apps (Sticky Notes, Snipping Tool) to show a "needs an update" error at first launch, including on air-gapped networks. |
-| **OneSyncSvc** | Not listed / candidate | Leave at default | Re-syncs Exchange mail, contacts, and calendar at session start. UWP app data is excluded from FSLogix containers so there is no cached state to fall back on — disabling leaves Mail and Calendar empty. |
-| **DPS / DiagSvc / WdiSystemHost** | Disable | NonPersistent only | On Persistent VMs these back the end-user Troubleshoot/Diagnose UX in Settings. Disabling on long-lived desktops breaks self-service diagnostics. |
-| **RegIdleBackup / SilentCleanup** | Disable | Retain | Registry hive backups enable mid-lifecycle corruption recovery. SilentCleanup only triggers on low disk space — both have operational value across the VM's monthly lifetime. |
-
-#### [Check-CbsState.ps1](Check-CbsState.ps1)
-
-Checks Component Based Servicing (CBS) registry state on the image VM to determine if a restart is required before proceeding with customization or sysprep.
-
-- **Used by:** Image Management (via `conditionalRestart.bicep` module)
-- **Features:**
-  - Waits up to 10 minutes for TiWorker.exe and TrustedInstaller.exe to exit before reading registry
-  - Checks `RebootPending`, `RebootInProgress`, `RebootRequired`, and `SessionsPending\Exclusive` keys
-  - Emits `RESTART_REQUIRED=true` or `RESTART_REQUIRED=false` as the first stdout line (instanceView-safe signal)
-  - Full timestamped log follows the signal in stdout and is written to `C:\Windows\Logs\Check-CbsState-*.log`
-- **Output:** Signal line first in stdout, full log at `C:\Windows\Logs\Check-CbsState-*.log`
-
-#### [Invoke-ConditionalRestart.ps1](Invoke-ConditionalRestart.ps1)
-
-Runs on the orchestration VM. Reads the `instanceView.output` of the `Check-CbsState` run command via ARM REST API and, if `RESTART_REQUIRED=true`, calls the ARM restart API (synchronous LRO) then waits 60 seconds for the guest agent to initialize.
-
-- **Used by:** Image Management (via `conditionalRestart.bicep` module)
-- **Parameters:** ResourceManagerUri, UserAssignedIdentityClientId, ImageVmResourceId, RunCommandName
-- **Features:**
-  - Reads run command instanceView without needing a separate deploymentScript resource
-  - Uses ARM restart LRO (definitive completion signal) instead of polling power state
-  - No timing races — restart only occurs when the CBS check script has already confirmed the need
-- **Output:** Restart decision and polling progress written to stdout (captured in blob log)
-
-#### [Invoke-Sysprep.ps1](Invoke-Sysprep.ps1)
-
-Executes sysprep to generalize Windows images, then captures the Panther logs into the Run Command output blob.
-
-- **Used by:** Image Management
-- **Parameters:** AdminUserPw
-- **Features:**
-  - Waits for required services (RdAgent, WindowsAzureGuestAgent) to be running
-  - Removes cached unattend files that would interfere with OOBE
-  - Enables the built-in local administrator account used to launch Sysprep
-  - Waits for CBS (Component Based Servicing) to settle; exits with an error if a reboot is still pending
-  - Logs a warning, without blocking capture, if Microsoft Defender for Endpoint appears onboarded or retains device identity
-  - Uses `LogonUser`, `LoadUserProfile`, and `CreateProcessAsUser` to run Sysprep `/oobe /generalize /quit /mode:vm` under the local administrator account
-  - Waits up to 30 minutes for the Sysprep process to complete and checks its exit code
-  - Emits `setupact.log` and `setuperr.log` from `C:\Windows\System32\Sysprep\Panther\` to stdout so they are captured by the Run Command `outputBlobUri`
-  - Fails the Run Command (and the deployment) if sysprep returns a non-zero exit code, with the Panther log already in the output blob
-  - Unloads the local administrator profile and closes native process handles
-  - Exits cleanly — `Generalize-Vm.ps1` handles deallocate and generalize
-- **Output:** Panther logs in the Run Command output blob; VM left running and generalized (ready for deallocate)
-
-### 🧹 Cleanup & Removal
-
-#### [Remove-AppXPackages.ps1](Remove-AppXPackages.ps1)
-
-Removes built-in Windows AppX packages during image build.
-
-- **Used by:** Image Management
-- **Parameters:** AppsToRemove (JSON array)
-- **Features:**
-  - Removes both provisioned and installed AppX packages
-  - Supports bulk removal for image optimization
-- **Output:** Log at `C:\Windows\Logs\Remove-Apps.log`
-
-#### [Remove-RunCommands.ps1](Remove-RunCommands.ps1)
-
-**[Shared Script]** - Cleans up Azure Run Commands after execution.
-
-- **Used by:** Image Management, Host Pool Deployment
-- **Parameters:** ResourceManagerUri, SubscriptionId, UserAssignedIdentityClientId, VirtualMachineNames, VirtualMachinesResourceGroup
-- **Features:**
-  - Uses managed identity authentication
-  - Removes all Run Commands from specified VMs
-  - Supports multi-cloud environments
-- **Purpose:** Clean up deployment artifacts and sensitive command data
-
-#### [Remove-ImageBuildResources.ps1](Remove-ImageBuildResources.ps1)
-
-Deletes temporary image build resources after successful image capture.
-
-- **Used by:** Image Management
-- **Purpose:** Clean up build VM, disks, NICs, and other temporary resources
-- **Features:** Uses managed identity to delete resource group containing build artifacts
-
-#### [Remove-ResourceGroup.ps1](Remove-ResourceGroup.ps1)
-
-Deletes Azure resource groups.
-
-- **Used by:** Host Pool Deployment
-- **Purpose:** Clean up deployment resource groups during teardown operations
-
-#### [Remove-RoleAssignments.ps1](Remove-RoleAssignments.ps1)
-
-Removes Azure RBAC role assignments.
-
-- **Used by:** Host Pool Deployment
-- **Purpose:** Clean up temporary role assignments created during deployment
-
-### 🔧 Virtual Machine Operations
-
-#### [Generalize-Vm.ps1](Generalize-Vm.ps1)
-
-Deallocates a running generalized VM and marks it as generalized via the Azure REST API.
-
-- **Used by:** Image Management
-- **Parameters:** ResourceManagerUri, UserAssignedIdentityClientId, VmResourceId
-- **Features:**
-  - Uses managed identity authentication (UAI or system-assigned)
-  - Calls `/deallocate` directly on the running VM — no prior stop required; Azure handles the stop+deallocate in one operation
-  - Polls VM power state until `VM deallocated` (5-minute timeout)
-  - Calls `/generalize` to mark the VM for image capture
-- **Purpose:** Prepare VM for Azure Compute Gallery image creation after `Invoke-Sysprep.ps1` has completed
-
-#### [Restart-Vm.ps1](Restart-Vm.ps1)
-
-Restarts an Azure VM via REST API and waits for it to be running.
-
-- **Used by:** Image Management
-- **Parameters:** ResourceManagerUri, UserAssignedIdentityClientId, VmResourceId
-- **Features:**
-  - Uses managed identity authentication
-  - Polls VM status until running
-  - Supports multi-cloud environments
-- **Purpose:** Reboot VMs after software installation or configuration changes
-
-#### [Update-AvdSessionDesktopName.ps1](Update-AvdSessionDesktopName.ps1)
-
-Updates the friendly name of the AVD session desktop in an application group.
-
-- **Used by:** Host Pool Deployment
-- **Parameters:** ApplicationGroupResourceId, FriendlyName, ResourceManagerUri, UserAssignedIdentityClientId
-- **Purpose:** Customize desktop display name for better user experience
-
-## Usage Patterns
-
-### Script Execution Methods
-
-1. **Azure Run Command** (Most Common)
-   - Scripts executed via Run Command API
-   - Supports managed identity authentication
-   - Automatic cleanup with `Remove-RunCommands.ps1`
-
-2. **Direct Execution**
-   - Some scripts run locally within VMs during customization
-
-### Common Parameter Patterns
-
-- **UserAssignedIdentityClientId**: Used for managed identity authentication to access Azure resources
-- **ResourceManagerUri**: Azure environment endpoint (varies by cloud: Azure, Azure Gov, Azure China)
-- **BlobStorageSuffix**: Cloud-specific blob storage endpoint
-- **APIVersion**: Azure API version for REST calls
-- **BuildDir**: Optional temporary directory for downloads (defaults to `$env:TEMP`)
-
-## Script Dependencies
-
-### Shared Scripts (Used by Both Solutions)
-
-- `Invoke-Customization.ps1`
-- `Remove-RunCommands.ps1`
-
-### Image Management Only
-
-- Application installers (FSLogix, M365, OneDrive, Teams)
-- Image optimization (`Optimize-AVDImage.ps1`)
-- CBS state check and conditional restart (`Check-CbsState.ps1`, `Invoke-ConditionalRestart.ps1`)
-- Image finalization (Sysprep, Generalize)
-
-### Host Pool Deployment Only
-
-- Session host configuration
-- FSLogix storage configuration
-- NTFS permission management
-- Entra ID/AD DS integration
-- AVD control plane updates
-
-## Multi-Cloud Support
-
-All scripts support multiple Azure clouds through parameterization:
-
-- **Azure Commercial** (`management.azure.com`, `blob.core.windows.net`)
-- **Azure Government** (`management.usgovcloudapi.net`, `blob.core.usgovcloudapi.net`)
-- **Azure China** (`management.chinacloudapi.cn`, `blob.core.chinacloudapi.cn`)
-
-Scripts use the `ResourceManagerUri` and `BlobStorageSuffix` parameters to adapt to the target cloud environment.
-
-## Logging Standards
-
-Most scripts follow consistent logging patterns:
-
-- **Transcripts**: Started with `Start-Transcript` to capture all output
-- **Log Location**: `C:\Windows\Logs\` directory
-- **Naming Convention**: `Install-<SoftwareName>.log` or `<Action>-<Component>.log`
-- **Timestamps**: Custom `Write-OutputWithTimeStamp` function for timestamped entries
-- **Format**: `[MM/dd/yyyy HH:mm:ss] Message`
-
-## Error Handling
-
-Standard error handling approach:
-
-```powershell
-$ErrorActionPreference = 'Stop'
-$WarningPreference = 'SilentlyContinue'
-```
-
-This ensures:
-
-- Scripts fail fast on errors
-- Warnings don't clutter logs
-- Bicep deployments detect failures appropriately
-
-## Security Considerations
-
-- **Managed Identity**: Scripts use user-assigned managed identities instead of credentials
-- **No Hardcoded Secrets**: All sensitive data passed as parameters or retrieved from Key Vault
-- **Least Privilege**: Scripts request only necessary permissions
-- **Cleanup**: Sensitive Run Commands removed after execution
-- **Audit Trail**: Comprehensive logging for compliance and troubleshooting
-
-## Maintenance
-
-When modifying scripts:
-
-1. Maintain parameter consistency across similar scripts
-2. Update both Bicep references if changing script names
-3. Test in multi-cloud environments if applicable
-4. Update logging to follow standards
-5. Document breaking changes in solution documentation
+- Scripts are embedded by Bicep and aren't intended as interactive operator utilities.
+- Azure REST and Microsoft Graph operations use managed identity rather than stored credentials.
+- Cloud endpoints and DNS suffixes are passed by the calling template where required.
+- Protected Run Command parameters are used for domain credentials and other sensitive values.
+- Every PowerShell file in this directory must remain ASCII-only because scripts are embedded in
+  generated ARM JSON.
+- Callers treat script failures as deployment failures where a failed operation would leave the
+  deployment incomplete or insecure.

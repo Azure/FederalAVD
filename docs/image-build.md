@@ -318,9 +318,82 @@ The `vdiOptimizationProfile` parameter controls which optimization sections `Opt
 
 **`vdiOptimizationAirGapped`:** When `true`, disables Windows components that make outbound calls to Microsoft cloud services: SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, activity history uploads, and the Connected Devices Platform (CDP). Recommended for air-gapped or proxy-only government deployments. Applies regardless of the selected profile.
 
-> For the full list of settings, deliberate deviations from the Microsoft VDI guide, and rationale, see [`deployments/shared/scripts/README.md` - Optimize-AVDImage.ps1](../deployments/shared/scripts/README.md#optimize-avdimageps1).
+> For the full list of settings, deliberate deviations from the Microsoft VDI guide, and rationale, see [`Optimize-AVDImage.ps1`](../deployments/imageBuild/scripts/README.md#optimize-avdimageps1).
 
 Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+
+### OneDrive, FSLogix, and Storage Sense
+
+The optimization profile describes how the session-host operating system is serviced. It does not
+install OneDrive, enable Known Folder Move (KFM), or configure FSLogix. Treat these as related but
+separate choices:
+
+- Set `installOneDrive` to `true` to install OneDrive per-machine. Per-machine installation is
+  required for supported OneDrive use on nonpersistent virtual desktops.
+- Use the
+  [Configure-OneDriveKFMPolicy example](../customer-examples/artifacts/Configure-OneDriveKFMPolicy/README.md)
+  after OneDrive installation to enable silent account configuration, Files On-Demand, silent KFM,
+  and prevention of KFM opt-out. Copy the example to `customer/artifacts/` before customization.
+- Use the latest FSLogix release for nonpersistent OneDrive deployments. A Profile Container is
+  the recommended default when the complete Windows profile and Microsoft 365 state should roam.
+  Do not allow the same user's container to be used concurrently by multiple sessions.
+- Ensure the session hosts can reach the required OneDrive and Microsoft 365 endpoints. KFM and
+  Files On-Demand are not offline or air-gapped data services; an online-only file needs cloud
+  connectivity when it is opened.
+
+| Host-pool scenario | Recommended configuration |
+| --- | --- |
+| **Pooled, image-managed** | `NonPersistent-Full`; per-machine OneDrive; current FSLogix Profile Container; Files On-Demand enabled; KFM where OneDrive endpoints and licensing are available. Storage Sense runs daily and dehydrates eligible cloud content after 30 days. |
+| **Pooled with external hardening** | `NonPersistent-UpdatesOnly`; apply equivalent profile, OneDrive, Storage Sense, and FSLogix settings in the external management baseline. |
+| **Personal, persistent** | `Persistent`; per-machine OneDrive; KFM and Files On-Demand recommended based on organizational data policy. Storage Sense runs monthly and dehydrates eligible cloud content after 30 days. FSLogix remains optional based on the profile architecture. |
+| **RemoteApp** | Test the complete published-app sign-in and sign-out flow. Use the KFM artifact's `-EnableRemoteApp` switch when OneDrive must remain active with RemoteApp sessions. |
+| **Air-gapped or disconnected** | Do not configure KFM or rely on online-only files unless all required OneDrive endpoints are reachable through the approved network path. Pre-stage the OneDrive installer only when the service itself will be reachable at runtime. |
+
+#### How Profile Space Is Reclaimed
+
+The default OneDrive sync root is under `%UserProfile%`. With an FSLogix Profile Container, the
+OneDrive placeholders, metadata, cache, and hydrated file content therefore occupy space inside
+the VHDX. OneDrive content is not automatically stored outside the profile container.
+
+1. Files On-Demand makes new synchronized files online-only by default and downloads content when
+  a user opens it.
+2. Storage Sense returns eligible cloud-backed content that has not been opened for 30 days to
+  online-only state. It also cleans eligible temporary files and Recycle Bin content. It does not
+  delete Downloads content in this solution.
+3. Dehydration creates free space inside the container, but does not shrink the physical VHDX.
+4. FSLogix evaluates a dynamically expanding container for VHD disk compaction at sign-out and can
+  reclaim the physical space when its compaction threshold is met. The Optimize Drives service
+  (`defragsvc`) must remain Manual or Automatic for this evaluation, so the image optimizer sets
+  it to Manual rather than disabling it.
+
+Storage Sense can make infrequently used content require a new download. Validate the 30-day
+threshold against offline-access requirements, network capacity, profile-container size, and user
+sign-out times. Size storage for actual hydrated content and application data rather than assuming
+Files On-Demand keeps profile containers small.
+
+#### KFM Rollout Checklist
+
+Before enabling silent KFM broadly:
+
+1. Verify OneDrive licensing, user provisioning, Microsoft Entra device join, and required endpoint
+  connectivity. Silent account configuration relies on a Microsoft Entra credential available to
+  the user session.
+2. Resolve existing Windows Folder Redirection and KFM mappings to other Microsoft 365 tenants.
+3. Pilot with representative users and data sets, then stage the deployment to control initial
+  upload traffic. Microsoft recommends pairing silent KFM with the prompt policy so users can
+  remediate silent-move failures.
+4. Confirm Desktop, Documents, and Pictures complete synchronization before relying on image or
+  profile replacement. Discarding a nonpersistent local profile can lose unsynchronized local
+  changes even though content already synchronized to OneDrive remains in the service.
+5. Monitor OneDrive sync health, FSLogix attach/compact events, VHDX growth, and sign-out duration.
+
+References:
+
+- [Use the OneDrive sync app on virtual desktops](https://learn.microsoft.com/en-us/sharepoint/sync-vdi-support)
+- [Redirect and move Windows known folders to OneDrive](https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders)
+- [Use OneDrive policies to control sync settings](https://learn.microsoft.com/en-us/sharepoint/use-group-policy)
+- [Configure Storage Sense](https://learn.microsoft.com/en-us/windows/configuration/storage/storage-sense)
+- [FSLogix VHD disk compaction](https://learn.microsoft.com/en-us/fslogix/concepts-vhd-disk-compaction)
 
 ### CMK Encryption Reference
 
@@ -347,23 +420,27 @@ These parameters reference Image Management outputs and belong in the same `<pre
 
 The image build process includes automatic timestamp-based versioning:
 
-**How it works:**
+#### How Automatic Versioning Works
+
 - If `imageVersionName` is left blank (recommended), the build automatically generates a version number
 - Version format: `YYYY.MMDD.HHMM` (e.g., `2026.0210.1435` for February 10, 2026 at 2:35 PM)
 - Each build gets a unique, sortable version number based on build time
 - Versions are chronologically sortable in the Compute Gallery
 
-**Benefits:**
+#### Automatic Versioning Benefits
+
 - ✅ No manual version management required
 - ✅ Multiple builds per day automatically get unique versions
 - ✅ Build time is captured in the version number
 - ✅ Easy to identify when an image was built
 
-**Custom versioning:**
+#### Custom Versioning
+
 - Specify a custom `imageVersionName` value (e.g., `1.0.0`, `2.5.3`) to override automatic versioning
 - Useful for release milestones or semantic versioning requirements
 
-**⚠️ Note about `timeStamp` parameter:**
+#### Note About the `timeStamp` Parameter
+
 - The Bicep template uses a `timeStamp` parameter to generate automatic versions
 - This parameter has a default value of `utcNow()` and should **never be included in parameter files**
 - When downloading parameters from Template Spec UI, remove the `timeStamp` parameter
@@ -582,7 +659,7 @@ Typical build duration: **45-90 minutes** depending on:
 
 ### Getting Detailed Logs
 
-**Option 1: Blob Storage Logs (Recommended)**
+#### Option 1: Blob Storage Logs (Recommended)
 
 If you enabled the `collectCustomizationLogs` parameter during deployment, logs are written to the existing storage account you specified:
 
@@ -604,7 +681,7 @@ $blob = Get-AzStorageBlob -Container "image-customization-logs" -Blob "vm-avd-bu
 $blob.ICloudBlob.DownloadText()
 ```
 
-**Option 2: Build VM Run Command Logs**
+#### Option 2: Build VM Run Command Logs
 
 ```powershell
 # View Run Commands on the build VM

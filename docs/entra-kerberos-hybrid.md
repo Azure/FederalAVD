@@ -159,8 +159,13 @@ If you do **not** provide the Managed Identity:
         3. Locate the `identifierUris` array and add the private link URIs (e.g., `api://<storageAccountName>.privatelink.file.core.windows.net`).
         4. Save the changes.
 
-> [!Note]
-> You could leverage the PowerShell Script located at '.common\scripts\Update-StorageAccountApplications.ps1' within a pipeline to automatically perform the first two tasks in this list.
+> [!NOTE]
+> When an application-update managed identity is supplied, shared orchestration performs these
+> operations with
+> [`Update-StorageAccountApplicationManifest.ps1`](../deployments/shared/scripts/Update-StorageAccountApplicationManifest.ps1)
+> and
+> [`Grant-StorageAccountApplicationConsent.ps1`](../deployments/shared/scripts/Grant-StorageAccountApplicationConsent.ps1).
+> Without that identity, the manual steps above remain required.
 
 ## Post Deployment Manual Steps
 

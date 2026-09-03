@@ -13,6 +13,9 @@ Don't use Session Host Replacer, the standalone Session Hosts add-on, or externa
 automation with this host pool. Change Session Host Configuration and use native Session Host
 Update and autoscale instead.
 
+See [Automated Host Pool PowerShell Scripts](scripts/README.md) for solution-owned scripts and the
+distinction between automated and directly managed session-host initialization.
+
 > Automated host pools currently require Azure Commercial and the
 > `Microsoft.DesktopVirtualization/hostPools@2025-11-01-preview` API. Use the standard
 > `deployments/hostpools` solution for sovereign clouds, personal host pools, and directly managed

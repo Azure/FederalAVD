@@ -8,7 +8,7 @@
 .DESCRIPTION
     Optimizes a Windows image for AVD based on the selected optimization profile.
     Writes group policy values directly to Registry.pol (MS-GPREG/PReg format) with no
-    LGPO.exe dependency. See deployments/shared/scripts/README.md for full details, references,
+    LGPO.exe dependency. See deployments/imageBuild/scripts/README.md for full details, references,
     and deliberate deviations from the VDI optimization article.
 
     Optimization profiles (-OptimizationProfile):

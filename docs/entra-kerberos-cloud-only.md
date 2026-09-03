@@ -156,8 +156,13 @@ If you do **not** provide the Managed Identity:
     * **Configure NTFS Permissions**[^4]:
         1. Since the automated identity was not used, you must manually configure group-scoped NTFS access if standard Authenticated Users access does not match your access requirements.
 
-> [!Note]
-> You could leverage the PowerShell Script located at '.common\scripts\Update-StorageAccountApplications.ps1' within a pipeline to automatically perform the first three tasks in this list.
+> [!NOTE]
+> When an application-update managed identity is supplied, shared orchestration performs these
+> operations with
+> [`Update-StorageAccountApplicationManifest.ps1`](../deployments/shared/scripts/Update-StorageAccountApplicationManifest.ps1)
+> and
+> [`Grant-StorageAccountApplicationConsent.ps1`](../deployments/shared/scripts/Grant-StorageAccountApplicationConsent.ps1).
+> Without that identity, the manual steps above remain required.
 
 ## Post Deployment Manual Steps
 

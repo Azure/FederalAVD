@@ -2,15 +2,22 @@
 
 ## Overview
 
-This PowerShell script configures OneDrive Known Folder Move (KFM) policies for Azure Virtual Desktop environments using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe required. It enables automatic redirection of Windows known folders (Desktop, Documents, and Pictures) to OneDrive for Business.
+This PowerShell script configures OneDrive Known Folder Move (KFM) policies for Azure Virtual
+Desktop environments using a built-in Registry.pol (PReg format) direct writer - no LGPO.exe
+required. It enables silent OneDrive account configuration, Files On-Demand, and automatic
+redirection of Desktop, Documents, and Pictures to OneDrive for Business.
+
+> This is a customer example. Copy the folder to `customer/artifacts/` before customizing or
+> packaging it. Run it during image build after OneDrive has been installed per-machine.
 
 ## Purpose
 
 - Enable OneDrive Known Folder Move (KFM) via Local Group Policy
+- Silently configure OneDrive for Microsoft Entra joined session hosts
+- Enable Files On-Demand to limit initial hydration of cloud content
 - Automatically redirect Desktop, Documents, and Pictures folders to OneDrive
-- Configure silent OneDrive folder redirection
-- Optimize OneDrive settings for AVD environments
-- Provide data backup and roaming capabilities
+- Prevent users from redirecting protected folders back to the local profile
+- Optionally enable OneDrive integration for RemoteApp sessions
 
 ## Parameters
 
@@ -18,9 +25,16 @@ This PowerShell script configures OneDrive Known Folder Move (KFM) policies for 
 
 - **Type:** String
 - **Required:** Yes
-- **Description:** The Azure Active Directory (Azure AD) Tenant ID for your organization
+- **Description:** The Microsoft Entra tenant ID for your organization
 - **Format:** GUID (e.g., `12345678-1234-1234-1234-123456789012`)
 - **Purpose:** Associates OneDrive KFM with your specific Microsoft 365 tenant
+
+### `EnableRemoteApp`
+
+- **Type:** Switch
+- **Required:** No
+- **Description:** Enables `EnableEnhancedShellExperienceForRemoteApp` when OneDrive must launch
+    and remain active with published RemoteApp sessions. Omit for full desktop deployments.
 
 ## Usage Examples
 
@@ -40,14 +54,10 @@ $tenantId = "12345678-1234-1234-1234-123456789012"
 ### Finding Your Tenant ID
 
 ```powershell
-# Method 1: Azure Portal
-# Navigate to: Azure Active Directory > Properties > Tenant ID
+# Method 1: Microsoft Entra admin center
+# Navigate to: Identity > Overview > Tenant ID
 
-# Method 2: PowerShell (Azure AD module)
-Connect-AzureAD
-(Get-AzureADTenantDetail).ObjectId
-
-# Method 3: PowerShell (Az module)
+# Method 2: PowerShell (Az module)
 Connect-AzAccount
 (Get-AzContext).Tenant.Id
 ```
@@ -60,9 +70,17 @@ Connect-AzAccount
 - Copies `OneDrive.admx` to `C:\Windows\PolicyDefinitions\`
 - Copies matching `.adml` files to `C:\Windows\PolicyDefinitions\en-us\`
 
-### 2. OneDrive KFM Configuration
+### 2. OneDrive and KFM Configuration
 
-The script configures the following Known Folder Move policies:
+The script configures these computer policies:
+
+| Registry value | Value | Effect |
+| --- | --- | --- |
+| `SilentAccountConfig` | `1` | Silently configures OneDrive using an available Microsoft Entra credential. |
+| `FilesOnDemandEnabled` | `1` | Makes new synchronized content online-only by default and downloads content when opened. |
+| `KFMSilentOptIn` | Tenant ID | Silently moves Desktop, Documents, and Pictures into the organization's OneDrive. |
+| `KFMBlockOptOut` | `1` | Prevents users from redirecting protected folders back to the local profile. |
+| `EnableEnhancedShellExperienceForRemoteApp` | `1` when selected | Enables the enhanced shell behavior used by OneDrive in RemoteApp scenarios. |
 
 #### Silent Known Folder Move
 
@@ -80,7 +98,7 @@ The script configures the following Known Folder Move policies:
 
 ### 3. Policy Application
 
-- Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe required
+- Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format - no LGPO.exe required
 - Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
 - `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
 
@@ -93,17 +111,21 @@ The script configures the following Known Folder Move policies:
 
 ```text
 Computer Configuration
-└── Administrative Templates
-    └── OneDrive
-        ├── Silently move Windows known folders to OneDrive: [Enabled]
-        │   └── Tenant ID: [Your Tenant ID]
-        └── Prevent users from redirecting their Windows known folders to their PC: [Enabled]
++-- Administrative Templates
+    +-- OneDrive
+        +-- Silently sign in users to the OneDrive sync app: [Enabled]
+        +-- Use OneDrive Files On-Demand: [Enabled]
+        +-- Silently move Windows known folders to OneDrive: [Enabled]
+        |   +-- Tenant ID: [Your Tenant ID]
+        +-- Prevent users from redirecting their Windows known folders to their PC: [Enabled]
 ```
 
 ## Registry Locations
 
 ```text
 HKLM:\SOFTWARE\Policies\Microsoft\OneDrive
+    SilentAccountConfig: 1
+    FilesOnDemandEnabled: 1
   KFMSilentOptIn: [Your Tenant ID]
   KFMBlockOptOut: 1
 ```
@@ -122,55 +144,74 @@ The following Windows known folders are automatically redirected to OneDrive:
 
 ### Initial Sync Process
 
-1. **OneDrive Detection:** OneDrive client detects KFM policy on user login
-2. **Folder Check:** Checks if Desktop, Documents, Pictures exist locally
-3. **Silent Move:** Moves folder contents to OneDrive without user interaction
-4. **Symbolic Link:** Creates folder redirection using Windows reparse points
-5. **Sync:** OneDrive syncs content to the cloud
+1. **Account configuration:** On a Microsoft Entra joined host, OneDrive uses the available user
+    credential to configure the work account silently.
+2. **Folder check:** OneDrive checks whether Desktop, Documents, and Pictures are eligible for KFM.
+3. **Silent move:** OneDrive changes the known-folder locations and begins moving eligible content
+    into the organization's OneDrive sync root.
+4. **Synchronization:** OneDrive uploads local content and maintains synchronization with the
+    service. Files On-Demand keeps new synchronized content online-only until it is opened.
 
 ### User Experience
 
 - **Transparent:** Users continue accessing folders normally
-- **No Prompts:** Silent configuration (no user dialogs)
+- **Normally silent:** Eligible users do not need to complete OneDrive account setup or KFM dialogs.
+    Configuration errors can still require user or administrator remediation.
 - **Automatic:** Happens on next OneDrive client startup
-- **Seamless:** Files appear in both local path and OneDrive
+- **Familiar paths:** Users continue to access Desktop, Documents, and Pictures through their normal
+    Windows locations after KFM succeeds.
 
 ## Benefits for AVD
 
 ### Data Protection
 
-- **Backup:** All user files automatically backed up to OneDrive
-- **Disaster Recovery:** Files safe if session host fails
+- **Cloud copy:** Files that finish synchronizing are stored in OneDrive
+- **Host replacement:** Synchronized content remains available if a session host is replaced
 - **Version History:** OneDrive maintains file version history
 
 ### User Roaming
 
 - **Multi-Device:** Files accessible from any device
 - **Session Portability:** Users get same files on any AVD host
-- **Personal/Pooled:** Works with both persistent and non-persistent hosts
+- **Personal/Pooled:** Supported when the host and profile architecture meets OneDrive VDI
+    requirements
 
 ### Profile Optimization
 
-- **Reduced Profile Size:** Files stored in OneDrive, not in FSLogix profile
-- **Faster Login:** Smaller profiles = faster FSLogix mount times
-- **On-Demand Files:** OneDrive Files On-Demand reduces local storage
+- **Reduced initial hydration:** Files On-Demand downloads file content when it is opened rather
+    than downloading the entire OneDrive during account setup.
+- **Profile-aware storage:** The default OneDrive sync root is under `%UserProfile%`. OneDrive
+    placeholders, metadata, cache, and hydrated file content therefore occupy space in an FSLogix
+    Profile Container.
+- **Space reclamation:** The FederalAVD full optimization profiles configure Storage Sense to
+    return eligible cloud-backed files not opened for 30 days to online-only state. FSLogix VHD disk
+    compaction can reclaim resulting free space from a dynamically expanding container at sign-out.
+- **Capacity planning:** Files On-Demand reduces local consumption but does not guarantee a small
+    profile. Size and monitor containers for actual hydrated content and application data.
 
 ## Requirements
 
 ### Prerequisites
 
-- **OS:** Windows 10 or Windows 11
-- **OneDrive Client:** OneDrive sync client installed
+- **OS:** A OneDrive-supported Windows client or Windows Server operating system
+- **OneDrive Client:** Current OneDrive sync client installed per-machine before this artifact runs
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
 - **Licensing:** Microsoft 365 subscription with OneDrive for Business
-- **Network:** Internet connectivity to OneDrive
+- **Network:** Runtime connectivity to the required OneDrive and Microsoft 365 endpoints
+- **Device identity:** Microsoft Entra joined for `SilentAccountConfig`; disable silent account
+    configuration when that requirement is not met
+- **Profile persistence:** Use the latest FSLogix release for supported OneDrive operation in
+    nonpersistent VDI and ensure a user's container is not attached concurrently to multiple sessions
 
 ### Tenant Configuration
 
-- **Azure AD:** Users must have Azure AD identities
+- **Microsoft Entra ID:** Users must have Microsoft Entra identities and an eligible credential in
+    the Windows session
 - **OneDrive:** OneDrive for Business enabled for users
 - **Licenses:** Users must have OneDrive licenses assigned
+- **Existing redirection:** Resolve Windows Folder Redirection and KFM mappings to other Microsoft
+    365 tenants before enabling this policy
 
 ## Logging
 
@@ -197,16 +238,22 @@ Log entries include:
 | `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
 | `Write-Log` | Writes formatted log entries |
 
-## Offline Usage
+## Offline Image Build and Runtime Connectivity
 
 This script has no external tool dependencies. It writes Registry.pol directly using an
-embedded PReg-format writer — LGPO.exe is not required and does not need to be present.
+embedded PReg-format writer - LGPO.exe is not required and does not need to be present. The image
+build can therefore run without internet access after the per-machine OneDrive installer is staged.
+
+This does not make OneDrive, KFM, or Files On-Demand an air-gapped runtime solution. KFM needs
+OneDrive service connectivity to upload content, and opening an online-only file needs connectivity
+to download it. Do not apply this configuration in a disconnected environment unless all required
+service endpoints are reachable through an approved network path.
 
 To use this script in air-gapped environments:
 
 1. **Ensure OneDrive Client Installed:**
-   - Windows 10/11 have OneDrive pre-installed
-   - Or include the OneDrive per-machine installer in your image build artifacts
+    - Include the approved OneDrive per-machine installer in image-build content.
+    - Do not rely on the inbox client being present or current.
 
 2. **Run Script:**
 
@@ -220,7 +267,9 @@ To use this script in air-gapped environments:
 
 **Issue:** Known folders not moving to OneDrive
 
-- **Solution:** Ensure OneDrive client is signed in; check Tenant ID is correct
+- **Solution:** Confirm the host is Microsoft Entra joined, OneDrive is silently signed in, the
+    tenant ID is correct, no conflicting Folder Redirection policy is enabled, and the files meet
+    OneDrive sync requirements
 
 **Issue:** Users see prompts to move folders
 
@@ -228,7 +277,8 @@ To use this script in air-gapped environments:
 
 **Issue:** Some files not syncing
 
-- **Solution:** Check OneDrive sync status; verify file names are valid
+- **Solution:** Check OneDrive sync health and activity, endpoint connectivity, storage quota, and
+    current OneDrive restrictions and limitations
 
 **Issue:** Folders redirected to wrong tenant
 
@@ -254,55 +304,77 @@ Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User 
 
 ## Best Practices
 
-1. **Pilot Testing:** Test KFM with pilot user group first
-2. **Storage Planning:** Ensure users have sufficient OneDrive storage
-3. **Network Bandwidth:** Plan for initial sync network usage
-4. **User Communication:** Inform users about folder redirection
-5. **Exclude Large Files:** Use selective sync to exclude large file types
-6. **Monitor Sync:** Monitor OneDrive admin center for sync issues
+1. **Pilot testing:** Test with representative users, existing data, profile sizes, host types, and
+    network conditions before broad deployment.
+2. **Staged rollout:** Limit rollout waves to control initial KFM upload traffic. Microsoft currently
+    recommends no more than 1,000 existing devices per day and 4,000 per week for silent KFM.
+3. **Failure recovery:** Consider deploying the KFM prompt policy through organizational management
+    so users can correct errors when silent KFM does not succeed.
+4. **Storage planning:** Size OneDrive quotas, FSLogix containers, and the backing file share for
+    expected hydrated data rather than total cloud capacity alone.
+5. **Bandwidth management:** Consider temporary percentage-based OneDrive upload management during
+    KFM rollout; remove temporary throttling after initial uploads complete.
+6. **Files On-Demand:** Keep Files On-Demand enabled. If specific files or folders must not upload,
+    use supported OneDrive exclusion policies and document that excluded local content is not
+    protected by OneDrive.
+7. **Monitoring:** Monitor OneDrive sync health, FSLogix attach and compact events, VHDX growth,
+    session sign-out duration, and KFM errors.
+8. **User communication:** Explain folder redirection, online-only file behavior, required network
+    access, and the effect of deleting synchronized content.
 
 ## Known Limitations
 
 ### File/Folder Restrictions
 
-OneDrive has limitations on what can be synced:
+OneDrive file-size, path-length, file-name, item-count, and file-type restrictions change over time.
+Validate the current [OneDrive and SharePoint restrictions and limitations](https://support.microsoft.com/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa)
+before rollout. KFM does not support extending its scope through Windows Folder Redirection, and
+existing Folder Redirection can prevent KFM from moving a folder.
 
-- **File Names:** Cannot contain: `< > : " | ? * /  \`
-- **File Size:** Maximum 250 GB per file
-- **Path Length:** Maximum 400 characters
-- **Special Folders:** Cannot sync system folders
-- **Unsupported Types:** Some file types may be blocked (e.g., PST files)
+Files that are excluded by OneDrive policy remain local and are not uploaded. Unsynchronized local
+changes can be lost when a nonpersistent profile or session host is discarded; content that has
+successfully synchronized remains in OneDrive.
 
 ### Performance Considerations
 
 - **Initial Sync:** Large folders take time to upload
 - **Network Usage:** OneDrive uses bandwidth for syncing
 - **CPU Usage:** Sync process uses CPU resources
-- **Battery Impact:** Increased battery usage on mobile devices
+- **Profile Storage:** Hydrated files and OneDrive state consume FSLogix container space
+- **Sign-out:** FSLogix compaction can extend sign-out while reclaiming VHDX space
+- **Rehydration:** Storage Sense dehydration can require a later cloud download when a user opens
+    an infrequently used file
 
 ## Advanced Configuration
 
 ### Additional OneDrive Policies
 
-You can extend this script with additional policies:
+Files On-Demand is already enabled by this artifact. Evaluate additional policies through domain
+Group Policy, Intune, or a customer-owned copy of this artifact. Common examples include:
 
-```powershell
-# Configure Files On-Demand
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' `
-    -RegistryValue 'FilesOnDemandEnabled' -RegistryData '1' -RegistryType 'DWORD'
+- Allow only approved Microsoft 365 tenant IDs.
+- Prevent personal OneDrive synchronization.
+- Enable OneDrive sync health reporting.
+- Warn or block downloads when local free space is low.
+- Use automatic upload bandwidth management.
+- Require confirmation for large synchronized-content deletion operations.
+- Configure selected SharePoint libraries as online-only, subject to Microsoft's library size and
+    device-count guidance.
 
-# Set disk space warning threshold
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' `
-    -RegistryValue 'DiskSpaceCheckThresholdMB' -RegistryData '500' -RegistryType 'DWORD'
-```
+Do not configure `PreventNetworkTrafficPreUserSignIn` with this artifact. That setting prevents
+OneDrive from starting automatically until a user explicitly starts synchronization and conflicts
+with the intended silent account and KFM experience.
 
 ## References
 
-- [OneDrive Known Folder Move](https://learn.microsoft.com/en-us/onedrive/redirect-known-folders)
-- [OneDrive Group Policy Settings](https://learn.microsoft.com/en-us/onedrive/use-group-policy)
-- [OneDrive Administrative Templates](https://learn.microsoft.com/en-us/onedrive/administrative-settings)
-- [AVD with OneDrive](https://learn.microsoft.com/en-us/azure/virtual-desktop/teams-on-avd)
-- [LGPO Tool Documentation](https://techcommunity.microsoft.com/t5/microsoft-security-baselines/lgpo-exe-local-group-policy-object-utility-v1-0/ba-p/701045)
+- [Use the OneDrive sync app on virtual desktops](https://learn.microsoft.com/en-us/sharepoint/sync-vdi-support)
+- [Redirect and move Windows known folders to OneDrive](https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders)
+- [Use OneDrive policies to control sync settings](https://learn.microsoft.com/en-us/sharepoint/use-group-policy)
+- [OneDrive and SharePoint restrictions and limitations](https://support.microsoft.com/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa)
+- [Configure Storage Sense](https://learn.microsoft.com/en-us/windows/configuration/storage/storage-sense)
+- [FSLogix profile and ODFC containers](https://learn.microsoft.com/en-us/fslogix/concepts-container-types)
+- [FSLogix VHD disk compaction](https://learn.microsoft.com/en-us/fslogix/concepts-vhd-disk-compaction)
+- [FederalAVD image-build guidance](../../../docs/image-build.md#onedrive-fslogix-and-storage-sense)
 
 ## Support
 

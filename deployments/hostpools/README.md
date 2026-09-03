@@ -2,6 +2,9 @@
 
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 >
+> **Script Reference:** See [Standard Host Pool PowerShell Scripts](scripts/README.md) for
+> solution-owned scripts and links to the shared script reference.
+>
 > **First deployment:** Use the Host Pool Template Spec portal form. On **Review + create**, select
 > **Create**, then download the generated template and parameters after submission. Use the
 > PowerShell and parameter examples below for subsequent deployments, or as a fallback when the
@@ -29,8 +32,6 @@ Deploy production-ready AVD environments with:
 - **Networking** - Virtual network integration, private endpoints, NSG configurations
 
 ## Architecture
-
-
 
 ### Resource Deployments
 
