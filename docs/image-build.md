@@ -333,7 +333,8 @@ separate choices:
 - Use the
   [Configure-OneDriveKFMPolicy example](../customer-examples/artifacts/Configure-OneDriveKFMPolicy/README.md)
   after OneDrive installation to enable silent account configuration, Files On-Demand, silent KFM,
-  and prevention of KFM opt-out. Copy the example to `customer/artifacts/` before customization.
+  prevention of KFM opt-out, and configurable low-free-space warning and download-blocking
+  thresholds. Copy the example to `customer/artifacts/` before customization.
 - Use the latest FSLogix release for nonpersistent OneDrive deployments. A Profile Container is
   the recommended default when the complete Windows profile and Microsoft 365 state should roam.
   Do not allow the same user's container to be used concurrently by multiple sessions.

@@ -36,6 +36,24 @@ redirection of Desktop, Documents, and Pictures to OneDrive for Business.
 - **Description:** Enables `EnableEnhancedShellExperienceForRemoteApp` when OneDrive must launch
     and remain active with published RemoteApp sessions. Omit for full desktop deployments.
 
+### `WarningMinDiskSpaceLimitInMB`
+
+- **Type:** Integer
+- **Required:** No
+- **Default:** `10240` (10 GB)
+- **Range:** `0` through `10240000` MB
+- **Description:** Warns users when downloading a OneDrive file would leave less than this amount
+    of available space.
+
+### `MinDiskSpaceLimitInMB`
+
+- **Type:** Integer
+- **Required:** No
+- **Default:** `5120` (5 GB)
+- **Range:** `0` through `10240000` MB
+- **Description:** Blocks OneDrive file downloads when available space is below this amount. It
+    must not exceed `WarningMinDiskSpaceLimitInMB`.
+
 ## Usage Examples
 
 ### Basic Usage
@@ -49,6 +67,15 @@ redirection of Desktop, Documents, and Pictures to OneDrive for Business.
 ```powershell
 $tenantId = "12345678-1234-1234-1234-123456789012"
 .\Configure-OneDrive.ps1 -TenantId $tenantId
+```
+
+### Custom Free-Space Thresholds
+
+```powershell
+.\Configure-OneDrive.ps1 `
+    -TenantId "12345678-1234-1234-1234-123456789012" `
+    -WarningMinDiskSpaceLimitInMB 15360 `
+    -MinDiskSpaceLimitInMB 10240
 ```
 
 ### Finding Your Tenant ID
@@ -80,6 +107,8 @@ The script configures these computer policies:
 | `FilesOnDemandEnabled` | `1` | Makes new synchronized content online-only by default and downloads content when opened. |
 | `KFMSilentOptIn` | Tenant ID | Silently moves Desktop, Documents, and Pictures into the organization's OneDrive. |
 | `KFMBlockOptOut` | `1` | Prevents users from redirecting protected folders back to the local profile. |
+| `WarningMinDiskSpaceLimitInMB` | `10240` by default | Warns before a download would reduce available space below the configured MB threshold. |
+| `MinDiskSpaceLimitInMB` | `5120` by default | Blocks OneDrive downloads below the configured available-space threshold. |
 | `EnableEnhancedShellExperienceForRemoteApp` | `1` when selected | Enables the enhanced shell behavior used by OneDrive in RemoteApp scenarios. |
 
 #### Silent Known Folder Move
@@ -118,6 +147,8 @@ Computer Configuration
         +-- Silently move Windows known folders to OneDrive: [Enabled]
         |   +-- Tenant ID: [Your Tenant ID]
         +-- Prevent users from redirecting their Windows known folders to their PC: [Enabled]
+        +-- Warn users who are low on disk space: [10240 MB by default]
+        +-- Block file downloads when users are low on disk space: [5120 MB by default]
 ```
 
 ## Registry Locations
@@ -126,8 +157,10 @@ Computer Configuration
 HKLM:\SOFTWARE\Policies\Microsoft\OneDrive
     SilentAccountConfig: 1
     FilesOnDemandEnabled: 1
-  KFMSilentOptIn: [Your Tenant ID]
-  KFMBlockOptOut: 1
+        KFMSilentOptIn: [Your Tenant ID]
+        KFMBlockOptOut: 1
+        WarningMinDiskSpaceLimitInMB: 10240
+        MinDiskSpaceLimitInMB: 5120
 ```
 
 ## Known Folders
@@ -186,6 +219,9 @@ The following Windows known folders are automatically redirected to OneDrive:
 - **Space reclamation:** The FederalAVD full optimization profiles configure Storage Sense to
     return eligible cloud-backed files not opened for 30 days to online-only state. FSLogix VHD disk
     compaction can reclaim resulting free space from a dynamically expanding container at sign-out.
+- **Low-space protection:** OneDrive warns at 10 GB free and blocks additional file downloads at
+    5 GB free by default. These thresholds protect space but do not dehydrate existing content or
+    shrink the FSLogix container.
 - **Capacity planning:** Files On-Demand reduces local consumption but does not guarantee a small
     profile. Size and monitor containers for actual hydrated content and application data.
 
@@ -355,7 +391,6 @@ Group Policy, Intune, or a customer-owned copy of this artifact. Common examples
 - Allow only approved Microsoft 365 tenant IDs.
 - Prevent personal OneDrive synchronization.
 - Enable OneDrive sync health reporting.
-- Warn or block downloads when local free space is low.
 - Use automatic upload bandwidth management.
 - Require confirmation for large synchronized-content deletion operations.
 - Configure selected SharePoint libraries as online-only, subject to Microsoft's library size and

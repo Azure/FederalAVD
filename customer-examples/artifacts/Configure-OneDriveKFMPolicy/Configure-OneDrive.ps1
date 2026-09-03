@@ -8,14 +8,18 @@
     group policy (Registry.pol / ADMX) so that settings take effect for all users on
     the image without requiring Intune or AD Group Policy:
 
-      SilentAccountConfig      - Silently sign in users with their Windows credentials.
-      FilesOnDemandEnabled     - Enable Files On Demand so only metadata is synced to disk
-                                 at sign-in; file content is fetched on first open.
-                                 Critical on VDI to avoid filling the OS disk.
-      KFMSilentOptIn           - Silently redirect Desktop, Documents, and Pictures to
-                                 OneDrive without user interaction.
-      KFMBlockOptOut           - Prevent users from redirecting known folders back to
-                                 local paths after KFM has been applied.
+      SilentAccountConfig           - Silently sign in users with their Windows credentials.
+      FilesOnDemandEnabled          - Enable Files On Demand so only metadata is synced to disk
+                                      at sign-in; file content is fetched on first open.
+                                      Critical on VDI to avoid filling the OS disk.
+    KFMSilentOptIn                - Silently redirect Desktop, Documents, and Pictures to
+                          OneDrive without user interaction.
+    KFMBlockOptOut                - Prevent users from redirecting known folders back to
+                          local paths after KFM has been applied.
+    WarningMinDiskSpaceLimitInMB  - Warn users before a download reduces available space
+                          below the configured threshold.
+    MinDiskSpaceLimitInMB         - Block downloads when available space is below the
+                          configured threshold.
 
     When -EnableRemoteApp is specified, also sets:
       EnableEnhancedShellExperienceForRemoteApp - Required for OneDrive to launch and
@@ -36,6 +40,15 @@
     When specified, enables the enhanced shell experience required for OneDrive to launch
     alongside published RemoteApp sessions. Omit for full desktop AVD deployments.
 
+.PARAMETER WarningMinDiskSpaceLimitInMB
+    Available-space threshold in MB at which OneDrive warns users before downloading a
+    file. Defaults to 10240 MB (10 GB). Valid range: 0 through 10240000.
+
+.PARAMETER MinDiskSpaceLimitInMB
+    Available-space threshold in MB below which OneDrive blocks file downloads. Defaults
+    to 5120 MB (5 GB). Valid range: 0 through 10240000. This value must not exceed the
+    warning threshold.
+
 .NOTES
     Must be run during image build (as SYSTEM or local administrator) after OneDrive has
     been installed per-machine.
@@ -50,7 +63,11 @@
 param (
     [Parameter(Mandatory = $true)]
     [string]$TenantId,
-    [switch]$EnableRemoteApp
+    [switch]$EnableRemoteApp,
+    [ValidateRange(0, 10240000)]
+    [int]$WarningMinDiskSpaceLimitInMB = 10240,
+    [ValidateRange(0, 10240000)]
+    [int]$MinDiskSpaceLimitInMB = 5120
 )
 
 
@@ -597,6 +614,9 @@ New-Log -Path (Join-Path -Path "$Env:SystemRoot\Logs" -ChildPath 'Configuration'
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -Message "Starting '$PSCommandPath'."
 #endregion
+if ($MinDiskSpaceLimitInMB -gt $WarningMinDiskSpaceLimitInMB) {
+    throw 'MinDiskSpaceLimitInMB must not exceed WarningMinDiskSpaceLimitInMB.'
+}
 $ref = "https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders"
 Write-Log -Message "Starting OneDrive configuration in accordance with '$ref'."
 
@@ -628,6 +648,9 @@ If ($TenantID -and $TenantID -ne '') {
         Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
         Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMSilentOptIn' -RegistryType String -RegistryData $TenantID
         Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1
+        Write-Log -Message "Warning users below $WarningMinDiskSpaceLimitInMB MB free and blocking OneDrive downloads below $MinDiskSpaceLimitInMB MB free."
+        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $WarningMinDiskSpaceLimitInMB
+        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $MinDiskSpaceLimitInMB
         Invoke-PolicyUpdate
     }
     Else {
@@ -641,6 +664,9 @@ If ($TenantID -and $TenantID -ne '') {
         Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMSilentOptIn' -Value $TenantID -Type String -Force
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMBlockOptOut' -Value 1 -Type DWord -Force
+        Write-Log -Message "Warning users below $WarningMinDiskSpaceLimitInMB MB free and blocking OneDrive downloads below $MinDiskSpaceLimitInMB MB free."
+        Set-ItemProperty -Path $oneDriveKey -Name 'WarningMinDiskSpaceLimitInMB' -Value $WarningMinDiskSpaceLimitInMB -Type DWord -Force
+        Set-ItemProperty -Path $oneDriveKey -Name 'MinDiskSpaceLimitInMB' -Value $MinDiskSpaceLimitInMB -Type DWord -Force
     }
 }
 If ($EnableRemoteApp) {

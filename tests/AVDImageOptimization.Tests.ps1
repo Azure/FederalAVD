@@ -50,10 +50,15 @@ if ($optimizerText -match "(?m)^\s*Set-PolicyValue .*PreventNetworkTrafficPreUse
 
 $oneDriveText = Get-Content -LiteralPath $oneDriveScriptPath -Raw
 $oneDriveExpectations = @(
+    '[int]$WarningMinDiskSpaceLimitInMB = 10240',
+    '[int]$MinDiskSpaceLimitInMB = 5120',
+    'if ($MinDiskSpaceLimitInMB -gt $WarningMinDiskSpaceLimitInMB)',
     "'SilentAccountConfig' -RegistryType DWORD -RegistryData 1",
     "'FilesOnDemandEnabled' -RegistryType DWORD -RegistryData 1",
     "'KFMSilentOptIn' -RegistryType String -RegistryData `$TenantID",
     "'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1",
+    "'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData `$WarningMinDiskSpaceLimitInMB",
+    "'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData `$MinDiskSpaceLimitInMB",
     "'EnableEnhancedShellExperienceForRemoteApp' -RegistryType DWORD -RegistryData 1"
 )
 foreach ($expectedText in $oneDriveExpectations) {
@@ -85,7 +90,7 @@ foreach ($expectedText in @('### OneDrive, FSLogix, and Storage Sense', '#### Ho
 }
 
 $oneDriveReadme = Get-Content -LiteralPath $oneDriveReadmePath -Raw
-foreach ($expectedText in @('Microsoft Entra', 'Files On-Demand', 'FSLogix VHD disk compaction', 'Unsynchronized local')) {
+foreach ($expectedText in @('Microsoft Entra', 'Files On-Demand', 'FSLogix VHD disk compaction', 'Unsynchronized local', 'WarningMinDiskSpaceLimitInMB', 'MinDiskSpaceLimitInMB')) {
     if (-not $oneDriveReadme.Contains($expectedText)) {
         throw "The OneDrive KFM README is missing required guidance: $expectedText"
     }
