@@ -113,7 +113,9 @@ After initial deployment, the repeating update cycle is:
    new gallery image version, drains existing session hosts, and replaces them automatically.
 
 The host pool itself is NOT redeployed on image updates — only session hosts are replaced.
-For manual drain-and-replace, use `deployments/TagAndDrainSessionHosts.ps1`.
+For a manual workflow, deploy and validate replacements, use
+`deployments/Set-SessionHostMaintenanceMode.ps1` to drain the old host range, then remove the old
+VMs through the approved operator process.
 
 ---
 
@@ -129,7 +131,7 @@ deployments/
   add-ons/            ← optional lifecycle automation (sessionHostReplacer, storageQuotaManager, etc.)
   Update-ImageArtifacts.ps1   ← downloads and uploads software artifacts to blob storage
   Invoke-ImageBuilds.ps1      ← triggers image build runs
-  TagAndDrainSessionHosts.ps1 ← manually drains session hosts before replacement
+  Set-SessionHostMaintenanceMode.ps1 ← drains or restores a numeric session-host range
 customer/
   parameters/         ← your parameter files (git-ignored)
   artifacts/          ← your artifact packages (git-ignored)

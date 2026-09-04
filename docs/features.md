@@ -314,7 +314,10 @@ This is a pure cloud identity solution using only Entra Id identities with no on
 
 **Limitations:**
 
-- While in preview, it is only supported in Azure Commercial
+- The core capability is generally available in Azure Commercial and Azure US Government.
+- Share-level Azure RBAC for cloud-only identities, which is required for group-scoped NTFS access
+  and profile sharding, is available only in supported Azure Commercial regions. Azure Government
+  does not currently support that RBAC capability.
 
 **Parameter Configuration:**
 

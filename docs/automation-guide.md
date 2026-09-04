@@ -429,13 +429,20 @@ The Session Host Replacer is an Azure Function add-on that monitors the Compute 
 
 > See [Session Host Replacer Add-On](session-host-replacer.md) and [full add-on documentation](../deployments/add-ons/sessionHostReplacer/README.md) for deployment prerequisites, configuration, and replacement mode comparison.
 
-### Manual approach: TagAndDrainSessionHosts.ps1
+### Manual approach: Set-SessionHostMaintenanceMode.ps1
 
-For teams that do not use the Session Host Replacer, `deployments/TagAndDrainSessionHosts.ps1` provides a manual drain-and-replace workflow:
+For teams that do not use the Session Host Replacer,
+`deployments/Set-SessionHostMaintenanceMode.ps1` supports the controlled parts of a manual
+drain-and-replace workflow:
 
-1. Run the script to tag existing session hosts into drain mode and optionally force-logoff sessions after a grace period
-2. Deploy replacement session hosts via the `deployments/add-ons/sessionHosts/` add-on or a new host pool deployment
-3. Once new hosts are healthy, delete the drained hosts
+1. Deploy replacement session hosts through the `deployments/add-ons/sessionHosts/` add-on.
+2. Validate that the replacement hosts are registered, healthy, and ready for users.
+3. Run the script in `Drain` mode for the selected old-host numeric range. It sets
+  `AllowNewSession=false` and adds the selected scaling-plan exclusion tag.
+4. Use an approved operator process to wait for or sign out remaining sessions, then delete the
+  drained old VMs and their associated resources.
+5. If rollback is required before deletion, run the script in `Restore` mode to set
+  `AllowNewSession=true` and remove the exclusion tag.
 
 This is appropriate for environments with strict change control windows or when the Session Host Replacer is not deployed.
 

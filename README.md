@@ -12,22 +12,37 @@
 
 ## 📋 Overview
 
-The Federal AVD solution provides comprehensive automation for deploying and managing Azure Virtual Desktop environments across all Azure cloud environments with built-in Zero Trust security controls, multi-cloud support, and enterprise-scale capabilities.
+FederalAVD is a modular deployment and operations toolkit for Azure Virtual Desktop. It can deploy
+networking and shared prerequisites, image infrastructure, custom images, and either standard- or
+automated-management host pools. Independently deployable add-ons provide profile storage,
+monitoring, governance, maintenance, and session-host lifecycle automation.
+
+Most components support Azure Commercial, Azure Government, Azure Government Secret, and Azure
+Government Top Secret. Capabilities that depend on preview services, public service endpoints, or
+cloud-specific extensions have narrower support and are called out below.
 
 ### What You Can Deploy
 
-| Component | Description | Documentation |
-| --------- | ----------- | ------------- |
-| 🌐 **Networking** | Virtual network, subnets, NSGs, NAT gateway, hub peering, route tables, private DNS zones | [Quick Start - Networking](docs/quick-start.md#step-0-deploy-networking-infrastructure-greenfield) |
-| 🔒 **AVD Shared Services** | Secrets and Encryption Key Vaults, optional shared Log Analytics and AVD Insights resources, and an optional shared FSLogix Recovery Services vault and Azure Files backup policy. | [Quick Start - AVD Shared Services](docs/quick-start.md#step-1-deploy-avd-shared-services) |
-| 🏢 **Host Pools** | Standard or AVD-managed pooled host pools with networking, storage, monitoring, and security | [Choose a Management Approach](docs/host-pool-management.md) |
-| 📦 **Image Management** | Central artifact storage and management for software packages | [Artifacts & Image Management](docs/artifacts-guide.md) |
-| 🎨 **Custom Images** | Automated custom image builds with artifact-based software deployment | [Image Build Guide](docs/image-build.md) |
-| 🔧 **Add-Ons** | Lifecycle automation and operational tools | [Add-Ons](#-add-ons) |
+| Deployment | What it can create | When to use it | Documentation |
+| --- | --- | --- | --- |
+| 🌐 **Networking** | Resource groups, VNets, purpose-specific subnets, NSGs, NAT Gateway or NVA routing, optional AVD bypass routes, hub peering, DDoS Network Protection, and private DNS zones | Build networking when approved landing-zone networking does not already exist | [Networking](deployments/networking/README.md) |
+| 🔒 **AVD Shared Services** | Separate secrets and encryption Key Vaults, optional Log Analytics workspace, AVD Insights DCR/DCE and Azure Monitor Agent identity, and optional shared FSLogix Recovery Services vault and Azure Files backup policy | Seed regional resources before consumers that require credentials, CMK, centralized monitoring, or shared FSLogix backup | [Shared Services](deployments/sharedServices/README.md) |
+| 📦 **Image Management** | Azure Compute Gallery, optional artifact and build-log storage, managed identity and RBAC, private endpoints, CMK resources, and a persistent image-build resource group | Host customizations or create and retain custom gallery images | [Image Management](deployments/imageManagement/README.md) |
+| 🎨 **Image Build** | Temporary orchestration and image VMs; software installation; custom artifacts; Windows Update; AppX removal; profile-aware VDI optimization; Sysprep; gallery image capture and replication | Bake a controlled custom image without depending on the Azure VM Image Builder service | [Image Build](docs/image-build.md) |
+| 🏢 **Standard Host Pool** | Pooled or personal host pool, workspace and application groups, directly managed session-host VMs, power-management scaling, FSLogix storage, monitoring, security, and optional backup | Use in every supported cloud when direct VM lifecycle control is required | [Host Pool Deployment](docs/hostpool-deployment.md) |
+| ⚙️ **Automated Host Pool** | Commercial pooled host pool using Session Host Configuration, native Session Host Update, optional dynamic create/delete scaling, FSLogix storage, monitoring, security, and policy-managed guest capabilities | Use when Azure Virtual Desktop should own the VM lifecycle and the preview dependency is acceptable | [Automated Host Pool](deployments/automatedHostPools/README.md) |
+| 🔧 **Add-Ons** | Nine independent deployments for alerts, standalone FSLogix storage, policies, additional hosts, image-driven replacement, run commands, and route/quota/key automation | Add only the operational capabilities required by the environment | [Add-Ons](docs/add-ons.md) |
 
-### Cloud Environment Support
+### Cloud and Deployment-Method Boundaries
 
-✅ **Azure Commercial** • ✅ **Azure Government** • ✅ **Azure Government Secret** • ✅ **Azure Government Top Secret**
+| Capability | Support boundary |
+| --- | --- |
+| Core networking, shared services, image, and standard host-pool deployments | Azure Commercial, Government, Secret, and Top Secret, subject to resource-provider and regional availability |
+| Automated host pools | Azure Commercial only; pooled only; uses the preview `2025-11-01-preview` AVD API |
+| Entra Kerberos for cloud-only identities | Generally available in Azure Commercial and Azure US Government; group-scoped NTFS access and profile sharding require share-level RBAC that is limited to supported Commercial regions |
+| Template Spec portal forms and PowerShell / Azure CLI | Supported deployment paths in every cloud, including air-gapped clouds after required files are transferred |
+| Blue Button portal links | Azure Commercial and Azure Government only; unavailable in Secret and Top Secret |
+| Components that retrieve public service data at runtime | Require a reachable approved endpoint; they are not automatically usable in a disconnected cloud |
 
 ---
 
@@ -37,109 +52,127 @@ Ready to deploy? The **[Quick Start Guide](docs/quick-start.md)** walks you thro
 
 **New to FederalAVD?** → **[Start with the PoC callout in Step 4](docs/quick-start.md#step-4-deploy-host-pool)** (existing VNet + marketplace images, no CMK) | **[Top 5 first-deployment mistakes](docs/troubleshooting.md#top-5-first-deployment-mistakes)**
 
-**👉 [Get Started Now →](docs/quick-start.md)** — choose your path (PoC · custom images · enterprise CMK), review prerequisites, and follow step-by-step instructions. All clouds and all deployment methods (Blue Button, Template Spec, PowerShell/CLI) are covered there.
+**👉 [Get Started Now →](docs/quick-start.md)** — choose your path (PoC · custom images · enterprise CMK), review prerequisites, and follow step-by-step instructions. The guide identifies which deployment methods are available in each cloud.
 
 ---
 
-## 🏗️ Architecture Components
+## 🏗️ Capability Summary
 
-### Core Components
+### Host Pools and Session Hosts
 
-#### Image Management Resources
+FederalAVD provides two separate host-pool deployments. Both create the AVD control plane and can
+integrate profile storage and monitoring, but they have different VM ownership boundaries:
 
-Central storage and management for software artifacts. **Required** for custom image builds or session host customizations.
+| Capability | Standard host pool | Automated host pool |
+| --- | --- | --- |
+| Pool types | Pooled and personal | Pooled only |
+| VM lifecycle owner | Customer, FederalAVD tooling, or Session Host Replacer | Azure Virtual Desktop |
+| Cloud availability | Commercial, Government, Secret, and Top Secret | Commercial only |
+| Image source | Marketplace or Compute Gallery | Marketplace or Compute Gallery |
+| Capacity management | Fixed host count or scaling plans that start and stop existing VMs | Fixed count, power management, or dynamic create/delete/power-manage scaling |
+| Image update | Customer replacement workflow or Session Host Replacer | Native Session Host Update |
+| Additional VM deployment | Session Hosts add-on | Change Session Host Configuration or managed instance count |
+| Pool conversion | Not supported; deploy and migrate to a new host pool | Not supported; deploy and migrate to a new host pool |
 
-**Resources Created:**
+See [Choose a Host Pool Management Approach](docs/host-pool-management.md) before deployment.
 
-- 🗄️ Storage Account with blob container for artifacts
-- 🆔 Managed Identity with RBAC for secure access
-- 🖼️ Compute Gallery for custom images
-- 🔐 Private endpoints (optional, for Zero Trust)
+### Images and Application Delivery
 
-**Learn More:**
+- Image Management can host artifact ZIPs even when no custom image is built.
+- Image Build can install FSLogix, Microsoft 365 Apps, OneDrive, Teams, Windows updates, and custom
+  artifact packages; remove selected AppX packages; apply VDI optimization; and capture replicated
+  Compute Gallery image versions.
+- Customer example artifacts include optional configuration and application patterns. Examples,
+  including STIG content, are not applied unless copied into the customer area and selected.
+- `Publish-VMApplications.ps1` can publish eligible artifact ZIPs as independently versioned Azure
+  Compute Gallery VM Applications. Uploading an artifact does not publish or assign it.
+- Standard hosts can receive provisioning customizations or externally managed software. Automated
+  hosts can use ordered policy-managed VM Applications and the configuration mechanisms documented
+  for Session Host Configuration.
 
-- [Artifacts & Image Management Guide](docs/artifacts-guide.md)
-- [Update-ImageArtifacts Script](docs/update-image-artifacts.md)
+See [Artifacts](docs/artifacts-guide.md), [Image Build](docs/image-build.md), and
+[VM Applications](docs/vm-applications.md).
 
-#### Custom Image Building
+### Identity, Profiles, and Data Protection
 
-Automated custom image build pipeline with artifact-based customizations.
+- Five session-host identity choices: Active Directory Domain Services, Microsoft Entra Domain
+  Services, Entra Kerberos hybrid, Entra Kerberos cloud-only, and Entra ID with FSLogix storage keys.
+- Azure Files supports every identity choice. Azure NetApp Files support depends on the selected
+  domain-backed architecture; review the compatibility matrix before selection.
+- FSLogix Profile, Profile plus Office, and Cloud Cache container patterns, with Azure Files
+  sharding and group-scoped permissions where supported.
+- Profile storage can be created with a host pool, reused as an existing resource, or deployed
+  first with the standalone FSLogix Storage add-on for sharing across host pools.
+- Optional Azure Files backup registration uses an existing Recovery Services vault and policy;
+  AVD Shared Services can deploy the shared vault and policy. Personal-host VM backup is configured
+  separately by the standard host-pool path.
+- Optional platform-managed or customer-managed encryption, private endpoints, storage firewall
+  rules, and managed-disk network isolation are available where the selected service supports them.
 
-**Features:**
+### Monitoring, Governance, and Operations
 
-- Automated software installation from artifacts
-- Windows Updates and optimizations
-- Supports marketplace or custom base images
-- Regional image replication
-- Build automation with PowerShell script
-
-**Learn More:**
-
-- [Image Build Guide](docs/image-build.md)
-
-#### Host Pool Deployment
-
-Complete AVD environment deployment with enterprise features.
-
-FederalAVD provides two host-pool deployments. Choose the management approach before deployment:
-
-- **Standard Host Pool** supports pooled and personal desktops in every supported Azure cloud. You
-  own the session-host VM lifecycle and can automate image replacement with Session Host Replacer.
-- **Automated Host Pool** is a Commercial-only preview for pooled desktops. Azure Virtual Desktop
-  owns VM creation, update, scaling, and deletion through Session Host Configuration.
-
-The choice can't be changed on an existing host pool. See
-[Choose a Host Pool Management Approach](docs/host-pool-management.md) before deploying Step 4.
-
-**What's Included:**
-
-- AVD host pool, workspace, and application groups
-- Session host virtual machines (pooled or personal)
-- FSLogix profile storage (Azure Files or NetApp Files)
-- Monitoring with Log Analytics and Application Insights
-- Key Vault for secrets management (inline or pre-deployed via AVD Shared Services)
-- Private endpoints and network security (Zero Trust)
-- Backup and recovery configuration
-- Customer Managed Keys: disk encryption sets and storage encryption UAIs deployed early in the deployment chain, giving RBAC propagation time before VMs are created
-
-**Learn More:**
-
-- [Choose a Host Pool Management Approach](docs/host-pool-management.md)
-- [Host Pool Deployment Guide](docs/hostpool-deployment.md)
-- [Automated Host Pool Deployment](deployments/automatedHostPools/README.md)
-- [Features](docs/features.md)
-- [Design](docs/design.md)
+- Log Analytics, AVD diagnostic settings, Azure Monitor Agent, Data Collection Rules, and optional
+  Data Collection Endpoints support AVD Insights monitoring.
+- The AVD Alerts add-on deploys host-pool, session-host, connection, FSLogix, VM, storage, NetApp,
+  and Service Health alert rules against existing monitoring and notification resources.
+- Session Host Policy can independently apply ordered VM Applications, Azure Monitor Agent and DCR
+  associations, Guest Attestation, and managed-disk isolation to a dedicated VM resource group.
+- Naming convention controls, resource tags, multi-subscription control-plane/monitoring placement,
+  custom RBAC guidance, compliance mappings, and air-gapped transfer guidance support enterprise
+  operations without claiming that every control is enabled by default.
 
 ---
 
 ## 🔧 Add-Ons
 
-Optional add-ons extend the base AVD deployment with advanced lifecycle management and operational automation:
+Optional add-ons are independent deployments. Their prerequisites and compatibility boundaries vary:
 
-| Add-On | Purpose | Documentation |
+| Add-On | Purpose | Compatibility / prerequisite | Documentation |
+| --- | --- | --- | --- |
+| 🚨 **AVD Alerts** | Deploys Azure Monitor scheduled-query, metric, and Service Health alerts for AVD, VMs, Azure Files, and Azure NetApp Files | Requires an existing Log Analytics workspace with required data and a global Action Group | [AVD Alerts](docs/avd-alerts.md) |
+| 📁 **FSLogix Storage** | Provisions Azure Files or Azure NetApp Files profile storage independently of a host-pool deployment | Use before consuming host pools when storage is shared; selected CMK, monitoring, and backup services must already exist | [FSLogix Storage](deployments/add-ons/fslogixStorage/README.md) |
+| 🔄 **Session Host Replacer** | Detects new gallery image versions and performs controlled drain-and-replace operations | Standard-management host pools only; not compatible with automated host pools | [Session Host Replacer](docs/session-host-replacer.md) |
+| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas before exhaustion | Targets all eligible shares in the selected storage resource group | [Storage Quota Manager](docs/storage-quota-manager.md) |
+| 🌐 **M365 Route Table Updater** | Reconciles Microsoft 365 service IP prefixes into an Azure route table for force-tunnel bypass | Requires runtime access to the Microsoft 365 endpoint service and an existing route table | [M365 Route Table Updater](docs/m365-route-table-updater.md) |
+| 🖥️ **Additional Session Hosts** | Adds VMs to an existing host pool without redeploying its control plane; also supplies the replacer's VM template | Standard-management host pools only | [Session Hosts](deployments/add-ons/sessionHosts/README.md) |
+| 📋 **Session Host Policy** | Applies ordered VM Applications, AVD Insights monitoring, Guest Attestation, and managed-disk isolation policies | Targets a dedicated VM resource group; capability availability must be verified in Secret and Top Secret | [Session Host Policy](deployments/add-ons/sessionHostPolicy/README.md) |
+| 📝 **Run Commands on VMs** | Executes inline, URI-hosted, or artifact-storage PowerShell on selected VMs | Resource-group scoped; use only where the VM lifecycle owner permits out-of-band configuration | [Run Commands](deployments/add-ons/runCommandsOnVms/README.md) |
+| 🔑 **Update FSLogix Storage Key** | Updates the selected storage account key in Windows Credential Manager on session hosts | For FSLogix storage-key authentication; requires VM and storage key permissions | [Update Storage Key](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md) |
+
+### Operational Scripts
+
+| Tool | Purpose | Documentation |
 | --- | --- | --- |
-| 🔄 **Session Host Replacer** | Automates rolling image replacement for standard-management host pools; don't use with automated host pools | [Session Host Replacer](deployments/add-ons/sessionHostReplacer/README.md) |
-| 📊 **Storage Quota Manager** | Monitors and automatically increases Azure Files Premium share quotas for FSLogix storage | [Storage Quota Manager](deployments/add-ons/storageQuotaManager/README.md) |
-| 🔑 **Update Storage Keys** | Updates FSLogix storage account keys on session hosts for Entra ID-only deployments | [Update Storage Keys](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md) |
-| 📝 **Run Commands on VMs** | Execute scripts on selected virtual machines from a resource group | [Run Commands](deployments/add-ons/runCommandsOnVms/README.md) |
-| 🖥️ **Session Hosts** | Deploy session hosts into an existing standard-management host pool without touching control-plane infrastructure | [Session Hosts](deployments/add-ons/sessionHosts/README.md) |
+| `New-TemplateSpecs.ps1` | Publish guided portal forms for selected core deployments and add-ons as Azure Template Specs | [Quick Start](docs/quick-start.md#1-publish-the-core-template-specs) |
+| `Deploy-ImageManagement.ps1` | Deploy Image Management from a parameter file and optionally update artifact packages | [Automation](docs/automation-guide.md#step-2-deploy-image-management) |
+| `Update-ImageArtifacts.ps1` | Merge customer artifact definitions, download or use pre-staged payloads, package artifacts, and upload them to Image Management storage | [Update Image Artifacts](docs/update-image-artifacts.md) |
+| `Publish-VMApplications.ps1` | Publish selected artifact ZIPs as immutable Compute Gallery VM Application versions | [VM Applications](docs/vm-applications.md) |
+| `Invoke-ImageBuilds.ps1` | Submit repeatable image builds from parameter files | [Automation](docs/automation-guide.md) |
+| `Set-SessionHostMaintenanceMode.ps1` | Apply or remove AVD drain mode and a scaling-plan exclusion tag for a numeric host range | [Manual Image Replacement](docs/automation-guide.md#manual-approach-set-sessionhostmaintenancemodeps1) |
 
 ---
 
 ## 🔒 Zero Trust Security
 
-This solution is architected to align with [Microsoft's Zero Trust principles for Azure Virtual Desktop](https://learn.microsoft.com/security/zero-trust/azure-infrastructure-avd):
+This solution provides controls that can be selected to align a deployment with
+[Microsoft's Zero Trust principles for Azure Virtual Desktop](https://learn.microsoft.com/security/zero-trust/azure-infrastructure-avd).
+The controls are conditional: deploying FederalAVD does not by itself satisfy an organization's
+complete security or compliance baseline.
 
 ### Security Controls
 
 | Layer | Capability |
 | --- | --- |
-| **🌐 Network** | Private endpoints, no public IPs, network segmentation |
-| **🔐 Identity** | Managed identities, Entra ID authentication, conditional access |
-| **📁 Data** | Customer-managed keys, encryption at rest/transit, private connectivity |
-| **🎯 Access** | RBAC least privilege, Azure Policy enforcement, user assignment restrictions |
-| **📊 Monitoring** | Centralized logging, diagnostic data collection, threat detection |
-| **⚙️ Configuration** | Immutable infrastructure, artifact-based deployment, integrity verification |
+| **🌐 Network** | Session hosts without public IPs; optional private endpoints, firewalls, NSGs, routing, and private DNS |
+| **🔐 Identity** | Managed identities for service access; multiple supported session-host and FSLogix identity models; Key Vault-backed deployment credentials |
+| **📁 Data** | Azure platform encryption plus optional CMK, private storage connectivity, disk network isolation, and backup integration |
+| **🎯 Access** | Scoped RBAC assignments, application-group assignments, and optional session-host Azure Policy controls |
+| **📊 Monitoring** | Optional centralized diagnostics and performance collection, plus separately deployed operational alerts |
+| **⚙️ Configuration** | Repeatable Bicep deployments, artifact-based customization, image-managed fleet patterns, and policy-managed guest capabilities |
+
+FederalAVD's AVD Insights configuration does not collect the Windows Security event log. Deploy a
+supplemental DCR or SIEM agent when audit requirements include Security events. See the
+[Compliance Control Mapping](docs/compliance.md#audit-and-accountability-au).
 
 **[Zero Trust Architecture Details](docs/features.md#zero-trust-architecture)**
 
@@ -154,8 +187,8 @@ Support for multiple identity configurations to meet organizational requirements
 | **Active Directory Domain Services** | Traditional hybrid identity with AD domain join | Enterprise hybrid environments with on-premises AD |
 | **Entra Domain Services** | Managed domain services in Azure | Cloud-focused without on-premises AD infrastructure |
 | **Entra Kerberos (Hybrid)** | Entra ID-joined hosts with AD user accounts | Modernizing while maintaining AD user accounts |
-| **Entra Kerberos (Cloud-Only)** | Entra ID users with Kerberos authentication | Cloud-native with Kerberos for FSLogix |
-| **Entra ID** | Pure cloud identity solution | Fully cloud-native deployments |
+| **Entra Kerberos (Cloud-Only)** | Entra-joined hosts and Entra-only users with Azure Files Kerberos | Commercial and Azure US Government; no AD DS dependency; advanced group access is region-limited |
+| **Entra ID with Storage Keys** | Entra-joined hosts with FSLogix Azure Files credentials stored per host | Cloud-native deployments that do not use Kerberos; rotate keys operationally |
 
 **[Identity Solutions Details](docs/features.md#identity-solutions)**
 
@@ -172,7 +205,11 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Deployment Guides
 
+- 🌐 [Networking](deployments/networking/README.md) - Deploy VNets, subnets, routing, NSGs, and private DNS
+- 🔒 [AVD Shared Services](deployments/sharedServices/README.md) - Deploy shared Key Vault, monitoring, and FSLogix backup resources
+- 📦 [Image Management](deployments/imageManagement/README.md) - Deploy gallery, artifact, logging, identity, and image-build resources
 - 🏢 [Host Pool Deployment](docs/hostpool-deployment.md) - Deploy AVD host pools
+- ⚙️ [Automated Host Pool](deployments/automatedHostPools/README.md) - Deploy Commercial pooled host pools managed by AVD
 - 🎨 [Image Build Guide](docs/image-build.md) - Build custom images
 - 📦 [Artifacts & Image Management](docs/artifacts-guide.md) - Software artifact system
 - 🔧 [Update-ImageArtifacts Script](docs/update-image-artifacts.md) - Script usage guide
@@ -187,11 +224,16 @@ Support for multiple identity configurations to meet organizational requirements
 
 ### Add-Ons
 
-- 🔄 [Session Host Replacer](deployments/add-ons/sessionHostReplacer/README.md)
-- 📊 [Storage Quota Manager](deployments/add-ons/storageQuotaManager/README.md)
-- 🔑 [Update Storage Keys](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md)
+- 📚 [Complete Add-On Catalog](docs/add-ons.md)
+- 🚨 [AVD Alerts](docs/avd-alerts.md)
+- 📁 [FSLogix Storage](deployments/add-ons/fslogixStorage/README.md)
+- 🔄 [Session Host Replacer](docs/session-host-replacer.md)
+- 📊 [Storage Quota Manager](docs/storage-quota-manager.md)
+- 🌐 [M365 Route Table Updater](docs/m365-route-table-updater.md)
+- 🖥️ [Additional Session Hosts](deployments/add-ons/sessionHosts/README.md)
+- 📋 [Session Host Policy](deployments/add-ons/sessionHostPolicy/README.md)
 - 📝 [Run Commands on VMs](deployments/add-ons/runCommandsOnVms/README.md)
-- 🖥️ [Session Hosts](deployments/add-ons/sessionHosts/README.md)
+- 🔑 [Update FSLogix Storage Key](deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md)
 
 ---
 

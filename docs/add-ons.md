@@ -66,7 +66,10 @@ add-on, and choose **Deploy**.
 
 ### Deploy when using custom images in a standard host pool
 
-- **Session Host Replacer** — Automates the drain-and-replace cycle triggered by new image versions. Without it, you must drain and replace manually using `TagAndDrainSessionHosts.ps1`.
+- **Session Host Replacer** — Automates the drain-and-replace cycle triggered by new image
+  versions. Without it, deploy and validate replacement hosts, use
+  `Set-SessionHostMaintenanceMode.ps1` to drain the selected old-host range, and then delete the old
+  VMs through an approved operator workflow.
 
 Automated host pools use native Session Host Configuration and Session Host Update. Don't attach
 Session Host Replacer or the Session Hosts add-on because Azure Virtual Desktop exclusively owns

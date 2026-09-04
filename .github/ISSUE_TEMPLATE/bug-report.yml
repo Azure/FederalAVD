@@ -35,7 +35,7 @@ body:
         - Step 4 — Host Pool
         - Update-ImageArtifacts.ps1
         - Invoke-ImageBuilds.ps1
-        - TagAndDrainSessionHosts.ps1
+        - Set-SessionHostMaintenanceMode.ps1
         - Session Host Replacer add-on
         - Storage Quota Manager add-on
         - Other add-on

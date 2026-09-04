@@ -45,8 +45,8 @@
     The zero-pad width of the numeric suffix. Default is 3 (e.g., 001, 002).
 
 .EXAMPLE
-    # Drain old hosts 1-10 after the new hosts our online and healthy during a replacement cycle
-    .\ Set-SessionHostMaintenanceMode.ps1 -Mode Drain -TagName ScalingPlanExclusion `
+    # Drain old hosts 1-10 after the new hosts are online and healthy during a replacement cycle
+    .\Set-SessionHostMaintenanceMode.ps1 -Mode Drain -TagName ScalingPlanExclusion `
         -HostPoolName hp-avd-prod -HostPoolResourceGroup rg-avd `
         -SessionHostPrefix 'avd-' -Start 1 -End 10
 

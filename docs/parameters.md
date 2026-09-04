@@ -11,7 +11,7 @@ Parameter documentation lives alongside each deployment template. Find the secti
 | Solution | Parameters | Examples |
 | --- | --- | --- |
 | 🌐 **Networking** | [networking/README.md](../deployments/networking/README.md) | [parameter files](../deployments/networking/README.md) |
-| 🔒 **AVD Shared Services (Key Vaults, Monitoring, and FSLogix Backup)** | [sharedServices/uiFormDefinition.json](../deployments/sharedServices/uiFormDefinition.json) *(see Quick Start Step 1)* | — |
+| 🔒 **AVD Shared Services (Key Vaults, Monitoring, and FSLogix Backup)** | [sharedServices/README.md — Parameters](../deployments/sharedServices/README.md#parameters) | [automated host-pool prerequisite](../customer-examples/parameters/sharedServices/poc.automatedHostPoolPrerequisites.sharedServices.parameters.json) |
 | 📦 **Image Management** | [imageManagement/README.md — Parameters](../deployments/imageManagement/README.md#parameters) | [imageManagement/README.md — Examples](../deployments/imageManagement/README.md#examples) |
 | 🎨 **Image Build** | [imageBuild/README.md — Parameters](../deployments/imageBuild/README.md#parameters) | [imageBuild/README.md — Examples](../deployments/imageBuild/README.md#examples) |
 | 🏢 **Host Pool (standard management)** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |

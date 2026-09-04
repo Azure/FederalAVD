@@ -504,7 +504,9 @@ The AVD Shared Services deployment creates a **dedicated operations resource gro
 (`rg-avd-operations-{loc}`) containing the Key Vaults and optional shared FSLogix Recovery Services
 vault. When `deployMonitoring` is `true`, it also creates a separate monitoring resource group
 containing the Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection
-Endpoint. The template entry point is `deployments/sharedServices/sharedServices.bicep`.
+Endpoint. The template entry point is `deployments/sharedServices/sharedServices.bicep`. See the
+[standalone Shared Services guide](../deployments/sharedServices/README.md) for its complete
+resource, parameter, prerequisite, networking, deployment, and output reference.
 
 | Resource | Name Pattern | Purpose |
 | --- | --- | --- |
