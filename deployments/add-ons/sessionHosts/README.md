@@ -260,15 +260,15 @@ New-AzResourceGroupDeployment `
 | `tags` | object | `{}` | Tags applied to all deployed resources, keyed by resource type |
 | `agentBootLoaderDownloadUrl` | string | `''` | Override AVD Agent Boot Loader download URL (air-gapped clouds) |
 | `agentDownloadUrl` | string | `''` | Override AVD Agent download URL (air-gapped clouds) |
-| `virtualMachineNameConv` | string | `vm-SHNAME` | VM naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
-| `virtualMachineNicNameConv` | string | `nic-SHNAME` | NIC naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
-| `virtualMachineDiskNameConv` | string | `disk-SHNAME` | OS disk naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
+| `virtualMachineNameConv` | string | `SHNAME` | VM naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
+| `virtualMachineNicNameConv` | string | `SHNAME-nic` | NIC naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
+| `virtualMachineDiskNameConv` | string | `SHNAME-osdisk` | OS disk naming convention. `SHNAME` is replaced with the session host name at deploy time. Pre-populated from host pool tags. |
 
 ---
 
 ## Naming Convention
 
-VM, NIC, OS disk, and availability set naming patterns are passed directly via parameters (`virtualMachineNameConv`, `virtualMachineNicNameConv`, `virtualMachineDiskNameConv`, `availabilitySetNameConv`). All four default to standard CAF-aligned patterns (`vm-SHNAME`, `nic-SHNAME`, `disk-SHNAME`, `avset-##`).
+VM, NIC, OS disk, and availability set naming patterns are passed directly via parameters (`virtualMachineNameConv`, `virtualMachineNicNameConv`, `virtualMachineDiskNameConv`, `availabilitySetNameConv`). The defaults are `SHNAME`, `SHNAME-nic`, `SHNAME-osdisk`, and `avset-##`. This keeps the VM name equal to the session host name and derives the NIC and OS disk names from it.
 
 When deploying through the Session Host Replacer, these values are pre-populated from tags on the hosts resource group (`virtualMachineNameConv`, `virtualMachineNicNameConv`, `virtualMachineDiskNameConv`, `availabilitySetNameConv`). Pass the same values here to ensure new session hosts are consistent with existing ones.
 

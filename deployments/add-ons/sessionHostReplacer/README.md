@@ -439,6 +439,8 @@ Pass the same `namingConvention` and `identifier` values used in the host pool d
 - If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConv: 'vm-SHNAME'`
 - If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConv: 'SHNAME-vm'`
 
+When naming tags are absent, the defaults are `SHNAME` for VMs, `SHNAME-osdisk` for OS disks, and `SHNAME-nic` for NICs. Existing resource-group tags continue to take precedence so replacement hosts retain the source host pool's naming.
+
 **Token Reference:**
 
 - `SHNAME` = Session host name (e.g., `avdvm-001` becomes `vm-avdvm-001`)
@@ -567,7 +569,7 @@ For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-h
 **When Custom Naming is NOT needed:**
 
 - Host pool follows standard patterns: `vdpool-avd-prod-eus` or `avd-prod-eus-vdpool`
-- Session hosts follow standard patterns: `vm-avdvm-001` or `avdvm-001-vm`
+- Session hosts follow the default pattern: `avdvm-001`, with related resources named `avdvm-001-osdisk` and `avdvm-001-nic`
 - You're comfortable with automatically-derived names
 
 #### Option 2: Deploy via PowerShell

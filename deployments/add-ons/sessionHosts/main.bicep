@@ -171,11 +171,11 @@ param intuneEnrollment bool = false
 @description('Optional. Azure region for session host VMs.')
 param location string = resourceGroup().location
 
-@description('Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to "nic-SHNAME".')
-param virtualMachineNicNameConv string = 'nic-SHNAME'
+@description('Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to "SHNAME-nic".')
+param virtualMachineNicNameConv string = 'SHNAME-nic'
 
-@description('Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to "disk-SHNAME".')
-param virtualMachineDiskNameConv string = 'disk-SHNAME'
+@description('Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to "SHNAME-osdisk".')
+param virtualMachineDiskNameConv string = 'SHNAME-osdisk'
 
 @description('Optional. OU path in Active Directory for session host computer accounts.')
 param ouPath string = ''
@@ -222,8 +222,8 @@ param tags object = {}
 @description('Optional. Windows time zone for session host VMs.')
 param timeZone string = 'Eastern Standard Time'
 
-@description('Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to "vm-SHNAME".')
-param virtualMachineNameConv string = 'vm-SHNAME'
+@description('Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to "SHNAME".')
+param virtualMachineNameConv string = 'SHNAME'
 
 @description('Required. Azure VM size for session hosts.')
 param virtualMachineSize string

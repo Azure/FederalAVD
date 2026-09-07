@@ -60,14 +60,14 @@ param storageAccountNameOverride string = ''
 @maxLength(128)
 param storageEncryptionIdentityNameOverride string = ''
 
-@description('Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., "vm-SHNAME" becomes "vm-avdhost001"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group.')
-param virtualMachineNameConv string = 'vm-SHNAME'
+@description('Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., "SHNAME" becomes "avdhost001"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group.')
+param virtualMachineNameConv string = 'SHNAME'
 
 @description('Required. Naming convention for session host OS disks. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineDiskNameConv tag on the hosts resource group.')
-param virtualMachineDiskNameConv string = 'disk-SHNAME'
+param virtualMachineDiskNameConv string = 'SHNAME-osdisk'
 
 @description('Required. Naming convention for session host network interfaces. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineNicNameConv tag on the hosts resource group.')
-param virtualMachineNicNameConv string = 'nic-SHNAME'
+param virtualMachineNicNameConv string = 'SHNAME-nic'
 
 @description('Required. Naming convention for availability sets. ## is replaced with the set index (e.g., "avset-##" becomes "avset-01"). Pre-populated from the availabilitySetNameConv tag on the hosts resource group.')
 param availabilitySetNameConv string = 'avset-##'

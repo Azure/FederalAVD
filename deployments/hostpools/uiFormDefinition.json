@@ -5318,16 +5318,15 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "Session host VM, disk, and NIC names follow a simpler pattern than infrastructure resources: just the resource type abbreviation and the session host name token (SHNAME). The defaults below reflect your current convention settings. Override if you need a different pattern."
+                    "text": "Session host VM names match the session host name. OS disk and NIC names append resource suffixes. The defaults are SHNAME, SHNAME-osdisk, and SHNAME-nic. Override if you need different patterns."
                   }
                 },
                 {
                   "name": "vmNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Virtual Machine Naming Convention",
-                  "placeholder": "vm-SHNAME",
-                  "defaultValue": "[if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))), 'resourceType'), concat('SHNAME-', if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm)), concat(if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm), '-SHNAME'))]",
-                  "toolTip": "Naming pattern for session host VMs. SHNAME is replaced with the session host name at deployment time (e.g., 'vm-SHNAME' becomes 'vm-avd01'). Defaults based on your resource type abbreviation and component position above.",
+                  "defaultValue": "SHNAME",
+                  "toolTip": "Naming pattern for session host VMs. SHNAME is replaced with the session host name at deployment time (e.g., 'SHNAME' becomes 'avd01').",
                   "constraints": {
                     "required": true,
                     "regex": "^.*SHNAME.*$",
@@ -5338,9 +5337,8 @@
                   "name": "diskNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "OS Disk Naming Convention",
-                  "placeholder": "disk-SHNAME",
-                  "defaultValue": "[if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))), 'resourceType'), concat('SHNAME-', if(empty(steps('tagsAndNaming').naming.rtCodeDisk),'disk',steps('tagsAndNaming').naming.rtCodeDisk)), concat(if(empty(steps('tagsAndNaming').naming.rtCodeDisk),'disk',steps('tagsAndNaming').naming.rtCodeDisk), '-SHNAME'))]",
-                  "toolTip": "Naming pattern for session host OS disks. SHNAME is replaced with the VM name (e.g., 'disk-SHNAME' becomes 'disk-avd01').",
+                  "defaultValue": "SHNAME-osdisk",
+                  "toolTip": "Naming pattern for session host OS disks. SHNAME is replaced with the VM name (e.g., 'SHNAME-osdisk' becomes 'avd01-osdisk').",
                   "constraints": {
                     "required": true,
                     "regex": "^.*SHNAME.*$",
@@ -5351,9 +5349,8 @@
                   "name": "nicNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interface Naming Convention",
-                  "placeholder": "nic-SHNAME",
-                  "defaultValue": "[if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))), 'resourceType'), concat('SHNAME-', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic)), concat(if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '-SHNAME'))]",
-                  "toolTip": "Naming pattern for session host network interfaces. SHNAME is replaced with the VM name (e.g., 'nic-SHNAME' becomes 'nic-avd01').",
+                  "defaultValue": "SHNAME-nic",
+                  "toolTip": "Naming pattern for session host network interfaces. SHNAME is replaced with the VM name (e.g., 'SHNAME-nic' becomes 'avd01-nic').",
                   "constraints": {
                     "required": true,
                     "regex": "^.*SHNAME.*$",

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "5137667093295700632"
+      "templateHash": "17892856933326095200"
     }
   },
   "definitions": {
@@ -118,21 +118,21 @@
     },
     "virtualMachineNameConv": {
       "type": "string",
-      "defaultValue": "vm-SHNAME",
+      "defaultValue": "SHNAME",
       "metadata": {
-        "description": "Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., \"vm-SHNAME\" becomes \"vm-avdhost001\"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group."
+        "description": "Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., \"SHNAME\" becomes \"avdhost001\"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group."
       }
     },
     "virtualMachineDiskNameConv": {
       "type": "string",
-      "defaultValue": "disk-SHNAME",
+      "defaultValue": "SHNAME-osdisk",
       "metadata": {
         "description": "Required. Naming convention for session host OS disks. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineDiskNameConv tag on the hosts resource group."
       }
     },
     "virtualMachineNicNameConv": {
       "type": "string",
-      "defaultValue": "nic-SHNAME",
+      "defaultValue": "SHNAME-nic",
       "metadata": {
         "description": "Required. Naming convention for session host network interfaces. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineNicNameConv tag on the hosts resource group."
       }
@@ -1132,7 +1132,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.46.1.21595",
-          "templateHash": "785658114248734996"
+          "templateHash": "9712962727583420559"
         }
       },
       "definitions": {
@@ -1513,16 +1513,16 @@
         },
         "virtualMachineNicNameConv": {
           "type": "string",
-          "defaultValue": "nic-SHNAME",
+          "defaultValue": "SHNAME-nic",
           "metadata": {
-            "description": "Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to \"nic-SHNAME\"."
+            "description": "Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to \"SHNAME-nic\"."
           }
         },
         "virtualMachineDiskNameConv": {
           "type": "string",
-          "defaultValue": "disk-SHNAME",
+          "defaultValue": "SHNAME-osdisk",
           "metadata": {
-            "description": "Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to \"disk-SHNAME\"."
+            "description": "Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to \"SHNAME-osdisk\"."
           }
         },
         "ouPath": {
@@ -1625,9 +1625,9 @@
         },
         "virtualMachineNameConv": {
           "type": "string",
-          "defaultValue": "vm-SHNAME",
+          "defaultValue": "SHNAME",
           "metadata": {
-            "description": "Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to \"vm-SHNAME\"."
+            "description": "Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to \"SHNAME\"."
           }
         },
         "virtualMachineSize": {
@@ -5858,9 +5858,8 @@
                       "name": "virtualMachineNameConvOverride",
                       "type": "Microsoft.Common.TextBox",
                       "label": "Virtual Machine Naming Convention",
-                      "placeholder": "vm-SHNAME",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'vm-SHNAME')]",
-                      "toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'vm-SHNAME' becomes 'vm-avdvm-001'). This MUST match your existing VM naming.",
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'SHNAME')]",
+                      "toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'SHNAME' becomes 'avdvm-001'). This MUST match your existing VM naming.",
                       "constraints": {
                         "required": true,
                         "regex": "^.*SHNAME.*$",
@@ -5871,9 +5870,8 @@
                       "name": "diskNameConvOverride",
                       "type": "Microsoft.Common.TextBox",
                       "label": "OS Disk Naming Convention",
-                      "placeholder": "disk-SHNAME",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'disk-SHNAME')]",
-                      "toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'disk-SHNAME' becomes 'disk-avdvm-001'). Should align with existing disk naming.",
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'SHNAME-osdisk')]",
+                      "toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'SHNAME-osdisk' becomes 'avdvm-001-osdisk'). Should align with existing disk naming.",
                       "constraints": {
                         "required": true,
                         "regex": "^.*SHNAME.*$",
@@ -5884,9 +5882,8 @@
                       "name": "networkInterfaceNameConvOverride",
                       "type": "Microsoft.Common.TextBox",
                       "label": "Network Interface Naming Convention",
-                      "placeholder": "nic-SHNAME",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'nic-SHNAME')]",
-                      "toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'nic-SHNAME' becomes 'nic-avdvm-001'). Should align with existing NIC naming.",
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'SHNAME-nic')]",
+                      "toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'SHNAME-nic' becomes 'avdvm-001-nic'). Should align with existing NIC naming.",
                       "constraints": {
                         "required": true,
                         "regex": "^.*SHNAME.*$",

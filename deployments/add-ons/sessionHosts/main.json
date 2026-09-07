@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "785658114248734996"
+      "templateHash": "9712962727583420559"
     }
   },
   "definitions": {
@@ -387,16 +387,16 @@
     },
     "virtualMachineNicNameConv": {
       "type": "string",
-      "defaultValue": "nic-SHNAME",
+      "defaultValue": "SHNAME-nic",
       "metadata": {
-        "description": "Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to \"nic-SHNAME\"."
+        "description": "Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to \"SHNAME-nic\"."
       }
     },
     "virtualMachineDiskNameConv": {
       "type": "string",
-      "defaultValue": "disk-SHNAME",
+      "defaultValue": "SHNAME-osdisk",
       "metadata": {
-        "description": "Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to \"disk-SHNAME\"."
+        "description": "Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to \"SHNAME-osdisk\"."
       }
     },
     "ouPath": {
@@ -499,9 +499,9 @@
     },
     "virtualMachineNameConv": {
       "type": "string",
-      "defaultValue": "vm-SHNAME",
+      "defaultValue": "SHNAME",
       "metadata": {
-        "description": "Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to \"vm-SHNAME\"."
+        "description": "Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to \"SHNAME\"."
       }
     },
     "virtualMachineSize": {

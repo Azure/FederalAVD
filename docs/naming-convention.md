@@ -72,9 +72,9 @@ This follows the CAF recommendation of *abbreviation → workload → component 
 | Key Vault (Encryption) | `kv-avd-enc-{unique}-use` |
 | Global Feed Workspace | `ws-avd-global-feed` |
 | Availability Set | `as-avd-desktop-01-use-##` |
-| VM naming pattern | `vm-SHNAME` |
-| OS Disk naming pattern | `osdisk-SHNAME` |
-| NIC naming pattern | `nic-SHNAME` |
+| VM naming pattern | `SHNAME` |
+| OS Disk naming pattern | `SHNAME-osdisk` |
+| NIC naming pattern | `SHNAME-nic` |
 
 > The `workload` component (`avd`) and the `purpose` component (`desktop-01`) are both present in the name. When `identifier` equals the `workload` value (e.g., both are `avd`), the workload token appears twice — this is intentional and consistent.
 
@@ -296,10 +296,13 @@ Compute Gallery names cannot contain hyphens. The engine replaces all `-` with `
 
 Virtual machines, OS disks, and network interfaces use a **naming pattern** rather than a fixed name. The `SHNAME` token is a placeholder that the session host deployment module replaces with the actual session host name at runtime:
 
-- RT-first: `vm-SHNAME`, `osdisk-SHNAME`, `nic-SHNAME`
-- RT-last: `SHNAME-vm`, `SHNAME-osdisk`, `SHNAME-nic`
+- VM: `SHNAME`
+- OS disk: `SHNAME-osdisk`
+- NIC: `SHNAME-nic`
 
-The actual VM name is `{pattern}` with `SHNAME = {sessionHostNamePrefix}{paddedIndex}`, for example `vm-avdhost001`.
+The actual VM name is `{pattern}` with `SHNAME = {sessionHostNamePrefix}{paddedIndex}`, for example `avdhost001`. These defaults intentionally do not use the virtual machine, OS disk, or network interface resource-type abbreviations or their position in the broader naming convention. This keeps the VM name equal to the session host name and derives the related resources from that stable name.
+
+Explicit `virtualMachineNameConvOverride`, `virtualMachineDiskNameConvOverride`, and `virtualMachineNicNameConvOverride` values continue to take precedence. Existing parameter files and host resource-group tags that specify older patterns are therefore unchanged on redeployment.
 
 ### Availability Set — `##` token
 
@@ -402,7 +405,7 @@ Do nothing. Deploy using the Portal or parameter files without overriding `namin
 vdpool-avd-desktop-01-use
 rg-avd-control-plane-use
 kv-avd-sec-d527e9-use
-vm-SHNAME  →  vm-desktophost001
+SHNAME  →  desktophost001
 ```
 
 ### Example 2 — Standard custom convention, RT-first
@@ -424,7 +427,7 @@ Results (identifier = `desktop`, index = `1`, region = `eastus`):
 vdpool-avd-desktop-01-use
 rg-avd-desktop-01-hosts-use
 kv-avd-sec-d527e9-use
-vm-SHNAME  →  vm-desktophost001
+SHNAME  →  desktophost001
 ```
 
 ### Example 3 — RT-last convention
@@ -444,7 +447,7 @@ Results (identifier = `prod`, region = `eastus2`):
 avd-prod-use2-vdpool
 avd-prod-use2-vddag
 avd-sec-75d05c-use2-kv
-SHNAME-vm  →  avdhost001-vm
+SHNAME  →  avdhost001
 ```
 
 ### Example 4 — Organisation prefix with freeform1
@@ -465,7 +468,7 @@ Results (identifier = `avd`, region = `eastus`):
 contoso-avd-avd-use-vdpool
 contoso-avd-control-plane-use-rg
 contoso-avd-sec-9ef5b1-u
-SHNAME-vm  →  avdhost001-vm
+SHNAME  →  avdhost001
 ```
 
 > **Note:** The generated KV name exceeds 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). Portal deployments require complete Key Vault name overrides so meaningful trailing components are not silently lost.
@@ -487,7 +490,7 @@ Results (identifier = `avd`, region = `westus2`):
 vdpool_avd_prod_avd_usw2
 rg_avd_prod_control-plane_usw2
 kv-avd-prod-sec-f0485a-u
-vm-SHNAME  (VM/disk/NIC always use hyphens in the SHNAME pattern)
+SHNAME, SHNAME-osdisk, SHNAME-nic
 ```
 
 > **Note:** `kvSanitize()` converts underscores and dots to hyphens in generated Key Vault names, so the generated KV name always uses `-` regardless of the convention delimiter. Complete overrides must independently satisfy Azure Key Vault naming rules.

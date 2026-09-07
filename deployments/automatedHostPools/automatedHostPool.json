@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "5687298520754505119"
+      "templateHash": "9579076512774716189"
     }
   },
   "definitions": {
@@ -1279,7 +1279,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "10061575092370751723"
+              "templateHash": "14918958316885224303"
             }
           },
           "functions": [
@@ -1832,9 +1832,9 @@
             "azureMonitorAgentIdentityName": "[replace(variables('userAssignedIdentityNameConv'), 'TOKEN', 'ama')]",
             "resourceGroupHosts": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}{1}hosts', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "availabilitySetNameConv": "[format('{0}{1}##', __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').availabilitySets, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), variables('cnv_delimiter'))]",
-            "virtualMachineNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineNameConvOverride'), ''))), parameters('namingConvention').virtualMachineNameConvOverride, if(empty(variables('cnv_rtCodes').virtualMachines), 'SHNAME', if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').virtualMachines), format('SHNAME-{0}', variables('cnv_rtCodes').virtualMachines))))]",
-            "virtualMachineDiskNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('namingConvention').virtualMachineDiskNameConvOverride, if(empty(variables('cnv_rtCodes').osdisks), 'SHNAME', if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').osdisks), format('SHNAME-{0}', variables('cnv_rtCodes').osdisks))))]",
-            "virtualMachineNicNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('namingConvention').virtualMachineNicNameConvOverride, if(empty(variables('cnv_rtCodes').networkInterfaces), 'SHNAME', if(variables('cnv_rtFirst'), format('{0}-SHNAME', variables('cnv_rtCodes').networkInterfaces), format('SHNAME-{0}', variables('cnv_rtCodes').networkInterfaces))))]",
+            "virtualMachineNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineNameConvOverride'), ''))), parameters('namingConvention').virtualMachineNameConvOverride, 'SHNAME')]",
+            "virtualMachineDiskNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('namingConvention').virtualMachineDiskNameConvOverride, 'SHNAME-osdisk')]",
+            "virtualMachineNicNameConv": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('namingConvention').virtualMachineNicNameConvOverride, 'SHNAME-nic')]",
             "diskAccessName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').diskAccesses, parameters('identifier'), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "diskEncryptionSetNameConv": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').diskEncryptionSets, format('{0}{1}TOKEN', parameters('identifier'), variables('cnv_delimiter')), variables('cnv_vmsloc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "diskEncryptionSetNameConfidentialVMs": "[replace(variables('diskEncryptionSetNameConv'), 'TOKEN', format('confvm{0}customer{1}keys', variables('cnv_delimiter'), variables('cnv_delimiter')))]",

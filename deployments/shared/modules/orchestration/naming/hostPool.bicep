@@ -185,9 +185,9 @@ var azureMonitorAgentIdentityName    = replace(userAssignedIdentityNameConv, 'TO
 // ── Compute Resources ─────────────────────────────────────────────────────────
 var resourceGroupHosts    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups,   '${identifier}${cnv_delimiter}hosts', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var availabilitySetNameConv = '${cnv(cnv_components, cnv_delimiter, cnv_rtCodes.availabilitySets, identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)}${cnv_delimiter}##'
-var virtualMachineNameConv   = !empty(namingConvention.?virtualMachineNameConvOverride ?? '')   ? namingConvention.virtualMachineNameConvOverride   : (empty(cnv_rtCodes.virtualMachines)   ? 'SHNAME' : (cnv_rtFirst ? '${cnv_rtCodes.virtualMachines}-SHNAME'   : 'SHNAME-${cnv_rtCodes.virtualMachines}'))
-var virtualMachineDiskNameConv = !empty(namingConvention.?virtualMachineDiskNameConvOverride ?? '') ? namingConvention.virtualMachineDiskNameConvOverride : (empty(cnv_rtCodes.osdisks)           ? 'SHNAME' : (cnv_rtFirst ? '${cnv_rtCodes.osdisks}-SHNAME'           : 'SHNAME-${cnv_rtCodes.osdisks}'))
-var virtualMachineNicNameConv  = !empty(namingConvention.?virtualMachineNicNameConvOverride ?? '')    ? namingConvention.virtualMachineNicNameConvOverride  : (empty(cnv_rtCodes.networkInterfaces) ? 'SHNAME' : (cnv_rtFirst ? '${cnv_rtCodes.networkInterfaces}-SHNAME' : 'SHNAME-${cnv_rtCodes.networkInterfaces}'))
+var virtualMachineNameConv   = !empty(namingConvention.?virtualMachineNameConvOverride ?? '')   ? namingConvention.virtualMachineNameConvOverride   : 'SHNAME'
+var virtualMachineDiskNameConv = !empty(namingConvention.?virtualMachineDiskNameConvOverride ?? '') ? namingConvention.virtualMachineDiskNameConvOverride : 'SHNAME-osdisk'
+var virtualMachineNicNameConv  = !empty(namingConvention.?virtualMachineNicNameConvOverride ?? '')    ? namingConvention.virtualMachineNicNameConvOverride  : 'SHNAME-nic'
 
 var diskAccessName    = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskAccesses,      identifier,            cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var diskEncryptionSetNameConv = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.diskEncryptionSets, '${identifier}${cnv_delimiter}TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)

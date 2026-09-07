@@ -83,9 +83,9 @@ Key properties:
   vmsLocationAbbreviation  — override for the auto-resolved VMs region abbreviation
   cpLocationAbbreviation   — override for the auto-resolved control plane region abbreviation
   fslogixStoragePrefix              — custom prefix for FSLogix storage accounts (max 13 lowercase alphanumeric)
-  virtualMachineNameConvOverride    — optional SHNAME pattern for VMs, e.g. "vm-SHNAME" (empty = derived from convention)
-  virtualMachineDiskNameConvOverride  — optional SHNAME pattern for VM OS disks (empty = derived from convention)
-  virtualMachineNicNameConvOverride   — optional SHNAME pattern for VM NICs (empty = derived from convention)
+  virtualMachineNameConvOverride    — optional SHNAME pattern for VMs (default "SHNAME")
+  virtualMachineDiskNameConvOverride  — optional SHNAME pattern for VM OS disks (default "SHNAME-osdisk")
+  virtualMachineNicNameConvOverride   — optional SHNAME pattern for VM NICs (default "SHNAME-nic")
 Resource type abbreviations are provided separately via namingResourceTypeCodes.
 Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults.''')
 param namingConvention object = {
