@@ -22,7 +22,7 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "resources\n| where type == 'microsoft.insights/components'\n| order by name asc\n| project value = id, label = name, selected = (name contains 'sessionhostreplacer')",
+            "query": "resources\n| where type == 'microsoft.insights/components'\n| extend ParentResourceId = tostring(tags['cm-resource-parent'])\n| order by name asc\n| project value = id, label = name, selected = (name contains 'sessionhostreplacer' or (name endswith '-insights' and ParentResourceId contains '/providers/Microsoft.DesktopVirtualization/hostPools/'))",
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"

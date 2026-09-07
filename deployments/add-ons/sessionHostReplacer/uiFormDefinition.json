@@ -3328,23 +3328,6 @@
                   }
                 },
                 {
-                  "name": "applicationInsightsNameOverride",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Application Insights Name",
-                  "placeholder": "appi-avdshr-prod-eus2",
-                  "toolTip": "Optional. Explicit name for the Application Insights instance.",
-                  "visible": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames, steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring)]",
-                  "constraints": {
-                    "required": false,
-                    "validations": [
-                      {
-                        "regex": "^[a-zA-Z0-9-_().]{1,260}$",
-                        "message": "Application Insights name must be 1-260 characters, containing alphanumeric characters, hyphens, underscores, parentheses, and periods."
-                      }
-                    ]
-                  }
-                },
-                {
                   "name": "appServicePlanNameOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "App Service Plan Name",
@@ -3585,7 +3568,6 @@
         "functionAppNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
         "storageAccountNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
         "storageEncryptionIdentityNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
-        "applicationInsightsNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.applicationInsightsNameOverride, ''), '')]",
         "appServicePlanNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
         "virtualMachineNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv), steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
         "virtualMachineDiskNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv), steps('advanced').sessionHostNaming.diskNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv)]",

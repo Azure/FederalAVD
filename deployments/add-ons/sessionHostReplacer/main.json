@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "9351637706322276443"
+      "templateHash": "8610955079966046688"
     }
   },
   "definitions": {
@@ -114,14 +114,6 @@
       "maxLength": 128,
       "metadata": {
         "description": "Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores)."
-      }
-    },
-    "applicationInsightsNameOverride": {
-      "type": "string",
-      "defaultValue": "",
-      "maxLength": 260,
-      "metadata": {
-        "description": "Optional. Explicit name for the Application Insights instance. If not provided, name is derived from shared naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods)."
       }
     },
     "virtualMachineNameConv": {
@@ -6087,7 +6079,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "6333070136803094939"
+              "templateHash": "7496873245676141924"
             }
           },
           "functions": [
@@ -6313,13 +6305,14 @@
             "sanitizedStorageId": "[replace(parameters('identifier'), '-', '')]",
             "storageRawName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), '', format('{0}shr{1}', variables('sanitizedStorageId'), parameters('uniqueString')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "peNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('cnv_rtCodes').privateEndpoints)]",
-            "peNicNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('peNameConv')), format('RESOURCETYPE-{0}', variables('peNameConv')))]"
+            "peNicNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('peNameConv')), format('RESOURCETYPE-{0}', variables('peNameConv')))]",
+            "functionAppName": "[take(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').functionApps, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), 60)]"
           },
           "resources": {},
           "outputs": {
             "functionAppName": {
               "type": "string",
-              "value": "[take(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').functionApps, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), 60)]"
+              "value": "[variables('functionAppName')]"
             },
             "storageAccountName": {
               "type": "string",
@@ -6335,7 +6328,7 @@
             },
             "appInsightsName": {
               "type": "string",
-              "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').applicationInsights, 'sessionhostreplacer', variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+              "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').applicationInsights, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
             },
             "templateSpecName": {
               "type": "string",
@@ -7480,7 +7473,7 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "applicationInsightsName": "[if(not(empty(parameters('applicationInsightsNameOverride'))), createObject('value', parameters('applicationInsightsNameOverride')), createObject('value', reference('shrNaming').outputs.appInsightsName.value))]",
+          "applicationInsightsName": "[if(not(empty(parameters('functionAppNameOverride'))), createObject('value', format('{0}-insights', if(not(empty(parameters('functionAppNameOverride'))), parameters('functionAppNameOverride'), reference('shrNaming').outputs.functionAppName.value))), createObject('value', reference('shrNaming').outputs.appInsightsName.value))]",
           "azureBlobPrivateDnsZoneResourceId": {
             "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
           },
@@ -9742,6 +9735,9 @@
           "applicationInsightsResourceId": {
             "value": "[reference('functionApp').outputs.applicationInsightsResourceId.value]"
           },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
           "tags": {
             "value": "[union(createObject('cm-resource-parent', parameters('logAnalyticsWorkspaceResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/workbooks'), createObject()))]"
           }
@@ -9753,7 +9749,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "3910417252351335565"
+              "templateHash": "5109385319491001284"
             }
           },
           "parameters": {
@@ -9773,6 +9769,12 @@
               "type": "string",
               "metadata": {
                 "description": "Required. The resource ID of the Application Insights instance for this region."
+              }
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. The resource ID of the Log Analytics workspace that provides the shared monitoring boundary."
               }
             },
             "tags": {
@@ -9808,7 +9810,7 @@
                         "multiSelect": true,
                         "quote": "'",
                         "delimiter": ",",
-                        "query": "resources\n| where type == 'microsoft.insights/components'\n| order by name asc\n| project value = id, label = name, selected = (name contains 'sessionhostreplacer')",
+                        "query": "resources\n| where type == 'microsoft.insights/components'\n| extend ParentResourceId = tostring(tags['cm-resource-parent'])\n| order by name asc\n| project value = id, label = name, selected = (name contains 'sessionhostreplacer' or (name endswith '-insights' and ParentResourceId contains '/providers/Microsoft.DesktopVirtualization/hostPools/'))",
                         "typeSettings": {
                           "additionalResourceOptions": [
                             "value::all"
@@ -10681,7 +10683,6 @@
               "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
             },
             "workbookDisplayName": "AVD Session Host Replacer - Enterprise Dashboard",
-            "workbookSourceId": "[parameters('applicationInsightsResourceId')]",
             "workbookTemplateBase": "[variables('$fxv#0')]",
             "workbookTemplateWithFallback": "[union(variables('workbookTemplateBase'), createObject('fallbackResourceIds', createArray(parameters('applicationInsightsResourceId'))))]"
           },
@@ -10697,7 +10698,7 @@
                 "displayName": "[variables('workbookDisplayName')]",
                 "serializedData": "[string(variables('workbookTemplateWithFallback'))]",
                 "version": "1.0",
-                "sourceId": "[variables('workbookSourceId')]",
+                "sourceId": "[parameters('logAnalyticsWorkspaceResourceId')]",
                 "category": "workbook"
               }
             }

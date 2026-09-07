@@ -71,11 +71,12 @@ var peNameConv = replace(
 var peNicNameConvTemp = nameConvReversed
   ? '${peNameConv}-RESOURCETYPE'
   : 'RESOURCETYPE-${peNameConv}'
-
-output functionAppName string = take(
+var functionAppName = take(
   cnv(cnv_components, cnv_delimiter, cnv_rtCodes.functionApps, hpPurpose, loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload),
   60
 )
+
+output functionAppName string = functionAppName
 output storageAccountName string = take(
   toLower(replace(storageRawName, cnv_delimiter, '')),
   24
@@ -90,7 +91,7 @@ output appServicePlanName string = cnv(
 )
 output appInsightsName string = cnv(
   cnv_components, cnv_delimiter, cnv_rtCodes.applicationInsights,
-  'sessionhostreplacer', loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
+  hpPurpose, loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
 )
 output templateSpecName string = cnv(
   cnv_components, cnv_delimiter, cnv_rtCodes.templateSpecs,

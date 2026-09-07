@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "2458038463918039152"
+      "version": "0.46.1.21595",
+      "templateHash": "7496873245676141924"
     }
   },
   "functions": [
@@ -232,13 +232,14 @@
     "sanitizedStorageId": "[replace(parameters('identifier'), '-', '')]",
     "storageRawName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), '', format('{0}shr{1}', variables('sanitizedStorageId'), parameters('uniqueString')), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
     "peNameConv": "[replace(if(variables('nameConvReversed'), 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE', 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID'), 'RESOURCETYPE', variables('cnv_rtCodes').privateEndpoints)]",
-    "peNicNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('peNameConv')), format('RESOURCETYPE-{0}', variables('peNameConv')))]"
+    "peNicNameConvTemp": "[if(variables('nameConvReversed'), format('{0}-RESOURCETYPE', variables('peNameConv')), format('RESOURCETYPE-{0}', variables('peNameConv')))]",
+    "functionAppName": "[take(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').functionApps, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), 60)]"
   },
   "resources": {},
   "outputs": {
     "functionAppName": {
       "type": "string",
-      "value": "[take(__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').functionApps, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), 60)]"
+      "value": "[variables('functionAppName')]"
     },
     "storageAccountName": {
       "type": "string",
@@ -254,7 +255,7 @@
     },
     "appInsightsName": {
       "type": "string",
-      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').applicationInsights, 'sessionhostreplacer', variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
+      "value": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').applicationInsights, variables('hpPurpose'), variables('loc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]"
     },
     "templateSpecName": {
       "type": "string",

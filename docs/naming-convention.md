@@ -386,7 +386,7 @@ When the convention-derived names need fine-tuning, each add-on exposes per-reso
 
 | Add-on | Override parameters |
 | --- | --- |
-| Session Host Replacer | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `applicationInsightsNameOverride`, `appServicePlanNameOverride`, `virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv` |
+| Session Host Replacer | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `appServicePlanNameOverride`, `virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv` |
 | Session Hosts | `virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv` |
 | Storage Quota Manager | `functionAppNameOverride`, `storageAccountNameOverride`, `storageEncryptionIdentityNameOverride`, `appServicePlanNameOverride` |
 

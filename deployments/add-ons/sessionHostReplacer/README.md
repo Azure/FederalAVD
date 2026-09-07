@@ -536,7 +536,10 @@ For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-h
 2. Fill out the **Function App Infrastructure Naming** section:
    - **Function App Name**: (Required) Globally unique name, 2-60 chars, alphanumeric and hyphens. Example: `func-avdshr-prod-eus2`
    - **Storage Account Name**: (Required) Globally unique name, 3-24 chars, lowercase alphanumeric only. Example: `stavdshrprod`
-   - **Application Insights Name**: (Required if monitoring enabled) Unique within resource group, 1-260 chars. Example: `appi-avdshr-prod-eus2`
+   - **Application Insights**: When monitoring is enabled, its name is generated automatically.
+     Standard deployments use the Application Insights resource-type abbreviation with the same
+     host-pool identity components as the Function App. A custom Function App name is followed by
+     `-insights`.
 3. Fill out the **Session Host Resource Naming** section:
    - **Virtual Machine Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `vm-SHNAME`
    - **OS Disk Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `disk-SHNAME`
@@ -553,7 +556,6 @@ For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-h
 - Built-in validation for global uniqueness (Function App, Storage Account)
 - Token validation (SHNAME and ## tokens required in naming patterns)
 - Helpful examples and warnings
-- Conditional visibility (Application Insights only shows if monitoring is enabled)
 
 **When to use Custom Naming:**
 
@@ -619,7 +621,6 @@ $params = @{
     # Required - naming overrides for non-standard host pool name
     functionAppNameOverride = "func-avdshr-prod-eus2"
     storageAccountNameOverride = "stavdshrprod"
-    applicationInsightsNameOverride = "appi-avdshr-prod-eus2"  # Only if monitoring enabled
     
     # Required - session host naming (MUST match existing VM naming!)
     # Existing VMs: vm-avdvm-001, vm-avdvm-002, etc.
@@ -2205,7 +2206,10 @@ The workbook is fully customizable. You can:
 - Export data for reporting
 - Filter by replacement mode
 
-> **Multi-Tenant Support**: If you manage multiple host pools with separate Session Host Replacer deployments logging to the same Application Insights workspace, use the **Host Pool** parameter to filter the dashboard to a specific host pool or view aggregate data across all pools.
+> **Multi-Host-Pool Support**: Each Session Host Replacer Function App has a corresponding
+> Application Insights resource in the Function App resource group. Those Application Insights
+> resources can send telemetry to the same Log Analytics workspace. Use the **Host Pool** parameter
+> to filter the dashboard to a specific host pool or view aggregate data across all pools.
 
 ### Enterprise Workbook Architecture
 
@@ -2213,6 +2217,8 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
 
 - **One Workbook per Log Analytics Workspace** deploys into the selected workspace's subscription
   and resource group
+- **One Application Insights per Function App** deploys into the Function App resource group and
+  uses the same host-pool identity components as the Function App
 - **Cross-Region Queries**: The workbook queries all regional Application Insights instances in your subscription
 - **Multi-Region Filtering**: Use the **Application Insights** parameter to select which regions to view
 - **Host Pool Filtering**: Use the **Host Pool** parameter to filter to specific pools or view all
@@ -2226,6 +2232,9 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
 - **Different Workspaces**: Receive separate workbooks so their monitoring boundaries remain
   independent
 - The workbook automatically discovers all Session Host Replacer Application Insights instances
+- The workbook is associated with the selected Log Analytics workspace and is available from
+  **Log Analytics workspace > Workbooks**. It can also be found by display name from
+  **Azure Monitor > Workbooks**.
 
 **Location Note:** The workbook's physical location doesn't affect its cross-region query
 capabilities (similar to AVD Insights). Use the same `workbookLocation` selected when the workbook
@@ -2238,6 +2247,13 @@ subscription.
 > workbook in the selected Log Analytics workspace resource group; ARM does not move or delete an
 > older workbook. Validate the centralized workbook, preserve any intentional customizations, and
 > then remove obsolete per-host workbooks through the approved change process.
+
+> **Application Insights naming upgrade:** This version gives each Function App a corresponding
+> Application Insights resource whose generated name uses the same host-pool identity. Redeploying
+> an environment that used the earlier convention-derived name creates the new component and rewires
+> the Function App to it. ARM does not delete the old component; retain it while historical telemetry
+> is needed, then remove it through the approved change process. Parameter files must remove the
+> retired `applicationInsightsNameOverride` parameter.
 
 This pattern:
 

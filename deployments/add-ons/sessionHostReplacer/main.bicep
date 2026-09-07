@@ -60,10 +60,6 @@ param storageAccountNameOverride string = ''
 @maxLength(128)
 param storageEncryptionIdentityNameOverride string = ''
 
-@description('Optional. Explicit name for the Application Insights instance. If not provided, name is derived from shared naming convention. Use this for brownfield deployments with non-standard naming. Must follow Azure naming rules (1-260 chars, alphanumeric, hyphens, underscores, parentheses, periods).')
-@maxLength(260)
-param applicationInsightsNameOverride string = ''
-
 @description('Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., "vm-SHNAME" becomes "vm-avdhost001"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group.')
 param virtualMachineNameConv string = 'vm-SHNAME'
 
@@ -530,8 +526,8 @@ var workbookResourceGroupName = !empty(logAnalyticsWorkspaceResourceId)
 var workbookName = guid(toLower(logAnalyticsWorkspaceResourceId), 'session-host-replacer-workbook')
 
 // Use explicit overrides when provided (brownfield); otherwise use naming module outputs.
-var appInsightsName               = !empty(applicationInsightsNameOverride)        ? applicationInsightsNameOverride        : shrNaming.outputs.appInsightsName
 var functionAppName               = !empty(functionAppNameOverride)                 ? functionAppNameOverride                 : shrNaming.outputs.functionAppName
+var appInsightsName               = !empty(functionAppNameOverride)                 ? '${functionAppName}-insights'           : shrNaming.outputs.appInsightsName
 var storageAccountName            = !empty(storageAccountNameOverride)              ? toLower(storageAccountNameOverride)     : shrNaming.outputs.storageAccountName
 var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)   ? storageEncryptionIdentityNameOverride   : shrNaming.outputs.storageEncryptionIdentityName
 var templateSpecNameFinal         = !empty(templateSpecName)                        ? templateSpecName                        : shrNaming.outputs.templateSpecName
@@ -1053,6 +1049,7 @@ module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty
     workbookName: workbookName
     location: workbookLocation
     applicationInsightsResourceId: functionApp.outputs.applicationInsightsResourceId
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     tags: union({ 'cm-resource-parent': logAnalyticsWorkspaceResourceId }, tags[?'Microsoft.Insights/workbooks'] ?? {})
   }
 }

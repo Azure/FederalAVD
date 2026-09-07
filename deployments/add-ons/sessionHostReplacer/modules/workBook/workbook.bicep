@@ -7,12 +7,13 @@ param location string
 @description('Required. The resource ID of the Application Insights instance for this region.')
 param applicationInsightsResourceId string
 
+@description('Required. The resource ID of the Log Analytics workspace that provides the shared monitoring boundary.')
+param logAnalyticsWorkspaceResourceId string
+
 @description('Optional. Tags for the workbook.')
 param tags object = {}
 
 var workbookDisplayName = 'AVD Session Host Replacer - Enterprise Dashboard'
-// Use Application Insights resource ID as source to display in App Insights workbooks blade
-var workbookSourceId = applicationInsightsResourceId
 
 // Load the workbook template and inject the Application Insights resource ID
 var workbookTemplateBase = loadJsonContent('workbookTemplate.json')
@@ -31,7 +32,7 @@ resource workbook 'Microsoft.Insights/workbooks@2023-06-01' = {
     displayName: workbookDisplayName
     serializedData: string(workbookTemplateWithFallback)
     version: '1.0'
-    sourceId: workbookSourceId
+    sourceId: logAnalyticsWorkspaceResourceId
     category: 'workbook'
   }
 }
