@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "9350549417644151210"
+      "templateHash": "16170637186453842726"
     }
   },
   "definitions": {
@@ -3158,9 +3158,6 @@
           "desktopFriendlyName": {
             "value": "[parameters('desktopFriendlyName')]"
           },
-          "diskSku": {
-            "value": "[parameters('diskSku')]"
-          },
           "diskEncryptionSetResourceId": "[if(variables('deployDiskCmk'), createObject('value', reference('virtualMachinesDiskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', ''))]",
           "domainJoinUserPassword": "[if(or(contains(parameters('identitySolution'), 'DomainServices'), variables('hybridDomainCredentialsRequired')), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('existingCredentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingCredentialsKeyVaultResourceId'), '/')[2], split(parameters('existingCredentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('existingCredentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
           "domainJoinUserPrincipalName": "[if(or(contains(parameters('identitySolution'), 'DomainServices'), variables('hybridDomainCredentialsRequired')), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('existingCredentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('existingCredentialsKeyVaultResourceId'), '/')[2], split(parameters('existingCredentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('existingCredentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
@@ -3237,15 +3234,12 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "1712327451195321264"
+              "templateHash": "17839636322747177762"
             }
           },
           "parameters": {
             "confidentialVMOSDiskEncryption": {
               "type": "bool"
-            },
-            "diskSku": {
-              "type": "string"
             },
             "diskEncryptionSetResourceId": {
               "type": "string",
@@ -3603,7 +3597,7 @@
                     "value": "[parameters('virtualMachineDiskName')]"
                   },
                   "osDiskSku": {
-                    "value": "[parameters('diskSku')]"
+                    "value": "StandardSSD_LRS"
                   },
                   "diskEncryptionSetResourceId": {
                     "value": "[parameters('diskEncryptionSetResourceId')]"

@@ -331,7 +331,6 @@ module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/dep
   params: {
     confidentialVMOSDiskEncryption: false
     desktopFriendlyName: ''
-    diskSku: 'StandardSSD_LRS'
     encryptionAtHost: true
     fslogix: true
     fslogixAppUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId

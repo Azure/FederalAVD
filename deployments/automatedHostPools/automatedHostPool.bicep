@@ -734,7 +734,6 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
     confidentialVMOSDiskEncryption: false
     deploymentVmSize: deploymentVirtualMachineSize
     desktopFriendlyName: desktopFriendlyName
-    diskSku: 'StandardSSD_LRS'
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     #disable-next-line BCP422
     domainJoinUserPassword: fslogixDomainCredentialsRequired

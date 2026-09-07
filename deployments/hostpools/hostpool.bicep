@@ -1277,7 +1277,6 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
     confidentialVMOSDiskEncryption: confidentialVMOSDiskEncryption
     deploymentVmSize: deploymentVmSize
     desktopFriendlyName: desktopFriendlyName
-    diskSku: diskSku
     diskEncryptionSetResourceId: deployDiskCmk ? virtualMachinesDiskCmk!.outputs.diskEncryptionSetResourceId : ''
     #disable-next-line BCP422
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired

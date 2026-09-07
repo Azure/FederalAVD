@@ -1,7 +1,6 @@
 targetScope = 'subscription'
 
 param confidentialVMOSDiskEncryption bool
-param diskSku string
 @description('Optional. Disk Encryption Set resource ID used to encrypt the deployment-helper OS disk.')
 param diskEncryptionSetResourceId string = ''
 @secure()
@@ -208,7 +207,7 @@ module virtualMachine '../../resourceModules/compute/virtualMachines/deploy.bice
     imageOffer: 'WindowsServer'
     imageSku: '2019-datacenter-core-g2'
     osDiskName: virtualMachineDiskName
-    osDiskSku: diskSku
+    osDiskSku: 'StandardSSD_LRS'
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     adminUsername: virtualMachineAdminUserName
     adminPassword: virtualMachineAdminPassword

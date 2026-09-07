@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "1054930396819323320"
+      "templateHash": "14609272353557314547"
     }
   },
   "definitions": {
@@ -4066,9 +4066,6 @@
           "desktopFriendlyName": {
             "value": "[parameters('desktopFriendlyName')]"
           },
-          "diskSku": {
-            "value": "StandardSSD_LRS"
-          },
           "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('virtualMachinesDiskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
           "domainJoinUserPassword": "[if(variables('fslogixDomainCredentialsRequired'), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', last(split(variables('effectiveDomainJoinPasswordSecretUri'), '/')))), createObject('value', ''))]",
           "domainJoinUserPrincipalName": "[if(variables('fslogixDomainCredentialsRequired'), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', last(split(variables('effectiveDomainJoinUsernameSecretUri'), '/')))), createObject('value', ''))]",
@@ -4150,15 +4147,12 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "1712327451195321264"
+              "templateHash": "17839636322747177762"
             }
           },
           "parameters": {
             "confidentialVMOSDiskEncryption": {
               "type": "bool"
-            },
-            "diskSku": {
-              "type": "string"
             },
             "diskEncryptionSetResourceId": {
               "type": "string",
@@ -4516,7 +4510,7 @@
                     "value": "[parameters('virtualMachineDiskName')]"
                   },
                   "osDiskSku": {
-                    "value": "[parameters('diskSku')]"
+                    "value": "StandardSSD_LRS"
                   },
                   "diskEncryptionSetResourceId": {
                     "value": "[parameters('diskEncryptionSetResourceId')]"
