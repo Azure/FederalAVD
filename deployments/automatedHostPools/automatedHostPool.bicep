@@ -669,11 +669,10 @@ module sessionHostResourceGroup '../shared/modules/resourceModules/resources/res
   }
 }
 
-module availabilitySet 'modules/availabilitySet.bicep' = {
+module availabilitySet 'modules/availabilitySet.bicep' = if (deployAvailabilitySet) {
   params: {
     resourceGroupName: naming.outputs.resourceGroupHosts
     nameConvention: naming.outputs.availabilitySetNameConv
-    deploy: deployAvailabilitySet
     location: location
     tags: union(parentResourceTag, tags[?'Microsoft.Compute/availabilitySets'] ?? {})
   }
@@ -1039,7 +1038,7 @@ module sessionHostPolicy 'policy/main.bicep' = {
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
     policyIdentityName: naming.outputs.policyRemediationIdentityName
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
-    availabilitySetResourceId: availabilitySet.outputs.resourceId
+    availabilitySetResourceId: deployAvailabilitySet ? availabilitySet!.outputs.resourceId : ''
     disableManagedDiskPublicNetworkAccess: disableManagedDiskPublicNetworkAccess
     enableMonitoring: monitoringConfigurationIsValid && monitoringIdentityConfigurationIsValid
       ? enableMonitoring

@@ -47,9 +47,10 @@ Describe 'Automated host-pool Availability Set placement' {
 
     It 'creates one managed Availability Set and excludes zones' {
         $bicep | Should Match "var deployAvailabilitySet = availability == 'AvailabilitySets' && availabilitySetCapacityIsValid"
-        $bicep | Should Match "module availabilitySet 'modules/availabilitySet.bicep' = \{"
-        $bicep | Should Match 'deploy: deployAvailabilitySet'
-        $availabilitySetAdapter | Should Match "module availabilitySet .* = if \(deploy\)"
+        $bicep | Should Match "module availabilitySet 'modules/availabilitySet.bicep' = if \(deployAvailabilitySet\) \{"
+        $bicep | Should Not Match 'deploy: deployAvailabilitySet'
+        $availabilitySetAdapter | Should Match "module availabilitySet .* = \{"
+        $availabilitySetAdapter | Should Not Match '(?m)^param deploy bool$'
         $availabilitySetAdapter | Should Match "../../shared/modules/resourceModules/compute/availabilitySets/deploy.bicep"
         $availabilitySetAdapter | Should Match "replace\(nameConvention, '-##', ''\)"
         $availabilitySetAdapter | Should Not Match '\[for '
@@ -76,7 +77,7 @@ Describe 'Automated host-pool Availability Set placement' {
         $policyAdapter | Should Match "availabilitySetEffect:"
         $policyAdapter | Should Match "value: empty\(availabilitySetResourceId\) \? 'Disabled' : 'Modify'"
         $policyAdapter | Should Not Match 'availabilitySetResourceIds'
-        $bicep | Should Match 'availabilitySetResourceId: availabilitySet.outputs.resourceId'
+        $bicep | Should Match "availabilitySetResourceId: deployAvailabilitySet \? availabilitySet!\.outputs\.resourceId : ''"
         $readme | Should Match 'before the Compute\s+resource provider processes each VM creation request'
     }
 

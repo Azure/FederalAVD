@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "14609272353557314547"
+      "templateHash": "11465566831501600160"
     }
   },
   "definitions": {
@@ -2189,6 +2189,7 @@
       ]
     },
     "availabilitySet": {
+      "condition": "[variables('deployAvailabilitySet')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('availabilitySet-{0}', uniqueString('availabilitySet', deployment().name))]",
@@ -2205,9 +2206,6 @@
           "nameConvention": {
             "value": "[reference('naming').outputs.availabilitySetNameConv.value]"
           },
-          "deploy": {
-            "value": "[variables('deployAvailabilitySet')]"
-          },
           "location": {
             "value": "[parameters('location')]"
           },
@@ -2223,7 +2221,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "6173773888608193564"
+              "templateHash": "4227250231299073525"
             }
           },
           "parameters": {
@@ -2237,12 +2235,6 @@
               "type": "string",
               "metadata": {
                 "description": "Required. Availability Set naming convention. The trailing -## token is removed."
-              }
-            },
-            "deploy": {
-              "type": "bool",
-              "metadata": {
-                "description": "Required. Whether to deploy the managed Availability Set."
               }
             },
             "location": {
@@ -2261,7 +2253,6 @@
           },
           "resources": {
             "availabilitySet": {
-              "condition": "[parameters('deploy')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('availabilitySet-{0}', uniqueString('availabilitySet', deployment().name))]",
@@ -2372,7 +2363,7 @@
           "outputs": {
             "resourceId": {
               "type": "string",
-              "value": "[if(parameters('deploy'), reference('availabilitySet').outputs.resourceId.value, '')]"
+              "value": "[reference('availabilitySet').outputs.resourceId.value]"
             }
           }
         }
@@ -14595,9 +14586,7 @@
             "value": "[reference('naming').outputs.policyRemediationIdentityName.value]"
           },
           "diskEncryptionSetResourceId": "[if(parameters('deployDiskEncryptionSet'), createObject('value', reference('virtualMachinesDiskCmk').outputs.diskEncryptionSetResourceId.value), createObject('value', parameters('diskEncryptionSetResourceId')))]",
-          "availabilitySetResourceId": {
-            "value": "[reference('availabilitySet').outputs.resourceId.value]"
-          },
+          "availabilitySetResourceId": "[if(variables('deployAvailabilitySet'), createObject('value', reference('availabilitySet').outputs.resourceId.value), createObject('value', ''))]",
           "disableManagedDiskPublicNetworkAccess": {
             "value": "[parameters('disableManagedDiskPublicNetworkAccess')]"
           },
