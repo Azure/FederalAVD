@@ -42,12 +42,12 @@
 
 .PARAMETER WarningMinDiskSpaceLimitInMB
     Available-space threshold in MB at which OneDrive warns users before downloading a
-    file. Defaults to 10240 MB (10 GB). Valid range: 0 through 10240000.
+    file. Omit to leave this policy unconfigured. Valid range: 0 through 10240000.
 
 .PARAMETER MinDiskSpaceLimitInMB
-    Available-space threshold in MB below which OneDrive blocks file downloads. Defaults
-    to 5120 MB (5 GB). Valid range: 0 through 10240000. This value must not exceed the
-    warning threshold.
+    Available-space threshold in MB below which OneDrive blocks file downloads. Omit to
+    leave this policy unconfigured. Valid range: 0 through 10240000. When both thresholds
+    are supplied, this value must not exceed the warning threshold.
 
 .NOTES
     Must be run during image build (as SYSTEM or local administrator) after OneDrive has
@@ -65,14 +65,12 @@ param (
     [string]$TenantId,
     [switch]$EnableRemoteApp,
     [ValidateRange(0, 10240000)]
-    [int]$WarningMinDiskSpaceLimitInMB = 10240,
+    [Nullable[int]]$WarningMinDiskSpaceLimitInMB,
     [ValidateRange(0, 10240000)]
-    [int]$MinDiskSpaceLimitInMB = 5120
+    [Nullable[int]]$MinDiskSpaceLimitInMB
 )
 
-
 #region Functions
-
 Function Write-Log {
     Param (
         [Parameter(Mandatory = $false, Position = 0)]
@@ -614,7 +612,9 @@ New-Log -Path (Join-Path -Path "$Env:SystemRoot\Logs" -ChildPath 'Configuration'
 $ErrorActionPreference = 'Stop'
 Write-Log -category Info -Message "Starting '$PSCommandPath'."
 #endregion
-if ($MinDiskSpaceLimitInMB -gt $WarningMinDiskSpaceLimitInMB) {
+if ($null -ne $MinDiskSpaceLimitInMB -and
+    $null -ne $WarningMinDiskSpaceLimitInMB -and
+    $MinDiskSpaceLimitInMB -gt $WarningMinDiskSpaceLimitInMB) {
     throw 'MinDiskSpaceLimitInMB must not exceed WarningMinDiskSpaceLimitInMB.'
 }
 $ref = "https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders"
@@ -648,9 +648,14 @@ If ($TenantID -and $TenantID -ne '') {
         Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
         Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMSilentOptIn' -RegistryType String -RegistryData $TenantID
         Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1
-        Write-Log -Message "Warning users below $WarningMinDiskSpaceLimitInMB MB free and blocking OneDrive downloads below $MinDiskSpaceLimitInMB MB free."
-        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $WarningMinDiskSpaceLimitInMB
-        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $MinDiskSpaceLimitInMB
+        if ($null -ne $WarningMinDiskSpaceLimitInMB) {
+            Write-Log -Message "Warning users before a OneDrive download reduces available space below $WarningMinDiskSpaceLimitInMB MB."
+            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $WarningMinDiskSpaceLimitInMB
+        }
+        if ($null -ne $MinDiskSpaceLimitInMB) {
+            Write-Log -Message "Blocking OneDrive downloads when available space is below $MinDiskSpaceLimitInMB MB."
+            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $MinDiskSpaceLimitInMB
+        }
         Invoke-PolicyUpdate
     }
     Else {
@@ -664,9 +669,14 @@ If ($TenantID -and $TenantID -ne '') {
         Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMSilentOptIn' -Value $TenantID -Type String -Force
         Set-ItemProperty -Path $oneDriveKey -Name 'KFMBlockOptOut' -Value 1 -Type DWord -Force
-        Write-Log -Message "Warning users below $WarningMinDiskSpaceLimitInMB MB free and blocking OneDrive downloads below $MinDiskSpaceLimitInMB MB free."
-        Set-ItemProperty -Path $oneDriveKey -Name 'WarningMinDiskSpaceLimitInMB' -Value $WarningMinDiskSpaceLimitInMB -Type DWord -Force
-        Set-ItemProperty -Path $oneDriveKey -Name 'MinDiskSpaceLimitInMB' -Value $MinDiskSpaceLimitInMB -Type DWord -Force
+        if ($null -ne $WarningMinDiskSpaceLimitInMB) {
+            Write-Log -Message "Warning users before a OneDrive download reduces available space below $WarningMinDiskSpaceLimitInMB MB."
+            Set-ItemProperty -Path $oneDriveKey -Name 'WarningMinDiskSpaceLimitInMB' -Value $WarningMinDiskSpaceLimitInMB -Type DWord -Force
+        }
+        if ($null -ne $MinDiskSpaceLimitInMB) {
+            Write-Log -Message "Blocking OneDrive downloads when available space is below $MinDiskSpaceLimitInMB MB."
+            Set-ItemProperty -Path $oneDriveKey -Name 'MinDiskSpaceLimitInMB' -Value $MinDiskSpaceLimitInMB -Type DWord -Force
+        }
     }
 }
 If ($EnableRemoteApp) {

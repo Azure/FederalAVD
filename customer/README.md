@@ -57,7 +57,7 @@ customer-examples/
     Configure-DesktopBackground/
     Configure-EdgePolicy/
     Configure-Office365Policy/
-    Configure-OneDriveKFMPolicy/
+    Configure-OneDrivePolicy/
     Configure-RemoteDesktopPolicy/
     Configure-WindowsUpdatePolicy/
     DoD-InstallRoot/

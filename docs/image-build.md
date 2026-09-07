@@ -331,7 +331,7 @@ separate choices:
 - Set `installOneDrive` to `true` to install OneDrive per-machine. Per-machine installation is
   required for supported OneDrive use on nonpersistent virtual desktops.
 - Use the
-  [Configure-OneDriveKFMPolicy example](../customer-examples/artifacts/Configure-OneDriveKFMPolicy/README.md)
+  [Configure-OneDrivePolicy example](../customer-examples/artifacts/Configure-OneDrivePolicy/README.md)
   after OneDrive installation to enable silent account configuration, Files On-Demand, silent KFM,
   prevention of KFM opt-out, and configurable low-free-space warning and download-blocking
   thresholds. Copy the example to `customer/artifacts/` before customization.

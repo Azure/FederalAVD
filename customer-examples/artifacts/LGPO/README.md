@@ -119,7 +119,6 @@ Many scripts in this artifacts folder depend on LGPO:
 - Configure-DesktopBackground.ps1
 - Configure-EdgePolicy.ps1
 - Configure-Office365.ps1
-- Configure-OneDrive.ps1
 - Configure-RemoteDesktopServicesPolicy.ps1
 - Configure-WindowsUpdatePolicy.ps1
 - STIGs/Apply-STIGsAVD.ps1

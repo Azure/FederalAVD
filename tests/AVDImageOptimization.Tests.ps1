@@ -5,8 +5,8 @@ $optimizerPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\sc
 $optimizerReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\README.md'
 $imageBuildReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\README.md'
 $imageBuildGuidePath = Join-Path -Path $repoRoot -ChildPath 'docs\image-build.md'
-$oneDriveArtifactPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\artifacts\Configure-OneDriveKFMPolicy'
-$oneDriveScriptPath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'Configure-OneDrive.ps1'
+$oneDriveArtifactPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\artifacts\Configure-OneDrivePolicy'
+$oneDriveScriptPath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'Configure-OneDrivePolicy.ps1'
 $oneDriveReadmePath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'README.md'
 
 foreach ($scriptPath in @($optimizerPath, $oneDriveScriptPath)) {
@@ -50,20 +50,24 @@ if ($optimizerText -match "(?m)^\s*Set-PolicyValue .*PreventNetworkTrafficPreUse
 
 $oneDriveText = Get-Content -LiteralPath $oneDriveScriptPath -Raw
 $oneDriveExpectations = @(
-    '[int]$WarningMinDiskSpaceLimitInMB = 10240',
-    '[int]$MinDiskSpaceLimitInMB = 5120',
-    'if ($MinDiskSpaceLimitInMB -gt $WarningMinDiskSpaceLimitInMB)',
+    '[Nullable[int]]$WarningMinDiskSpaceLimitInMB',
+    '[Nullable[int]]$MinDiskSpaceLimitInMB',
+    '$null -ne $MinDiskSpaceLimitInMB',
+    '$null -ne $WarningMinDiskSpaceLimitInMB',
+    '$MinDiskSpaceLimitInMB -gt $WarningMinDiskSpaceLimitInMB',
     "'SilentAccountConfig' -RegistryType DWORD -RegistryData 1",
     "'FilesOnDemandEnabled' -RegistryType DWORD -RegistryData 1",
     "'KFMSilentOptIn' -RegistryType String -RegistryData `$TenantID",
     "'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1",
     "'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData `$WarningMinDiskSpaceLimitInMB",
     "'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData `$MinDiskSpaceLimitInMB",
+    "-Name 'WarningMinDiskSpaceLimitInMB' -Value `$WarningMinDiskSpaceLimitInMB -Type DWord",
+    "-Name 'MinDiskSpaceLimitInMB' -Value `$MinDiskSpaceLimitInMB -Type DWord",
     "'EnableEnhancedShellExperienceForRemoteApp' -RegistryType DWORD -RegistryData 1"
 )
 foreach ($expectedText in $oneDriveExpectations) {
     if (-not $oneDriveText.Contains($expectedText)) {
-        throw "Configure-OneDrive.ps1 is missing required behavior: $expectedText"
+        throw "Configure-OneDrivePolicy.ps1 is missing required behavior: $expectedText"
     }
 }
 

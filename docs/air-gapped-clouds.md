@@ -295,7 +295,7 @@ The other Configure policy examples do not require a separately downloaded templ
 
 | Artifact | Template source |
 | --- | --- |
-| [Configure-OneDriveKFMPolicy](../customer-examples/artifacts/Configure-OneDriveKFMPolicy/README.md) | Copies `OneDrive.admx` and its ADML files from the installed OneDrive client |
+| [Configure-OneDrivePolicy](../customer-examples/artifacts/Configure-OneDrivePolicy/README.md) | Copies `OneDrive.admx` and its ADML files from the installed OneDrive client |
 | [Configure-RemoteDesktopPolicy](../customer-examples/artifacts/Configure-RemoteDesktopPolicy/README.md) | Uses Remote Desktop policy definitions included with Windows |
 | [Configure-WindowsUpdatePolicy](../customer-examples/artifacts/Configure-WindowsUpdatePolicy/README.md) | Uses Windows Update policy definitions included with Windows |
 

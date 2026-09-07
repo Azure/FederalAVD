@@ -1055,11 +1055,11 @@ Edit your host pool parameters file:
   "sessionHostCustomizations": {
     "value": [
       {
-        // Configure-OneDriveKFMPolicy: -TenantId is mandatory.
-        // Add -EnableRemoteApp for RemoteApp (not full-desktop) host pools.
-        "name": "Configure-OneDriveKFMPolicy",
-        "blobNameOrUri": "Configure-OneDriveKFMPolicy.zip",
-        "arguments": "-TenantId 12345678-1234-1234-1234-123456789012"
+      // Configure-OneDrivePolicy: -TenantId is mandatory.
+      // Add -EnableRemoteApp for RemoteApp (not full-desktop) host pools.
+      "name": "Configure-OneDrivePolicy",
+      "blobNameOrUri": "Configure-OneDrivePolicy.zip",
+      "arguments": "-TenantId 12345678-1234-1234-1234-123456789012 -WarningMinDiskSpaceLimitInMB 10240 -MinDiskSpaceLimitInMB 5120"
       },
       {
         // Configure-RemoteDesktopPolicy: use -EnableRemoteApp for RemoteApp pools.

@@ -15,7 +15,6 @@
             "Configure-DesktopBackground",
             "Configure-EdgePolicy",
             "Configure-Office365Policy",
-            "Configure-OneDriveKFMPolicy",
             "Configure-RemoteDesktopPolicy",
             "Configure-WindowsUpdatePolicy",
             "LGPO",

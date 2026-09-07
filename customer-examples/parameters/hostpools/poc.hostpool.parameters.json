@@ -137,11 +137,11 @@
         // "sessionHostCustomizations": {
         //     "value": [
         //         {
-        //             // Configure-OneDriveKFMPolicy: TenantId is MANDATORY.
+        //             // Configure-OneDrivePolicy: TenantId is MANDATORY.
         //             // Add -EnableRemoteApp if deploying as a RemoteApp (not full desktop).
-        //             "name": "Configure-OneDriveKFMPolicy",
-        //             "blobNameOrUri": "Configure-OneDriveKFMPolicy.zip",
-        //             "arguments": "-TenantId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        //             "name": "Configure-OneDrivePolicy",
+        //             "blobNameOrUri": "Configure-OneDrivePolicy.zip",
+        //             "arguments": "-TenantId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -WarningMinDiskSpaceLimitInMB 10240 -MinDiskSpaceLimitInMB 5120"
         //         },
         //         {
         //             // Configure-RemoteDesktopPolicy: use -EnableRemoteApp for RemoteApp pools.

@@ -85,7 +85,7 @@ command-line syntax instead of PowerShell parameter splatting.
 | [Configure-DesktopBackground](Configure-DesktopBackground/) | Set a custom desktop wallpaper | — |
 | [Configure-EdgePolicy](Configure-EdgePolicy/) | Apply Edge Group Policy settings via LGPO, including search provider enforcement | `EdgeEnterpriseAdministrativeTemplates` |
 | [Configure-Office365Policy](Configure-Office365Policy/) | Apply Microsoft 365 Group Policy settings via LGPO | `Office365AdministrativeTemplates` |
-| [Configure-OneDriveKFMPolicy](Configure-OneDriveKFMPolicy/) | Configure OneDrive Known Folder Move | — |
+| [Configure-OneDrivePolicy](Configure-OneDrivePolicy/) | Configure OneDrive Known Folder Move and free-space thresholds | — |
 | [Configure-RemoteDesktopPolicy](Configure-RemoteDesktopPolicy/) | Configure Remote Desktop session policies | — |
 | [Configure-SecureNetworkProtocols](Configure-SecureNetworkProtocols/) | Disable legacy TLS/SSL and weak cipher suites | — |
 | [Configure-WindowsUpdatePolicy](Configure-WindowsUpdatePolicy/) | Configure Windows Update / WSUS policy settings | — |

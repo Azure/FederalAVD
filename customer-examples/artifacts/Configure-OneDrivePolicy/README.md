@@ -1,4 +1,4 @@
-﻿# Configure-OneDrive.ps1
+﻿# Configure-OneDrivePolicy.ps1
 
 ## Overview
 
@@ -40,39 +40,40 @@ redirection of Desktop, Documents, and Pictures to OneDrive for Business.
 
 - **Type:** Integer
 - **Required:** No
-- **Default:** `10240` (10 GB)
+- **Default:** Not configured
 - **Range:** `0` through `10240000` MB
 - **Description:** Warns users when downloading a OneDrive file would leave less than this amount
-    of available space.
+    of available space. Omit the parameter to leave this policy unconfigured.
 
 ### `MinDiskSpaceLimitInMB`
 
 - **Type:** Integer
 - **Required:** No
-- **Default:** `5120` (5 GB)
+- **Default:** Not configured
 - **Range:** `0` through `10240000` MB
 - **Description:** Blocks OneDrive file downloads when available space is below this amount. It
-    must not exceed `WarningMinDiskSpaceLimitInMB`.
+    must not exceed `WarningMinDiskSpaceLimitInMB` when both parameters are supplied. Omit the
+    parameter to leave this policy unconfigured.
 
 ## Usage Examples
 
 ### Basic Usage
 
 ```powershell
-.\Configure-OneDrive.ps1 -TenantId "12345678-1234-1234-1234-123456789012"
+.\Configure-OneDrivePolicy.ps1 -TenantId "12345678-1234-1234-1234-123456789012"
 ```
 
 ### With Variable
 
 ```powershell
 $tenantId = "12345678-1234-1234-1234-123456789012"
-.\Configure-OneDrive.ps1 -TenantId $tenantId
+.\Configure-OneDrivePolicy.ps1 -TenantId $tenantId
 ```
 
 ### Custom Free-Space Thresholds
 
 ```powershell
-.\Configure-OneDrive.ps1 `
+.\Configure-OneDrivePolicy.ps1 `
     -TenantId "12345678-1234-1234-1234-123456789012" `
     -WarningMinDiskSpaceLimitInMB 15360 `
     -MinDiskSpaceLimitInMB 10240
@@ -107,8 +108,8 @@ The script configures these computer policies:
 | `FilesOnDemandEnabled` | `1` | Makes new synchronized content online-only by default and downloads content when opened. |
 | `KFMSilentOptIn` | Tenant ID | Silently moves Desktop, Documents, and Pictures into the organization's OneDrive. |
 | `KFMBlockOptOut` | `1` | Prevents users from redirecting protected folders back to the local profile. |
-| `WarningMinDiskSpaceLimitInMB` | `10240` by default | Warns before a download would reduce available space below the configured MB threshold. |
-| `MinDiskSpaceLimitInMB` | `5120` by default | Blocks OneDrive downloads below the configured available-space threshold. |
+| `WarningMinDiskSpaceLimitInMB` | Supplied parameter value | Warns before a download would reduce available space below the configured MB threshold; omitted when the parameter is not supplied. |
+| `MinDiskSpaceLimitInMB` | Supplied parameter value | Blocks OneDrive downloads below the configured available-space threshold; omitted when the parameter is not supplied. |
 | `EnableEnhancedShellExperienceForRemoteApp` | `1` when selected | Enables the enhanced shell behavior used by OneDrive in RemoteApp scenarios. |
 
 #### Silent Known Folder Move
@@ -147,8 +148,8 @@ Computer Configuration
         +-- Silently move Windows known folders to OneDrive: [Enabled]
         |   +-- Tenant ID: [Your Tenant ID]
         +-- Prevent users from redirecting their Windows known folders to their PC: [Enabled]
-        +-- Warn users who are low on disk space: [10240 MB by default]
-        +-- Block file downloads when users are low on disk space: [5120 MB by default]
+        +-- Warn users who are low on disk space: [Configured only when supplied]
+        +-- Block file downloads when users are low on disk space: [Configured only when supplied]
 ```
 
 ## Registry Locations
@@ -159,8 +160,8 @@ HKLM:\SOFTWARE\Policies\Microsoft\OneDrive
     FilesOnDemandEnabled: 1
         KFMSilentOptIn: [Your Tenant ID]
         KFMBlockOptOut: 1
-        WarningMinDiskSpaceLimitInMB: 10240
-        MinDiskSpaceLimitInMB: 5120
+        WarningMinDiskSpaceLimitInMB: [Supplied value, when configured]
+        MinDiskSpaceLimitInMB: [Supplied value, when configured]
 ```
 
 ## Known Folders
@@ -219,8 +220,8 @@ The following Windows known folders are automatically redirected to OneDrive:
 - **Space reclamation:** The FederalAVD full optimization profiles configure Storage Sense to
     return eligible cloud-backed files not opened for 30 days to online-only state. FSLogix VHD disk
     compaction can reclaim resulting free space from a dynamically expanding container at sign-out.
-- **Low-space protection:** OneDrive warns at 10 GB free and blocks additional file downloads at
-    5 GB free by default. These thresholds protect space but do not dehydrate existing content or
+- **Low-space protection:** When configured, OneDrive warns or blocks additional file downloads at
+    the supplied thresholds. These policies protect space but do not dehydrate existing content or
     shrink the FSLogix container.
 - **Capacity planning:** Files On-Demand reduces local consumption but does not guarantee a small
     profile. Size and monitor containers for actual hydrated content and application data.
@@ -294,7 +295,7 @@ To use this script in air-gapped environments:
 2. **Run Script:**
 
    ```powershell
-   .\Configure-OneDrive.ps1 -TenantId "your-tenant-id"
+    .\Configure-OneDrivePolicy.ps1 -TenantId "your-tenant-id"
    ```
 
 ## Troubleshooting

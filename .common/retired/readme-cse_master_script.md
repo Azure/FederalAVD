@@ -199,7 +199,7 @@ $DynParameters = @{
 Child scripts must declare parameters:
 
 ```powershell
-# Configure-OneDrive.ps1
+# Configure-OneDrivePolicy.ps1
 param(
     [Parameter(Mandatory = $false)]
     [string]$TenantId,
