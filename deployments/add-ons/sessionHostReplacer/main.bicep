@@ -165,7 +165,7 @@ param templateSpecVersion string = '1.0.0'
 @description('Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every 30 minutes starting at minute 0 (runs at :00 and :30). To stagger across deployments, vary the minute (e.g., "0 15,45 * * * *" runs at :15 and :45 past each hour). For half-hourly execution during specific hours, use "0 0,30 8-17 * * 1-5" for 8 AM to 5 PM weekdays. The UI form automatically generates the correct format when you select hours and start minute.')
 param timerSchedule string = '0 0,30 * * * *'
 
-@description('Optional. Whether to deploy the Azure Monitor Workbook dashboard. Set to true for the first deployment or when updating the workbook. Set to false for subsequent deployments in the same subscription to avoid conflicts. Default is true.')
+@description('Optional. Whether to deploy the Azure Monitor Workbook dashboard into the selected Log Analytics workspace resource group. Deployments that use the same workspace converge on the same workbook. Default is true.')
 param deployWorkbook bool = true
 
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
@@ -519,8 +519,15 @@ var appServicePlanName         = !empty(appServicePlanNameOverride) ? appService
 var privateEndpointNameConv    = shrNaming.outputs.privateEndpointNameConv
 var privateEndpointNICNameConv = shrNaming.outputs.privateEndpointNICNameConv
 
-// Enterprise Workbook - single GUID-named workbook across all host pools and regions
-var workbookName = guid(subscription().subscriptionId, 'session-host-replacer-workbook')
+// Enterprise workbook - one deterministic workbook per selected Log Analytics workspace.
+// The guarded fallbacks keep expressions valid when monitoring and workbook deployment are disabled.
+var workbookSubscriptionId = !empty(logAnalyticsWorkspaceResourceId)
+  ? split(logAnalyticsWorkspaceResourceId, '/')[2]
+  : subscription().subscriptionId
+var workbookResourceGroupName = !empty(logAnalyticsWorkspaceResourceId)
+  ? split(logAnalyticsWorkspaceResourceId, '/')[4]
+  : functionAppResourceGroupName
+var workbookName = guid(toLower(logAnalyticsWorkspaceResourceId), 'session-host-replacer-workbook')
 
 // Use explicit overrides when provided (brownfield); otherwise use naming module outputs.
 var appInsightsName               = !empty(applicationInsightsNameOverride)        ? applicationInsightsNameOverride        : shrNaming.outputs.appInsightsName
@@ -1041,12 +1048,12 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
 }
 
 module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {
-  scope: resourceGroup(functionAppResourceGroupName)
+  scope: resourceGroup(workbookSubscriptionId, workbookResourceGroupName)
   params: {
     workbookName: workbookName
     location: workbookLocation
     applicationInsightsResourceId: functionApp.outputs.applicationInsightsResourceId
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Insights/workbooks'] ?? {})
+    tags: union({ 'cm-resource-parent': logAnalyticsWorkspaceResourceId }, tags[?'Microsoft.Insights/workbooks'] ?? {})
   }
 }
 

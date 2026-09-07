@@ -2134,7 +2134,8 @@ The Session Host Replacer includes a pre-built Azure Monitor Workbook that provi
 
 1. Navigate to Azure Portal → **Monitor** → **Workbooks**
 2. Select **AVD Session Host Replacer Dashboard**
-3. Or navigate directly from the Function App → **Monitoring** → **Workbooks**
+3. Or open the resource group containing the selected Log Analytics workspace and select the
+  **AVD Session Host Replacer - Enterprise Dashboard** workbook
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
 
 **Dashboard Features:**
@@ -2210,18 +2211,33 @@ The workbook is fully customizable. You can:
 
 The Session Host Replacer uses a **centralized workbook** pattern for enterprise-wide visibility:
 
-- **Single Workbook** deploys to a central location (defaults to first deployment region)
+- **One Workbook per Log Analytics Workspace** deploys into the selected workspace's subscription
+  and resource group
 - **Cross-Region Queries**: The workbook queries all regional Application Insights instances in your subscription
 - **Multi-Region Filtering**: Use the **Application Insights** parameter to select which regions to view
 - **Host Pool Filtering**: Use the **Host Pool** parameter to filter to specific pools or view all
 
 **Deployment Behavior:**
 
-- **First Deployment**: Creates the workbook in the specified `workbookLocation` (defaults to deployment region)
-- **Subsequent Deployments**: Reuse the existing workbook (idempotent deployment)
+- **First Deployment for a Workspace**: Creates the workbook in the selected Log Analytics
+  workspace resource group and specified `workbookLocation` (defaults to the deployment region)
+- **Subsequent Deployments Using the Same Workspace**: Reuse and update the same deterministic
+  workbook, even when their Function Apps and session hosts use different resource groups
+- **Different Workspaces**: Receive separate workbooks so their monitoring boundaries remain
+  independent
 - The workbook automatically discovers all Session Host Replacer Application Insights instances
 
-**Location Note:** The workbook's physical location doesn't affect its cross-region query capabilities (similar to AVD Insights). You can optionally specify a preferred `workbookLocation` parameter if you want to control where it's deployed.
+**Location Note:** The workbook's physical location doesn't affect its cross-region query
+capabilities (similar to AVD Insights). Use the same `workbookLocation` selected when the workbook
+was first created for that workspace. The deployment identity needs permission to create or update
+workbooks in the workspace resource group, including when it is in a centralized monitoring
+subscription.
+
+> **Upgrade note:** Earlier releases deployed the workbook into each Session Host Replacer
+> Function App resource group. The first deployment of this version creates the workspace-scoped
+> workbook in the selected Log Analytics workspace resource group; ARM does not move or delete an
+> older workbook. Validate the centralized workbook, preserve any intentional customizations, and
+> then remove obsolete per-host workbooks through the approved change process.
 
 This pattern:
 

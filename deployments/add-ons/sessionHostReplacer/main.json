@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "11683343511093750929"
+      "templateHash": "9351637706322276443"
     }
   },
   "definitions": {
@@ -322,7 +322,7 @@
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "Optional. Whether to deploy the Azure Monitor Workbook dashboard. Set to true for the first deployment or when updating the workbook. Set to false for subsequent deployments in the same subscription to avoid conflicts. Default is true."
+        "description": "Optional. Whether to deploy the Azure Monitor Workbook dashboard into the selected Log Analytics workspace resource group. Deployments that use the same workspace converge on the same workbook. Default is true."
       }
     },
     "workbookLocation": {
@@ -4233,6 +4233,8 @@
                     "method": "GET",
                     "path": "[[concat(steps('hosts').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('hosts').scope.location.name, decodeUriComponent('%27'))]",
                     "transforms": {
+                      "vmSizes": "value[?resourceType == 'virtualMachines'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}",
+                      "vmSizesNames": "value[?resourceType == 'virtualMachines'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].name",
                       "confidentialVMSizes": "value[?resourceType=='virtualMachines'&&ends_with(name, `v5`)&&(starts_with(name, `Standard_DC`)||starts_with(name, `Standard_EC`)||starts_with(name, `Standard_NCC`))]|[*].{label:name, value:name}"
                     }
                   }
@@ -4783,35 +4785,15 @@
                     },
                     {
                       "name": "sizeGeneric",
-                      "type": "Microsoft.Compute.SizeSelector",
+                      "type": "Microsoft.Common.DropDown",
                       "label": "Size",
+                      "filter": true,
+                      "multiLine": true,
                       "toolTip": "Select the size of the virtual machines. Multi-session hosts should have 4 - 24 vCPUs. Single session host should have 2 or more vCPUs.",
-                      "recommendedSizes": [
-                        "[[coalesce(steps('basics').hostsRGProps.tags.vmSize, 'Standard_D4ads_v6')]",
-                        "Standard_D8ads_v6",
-                        "Standard_D16ads_v6",
-                        "Standard_D32ads_v6",
-                        "Standard_D4as_v6",
-                        "Standard_D8as_v6",
-                        "Standard_D16as_v6",
-                        "Standard_D32as_v6",
-                        "Standard_D4ds_v6",
-                        "Standard_D8ds_v6",
-                        "Standard_D16ds_v6",
-                        "Standard_D32ds_v6",
-                        "Standard_D4s_v6",
-                        "Standard_D8s_v6",
-                        "Standard_D16s_v6",
-                        "Standard_D32s_v6"
-                      ],
-                      "options": {
-                        "hideDiskTypeFilter": "[[if(equals(steps('hosts').specs.diskSku, 'Premium_LRS'), true, false)]"
-                      },
-                      "osPlatform": "Windows",
-                      "count": 1,
-                      "scope": {
-                        "location": "[[steps('hosts').scope.location.name]",
-                        "subscriptionId": "[[steps('hosts').scope.subscription.subscriptionId]"
+                      "defaultValue": "[[if(contains(steps('hosts').resourceSkusApi.transformed.vmSizesNames, coalesce(steps('basics').hostsRGProps.tags.vmSize, '')), steps('basics').hostsRGProps.tags.vmSize, if(contains(steps('hosts').resourceSkusApi.transformed.vmSizesNames, 'Standard_D4ads_v6'), 'Standard_D4ads_v6', coalesce(first(steps('hosts').resourceSkusApi.transformed.vmSizesNames), '')))]",
+                      "constraints": {
+                        "allowedValues": "[[steps('hosts').resourceSkusApi.transformed.vmSizes]",
+                        "required": true
                       },
                       "visible": "[[not(equals(steps('hosts').security.securityType, 'ConfidentialVM'))]"
                     },
@@ -4854,28 +4836,24 @@
                     {
                       "name": "availability",
                       "type": "Microsoft.Common.DropDown",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.vmAvailability, 'No infrastructure redundancy required')]",
+                      "defaultValue": "[[if(empty(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone)))), 'No infrastructure redundancy required', coalesce(steps('basics').hostsRGProps.tags.vmAvailability, 'No infrastructure redundancy required'))]",
                       "label": "Availability Options",
                       "toolTip": "Select the redundancy / resiliency for the virtual machines.",
                       "constraints": {
                         "required": true,
-                        "allowedValues": "[[if(empty(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
+                        "allowedValues": "[[if(empty(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone)))), parse('[{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"}]'), parse('[{\"label\":\"Availability Zones\",\"value\":\"AvailabilityZones\"},{\"label\":\"Availability Sets\",\"value\":\"AvailabilitySets\"},{\"label\":\"No infrastructure redundancy required\",\"value\":\"None\"}]'))]"
                       }
                     },
                     {
                       "name": "availabilityZones",
                       "type": "Microsoft.Common.DropDown",
                       "label": "Select Availability Zones",
-                      "defaultValue": [
-                        "Zone 1",
-                        "Zone 2",
-                        "Zone 3"
-                      ],
+                      "defaultValue": "[[map(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone))), (zone) => concat('Zone ', zone))]",
                       "multiselect": true,
                       "selectAll": true,
                       "toolTip": "Select the desired Availability Zones",
                       "constraints": {
-                        "allowedValues": "[[map(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (sku) => sku.zones)), (zone) => parse(concat('{\"label\":\"Zone ', zone, '\",\"value\":\"', zone, '\"}')))]",
+                        "allowedValues": "[[map(filter(coalesce(first(map(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.locationInfo)), (locationInfo) => locationInfo.zones)), parse('[]')), (zone) => not(contains(coalesce(first(map(filter(first(map(filter(steps('hosts').resourceSkusApi.value, (sku) => contains(sku.name, if(equals(steps('hosts').security.securityType, 'ConfidentialVM'), steps('hosts').specs.sizeConfidentialVM, steps('hosts').specs.sizeGeneric))), (sku) => sku.restrictions)), (restriction) => equals(restriction.type, 'Zone')), (restriction) => restriction.restrictionInfo.zones)), parse('[]')), zone))), (zone) => parse(concat('{\"label\":\"Zone ', zone, '\",\"value\":\"', zone, '\"}')))]",
                         "required": true
                       },
                       "visible": "[[equals(steps('hosts').availability.availability, 'AvailabilityZones')]"
@@ -6043,7 +6021,9 @@
     "uniqueStringHosts": "[take(uniqueString(variables('virtualMachinesSubscriptionId'), variables('virtualMachinesResourceGroupName')), 6)]",
     "effectiveIdentifier": "[if(not(empty(parameters('identifier'))), parameters('identifier'), 'replacer')]",
     "effectiveNamingConvention": "[if(not(empty(parameters('namingResourceTypeCodes'))), union(parameters('namingConvention'), createObject('resourceTypeCodes', parameters('namingResourceTypeCodes'))), parameters('namingConvention'))]",
-    "workbookName": "[guid(subscription().subscriptionId, 'session-host-replacer-workbook')]",
+    "workbookSubscriptionId": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), split(parameters('logAnalyticsWorkspaceResourceId'), '/')[2], subscription().subscriptionId)]",
+    "workbookResourceGroupName": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), split(parameters('logAnalyticsWorkspaceResourceId'), '/')[4], parameters('functionAppResourceGroupName'))]",
+    "workbookName": "[guid(toLower(parameters('logAnalyticsWorkspaceResourceId')), 'session-host-replacer-workbook')]",
     "encryptionKeyName": "[format('{0}-shr-storage-cmk', variables('effectiveIdentifier'))]",
     "computeGalleryResourceId": "[if(contains(parameters('imageReference'), 'id'), join(take(split(parameters('imageReference').id, '/'), 9), '/'), '')]",
     "paramAgentDownloadUrl": "[if(not(empty(parameters('agentDownloadUrl'))), createObject('agentDownloadUrl', parameters('agentDownloadUrl')), createObject())]",
@@ -7585,7 +7565,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "13844960469852537668"
+              "templateHash": "5762037238227399872"
             }
           },
           "parameters": {
@@ -7846,7 +7826,7 @@
             "createStorageEncryptionUai": "[variables('useCmk')]",
             "storageEncryptionUaiResourceId": "[if(variables('useCmk'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('storageEncryptionIdentityName')), '')]",
             "cmkUaiResourceId": "[if(variables('useCmk'), variables('storageEncryptionUaiResourceId'), '')]",
-            "storageAccountRoleDefinitions": "[union(createArray('ba92f5b4-2d11-453d-a403-e96b0029c9fe', '974c5e8b-45b9-4653-ba55-5f855dd0fb88'), parameters('storageAccountRoleDefinitionIds'))]"
+            "storageAccountRoleDefinitions": "[union(createArray('b7e6dc6d-f1e8-4753-8033-0f276bb0955b', '974c5e8b-45b9-4653-ba55-5f855dd0fb88'), parameters('storageAccountRoleDefinitionIds'))]"
           },
           "resources": {
             "storageAccount::blobService": {
@@ -9745,7 +9725,8 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('workbook-{0}', uniqueString('workbook', deployment().name))]",
-      "resourceGroup": "[parameters('functionAppResourceGroupName')]",
+      "subscriptionId": "[variables('workbookSubscriptionId')]",
+      "resourceGroup": "[variables('workbookResourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -9762,7 +9743,7 @@
             "value": "[reference('functionApp').outputs.applicationInsightsResourceId.value]"
           },
           "tags": {
-            "value": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/workbooks'), createObject()))]"
+            "value": "[union(createObject('cm-resource-parent', parameters('logAnalyticsWorkspaceResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/workbooks'), createObject()))]"
           }
         },
         "template": {

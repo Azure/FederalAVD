@@ -2954,7 +2954,7 @@
                   "visible": "[steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring]",
                   "label": "Deploy Azure Monitor Workbook Dashboard",
                   "defaultValue": true,
-                  "toolTip": "Deploy a centralized workbook for monitoring all Session Host Replacer deployments. The workbook provides real-time visibility into replacement status, deployment progress, and host pool health across all regions."
+                  "toolTip": "Deploy a centralized workbook into the selected Log Analytics workspace resource group. Deployments that use the same workspace converge on the same dashboard for replacement status, deployment progress, and host pool health across all regions."
                 },
                 {
                   "name": "workbookInfoBox",
@@ -2962,7 +2962,7 @@
                   "visible": "[and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook)]",
                   "options": {
                     "icon": "Info",
-                    "text": "The workbook is deployed enterprise-wide and can query across all regions. It provides filtering by Application Insights instance and Host Pool. If a workbook already exists from a previous deployment in this subscription, it will be reused automatically (idempotent deployment). Only check this box for the first deployment or when you want to update an existing workbook."
+                    "text": "The workbook is deployed into the selected Log Analytics workspace subscription and resource group and can query across all regions. It provides filtering by Application Insights instance and Host Pool. Deployments that select the same workspace reuse and update the same workbook automatically."
                   }
                 },
                 {
@@ -2971,7 +2971,7 @@
                   "visible": "[and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.deployWorkbook)]",
                   "label": "Workbook Location",
                   "defaultValue": "[steps('basics').location.displayName]",
-                  "toolTip": "Select the Azure region where the workbook will be deployed. The workbook's location does not affect its ability to query cross-region Application Insights instances. This should match the location of your first deployment to ensure idempotency.",
+                  "toolTip": "Select the Azure region where the workbook will be deployed. The workbook's location does not affect its ability to query cross-region Application Insights instances. Reuse the original location when updating the workbook associated with this workspace.",
                   "constraints": {
                     "allowedValues": "[steps('monitoring').functionAppMonitoringSection.locationsApi.transformed.list]",
                     "required": true
