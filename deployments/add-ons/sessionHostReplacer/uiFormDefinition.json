@@ -434,7 +434,7 @@
               "type": "Microsoft.Common.DropDown",
               "label": "Replacement Mode",
               "toolTip": "Select the Replacement Mode Option. Side-by-Side (Add then Delete): Adds new session hosts before deleting old ones resulting in zero downtime during updates, but higher cost during update cycles (can temporarily double host pool size). This mode does NOT support dedicated hosts. Requires sufficient vCPU quota and subnet IP space for both old and new hosts simultaneously. Delete-First (Delete then Add): Deletes idle session hosts before adding replacements resulting in lower cost (maintains approximately target capacity throughout), but temporary capacity reduction during replacements. Supports dedicated hosts - preserves dedicated host assignments and zones. Reuses hostnames for seamless transitions",
-              "defaultValue": "SideBySide",
+              "defaultValue": "Side-by-Side (Add then Delete)",
               "constraints": {
                 "required": true,
                 "allowedValues": [
@@ -2506,23 +2506,12 @@
               "toolTip": "Select an existing App Service Plan instead of creating a new one."
             },
             {
-              "name": "appServicePlanSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "App Service Plan Subscription",
-              "defaultValue": "[steps('basics').subscription.displayName]",
-              "toolTip": "Select the subscription that contains your app service plan.",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              }
-            },
-            {
               "name": "resourceGroupsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('infrastructure').appServicePlanSubscription.id))]",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
               "request": {
                 "method": "GET",
-                "path": "[concat(steps('infrastructure').appServicePlanSubscription.id, '/resourcegroups?api-version=2021-04-01')]"
+                "path": "[concat(steps('basics').subscription.id, '/resourcegroups?api-version=2021-04-01')]"
               }
             },
             {
@@ -2530,9 +2519,10 @@
               "type": "Microsoft.Common.DropDown",
               "label": "App Service Plan Resource Group",
               "multiLine": true,
-              "toolTip": "Select the shared operations group containing resources used to manage all host pools.",
+              "defaultValue": "[if(empty(filter(steps('infrastructure').resourceGroupsApi.value, (rg) => and(equals(toLower(rg.location), toLower(steps('basics').location.name)), contains(toLower(rg.name), 'operations')))), '', first(map(filter(steps('infrastructure').resourceGroupsApi.value, (rg) => and(equals(toLower(rg.location), toLower(steps('basics').location.name)), contains(toLower(rg.name), 'operations'))), (rg) => rg.name)))]",
+              "toolTip": "Select an existing resource group in the Function App region. The first resource group containing 'operations' in its name is selected by default when available.",
               "constraints": {
-                "allowedValues": "[map(steps('infrastructure').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+                "allowedValues": "[map(filter(steps('infrastructure').resourceGroupsApi.value, (rg) => equals(toLower(rg.location), toLower(steps('basics').location.name))), (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
                 "required": true
               },
               "visible": "[not(steps('infrastructure').useExistingHostingPlan)]"
@@ -2540,10 +2530,10 @@
             {
               "name": "serverFarmsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('infrastructure').appServicePlanSubscription)), steps('infrastructure').useExistingHostingPlan)]",
+              "condition": "[and(not(empty(steps('basics').subscription.id)), steps('infrastructure').useExistingHostingPlan)]",
               "request": {
                 "method": "GET",
-                "path": "[concat(steps('infrastructure').appServicePlanSubscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
+                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Web/serverfarms?api-version=2024-11-01')]"
               }
             },
             {
