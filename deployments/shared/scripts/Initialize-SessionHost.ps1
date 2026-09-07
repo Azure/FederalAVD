@@ -274,32 +274,43 @@ function Get-InstallerFromUrl {
         [string]$ClientId = $script:UserAssignedIdentityClientId,
         [string]$Url,
         [string]$DestinationPath,
-        [string]$DisplayName
+        [string]$DisplayName,
+        [int]$MaxAttempts = 3,
+        [int]$RetryDelaySeconds = 10,
+        [int]$TimeoutSeconds = 120
     )
-    
-    try {
-        $WebClient = New-Object System.Net.WebClient
-        
-        # If URL is Azure Storage and we have a managed identity, authenticate
-        if (-not [string]::IsNullOrEmpty($StorageSuffix) -and $Url -match $StorageSuffix -and -not [string]::IsNullOrEmpty($ClientId)) {
-            Write-Log -Message "Authenticating to Azure Storage using managed identity"
-            $StorageEndpoint = ($Url -split "://")[0] + "://" + ($Url -split "/")[2] + "/"
-            $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId"
-            $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing).Content | ConvertFrom-Json).access_token
-            $WebClient.Headers.Add('x-ms-version', '2017-11-09')
-            $WebClient.Headers.Add("Authorization", "Bearer $AccessToken")
-        }
 
-        Write-Log -Message "Downloading $DisplayName from: $Url"
-        $WebClient.DownloadFile("$Url", "$DestinationPath")
-        $WebClient = $null
-        Write-Log -Message "Successfully downloaded $DisplayName to: $DestinationPath"
-        return $true
-    }
-    catch {
-        Write-Log -Category Error -Message "Failed to download $DisplayName : $($_.Exception.Message)"
-        $WebClient = $null
-        return $false
+    $ProgressPreference = 'SilentlyContinue'
+    For ($Attempt = 1; $Attempt -le $MaxAttempts; $Attempt++) {
+        Try {
+            $Headers = @{}
+
+            # If URL is Azure Storage and we have a managed identity, authenticate
+            if (-not [string]::IsNullOrEmpty($StorageSuffix) -and $Url -match $StorageSuffix -and -not [string]::IsNullOrEmpty($ClientId)) {
+                Write-Log -Message "Authenticating to Azure Storage using managed identity"
+                $StorageEndpoint = ($Url -split "://")[0] + "://" + ($Url -split "/")[2] + "/"
+                $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId"
+                $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing -TimeoutSec 30).Content | ConvertFrom-Json).access_token
+                $Headers['x-ms-version'] = '2017-11-09'
+                $Headers['Authorization'] = "Bearer $AccessToken"
+            }
+
+            Write-Log -Message "Downloading $DisplayName from: $Url (attempt $Attempt of $MaxAttempts)"
+            Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -Headers $Headers -UseBasicParsing -TimeoutSec $TimeoutSeconds
+            Write-Log -Message "Successfully downloaded $DisplayName to: $DestinationPath"
+            return $true
+        }
+        Catch {
+            $FailureMessage = $_.Exception.Message
+            Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue
+            If ($Attempt -eq $MaxAttempts) {
+                Write-Log -Category Error -Message "Failed to download $DisplayName after $MaxAttempts attempts: $FailureMessage"
+                return $false
+            }
+
+            Write-Log -Category Warning -Message "Download attempt $Attempt of $MaxAttempts for $DisplayName failed: $FailureMessage. Retrying in $RetryDelaySeconds seconds."
+            Start-Sleep -Seconds $RetryDelaySeconds
+        }
     }
 }
 
@@ -1155,7 +1166,8 @@ try {
 catch {
     Write-Log -Category Error -Message "Initialization failed: $($_.Exception.Message)"
     Write-Log -Category Error -Message "Stack Trace: $($_.ScriptStackTrace)"
-    Write-Log -Message "Log file location: $Script:LogPath"    
+    Write-Log -Message "Log file location: $Script:LogPath"
+    Write-Error -Message "Initialization failed: $($_.Exception.Message). Review $Script:LogPath on the VM." -ErrorAction Continue
     exit 1
 }
 
