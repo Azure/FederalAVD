@@ -4,6 +4,7 @@ $policyPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bi
 $entryTemplatePath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $controlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
 $permissionsPath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\permissions.bicep'
+$policyDefinitionPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\vmApplications.policyDefinition.bicep'
 
 Describe 'Automated host-pool VM Application assignments' {
     BeforeAll {
@@ -21,6 +22,7 @@ Describe 'Automated host-pool VM Application assignments' {
         $entryTemplateSource = Get-Content -LiteralPath $entryTemplatePath -Raw
         $controlPlaneSource = Get-Content -LiteralPath $controlPlanePath -Raw
         $permissionsSource = Get-Content -LiteralPath $permissionsPath -Raw
+        $policyDefinitionSource = Get-Content -LiteralPath $policyDefinitionPath -Raw
     }
 
     It 'uses one deployment subscription selected on Basics' {
@@ -82,6 +84,15 @@ Describe 'Automated host-pool VM Application assignments' {
         $policySource | Should Match "contains\(toLower\(application.packageReferenceId\), '/versions/'\)"
         $policySource | Should Match "lastIndexOf\(toLower\(application.packageReferenceId\), '/versions/'\)"
         $policySource | Should Match 'cannot contain more than one version of the same application'
+    }
+
+    It 'accepts a resolved concrete version only when the assignment selects latest for the same application' {
+        $policyDefinitionSource | Should Match "equals: '\[current\(\\'configuredApplication\\'\)\.packageReferenceId\]'"
+        $policyDefinitionSource | Should Match "endsWith\(toLower\(current\(\\'configuredApplication\\'\)\.packageReferenceId\), \\'/versions/latest\\'\)"
+        $policyDefinitionSource | Should Match "lastIndexOf\(toLower\(current\(\\'configuredApplication\\'\)\.packageReferenceId\), \\'/versions/\\'\)"
+        $policyDefinitionSource | Should Match "length\(\\'/versions/\\'\)"
+        $policyDefinitionSource | Should Match "like: '\[concat\(substring\(current\(\\'configuredApplication\\'\)\.packageReferenceId, 0, add\("
+        $policyDefinitionSource | Should Match "component: 'VM Applications'[\s\S]+version: '1\.0\.1'"
     }
 
     It 'grants the host-pool identity gallery-scoped Reader access before host creation' {

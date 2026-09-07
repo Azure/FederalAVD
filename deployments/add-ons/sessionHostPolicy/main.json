@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17492738959720638605"
+      "templateHash": "2234385566505785059"
     }
   },
   "definitions": {
@@ -414,7 +414,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "5480657240490984096"
+              "templateHash": "7964603770913061079"
             }
           },
           "definitions": {
@@ -609,7 +609,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "10773589215474625294"
+                      "templateHash": "12715987669719701126"
                     }
                   },
                   "parameters": {
@@ -639,7 +639,7 @@
                           "category": "Azure Virtual Desktop",
                           "solution": "AVD Session Host Governance",
                           "component": "VM Applications",
-                          "version": "1.0.0"
+                          "version": "1.0.1"
                         },
                         "parameters": {
                           "galleryApplications": {
@@ -683,8 +683,24 @@
                                           "where": {
                                             "allOf": [
                                               {
-                                                "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].packageReferenceId",
-                                                "equals": "[[current('configuredApplication').packageReferenceId]"
+                                                "anyOf": [
+                                                  {
+                                                    "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].packageReferenceId",
+                                                    "equals": "[[current('configuredApplication').packageReferenceId]"
+                                                  },
+                                                  {
+                                                    "allOf": [
+                                                      {
+                                                        "value": "[[endsWith(toLower(current('configuredApplication').packageReferenceId), '/versions/latest')]",
+                                                        "equals": true
+                                                      },
+                                                      {
+                                                        "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].packageReferenceId",
+                                                        "like": "[[concat(substring(current('configuredApplication').packageReferenceId, 0, add(lastIndexOf(toLower(current('configuredApplication').packageReferenceId), '/versions/'), length('/versions/'))), '*')]"
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
                                               },
                                               {
                                                 "field": "Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].order",

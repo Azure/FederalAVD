@@ -42,6 +42,11 @@ the returned Gallery application-version resource IDs in `vmApplications`. Each 
 - `order`: a unique operational installation order from 1 through 25.
 - `treatFailureAsDeploymentFailure`: whether lifecycle failure marks VM provisioning failed.
 
+When an assignment uses `/versions/latest`, Azure persists the resolved concrete version on the VM.
+The policy treats that concrete version as compliant only when it belongs to the same Gallery
+application definition. An assignment that names a specific version continues to require that exact
+version.
+
 Publishing a version does not change the policy assignment. New or updated VMs receive the policy
 through Azure Policy `Modify`. Existing noncompliant VMs change only after an intentional VM update
 or remediation.

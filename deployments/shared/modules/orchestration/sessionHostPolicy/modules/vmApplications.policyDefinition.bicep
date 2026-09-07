@@ -14,7 +14,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
       category: 'Azure Virtual Desktop'
       solution: 'AVD Session Host Governance'
       component: 'VM Applications'
-      version: '1.0.0'
+      version: '1.0.1'
     }
     parameters: {
       galleryApplications: {
@@ -58,8 +58,24 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                       where: {
                         allOf: [
                           {
-                            field: 'Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].packageReferenceId'
-                            equals: '[current(\'configuredApplication\').packageReferenceId]'
+                            anyOf: [
+                              {
+                                field: 'Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].packageReferenceId'
+                                equals: '[current(\'configuredApplication\').packageReferenceId]'
+                              }
+                              {
+                                allOf: [
+                                  {
+                                    value: '[endsWith(toLower(current(\'configuredApplication\').packageReferenceId), \'/versions/latest\')]'
+                                    equals: true
+                                  }
+                                  {
+                                    field: 'Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].packageReferenceId'
+                                    like: '[concat(substring(current(\'configuredApplication\').packageReferenceId, 0, add(lastIndexOf(toLower(current(\'configuredApplication\').packageReferenceId), \'/versions/\'), length(\'/versions/\'))), \'*\')]'
+                                  }
+                                ]
+                              }
+                            ]
                           }
                           {
                             field: 'Microsoft.Compute/virtualMachines/applicationProfile.galleryApplications[*].order'
