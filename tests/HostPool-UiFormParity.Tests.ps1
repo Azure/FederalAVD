@@ -1,5 +1,6 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
+$standardBicepPath = Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep'
 $automatedFormPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $automatedBicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 
@@ -9,11 +10,14 @@ Describe 'Common host-pool UI form behavior' {
         $automatedForm = Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json
         $automatedBicep = Get-Content -LiteralPath $automatedBicepPath -Raw
         $standardFormJson = Get-Content -LiteralPath $standardFormPath -Raw
+        $standardBicep = Get-Content -LiteralPath $standardBicepPath -Raw
 
         $standardControlPlane = $standardForm.view.properties.steps | Where-Object { $_.name -eq 'controlPlane' }
         $standardWorkspaceApi = $standardControlPlane.elements | Where-Object { $_.name -eq 'workspacesApi' }
         $standardWorkspaceSection = $standardControlPlane.elements | Where-Object { $_.name -eq 'workspace' }
         $standardExistingWorkspace = $standardWorkspaceSection.elements | Where-Object { $_.name -eq 'existingWorkspace' }
+        $standardScalingPlan = $standardControlPlane.elements | Where-Object { $_.name -eq 'scalingPlan' }
+        $standardPooledSchedules = $standardScalingPlan.elements | Where-Object { $_.name -eq 'pooledSchedules' }
         $standardOutputs = $standardForm.view.outputs.parameters
 
         $automatedControlPlane = $automatedForm.view.properties.steps | Where-Object { $_.name -eq 'controlPlane' }
@@ -48,6 +52,34 @@ Describe 'Common host-pool UI form behavior' {
     It 'uses the current workspace list API in the standard form' {
         $standardWorkspaceApi.request.path | Should Match 'api-version=2024-04-03'
         $standardWorkspaceApi.request.path | Should Not Match '2022-02-10-preview'
+    }
+
+    It 'does not require interaction with pooled scaling dropdowns that have effective defaults' {
+        $dropdownsWithDefaults = @(
+            'rampUpLoadBalancingAlgorithm'
+            'peakLoadBalancingAlgorithm'
+            'rampDownLoadBalancingAlgorithm'
+            'rampDownForceLogoffUsers'
+            'rampDownStopHostsWhen'
+            'offPeakLoadBalancingAlgorithm'
+        )
+
+        foreach ($id in $dropdownsWithDefaults) {
+            $column = $standardPooledSchedules.constraints.columns | Where-Object { $_.id -eq $id }
+            $column.element.constraints.required | Should Be $false
+        }
+
+        ($standardPooledSchedules.constraints.columns | Where-Object { $_.id -eq 'daysOfWeek' }).element.constraints.required |
+            Should Be $true
+    }
+
+    It 'normalizes omitted standard pooled scaling dropdowns like the automated host pool' {
+        $standardBicep | Should Match "schedule\.\?rampUpLoadBalancingAlgorithm \?\? 'BreadthFirst'"
+        $standardBicep | Should Match "schedule\.\?peakLoadBalancingAlgorithm \?\? 'BreadthFirst'"
+        $standardBicep | Should Match "schedule\.\?rampDownLoadBalancingAlgorithm \?\? 'DepthFirst'"
+        $standardBicep | Should Match 'schedule\.\?rampDownForceLogoffUsers \?\? false'
+        $standardBicep | Should Match "schedule\.\?rampDownStopHostsWhen \?\? 'ZeroSessions'"
+        $standardBicep | Should Match "schedule\.\?offPeakLoadBalancingAlgorithm \?\? 'DepthFirst'"
     }
 
     It 'matches the selected standard VM SKU exactly for capabilities and zones' {

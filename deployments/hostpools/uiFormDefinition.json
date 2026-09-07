@@ -510,7 +510,7 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Breadth-First",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       },
                       {
@@ -545,8 +545,8 @@
                         "header": "Peak Balance",
                         "element": {
                           "type": "Microsoft.Common.DropDown",
-                          "placeholder": "Depth-First",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "placeholder": "Breadth-First",
+                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       },
                       {
@@ -564,7 +564,7 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Depth-First",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       },
                       {
@@ -591,7 +591,7 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "No",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Yes", "value": true }, { "label": "No", "value": false }] }
+                          "constraints": { "required": false, "allowedValues": [{ "label": "Yes", "value": true }, { "label": "No", "value": false }] }
                         }
                       },
                       {
@@ -619,7 +619,7 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Zero Sessions",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Zero Sessions", "value": "ZeroSessions" }, { "label": "Zero Active Sessions", "value": "ZeroActiveSessions" }] }
+                          "constraints": { "required": false, "allowedValues": [{ "label": "Zero Sessions", "value": "ZeroSessions" }, { "label": "Zero Active Sessions", "value": "ZeroActiveSessions" }] }
                         }
                       },
                       {
@@ -637,7 +637,7 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Depth-First",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
                         }
                       }
                     ]

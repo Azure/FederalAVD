@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "6072829258859634557"
+      "templateHash": "3919488520915853892"
     }
   },
   "definitions": {
@@ -30,7 +30,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         },
         "rampUpMinimumHostsPct": {
           "type": "string"
@@ -46,7 +47,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         },
         "rampDownStartTime": {
           "type": "string"
@@ -56,7 +58,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         },
         "rampDownMinimumHostsPct": {
           "type": "string"
@@ -65,7 +68,8 @@
           "type": "string"
         },
         "rampDownForceLogoffUsers": {
-          "type": "bool"
+          "type": "bool",
+          "nullable": true
         },
         "rampDownWaitTimeMinutes": {
           "type": "string",
@@ -80,7 +84,8 @@
           "allowedValues": [
             "ZeroActiveSessions",
             "ZeroSessions"
-          ]
+          ],
+          "nullable": true
         },
         "offPeakStartTime": {
           "type": "string"
@@ -90,7 +95,8 @@
           "allowedValues": [
             "BreadthFirst",
             "DepthFirst"
-          ]
+          ],
+          "nullable": true
         }
       }
     },
@@ -1405,18 +1411,18 @@
             "hour": "[if(equals(first(split(string(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].offPeakStartTime), ':')[0]), '0'), int(last(split(string(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].offPeakStartTime), ':')[0])), int(split(string(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].offPeakStartTime), ':')[0]))]",
             "minute": "[if(equals(first(split(string(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].offPeakStartTime), ':')[1]), '0'), int(last(split(string(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].offPeakStartTime), ':')[1])), int(split(string(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].offPeakStartTime), ':')[1]))]"
           },
-          "rampUpLoadBalancingAlgorithm": "[parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampUpLoadBalancingAlgorithm]",
+          "rampUpLoadBalancingAlgorithm": "[coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampUpLoadBalancingAlgorithm'), 'BreadthFirst')]",
           "rampUpMinimumHostsPct": "[int(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampUpMinimumHostsPct)]",
           "rampUpCapacityThresholdPct": "[int(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampUpCapacityThresholdPct)]",
-          "peakLoadBalancingAlgorithm": "[parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].peakLoadBalancingAlgorithm]",
-          "rampDownLoadBalancingAlgorithm": "[parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownLoadBalancingAlgorithm]",
+          "peakLoadBalancingAlgorithm": "[coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'peakLoadBalancingAlgorithm'), 'BreadthFirst')]",
+          "rampDownLoadBalancingAlgorithm": "[coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownLoadBalancingAlgorithm'), 'DepthFirst')]",
           "rampDownMinimumHostsPct": "[int(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownMinimumHostsPct)]",
           "rampDownCapacityThresholdPct": "[int(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownCapacityThresholdPct)]",
-          "rampDownForceLogoffUsers": "[parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownForceLogoffUsers]",
-          "rampDownWaitTimeMinutes": "[if(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownForceLogoffUsers, if(empty(coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownWaitTimeMinutes'), '')), 30, int(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownWaitTimeMinutes)), 0)]",
-          "rampDownNotificationMessage": "[if(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownForceLogoffUsers, if(empty(coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownNotificationMessage'), '')), 'Save your work and sign out. This session host is being removed by autoscale.', parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownNotificationMessage), null())]",
-          "rampDownStopHostsWhen": "[parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownStopHostsWhen]",
-          "offPeakLoadBalancingAlgorithm": "[parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].offPeakLoadBalancingAlgorithm]"
+          "rampDownForceLogoffUsers": "[coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownForceLogoffUsers'), false())]",
+          "rampDownWaitTimeMinutes": "[if(coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownForceLogoffUsers'), false()), if(empty(coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownWaitTimeMinutes'), '')), 30, int(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownWaitTimeMinutes)), 0)]",
+          "rampDownNotificationMessage": "[if(coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownForceLogoffUsers'), false()), if(empty(coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownNotificationMessage'), '')), 'Save your work and sign out. This session host is being removed by autoscale.', parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')].rampDownNotificationMessage), null())]",
+          "rampDownStopHostsWhen": "[coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'rampDownStopHostsWhen'), 'ZeroSessions')]",
+          "offPeakLoadBalancingAlgorithm": "[coalesce(tryGet(parameters('scalingPlanPooledSchedules')[copyIndex('scalingPlanSchedulesCustom')], 'offPeakLoadBalancingAlgorithm'), 'DepthFirst')]"
         }
       },
       {

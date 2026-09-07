@@ -12,21 +12,21 @@ type pooledScalingScheduleInputType = {
   name: string
   daysOfWeek: scalingDayType[]
   rampUpStartTime: string
-  rampUpLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  rampUpLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
   rampUpMinimumHostsPct: string
   rampUpCapacityThresholdPct: string
   peakStartTime: string
-  peakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  peakLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
   rampDownStartTime: string
-  rampDownLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  rampDownLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
   rampDownMinimumHostsPct: string
   rampDownCapacityThresholdPct: string
-  rampDownForceLogoffUsers: bool
+  rampDownForceLogoffUsers: bool?
   rampDownWaitTimeMinutes: string?
   rampDownNotificationMessage: string?
-  rampDownStopHostsWhen: 'ZeroSessions' | 'ZeroActiveSessions'
+  rampDownStopHostsWhen: ('ZeroSessions' | 'ZeroActiveSessions')?
   offPeakStartTime: string
-  offPeakLoadBalancingAlgorithm: 'BreadthFirst' | 'DepthFirst'
+  offPeakLoadBalancingAlgorithm: ('BreadthFirst' | 'DepthFirst')?
 }
 
 type personalScalingScheduleInputType = {
@@ -810,22 +810,22 @@ var scalingPlanSchedulesCustom = [
         ? int(last(split(string(schedule.offPeakStartTime), ':')[1]))
         : int(split(string(schedule.offPeakStartTime), ':')[1])
     }
-    rampUpLoadBalancingAlgorithm: schedule.rampUpLoadBalancingAlgorithm
+    rampUpLoadBalancingAlgorithm: schedule.?rampUpLoadBalancingAlgorithm ?? 'BreadthFirst'
     rampUpMinimumHostsPct: int(schedule.rampUpMinimumHostsPct)
     rampUpCapacityThresholdPct: int(schedule.rampUpCapacityThresholdPct)
-    peakLoadBalancingAlgorithm: schedule.peakLoadBalancingAlgorithm
-    rampDownLoadBalancingAlgorithm: schedule.rampDownLoadBalancingAlgorithm
+    peakLoadBalancingAlgorithm: schedule.?peakLoadBalancingAlgorithm ?? 'BreadthFirst'
+    rampDownLoadBalancingAlgorithm: schedule.?rampDownLoadBalancingAlgorithm ?? 'DepthFirst'
     rampDownMinimumHostsPct: int(schedule.rampDownMinimumHostsPct)
     rampDownCapacityThresholdPct: int(schedule.rampDownCapacityThresholdPct)
-    rampDownForceLogoffUsers: schedule.rampDownForceLogoffUsers
-    rampDownWaitTimeMinutes: schedule.rampDownForceLogoffUsers
+    rampDownForceLogoffUsers: schedule.?rampDownForceLogoffUsers ?? false
+    rampDownWaitTimeMinutes: (schedule.?rampDownForceLogoffUsers ?? false)
       ? (empty(schedule.?rampDownWaitTimeMinutes ?? '') ? 30 : int(schedule.rampDownWaitTimeMinutes!))
       : 0
-    rampDownNotificationMessage: schedule.rampDownForceLogoffUsers
+    rampDownNotificationMessage: (schedule.?rampDownForceLogoffUsers ?? false)
       ? (empty(schedule.?rampDownNotificationMessage ?? '') ? 'Save your work and sign out. This session host is being removed by autoscale.' : schedule.rampDownNotificationMessage!)
       : null
-    rampDownStopHostsWhen: schedule.rampDownStopHostsWhen
-    offPeakLoadBalancingAlgorithm: schedule.offPeakLoadBalancingAlgorithm
+    rampDownStopHostsWhen: schedule.?rampDownStopHostsWhen ?? 'ZeroSessions'
+    offPeakLoadBalancingAlgorithm: schedule.?offPeakLoadBalancingAlgorithm ?? 'DepthFirst'
   }
 ]
 
