@@ -1108,8 +1108,8 @@
 										"required": true,
 										"validations": [
 											{
-												"regex": "^(?!-)(?![0-9]+$)[A-Za-z0-9-]+$",
-												"message": "Use letters, numbers, and dashes; do not begin with a dash or use only numbers."
+												"regex": "^(?!-)(?!.*-$)(?![0-9]+$)[A-Za-z0-9-]+$",
+												"message": "Use letters, numbers, and dashes; do not begin or end with a dash or use only numbers."
 											},
 											{
 												"isValid": "[lessOrEquals(length(steps('hosts').hostDetails.virtualMachineNamePrefix), 10)]",

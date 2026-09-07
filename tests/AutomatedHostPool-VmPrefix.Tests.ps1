@@ -22,6 +22,10 @@ Describe 'Automated host-pool VM name prefix validation' {
 
         $lengthValidation.isValid | Should Be "[lessOrEquals(length(steps('hosts').hostDetails.virtualMachineNamePrefix), 10)]"
         $lengthValidation.message | Should Match 'cannot exceed 10 characters'
-        $regexValidation.regex | Should Be '^(?!-)(?![0-9]+$)[A-Za-z0-9-]+$'
+        $regexValidation.regex | Should Be '^(?!-)(?!.*-$)(?![0-9]+$)[A-Za-z0-9-]+$'
+        $regexValidation.message | Should Match 'do not begin or end with a dash'
+        'avdhost' | Should Match $regexValidation.regex
+        'avd-host' | Should Match $regexValidation.regex
+        'avdhost-' | Should Not Match $regexValidation.regex
     }
 }
