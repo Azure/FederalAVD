@@ -140,7 +140,7 @@ try {
     }
     $msiUninstallCall = $global:sevenZipProcessCalls[0]
     if ($msiUninstallCall.FilePath -ne 'msiexec.exe' -or
-        $msiUninstallCall.ArgumentList -ne "/x $global:sevenZipProductCode /quiet /qn /norestart") {
+        $msiUninstallCall.ArgumentList -ne "/x $global:sevenZipProductCode /qn /norestart") {
         throw "Unexpected MSI uninstall invocation: $($msiUninstallCall | ConvertTo-Json -Compress)"
     }
 

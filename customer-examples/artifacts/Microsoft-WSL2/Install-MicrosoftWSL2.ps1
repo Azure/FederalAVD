@@ -156,7 +156,7 @@ function Enable-WSLPlatform {
 
     Invoke-Process `
         -FilePath 'msiexec.exe' `
-        -ArgumentList "/i `"$installer`" /quiet /qn /norestart" `
+        -ArgumentList "/i `"$installer`" /qn /norestart" `
         -Action 'Install Microsoft WSL' `
         -SuccessExitCodes @(0, 1638, 3010)
 

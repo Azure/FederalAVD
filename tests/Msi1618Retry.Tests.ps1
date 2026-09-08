@@ -30,6 +30,14 @@ Describe 'MSI exit code 1618 handling' {
         $vscodeScript = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\Microsoft-VSCode\Deploy-VSCode.ps1') -Raw
         $vscodeScript | Should Not Match 'Wait-MsiexecIdle|Invoke-MsiProcess'
     }
+
+    It 'does not combine the equivalent quiet and qn options' {
+        $artifactScripts = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts') -Filter '*.ps1' -File -Recurse
+        foreach ($artifactScript in $artifactScripts) {
+            $content = Get-Content -LiteralPath $artifactScript.FullName -Raw
+            $content | Should Not Match '(?i)/quiet\s+/qn|/qn\s+/quiet'
+        }
+    }
 }
 
 Describe 'InstallRoot MSI application lifecycle' {

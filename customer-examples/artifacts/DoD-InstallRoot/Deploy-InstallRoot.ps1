@@ -117,7 +117,7 @@ function Remove-MSIApplication {
 
     $installedApplication = $installedApplications[0]
     Write-Log -Category Info -Message "Removing '$($installedApplication.DisplayName)' with ProductCode '$($installedApplication.ProductCode)'."
-    $uninstaller = Invoke-MsiProcess -ArgumentList "/x $($installedApplication.ProductCode) /quiet /qn /norestart" -Action "'$Name' MSI uninstaller" -TimeoutMs $TimeoutMs
+    $uninstaller = Invoke-MsiProcess -ArgumentList "/x $($installedApplication.ProductCode) /qn /norestart" -Action "'$Name' MSI uninstaller" -TimeoutMs $TimeoutMs
     if ($uninstaller.ExitCode -notin $SuccessExitCodes) {
         throw "'$Name' MSI uninstaller failed with exit code $($uninstaller.ExitCode)."
     }
