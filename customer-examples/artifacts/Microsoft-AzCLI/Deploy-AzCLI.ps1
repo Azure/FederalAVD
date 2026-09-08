@@ -231,12 +231,8 @@ Function Remove-MSIApplication {
         $ProductCode = $InstalledApp.ProductCode
         Write-Log -Message "Removing $Name with Product Code $ProductCode"
         $UninstallTimeoutMs = 600000 # 10 minutes
-        $uninstall = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/X $ProductCode /qn" -PassThru
-        if (-not $uninstall.WaitForExit($UninstallTimeoutMs)) {
-            $uninstall.Kill()
-            Write-Log -Category Warning -Message "$Name uninstaller timed out after $($UninstallTimeoutMs / 60000) minutes and was terminated."
-        }
-        elseif ($Uninstall.ExitCode -eq '0' -or $Uninstall.ExitCode -eq '3010') {
+        $uninstall = Invoke-MsiProcess -ArgumentList "/X $ProductCode /qn" -Action "'$Name' uninstaller" -TimeoutMs $UninstallTimeoutMs
+        if ($Uninstall.ExitCode -eq '0' -or $Uninstall.ExitCode -eq '3010') {
             Write-Log -Message "Uninstalled successfully"
         }
         else {
@@ -245,24 +241,26 @@ Function Remove-MSIApplication {
     }
 }
 
-function Wait-MsiexecIdle {
-    # msiexec serializes all MSI transactions through a global Windows Installer mutex.
-    # Only one MSI transaction can run at a time. If an Azure Policy deployIfNotExists
-    # extension or concurrent deployment holds the lock, this waits up to 5 minutes.
-    param ([int]$WaitSeconds = 300)
-    $elapsed = 0
-    Write-Log -Category Info -Message 'Pre-flight: checking for active msiexec processes...'
-    while ($elapsed -lt $WaitSeconds) {
-        if (-not (Get-Process -Name 'msiexec' -ErrorAction SilentlyContinue | Where-Object { -not $_.HasExited })) { break }
-        Write-Log -Category Info -Message "Pre-flight: msiexec is active. Waiting 10 s... ($elapsed / $WaitSeconds s elapsed)"
-        Start-Sleep -Seconds 10
-        $elapsed += 10
-    }
-    if ($elapsed -ge $WaitSeconds) {
-        Write-Log -Category Warning -Message "Pre-flight: msiexec was still active after $WaitSeconds seconds. Installation may queue or fail."
-    }
-    else {
-        Write-Log -Category Info -Message 'Pre-flight: msiexec serialization lock is free.'
+function Invoke-MsiProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int]$TimeoutMs = 600000,
+        [int]$MaxAttempts = 11,
+        [int]$RetryDelaySeconds = 30
+    )
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -PassThru
+        if (-not $process.WaitForExit($TimeoutMs)) {
+            $process.Kill()
+            throw "$Action timed out after $($TimeoutMs / 60000) minutes and was terminated."
+        }
+        if ($process.ExitCode -ne 1618) { return $process }
+        if ($attempt -eq $MaxAttempts) {
+            throw "$Action failed after $MaxAttempts attempts with exit code 1618 (another installation is already in progress)."
+        }
+        Write-Log -Category Warning -Message "$Action returned exit code 1618. Retrying in $RetryDelaySeconds seconds (attempt $attempt of $MaxAttempts)."
+        Start-Sleep -Seconds $RetryDelaySeconds
     }
 }
 #endregion
@@ -270,7 +268,6 @@ function Wait-MsiexecIdle {
 $SoftwareName = 'Microsoft Azure CLI'
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Software')
 If ($DeploymentType -eq 'Install') {
-    Wait-MsiexecIdle
     Remove-MSIApplication -Name $SoftwareName
     $installerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.msi' -File)
     if ($installerFiles.Count -eq 0) { throw "No MSI installer found for '$SoftwareName' in '$PSScriptRoot'." }
@@ -280,13 +277,8 @@ If ($DeploymentType -eq 'Install') {
     Write-Log -Message "Installing '$SoftwareName' via cmdline:"
     Write-Log -Message "     'msiexec.exe /i `"$pathMSI`" /qn /norestart'"
     $InstallerTimeoutMs = 600000 # 10 minutes
-    $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$pathMSI`" /qn /norestart" -PassThru
-    if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
-        $Installer.Kill()
-        Write-Log -Category Error -Message "'$SoftwareName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
-        exit 1
-    }
-    elseif ($Installer.ExitCode -in $SuccessExitCodes) {
+    $Installer = Invoke-MsiProcess -ArgumentList "/i `"$pathMSI`" /qn /norestart" -Action "'$SoftwareName' installer" -TimeoutMs $InstallerTimeoutMs
+    if ($Installer.ExitCode -in $SuccessExitCodes) {
         if ($Installer.ExitCode -eq 3010) { Write-Log -Message "'$SoftwareName' installed successfully. A reboot is required." }
         else { Write-Log -Message "'$SoftwareName' installed successfully." }
     }

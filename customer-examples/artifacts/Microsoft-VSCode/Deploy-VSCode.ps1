@@ -131,27 +131,6 @@ Function Set-RegistryValue {
     }
 }
 
-function Wait-MsiexecIdle {
-    # msiexec serializes all MSI transactions through a global Windows Installer mutex.
-    # Only one MSI transaction can run at a time. If an Azure Policy deployIfNotExists
-    # extension or concurrent deployment holds the lock, this waits up to 5 minutes.
-    param ([int]$WaitSeconds = 300)
-    $elapsed = 0
-    Write-Log -Category Info -Message 'Pre-flight: checking for active msiexec processes...'
-    while ($elapsed -lt $WaitSeconds) {
-        if (-not (Get-Process -Name 'msiexec' -ErrorAction SilentlyContinue | Where-Object { -not $_.HasExited })) { break }
-        Write-Log -Category Info -Message "Pre-flight: msiexec is active. Waiting 10 s... ($elapsed / $WaitSeconds s elapsed)"
-        Start-Sleep -Seconds 10
-        $elapsed += 10
-    }
-    if ($elapsed -ge $WaitSeconds) {
-        Write-Log -Category Warning -Message "Pre-flight: msiexec was still active after $WaitSeconds seconds. Installation may queue or fail."
-    }
-    else {
-        Write-Log -Category Info -Message 'Pre-flight: msiexec serialization lock is free.'
-    }
-}
-
 #endregion Functions
 
 #region Initialization
@@ -182,7 +161,6 @@ else {
     $VSCodeExe = $InstallerFiles[0].FullName
     $Arguments = '/VERYSILENT /NORESTART /MERGETASKS=!runcode'
     Write-Log -Message "Installing Visual Studio Code with '$VSCodeExe $Arguments'."
-    Wait-MsiexecIdle
     $Process = Start-Process -FilePath $VSCodeExe -ArgumentList $Arguments -PassThru
     if (-not $Process.WaitForExit($ProcessTimeoutMs)) { $Process.Kill(); throw 'Visual Studio Code installer timed out.' }
     if ($Process.ExitCode -notin $SuccessExitCodes) { throw "Visual Studio Code installer failed with exit code $($Process.ExitCode)." }

@@ -1,4 +1,4 @@
-﻿# Install-InstallRoot.ps1
+﻿# Deploy-InstallRoot.ps1
 
 ## Overview
 
@@ -14,38 +14,49 @@ This PowerShell script automates the installation of DoD InstallRoot certificate
 
 ## Parameters
 
-None - This script runs with default settings.
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `DeploymentType` | String | `Install` | Runs the `Install` or `Uninstall` lifecycle. |
+| `SuccessExitCodes` | Integer array | `0, 3010` | MSI exit codes accepted as successful for installation and removal. |
 
 ## Usage
 
 ### Basic Usage
 
 ```powershell
-.\Install-InstallRoot.ps1
+.\Deploy-InstallRoot.ps1
+```
+
+### Uninstall
+
+```powershell
+.\Deploy-InstallRoot.ps1 -DeploymentType Uninstall
 ```
 
 ## What the Script Does
 
 ### Installation Process
 
-1. **Check for Existing Installation**
-   - Queries registry for installed InstallRoot version
-   - Determines if installation or upgrade is needed
+1. **Find the Installer**
+   - Requires exactly one MSI file in the artifact folder
+   - The artifact update workflow downloads the MSI before packaging
 
-2. **Download Installer (if needed)**
-   - Downloads latest InstallRoot MSI from DoD Cyber Exchange
-   - URL: https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64.msi
-   - Uses local MSI if available (offline scenario)
-
-3. **Install InstallRoot**
+2. **Install InstallRoot**
    - Executes MSI installer with silent parameters
    - Parameters: `/i <msi file> /qn /norestart`
    - Waits for installation to complete
    - Captures and logs exit code
+   - Retries only when Windows Installer returns exit code 1618
 
-4. **Verification**
+3. **Verification**
    - Checks installation success via exit code
    - Logs installation completion
+
+### Uninstall Process
+
+1. Finds the installed MSI registration for InstallRoot.
+2. Runs `msiexec /x <product-code> /quiet /qn /norestart`.
+3. Applies the same success-code and exit-code-1618 retry handling used by installation.
 
 ## Installation Details
 
@@ -144,7 +155,7 @@ Invoke-WebRequest -Uri "https://www.dmdc.osd.mil" -UseBasicParsing
 Logs are created in:
 
 ```text
-C:\Windows\Logs\Install-InstallRoot-<timestamp>.log
+C:\Windows\Logs\Deploy-InstallRoot-<timestamp>.log
 ```
 
 Log entries include:
@@ -159,8 +170,8 @@ Log entries include:
 
 | Function | Description |
 | --- | --- |
-| `Get-InstalledApplication` | Queries registry for installed applications |
-| `Get-InternetFile` | Downloads files from URLs with progress tracking |
+| `Remove-MSIApplication` | Finds and removes the installed MSI application |
+| `Invoke-MsiProcess` | Runs MSI operations and retries exit code 1618 contention |
 | `New-Log` | Initializes logging infrastructure |
 | `Write-Log` | Writes formatted log entries |
 
@@ -169,7 +180,7 @@ Log entries include:
 - **OS:** Windows 10 or Windows 11
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
-- **Network Access:** Required for online installation
+- **Network Access:** Not required at installation time when the MSI is pre-staged
 
 ## Troubleshooting
 
@@ -234,23 +245,33 @@ Get-ChildItem Cert:\LocalMachine\Root | Where-Object {
 
 ## Offline Usage
 
-To use this script in air-gapped environments:
+The artifact update workflow normally downloads the MSI before packaging. To stage it manually in
+a connected environment, run this command from the repository root:
+
+```powershell
+Invoke-WebRequest `
+    -Uri 'https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/InstallRoot_5.6x64.msi' `
+    -OutFile 'customer-examples\artifacts\DoD-InstallRoot\InstallRoot.msi'
+```
+
+For an air-gapped environment:
 
 1. **Download InstallRoot MSI:**
-   - URL: https://dl.dod.cyber.mil/wp-content/uploads/pki-pke/msi/
-   - Download latest: InstallRoot_<version>x64.msi
+   - Download from the URL above on an approved connected workstation.
+   - Validate the file according to organizational software-transfer procedures.
+   - Transfer the MSI through the approved cross-domain or offline transfer process.
 
 2. **Place in Script Directory:**
 
 ```text
-   Install-InstallRoot.ps1
-   InstallRoot_5.6x64.msi
+   Deploy-InstallRoot.ps1
+   InstallRoot.msi
    ```
 
 3. **Run Script:**
 
    ```powershell
-   .\Install-InstallRoot.ps1
+   .\Deploy-InstallRoot.ps1
    ```
 
 ## CAC Authentication

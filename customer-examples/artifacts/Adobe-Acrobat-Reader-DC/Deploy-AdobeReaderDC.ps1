@@ -52,25 +52,30 @@ function New-Log {
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
 }
 
-function Wait-MsiexecIdle {
+function Invoke-MsiProcess {
     [CmdletBinding()]
     param (
-        [int]$WaitSeconds = 300
+        [Parameter(Mandatory = $true)]
+        [string]$ArgumentList,
+        [Parameter(Mandatory = $true)]
+        [string]$Action,
+        [int]$TimeoutMs = 600000,
+        [int]$MaxAttempts = 11,
+        [int]$RetryDelaySeconds = 30
     )
 
-    $elapsed = 0
-    Write-Log -Category Info -Message 'Pre-flight: checking for active msiexec processes...'
-    while ($elapsed -lt $WaitSeconds) {
-        if (-not (Get-Process -Name 'msiexec' -ErrorAction SilentlyContinue | Where-Object { -not $_.HasExited })) { break }
-        Write-Log -Category Info -Message "Pre-flight: msiexec is active. Waiting 10 s... ($elapsed / $WaitSeconds s elapsed)"
-        Start-Sleep -Seconds 10
-        $elapsed += 10
-    }
-    if ($elapsed -ge $WaitSeconds) {
-        Write-Log -Category Warning -Message "Pre-flight: msiexec was still active after $WaitSeconds seconds. The operation may queue or fail."
-    }
-    else {
-        Write-Log -Category Info -Message 'Pre-flight: msiexec serialization lock is free.'
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -PassThru
+        if (-not $process.WaitForExit($TimeoutMs)) {
+            $process.Kill()
+            throw "$Action timed out after $($TimeoutMs / 60000) minutes and was terminated."
+        }
+        if ($process.ExitCode -ne 1618) { return $process }
+        if ($attempt -eq $MaxAttempts) {
+            throw "$Action failed after $MaxAttempts attempts with exit code 1618 (another installation is already in progress)."
+        }
+        Write-Log -Category Warning -Message "$Action returned exit code 1618. Retrying in $RetryDelaySeconds seconds (attempt $attempt of $MaxAttempts)."
+        Start-Sleep -Seconds $RetryDelaySeconds
     }
 }
 
@@ -102,18 +107,13 @@ function Remove-AdobeReader {
         return
     }
     if ($installedApplications.Count -gt 1) {
-        $matches = ($installedApplications | ForEach-Object { "$($_.DisplayName) [$($_.ProductCode)]" }) -join ', '
-        throw "Multiple Adobe Acrobat MSI installations matched: $matches"
+        $matchedApplications = ($installedApplications | ForEach-Object { "$($_.DisplayName) [$($_.ProductCode)]" }) -join ', '
+        throw "Multiple Adobe Acrobat MSI installations matched: $matchedApplications"
     }
 
     $installedApplication = $installedApplications[0]
     Write-Log -Category Info -Message "Removing '$($installedApplication.DisplayName)' with ProductCode '$($installedApplication.ProductCode)'."
-    Wait-MsiexecIdle
-    $uninstaller = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x $($installedApplication.ProductCode) /qn /norestart" -PassThru
-    if (-not $uninstaller.WaitForExit($TimeoutMs)) {
-        $uninstaller.Kill()
-        throw "'$SoftwareName' uninstaller timed out after $($TimeoutMs / 60000) minutes and was terminated."
-    }
+    $uninstaller = Invoke-MsiProcess -ArgumentList "/x $($installedApplication.ProductCode) /qn /norestart" -Action "'$SoftwareName' uninstaller" -TimeoutMs $TimeoutMs
     if ($uninstaller.ExitCode -notin $SuccessExitCodes) {
         throw "'$SoftwareName' uninstaller failed with exit code $($uninstaller.ExitCode)."
     }

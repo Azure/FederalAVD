@@ -58,25 +58,28 @@ function New-Log {
     Add-Content -LiteralPath $Script:Log -Value "Date`t`t`tCategory`t`tDetails"
 }
 
-function Wait-MsiexecIdle {
+function Invoke-MsiProcess {
     param (
-        [int]$WaitSeconds = 300
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int]$TimeoutMs = 600000,
+        [int]$MaxAttempts = 11,
+        [int]$RetryDelaySeconds = 30
     )
 
-    $elapsed = 0
-    while ($elapsed -lt $WaitSeconds) {
-        $activeInstallers = Get-Process -Name 'msiexec' -ErrorAction SilentlyContinue |
-            Where-Object { -not $_.HasExited }
-        if (-not $activeInstallers) {
-            return
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -PassThru
+        if (-not $process.WaitForExit($TimeoutMs)) {
+            $process.Kill()
+            throw "$Action timed out after $($TimeoutMs / 60000) minutes and was terminated."
         }
-
-        Write-Log -Message "msiexec is active. Waiting 10 seconds ($elapsed of $WaitSeconds seconds elapsed)."
-        Start-Sleep -Seconds 10
-        $elapsed += 10
+        if ($process.ExitCode -ne 1618) { return $process }
+        if ($attempt -eq $MaxAttempts) {
+            throw "$Action failed after $MaxAttempts attempts with exit code 1618 (another installation is already in progress)."
+        }
+        Write-Log -Category Warning -Message "$Action returned exit code 1618. Retrying in $RetryDelaySeconds seconds (attempt $attempt of $MaxAttempts)."
+        Start-Sleep -Seconds $RetryDelaySeconds
     }
-
-    throw "msiexec remained active after $WaitSeconds seconds."
 }
 
 function Assert-MicrosoftSignature {
@@ -149,12 +152,7 @@ if ($runningBrowsers.Count -gt 0) {
 $msiLogPath = Join-Path $env:SystemRoot "Logs\$Script:Name-msiexec.log"
 $arguments = "/i `"$installerPath`" /quiet /norestart /L*v `"$msiLogPath`""
 Write-Log -Message "Installing '$SoftwareName'."
-Wait-MsiexecIdle
-$installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
-if (-not $installer.WaitForExit(600000)) {
-    $installer.Kill()
-    throw "'$SoftwareName' installation timed out after 10 minutes."
-}
+$installer = Invoke-MsiProcess -ArgumentList $arguments -Action "'$SoftwareName' installation"
 
 if ($installer.ExitCode -notin $SuccessExitCodes) {
     throw "'$SoftwareName' installation failed with exit code $($installer.ExitCode). Review '$msiLogPath'."

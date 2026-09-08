@@ -1,12 +1,12 @@
-﻿param (
+param (
     [ValidateSet('Install', 'Uninstall')]
     [string]$DeploymentType = 'Install',
     [int[]]$SuccessExitCodes = @(0, 3010)
 )
 
 #region Initialization
-$SoftwareName = '7-Zip'
-$Script:Name = 'Deploy-7-Zip'
+$SoftwareName = 'InstallRoot'
+$Script:Name = 'Deploy-InstallRoot'
 #endregion
 
 #region Supporting Functions
@@ -85,16 +85,21 @@ function Remove-MSIApplication {
         [int]$TimeoutMs = 600000
     )
 
-    $uninstallRegistryPath = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    $uninstallRegistryPaths = @(
+        'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+        'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )
     $installedApplications = @(
-        if (Test-Path -LiteralPath $uninstallRegistryPath) {
-            Get-ChildItem -LiteralPath $uninstallRegistryPath -ErrorAction SilentlyContinue | ForEach-Object {
-                $application = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
-                if ($application.DisplayName -like "*$Name*" -and
-                    $_.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$') {
-                    [pscustomobject]@{
-                        DisplayName = $application.DisplayName
-                        ProductCode = $_.PSChildName
+        foreach ($uninstallRegistryPath in $uninstallRegistryPaths) {
+            if (Test-Path -LiteralPath $uninstallRegistryPath) {
+                Get-ChildItem -LiteralPath $uninstallRegistryPath -ErrorAction SilentlyContinue | ForEach-Object {
+                    $application = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+                    if ($application.DisplayName -like "*$Name*" -and
+                        $_.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$') {
+                        [pscustomobject]@{
+                            DisplayName = $application.DisplayName
+                            ProductCode = $_.PSChildName
+                        }
                     }
                 }
             }
@@ -128,7 +133,7 @@ function Remove-MSIApplication {
 
 New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
 $ErrorActionPreference = 'Stop'
-Write-Log -category Info -message "Starting '$PSCommandPath'."
+Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 
 $InstallerTimeoutMs = 600000 # 10 minutes
 
@@ -140,11 +145,21 @@ else {
     if ($InstallerFiles.Count -eq 0) { throw "No MSI installer found for '$SoftwareName' in '$PSScriptRoot'." }
     if ($InstallerFiles.Count -gt 1) { throw "Expected one MSI installer for '$SoftwareName', but found: $($InstallerFiles.Name -join ', ')" }
     $PathMSI = $InstallerFiles[0].FullName
-    Write-Log -Category Info -message "Installing '$SoftwareName' via MSI: 'msiexec /i `"$PathMSI`" /qn /norestart'."
+    Write-Log -Category Info -Message "Installing '$SoftwareName' via MSI: 'msiexec /i `"$PathMSI`" /qn /norestart'."
     $Installer = Invoke-MsiProcess -ArgumentList "/i `"$PathMSI`" /qn /norestart" -Action "'$SoftwareName' MSI installer" -TimeoutMs $InstallerTimeoutMs
     if ($Installer.ExitCode -in $SuccessExitCodes) {
-        if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -message "'$SoftwareName' installed successfully. A reboot is required." }
-        else { Write-Log -Category Info -message "'$SoftwareName' installed successfully." }
+        if ($Installer.ExitCode -eq 3010) { Write-Log -Category Info -Message "'$SoftwareName' installed successfully. A reboot is required." }
+        else { Write-Log -Category Info -Message "'$SoftwareName' installed successfully." }
+
+        $shortcutWaitSeconds = 20
+        for ($attempt = 1; $attempt -le $shortcutWaitSeconds; $attempt++) {
+            $shortcuts = @(Get-ChildItem -Path "$env:SystemDrive\Users\Public\Desktop" -Filter 'InstallRoot*.lnk' -ErrorAction SilentlyContinue)
+            if ($shortcuts.Count -gt 0) {
+                $shortcuts | Remove-Item -Force
+                break
+            }
+            Start-Sleep -Seconds 1
+        }
     }
     else {
         Write-Log -Category Error -Message "'$SoftwareName' MSI installer failed with exit code $($Installer.ExitCode)."
@@ -152,4 +167,4 @@ else {
     }
 }
 
-Write-Log -Category Info -message "Completed '$SoftwareName' $DeploymentType."
+Write-Log -Category Info -Message "Completed '$SoftwareName' $DeploymentType."
