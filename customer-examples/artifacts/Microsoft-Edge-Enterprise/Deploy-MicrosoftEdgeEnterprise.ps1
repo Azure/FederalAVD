@@ -105,7 +105,7 @@ function Remove-EdgeEnterprise {
         'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
         'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
     )
-    $matches = @(
+    $installedApplications = @(
         foreach ($registryPath in $registryPaths) {
             if (Test-Path -LiteralPath $registryPath) {
                 Get-ChildItem -LiteralPath $registryPath -ErrorAction SilentlyContinue | ForEach-Object {
@@ -119,11 +119,12 @@ function Remove-EdgeEnterprise {
             }
         }
     )
-    if (-not $matches) { Write-Log -Message "No enterprise MSI installation of '$SoftwareName' was found."; return }
-    if ($matches.Count -gt 1) { throw "Multiple Microsoft Edge MSI installations matched: $(($matches.ProductCode) -join ', ')" }
-    Write-Log -Message "Removing '$SoftwareName' with ProductCode '$($matches[0].ProductCode)'."
+    if (-not $installedApplications) { Write-Log -Message "No enterprise MSI installation of '$SoftwareName' was found."; return }
+    if ($installedApplications.Count -gt 1) { throw "Multiple Microsoft Edge MSI installations matched: $(($installedApplications.ProductCode) -join ', ')" }
+    $installedApplication = $installedApplications[0]
+    Write-Log -Message "Removing '$SoftwareName' with ProductCode '$($installedApplication.ProductCode)'."
     Wait-MsiexecIdle
-    $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x $($matches[0].ProductCode) /qn /norestart" -PassThru
+    $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x $($installedApplication.ProductCode) /qn /norestart" -PassThru
     if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "'$SoftwareName' uninstaller timed out." }
     if ($process.ExitCode -notin $SuccessExitCodes) { throw "'$SoftwareName' uninstaller failed with exit code $($process.ExitCode)." }
 }
