@@ -38,6 +38,7 @@ var envSuffix = substring(environment().suffixes.storage, 5, length(environment(
 
 var buildDir = 'c:\\BuildDir'
 var restartVmScript = loadTextContent('../scripts/Restart-Vm.ps1')
+var removeMicrosoftSoftwareRunCommandName = 'remove-microsoft-software-runCommands'
 
 var customizers = [
   for customization in customizations: {
@@ -403,7 +404,7 @@ resource teams 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (
 
 resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = if (!empty(customizations) || !empty(vdiCustomizations)) {
   parent: orchestrationVm
-  name: 'remove-microsoft-software-runCommands'
+  name: removeMicrosoftSoftwareRunCommandName
   location: location
   properties: {
     asyncExecution: false
@@ -425,8 +426,16 @@ resource removeRunCommandsMicrosoftSoftware 'Microsoft.Compute/virtualMachines/r
         value: imageVmName
       }
       {
-        name: 'ImageVmResourceGroup'
+        name: 'ImageBuildResourceGroup'
         value: resourceGroup().name
+      }
+      {
+        name: 'OrchestrationVmName'
+        value: orchestrationVmName
+      }
+      {
+        name: 'CurrentRunCommandName'
+        value: removeMicrosoftSoftwareRunCommandName
       }
     ]
     source: {

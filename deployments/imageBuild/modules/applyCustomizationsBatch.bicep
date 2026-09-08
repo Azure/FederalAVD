@@ -19,6 +19,8 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
   name: orchestrationVmName
 }
 
+var removeRunCommandName = 'remove-${batchContext}-runCommands-batch-${batchIndex}'
+
 @batchSize(1)
 module applyCustomizations 'applyCustomization.bicep' = [
   for (customization, customizationIndex) in customizations: {
@@ -39,7 +41,7 @@ module applyCustomizations 'applyCustomization.bicep' = [
 
 resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = {
   parent: orchestrationVm
-  name: 'remove-${batchContext}-runCommands-batch-${batchIndex}'
+  name: removeRunCommandName
   location: location
   properties: {
     asyncExecution: false
@@ -61,8 +63,16 @@ resource removeRunCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-0
         value: imageVmName
       }
       {
-        name: 'ImageVmResourceGroup'
+        name: 'ImageBuildResourceGroup'
         value: resourceGroupName
+      }
+      {
+        name: 'OrchestrationVmName'
+        value: orchestrationVmName
+      }
+      {
+        name: 'CurrentRunCommandName'
+        value: removeRunCommandName
       }
     ]
     source: {
