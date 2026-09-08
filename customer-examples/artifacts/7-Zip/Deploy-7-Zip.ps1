@@ -139,9 +139,9 @@ else {
     if ($InstallerFiles.Count -eq 0) { throw "No MSI installer found for '$SoftwareName' in '$PSScriptRoot'." }
     if ($InstallerFiles.Count -gt 1) { throw "Expected one MSI installer for '$SoftwareName', but found: $($InstallerFiles.Name -join ', ')" }
     $PathMSI = $InstallerFiles[0].FullName
-    Write-Log -Category Info -message "Installing '$SoftwareName' via MSI: 'msiexec /i `"$PathMSI`" /quiet /noreboot'."
+    Write-Log -Category Info -message "Installing '$SoftwareName' via MSI: 'msiexec /i `"$PathMSI`" /qn /norestart'."
     Wait-MsiexecIdle
-    $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /quiet /noreboot" -PassThru
+    $Installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/i `"$PathMSI`" /qn /norestart" -PassThru
     if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
         $Installer.Kill()
         Write-Log -Category Error -Message "'$SoftwareName' MSI installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
