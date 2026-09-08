@@ -1,7 +1,13 @@
 ﻿param(
     [string]$ResourceManagerUri,
     [string]$UserAssignedIdentityClientId,
-    [string]$VmResourceId
+    [string]$VmResourceId,
+    [ValidateRange(0, 3600)]
+    [int]$StableSeconds = 15,
+    [ValidateRange(60, 3600)]
+    [int]$ReadyTimeoutSeconds = 900,
+    [ValidateRange(1, 60)]
+    [int]$PollIntervalSeconds = 5
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,16 +28,59 @@ Try {
         'Authorization'='Bearer ' + $AzureManagementAccessToken
     }
 
-    # Restart the VM
+    # Restart the VM. Post-update callers use a longer stability window so this
+    # orchestration command survives and absorbs follow-up TrustedInstaller reboots.
     $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/restart?api-version=2024-03-01')
-    $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')
-    $provisioningState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).code
-    While ($provisioningState -ne "PowerState/running") {
-        Start-Sleep -Seconds 5
-        $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01')
-        $provisioningState = ($VMStatus.statuses | Where-Object {$_.code -like 'PowerState*'}).code
+
+    $InstanceViewUri = $ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01'
+    $ReadyDeadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)
+    $StableSince = $null
+
+    Write-Output "Waiting for the image VM to remain running with the guest agent ready for $StableSeconds seconds."
+    while ($true) {
+        $Now = Get-Date
+        if ($Now -ge $ReadyDeadline) {
+            throw "Timed out after $ReadyTimeoutSeconds seconds waiting for the image VM to remain ready for $StableSeconds seconds."
+        }
+
+        try {
+            $VmStatus = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $InstanceViewUri
+            $PowerState = ($VmStatus.statuses | Where-Object { $_.code -like 'PowerState/*' } | Select-Object -First 1).code
+            $AgentState = ($VmStatus.vmAgent.statuses | Where-Object { $_.code -like 'ProvisioningState/*' } | Select-Object -First 1).code
+            $VmReady = $PowerState -eq 'PowerState/running' -and $AgentState -eq 'ProvisioningState/succeeded'
+        }
+        catch {
+            $PowerState = 'Unavailable'
+            $AgentState = 'Unavailable'
+            $VmReady = $false
+            Write-Output "Unable to read VM readiness during restart: $($_.Exception.Message)"
+        }
+
+        if ($VmReady) {
+            if ($null -eq $StableSince) {
+                $StableSince = $Now
+                Write-Output 'Image VM is running and the guest agent is ready. Starting stability timer.'
+            }
+
+            $StableElapsed = [int](($Now - $StableSince).TotalSeconds)
+            if ($StableElapsed -ge $StableSeconds) {
+                Write-Output "Image VM remained ready for $StableElapsed seconds. Proceeding."
+                break
+            }
+            Write-Output "Image VM ready for $StableElapsed of $StableSeconds required seconds."
+        }
+        else {
+            if ($null -ne $StableSince) {
+                Write-Output "Image VM readiness was interrupted (power=$PowerState, agent=$AgentState). Resetting stability timer."
+                $StableSince = $null
+            }
+            else {
+                Write-Output "Image VM is not ready (power=$PowerState, agent=$AgentState)."
+            }
+        }
+
+        Start-Sleep -Seconds $PollIntervalSeconds
     }
-    Start-Sleep -Seconds 15   
 }
 catch {
     throw

@@ -579,10 +579,24 @@ resource restartUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03-0
   parent: orchestrationVm
   properties: {
     asyncExecution: false
-    parameters: restartVMParameters
+    parameters: concat(restartVMParameters, [
+      {
+        name: 'StableSeconds'
+        value: '180'
+      }
+      {
+        name: 'ReadyTimeoutSeconds'
+        value: '1800'
+      }
+      {
+        name: 'PollIntervalSeconds'
+        value: '5'
+      }
+    ])
     source: {
       script: restartVmScript
     }
+    timeoutInSeconds: 2100
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
