@@ -161,8 +161,8 @@ If your customer parameter files live outside the extracted repo zip, pass `-Cus
 | `artifactsBlobContainerUrl` | Image Build — `artifactsContainerUri` parameter |
 | `managedIdentityResourceId` | Image Build — `userAssignedIdentityResourceId` parameter |
 | `buildLogsStorageAccountResourceId` | Image Build — `logStorageAccountResourceId` parameter |
-| `diskEncryptionSetResourceId` | Image Build — `diskEncryptionSetResourceId` parameter (only when CMK enabled) |
-| `confidentialVmDiskEncryptionSetResourceId` | Image Build — `confidentialVMDiskEncryptionSetResourceId` parameter (only when Confidential VM encryption type is `EncryptedWithCmk`) |
+| `diskEncryptionSetResourceId` | Image Build — `diskEncryptionSetResourceId` (source/build region, only when CMK enabled) |
+| `confidentialVmDiskEncryptionSetResourceId` | Image Build — `confidentialVMDiskEncryptionSetResourceId` (source/build region, only when Confidential VM encryption type is `EncryptedWithCmk`) |
 | `imageBuildResourceGroupResourceId` | Image Build — `imageBuildResourceGroupId` parameter (existing RG path only) |
 
 ### Notes

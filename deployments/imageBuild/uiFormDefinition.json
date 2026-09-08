@@ -125,7 +125,13 @@
                                     "name": "gallery",
                                     "type": "Microsoft.Solutions.ResourceSelector",
                                     "label": "Select the existing Compute Gallery",
-                                    "resourceType": "Microsoft.Compute/galleries"
+                                    "resourceType": "Microsoft.Compute/galleries",
+                                    "options": {
+                                        "filter": {
+                                            "subscription": "onBasics",
+                                            "location": "onBasics"
+                                        }
+                                    }
                                 }
                             ]
                         },
@@ -664,7 +670,7 @@
                                             },
                                             {
                                                 "label": "DoD",
-                                                "value": "DOD"
+                                                "value": "DoD"
                                             },
                                             {
                                                 "label": "GovSecret",
@@ -1599,6 +1605,104 @@
                             "label": "Image Version Details",
                             "elements": [
                                 {
+                                    "name": "imageVersionEncryptionInfo",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": true,
+                                    "options": {
+                                        "style": "Info",
+                                        "text": "Select one encryption type for the image version and all of its regional replicas. Platform-managed encryption requires no Disk Encryption Set. Customer-managed and double encryption require a matching Disk Encryption Set in each target region."
+                                    }
+                                },
+                                {
+                                    "name": "galleryImageVersionEncryptionType",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Image Version Encryption Type",
+                                    "defaultValue": "Platform-managed key",
+                                    "toolTip": "Select the encryption type applied to the image version in every target region. Customer-managed and double encryption only list regional Disk Encryption Sets with the exact matching encryption type.",
+                                    "constraints": {
+                                        "allowedValues": [
+                                            {
+                                                "label": "Platform-managed key",
+                                                "value": "PlatformManaged"
+                                            },
+                                            {
+                                                "label": "Customer-managed key",
+                                                "value": "EncryptionAtRestWithCustomerKey"
+                                            },
+                                            {
+                                                "label": "Platform-managed and customer-managed keys",
+                                                "value": "EncryptionAtRestWithPlatformAndCustomerKeys"
+                                            }
+                                        ],
+                                        "required": true
+                                    },
+                                    "visible": true
+                                },
+                                {
+                                    "name": "diskEncryptionSetsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[not(empty(steps('basics').scope.subscription))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2024-03-02')]",
+                                        "transforms": {
+                                            "customerManaged": "sort_by(value[?properties.encryptionType == 'EncryptionAtRestWithCustomerKey'], &location) | [*].{name:name, id:id, location:location}",
+                                            "doubleEncryption": "sort_by(value[?properties.encryptionType == 'EncryptionAtRestWithPlatformAndCustomerKeys'], &location) | [*].{name:name, id:id, location:location}",
+                                            "confidentialVm": "sort_by(value[?properties.encryptionType == 'ConfidentialVmEncryptedWithCustomerKey'], &location) | [*].{name:name, id:id, location:location}"
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "existingDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Default Region Disk Encryption Set",
+                                    "placeholder": "Select a Disk Encryption Set...",
+                                    "toolTip": "Required for customer-managed and double encryption. Only Disk Encryption Sets in the default image version region with the selected encryption type are shown.",
+                                    "visible": "[not(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'PlatformManaged'))]",
+                                    "multiLine": true,
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(if(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'EncryptionAtRestWithCustomerKey'), steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.customerManaged, steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.doubleEncryption), (des) => equals(toLower(des.location), toLower(steps('basics').scope.location.name))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                    }
+                                },
+                                {
+                                    "name": "confidentialVMEncryptionType",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Confidential VM Guest State Encryption",
+                                    "defaultValue": "Encrypted with PMK",
+                                    "toolTip": "Specifies how the Confidential VM guest state is encrypted in gallery image version replicas. Encrypted with CMK requires a Confidential VM DES created by the imageManagement template.",
+                                    "visible": "[contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential')]",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Encrypted with PMK",
+                                                "value": "EncryptedWithPmk"
+                                            },
+                                            {
+                                                "label": "Encrypted VM Guest State Only with PMK",
+                                                "value": "EncryptedVMGuestStateOnlyWithPmk"
+                                            },
+                                            {
+                                                "label": "Encrypted with CMK (requires Confidential VM DES)",
+                                                "value": "EncryptedWithCmk"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "existingConfidentialVMDiskEncryptionSetResourceId",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Default Region Confidential VM Disk Encryption Set",
+                                    "placeholder": "Select a Confidential VM Disk Encryption Set...",
+                                    "toolTip": "Required for Confidential VM guest-state CMK. Only matching Confidential VM Disk Encryption Sets in the default image version region are shown.",
+                                    "visible": "[and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').imageVersion.confidentialVMEncryptionType, 'EncryptedWithCmk'))]",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.confidentialVm, (des) => equals(toLower(des.location), toLower(steps('basics').scope.location.name))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                    }
+                                },
+                                {
                                     "name": "useCustomVersion",
                                     "type": "Microsoft.Common.OptionsGroup",
                                     "label": "Specify Custom Version Information",
@@ -1723,9 +1827,10 @@
                                     "visible": true
                                 },
                                 {
-                                    "name": "specifyReplicationRegions",
+                                    "name": "specifyAdditionalReplicaRegions",
                                     "type": "Microsoft.Common.OptionsGroup",
-                                    "label": "Specify more than one location where the image version should be stored?",
+                                    "label": "Replicate this image version to additional regions in the primary Compute Gallery",
+                                    "toolTip": "Select this option to store replicas of the primary gallery image version in regions other than the default image version region. This does not create or use a separate disaster recovery Compute Gallery.",
                                     "defaultValue": "No",
                                     "constraints": {
                                         "allowedValues": [
@@ -1743,18 +1848,19 @@
                                 },
                                 {
                                     "name": "repRegionsText",
-                                    "type": "Microsoft.Common.TextBlock",
-                                    "visible": "[if(equals(steps('imageDest').imageVersion.specifyReplicationRegions, true), true, false)]",
+                                    "type": "Microsoft.Common.InfoBox",
+                                    "visible": "[if(equals(steps('imageDest').imageVersion.specifyAdditionalReplicaRegions, true), true, false)]",
                                     "options": {
-                                        "text": "Use the grid below to add All replication regions and the associated values. To add rows, toggle one of the drop down boxes."
+                                        "style": "Warning",
+                                        "text": "Use the grid below to add replica regions for the primary Compute Gallery. The form cannot enforce that a selected Disk Encryption Set is in the row's region. For customer-managed or double encryption, verify that each standard DES displays the same region as its row. Confidential VM builds using guest-state CMK require the same manual check for each Confidential VM DES. A region-to-DES mismatch will cause the deployment to fail."
                                     }
                                 },
                                 {
-                                    "name": "replicationRegions",
+                                    "name": "additionalReplicaRegions",
                                     "type": "Microsoft.Common.EditableGrid",
-                                    "ariaLabel": "Replication Regions",
-                                    "label": "Replication Regions",
-                                    "visible": "[if(equals(steps('imageDest').imageVersion.specifyReplicationRegions, true), true, false)]",
+                                    "ariaLabel": "Additional Replica Regions",
+                                    "label": "Additional Replica Regions",
+                                    "visible": "[if(equals(steps('imageDest').imageVersion.specifyAdditionalReplicaRegions, true), true, false)]",
                                     "constraints": {
                                         "width": "Full",
                                         "rows": {
@@ -1771,7 +1877,7 @@
                                                 "element": {
                                                     "type": "Microsoft.Common.DropDown",
                                                     "constraints": {
-                                                        "allowedValues": "[map(first(map(filter(steps('basics').computeApi.value, (resourceTypes) => equals(resourceTypes.resourceType, 'galleries/images/versions')), (item) => item.locations)), (item) => parse(concat('{\"label\":\"', item, '\",\"value\":\"', toLower(replace(item, ' ', '')), '\"}')))]",
+                                                        "allowedValues": "[map(filter(first(map(filter(steps('basics').computeApi.value, (resourceTypes) => equals(resourceTypes.resourceType, 'galleries/images/versions')), (item) => item.locations)), (item) => not(equals(toLower(replace(item, ' ', '')), toLower(steps('basics').scope.location.name)))), (item) => parse(concat('{\"label\":\"', item, '\",\"value\":\"', toLower(replace(item, ' ', '')), '\"}')))]",
                                                         "required": true
                                                     }
                                                 }
@@ -1784,7 +1890,7 @@
                                                     "type": "Microsoft.Common.DropDown",
                                                     "constraints": {
                                                         "required": false,
-                                                        "allowedValues": "[if(empty(filter(first(map(filter(steps('basics').storageApi.value, (resTypes) => equals(resTypes.resourceType, 'storageAccounts')), (sa) => sa.zoneMappings)), (zm) => equals(toLower(replace(zm.location, ' ', '')), last(take(steps('imageDest').imageVersion.replicationRegions, $rowIndex)).name))), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"}]'), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"},{\"label\":\"Standard ZRS\",\"value\":\"Standard_ZRS\"}]'))]"
+                                                        "allowedValues": "[if(empty(filter(first(map(filter(steps('basics').storageApi.value, (resTypes) => equals(resTypes.resourceType, 'storageAccounts')), (sa) => sa.zoneMappings)), (zm) => equals(toLower(replace(zm.location, ' ', '')), last(take(steps('imageDest').imageVersion.additionalReplicaRegions, $rowIndex)).name))), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"}]'), parse('[{\"label\":\"Standard LRS\",\"value\":\"Standard_LRS\"},{\"label\":\"Standard ZRS\",\"value\":\"Standard_ZRS\"}]'))]"
                                                     }
                                                 }
                                             },
@@ -1792,9 +1898,9 @@
                                                 "id": "regionalReplicaCount",
                                                 "header": "Replica Count",
                                                 "width": "1fr",
-                                                "defaultValue": "1",
                                                 "element": {
                                                     "type": "Microsoft.Common.TextBox",
+                                                    "placeholder": "1",
                                                     "constraints": {
                                                         "validations": [
                                                             {
@@ -1803,6 +1909,34 @@
                                                             }
                                                         ],
                                                         "required": false
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "id": "diskEncryptionSetResourceId",
+                                                "header": "Regional standard DES",
+                                                "width": "3fr",
+                                                "element": {
+                                                    "type": "Microsoft.Common.DropDown",
+                                                    "placeholder": "Select a DES...",
+                                                    "multiLine": true,
+                                                    "constraints": {
+                                                        "required": "[not(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'PlatformManaged'))]",
+                                                        "allowedValues": "[if(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'PlatformManaged'), parse('[{\"label\":\"Not applicable\",\"value\":\"NotApplicable\"}]'), map(if(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'EncryptionAtRestWithCustomerKey'), steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.customerManaged, steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.doubleEncryption), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Region: ', des.location, ' | Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}'))))]"
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "id": "confidentialVMDiskEncryptionSetResourceId",
+                                                "header": "Regional Confidential VM DES",
+                                                "width": "3fr",
+                                                "element": {
+                                                    "type": "Microsoft.Common.DropDown",
+                                                    "placeholder": "Select a Confidential VM DES...",
+                                                    "multiLine": true,
+                                                    "constraints": {
+                                                        "required": "[equals(steps('imageDest').imageVersion.confidentialVMEncryptionType, 'EncryptedWithCmk')]",
+                                                        "allowedValues": "[if(equals(steps('imageDest').imageVersion.confidentialVMEncryptionType, 'EncryptedWithCmk'), map(steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.confidentialVm, (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Region: ', des.location, ' | Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}'))), parse('[{\"label\":\"Not applicable\",\"value\":\"NotApplicable\"}]'))]"
                                                     }
                                                 }
                                             }
@@ -1821,15 +1955,16 @@
                                     "type": "Microsoft.Common.InfoBox",
                                     "options": {
                                         "style": "Info",
-                                        "text": "To recover from a regional outage, it is recommended to maintain an Azure Compute Gallery in a secondary region, as the Azure Compute Gallery is not a global resource. By selecting 'Yes' below, you will be able to choose an Azure Compute Gallery in a secondary region, and a matching image definition and image version will automatically be created in that region.",
+                                        "text": "Additional replicas in the primary Compute Gallery protect image-version availability, but the gallery resource itself remains regional. For regional disaster recovery, select Yes below to create a matching image definition and image version in a separate Compute Gallery located in another region.",
                                         "uri": "https://learn.microsoft.com/en-us/azure/architecture/example-scenario/azure-virtual-desktop/azure-virtual-desktop-multi-region-bcdr#compute"
                                     }
                                 },
                                 {
                                     "name": "specifyRemoteGallery",
                                     "type": "Microsoft.Common.OptionsGroup",
-                                    "label": "Specify a remote Azure Compute Gallery for regional disaster recovery purposes.",
+                                    "label": "Create a matching image version in a separate Compute Gallery for regional disaster recovery?",
                                     "defaultValue": "No",
+                                    "toolTip": "Select Yes to copy the image version to a separate Compute Gallery in another region. This is independent of replicas stored in additional regions by the primary Compute Gallery.",
                                     "constraints": {
                                         "allowedValues": [
                                             {
@@ -1912,100 +2047,18 @@
                                         "required": false
                                     },
                                     "visible": "[steps('imageDest').disasterRecovery.specifyRemoteGallery]"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "encryption",
-                            "type": "Microsoft.Common.Section",
-                            "label": "Disk Encryption",
-                            "elements": [
-                                {
-                                    "name": "buildVmDesInfoBox",
-                                    "type": "Microsoft.Common.InfoBox",
-                                    "visible": true,
-                                    "options": {
-                                        "style": "Info",
-                                        "text": "Disk Encryption Sets are applied to both build VM OS disks and gallery image version replicas, keeping builds compliant with policies that require a DES on all VMs. The standard DES is applied to the orchestration VM and the image VM for non-Confidential VM builds. For Confidential VM builds, the Confidential VM DES is applied to the image VM OS disk instead; the standard DES is used as a fallback when no Confidential VM DES is provided."
-                                    }
-                                },
-                                {
-                                    "name": "enableCmk",
-                                    "type": "Microsoft.Common.CheckBox",
-                                    "label": "Enable Customer Managed Key encryption",
-                                    "defaultValue": false,
-                                    "toolTip": "When enabled, a standard Customer Managed Key Disk Encryption Set must be selected. Applied to the orchestration VM OS disk, the image VM OS disk for non-Confidential VM builds (or as a fallback for Confidential VM builds), and gallery image version replicas.",
-                                    "visible": true
-                                },
-                                {
-                                    "name": "diskEncryptionSetsApi",
-                                    "type": "Microsoft.Solutions.ArmApiControl",
-                                    "request": {
-                                        "method": "GET",
-                                        "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/diskEncryptionSets?api-version=2023-10-02')]"
-                                    }
-                                },
-                                {
-                                    "name": "existingDiskEncryptionSetResourceId",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "label": "Standard Disk Encryption Set",
-                                    "placeholder": "Select a standard Disk Encryption Set...",
-                                    "toolTip": "Required. Select the standard DES created by the imageManagement template. Only DES of type Customer Managed Key or Platform + Customer Managed Keys are shown; Confidential VM DES are excluded. Applied to the orchestration VM OS disk, the image VM OS disk for non-Confidential VM builds (or as a fallback for Confidential VM builds), and gallery image version replicas.",
-                                    "visible": "[steps('imageDest').encryption.enableCmk]",
-                                    "multiLine": true,
-                                    "constraints": {
-                                        "required": true,
-                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), and(equals(toLower(first(skip(split(des.id, '/'), 4))), toLower(first(skip(split(steps('prereqs').gallery.gallery.id, '/'), 4)))), not(equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey'))))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
-                                    }
                                 },
                                 {
                                     "name": "existingRemoteDiskEncryptionSetResourceId",
                                     "type": "Microsoft.Common.DropDown",
-                                    "label": "Remote Standard Disk Encryption Set",
-                                    "placeholder": "Select a standard Disk Encryption Set in the remote region...",
-                                    "toolTip": "Required. Select a standard DES in the same subscription and region as the remote Compute Gallery. It encrypts the remote-region gallery image replicas.",
-                                    "visible": "[and(steps('imageDest').encryption.enableCmk, steps('imageDest').disasterRecovery.specifyRemoteGallery)]",
+                                    "label": "Remote Region Disk Encryption Set",
+                                    "placeholder": "Select a Disk Encryption Set in the remote region...",
+                                    "toolTip": "Required for customer-managed and double encryption. Only Disk Encryption Sets in the remote gallery region with the image version's selected encryption type are shown.",
+                                    "visible": "[and(not(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'PlatformManaged')), steps('imageDest').disasterRecovery.specifyRemoteGallery)]",
                                     "multiLine": true,
                                     "constraints": {
                                         "required": true,
-                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location)), not(equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
-                                    }
-                                },
-                                {
-                                    "name": "confidentialVMEncryptionType",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "label": "Confidential VM Guest State Encryption",
-                                    "defaultValue": "Encrypted with PMK",
-                                    "toolTip": "Specifies how the Confidential VM guest state is encrypted in gallery image version replicas. 'Encrypted with CMK' requires a Confidential VM DES created by the imageManagement template. Pass the imageManagement output 'confidentialVmDiskEncryptionSetResourceId' to the picker below.",
-                                    "visible": "[contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential')]",
-                                    "constraints": {
-                                        "required": true,
-                                        "allowedValues": [
-                                            {
-                                                "label": "Encrypted with PMK",
-                                                "value": "EncryptedWithPmk"
-                                            },
-                                            {
-                                                "label": "Encrypted VM Guest State Only with PMK",
-                                                "value": "EncryptedVMGuestStateOnlyWithPmk"
-                                            },
-                                            {
-                                                "label": "Encrypted with CMK (requires Confidential VM DES)",
-                                                "value": "EncryptedWithCmk"
-                                            }
-                                        ]
-                                    }
-                                },
-                                {
-                                    "name": "existingConfidentialVMDiskEncryptionSetResourceId",
-                                    "type": "Microsoft.Common.DropDown",
-                                    "label": "Confidential VM Disk Encryption Set",
-                                    "placeholder": "Select a Confidential VM Disk Encryption Set...",
-                                    "toolTip": "Required. Only DES of type ConfidentialVmEncryptedWithCustomerKey are shown. This DES must have CVM Orchestrator key release permissions pre-configured. Applied to the image VM OS disk during Confidential VM builds and gallery image version guest state encryption in each replication region. Use the imageManagement template to create this.",
-                                    "visible": "[and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk'))]",
-                                    "constraints": {
-                                        "required": true,
-                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(des.location, steps('basics').scope.location.name), and(equals(toLower(first(skip(split(des.id, '/'), 4))), toLower(first(skip(split(steps('prereqs').gallery.gallery.id, '/'), 4)))), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey')))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                        "allowedValues": "[map(filter(if(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'EncryptionAtRestWithCustomerKey'), steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.customerManaged, steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.doubleEncryption), (des) => equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
                                     }
                                 },
                                 {
@@ -2013,12 +2066,12 @@
                                     "type": "Microsoft.Common.DropDown",
                                     "label": "Remote Confidential VM Disk Encryption Set",
                                     "placeholder": "Select a Confidential VM Disk Encryption Set in the remote region...",
-                                    "toolTip": "Required. Select a Confidential VM DES in the same subscription and region as the remote Compute Gallery. This DES must have CVM Orchestrator key release permissions pre-configured.",
-                                    "visible": "[and(steps('imageDest').disasterRecovery.specifyRemoteGallery, and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')))]",
+                                    "toolTip": "Required for Confidential VM guest-state CMK. Only matching Confidential VM Disk Encryption Sets in the remote gallery region are shown.",
+                                    "visible": "[and(steps('imageDest').disasterRecovery.specifyRemoteGallery, equals(steps('imageDest').imageVersion.confidentialVMEncryptionType, 'EncryptedWithCmk'))]",
                                     "multiLine": true,
                                     "constraints": {
                                         "required": true,
-                                        "allowedValues": "[map(filter(steps('imageDest').encryption.diskEncryptionSetsApi.value, (des) => and(equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location)), equals(des.properties.encryptionType, 'ConfidentialVmEncryptedWithCustomerKey'))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
+                                        "allowedValues": "[map(filter(steps('imageDest').imageVersion.diskEncryptionSetsApi.transformed.confidentialVm, (des) => equals(toLower(des.location), toLower(steps('imageDest').disasterRecovery.remoteComputeGallery.location))), (des) => parse(concat('{\"label\":\"', des.name, '\",\"description\":\"Resource group: ', first(skip(split(des.id, '/'), 4)), '\",\"value\":\"', des.id, '\"}')))]"
                                     }
                                 }
                             ]
@@ -2206,11 +2259,11 @@
                 "collectCustomizationLogs": "[steps('prereqs').storage.collectLogs]",
                 "logStorageAccountResourceId": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.existingLogsStorageAccount.id, ''), '')]",
                 "logContainerName": "[if(steps('prereqs').storage.collectLogs, coalesce(steps('prereqs').storage.logsContainer, 'image-customization-logs'), 'image-customization-logs')]",
-                "diskEncryptionSetResourceId": "[if(steps('imageDest').encryption.enableCmk, coalesce(steps('imageDest').encryption.existingDiskEncryptionSetResourceId, ''), '')]",
-                "remoteDiskEncryptionSetResourceId": "[if(and(steps('imageDest').encryption.enableCmk, steps('imageDest').disasterRecovery.specifyRemoteGallery), coalesce(steps('imageDest').encryption.existingRemoteDiskEncryptionSetResourceId, ''), '')]",
-                "galleryImageVersionConfidentialVMEncryptionType": "[if(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), coalesce(steps('imageDest').encryption.confidentialVMEncryptionType, ''), '')]",
-                "confidentialVMDiskEncryptionSetResourceId": "[if(and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk')), coalesce(steps('imageDest').encryption.existingConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
-                "remoteConfidentialVMDiskEncryptionSetResourceId": "[if(and(steps('imageDest').disasterRecovery.specifyRemoteGallery, and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').encryption.confidentialVMEncryptionType, 'EncryptedWithCmk'))), coalesce(steps('imageDest').encryption.existingRemoteConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
+                "diskEncryptionSetResourceId": "[if(not(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'PlatformManaged')), coalesce(steps('imageDest').imageVersion.existingDiskEncryptionSetResourceId, ''), '')]",
+                "remoteDiskEncryptionSetResourceId": "[if(and(not(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'PlatformManaged')), steps('imageDest').disasterRecovery.specifyRemoteGallery), coalesce(steps('imageDest').disasterRecovery.existingRemoteDiskEncryptionSetResourceId, ''), '')]",
+                "galleryImageVersionConfidentialVMEncryptionType": "[if(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), coalesce(steps('imageDest').imageVersion.confidentialVMEncryptionType, ''), '')]",
+                "confidentialVMDiskEncryptionSetResourceId": "[if(and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').imageVersion.confidentialVMEncryptionType, 'EncryptedWithCmk')), coalesce(steps('imageDest').imageVersion.existingConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
+                "remoteConfidentialVMDiskEncryptionSetResourceId": "[if(and(steps('imageDest').disasterRecovery.specifyRemoteGallery, and(contains(coalesce(if(equals(steps('imageDest').imageDefinition.useExImageDef, true), coalesce(steps('imageDest').imageDefinition.existingImageDefinition.SecurityType, 'Standard'), steps('imageDest').imageDefinition.securityType), 'Standard'), 'Confidential'), equals(steps('imageDest').imageVersion.confidentialVMEncryptionType, 'EncryptedWithCmk'))), coalesce(steps('imageDest').disasterRecovery.existingRemoteConfidentialVMDiskEncryptionSetResourceId, ''), '')]",
                 "imageDefinitionResourceId": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, true), steps('imageDest').imageDefinition.existingImageDefinition.id, '')]",
                 "customImageDefinitionName": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.customImageDefinitionName, '')]",
                 "imageDefinitionPublisher": "[if(equals(steps('imageDest').imageDefinition.useExImageDef, false), steps('imageDest').imageDefinition.imageDefinitionPublisher, '')]",
@@ -2227,7 +2280,7 @@
                 "imageVersionExcludeFromLatest": "[steps('imageDest').imageVersion.excludeFromLatest]",
                 "imageVersionDefaultReplicaCount": "[steps('imageDest').imageVersion.replicaCount]",
                 "imageVersionDefaultStorageAccountType": "[steps('imageDest').imageVersion.storageAccountType]",
-                "imageVersionTargetRegions": "[if(equals(steps('imageDest').imageVersion.specifyReplicationRegions, true), map(steps('imageDest').imageVersion.replicationRegions, (region) => parse(concat('{\"name\":\"', region.name, '\",\"storageAccountType\":\"', if(empty(region.storageAccountType), steps('imageDest').imageVersion.storageAccountType, region.storageAccountType), '\",\"regionalReplicaCount\":', if(empty(region.regionalReplicaCount), string(steps('imageDest').imageVersion.replicaCount), region.regionalReplicaCount), '}'))), parse('[]'))]",
+                "imageVersionTargetRegions": "[if(equals(steps('imageDest').imageVersion.specifyAdditionalReplicaRegions, true), map(steps('imageDest').imageVersion.additionalReplicaRegions, (region) => parse(concat('{\"name\":\"', region.name, '\",\"storageAccountType\":\"', if(empty(region.storageAccountType), steps('imageDest').imageVersion.storageAccountType, region.storageAccountType), '\",\"regionalReplicaCount\":', if(empty(region.regionalReplicaCount), string(steps('imageDest').imageVersion.replicaCount), region.regionalReplicaCount), ',\"diskEncryptionSetResourceId\":\"', if(or(equals(steps('imageDest').imageVersion.galleryImageVersionEncryptionType, 'PlatformManaged'), equals(coalesce(region.diskEncryptionSetResourceId, ''), 'NotApplicable')), '', coalesce(region.diskEncryptionSetResourceId, '')), '\",\"confidentialVMDiskEncryptionSetResourceId\":\"', if(and(equals(steps('imageDest').imageVersion.confidentialVMEncryptionType, 'EncryptedWithCmk'), not(equals(coalesce(region.confidentialVMDiskEncryptionSetResourceId, ''), 'NotApplicable'))), coalesce(region.confidentialVMDiskEncryptionSetResourceId, ''), ''), '\"}'))), parse('[]'))]",
                 "remoteComputeGalleryResourceId": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.remoteComputeGallery.id, '')]",
                 "remoteImageVersionStorageAccountType": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.storageAccountType , 'Standard_LRS')]",
                 "remoteImageVersionDefaultReplicaCount": "[if(steps('imageDest').disasterRecovery.specifyRemoteGallery, steps('imageDest').disasterRecovery.replicaCount, 1)]",

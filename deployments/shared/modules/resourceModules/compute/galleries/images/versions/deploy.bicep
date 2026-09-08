@@ -117,7 +117,7 @@ var targetRegionDefault = [
   }
 ]
 // determine if targetRegions contains the deployment location with the next two variables
-var regionMatchArray = [for region in targetRegions: region.name == location ? true : false]
+var regionMatchArray = [for region in targetRegions: toLower(region.name) == toLower(location) ? true : false]
 var targetRegionsContainsLocation = contains(regionMatchArray, true) ? true : false
 // cannot simply use a union function on an array of objects because there could be duplicates which will cause failures.
 var targetRegionsVar = !empty(targetRegions)

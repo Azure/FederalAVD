@@ -70,7 +70,7 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 | **imageManagement** | `managedIdentityResourceId` | **imageBuild** | `userAssignedIdentityResourceId` |
 | **imageManagement** | `buildLogsStorageAccountResourceId` | **imageBuild** | `logStorageAccountResourceId` |
 | **imageManagement** | `imageBuildResourceGroupResourceId` | **imageBuild** | `imageBuildResourceGroupId` |
-| **imageManagement** | `diskEncryptionSetResourceId` | **imageBuild** | `diskEncryptionSetResourceId` |
+| **imageManagement** | `diskEncryptionSetResourceId` | **imageBuild** | `diskEncryptionSetResourceId` for the source/build region; use `imageVersionTargetRegions[].diskEncryptionSetResourceId` for additional regions |
 | **imageBuild** | image definition resource ID | **hostpool** | `customImageResourceId` |
 
 ---

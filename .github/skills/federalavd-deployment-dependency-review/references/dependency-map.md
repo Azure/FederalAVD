@@ -24,8 +24,8 @@
 | Image Management | `artifactsBlobContainerUrl` | Image Build `artifactsContainerUri` |
 | Image Management | `managedIdentityResourceId` | Image Build `userAssignedIdentityResourceId` |
 | Image Management | `buildLogsStorageAccountResourceId` | Image Build `logStorageAccountResourceId` |
-| Image Management | `diskEncryptionSetResourceId` | Image Build `diskEncryptionSetResourceId` |
-| Image Management | `confidentialVmDiskEncryptionSetResourceId` | Image Build `confidentialVMDiskEncryptionSetResourceId` |
+| Image Management | `diskEncryptionSetResourceId` | Image Build `diskEncryptionSetResourceId` for the source/build region; use `imageVersionTargetRegions[].diskEncryptionSetResourceId` for additional regions |
+| Image Management | `confidentialVmDiskEncryptionSetResourceId` | Image Build `confidentialVMDiskEncryptionSetResourceId` for the source/build region; use `imageVersionTargetRegions[].confidentialVMDiskEncryptionSetResourceId` for additional regions |
 | Image Management | `imageBuildResourceGroupResourceId` | Image Build `imageBuildResourceGroupId` |
 | Image Build | `customImageResourceId` | Host Pool `customImageResourceId` |
 

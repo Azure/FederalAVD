@@ -166,7 +166,7 @@ try {
         "GCCH" {
             $CloudType = 3
         }
-        "DOD" {
+        "DoD" {
             $CloudType = 4
         }
         "GovSecret" {

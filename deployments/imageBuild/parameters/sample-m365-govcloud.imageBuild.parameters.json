@@ -194,6 +194,9 @@
         "imageVersionDefaultStorageAccountType": {
             "value": "Standard_LRS"
         },
+        "imageVersionExcludeFromLatest": {
+            "value": false
+        },
         "imageVersionEOLinDays": {
             "value": 180
         }

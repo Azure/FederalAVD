@@ -459,20 +459,20 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
 
 ### Customer-Managed Key Encryption
 
-Gallery image version CMK is managed by the **imageManagement** template, which creates one Disk Encryption Set (DES) for the gallery and outputs `diskEncryptionSetResourceId`. Pass that output here to share the same DES across all builds rather than creating a new one per build.
+Gallery image version encryption can use platform-managed keys, customer-managed keys, or platform-managed and customer-managed keys (double encryption). The Template Spec form requires one encryption type for the deployment and only lists Disk Encryption Sets (DES) whose immutable `properties.encryptionType` exactly matches that selection. Pass the source/build region's **imageManagement** `diskEncryptionSetResourceId` output through the top-level `diskEncryptionSetResourceId` parameter. Put each additional primary-gallery region's DES in its matching `imageVersionTargetRegions` object. A DES from one region or encryption type is never reused for another.
 
 #### `diskEncryptionSetResourceId`
 
 - **Type:** String
 - **Default:** `''`
-- **Description:** Resource ID of an existing Disk Encryption Set for gallery image version encryption. Created by the imageManagement template; pass its `diskEncryptionSetResourceId` output here. When empty, gallery image versions use platform-managed keys.
+- **Description:** Resource ID of the standard DES for the image-version source/build region. Leave empty for platform-managed encryption.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}`
 
 #### `remoteDiskEncryptionSetResourceId`
 
 - **Type:** String
 - **Default:** `''`
-- **Description:** Resource ID of an existing standard Disk Encryption Set in the remote Compute Gallery region. Required when a remote gallery is configured and its image replicas use customer-managed keys. The DES must be in the same subscription as the remote image and in the remote target region.
+- **Description:** Resource ID of an existing standard Disk Encryption Set in the remote Compute Gallery region. Required when a remote gallery is configured and its image version uses customer-managed keys. The DES must be in the same subscription as the remote image and in the remote target region.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{remote-rg}/providers/Microsoft.Compute/diskEncryptionSets/{remote-des}`
 
 #### `galleryImageVersionConfidentialVMEncryptionType`
@@ -486,7 +486,7 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 
 - **Type:** String
 - **Default:** `''`
-- **Description:** Required when `galleryImageVersionConfidentialVMEncryptionType` is `EncryptedWithCmk`. Must be a Confidential VM DES of type `ConfidentialVmEncryptedWithCustomerKey`. Created by the imageManagement template; pass its `confidentialVmDiskEncryptionSetResourceId` output here.
+- **Description:** Resource ID of the Confidential VM DES for the image-version source/build region when guest-state encryption uses CMK.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{cvm-des}`
 
 #### `remoteConfidentialVMDiskEncryptionSetResourceId`
@@ -550,7 +550,8 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 
 - **Type:** String
 - **Default:** `TrustedLaunch`
-- **Allowed Values:** `Standard`, `TrustedLaunch`, `TrustedLaunchSupported`, `ConfidentialVM`, `ConfidentialVMSupported`, `TrustedLaunchAndConfidentialVMSupported`
+- **Allowed Values:** `Standard`, `TrustedLaunch`, `TrustedLaunchSupported`, `ConfidentialVM`, `ConfidentialVMSupported`, `TrustedLaunchAndConfidentialVmSupported`
+- **Backward Compatibility:** The legacy spelling `TrustedLaunchAndConfidentialVMSupported` remains accepted and is normalized to Azure's canonical `TrustedLaunchAndConfidentialVmSupported` value.
 - **Description:** Security type for the image definition. Confidential VM variants are incompatible with NVMe, Accelerated Networking, and Hibernation — selecting a Confidential type forces those features off and restricts the build VM size list to Confidential-capable SKUs (DC/EC/NCC series).
 
 ### Image Version
@@ -585,29 +586,32 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Exclude this version when using "latest" tag
+- **Description:** Image-version-wide default that determines whether deployments using `latest` can select this version. A target-region object can override it with `excludeFromLatest`.
 
 #### `imageVersionDefaultReplicaCount`
 
 - **Type:** Integer (1-100)
 - **Default:** `1`
-- **Description:** Number of replicas per region
+- **Description:** Default replica count per region. A target-region object can override it with `regionalReplicaCount`.
 
 #### `imageVersionDefaultStorageAccountType`
 
 - **Type:** String
 - **Default:** `Standard_LRS`
 - **Allowed Values:** `Standard_LRS`, `Standard_ZRS`, `Premium_LRS`
+- **Description:** Default storage account type for image-version replicas. A target-region object can override it with `storageAccountType`.
 
 #### `imageVersionTargetRegions`
 
 - **Type:** Array of Objects
-- **Description:** Additional replication regions (default region always included)
+- **Description:** Regional overrides and additional persistent replica regions for the image version in the primary gallery. The source/build region is added automatically from the top-level defaults when omitted. The Template Spec form emits only the additional regions selected in its grid. Configuring a remote gallery does not persistently add the remote gallery region to this list.
 - **Object Properties:**
   - `name` (required): Region name
   - `storageAccountType`: Storage type for this region
   - `regionalReplicaCount`: Replica count for this region
   - `excludeFromLatest`: Exclude from latest in this region
+  - `diskEncryptionSetResourceId`: Standard DES in this region. Required for every non-primary region when customer-managed or double encryption is enabled, and its encryption type must match the primary DES.
+  - `confidentialVMDiskEncryptionSetResourceId`: Confidential VM DES in this region. Required for every non-primary region when guest-state encryption uses CMK.
 
 **Example:**
 
@@ -617,7 +621,8 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
     "name": "westus2",
     "storageAccountType": "Standard_ZRS",
     "regionalReplicaCount": 2,
-    "excludeFromLatest": false
+    "excludeFromLatest": false,
+    "diskEncryptionSetResourceId": "/subscriptions/{sub-id}/resourceGroups/{west-rg}/providers/Microsoft.Compute/diskEncryptionSets/{west-des}"
   },
   {
     "name": "centralus",
@@ -627,12 +632,20 @@ Gallery image version CMK is managed by the **imageManagement** template, which 
 ]
 ```
 
+Existing parameter files remain valid when `imageVersionTargetRegions` includes the source/build
+region or omits optional regional properties. The top-level values provide Azure's publishing-profile
+defaults, while properties on a target-region object override those defaults for that region.
+However, remote-gallery topology has intentionally changed: selecting a remote gallery no longer
+keeps a persistent primary-gallery replica in that gallery's region. Add the remote region explicitly
+to `imageVersionTargetRegions` when both a separate remote-gallery copy and a persistent replica in
+the primary gallery are required.
+
 ### Disaster Recovery
 
 #### `remoteComputeGalleryResourceId`
 
 - **Type:** String
-- **Description:** Remote compute gallery for DR (different region)
+- **Description:** Remote compute gallery for DR (different region). The deployment performs a second capture from the same generalized build source because Azure does not support using a CMK-encrypted Compute Gallery image version as another image version's source. The primary gallery is not replicated to the remote region unless that region is explicitly included in `imageVersionTargetRegions`. The remote gallery version includes its required source/build-region replica and its remote-region replica.
 - **Example:** `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}`
 
 #### `remoteImageVersionExcludeFromLatest`
@@ -814,18 +827,18 @@ module imageBuild './imageBuild.bicep' = {
     // Existing definition
     imageDefinitionResourceId: '/subscriptions/{sub}/resourceGroups/rg-gallery-east/providers/Microsoft.Compute/galleries/gal-avd-east/images/vmid-win11-avd'
     
-    // Multi-region replication
+    // Image-version defaults for the source/build region
+    imageVersionDefaultReplicaCount: 3
+    imageVersionDefaultStorageAccountType: 'Standard_ZRS'
+    imageVersionExcludeFromLatest: false
+
+    // Additional primary-gallery replica regions
     imageVersionTargetRegions: [
-      {
-        name: 'eastus'
-        storageAccountType: 'Standard_ZRS'
-        regionalReplicaCount: 3
-        excludeFromLatest: false
-      }
       {
         name: 'centralus'
         storageAccountType: 'Standard_LRS'
         regionalReplicaCount: 2
+        diskEncryptionSetResourceId: '/subscriptions/{sub}/resourceGroups/rg-gallery-central/providers/Microsoft.Compute/diskEncryptionSets/des-avd-central'
       }
       {
         name: 'westus2'

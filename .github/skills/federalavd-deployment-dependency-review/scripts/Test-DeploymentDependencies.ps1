@@ -67,7 +67,19 @@ foreach ($name in @('keyManagementStorage', 'keyManagementRecoveryServicesVault'
 Test-RequiredValue -WhenName 'imageBuildResourceGroupId' -When { param($value) -not [string]::IsNullOrWhiteSpace([string]$value) } -RequiredName 'userAssignedIdentityResourceId' -Detail 'The existing image-build resource group path requires the Image Management identity output.'
 Test-RequiredValue -WhenName 'collectCustomizationLogs' -When { param($value) $value -eq $true } -RequiredName 'logStorageAccountResourceId' -Detail 'Customization log collection requires the Image Management build-logs storage output.'
 Test-RequiredValue -WhenName 'collectCustomizationLogs' -When { param($value) $value -eq $true } -RequiredName 'userAssignedIdentityResourceId' -Detail 'Customization log collection requires the Image Management identity output.'
-Test-RequiredValue -WhenName 'galleryImageVersionConfidentialVMEncryptionType' -When { param($value) $value -eq 'EncryptedWithCmk' } -RequiredName 'confidentialVMDiskEncryptionSetResourceId' -Detail 'Confidential VM CMK encryption requires the matching Disk Encryption Set output.'
+if ($values.ContainsKey('galleryImageVersionConfidentialVMEncryptionType') -and $values['galleryImageVersionConfidentialVMEncryptionType'] -eq 'EncryptedWithCmk') {
+    $legacyCvmDesPresent = $values.ContainsKey('confidentialVMDiskEncryptionSetResourceId') -and
+        -not [string]::IsNullOrWhiteSpace([string]$values['confidentialVMDiskEncryptionSetResourceId'])
+    $regionalCvmDesPresent = $values.ContainsKey('imageVersionTargetRegions') -and @(
+        $values['imageVersionTargetRegions'] |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.confidentialVMDiskEncryptionSetResourceId) }
+    ).Count -gt 0
+    $results.Add([pscustomobject]@{
+        Check = 'galleryImageVersionConfidentialVMEncryptionType -> imageVersionTargetRegions confidential VM DES'
+        Status = if ($legacyCvmDesPresent -or $regionalCvmDesPresent) { 'Passed' } else { 'Failed' }
+        Detail = 'Confidential VM CMK encryption requires the source-region top-level Disk Encryption Set or matching Disk Encryption Sets in additional imageVersionTargetRegions entries.'
+    })
+}
 Test-RequiredValue -WhenName 'existingLogAnalyticsWorkspaceResourceId' -When { param($value) -not [string]::IsNullOrWhiteSpace([string]$value) } -RequiredName 'existingAVDInsightsDataCollectionRuleResourceId' -Detail 'Shared host-pool monitoring should reuse the matching AVD Insights DCR.'
 Test-RequiredValue -WhenName 'existingLogAnalyticsWorkspaceResourceId' -When { param($value) -not [string]::IsNullOrWhiteSpace([string]$value) } -RequiredName 'existingDataCollectionEndpointResourceId' -Detail 'Shared host-pool monitoring should reuse the matching data collection endpoint.'
 

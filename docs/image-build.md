@@ -398,14 +398,27 @@ References:
 
 ### CMK Encryption Reference
 
-Gallery image version encryption is managed by the **imageManagement** template. Deploy imageManagement with `keyManagement = CustomerManaged` or `CustomerManagedHSM` to create a Disk Encryption Set (DES) for each target region. A DES is regional, and Azure requires it to be in the same subscription as the image. Pass the primary region's `diskEncryptionSetResourceId` output to the image build. When using a remote Compute Gallery, also pass a DES created in the remote region.
+Gallery image version encryption can use platform-managed keys, customer-managed keys, or platform-managed and customer-managed keys (double encryption). The Template Spec form selects one encryption type and filters every regional DES picker to Disk Encryption Sets whose immutable `properties.encryptionType` exactly matches it. Deploy imageManagement with the corresponding key-management option to create a matching DES for each target region. A DES is regional, and Azure requires it to be in the same subscription as the image. Pass the source/build region's DES through `diskEncryptionSetResourceId`; put each additional primary-gallery region's DES in its corresponding `imageVersionTargetRegions` object. When using a remote Compute Gallery, continue to pass its matching DES through `remoteDiskEncryptionSetResourceId`.
 
 | Parameter | Description | Example |
 | --- | --- | --- |
-| **diskEncryptionSetResourceId** | Resource ID of the DES created by imageManagement. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
+| **diskEncryptionSetResourceId** | Resource ID of the standard DES for the image-version source/build region. Leave empty for platform-managed key encryption. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{des}` |
+| **imageVersionTargetRegions[].diskEncryptionSetResourceId** | Resource ID of the matching standard DES for an additional primary-gallery target region. | `/subscriptions/{sub}/resourceGroups/{regional-rg}/providers/Microsoft.Compute/diskEncryptionSets/{regional-des}` |
 | **remoteDiskEncryptionSetResourceId** | Resource ID of a standard DES in the remote Compute Gallery region. Required by the form when remote Gallery CMK is enabled. | `/subscriptions/{sub}/resourceGroups/{remote-rg}/providers/Microsoft.Compute/diskEncryptionSets/{remote-des}` |
-| **confidentialVMDiskEncryptionSetResourceId** | Resource ID of the primary-region Confidential VM DES when guest-state encryption uses CMK. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{cvm-des}` |
+| **confidentialVMDiskEncryptionSetResourceId** | Resource ID of the Confidential VM DES for the source/build region when guest-state encryption uses CMK. | `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/diskEncryptionSets/{cvm-des}` |
+| **imageVersionTargetRegions[].confidentialVMDiskEncryptionSetResourceId** | Resource ID of the matching Confidential VM DES for an additional target region. | `/subscriptions/{sub}/resourceGroups/{regional-rg}/providers/Microsoft.Compute/diskEncryptionSets/{regional-cvm-des}` |
 | **remoteConfidentialVMDiskEncryptionSetResourceId** | Resource ID of the remote-region Confidential VM DES when a remote Gallery is configured and guest-state encryption uses CMK. | `/subscriptions/{sub}/resourceGroups/{remote-rg}/providers/Microsoft.Compute/diskEncryptionSets/{remote-cvm-des}` |
+
+The primary and remote galleries have independent target lists. Selecting a remote gallery does not add a replica of the primary gallery version in the remote region. The deployment performs a second capture from the same generalized build source because Azure does not support using a CMK-encrypted Compute Gallery image version as another image version's source. The remote gallery version therefore includes the required source/build-region target plus the remote-region target, with each target using its regional DES.
+
+> **Parameter model:** `imageVersionDefaultReplicaCount`,
+> `imageVersionDefaultStorageAccountType`, and `imageVersionExcludeFromLatest` map to Azure's
+> publishing-profile defaults. The source/build region is added to Azure's target list automatically.
+> `imageVersionTargetRegions` contains regional overrides and additional persistent primary-gallery
+> replicas. Existing files that explicitly include the source/build region remain supported. If an
+> existing workflow relied on selecting a remote gallery to also retain a primary-gallery replica in
+> that region, add the remote region explicitly to `imageVersionTargetRegions`. The remote gallery
+> selection now controls only the separate disaster-recovery gallery copy.
 
 ### Image Management Resource References
 

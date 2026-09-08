@@ -7,6 +7,8 @@ type imageVersionTargetRegionInputType = {
   storageAccountType: ('Standard_LRS' | 'Standard_ZRS' | 'Premium_LRS' | 'PremiumV2_LRS')?
   regionalReplicaCount: int?
   excludeFromLatest: bool?
+  diskEncryptionSetResourceId: string?
+  confidentialVMDiskEncryptionSetResourceId: string?
 }
 
 // Builds a custom Windows image for Azure Virtual Desktop using a zero-trust architecture.
@@ -194,7 +196,7 @@ param logStorageAccountResourceId string = ''
 @description('Optional. Name of the blob container in the logs storage account to write customization logs to.')
 param logContainerName string = 'image-customization-logs'
 
-@description('Optional. Resource ID of an existing Disk Encryption Set to use for gallery image version encryption. Created by the imageManagement template; pass its diskEncryptionSetResourceId output here to share the same DES across all image builds.')
+@description('Optional. Resource ID of the Disk Encryption Set for the image-version source region. Leave empty for platform-managed encryption.')
 param diskEncryptionSetResourceId string = ''
 
 @description('Optional. Resource ID of an existing Disk Encryption Set in the remote Compute Gallery region. Required to encrypt remote gallery image version replicas with a customer-managed key.')
@@ -209,7 +211,7 @@ param remoteDiskEncryptionSetResourceId string = ''
 ])
 param galleryImageVersionConfidentialVMEncryptionType string = ''
 
-@description('Optional. Resource ID of an existing Disk Encryption Set to use for Confidential VM guest state encryption in gallery image version replicas. When provided, no new DES is created. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
+@description('Optional. Resource ID of the Confidential VM Disk Encryption Set for the image-version source region. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
 param confidentialVMDiskEncryptionSetResourceId string = ''
 
 @description('Optional. Resource ID of an existing Confidential VM Disk Encryption Set in the remote Compute Gallery region. Only used when galleryImageVersionConfidentialVMEncryptionType is EncryptedWithCmk.')
@@ -264,6 +266,7 @@ param imageDefinitionIsHigherStoragePerformanceSupported bool = false
   'ConfidentialVMSupported'
   'TrustedLaunch'
   'TrustedLaunchSupported'
+  'TrustedLaunchAndConfidentialVmSupported'
   'TrustedLaunchAndConfidentialVMSupported'
 ])
 param imageDefinitionSecurityType string = 'TrustedLaunch'
@@ -289,12 +292,12 @@ param imagePatch int = -1
 @description('Optional. The number of days from now that the image version will reach end of life.')
 param imageVersionEOLinDays int = 0
 
-@description('Optional. The default image version replica count per region. This can be overwritten by the regional value.')
+@description('Optional. The default image version replica count per region. A target region can override this with regionalReplicaCount.')
 @minValue(1)
 @maxValue(100)
 param imageVersionDefaultReplicaCount int = 1
 
-@description('Optional. Specifies the storage account type to be used to store the image. This property is not updatable.')
+@description('Optional. The default storage account type used to store the image. A target region can override this with storageAccountType. This property is not updatable.')
 @allowed([
   'Premium_LRS'
   'Standard_LRS'
@@ -302,10 +305,10 @@ param imageVersionDefaultReplicaCount int = 1
 ])
 param imageVersionDefaultStorageAccountType string = 'Standard_LRS'
 
-@description('Optional. Exclude this image version from the latest. This property can be overwritten by the regional value.')
+@description('Optional. Exclude this image version from latest by default. A target region can override this with excludeFromLatest.')
 param imageVersionExcludeFromLatest bool = false
 
-@description('Optional. The regions to which the image version will be replicated. (Default: deployment location with Standard_LRS storage and 1 replica.)')
+@description('Optional. Primary gallery image-version target-region overrides and additional replica regions. The source/build region is added automatically using the top-level defaults when omitted. Each additional CMK region must specify its matching regional Disk Encryption Set resource IDs.')
 param imageVersionTargetRegions imageVersionTargetRegionInputType[] = []
 
 @description('Optional. The resource Id of the remote compute gallery.')
@@ -390,13 +393,17 @@ var logContainerUri = collectCustomizationLogs && !empty(logStorageAccountResour
   ? 'https://${existingLogStorageAccountName}.blob.${environment().suffixes.storage}/${logContainerName}/'
   : ''
 
+var normalizedImageDefinitionSecurityType = imageDefinitionSecurityType == 'TrustedLaunchAndConfidentialVMSupported'
+  ? 'TrustedLaunchAndConfidentialVmSupported'
+  : imageDefinitionSecurityType
+
 var imageDefinitionFeatures = empty(imageDefinitionResourceId)
   ? filter(
       [
         imageDefinitionIsHibernateSupported ? { name: 'IsHibernateSupported', value: 'True' } : null
         imageDefinitionIsAcceleratedNetworkSupported ? { name: 'IsAcceleratedNetworkSupported', value: 'True' } : null
         imageDefinitionIsHigherStoragePerformanceSupported ? { name: 'DiskControllerTypes', value: 'SCSI, NVMe' } : null
-        imageDefinitionSecurityType != 'Standard' ? { name: 'SecurityType', value: imageDefinitionSecurityType } : null
+        normalizedImageDefinitionSecurityType != 'Standard' ? { name: 'SecurityType', value: normalizedImageDefinitionSecurityType } : null
       ],
       item => item != null
     )
@@ -420,7 +427,7 @@ var effectiveGalleryImageDefinitionPublisher = !empty(imageDefinitionPublisher)
   : mpPublisher
 
 var effectiveGalleryImageDefinitionSecurityType = empty(imageDefinitionResourceId)
-  ? imageDefinitionSecurityType
+  ? normalizedImageDefinitionSecurityType
   : !empty(filter(existingImageDefinition!.properties.features, feature => feature.name == 'SecurityType'))
       ? filter(existingImageDefinition!.properties.features, feature => feature.name == 'SecurityType')[0].value
       : 'Standard'
@@ -437,36 +444,53 @@ var defaultLocalImageVersionTargetRegions = [
     name: computeLocation
     regionalReplicaCount: imageVersionDefaultReplicaCount
     storageAccountType: imageVersionDefaultStorageAccountType
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
+    confidentialVMDiskEncryptionSetResourceId: galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
+      ? confidentialVMDiskEncryptionSetResourceId
+      : ''
   }
 ]
 
 var defaultRemoteImageVersionTargetRegions = [
   {
     excludeFromLatest: remoteImageVersionExcludeFromLatest
+    name: computeLocation
+    regionalReplicaCount: remoteImageVersionDefaultReplicaCount
+    storageAccountType: remoteImageVersionStorageAccountType
+    diskEncryptionSetResourceId: diskEncryptionSetResourceId
+    confidentialVMDiskEncryptionSetResourceId: galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
+      ? confidentialVMDiskEncryptionSetResourceId
+      : ''
+  }
+  {
+    excludeFromLatest: remoteImageVersionExcludeFromLatest
     name: remoteLocation
     regionalReplicaCount: remoteImageVersionDefaultReplicaCount
-    storageAccountType: 'Standard_LRS'
+    storageAccountType: remoteImageVersionStorageAccountType
+    diskEncryptionSetResourceId: remoteDiskEncryptionSetResourceId
+    confidentialVMDiskEncryptionSetResourceId: remoteConfidentialVMDiskEncryptionSetResourceId
   }
 ]
 
 var normalizedImageVersionTargetRegions = map(imageVersionTargetRegions, region => {
-  name: region.name
+  name: toLower(region.name) == toLower(computeLocation) ? computeLocation : region.name
   excludeFromLatest: region.?excludeFromLatest ?? imageVersionExcludeFromLatest
   regionalReplicaCount: region.?regionalReplicaCount ?? imageVersionDefaultReplicaCount
   storageAccountType: region.?storageAccountType ?? imageVersionDefaultStorageAccountType
+  diskEncryptionSetResourceId: region.?diskEncryptionSetResourceId ?? (toLower(region.name) == toLower(computeLocation) ? diskEncryptionSetResourceId : '')
+  confidentialVMDiskEncryptionSetResourceId: region.?confidentialVMDiskEncryptionSetResourceId ?? (toLower(region.name) == toLower(computeLocation) && galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk' ? confidentialVMDiskEncryptionSetResourceId : '')
 })
 
 var localImageVersionTargetRegions = !empty(normalizedImageVersionTargetRegions)
-  ? empty(filter(normalizedImageVersionTargetRegions, region => region.name == computeLocation))
+  ? empty(filter(normalizedImageVersionTargetRegions, region => toLower(region.name) == toLower(computeLocation)))
       ? union(defaultLocalImageVersionTargetRegions, normalizedImageVersionTargetRegions)
       : normalizedImageVersionTargetRegions
   : defaultLocalImageVersionTargetRegions
 
-var imageVersionReplicationRegions = empty(remoteComputeGalleryResourceId)
+var localImageVersionTargetRegionNames = map(localImageVersionTargetRegions, region => toLower(replace(region.name, ' ', '')))
+var validatedLocalImageVersionTargetRegions = length(localImageVersionTargetRegionNames) == length(union(localImageVersionTargetRegionNames, localImageVersionTargetRegionNames))
   ? localImageVersionTargetRegions
-  : empty(filter(localImageVersionTargetRegions, region => region.name == remoteLocation))
-      ? union(localImageVersionTargetRegions, defaultRemoteImageVersionTargetRegions)
-      : localImageVersionTargetRegions
+  : fail('imageVersionTargetRegions must contain each region only once.')
 
 // Note: auto-creation of a ConfidentialVM DES (ConfidentialVmEncryptedWithCustomerKey type) is a feature gap.
 // CVM DES provisioning requires a Confidential VM Orchestrator service principal key-release role assignment
@@ -475,65 +499,58 @@ var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConf
   ? confidentialVMDiskEncryptionSetResourceId
   : ''
 
-var effectiveRemoteConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConfidentialVMEncryptionType == 'EncryptedWithCmk'
-  ? remoteConfidentialVMDiskEncryptionSetResourceId
-  : ''
+var localImageVersionTargetRegionsWithEncryption = map(validatedLocalImageVersionTargetRegions, region => union(
+  {
+    name: region.name
+    excludeFromLatest: region.excludeFromLatest
+    regionalReplicaCount: region.regionalReplicaCount
+    storageAccountType: region.storageAccountType
+  },
+  !empty(region.diskEncryptionSetResourceId) || !empty(galleryImageVersionConfidentialVMEncryptionType)
+    ? {
+        encryption: {
+          osDiskImage: union(
+            !empty(region.diskEncryptionSetResourceId)
+              ? { diskEncryptionSetId: region.diskEncryptionSetResourceId }
+              : {},
+            !empty(galleryImageVersionConfidentialVMEncryptionType)
+              ? {
+                  securityProfile: union(
+                    { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
+                    !empty(region.confidentialVMDiskEncryptionSetResourceId)
+                      ? {
+                          secureVMDiskEncryptionSetId: region.confidentialVMDiskEncryptionSetResourceId
+                        }
+                      : {}
+                  )
+                }
+              : {}
+          )
+        }
+      }
+    : {}
+))
 
-var imageVersionReplicationRegionsWithEncryption = empty(diskEncryptionSetResourceId) && empty(remoteDiskEncryptionSetResourceId)
-  ? imageVersionReplicationRegions
-  : map(
-      imageVersionReplicationRegions,
-      region =>
-        empty(toLower(region.name) == toLower(remoteLocation) ? remoteDiskEncryptionSetResourceId : diskEncryptionSetResourceId)
-          ? region
-          : union(region, {
-              encryption: {
-                osDiskImage: union(
-                  {
-                    diskEncryptionSetId: toLower(region.name) == toLower(remoteLocation)
-                      ? remoteDiskEncryptionSetResourceId
-                      : diskEncryptionSetResourceId
-                  },
-                  !empty(galleryImageVersionConfidentialVMEncryptionType)
-                    ? {
-                        securityProfile: union(
-                          { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
-                          !empty(toLower(region.name) == toLower(remoteLocation)
-                            ? effectiveRemoteConfidentialVmDiskEncryptionSetResourceId
-                            : effectiveConfidentialVmDiskEncryptionSetResourceId)
-                            ? {
-                                secureVMDiskEncryptionSetId: toLower(region.name) == toLower(remoteLocation)
-                                  ? effectiveRemoteConfidentialVmDiskEncryptionSetResourceId
-                                  : effectiveConfidentialVmDiskEncryptionSetResourceId
-                              }
-                            : {}
-                        )
-                      }
-                    : {}
-                )
-              }
-            })
-    )
-
-var remoteImageVersionTargetRegions = [
-  union(
+var remoteImageVersionTargetRegions = map(defaultRemoteImageVersionTargetRegions, region => union(
     {
-      name: computeLocation
+      name: region.name
       excludeFromLatest: remoteImageVersionExcludeFromLatest
       regionalReplicaCount: remoteImageVersionDefaultReplicaCount
       storageAccountType: remoteImageVersionStorageAccountType
     },
-    !empty(diskEncryptionSetResourceId)
+    !empty(region.diskEncryptionSetResourceId) || !empty(galleryImageVersionConfidentialVMEncryptionType)
       ? {
           encryption: {
             osDiskImage: union(
-              { diskEncryptionSetId: diskEncryptionSetResourceId },
+              !empty(region.diskEncryptionSetResourceId)
+                ? { diskEncryptionSetId: region.diskEncryptionSetResourceId }
+                : {},
               !empty(galleryImageVersionConfidentialVMEncryptionType)
                 ? {
                     securityProfile: union(
                       { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
-                      !empty(effectiveConfidentialVmDiskEncryptionSetResourceId)
-                        ? { secureVMDiskEncryptionSetId: effectiveConfidentialVmDiskEncryptionSetResourceId }
+                      !empty(region.confidentialVMDiskEncryptionSetResourceId)
+                        ? { secureVMDiskEncryptionSetId: region.confidentialVMDiskEncryptionSetResourceId }
                         : {}
                     )
                   }
@@ -542,35 +559,7 @@ var remoteImageVersionTargetRegions = [
           }
         }
       : {}
-  )
-  union(
-    {
-      name: remoteLocation
-      excludeFromLatest: remoteImageVersionExcludeFromLatest
-      regionalReplicaCount: remoteImageVersionDefaultReplicaCount
-      storageAccountType: remoteImageVersionStorageAccountType
-    },
-    !empty(remoteDiskEncryptionSetResourceId)
-      ? {
-          encryption: {
-            osDiskImage: union(
-              { diskEncryptionSetId: remoteDiskEncryptionSetResourceId },
-              !empty(galleryImageVersionConfidentialVMEncryptionType)
-                ? {
-                    securityProfile: union(
-                      { confidentialVMEncryptionType: galleryImageVersionConfidentialVMEncryptionType },
-                      !empty(effectiveRemoteConfidentialVmDiskEncryptionSetResourceId)
-                        ? { secureVMDiskEncryptionSetId: effectiveRemoteConfidentialVmDiskEncryptionSetResourceId }
-                        : {}
-                    )
-                  }
-                : {}
-            )
-          }
-        }
-      : {}
-  )
-]
+))
 
 var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
   ? dateTimeAdd(buildTimestamp, 'P${imageVersionEOLinDays}D')
@@ -876,7 +865,7 @@ module captureImage 'modules/captureImage.bicep' = {
     imageVersionDefaultStorageAccountType: imageVersionDefaultStorageAccountType
     imageVersionExcludeFromLatest: imageVersionExcludeFromLatest
     imageVersionName: imageVersionName
-    imageVersionReplicationRegions: imageVersionReplicationRegionsWithEncryption
+    imageVersionReplicationRegions: localImageVersionTargetRegionsWithEncryption
     imageVersionEndOfLifeDate: imageVersionEndOfLifeDate
     location: computeLocation
     tags: tags

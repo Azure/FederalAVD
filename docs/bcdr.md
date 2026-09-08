@@ -134,14 +134,14 @@ The template configures FSLogix `CCDLocations` registry keys on every session ho
 
 ### Architecture
 
-Image gallery replication requires **two imageManagement deployments** — one per region. Each creates an independent Azure Compute Gallery. The imageBuild template then replicates each image version to both galleries automatically.
+Image gallery distribution requires **two imageManagement deployments** — one per region. Each creates an independent Azure Compute Gallery. The imageBuild template creates a version in each gallery without retaining cross-region replicas in either gallery unless those regions were explicitly selected for the primary gallery.
 
 ```text
 imageManagement → Primary Region Gallery (always created)
 imageManagement → Secondary Region Gallery (separate deployment, prerequisite for DR)
 
-imageBuild → builds in primary region
-           → replicates image version to both galleries (via remoteComputeGalleryResourceId)
+imageBuild → builds and publishes in primary gallery
+           → copies a remote-region version to the secondary gallery (via remoteComputeGalleryResourceId)
 ```
 
 ### Deployment Sequence
@@ -180,7 +180,7 @@ Secondary region parameter file:
 }
 ```
 
-The template automatically derives the secondary region name from the gallery resource's `.location` property and adds it to the image version's `targetRegions` array. No manual region string is required.
+The template automatically derives the secondary region name from the gallery resource's `.location` property. The deployment performs a second capture from the same generalized build source because Azure does not support using a CMK-encrypted Compute Gallery image version as another image version's source. The secondary gallery version includes the required source/build-region target and the secondary-region target. The primary gallery is not replicated to the secondary region unless that region is independently selected in `imageVersionTargetRegions`.
 
 #### Step 3: Secondary host pool references its local gallery
 
@@ -196,7 +196,7 @@ Azure resolves `latest` from within the secondary gallery, which already has the
 
 ### Customer-Managed Key Considerations
 
-If `keyManagementGalleryImageVersions` is not `PlatformManaged`, the `diskEncryptionSetResourceId` output from each imageManagement deployment is region-specific. Pass the **secondary region** imageManagement DES output to the imageBuild `diskEncryptionSetResourceId` parameter when building images that will be replicated to that region. Encrypted image versions can only be replicated to regions where the DES exists.
+If `keyManagementGalleryImageVersions` is not `PlatformManaged`, the `diskEncryptionSetResourceId` output from each imageManagement deployment is region-specific. Use the same image-version encryption type in every regional imageManagement deployment; Azure does not allow DES types to be mixed across the image version's regions. Pass the primary output to imageBuild `diskEncryptionSetResourceId` and the **secondary region** output to `remoteDiskEncryptionSetResourceId`. For any other region explicitly listed in `imageVersionTargetRegions`, set that row's `diskEncryptionSetResourceId` to a DES in the same region with the same encryption type. Confidential VM guest-state CMK follows the same pattern with the primary, remote, and per-row Confidential VM DES parameters. Encrypted image versions can only be replicated to regions where the matching regional DES exists.
 
 ---
 
@@ -415,7 +415,7 @@ The following illustrates a complete active/passive multi-region AVD deployment 
 graph TB
     subgraph Primary["Primary Region (USGovVirginia)"]
         imgMgmt1["imageManagement\n(Gallery + Storage)"]
-        imageBuild["imageBuild\n(primary + replicates to secondary)"]
+        imageBuild["imageBuild\n(primary + copies to secondary)"]
         hp1["Host Pool\nfinance-01-va\n(Active)"]
         fslogix1["FSLogix Storage\nAzure Files Premium ZRS"]
         rsv1["Recovery Services Vault\n(GeoRedundant for personal)"]
@@ -434,7 +434,7 @@ graph TB
     end
 
     imgMgmt1 --> imageBuild
-    imageBuild -->|"replicates image version"| imgMgmt2
+    imageBuild -->|"copies image version"| imgMgmt2
     imageBuild -->|"computeGalleryResourceId"| hp1
     imgMgmt2 -->|"customImageResourceId (secondary gallery)"| hp2
 
