@@ -8,9 +8,11 @@ Describe 'Image Build Run Command capacity protection' {
         Remove-Variable -Name ImageBuildTestImageRunCommands -Scope Global -ErrorAction SilentlyContinue
         Remove-Variable -Name ImageBuildTestOrchestrationRunCommands -Scope Global -ErrorAction SilentlyContinue
         Remove-Variable -Name ImageBuildTestDeletedUris -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name ImageBuildTestImageGetCount -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name ImageBuildTestOrchestrationGetCount -Scope Global -ErrorAction SilentlyContinue
     }
 
-    It 'removes completed commands from both VMs but preserves its current command' {
+    It 'waits for image commands but only queues orchestration command deletions' {
         $global:ImageBuildTestImageRunCommands = @(
             [pscustomobject]@{ name = 'customization-one' }
             [pscustomobject]@{ name = 'customization-two' }
@@ -20,6 +22,8 @@ Describe 'Image Build Run Command capacity protection' {
             [pscustomobject]@{ name = 'current-cleanup' }
         )
         $global:ImageBuildTestDeletedUris = @()
+        $global:ImageBuildTestImageGetCount = 0
+        $global:ImageBuildTestOrchestrationGetCount = 0
 
         Mock Invoke-RestMethod {
             param($Headers, $Method, $Uri)
@@ -29,9 +33,11 @@ Describe 'Image Build Run Command capacity protection' {
             }
 
             if ($Method -eq 'GET' -and $Uri -match '/virtualMachines/image-vm/runCommands') {
+                $global:ImageBuildTestImageGetCount++
                 return [pscustomobject]@{ value = @($global:ImageBuildTestImageRunCommands) }
             }
             if ($Method -eq 'GET' -and $Uri -match '/virtualMachines/orchestration-vm/runCommands') {
+                $global:ImageBuildTestOrchestrationGetCount++
                 return [pscustomobject]@{ value = @($global:ImageBuildTestOrchestrationRunCommands) }
             }
             if ($Method -eq 'DELETE') {
@@ -39,10 +45,6 @@ Describe 'Image Build Run Command capacity protection' {
                 if ($Uri -match '/virtualMachines/image-vm/runCommands/([^?]+)') {
                     $name = $Matches[1]
                     $global:ImageBuildTestImageRunCommands = @($global:ImageBuildTestImageRunCommands | Where-Object { $_.name -ne $name })
-                }
-                elseif ($Uri -match '/virtualMachines/orchestration-vm/runCommands/([^?]+)') {
-                    $name = $Matches[1]
-                    $global:ImageBuildTestOrchestrationRunCommands = @($global:ImageBuildTestOrchestrationRunCommands | Where-Object { $_.name -ne $name })
                 }
                 return
             }
@@ -63,8 +65,10 @@ Describe 'Image Build Run Command capacity protection' {
         ($global:ImageBuildTestDeletedUris -join "`n") | Should Match '/virtualMachines/image-vm/runCommands/customization-two\?'
         ($global:ImageBuildTestDeletedUris -join "`n") | Should Match '/virtualMachines/orchestration-vm/runCommands/previous-restart\?'
         ($global:ImageBuildTestDeletedUris -join "`n") | Should Not Match '/runCommands/current-cleanup\?'
-        @($global:ImageBuildTestOrchestrationRunCommands).Count | Should Be 1
-        $global:ImageBuildTestOrchestrationRunCommands[0].name | Should Be 'current-cleanup'
+        @($global:ImageBuildTestImageRunCommands).Count | Should Be 0
+        @($global:ImageBuildTestOrchestrationRunCommands).Count | Should Be 2
+        $global:ImageBuildTestImageGetCount | Should Be 2
+        $global:ImageBuildTestOrchestrationGetCount | Should Be 1
     }
 
     It 'passes the active cleanup command name from every Bicep call site' {

@@ -207,14 +207,13 @@ Deallocates the Sysprep-completed image VM and marks it generalized through Azur
 
 ### [Remove-ImageBuildRunCommands.ps1](Remove-ImageBuildRunCommands.ps1)
 
-Removes completed Run Command resources from the image and orchestration VMs between customization
-batches and before capture.
+Removes Run Command resources from the image and orchestration VMs between customization batches.
 
 - **Parameters:** `ResourceManagerUri`, `SubscriptionId`, `UserAssignedIdentityClientId`,
   `ImageVmName`, `ImageBuildResourceGroup`, `OrchestrationVmName`, `CurrentRunCommandName`
-- **Behavior:** Deletes all image VM Run Commands and all orchestration VM Run Commands except the
-  cleanup command currently executing, then waits up to ten minutes for their removal. Cleanup for
-  both VMs is dispatched before polling so orchestration cleanup adds minimal build latency.
+- **Behavior:** Deletes all image VM Run Commands and waits up to ten minutes for their removal.
+  It then submits deletion requests for all orchestration VM Run Commands except the cleanup command
+  currently executing and exits without polling those same-VM deletions.
 
 ### [Remove-ImageBuildResources.ps1](Remove-ImageBuildResources.ps1)
 

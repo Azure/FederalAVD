@@ -39,54 +39,39 @@ function Get-RunCommands {
 
 $ResourceGroupId = '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ImageBuildResourceGroup
 $VirtualMachineUri = $ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/'
-$RunCommandTargets = @(
-    [pscustomobject]@{
-        VmName = $ImageVmName
-        RunCommandsUri = $VirtualMachineUri + $ImageVmName + '/runCommands?api-version=2024-03-01'
-        ExcludedRunCommandName = ''
-    }
-    [pscustomobject]@{
-        VmName = $OrchestrationVmName
-        RunCommandsUri = $VirtualMachineUri + $OrchestrationVmName + '/runCommands?api-version=2024-03-01'
-        ExcludedRunCommandName = $CurrentRunCommandName
-    }
-)
+$ImageRunCommandsUri = $VirtualMachineUri + $ImageVmName + '/runCommands?api-version=2024-03-01'
+$OrchestrationRunCommandsUri = $VirtualMachineUri + $OrchestrationVmName + '/runCommands?api-version=2024-03-01'
 
-foreach ($Target in $RunCommandTargets) {
-    $RunCommands = Get-RunCommands `
-        -RunCommandsUri $Target.RunCommandsUri `
-        -ExcludedRunCommandName $Target.ExcludedRunCommandName
-
-    foreach ($RunCommand in $RunCommands) {
-        $DeleteUri = $VirtualMachineUri + $Target.VmName + '/runCommands/' + $RunCommand.name + '?api-version=2024-03-01'
-        Invoke-RestMethod `
-            -Headers $AzureManagementHeader `
-            -Method 'DELETE' `
-            -Uri $DeleteUri | Out-Null
-    }
+$ImageRunCommands = Get-RunCommands -RunCommandsUri $ImageRunCommandsUri
+foreach ($RunCommand in $ImageRunCommands) {
+    $DeleteUri = $VirtualMachineUri + $ImageVmName + '/runCommands/' + $RunCommand.name + '?api-version=2024-03-01'
+    Invoke-RestMethod `
+        -Headers $AzureManagementHeader `
+        -Method 'DELETE' `
+        -Uri $DeleteUri | Out-Null
 }
 
 $DeleteDeadline = (Get-Date).AddMinutes(10)
 Do {
-    $RemainingRunCommands = @(
-        foreach ($Target in $RunCommandTargets) {
-            Get-RunCommands `
-                -RunCommandsUri $Target.RunCommandsUri `
-                -ExcludedRunCommandName $Target.ExcludedRunCommandName |
-                ForEach-Object {
-                    [pscustomobject]@{
-                        VmName = $Target.VmName
-                        Name = $_.name
-                    }
-                }
-        }
-    )
-    if ($RemainingRunCommands.Count -gt 0) {
+    $RemainingImageRunCommands = Get-RunCommands -RunCommandsUri $ImageRunCommandsUri
+    if ($RemainingImageRunCommands.Count -gt 0) {
         Start-Sleep -Seconds 5
     }
-} Until ($RemainingRunCommands.Count -eq 0 -or (Get-Date) -ge $DeleteDeadline)
+} Until ($RemainingImageRunCommands.Count -eq 0 -or (Get-Date) -ge $DeleteDeadline)
 
-if ($RemainingRunCommands.Count -gt 0) {
-    $RemainingRunCommandNames = $RemainingRunCommands | ForEach-Object { "$($_.VmName)/$($_.Name)" }
-    throw "Timed out waiting for Run Commands to be removed. Remaining commands: $($RemainingRunCommandNames -join ', ')"
+if ($RemainingImageRunCommands.Count -gt 0) {
+    $RemainingRunCommandNames = $RemainingImageRunCommands | ForEach-Object { $_.name }
+    throw "Timed out waiting for image VM Run Commands to be removed. Remaining commands: $($RemainingRunCommandNames -join ', ')"
+}
+
+$OrchestrationRunCommands = Get-RunCommands `
+    -RunCommandsUri $OrchestrationRunCommandsUri `
+    -ExcludedRunCommandName $CurrentRunCommandName
+
+foreach ($RunCommand in $OrchestrationRunCommands) {
+    $DeleteUri = $VirtualMachineUri + $OrchestrationVmName + '/runCommands/' + $RunCommand.name + '?api-version=2024-03-01'
+    Invoke-RestMethod `
+        -Headers $AzureManagementHeader `
+        -Method 'DELETE' `
+        -Uri $DeleteUri | Out-Null
 }
