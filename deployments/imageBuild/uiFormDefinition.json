@@ -1091,7 +1091,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addCustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments, and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
+                                        "text": "Enter customizations for your image below. Specify a name, case-sensitive blob name or URI, optional arguments, optional comma-separated success exit codes (default 0,3010), and whether to restart after the customization."
                                     }
                                 },
                                 {
@@ -1149,6 +1149,24 @@
                                                 }
                                             },
                                             {
+                                                "id": "successExitCodes",
+                                                "header": "Success Exit Codes",
+                                                "width": "1fr",
+                                                "element": {
+                                                    "type": "Microsoft.Common.TextBox",
+                                                    "placeholder": "Default: 0,3010",
+                                                    "constraints": {
+                                                        "required": false,
+                                                        "validations": [
+                                                            {
+                                                                "regex": "^$|^-?[0-9]+(\\s*,\\s*-?[0-9]+)*$",
+                                                                "message": "Enter comma-separated integer exit codes, such as 0,3010."
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            {
                                                 "id": "restart",
                                                 "header": "Restart",
                                                 "width": "1fr",
@@ -1194,7 +1212,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addVDICustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments."
+                                        "text": "Enter customizations for your image below. Specify a name, case-sensitive blob name or URI, optional arguments, and optional comma-separated success exit codes (default 0,3010)."
                                     }
                                 },
                                 {
@@ -1248,6 +1266,24 @@
                                                     "placeholder": "Example: /verysilent /mergetasks='!runcode'",
                                                     "constraints": {
                                                         "required": false
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "id": "successExitCodes",
+                                                "header": "Success Exit Codes",
+                                                "width": "1fr",
+                                                "element": {
+                                                    "type": "Microsoft.Common.TextBox",
+                                                    "placeholder": "Default: 0,3010",
+                                                    "constraints": {
+                                                        "required": false,
+                                                        "validations": [
+                                                            {
+                                                                "regex": "^$|^-?[0-9]+(\\s*,\\s*-?[0-9]+)*$",
+                                                                "message": "Enter comma-separated integer exit codes, such as 0,3010."
+                                                            }
+                                                        ]
                                                     }
                                                 }
                                             }

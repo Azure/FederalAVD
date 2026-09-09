@@ -1708,7 +1708,7 @@
 									"name": "customizations",
 									"type": "Microsoft.Common.EditableGrid",
 									"label": "Ordered Customizations",
-									"ariaLabel": "Ordered session host customizations",
+											"ariaLabel": "Ordered session host customizations with optional success exit codes",
 									"visible": "[steps('hosts').customizations.enableCustomizations]",
 									"constraints": {
 										"width": "Full",
@@ -1751,6 +1751,24 @@
 													"type": "Microsoft.Common.TextBox",
 													"constraints": {
 														"required": false
+													}
+												}
+											},
+											{
+												"id": "successExitCodes",
+												"header": "Success Exit Codes",
+												"width": "1fr",
+												"element": {
+													"type": "Microsoft.Common.TextBox",
+													"placeholder": "Default: 0,3010",
+													"constraints": {
+														"required": false,
+														"validations": [
+															{
+																"regex": "^$|^-?[0-9]+(\\s*,\\s*-?[0-9]+)*$",
+																"message": "Enter comma-separated integer exit codes, such as 0,3010."
+															}
+														]
 													}
 												}
 											}

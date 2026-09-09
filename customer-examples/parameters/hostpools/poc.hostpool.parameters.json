@@ -141,7 +141,8 @@
         //             // Add -EnableRemoteApp if deploying as a RemoteApp (not full desktop).
         //             "name": "Configure-OneDrivePolicy",
         //             "blobNameOrUri": "Configure-OneDrivePolicy.zip",
-        //             "arguments": "-TenantId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -WarningMinDiskSpaceLimitInMB 10240 -MinDiskSpaceLimitInMB 5120"
+        //             "arguments": "-TenantId xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -WarningMinDiskSpaceLimitInMB 10240 -MinDiskSpaceLimitInMB 5120",
+        //             "successExitCodes": "0,3010"
         //         },
         //         {
         //             // Configure-RemoteDesktopPolicy: use -EnableRemoteApp for RemoteApp pools.

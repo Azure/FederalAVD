@@ -1852,7 +1852,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('hosts').customizations.addCustomScripts]",
                   "options": {
-                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments."
+                    "text": "Specify each customization's name, blob name (or full URI), optional arguments, and optional comma-separated success exit codes (default 0,3010)."
                   }
                 },
                 {
@@ -1918,6 +1918,24 @@
                           "placeholder": "Example: /install /silent",
                           "constraints": {
                             "required": false
+                          }
+                        }
+                      },
+                      {
+                        "id": "successExitCodes",
+                        "header": "Success Exit Codes",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "Default: 0,3010",
+                          "constraints": {
+                            "required": false,
+                            "validations": [
+                              {
+                                "regex": "^$|^-?[0-9]+(\\s*,\\s*-?[0-9]+)*$",
+                                "message": "Enter comma-separated integer exit codes, such as 0,3010."
+                              }
+                            ]
                           }
                         }
                       }

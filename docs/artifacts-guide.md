@@ -249,6 +249,31 @@ ZIP artifacts must contain exactly one root-level PowerShell script. The runtime
 declared entry point and does not guarantee which script is selected when multiple root scripts
 exist. Put helper scripts in a subdirectory and invoke them explicitly from the root script.
 
+Every artifact type validates its result against the optional `successExitCodes` customization
+property. Supply a comma-separated string of integer exit codes, such as `"0,1641,3010"`. When
+omitted or blank, the Run Command does not submit that parameter, so the script default of
+`"0,3010"` applies: `0` is normal success and `3010` is success with a reboot required. Exit code
+`1641` is not accepted by default because it indicates that the installer initiated a restart;
+add it only when that behavior is intentional.
+
+```json
+{
+   "name": "Install-CustomApp",
+   "blobNameOrUri": "CustomApp.zip",
+   "arguments": "-DeploymentType Install",
+   "successExitCodes": "0,1641,3010",
+   "restart": true
+}
+```
+
+The orchestrator captures the process exit code for EXE, MSI, and BAT artifacts and uses
+`$LASTEXITCODE` for direct PowerShell and ZIP-contained PowerShell scripts. It logs accepted reboot
+codes but does not restart the VM automatically; the image-build `restart` property controls the
+subsequent restart. An exit code not in `successExitCodes` fails the customization.
+
+The optional `arguments` property follows the same omission behavior. When it is omitted or blank,
+the Run Command does not submit the parameter and the script's empty-string default applies.
+
 For application artifacts that can also be published as VM Applications, use the same root script
 for both lifecycle actions:
 

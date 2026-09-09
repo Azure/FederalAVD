@@ -339,22 +339,28 @@ var buildTimestamp = startsWith(deployment().name, 'Microsoft.Template-')
 var buildRunId = uniqueString(subscription().subscriptionId, deployment().name, buildTimestamp)
 
 // Function to ensure unique names in customization arrays by appending index to duplicates
-var uniqueCustomizers = map(range(0, length(customizations)), i => {
-  name: length(filter(customizations, item => item.name == customizations[i].name)) > 1
-    ? '${customizations[i].name}-${length(filter(take(customizations, i + 1), item => item.name == customizations[i].name))}'
-    : customizations[i].name
-  blobNameOrUri: customizations[i].blobNameOrUri
-  arguments: customizations[i].?arguments ?? ''
-  restart: customizations[i].?restart ?? false
-})
+var uniqueCustomizers = map(range(0, length(customizations)), i => union(
+  {
+    name: length(filter(customizations, item => item.name == customizations[i].name)) > 1
+      ? '${customizations[i].name}-${length(filter(take(customizations, i + 1), item => item.name == customizations[i].name))}'
+      : customizations[i].name
+    blobNameOrUri: customizations[i].blobNameOrUri
+    restart: customizations[i].?restart ?? false
+  },
+  empty(customizations[i].?arguments ?? '') ? {} : { arguments: customizations[i].arguments! },
+  empty(customizations[i].?successExitCodes ?? '') ? {} : { successExitCodes: customizations[i].successExitCodes! }
+))
 
-var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => {
-  name: length(filter(vdiCustomizations, item => item.name == vdiCustomizations[i].name)) > 1
-    ? '${vdiCustomizations[i].name}-${length(filter(take(vdiCustomizations, i + 1), item => item.name == vdiCustomizations[i].name))}'
-    : vdiCustomizations[i].name
-  blobNameOrUri: vdiCustomizations[i].blobNameOrUri
-  arguments: vdiCustomizations[i].?arguments ?? ''
-})
+var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => union(
+  {
+    name: length(filter(vdiCustomizations, item => item.name == vdiCustomizations[i].name)) > 1
+      ? '${vdiCustomizations[i].name}-${length(filter(take(vdiCustomizations, i + 1), item => item.name == vdiCustomizations[i].name))}'
+      : vdiCustomizations[i].name
+    blobNameOrUri: vdiCustomizations[i].blobNameOrUri
+  },
+  empty(vdiCustomizations[i].?arguments ?? '') ? {} : { arguments: vdiCustomizations[i].arguments! },
+  empty(vdiCustomizations[i].?successExitCodes ?? '') ? {} : { successExitCodes: vdiCustomizations[i].successExitCodes! }
+))
 
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes

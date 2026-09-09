@@ -1,7 +1,8 @@
 param artifactUri string
-param arguments string
+param arguments string = ''
 param location string
 param runCommandName string
+param successExitCodes string = ''
 param userAssignedIdentityResourceId string
 param virtualMachineName string
 
@@ -22,32 +23,46 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' =
   name: runCommandName
   location: location
   properties: {
-    parameters: [
-      {
-        name: 'APIVersion'
-        value: '2018-02-01'
-      }
-      {
-        name: 'Arguments'
-        value: arguments
-      }
-      {
-        name: 'BlobStorageSuffix'
-        value: 'blob.${environment().suffixes.storage}'
-      }
-      {
-        name: 'Name'
-        value: runCommandName
-      }
-      {
-        name: 'Uri'
-        value: artifactUri
-      }
-      {
-        name: 'UserAssignedIdentityClientId'
-        value: userAssignedIdentity.properties.clientId
-      }
-    ]
+    parameters: union(
+      [
+        {
+          name: 'APIVersion'
+          value: '2018-02-01'
+        }
+        {
+          name: 'BlobStorageSuffix'
+          value: 'blob.${environment().suffixes.storage}'
+        }
+        {
+          name: 'Name'
+          value: runCommandName
+        }
+        {
+          name: 'Uri'
+          value: artifactUri
+        }
+        {
+          name: 'UserAssignedIdentityClientId'
+          value: userAssignedIdentity.properties.clientId
+        }
+      ],
+      empty(arguments)
+        ? []
+        : [
+            {
+              name: 'Arguments'
+              value: arguments
+            }
+          ],
+      empty(successExitCodes)
+        ? []
+        : [
+            {
+              name: 'SuccessExitCodes'
+              value: successExitCodes
+            }
+          ]
+    )
     source: {
       script: loadTextContent('../../../../../../scripts/Invoke-Customization.ps1')
     }

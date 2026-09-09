@@ -4,6 +4,7 @@
   [string]$BlobStorageSuffix,
   [string]$BuildDir = '',
   [string]$Name,
+  [string]$SuccessExitCodes = '0,3010',
   [string]$Uri,
   [string]$UserAssignedIdentityClientId
 )
@@ -402,9 +403,49 @@ function ConvertTo-ParametersSplat {
   return $parameters
 }
 
+function ConvertTo-SuccessExitCodes {
+  param([string]$Value)
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    throw 'SuccessExitCodes cannot be empty.'
+  }
+
+  $exitCodes = [System.Collections.Generic.List[int]]::new()
+  foreach ($item in $Value.Split(',')) {
+    $exitCode = 0
+    if (-not [int]::TryParse($item.Trim(), [ref]$exitCode)) {
+      throw "SuccessExitCodes contains invalid integer '$($item.Trim())'."
+    }
+    if (-not $exitCodes.Contains($exitCode)) {
+      $exitCodes.Add($exitCode)
+    }
+  }
+  return [int[]]$exitCodes
+}
+
+function Test-ArtifactExecutionSuccess {
+  param(
+    [int]$ExitCode,
+    [int[]]$AcceptedExitCodes,
+    [bool]$InvocationSucceeded,
+    [bool]$IsPowerShellScript = $false
+  )
+
+  # A PowerShell invocation can fail without setting LASTEXITCODE. Do not allow the initialized
+  # value of 0 to mask that failure. An explicit nonzero exit sets $? to false but remains valid
+  # when the exit code is accepted.
+  if ($IsPowerShellScript -and -not $InvocationSucceeded -and $ExitCode -eq 0) {
+    return $false
+  }
+  return $ExitCode -in $AcceptedExitCodes
+}
+
 try {
   Write-Log "Starting '$Name' customization."
   Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)
+
+  $AcceptedExitCodes = ConvertTo-SuccessExitCodes -Value $SuccessExitCodes
+  Write-Log "Accepted success exit codes: $($AcceptedExitCodes -join ', ')."
 
   If ($Arguments -eq '') { $Arguments = $null }
 
@@ -453,6 +494,12 @@ try {
           $Install = Start-Process -FilePath "$DestFile" -NoNewWindow -Wait -PassThru
           Write-Log "Installation ended with exit code $($Install.ExitCode)."
         }
+        if (-not (Test-ArtifactExecutionSuccess -ExitCode $Install.ExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $true)) {
+          throw "EXE installation failed with exit code $($Install.ExitCode)."
+        }
+        if ($Install.ExitCode -in @(1641, 3010)) {
+          Write-Log "EXE installation completed successfully with exit code $($Install.ExitCode). A reboot is required."
+        }
       }
       'msi' {
         $MsiArguments = Get-MsiArgumentList -InstallerPath $DestFile -ArgumentString $Arguments
@@ -460,8 +507,11 @@ try {
         Write-Log "Executing 'msiexec.exe $MsiCommandLine'"
         $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $MsiCommandLine -Wait -PassThru
         Write-Log "Installation ended with exit code $($MsiExec.ExitCode)."
-        if ($MsiExec.ExitCode -notin @(0, 3010)) {
+        if (-not (Test-ArtifactExecutionSuccess -ExitCode $MsiExec.ExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $true)) {
           throw "MSI installation failed with exit code $($MsiExec.ExitCode)."
+        }
+        if ($MsiExec.ExitCode -in @(1641, 3010)) {
+          Write-Log "MSI installation completed successfully with exit code $($MsiExec.ExitCode). A reboot is required."
         }
       }
       'bat' {
@@ -469,11 +519,18 @@ try {
           Write-Log "Executing 'cmd.exe `"$DestFile`" $Arguments'"
           $BatArgs = Split-ArgumentString -ArgumentString $Arguments
           If ($BatArgs -notcontains $DestFile) { $BatArgs = @("$DestFile") + $BatArgs }
-          Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait
+          $BatProcess = Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait -PassThru
         }
         Else {
           Write-Log "Executing 'cmd.exe `"$DestFile`"'"
-          Start-Process -FilePath cmd.exe -ArgumentList "`"$DestFile`"" -Wait
+          $BatProcess = Start-Process -FilePath cmd.exe -ArgumentList "`"$DestFile`"" -Wait -PassThru
+        }
+        Write-Log "Batch script ended with exit code $($BatProcess.ExitCode)."
+        if (-not (Test-ArtifactExecutionSuccess -ExitCode $BatProcess.ExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $true)) {
+          throw "Batch script failed with exit code $($BatProcess.ExitCode)."
+        }
+        if ($BatProcess.ExitCode -in @(1641, 3010)) {
+          Write-Log "Batch script completed successfully with exit code $($BatProcess.ExitCode). A reboot is required."
         }
       }
       'ps1' {
@@ -489,8 +546,12 @@ try {
           & $DestFile *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
         $ScriptSucceeded = $?
-        if (-not $ScriptSucceeded) {
-          throw "Script '$DestFile' failed with exit code $LASTEXITCODE."
+        $ScriptExitCode = $LASTEXITCODE
+        if (-not (Test-ArtifactExecutionSuccess -ExitCode $ScriptExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $ScriptSucceeded -IsPowerShellScript $true)) {
+          throw "Script '$DestFile' failed with exit code $ScriptExitCode."
+        }
+        if ($ScriptExitCode -in @(1641, 3010)) {
+          Write-Log "Script '$DestFile' completed successfully with exit code $ScriptExitCode. A reboot is required."
         }
       }
       'zip' {
@@ -512,8 +573,12 @@ try {
           & $PSScript *>&1 | ForEach-Object { $line = "$_"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }
         }
         $ScriptSucceeded = $?
-        if (-not $ScriptSucceeded) {
-          throw "Script '$PSScript' failed with exit code $LASTEXITCODE."
+        $ScriptExitCode = $LASTEXITCODE
+        if (-not (Test-ArtifactExecutionSuccess -ExitCode $ScriptExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $ScriptSucceeded -IsPowerShellScript $true)) {
+          throw "Script '$PSScript' failed with exit code $ScriptExitCode."
+        }
+        if ($ScriptExitCode -in @(1641, 3010)) {
+          Write-Log "Script '$PSScript' completed successfully with exit code $ScriptExitCode. A reboot is required."
         }
       }
     }

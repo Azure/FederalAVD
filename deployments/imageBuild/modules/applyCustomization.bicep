@@ -34,20 +34,35 @@ resource applyCustomization 'Microsoft.Compute/virtualMachines/runCommands@2023-
     outputBlobUri: empty(logBlobContainerUri)
       ? null
       : '${logBlobContainerUri}${imageVmName}-${customization.name}-${buildTimestamp}.log'
-    parameters: union(commonScriptParams, [
-      {
-        name: 'Uri'
-        value: customization.uri
-      }
-      {
-        name: 'Name'
-        value: customization.name
-      }
-      {
-        name: 'Arguments'
-        value: customization.arguments
-      }
-    ])
+    parameters: union(
+      commonScriptParams,
+      [
+        {
+          name: 'Uri'
+          value: customization.uri
+        }
+        {
+          name: 'Name'
+          value: customization.name
+        }
+      ],
+      empty(customization.?arguments ?? '')
+        ? []
+        : [
+            {
+              name: 'Arguments'
+              value: customization.arguments!
+            }
+          ],
+      empty(customization.?successExitCodes ?? '')
+        ? []
+        : [
+            {
+              name: 'SuccessExitCodes'
+              value: customization.?successExitCodes!
+            }
+          ]
+    )
     source: {
       script: customizationScript
     }

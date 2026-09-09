@@ -41,24 +41,30 @@ var restartVmScript = loadTextContent('../scripts/Restart-Vm.ps1')
 var removeMicrosoftSoftwareRunCommandName = 'remove-microsoft-software-runCommands'
 
 var customizers = [
-  for customization in customizations: {
-    name: replace(customization.name, ' ', '-')
-    uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
-      ? customization.blobNameOrUri
-      : '${artifactsContainerUri}/${customization.blobNameOrUri}'
-    arguments: customization.?arguments ?? ''
-    restart: customization.?restart ?? false
-  }
+  for customization in customizations: union(
+    {
+      name: replace(customization.name, ' ', '-')
+      uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
+        ? customization.blobNameOrUri
+        : '${artifactsContainerUri}/${customization.blobNameOrUri}'
+      restart: customization.?restart ?? false
+    },
+    empty(customization.?arguments ?? '') ? {} : { arguments: customization.arguments! },
+    empty(customization.?successExitCodes ?? '') ? {} : { successExitCodes: customization.successExitCodes! }
+  )
 ]
 
 var vdiCustomizers = [
-  for customization in vdiCustomizations: {
-    name: replace(customization.name, ' ', '-')
-    uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
-      ? customization.blobNameOrUri
-      : '${artifactsContainerUri}/${customization.blobNameOrUri}'
-    arguments: customization.?arguments ?? ''
-  }
+  for customization in vdiCustomizations: union(
+    {
+      name: replace(customization.name, ' ', '-')
+      uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
+        ? customization.blobNameOrUri
+        : '${artifactsContainerUri}/${customization.blobNameOrUri}'
+    },
+    empty(customization.?arguments ?? '') ? {} : { arguments: customization.arguments! },
+    empty(customization.?successExitCodes ?? '') ? {} : { successExitCodes: customization.successExitCodes! }
+  )
 ]
 
 var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || !empty(vdiCustomizations)
@@ -488,7 +494,8 @@ module customizationBatches 'applyCustomizationsBatch.bicep' = [
         j => {
           name: customizers[i * customizationBatchSize + j].name
           uri: customizers[i * customizationBatchSize + j].uri
-          arguments: customizers[i * customizationBatchSize + j].arguments
+          arguments: customizers[i * customizationBatchSize + j].?arguments
+          successExitCodes: customizers[i * customizationBatchSize + j].?successExitCodes
           restart: customizers[i * customizationBatchSize + j].restart
         }
       )
@@ -631,7 +638,8 @@ module vdiCustomizationBatches 'applyCustomizationsBatch.bicep' = [
         j => {
           name: vdiCustomizers[i * customizationBatchSize + j].name
           uri: vdiCustomizers[i * customizationBatchSize + j].uri
-          arguments: vdiCustomizers[i * customizationBatchSize + j].arguments
+          arguments: vdiCustomizers[i * customizationBatchSize + j].?arguments
+          successExitCodes: vdiCustomizers[i * customizationBatchSize + j].?successExitCodes
           restart: false
         }
       )

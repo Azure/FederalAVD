@@ -370,6 +370,8 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
   - `name` (required): Customization name (alphanumeric, no spaces)
   - `blobNameOrUri` (required): Blob name or full URI
   - `arguments` (optional): Installation arguments
+  - `successExitCodes` (optional): Comma-separated successful exit codes; when omitted or blank,
+    the script default of `0,3010` applies
   - `restart` (optional): Introduce restart after execution
 
 **Example:**
@@ -380,6 +382,7 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
     "name": "VSCode",
     "blobNameOrUri": "VSCode.zip",
     "arguments": "/verysilent /mergetasks=!runcode",
+    "successExitCodes": "0,3010",
     "restart": false
   },
   {

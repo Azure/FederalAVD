@@ -1010,3 +1010,131 @@ Describe 'InstallRoot MSI application lifecycle' {
         ([regex]::Matches($content, '-notin \$SuccessExitCodes|-in \$SuccessExitCodes')).Count | Should Be 2
     }
 }
+
+Describe 'Customization success exit codes' {
+    BeforeAll {
+        $invokeCustomizationPath = Join-Path $repoRoot 'deployments\shared\scripts\Invoke-Customization.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [System.Management.Automation.Language.Parser]::ParseFile(
+            $invokeCustomizationPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($parseErrors.Count -gt 0) {
+            throw "Invoke-Customization.ps1 has parser errors: $($parseErrors.Message -join '; ')"
+        }
+        $conversionFunction = $syntaxTree.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'ConvertTo-SuccessExitCodes'
+        }, $true)
+        $successFunction = $syntaxTree.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Test-ArtifactExecutionSuccess'
+        }, $true)
+        if (-not $conversionFunction -or -not $successFunction) {
+            throw 'Customization exit-code function AST was not found.'
+        }
+        Invoke-Expression $conversionFunction.Extent.Text
+        Invoke-Expression $successFunction.Extent.Text
+        $invokeCustomizationContent = Get-Content -LiteralPath $invokeCustomizationPath -Raw
+    }
+
+    AfterAll {
+        Remove-Item function:\ConvertTo-SuccessExitCodes -ErrorAction SilentlyContinue
+        Remove-Item function:\Test-ArtifactExecutionSuccess -ErrorAction SilentlyContinue
+    }
+
+    It 'parses defaults and custom comma-separated integer lists' {
+        (@(ConvertTo-SuccessExitCodes -Value '0,3010') -join ',') | Should Be '0,3010'
+        (@(ConvertTo-SuccessExitCodes -Value '0, 1641, 3010, 3010') -join ',') | Should Be '0,1641,3010'
+    }
+
+    It 'rejects empty and invalid success exit-code lists' {
+        $emptyFailure = $null
+        $invalidFailure = $null
+        try { ConvertTo-SuccessExitCodes -Value '' } catch { $emptyFailure = $_ }
+        try { ConvertTo-SuccessExitCodes -Value '0,success' } catch { $invalidFailure = $_ }
+
+        $emptyFailure.Exception.Message | Should Match 'cannot be empty'
+        $invalidFailure.Exception.Message | Should Match "invalid integer 'success'"
+    }
+
+    It 'accepts configured codes and rejects codes outside the list' {
+        $accepted = @(0, 1641, 3010)
+        Test-ArtifactExecutionSuccess -ExitCode 0 -AcceptedExitCodes $accepted -InvocationSucceeded $true | Should Be $true
+        Test-ArtifactExecutionSuccess -ExitCode 1641 -AcceptedExitCodes $accepted -InvocationSucceeded $true | Should Be $true
+        Test-ArtifactExecutionSuccess -ExitCode 3010 -AcceptedExitCodes $accepted -InvocationSucceeded $false -IsPowerShellScript $true | Should Be $true
+        Test-ArtifactExecutionSuccess -ExitCode 1603 -AcceptedExitCodes $accepted -InvocationSucceeded $true | Should Be $false
+    }
+
+    It 'does not let a failed PowerShell invocation inherit the initialized zero code' {
+        Test-ArtifactExecutionSuccess -ExitCode 0 -AcceptedExitCodes @(0, 3010) -InvocationSucceeded $false -IsPowerShellScript $true | Should Be $false
+    }
+
+    It 'captures and validates all supported artifact execution types' {
+        $invokeCustomizationContent | Should Match "\[string\]\`$SuccessExitCodes = '0,3010'"
+        $invokeCustomizationContent | Should Match '\$Install\.ExitCode -AcceptedExitCodes'
+        $invokeCustomizationContent | Should Match '\$MsiExec\.ExitCode -AcceptedExitCodes'
+        $invokeCustomizationContent | Should Match 'cmd\.exe[\s\S]*?-Wait -PassThru'
+        $invokeCustomizationContent | Should Match '\$BatProcess\.ExitCode -AcceptedExitCodes'
+        ([regex]::Matches($invokeCustomizationContent, '-IsPowerShellScript \$true')).Count | Should Be 2
+    }
+
+    It 'conditionally passes supplied success exit codes through every customization Bicep path' {
+        $runCommandPaths = @(
+            'deployments\imageBuild\modules\applyCustomization.bicep'
+            'deployments\shared\modules\orchestration\sessionHosts\invokeCustomizations.bicep'
+            'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\PrivateCustomizationRunCommand.bicep'
+        )
+        foreach ($bicepPath in $runCommandPaths) {
+            $content = Get-Content -LiteralPath (Join-Path $repoRoot $bicepPath) -Raw
+            $content | Should Match "name: 'SuccessExitCodes'"
+            $content | Should Match "\? \[\]"
+        }
+
+        $types = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\resourceModules\types\customizationTypes.bicep') -Raw
+        ([regex]::Matches($types, 'successExitCodes: string\??')).Count | Should Be 3
+
+        $bicepPaths = $runCommandPaths + @(
+            'deployments\imageBuild\modules\customizeImage.bicep'
+            'deployments\automatedHostPools\policy\main.bicep'
+            'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\PrivateCustomization.bicep'
+        )
+        $bicepContent = $bicepPaths | ForEach-Object {
+            Get-Content -LiteralPath (Join-Path $repoRoot $_) -Raw
+        }
+        ($bicepContent -join "`n") | Should Not Match "'0,3010'"
+    }
+
+    It 'conditionally passes nonblank arguments through every customization Run Command path' {
+        $runCommandPaths = @(
+            'deployments\imageBuild\modules\applyCustomization.bicep'
+            'deployments\shared\modules\orchestration\sessionHosts\invokeCustomizations.bicep'
+            'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\PrivateCustomizationRunCommand.bicep'
+        )
+        foreach ($bicepPath in $runCommandPaths) {
+            $content = Get-Content -LiteralPath (Join-Path $repoRoot $bicepPath) -Raw
+            $content | Should Match "name: 'Arguments'"
+            $content | Should Match 'empty\([^\r\n]*arguments'
+        }
+
+        $invokeCustomizationContent | Should Match "\[string\]\`$Arguments = ''"
+    }
+
+    It 'exposes success exit codes in every customization portal grid' {
+        $formExpectations = @{
+            'deployments\imageBuild\uiFormDefinition.json' = 2
+            'deployments\hostpools\uiFormDefinition.json' = 1
+            'deployments\automatedHostPools\uiFormDefinition.json' = 1
+            'deployments\add-ons\sessionHosts\uiFormDefinition.json' = 1
+            'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json' = 1
+        }
+        foreach ($relativePath in $formExpectations.Keys) {
+            $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+            ([regex]::Matches($content, '"id":\s*"successExitCodes"')).Count | Should Be $formExpectations[$relativePath]
+        }
+    }
+}
