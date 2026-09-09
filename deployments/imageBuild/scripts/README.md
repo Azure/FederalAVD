@@ -221,8 +221,10 @@ Removes temporary image-build resources after the image version has been capture
 
 - **Parameters:** `ResourceManagerUri`, `UserAssignedIdentityClientId`, `ImageVmResourceId`,
   `ManagementVmResourceId`, `ImageResourceId`, `ResourceGroupId`
-- **Behavior:** Deletes build VMs and supporting resources while preserving the captured image
-  resource and respecting whether the deployment created or reused the resource group.
+- **Behavior:** Allows Azure Managed Run Command at least 30 seconds to report status before
+  deleting its parent VM or resource group. It deletes build VMs and supporting resources while
+  preserving the captured image resource and respecting whether the deployment created or reused
+  the resource group. Already-absent resources are treated as clean.
 
 ## Conventions
 

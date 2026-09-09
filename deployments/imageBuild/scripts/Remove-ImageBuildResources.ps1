@@ -22,6 +22,8 @@ $ErrorActionPreference = 'Stop'
 $WarningPreference = 'SilentlyContinue'
 
 Try {
+    $StopWatch = [Diagnostics.Stopwatch]::StartNew()
+
     # Fix the resource manager URI since only AzureCloud contains a trailing slash
     $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}
 
@@ -36,39 +38,55 @@ Try {
         'Authorization'='Bearer ' + $AzureManagementAccessToken
     }
 
-    # Poll until ARM records this run command resource as 'Succeeded' before deleting the VM or resource group.
-    # asyncExecution=true means ARM marks the deployment Succeeded as soon as the VM agent starts the script,
-    # but we confirm this explicitly rather than relying on a fixed sleep to avoid the race condition where the
-    # agent hasn't yet phoned home to ARM before the VM is deleted.
-    $RunCommandUri = $ResourceManagerUriFixed + $ManagementVmResourceId + '/runCommands/RemoveImageBuildResources?api-version=2024-03-01'
-    $ArmConfirmed = $false
-    $Deadline = (Get-Date).AddSeconds(120)
-    while (-not $ArmConfirmed -and (Get-Date) -lt $Deadline) {
-        Start-Sleep -Seconds 5
+    Function Invoke-ArmDelete {
+        param(
+            [Parameter(Mandatory=$true)]
+            [string]$Uri
+        )
+
         Try {
-            $RunCommandResource = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'GET' -Uri $RunCommandUri
-            if ($RunCommandResource.properties.provisioningState -eq 'Succeeded') {
-                $ArmConfirmed = $true
+            Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $Uri | Out-Null
+        } Catch {
+            $StatusCode = if ($null -ne $_.Exception.Response) {
+                [int]$_.Exception.Response.StatusCode
+            } else {
+                $null
             }
-        } Catch {}
+
+            # Deletion is idempotent; an already-absent temporary resource is the desired state.
+            If ($StatusCode -ne 404) {
+                Throw
+            }
+        }
+    }
+
+    Function Wait-ForRunCommandReporting {
+        # Match deployment-helper cleanup: allow Managed Run Command at least 30 seconds to report
+        # status to ARM before deleting its parent VM or resource group.
+        $StopWatch.Stop()
+        If ($StopWatch.Elapsed.TotalSeconds -lt 30) {
+            Start-Sleep -Seconds (30 - $StopWatch.Elapsed.TotalSeconds)
+        }
     }
 
     If (-not [string]::IsNullOrEmpty($ResourceGroupId)) {
         # New RG path  -  delete the entire resource group (cleans up all VMs, disks, NICs, images)
-        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '?api-version=2021-04-01') | Out-Null
+        Wait-ForRunCommandReporting
+        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '?api-version=2021-04-01')
     } Else {
         # Existing RG path  -  delete individual VMs only, leave the RG intact
 
         # Delete Image VM
-        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')
+        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')
 
         # Delete the managed image (if it exists  -  only present for Trusted Launch compatible security type)
-        If ($ImageResourceId -ne '') {
-            Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')
+        If (-not [string]::IsNullOrEmpty($ImageResourceId)) {
+            Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')
         }
 
         # Delete the Management VM
-        Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')
+        Wait-ForRunCommandReporting
+        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')
     }
 }
 catch {
