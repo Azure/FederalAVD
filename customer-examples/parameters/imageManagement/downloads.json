@@ -272,6 +272,14 @@
             "BuiltIn-UWP-Apps\\StickyNotes"
         ]
     },
+    "MicrosoftAppInstaller": {
+        "Description": "Microsoft App Installer - provides App Installer and Windows Package Manager (winget) for all users",
+        "WingetId": "9NBLGGH4NNS1",
+        "WingetPreserveLayout": true,
+        "DestinationFolders": [
+            "BuiltIn-UWP-Apps\\AppInstaller"
+        ]
+    },
     "WindowsTerminal": {
         "Description": "Windows Terminal - built-in UWP app provisioned for all users",
         "WingetId": "9N0DX20HK701",

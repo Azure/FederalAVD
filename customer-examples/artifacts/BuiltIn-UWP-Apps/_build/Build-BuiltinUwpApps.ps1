@@ -50,6 +50,7 @@ $DefaultFolderNames = @{
     '9P1J8S7CCWWT' = 'Clipchamp'
     '9WZDNCRFJBH4' = 'Photos'
     '9NBLGGH4QGHW' = 'StickyNotes'
+    '9NBLGGH4NNS1' = 'AppInstaller'
     '9N0DX20HK701' = 'Terminal'
     '9N4D0MSMP0PT' = 'VP9VideoExtensions'
     '9N5TDP8VCMHS' = 'WebMediaExtensions'

@@ -37,6 +37,7 @@ retained after sysprep".
 | `Clipchamp` | Clipchamp | `9P1J8S7CCWWT` |
 | `Photos` | Microsoft Photos | `9WZDNCRFJBH4` |
 | `StickyNotes` | Sticky Notes | `9NBLGGH4QGHW` |
+| `AppInstaller` | Microsoft App Installer and Windows Package Manager (winget) | `9NBLGGH4NNS1` |
 | `Terminal` | Windows Terminal | `9N0DX20HK701` |
 | `VP9VideoExtensions` | VP9 Video Extensions | `9N4D0MSMP0PT` |
 | `WebMediaExtensions` | Web Media Extensions | `9N5TDP8VCMHS` |
@@ -111,6 +112,19 @@ The downloads entries for each app use the `WingetPreserveLayout` flag, which te
 `Update-ImageArtifacts.ps1` to preserve the native folder layout produced by
 `winget download` instead of renaming the file. This is required for MSIX/MSIXBUNDLE packages
 that must keep their original filenames for `Add-AppxProvisionedPackage` to work correctly.
+
+The connected download performed for Microsoft App Installer is equivalent to:
+
+```powershell
+winget download --id 9NBLGGH4NNS1 --source msstore `
+    --download-directory "customer\artifacts\BuiltIn-UWP-Apps\AppInstaller" `
+    --skip-license --accept-source-agreements --accept-package-agreements `
+    --disable-interactivity --architecture x64
+```
+
+The repository-wide package builder is preferred because it also consolidates App Installer's
+framework dependencies into `SharedDependencies\`. For disconnected environments, run that builder
+on a connected workstation and transfer the resulting `BuiltIn-UWP-Apps.zip` as described below.
 
 If `customer/parameters/imageManagement/downloads.json` already contains customized entries,
 do not overwrite it. Merge the entries with `"WingetPreserveLayout": true` and

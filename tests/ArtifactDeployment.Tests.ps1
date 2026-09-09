@@ -1138,3 +1138,24 @@ Describe 'Customization success exit codes' {
         }
     }
 }
+
+Describe 'Built-in UWP app download definitions' {
+    BeforeAll {
+        $repoRoot = Split-Path -Path $PSScriptRoot -Parent
+        $downloads = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\imageManagement\downloads.json') -Raw | ConvertFrom-Json
+        $builderContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\_build\Build-BuiltinUwpApps.ps1') -Raw
+        $readmeContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\README.md') -Raw
+    }
+
+    It 'stages Microsoft App Installer with its preserved Store package layout' {
+        $entry = $downloads.MicrosoftAppInstaller
+        $entry.WingetId | Should Be '9NBLGGH4NNS1'
+        $entry.WingetPreserveLayout | Should Be $true
+        (@($entry.DestinationFolders) -join ',') | Should Be 'BuiltIn-UWP-Apps\AppInstaller'
+    }
+
+    It 'uses the AppInstaller folder in the standalone builder and documentation' {
+        $builderContent | Should Match "'9NBLGGH4NNS1' = 'AppInstaller'"
+        $readmeContent | Should Match '\| `AppInstaller` \| Microsoft App Installer and Windows Package Manager \(winget\) \| `9NBLGGH4NNS1` \|'
+    }
+}
