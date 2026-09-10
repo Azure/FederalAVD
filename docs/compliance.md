@@ -499,12 +499,25 @@ A ready-to-use script is included in this repository at [`customer-examples/arti
 
 The script uses Microsoft's [LGPO.exe](https://www.microsoft.com/en-us/download/details.aspx?id=55319) to apply DISA STIG GPO packages from [public.cyber.mil](https://public.cyber.mil/stigs/gpo) to the local machine. It handles:
 
-- Windows 10 and Windows 11 STIG GPOs
+- Windows 10 and Windows 11 STIG GPOs, including correct handling of Windows Enterprise multi-session SKU 175
+- Windows Server 2022 and 2025 Member Server STIG GPOs; Windows Server 2016/2019 and domain controllers are rejected, and Domain Controller GPO backups are excluded
 - Microsoft Edge, Firewall, Defender Antivirus, Internet Explorer STIGs
 - Microsoft 365 / Office / Teams STIGs (detected automatically)
 - Third-party application STIGs: Adobe Acrobat Pro/Reader, Google Chrome, Mozilla Firefox
 - AVD-specific exceptions (remote interactive logon rights, ECC curve SSL fix that breaks AVD, firewall settings for non-domain joined VMs)
 - Individual STIG release stamping to `HKLM:\Software\DoD\STIG` for upgrade detection
+
+For Windows Server, the script reads each GPO backup's `Backup.xml` metadata and applies only the
+matching Member Server computer/user GPOs from the mixed MS/DC package. Server stamps include the
+role (for example, `DoD WinSvr 2022 MS = v2r9`). Supplemental Windows 11 V-ID remediations do not
+run on Server and are not claimed as Server compliance. A review of Server 2022 V2R10 and Server
+2025 V1R3 identified additional non-GPO checks for Server features, event-log file ACLs, physical
+wireless/Bluetooth devices, certificate files and stores, software/update status, account
+governance, and other organization-specific evidence. The artifact README documents the current
+automation and intentional AVD deviations. It removes prohibited Simple TCP/IP, Telnet, TFTP,
+SMBv1, and PowerShell 2.0 Server features and disables physical Wi-Fi and Bluetooth on Server 2025.
+Do not treat application of the GPO package or these supplemental actions alone as evidence that
+every manual Server finding is satisfied.
 
 **Deploy in image build (recommended):** Baking STIGs into the golden image means every session host starts hardened without per-VM execution time at deployment. Follow the standard artifacts workflow:
 

@@ -41,16 +41,6 @@ param (
 #region Initialization
 $Script:Name = 'Apply-STIGs'
 [string]$LGPOUrl = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
-$osCaption = (Get-WmiObject -Class Win32_OperatingSystem).caption
-If ($osCaption -match 'Windows 11') {
-    $osVersion = 11
-}
-ElseIf ($osCaption -match 'Windows 10') {
-    $osVersion = 10
-}
-Else {
-    throw "Unsupported operating system '$osCaption'. This artifact supports Windows 10 and Windows 11 only."
-}
 [string]$Script:TempDir = Join-Path -Path "$env:SystemRoot\Temp" -ChildPath $Script:Name
 [string]$Script:LGPOTempDir = Join-Path -Path $Script:TempDir -ChildPath 'LGPO'
 
@@ -58,6 +48,65 @@ Else {
 #endregion
 
 #region Functions
+
+Function Get-OperatingSystemContext {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [psobject]$OperatingSystem
+    )
+
+    $caption = [string]$OperatingSystem.Caption
+    $productType = [int]$OperatingSystem.ProductType
+    $operatingSystemSku = [int]$OperatingSystem.OperatingSystemSKU
+    $enterpriseMultiSessionSku = 175
+
+    If ($productType -eq 2) {
+        throw "Unsupported operating system role '$caption'. Domain controllers must not be used as Azure Virtual Desktop session hosts."
+    }
+
+    # Windows Enterprise multi-session reports ProductType 3 (Server), so SKU 175 must
+    # take precedence over ProductType when classifying the operating system family.
+    $isWindowsClient = $operatingSystemSku -eq $enterpriseMultiSessionSku -or $productType -eq 1
+    If ($isWindowsClient) {
+        If ($caption -match 'Windows 11') {
+            $release = '11'
+        }
+        ElseIf ($caption -match 'Windows 10') {
+            $release = '10'
+        }
+        Else {
+            throw "Unsupported Windows client operating system '$caption' (ProductType $productType, SKU $operatingSystemSku)."
+        }
+
+        return [pscustomobject]@{
+            Caption = $caption
+            Family = 'Client'
+            Release = $release
+            ProductType = $productType
+            OperatingSystemSKU = $operatingSystemSku
+            StigFolderPattern = "^DoD Windows $release v\d+r\d+$"
+        }
+    }
+
+    If ($productType -eq 3) {
+        If ($caption -notmatch 'Windows Server (2022|2025)') {
+            throw "Unsupported Windows Server operating system '$caption' (SKU $operatingSystemSku). Supported releases are 2022 and 2025."
+        }
+        $release = $matches[1]
+
+        return [pscustomobject]@{
+            Caption = $caption
+            Family = 'Server'
+            Release = $release
+            ProductType = $productType
+            OperatingSystemSKU = $operatingSystemSku
+            StigFolderPattern = "^DoD WinSvr $release MS and DC v\d+r\d+$"
+        }
+    }
+
+    throw "Unsupported operating system '$caption' (ProductType $productType, SKU $operatingSystemSku)."
+}
 
 Function Get-InstalledApplication {
     [CmdletBinding()]
@@ -324,7 +373,7 @@ Function Get-StigVersionMap {
             throw "Unable to determine the STIG name and version from folder '$name'. Expected a name ending in v<major>r<revision>."
         }
 
-        $stigName = $matches.StigName.Trim()
+        $stigName = $matches.StigName.Trim() -replace '^(DoD WinSvr .+) MS and DC$', '$1 MS'
         $stigVersion = $matches.StigVersion.ToLowerInvariant()
         If ($versions.ContainsKey($stigName) -and $versions[$stigName] -ne $stigVersion) {
             throw "Multiple versions of '$stigName' are applicable: '$($versions[$stigName])' and '$stigVersion'."
@@ -332,6 +381,76 @@ Function Get-StigVersionMap {
         $versions[$stigName] = $stigVersion
     }
     return $versions
+}
+
+Function Get-GpoBackupDisplayName {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [string]$GpoFolder
+    )
+
+    $backupPath = Join-Path -Path $GpoFolder -ChildPath 'Backup.xml'
+    If (-not (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+        throw "GPO backup metadata not found: $backupPath"
+    }
+
+    [xml]$backup = Get-Content -LiteralPath $backupPath -Raw -ErrorAction Stop
+    $displayNameNode = $backup.SelectSingleNode("/*[local-name()='GroupPolicyBackupScheme']/*[local-name()='GroupPolicyObject']/*[local-name()='GroupPolicyCoreSettings']/*[local-name()='DisplayName']")
+    If (-not $displayNameNode -or [string]::IsNullOrWhiteSpace($displayNameNode.InnerText)) {
+        throw "GPO display name not found in '$backupPath'."
+    }
+    return $displayNameNode.InnerText.Trim()
+}
+
+Function Get-ApplicableGpoFolders {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [System.IO.DirectoryInfo[]]$StigFolder,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Client', 'Server')]
+        [string]$OperatingSystemFamily,
+        [Parameter(Mandatory = $true)]
+        [string]$OperatingSystemRelease
+    )
+
+    $selectedFolders = @()
+    $memberServerComputerGpoCount = 0
+    $memberServerUserGpoCount = 0
+    ForEach ($folder in $StigFolder) {
+        $gpoRoot = Join-Path -Path $folder.FullName -ChildPath 'GPOs'
+        If (-not (Test-Path -LiteralPath $gpoRoot -PathType Container)) {
+            throw "Expected GPOs directory not found under '$($folder.FullName)'."
+        }
+
+        ForEach ($gpoFolder in @(Get-ChildItem -LiteralPath $gpoRoot -Directory)) {
+            If ($OperatingSystemFamily -eq 'Server' -and $folder.Name -match "^DoD WinSvr $OperatingSystemRelease MS and DC ") {
+                $displayName = Get-GpoBackupDisplayName -GpoFolder $gpoFolder.FullName
+                If ($displayName -match "^DoD WinSvr $OperatingSystemRelease DC STIG ") {
+                    continue
+                }
+                If ($displayName -notmatch "^DoD WinSvr $OperatingSystemRelease MS STIG (Comp|User) v\d+r\d+$") {
+                    throw "Unexpected GPO '$displayName' in Member Server STIG package '$($folder.Name)'."
+                }
+                If ($matches[1] -eq 'Comp') {
+                    $memberServerComputerGpoCount++
+                }
+                Else {
+                    $memberServerUserGpoCount++
+                }
+            }
+            $selectedFolders += $gpoFolder.FullName
+        }
+    }
+
+    If ($OperatingSystemFamily -eq 'Server' -and $memberServerComputerGpoCount -ne 1) {
+        throw "Expected exactly one Windows Server $OperatingSystemRelease Member Server computer GPO, found $memberServerComputerGpoCount."
+    }
+    If ($OperatingSystemFamily -eq 'Server' -and $memberServerUserGpoCount -gt 1) {
+        throw "Expected at most one Windows Server $OperatingSystemRelease Member Server user GPO, found $memberServerUserGpoCount."
+    }
+    return $selectedFolders
 }
 
 Function Update-LocalGPOTextFile {
@@ -545,6 +664,30 @@ Function Disable-OptionalFeatureIfEnabled {
     }
 }
 
+Function Uninstall-WindowsServerFeatureIfInstalled {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$FeatureName,
+        [Parameter(Mandatory)][string]$StigId
+    )
+
+    $feature = Get-WindowsFeature -Name $FeatureName -ErrorAction Stop
+    If ($null -eq $feature) {
+        throw "${StigId}: Unable to query Windows Server feature '$FeatureName'."
+    }
+    If ($feature.Installed) {
+        Write-Log -Message "${StigId}: Uninstalling Windows Server feature '$FeatureName'."
+        $result = Uninstall-WindowsFeature -Name $FeatureName -Restart:$false -ErrorAction Stop
+        If (-not $result.Success) {
+            throw "${StigId}: Windows Server feature removal reported failure for '$FeatureName'."
+        }
+        Write-Log -Message "${StigId}: Removed '$FeatureName'. Restart needed: $($result.RestartNeeded)."
+    }
+    Else {
+        Write-Log -Message "${StigId}: '$FeatureName' is not installed. No action required."
+    }
+}
+
 Function Write-Log {
     Param (
         [Parameter(Mandatory = $false, Position = 0)]
@@ -568,8 +711,15 @@ Function Write-Log {
 
 #region Main
 
+$operatingSystem = Get-WmiObject -Class Win32_OperatingSystem
+$osContext = Get-OperatingSystemContext -OperatingSystem $operatingSystem
+$osCaption = $osContext.Caption
+$osVersion = $osContext.Release
+$isWindowsClient = $osContext.Family -eq 'Client'
+
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 Write-Log -Message "Starting '$PSCommandPath'."
+Write-Log -Message "Operating system: $osCaption; family: $($osContext.Family); release: $osVersion; ProductType: $($osContext.ProductType); SKU: $($osContext.OperatingSystemSKU)."
 $ErrorActionPreference = 'Stop'
 
 Try {
@@ -621,7 +771,13 @@ $null = Get-ChildItem -Path $Script:TempDir -Directory -Recurse | Where-Object {
 Write-Log -Message "Getting List of Applicable GPO folders."
 
 $STIGFolders = Get-ChildItem -Path $Script:TempDir -Directory
-[array]$ApplicableFolders = $STIGFolders | Where-Object { $_.Name -like "DoD*Windows $osVersion*" -or $_.Name -like 'DoD*Edge*' -or $_.Name -like 'DoD*Firewall*' -or $_.Name -like 'DoD*Internet Explorer*' -or $_.Name -like 'DoD*Defender Antivirus*' }
+[array]$ApplicableFolders = $STIGFolders | Where-Object {
+    $_.Name -match $osContext.StigFolderPattern -or
+    $_.Name -like 'DoD*Edge*' -or
+    $_.Name -like 'DoD*Firewall*' -or
+    $_.Name -like 'DoD*Internet Explorer*' -or
+    $_.Name -like 'DoD*Defender Antivirus*'
+}
 If (Get-InstalledApplication -Name 'Microsoft 365', 'Office', 'Teams') {
     $ApplicableFolders += $STIGFolders | Where-Object { $_.Name -match 'M365' } 
 }
@@ -640,17 +796,17 @@ Else {
 }
 
 $ApplicableFolders = @($ApplicableFolders | Sort-Object -Property FullName -Unique)
+$operatingSystemStigFolders = @($ApplicableFolders | Where-Object { $_.Name -match $osContext.StigFolderPattern })
+If ($operatingSystemStigFolders.Count -ne 1) {
+    throw "Expected exactly one applicable $($osContext.Family) operating system STIG folder matching '$($osContext.StigFolderPattern)', found $($operatingSystemStigFolders.Count)."
+}
 
 Write-Log -Message "Found $($ApplicableFolders.Count) applicable GPO folders:"
 $ApplicableFolders | ForEach-Object { Write-Log -Message "  $_" } 
-[array]$GPOFolders = @()
-ForEach ($folder in $ApplicableFolders) {
-    $gpoFolderPaths = @(Get-ChildItem -Path $folder.FullName -Filter 'GPOs' -Directory)
-    If ($gpoFolderPaths.Count -ne 1) {
-        throw "Expected one GPOs directory under '$($folder.FullName)', found $($gpoFolderPaths.Count)."
-    }
-    $GPOFolders += $gpoFolderPaths[0].FullName
-}
+[array]$GPOFolders = @(Get-ApplicableGpoFolders `
+    -StigFolder $ApplicableFolders `
+    -OperatingSystemFamily $osContext.Family `
+    -OperatingSystemRelease $osVersion)
 $applicableStigVersions = Get-StigVersionMap -FolderName @($ApplicableFolders.Name)
 $applicableStigVersions.GetEnumerator() | Sort-Object -Property Name | ForEach-Object {
     Write-Log -Message "Applicable STIG version: $($_.Name) = $($_.Value)"
@@ -690,7 +846,19 @@ $Script:PreExistingEdgeProxySettings = Get-ItemPropertyValue -Path 'HKLM:\SOFTWA
 $Script:PreExistingChromeProxySettings = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Policies\Google\Chrome' -Name 'ProxySettings' -ErrorAction SilentlyContinue
 
 ForEach ($gpoFolder in $GPOFolders) {
-    If ($gpoFolder -match "DoD Windows $osVersion") {
+    $isOperatingSystemGpo = @($operatingSystemStigFolders | Where-Object {
+        $gpoFolder.StartsWith($_.FullName, [System.StringComparison]::OrdinalIgnoreCase)
+    }).Count -eq 1
+    $securityTemplates = If ($isOperatingSystemGpo) {
+        @(Get-ChildItem -Path $gpoFolder -Recurse -Filter 'GptTmpl.inf' -File)
+    }
+    Else {
+        @()
+    }
+    If ($securityTemplates.Count -gt 1) {
+        throw "Expected at most one security template in operating-system GPO '$gpoFolder', found $($securityTemplates.Count)."
+    }
+    If ($securityTemplates.Count -eq 1) {
         <# Remove the policies that disable and rename the administrator account.
             # this should be done via the following code in run commands.
             
@@ -703,9 +871,9 @@ ForEach ($gpoFolder in $GPOFolders) {
             # Disable the renamed account
             Disable-LocalUser -Name $newAdminName
         #>
-        $SecEditFile = (Get-ChildItem -Path $gpoFolder -Recurse -Filter "GptTmpl.inf" | Where-Object { $_.DirectoryName -match "SecEdit" }).FullName
+        $SecEditFile = $securityTemplates[0].FullName
         $Content = Get-Content -Path $SecEditFile -Encoding Unicode
-        Write-Output "Applying AVD exceptions to DoD Windows $osVersion security template: $SecEditFile"
+        Write-Output "Applying AVD exceptions to $($osContext.Family) $osVersion security template: $SecEditFile"
 
         # Remove administrator account disable/rename lines
         Write-Log -Message "[GptTmpl] Removing 'NewAdministratorName' and 'EnableAdminAccount' - Azure manages the built-in administrator account (RID-500) independently; allowing the STIG to rename or disable it breaks local admin access and agent operations."
@@ -795,19 +963,16 @@ if ($null -ne $Script:PreExistingChromeProxySettings) {
     Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Google\Chrome' -RegistryValue 'ProxySettings' -Delete -OutputFile $LgpoTxtFile
 }
 
-# V-253260 - BitLocker startup PIN requirement (UseAdvancedStartup, UseTPMPIN, UseTPMKeyPIN)
-# The STIG mandates BitLocker startup authentication with a PIN or PIN+key.
-# Per the finding: "For AVD implementations with no data at rest, this is NA."
-# AVD session hosts are stateless - the OS disk contains no persistent user data and is
-# typically refreshed or deleted on logoff. Enforcing a BitLocker startup PIN on an AVD
-# session host would prevent the VM from booting unattended after reboot (e.g. after
-# Windows Update or a scale event), breaking the session host lifecycle entirely.
-Write-Log -Message "[AdminTemplate] Deleting 'UseAdvancedStartup' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker advanced startup is NA for AVD (stateless session hosts have no data at rest). Enforcing a startup PIN prevents unattended VM boot after reboots triggered by Windows Update or scale events."
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseAdvancedStartup' -Delete -OutputFile $LgpoTxtFile
-Write-Log -Message "[AdminTemplate] Deleting 'UseTPMPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker TPM+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseTPMPIN' -Delete -OutputFile $LgpoTxtFile
-Write-Log -Message "[AdminTemplate] Deleting 'UseTPMKeyPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker TPM+key+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
-Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseTPMKeyPIN' -Delete -OutputFile $LgpoTxtFile
+If ($isWindowsClient) {
+    # V-253260 - BitLocker startup PIN requirement (UseAdvancedStartup, UseTPMPIN, UseTPMKeyPIN)
+    # The Windows 11 STIG declares this requirement NA for AVD implementations with no data at rest.
+    Write-Log -Message "[AdminTemplate] Deleting 'UseAdvancedStartup' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker advanced startup is NA for AVD (stateless session hosts have no data at rest). Enforcing a startup PIN prevents unattended VM boot after reboots triggered by Windows Update or scale events."
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseAdvancedStartup' -Delete -OutputFile $LgpoTxtFile
+    Write-Log -Message "[AdminTemplate] Deleting 'UseTPMPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker TPM+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseTPMPIN' -Delete -OutputFile $LgpoTxtFile
+    Write-Log -Message "[AdminTemplate] Deleting 'UseTPMKeyPIN' (V-253260) from HKLM\SOFTWARE\Policies\Microsoft\FVE - BitLocker TPM+key+PIN startup is NA for AVD session hosts. See UseAdvancedStartup above."
+    Update-LocalGPOTextFile -Scope 'Computer' -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\FVE' -RegistryValue 'UseTPMKeyPIN' -Delete -OutputFile $LgpoTxtFile
+}
 
 If (-not $IsDomainJoined) {
     # Remove firewall settings that break non-domain-joined Remote Desktop.
@@ -846,6 +1011,11 @@ Write-Log -Message "'gpupdate.exe' exited with code [$($GPUpdate.ExitCode)])."
 if ($GPUpdate.ExitCode -ne 0) {
     throw "gpupdate.exe failed with exit code [$($GPUpdate.ExitCode)]."
 }
+
+If ($isWindowsClient) {
+# The following supplemental remediations implement Windows client STIG findings that are not
+# fully represented by the GPO package. Server STIG support intentionally applies only audited
+# Member Server GPOs and the common AVD exceptions above.
 
 # V-253289 MEDIUM: The Secondary Logon service must be disabled on Windows 11.
 Write-Log -Message "V-253289: Disabling the Secondary Logon Service."
@@ -963,6 +1133,64 @@ foreach ($log in $eventLogMap.Keys) {
         -Path "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\$log" `
         -PropertyType String `
         -Value $eventLogSddl
+}
+}
+Else {
+    Write-Log -Message "Applying Windows Server $osVersion supplemental STIG remediations."
+
+    $serverFeatureStigIds = If ($osVersion -eq '2022') {
+        @{
+            'Simple-TCPIP' = 'V-254272'
+            'Telnet-Client' = 'V-254273'
+            'TFTP-Client' = 'V-254274'
+            'FS-SMB1' = 'V-254275'
+            'PowerShell-v2' = 'V-254278'
+        }
+    }
+    Else {
+        @{
+            'Simple-TCPIP' = 'V-278020'
+            'Telnet-Client' = 'V-278021'
+            'TFTP-Client' = 'V-278022'
+            'FS-SMB1' = 'V-278023'
+            'PowerShell-v2' = 'V-278026'
+        }
+    }
+
+    ForEach ($featureName in ($serverFeatureStigIds.Keys | Sort-Object)) {
+        Uninstall-WindowsServerFeatureIfInstalled `
+            -FeatureName $featureName `
+            -StigId $serverFeatureStigIds[$featureName]
+    }
+
+    If ($osVersion -eq '2025') {
+        # V-278017: Physical Wi-Fi adapters are prohibited unless explicitly approved.
+        # Azure Virtual Desktop session hosts do not require physical wireless networking.
+        $physicalWifiAdapters = @(Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object {
+            $_.PhysicalMediaType -eq 'Native 802.11'
+        })
+        If ($physicalWifiAdapters.Count -gt 0) {
+            Write-Log -Message "V-278017: Disabling $($physicalWifiAdapters.Count) physical Wi-Fi adapter(s)."
+            $physicalWifiAdapters | Disable-NetAdapter -Confirm:$false -ErrorAction Stop
+        }
+        Else {
+            Write-Log -Message 'V-278017: No physical Wi-Fi adapters found. No action required.'
+        }
+
+        # V-278018: Bluetooth is prohibited unless explicitly approved. AVD session hosts
+        # have no approved Bluetooth requirement, so disable and stop the support service.
+        $bluetoothService = Get-Service -Name 'bthserv' -ErrorAction SilentlyContinue
+        If ($bluetoothService) {
+            Write-Log -Message 'V-278018: Disabling the Bluetooth Support Service.'
+            Set-Service -Name 'bthserv' -StartupType Disabled -ErrorAction Stop
+            If ($bluetoothService.Status -ne 'Stopped') {
+                Stop-Service -Name 'bthserv' -Force -ErrorAction Stop
+            }
+        }
+        Else {
+            Write-Log -Message 'V-278018: Bluetooth Support Service not present. No action required.'
+        }
+    }
 }
 
 # Stamp each successfully applied STIG with its own release version.

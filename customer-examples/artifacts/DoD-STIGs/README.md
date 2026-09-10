@@ -6,7 +6,7 @@ This PowerShell script automates the application of Defense Information Systems 
 
 ## Purpose
 
-- Apply DISA STIG Group Policy Objects to Windows 10/11 systems
+- Apply DISA STIG Group Policy Objects to Windows 10/11 and supported Windows Server Member Server systems
 - Configure security settings for AVD environments
 - Apply STIGs for common enterprise applications
 - Implement additional security mitigations beyond standard STIG GPOs
@@ -86,7 +86,9 @@ converts it to a string array before splatting the parameters into this script:
 
 ### 1. Initialization
 
-- Validates OS version (Windows 10 or 11)
+- Classifies the OS by SKU and product type, including Windows Enterprise multi-session SKU 175
+- Supports Windows 10/11 clients and Windows Server 2022 and 2025 Member Servers
+- Rejects domain controllers and unsupported server releases before applying policy
 - Creates temporary working directories
 - Initializes logging
 
@@ -104,8 +106,10 @@ converts it to a string array before splatting the parameters into this script:
 ### 4. GPO Application
 
 - Identifies applicable STIG folders based on OS version
+- For Windows Server packages, reads each `Backup.xml` and imports only the matching Member Server computer/user GPOs; Domain Controller GPOs are never imported
 - Applies STIGs for:
   - Windows 10/11
+  - Windows Server 2022/2025 Member Servers
   - Microsoft Edge
   - Windows Firewall
   - Internet Explorer
@@ -122,7 +126,13 @@ converts it to a string array before splatting the parameters into this script:
 - Removes Edge proxy configuration (V-235798)
 - Removes BitLocker startup PIN requirement (V-253260 - NA for stateless AVD session hosts)
 
-### 6. Additional Security Mitigations
+### 6. Additional Windows Client Security Mitigations
+
+The supplemental remediations below implement Windows client STIG findings and run only on
+Windows 10/11. Windows Server support applies the official Member Server GPOs and common AVD
+compatibility exceptions. The Windows Server 2022 V2R10 and Windows Server 2025 V1R3 manual
+XCCDF files have been reviewed. Safe non-GPO Server remediations are applied separately with
+their Server feature names and release-specific V-IDs. See the Server STIG scope notes below.
 
 | STIG ID | Severity | Action |
 | --- | --- | --- |
@@ -141,9 +151,49 @@ converts it to a string array before splatting the parameters into this script:
 | V-253359 | MEDIUM | Removes "Run as different user" from context menus |
 | V-253340/41/42 | MEDIUM | Restricts Application, Security, and System event log access |
 
+### Windows Server STIG scope
+
+The Server 2022 V2R10 and Server 2025 V1R3 manuals were compared with the July 2026 Server GPO
+package (Server 2022 V2R9 and Server 2025 V1R2). The GPOs contain most policy-based controls.
+The artifact additionally applies these manual-XCCDF remediations during an image build:
+
+| Action | Server 2022 STIG ID | Server 2025 STIG ID |
+| --- | --- | --- |
+| Remove Simple TCP/IP Services | V-254272 | V-278020 |
+| Remove Telnet Client | V-254273 | V-278021 |
+| Remove TFTP Client | V-254274 | V-278022 |
+| Remove SMBv1 | V-254275 | V-278023 |
+| Remove Windows PowerShell 2.0 | V-254278 | V-278026 |
+| Disable physical Wi-Fi adapters | Not present | V-278017 |
+| Disable Bluetooth Support Service | Not present | V-278018 |
+
+Server feature-removal failures stop the artifact. Server 2025 physical Wi-Fi and Bluetooth are
+disabled because Azure Virtual Desktop session hosts have no approved physical wireless use.
+These checks are distinct from the Windows 11 Wi-Fi Direct adapter finding.
+
+The following manual checks still need separate handling or deployment evidence:
+
+- Event log findings inspect the ACLs on the `.evtx` files. The client `CustomSD` registry action
+  is not claimed as satisfying these Server findings.
+- Volume format, certificate-installation-file cleanup, antivirus/IDPS, patch timeliness,
+  approved DoW certificate stores, account governance, LAPS, and legal notice values require
+  runtime validation or organization-specific inputs and evidence.
+- OpenSSH findings in Server 2025 are not applicable when OpenSSH is not installed. The artifact
+  does not install OpenSSH solely to make those conditional findings applicable.
+- Domain Controller-only findings are outside scope because this artifact rejects domain
+  controllers and imports only Member Server GPOs.
+
+The artifact intentionally changes STIG-defined interactive-logon rights for AVD compatibility.
+In particular, allowing local RDS logon removes local-account deny SIDs, which is a documented
+deviation from Server 2022 V-254439 and Server 2025 V-278188. The artifact also removes the GPO
+setting that renames the built-in Administrator account, so Server 2022 V-254447 and Server 2025
+V-278197 must be addressed by the approved account-management process. These deviations must be
+included in the system security plan and accepted by the authorizing official where applicable.
+
 ### 7. Version Tracking
 
 - Detects each applicable STIG release from its folder name, such as `DoD Windows 11 v2r8`
+- Records mixed Server package releases with an explicit Member Server role, such as `DoD WinSvr 2022 MS = v2r9`
 - Stamps a separate registry value for every successfully applied STIG at `HKLM:\Software\DoD\STIG`
 - Enables upgrade detection on subsequent runs
 
@@ -192,6 +242,10 @@ The script implements version tracking to support upgrades:
 | `Disable-OptionalFeatureIfEnabled` | Disables a Windows optional feature if currently enabled |
 | `Get-InstalledApplication` | Queries registry for installed applications |
 | `Get-InternetFile` | Downloads files from URLs with progress tracking |
+| `Get-OperatingSystemContext` | Classifies supported client and server operating systems, prioritizing multi-session SKU 175 over product type |
+| `Get-GpoBackupDisplayName` | Reads a GPO backup display name from `Backup.xml` |
+| `Get-ApplicableGpoFolders` | Selects applicable backups and excludes Domain Controller GPOs from Server packages |
+| `Uninstall-WindowsServerFeatureIfInstalled` | Removes a prohibited Server feature and fails if servicing does not report success |
 | `New-Log` | Initializes logging infrastructure |
 | `Reset-LocalPolicy` | Resets Local Group Policy and optionally Local Security Policy |
 | `Set-RegistryValue` | Creates or updates registry values |
@@ -201,7 +255,7 @@ The script implements version tracking to support upgrades:
 
 ## Requirements
 
-- **OS:** Windows 10 or Windows 11; unsupported operating systems fail before any policy is applied
+- **OS:** Windows 10/11 or Windows Server 2022/2025 Member Server; domain controllers, Windows Server 2016/2019, and other unsupported releases fail before any policy is applied
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
 - **Network Access:** Required for downloading LGPO and STIG packages (unless using offline mode)
@@ -252,6 +306,7 @@ HKLM:\Software\DoD\STIG
   DoD Microsoft Edge: v2r5
   DoD Windows Defender Firewall: v2r2
   DoD Google Chrome: v2r11
+  DoD WinSvr 2022 MS: v2r9
 ```
 
 The exact values depend on the operating system, installed applications, and

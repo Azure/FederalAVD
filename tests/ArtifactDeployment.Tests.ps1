@@ -1024,7 +1024,15 @@ Describe 'DoD STIG local user logon rights' {
         if ($parseErrors.Count -gt 0) {
             throw "Apply-STIGsAVD.ps1 has parser errors: $($parseErrors.Message -join '; ')"
         }
-        foreach ($functionName in @('Set-ExistingPrivilegeRight', 'Remove-PrivilegeRightPrincipals', 'Update-PrivilegeRightPlaceholders', 'Get-StigVersionMap')) {
+        foreach ($functionName in @(
+            'Set-ExistingPrivilegeRight'
+            'Remove-PrivilegeRightPrincipals'
+            'Update-PrivilegeRightPlaceholders'
+            'Get-StigVersionMap'
+            'Get-OperatingSystemContext'
+            'Get-GpoBackupDisplayName'
+            'Get-ApplicableGpoFolders'
+        )) {
             $functionDefinition = $syntaxTree.Find({
                 param($node)
                 $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
@@ -1043,6 +1051,9 @@ Describe 'DoD STIG local user logon rights' {
         Remove-Item function:\Remove-PrivilegeRightPrincipals -ErrorAction SilentlyContinue
         Remove-Item function:\Update-PrivilegeRightPlaceholders -ErrorAction SilentlyContinue
         Remove-Item function:\Get-StigVersionMap -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-OperatingSystemContext -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-GpoBackupDisplayName -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-ApplicableGpoFolders -ErrorAction SilentlyContinue
     }
 
     It 'leaves the RDS allow right unchanged when the Windows 11 v2r8 STIG omits it' {
@@ -1132,12 +1143,14 @@ Describe 'DoD STIG local user logon rights' {
             'DoD Windows 11 v2r8'
             'DoD Microsoft Edge v2r5'
             'DoD Google Chrome V2R11'
+            'DoD WinSvr 2022 MS and DC v2r9'
         )
 
-        $versions.Count | Should Be 3
+        $versions.Count | Should Be 4
         $versions['DoD Windows 11'] | Should Be 'v2r8'
         $versions['DoD Microsoft Edge'] | Should Be 'v2r5'
         $versions['DoD Google Chrome'] | Should Be 'v2r11'
+        $versions['DoD WinSvr 2022 MS'] | Should Be 'v2r9'
     }
 
     It 'rejects an applicable STIG folder without a release suffix' {
@@ -1153,6 +1166,90 @@ Describe 'DoD STIG local user logon rights' {
         $stigScriptContent | Should Match "'SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight'"
         $stigScriptContent | Should Match "\*S-1-5-113', '\*S-1-5-114"
     }
+
+    It 'classifies SKU 175 as Windows client even when ProductType is 3' {
+        $context = Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+            Caption = 'Microsoft Windows 11 Enterprise multi-session'
+            ProductType = 3
+            OperatingSystemSKU = 175
+        })
+
+        $context.Family | Should Be 'Client'
+        $context.Release | Should Be '11'
+        $context.StigFolderPattern | Should Be '^DoD Windows 11 v\d+r\d+$'
+    }
+
+    It 'classifies supported ProductType 3 server releases as Windows Server' {
+        foreach ($release in '2022', '2025') {
+            $context = Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                Caption = "Microsoft Windows Server $release Datacenter"
+                ProductType = 3
+                OperatingSystemSKU = 8
+            })
+
+            $context.Family | Should Be 'Server'
+            $context.Release | Should Be $release
+            $context.StigFolderPattern | Should Be "^DoD WinSvr $release MS and DC v\d+r\d+$"
+        }
+    }
+
+    It 'rejects domain controllers and sunsetting or unsupported server releases' {
+        $domainControllerError = $null
+        Try {
+            Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                Caption = 'Microsoft Windows Server 2022 Datacenter'
+                ProductType = 2
+                OperatingSystemSKU = 8
+            })
+        }
+        Catch { $domainControllerError = $_ }
+
+        $domainControllerError.Exception.Message | Should Match 'Domain controllers must not be used'
+        foreach ($release in '2012 R2', '2016', '2019') {
+            $unsupportedServerError = $null
+            Try {
+                Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                    Caption = "Microsoft Windows Server $release Datacenter"
+                    ProductType = 3
+                    OperatingSystemSKU = 8
+                })
+            }
+            Catch { $unsupportedServerError = $_ }
+
+            $unsupportedServerError.Exception.Message | Should Match 'Supported releases are 2022 and 2025'
+        }
+    }
+
+    It 'selects only Member Server GPO backups from a mixed server package' {
+        $tempRoot = Join-Path $env:TEMP "FederalAVD-stig-gpo-test-$([guid]::NewGuid())"
+        Try {
+            $stigFolderPath = Join-Path $tempRoot 'DoD WinSvr 2022 MS and DC v2r9'
+            $gpoRoot = Join-Path $stigFolderPath 'GPOs'
+            foreach ($gpo in @(
+                @{ Folder = 'ms-comp'; Name = 'DoD WinSvr 2022 MS STIG Comp v2r9' }
+                @{ Folder = 'ms-user'; Name = 'DoD WinSvr 2022 MS STIG User v2r9' }
+                @{ Folder = 'dc-comp'; Name = 'DoD WinSvr 2022 DC STIG Comp v2r9' }
+            )) {
+                $path = Join-Path $gpoRoot $gpo.Folder
+                New-Item -Path $path -ItemType Directory -Force | Out-Null
+                $backup = "<GroupPolicyBackupScheme><GroupPolicyObject><GroupPolicyCoreSettings><DisplayName>$($gpo.Name)</DisplayName></GroupPolicyCoreSettings></GroupPolicyObject></GroupPolicyBackupScheme>"
+                Set-Content -LiteralPath (Join-Path $path 'Backup.xml') -Value $backup -Encoding ASCII
+            }
+
+            $selected = @(Get-ApplicableGpoFolders `
+                -StigFolder (Get-Item $stigFolderPath) `
+                -OperatingSystemFamily Server `
+                -OperatingSystemRelease '2022')
+
+            $selected.Count | Should Be 2
+            ($selected -join "`n") | Should Match 'ms-comp'
+            ($selected -join "`n") | Should Match 'ms-user'
+            ($selected -join "`n") | Should Not Match 'dc-comp'
+        }
+        Finally {
+            Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 Describe 'DoD STIG image build safety' {
@@ -1161,9 +1258,12 @@ Describe 'DoD STIG image build safety' {
         $stigScriptContent = Get-Content -LiteralPath $stigScriptPath -Raw
     }
 
-    It 'accepts only Windows 10 and Windows 11 operating systems' {
-        $stigScriptContent | Should Match "ElseIf \(\`$osCaption -match 'Windows 10'\)"
-        $stigScriptContent | Should Match "Unsupported operating system '\`$osCaption'"
+    It 'uses SKU-aware OS classification and supports current AVD Windows Server releases' {
+        $stigScriptContent | Should Match '\$enterpriseMultiSessionSku = 175'
+        $stigScriptContent | Should Match '\$operatingSystemSku -eq \$enterpriseMultiSessionSku -or \$productType -eq 1'
+        $stigScriptContent | Should Match "Windows Server \(2022\|2025\)"
+        $stigScriptContent | Should Not Match "Windows Server \(2016\|2019"
+        $stigScriptContent | Should Match 'Domain controllers must not be used as Azure Virtual Desktop session hosts'
     }
 
     It 'cleans stale temporary content and always removes the workspace' {
@@ -1175,6 +1275,8 @@ Describe 'DoD STIG image build safety' {
     It 'fails when required compliance remediations fail' {
         $stigScriptContent | Should Match "Disable-WindowsOptionalFeature[\s\S]*?-ErrorAction Stop"
         $stigScriptContent | Should Match "Remove-WindowsCapability[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Uninstall-WindowsFeature -Name \`$FeatureName -Restart:\`$false -ErrorAction Stop"
+        $stigScriptContent | Should Match "If \(-not \`$result.Success\)"
         $stigScriptContent | Should Match "Stop-Service \`$Service -Force -ErrorAction Stop"
         $stigScriptContent | Should Match "Remove-AppxProvisionedPackage[\s\S]*?-ErrorAction Stop"
         $stigScriptContent | Should Match "Remove-AppxPackage[\s\S]*?-ErrorAction Stop"
@@ -1198,6 +1300,32 @@ Describe 'DoD STIG image build safety' {
     It 'does not expose the obsolete package-level Version parameter' {
         $stigScriptContent | Should Not Match '(?m)^\s*\[string\]\$Version\b'
         $stigScriptContent | Should Not Match '(?m)^\.PARAMETER Version\s*$'
+    }
+
+    It 'selects server GPOs by Backup.xml display name and separates client remediations' {
+        $stigScriptContent | Should Match 'Get-GpoBackupDisplayName -GpoFolder \$gpoFolder\.FullName'
+        $stigScriptContent | Should Match "DC STIG "
+        $stigScriptContent | Should Match "MS STIG \(Comp\|User\)"
+        $stigScriptContent | Should Match 'If \(\$isWindowsClient\) \{[\s\S]*?V-253289[\s\S]*?V-253340'
+        $stigScriptContent | Should Match 'Applying Windows Server \$osVersion supplemental STIG remediations'
+    }
+
+    It 'removes prohibited Server features with release-specific V-IDs' {
+        foreach ($feature in 'Simple-TCPIP', 'Telnet-Client', 'TFTP-Client', 'FS-SMB1', 'PowerShell-v2') {
+            $stigScriptContent | Should Match ([regex]::Escape("'$feature'"))
+        }
+        foreach ($stigId in 'V-254272', 'V-254273', 'V-254274', 'V-254275', 'V-254278',
+            'V-278020', 'V-278021', 'V-278022', 'V-278023', 'V-278026') {
+            $stigScriptContent | Should Match $stigId
+        }
+        $stigScriptContent | Should Match 'Uninstall-WindowsServerFeatureIfInstalled[\s\S]*?-StigId \$serverFeatureStigIds\[\$featureName\]'
+    }
+
+    It 'disables physical Wi-Fi and Bluetooth only on Server 2025' {
+        $stigScriptContent | Should Match "If \(\`$osVersion -eq '2025'\) \{[\s\S]*?V-278017[\s\S]*?PhysicalMediaType -eq 'Native 802\.11'"
+        $stigScriptContent | Should Match "V-278018[\s\S]*?Get-Service -Name 'bthserv'"
+        $stigScriptContent | Should Match "Set-Service -Name 'bthserv' -StartupType Disabled -ErrorAction Stop"
+        $stigScriptContent | Should Match "Stop-Service -Name 'bthserv' -Force -ErrorAction Stop"
     }
 
     It 'disables both Windows PowerShell 2.0 optional features for V-253285' {
