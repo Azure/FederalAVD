@@ -782,6 +782,10 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     $packageCount = ($Downloads.PSObject.Properties.Name).Count
     Write-Output "Processing $packageCount package(s) from '$downloadFilePath'."
 
+    # Cache release metadata by repository so multiple assets requested from the same release
+    # are resolved atomically and do not consume one GitHub API request per asset.
+    $GitHubReleaseCache = @{}
+
     # Clean winget's own working directory so stale files from previous runs do not
     # accumulate. winget creates %TEMP%\WinGet independently of --download-directory.
     $WingetTempDir = Join-Path -Path $Env:TEMP -ChildPath 'WinGet'
@@ -796,6 +800,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         Write-Output ""
         Write-Output "=== $SoftwareName ==="
         $DownloadUrl = $null
+        $DownloadAssets = @()
         $UseWinget = $false
         If ($null -ne $Download.WingetId -and $Download.WingetId -ne '') {
             $UseWinget = $true
@@ -842,11 +847,35 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         }
         ElseIf ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo
-            $FileNamePattern = $Download.GitHubFileNamePattern
             $ReleasesUri = "https://api.github.com/repos/$Repo/releases/latest"
             Write-Output "[$SoftwareName] Retrieving URL from GitHub ($Repo)..."
-            $DownloadUrl = ((Invoke-RestMethod -Method GET -Uri $ReleasesUri).assets | Where-Object name -like $FileNamePattern).browser_download_url
-            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            If (-not $GitHubReleaseCache.ContainsKey($Repo)) {
+                $GitHubReleaseCache[$Repo] = Invoke-RestMethod -Method GET -Uri $ReleasesUri
+            }
+            $FileNamePatterns = @($Download.GitHubFileNamePatterns | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+            If ($FileNamePatterns.Count -gt 0) {
+                foreach ($FileNamePattern in $FileNamePatterns) {
+                    $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                    If ($MatchingAssets.Count -ne 1) {
+                        Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
+                    }
+                    $DownloadAssets += [pscustomobject]@{
+                        Name = [string]$MatchingAssets[0].name
+                        Url = [string]$MatchingAssets[0].browser_download_url
+                        Digest = [string]$MatchingAssets[0].digest
+                    }
+                }
+                Write-Output "[$SoftwareName] Resolved $($DownloadAssets.Count) asset(s) from release '$($GitHubReleaseCache[$Repo].tag_name)'."
+            }
+            Else {
+                $FileNamePattern = $Download.GitHubFileNamePattern
+                $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                If ($MatchingAssets.Count -ne 1) {
+                    Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
+                }
+                $DownloadUrl = $MatchingAssets[0].browser_download_url
+                Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            }
         }
         If ($UseWinget) {
             If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
@@ -1063,6 +1092,81 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                                 $null = $CustomerPreserveLayoutParentFolders.Add((Join-Path -Path $CustomerArtifactsDir -ChildPath $parentRelative))
                             }
                         }
+                    }
+                }
+            }
+        }
+        ElseIf ($DownloadAssets.Count -gt 0) {
+            Write-Output "[$SoftwareName] Downloading $($DownloadAssets.Count) grouped GitHub release asset(s)..."
+            $DestFolders = @(if (@($Download.DestinationFolders).Count -gt 0) { $Download.DestinationFolders } else { '' })
+            $PrimaryDestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolders[0]
+            If (-not (Test-Path -Path $PrimaryDestinationDir)) {
+                New-Item -Path $PrimaryDestinationDir -ItemType Directory -Force | Out-Null
+            }
+            foreach ($CleanupPattern in @($Download.DestinationCleanupPatterns)) {
+                Get-ChildItem -LiteralPath $PrimaryDestinationDir -File -Filter $CleanupPattern -ErrorAction SilentlyContinue |
+                    Remove-Item -Force
+            }
+            $VersionText = @(
+                "SoftwareName = $SoftwareName"
+                "GitHubRepo = $Repo"
+                "GitHubRelease = $($GitHubReleaseCache[$Repo].tag_name)"
+            )
+            foreach ($DownloadAsset in $DownloadAssets) {
+                $DownloadedAssetPath = @(Get-InternetFile `
+                    -Url $DownloadAsset.Url `
+                    -OutputDirectory $PrimaryDestinationDir `
+                    -OutputFileName $DownloadAsset.Name)[-1]
+                If (-not (Test-Path -LiteralPath $DownloadedAssetPath -PathType Leaf)) {
+                    Throw "[$SoftwareName] GitHub release asset '$($DownloadAsset.Name)' was not downloaded."
+                }
+                If (-not [string]::IsNullOrWhiteSpace($DownloadAsset.Digest)) {
+                    If ($DownloadAsset.Digest -notmatch '^sha256:([0-9A-Fa-f]{64})$') {
+                        Throw "[$SoftwareName] Unsupported digest '$($DownloadAsset.Digest)' for '$($DownloadAsset.Name)'."
+                    }
+                    $ExpectedHash = $Matches[1].ToUpperInvariant()
+                    $ActualHash = (Get-FileHash -LiteralPath $DownloadedAssetPath -Algorithm SHA256).Hash
+                    If ($ActualHash -ne $ExpectedHash) {
+                        Throw "[$SoftwareName] SHA256 mismatch for '$($DownloadAsset.Name)'."
+                    }
+                }
+                $VersionText += "Downloaded File = $($DownloadAsset.Name)"
+            }
+            $VersionText += "Downloaded on = $(Get-Date)"
+            $VersionText += "--------------------------------------------------"
+            Add-Content -Path $FileVersionInfoFile -Value $VersionText
+
+            $copySize = [math]::Round((($DownloadAssets | ForEach-Object {
+                (Get-Item -LiteralPath (Join-Path $PrimaryDestinationDir $_.Name)).Length
+            } | Measure-Object -Sum).Sum) / 1MB, 1)
+            Write-Output "[$SoftwareName] Downloaded grouped assets directly to '$($DestFolders[0])' ($copySize MB)."
+
+            foreach ($DestFolder in @($DestFolders | Select-Object -Skip 1)) {
+                $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
+                If (-not (Test-Path -Path $DestinationDir)) {
+                    New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
+                }
+                foreach ($CleanupPattern in @($Download.DestinationCleanupPatterns)) {
+                    Get-ChildItem -LiteralPath $DestinationDir -File -Filter $CleanupPattern -ErrorAction SilentlyContinue |
+                        Remove-Item -Force
+                }
+                foreach ($DownloadAsset in $DownloadAssets) {
+                    Copy-Item -LiteralPath (Join-Path $PrimaryDestinationDir $DownloadAsset.Name) -Destination $DestinationDir -Force
+                }
+            }
+
+            if ($CopyDownloadsToCustomerArtifacts) {
+                foreach ($DestFolder in $DestFolders) {
+                    $CustomerDestinationDir = Join-Path -Path $CustomerArtifactsDir -ChildPath $DestFolder
+                    If (-not (Test-Path -Path $CustomerDestinationDir)) {
+                        New-Item -Path $CustomerDestinationDir -ItemType Directory -Force | Out-Null
+                    }
+                    foreach ($CleanupPattern in @($Download.DestinationCleanupPatterns)) {
+                        Get-ChildItem -LiteralPath $CustomerDestinationDir -File -Filter $CleanupPattern -ErrorAction SilentlyContinue |
+                            Remove-Item -Force
+                    }
+                    foreach ($DownloadAsset in $DownloadAssets) {
+                        Copy-Item -LiteralPath (Join-Path $PrimaryDestinationDir $DownloadAsset.Name) -Destination $CustomerDestinationDir -Force
                     }
                 }
             }

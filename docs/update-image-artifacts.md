@@ -256,7 +256,7 @@ Retrieves the latest version from a JSON API endpoint.
 
 #### 4. GitHub Releases
 
-Fetches the latest release asset from a GitHub repository.
+Fetches one or more assets from the latest release of a GitHub repository.
 
 ```json
 "PowerShell7": {
@@ -271,7 +271,18 @@ Fetches the latest release asset from a GitHub repository.
 | Field | Description |
 | --- | --- |
 | `GitHubRepo` | `owner/repo` path on GitHub |
-| `GitHubFileNamePattern` | Wildcard pattern to match the desired release asset filename |
+| `GitHubFileNamePattern` | Wildcard pattern that must match exactly one release asset |
+| `GitHubFileNamePatterns` | Array of wildcard patterns for a grouped download; every pattern must match exactly one asset from the same release |
+| `DestinationCleanupPatterns` | Optional wildcard patterns for stale payload files to remove from each destination before copying grouped assets; authored files are preserved |
+
+Use either `GitHubFileNamePattern` with `DestinationFileName` for one asset, or
+`GitHubFileNamePatterns` for a group whose original release filenames must be preserved. A grouped
+download writes directly to its first artifact destination and verifies any SHA256 digest published
+by GitHub. Additional destinations receive the verified files from that first destination.
+
+Release metadata is cached by repository for the duration of the update. Each pattern must match
+exactly one asset; zero or multiple matches stop that download rather than selecting an arbitrary
+file.
 
 #### 5. Winget
 

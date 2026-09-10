@@ -272,13 +272,23 @@
             "BuiltIn-UWP-Apps\\StickyNotes"
         ]
     },
-    "MicrosoftAppInstaller": {
-        "Description": "Microsoft App Installer - provides App Installer and Windows Package Manager (winget) for all users",
-        "WingetId": "Microsoft.AppInstaller",
-        "WingetSource": "winget",
-        "WingetPreserveLayout": true,
+    "MicrosoftWinGet": {
+        "Description": "Official Microsoft App Installer bundle, dependencies, metadata, and offline license from one winget-cli release.",
+        "GitHubRepo": "microsoft/winget-cli",
+        "GitHubFileNamePatterns": [
+            "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle",
+            "DesktopAppInstaller_Dependencies.zip",
+            "DesktopAppInstaller_Dependencies.json",
+            "*_License1.xml"
+        ],
+        "DestinationCleanupPatterns": [
+            "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle",
+            "DesktopAppInstaller_Dependencies.zip",
+            "DesktopAppInstaller_Dependencies.json",
+            "*_License1.xml"
+        ],
         "DestinationFolders": [
-            "BuiltIn-UWP-Apps\\AppInstaller"
+            "Microsoft-WinGet"
         ]
     },
     "WindowsTerminal": {

@@ -37,7 +37,6 @@ retained after sysprep".
 | `Clipchamp` | Clipchamp | `9P1J8S7CCWWT` |
 | `Photos` | Microsoft Photos | `9WZDNCRFJBH4` |
 | `StickyNotes` | Sticky Notes | `9NBLGGH4QGHW` |
-| `AppInstaller` | Microsoft App Installer and Windows Package Manager (winget) | `Microsoft.AppInstaller` |
 | `Terminal` | Windows Terminal | `9N0DX20HK701` |
 | `VP9VideoExtensions` | VP9 Video Extensions | `9N4D0MSMP0PT` |
 | `WebMediaExtensions` | Web Media Extensions | `9N5TDP8VCMHS` |
@@ -58,6 +57,10 @@ package; RDP uses the supported GPU driver directly.
 The HEIF Image Extension uses the AV1 Video Extension to display AVIF images. Displaying HEIC and
 other HEVC-compressed HEIF images also requires the separately licensed HEVC Video Extensions
 package, which this artifact doesn't distribute.
+
+Microsoft App Installer and Windows Package Manager are intentionally excluded. App Installer
+requires its matching offline license for supported all-users provisioning and is handled by the
+separate `Microsoft-WinGet` artifact.
 
 ## Artifact folder structure
 
@@ -113,21 +116,6 @@ The downloads entries for each app use the `WingetPreserveLayout` flag, which te
 `winget download` instead of renaming the file. This is required for MSIX/MSIXBUNDLE packages
 that must keep their original filenames for `Add-AppxProvisionedPackage` to work correctly.
 
-The connected download performed for Microsoft App Installer is equivalent to:
-
-```powershell
-winget download --id Microsoft.AppInstaller --exact --source winget `
-    --download-directory "customer\artifacts\BuiltIn-UWP-Apps\AppInstaller" `
-    --skip-license --accept-source-agreements --accept-package-agreements `
-    --disable-interactivity --architecture x64
-```
-
-The Microsoft Store product ID doesn't support `winget download`. The `Microsoft.AppInstaller`
-community manifest downloads the official MSIX bundle from the Microsoft winget-cli GitHub release.
-The repository-wide package builder expands its dependency archives and consolidates the required
-framework packages into `SharedDependencies\`. For disconnected environments, run that builder on
-a connected workstation and transfer the resulting `BuiltIn-UWP-Apps.zip` as described below.
-
 If `customer/parameters/imageManagement/downloads.json` already contains customized entries,
 do not overwrite it. Merge the entries with `"WingetPreserveLayout": true` and
 `DestinationFolders` beginning with `BuiltIn-UWP-Apps\` from the example file into your existing
@@ -138,13 +126,20 @@ file.
 #### Standalone transfer builder
 
 The `_build` folder contains a connected-workstation builder that does not depend on
-`Update-ImageArtifacts.ps1` or `downloads.json`. It accepts an array of Microsoft Store product IDs,
-downloads the packages with `winget`, keeps the best x64-compatible package variant, removes Arm
-dependencies, deduplicates shared framework packages, and creates one zip for transfer:
+`Update-ImageArtifacts.ps1` or `downloads.json`. By default it includes every Store ID in the table
+above. It downloads the packages with `winget`, keeps the best x64-compatible package variant,
+removes Arm dependencies, deduplicates shared framework packages, and creates one zip for transfer:
 
 ```powershell
 cd C:\repos\FederalAVD\customer-examples\artifacts\BuiltIn-UWP-Apps\_build
 
+.\Build-BuiltinUwpApps.ps1 `
+    -OutputPath 'C:\AirGapTransfer\BuiltIn-UWP-Apps.zip'
+```
+
+Pass `-AppStoreIds` to build a subset instead:
+
+```powershell
 .\Build-BuiltinUwpApps.ps1 `
     -AppStoreIds @(
         '9WZDNCRFHVN5', # Calculator
@@ -225,12 +220,14 @@ No special arguments are needed — the script handles prerequisites automatical
 5. **Resolves dependencies** from the `SharedDependencies\` folder at the artifact root;
    deduplicates by package family, keeping the highest version.
 6. **Provisions** via `Add-AppxProvisionedPackage -Online -SkipLicense -Regions all`.
-   - The `-Regions all` parameter is required for the provisioned package to survive sysprep.
-   - First attempt: no explicit dependencies (the OS component store satisfies frameworks on a
-     modern Windows 11 image). This avoids error `0xc1570118` that occurs when passing explicit
-     dependency packages that conflict with already-registered OS versions.
-   - If the first attempt fails and staged dependencies are available, retries with explicit
-     `-DependencyPackagePath`.
+        - Detects MSIX/APPX bundles that winget saved with a single-package extension and corrects
+            `.msix` to `.msixbundle` or `.appx` to `.appxbundle` before provisioning.
+        - The `-Regions all` parameter is required for the provisioned package to survive sysprep.
+        - First attempt: no explicit dependencies (the OS component store satisfies frameworks on a
+            modern Windows 11 image). This avoids error `0xc1570118` that occurs when passing explicit
+            dependency packages that conflict with already-registered OS versions.
+        - If the first attempt fails and staged dependencies are available, retries with explicit
+            `-DependencyPackagePath`.
 7. **Logs a change summary** table at the end showing before/after versions for each app.
 
 ## Troubleshooting

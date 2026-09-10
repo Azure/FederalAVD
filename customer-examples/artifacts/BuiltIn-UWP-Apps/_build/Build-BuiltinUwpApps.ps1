@@ -10,6 +10,12 @@
     The build script lives below the artifact root so Invoke-Customization.ps1 cannot select it as
     the artifact entry script. The generated zip contains only the runtime installer and payload.
 
+.PARAMETER AppStoreIds
+    Microsoft Store product IDs to include. Defaults to all apps listed in the artifact README.
+
+.EXAMPLE
+    .\Build-BuiltinUwpApps.ps1 -OutputPath 'C:\AirGapTransfer\BuiltIn-UWP-Apps.zip'
+
 .EXAMPLE
     .\Build-BuiltinUwpApps.ps1 `
         -AppStoreIds @('9WZDNCRFHVN5', '9PCFS5B6T72H', '9MZ95KL8MR0L') `
@@ -18,9 +24,23 @@
 
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [Parameter(Mandatory)]
     [ValidateNotNullOrEmpty()]
-    [string[]]$AppStoreIds,
+    [string[]]$AppStoreIds = @(
+        '9WZDNCRFHVN5'
+        '9PCFS5B6T72H'
+        '9MZ95KL8MR0L'
+        '9MSMLRH6LZF3'
+        '9P1J8S7CCWWT'
+        '9WZDNCRFJBH4'
+        '9NBLGGH4QGHW'
+        '9N0DX20HK701'
+        '9N4D0MSMP0PT'
+        '9N5TDP8VCMHS'
+        '9PG2DK419DRG'
+        '9MVZQVXJBQ9V'
+        '9N95Q1ZZPMH4'
+        '9PMMSR1CGPWG'
+    ),
 
     [Parameter(Mandatory)]
     [ValidateNotNullOrEmpty()]
@@ -50,7 +70,6 @@ $DefaultFolderNames = @{
     '9P1J8S7CCWWT' = 'Clipchamp'
     '9WZDNCRFJBH4' = 'Photos'
     '9NBLGGH4QGHW' = 'StickyNotes'
-    'Microsoft.AppInstaller' = 'AppInstaller'
     '9N0DX20HK701' = 'Terminal'
     '9N4D0MSMP0PT' = 'VP9VideoExtensions'
     '9N5TDP8VCMHS' = 'WebMediaExtensions'
