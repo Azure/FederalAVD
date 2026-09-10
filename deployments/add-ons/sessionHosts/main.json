@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "8543211480184022214"
+      "templateHash": "2721848083316134862"
     }
   },
   "definitions": {
@@ -792,7 +792,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "14493515072687236900"
+              "templateHash": "2909880205324522577"
             }
           },
           "definitions": {
@@ -1532,7 +1532,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "9751363084409559750"
+                      "templateHash": "1295756730545622279"
                     }
                   },
                   "definitions": {
@@ -2307,7 +2307,7 @@
                       "condition": "[not(empty(parameters('sessionHostCustomizations')))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('customizations-{0}-{1}', copyIndex(), uniqueString('customizations', deployment().name))]",
+                      "name": "[format('{0}-customizations', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[copyIndex()]])]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -2453,7 +2453,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('updateOSDiskNetworkAccess-{0}-{1}', copyIndex(), uniqueString('updateOSDiskNetworkAccess', deployment().name))]",
+                      "name": "[format('{0}-update-os-disk-network-access', variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[copyIndex()]])]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"

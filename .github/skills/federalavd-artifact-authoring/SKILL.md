@@ -17,6 +17,9 @@ Use this workflow for content under `customer-examples/artifacts/` and entries i
    git-ignored `customer/artifacts/` folder before customization.
 4. Select the source supported by `deployments/Update-ImageArtifacts.ps1`:
    `DownloadUrl`, `APIUrl`, `GitHubRepo`, or `WingetId`.
+   For multiple files from one GitHub release, use one `GitHubRepo` entry with
+   `GitHubFileNamePatterns` so every asset resolves against the same release and is copied as a
+   group.
 5. Make `DestinationFileName` match the filename consumed by the installation script.
 6. Set every `DestinationFolders` value to the exact artifact folder name. An empty destination
    is allowed only when the package is intentionally copied to the artifact root.

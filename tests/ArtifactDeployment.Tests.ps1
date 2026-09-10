@@ -1472,26 +1472,225 @@ Describe 'Built-in UWP app download definitions' {
         $repoRoot = Split-Path -Path $PSScriptRoot -Parent
         $downloads = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\imageManagement\downloads.json') -Raw | ConvertFrom-Json
         $builderContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\_build\Build-BuiltinUwpApps.ps1') -Raw
+        $installerContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\Install-BuiltinUwpApps.ps1') -Raw
         $readmeContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\README.md') -Raw
     }
 
-    It 'stages Microsoft App Installer with its preserved Store package layout' {
-        $entry = $downloads.MicrosoftAppInstaller
-        $entry.WingetId | Should Be 'Microsoft.AppInstaller'
-        $entry.WingetSource | Should Be 'winget'
-        $entry.WingetPreserveLayout | Should Be $true
-        (@($entry.DestinationFolders) -join ',') | Should Be 'BuiltIn-UWP-Apps\AppInstaller'
+    It 'keeps Microsoft App Installer out of the generic UWP artifact' {
+        ($downloads.PSObject.Properties.Name -notcontains 'MicrosoftAppInstaller') | Should Be $true
+        $builderContent | Should Not Match 'Microsoft\.AppInstaller'
+        $readmeContent | Should Match 'separate `Microsoft-WinGet` artifact'
     }
 
-    It 'uses the AppInstaller folder in the standalone builder and documentation' {
-        $builderContent | Should Match "'Microsoft\.AppInstaller' = 'AppInstaller'"
-        $builderContent | Should Match "\{ 'winget' \} else \{ 'msstore' \}"
-        $readmeContent | Should Match '\| `AppInstaller` \| Microsoft App Installer and Windows Package Manager \(winget\) \| `Microsoft\.AppInstaller` \|'
+    It 'defaults the standalone builder to every documented built-in app ID' {
+        $tokens = $null
+        $parseErrors = $null
+        $builderAst = [System.Management.Automation.Language.Parser]::ParseInput(
+            $builderContent,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        $parseErrors.Count | Should Be 0
+        $appStoreIdsParameter = $builderAst.ParamBlock.Parameters | Where-Object {
+            $_.Name.VariablePath.UserPath -eq 'AppStoreIds'
+        }
+        $appStoreIdsParameter | Should Not BeNullOrEmpty
+        $defaultIds = @($appStoreIdsParameter.DefaultValue.SafeGetValue())
+        $downloadIds = @($downloads.PSObject.Properties |
+            Where-Object { @($_.Value.DestinationFolders) -like 'BuiltIn-UWP-Apps\*' } |
+            ForEach-Object { [string]$_.Value.WingetId })
+        ($defaultIds | Sort-Object) -join ',' | Should Be (($downloadIds | Sort-Object) -join ',')
+        $defaultIds.Count | Should Be 14
+        $readmeContent | Should Match 'By default it includes every Store ID in the table'
     }
 
     It 'supports a winget source override and expands dependency archives' {
         $updateScript = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\Update-ImageArtifacts.ps1') -Raw
         $updateScript | Should Match '\$Download\.WingetSource'
         $updateScript | Should Match 'Expanding dependency archive'
+    }
+
+    It 'corrects bundle payloads that winget saved with a single-package extension' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(
+            $installerContent,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        $parseErrors.Count | Should Be 0
+        $repairFunction = $ast.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Repair-MislabeledBundleExtension'
+        }, $true)
+        $repairFunction | Should Not BeNullOrEmpty
+
+        $testRoot = Join-Path $env:TEMP "FederalAVD-AppInstaller-$([guid]::NewGuid())"
+        try {
+            $metadataPath = Join-Path $testRoot 'content\AppxMetadata'
+            New-Item -Path $metadataPath -ItemType Directory -Force | Out-Null
+            '<Bundle><Identity Name="Microsoft.DesktopAppInstaller" /></Bundle>' |
+                Set-Content -LiteralPath (Join-Path $metadataPath 'AppxBundleManifest.xml') -Encoding ASCII
+            $mislabeledPath = Join-Path $testRoot 'AppInstaller.msix'
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [System.IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $testRoot 'content'), $mislabeledPath)
+
+            function Write-Log { param([string]$Message) }
+            $identityFunction = $ast.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq 'Get-AppxPackageIdentityName'
+            }, $true)
+            $identityFunction | Should Not BeNullOrEmpty
+            Invoke-Expression $identityFunction.Extent.Text
+            Invoke-Expression $repairFunction.Extent.Text
+            Repair-MislabeledBundleExtension -PackageFile (Get-Item $mislabeledPath)
+
+            Test-Path -LiteralPath $mislabeledPath | Should Be $false
+            $correctedPackage = Get-Item (Join-Path $testRoot 'AppInstaller.msixbundle')
+            $correctedPackage | Should Not BeNullOrEmpty
+            Get-AppxPackageIdentityName -PackageFile $correctedPackage | Should Be 'Microsoft.DesktopAppInstaller'
+        }
+        finally {
+            Remove-Item function:\Get-AppxPackageIdentityName -ErrorAction SilentlyContinue
+            Remove-Item function:\Repair-MislabeledBundleExtension -ErrorAction SilentlyContinue
+            Remove-Item function:\Write-Log -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'does not report passing health when an app failed provisioning' {
+        $installerContent | Should Match '\$HealthIssues\.Add\("\$\(\$Row\.App\): provisioning failed"\)'
+        $installerContent | Should Match 'if \(\$ErrorCount -eq 0 -and \$HealthIssues\.Count -eq 0\)'
+    }
+}
+
+Describe 'Microsoft WinGet artifact' {
+    BeforeAll {
+        $repoRoot = Split-Path -Path $PSScriptRoot -Parent
+        $downloads = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\imageManagement\downloads.json') -Raw | ConvertFrom-Json
+        $artifactRoot = Join-Path $repoRoot 'customer-examples\artifacts\Microsoft-WinGet'
+        $installerPath = Join-Path $artifactRoot 'Install-MicrosoftWinGet.ps1'
+        $installerContent = Get-Content -LiteralPath $installerPath -Raw
+        $builderPath = Join-Path $artifactRoot '_build\Build-MicrosoftWinGet.ps1'
+        $builderContent = Get-Content -LiteralPath $builderPath -Raw
+        $readmeContent = Get-Content -LiteralPath (Join-Path $artifactRoot 'README.md') -Raw
+    }
+
+    It 'stages the four official assets from the Microsoft winget-cli release' {
+        $entry = $downloads.MicrosoftWinGet
+        $entry.GitHubRepo | Should Be 'microsoft/winget-cli'
+        (@($entry.GitHubFileNamePatterns) -join ',') | Should Be (
+            'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle,' +
+            'DesktopAppInstaller_Dependencies.zip,' +
+            'DesktopAppInstaller_Dependencies.json,' +
+            '*_License1.xml'
+        )
+        (@($entry.DestinationFolders) -join ',') | Should Be 'Microsoft-WinGet'
+        $updateScript = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\Update-ImageArtifacts.ps1') -Raw
+        $updateScript | Should Match '\$GitHubReleaseCache\[\$Repo\]'
+        $updateScript | Should Match '\$MatchingAssets\.Count -ne 1'
+        $updateScript | Should Match '-OutputDirectory \$PrimaryDestinationDir'
+        $updateScript | Should Match '\$DestFolders = @\(if \(@\(\$Download\.DestinationFolders\)\.Count -gt 0\)'
+    }
+
+    It 'uses license-aware all-users image provisioning instead of the repair cmdlet' {
+        $installerContent | Should Match 'Add-AppxProvisionedPackage @provisionParameters'
+        $installerContent | Should Match 'LicensePath = \$license\.FullName'
+        $installerContent | Should Match "Regions = 'all'"
+        $installerContent | Should Match "Microsoft\.DesktopAppInstaller"
+        $installerContent | Should Not Match '(?m)^\s*Repair-WinGetPackageManager\s+-AllUsers'
+    }
+
+    It 'validates the complete release payload and filters dependency architectures' {
+        $installerContent | Should Match 'DesktopAppInstaller_Dependencies\.zip'
+        $installerContent | Should Match 'DesktopAppInstaller_Dependencies\.json'
+        $installerContent | Should Match '\*_License1\.xml'
+        $installerContent | Should Match "Architecture -notin @\('x86', 'x64', 'neutral'\)"
+        $installerContent | Should Match '\$dependencyDefinition\.Dependencies'
+        $installerContent | Should Match 'foreach \(\$requiredArchitecture in @\(''x86'', ''x64''\)\)'
+        $readmeContent | Should Match 'Do not mix assets from\s+different releases'
+    }
+
+    It 'returns only file objects when dependency selection writes log messages' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(
+            $installerContent,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        $parseErrors.Count | Should Be 0
+        $selectionFunction = $ast.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Select-RequiredDependencies'
+        }, $true)
+        $selectionFunction | Should Not BeNullOrEmpty
+
+        $testRoot = Join-Path $env:TEMP "FederalAVD-WinGetDependencies-$([guid]::NewGuid())"
+        try {
+            New-Item -Path $testRoot -ItemType Directory -Force | Out-Null
+            $requiredFile = New-Item -Path (Join-Path $testRoot 'required.appx') -ItemType File
+            $ignoredFile = New-Item -Path (Join-Path $testRoot 'ignored.appx') -ItemType File
+            function Write-Log { param([string]$Message) Write-Output "LOG: $Message" }
+            function Get-AppxIdentity {
+                param([System.IO.FileInfo]$PackageFile)
+                [pscustomobject]@{
+                    Name = $PackageFile.BaseName
+                    Version = [Version]'1.0.0.0'
+                    Architecture = if ($PackageFile.BaseName -eq 'ignored') { 'arm64' } else { 'x64' }
+                }
+            }
+            function Get-AppxPackage { @() }
+            Invoke-Expression $selectionFunction.Extent.Text
+
+            $result = @(Select-RequiredDependencies -DependencyPackages @($requiredFile, $ignoredFile))
+            $result.Count | Should Be 1
+            $result[0] | Should BeOfType System.IO.FileInfo
+            $result[0].FullName | Should Be $requiredFile.FullName
+        }
+        finally {
+            Remove-Item function:\Select-RequiredDependencies -ErrorAction SilentlyContinue
+            Remove-Item function:\Get-AppxIdentity -ErrorAction SilentlyContinue
+            Remove-Item function:\Get-AppxPackage -ErrorAction SilentlyContinue
+            Remove-Item function:\Write-Log -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'contains one ASCII PowerShell entry script with valid syntax' {
+        @(Get-ChildItem -LiteralPath $artifactRoot -File -Filter '*.ps1').Count | Should Be 1
+        (Get-Content -LiteralPath $installerPath | Where-Object { $_ -match '[^\x00-\x7E]' }) | Should BeNullOrEmpty
+        $tokens = $null
+        $parseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile(
+            $installerPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        ) | Out-Null
+        $parseErrors.Count | Should Be 0
+    }
+
+    It 'builds a transfer zip from one stable release with digest verification' {
+        $builderContent | Should Match 'releases/latest'
+        $builderContent | Should Match 'releases/tags/\$ReleaseTag'
+        $builderContent | Should Match '\$release\.draft -or \$release\.prerelease'
+        $builderContent | Should Match 'Expected exactly one asset matching'
+        $builderContent | Should Match 'Get-FileHash -LiteralPath \$destinationPath -Algorithm SHA256'
+        $builderContent | Should Match "'transfer-manifest\.json'"
+        $builderContent | Should Match 'Compress-Archive'
+        $readmeContent | Should Match 'Build-MicrosoftWinGet\.ps1'
+
+        (Get-Content -LiteralPath $builderPath | Where-Object { $_ -match '[^\x00-\x7E]' }) | Should BeNullOrEmpty
+        $tokens = $null
+        $parseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile(
+            $builderPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        ) | Out-Null
+        $parseErrors.Count | Should Be 0
     }
 }
