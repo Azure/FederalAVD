@@ -1149,13 +1149,21 @@ Describe 'Built-in UWP app download definitions' {
 
     It 'stages Microsoft App Installer with its preserved Store package layout' {
         $entry = $downloads.MicrosoftAppInstaller
-        $entry.WingetId | Should Be '9NBLGGH4NNS1'
+        $entry.WingetId | Should Be 'Microsoft.AppInstaller'
+        $entry.WingetSource | Should Be 'winget'
         $entry.WingetPreserveLayout | Should Be $true
         (@($entry.DestinationFolders) -join ',') | Should Be 'BuiltIn-UWP-Apps\AppInstaller'
     }
 
     It 'uses the AppInstaller folder in the standalone builder and documentation' {
-        $builderContent | Should Match "'9NBLGGH4NNS1' = 'AppInstaller'"
-        $readmeContent | Should Match '\| `AppInstaller` \| Microsoft App Installer and Windows Package Manager \(winget\) \| `9NBLGGH4NNS1` \|'
+        $builderContent | Should Match "'Microsoft\.AppInstaller' = 'AppInstaller'"
+        $builderContent | Should Match "\{ 'winget' \} else \{ 'msstore' \}"
+        $readmeContent | Should Match '\| `AppInstaller` \| Microsoft App Installer and Windows Package Manager \(winget\) \| `Microsoft\.AppInstaller` \|'
+    }
+
+    It 'supports a winget source override and expands dependency archives' {
+        $updateScript = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\Update-ImageArtifacts.ps1') -Raw
+        $updateScript | Should Match '\$Download\.WingetSource'
+        $updateScript | Should Match 'Expanding dependency archive'
     }
 }

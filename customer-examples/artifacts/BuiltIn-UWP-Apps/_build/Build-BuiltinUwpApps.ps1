@@ -50,7 +50,7 @@ $DefaultFolderNames = @{
     '9P1J8S7CCWWT' = 'Clipchamp'
     '9WZDNCRFJBH4' = 'Photos'
     '9NBLGGH4QGHW' = 'StickyNotes'
-    '9NBLGGH4NNS1' = 'AppInstaller'
+    'Microsoft.AppInstaller' = 'AppInstaller'
     '9N0DX20HK701' = 'Terminal'
     '9N4D0MSMP0PT' = 'VP9VideoExtensions'
     '9N5TDP8VCMHS' = 'WebMediaExtensions'
@@ -138,8 +138,8 @@ if ($AppStoreIds.Count -ne (@($AppStoreIds | Sort-Object -Unique)).Count) {
     throw 'AppStoreIds contains duplicate values.'
 }
 foreach ($storeId in $AppStoreIds) {
-    if ($storeId -notmatch '^[A-Za-z0-9]{10,14}$') {
-        throw "Invalid Microsoft Store product ID '$storeId'. Use the alphanumeric product ID shown by winget."
+    if ($storeId -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]{1,127}$') {
+        throw "Invalid winget package ID '$storeId'. Use the package ID shown by winget search."
     }
 }
 
@@ -171,11 +171,13 @@ try {
         $appDownloadDirectory = Join-Path $DownloadRoot $storeId
         New-Item -Path $appDownloadDirectory -ItemType Directory -Force | Out-Null
         $wingetArguments = @(
-            'download', '--id', $storeId, '--source', 'msstore',
+            'download', '--id', $storeId,
             '--download-directory', $appDownloadDirectory,
             '--skip-license', '--accept-source-agreements', '--accept-package-agreements',
             '--disable-interactivity'
         )
+        $wingetSource = if ($storeId -match '\.') { 'winget' } else { 'msstore' }
+        $wingetArguments += @('--source', $wingetSource)
         if ($storeId -notin $NeutralArchitectureIds) {
             $wingetArguments += @('--architecture', 'x64')
         }
@@ -184,6 +186,13 @@ try {
         & winget @wingetArguments
         if ($LASTEXITCODE -ne 0) {
             throw "winget download failed for '$storeId' with exit code $LASTEXITCODE."
+        }
+
+        $dependencyArchives = Get-ChildItem -Path $appDownloadDirectory -Recurse -File -Filter '*.zip' |
+            Where-Object { $_.FullName -match '(?i)\\dependencies\\' }
+        foreach ($dependencyArchive in $dependencyArchives) {
+            $dependencyExtractPath = Join-Path $dependencyArchive.DirectoryName $dependencyArchive.BaseName
+            Expand-Archive -LiteralPath $dependencyArchive.FullName -DestinationPath $dependencyExtractPath -Force
         }
 
         $mainCandidates = @(Get-ChildItem -Path $appDownloadDirectory -File |

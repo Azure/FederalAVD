@@ -274,7 +274,8 @@
     },
     "MicrosoftAppInstaller": {
         "Description": "Microsoft App Installer - provides App Installer and Windows Package Manager (winget) for all users",
-        "WingetId": "9NBLGGH4NNS1",
+        "WingetId": "Microsoft.AppInstaller",
+        "WingetSource": "winget",
         "WingetPreserveLayout": true,
         "DestinationFolders": [
             "BuiltIn-UWP-Apps\\AppInstaller"

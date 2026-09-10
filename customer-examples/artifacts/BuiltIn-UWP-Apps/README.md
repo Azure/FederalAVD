@@ -37,7 +37,7 @@ retained after sysprep".
 | `Clipchamp` | Clipchamp | `9P1J8S7CCWWT` |
 | `Photos` | Microsoft Photos | `9WZDNCRFJBH4` |
 | `StickyNotes` | Sticky Notes | `9NBLGGH4QGHW` |
-| `AppInstaller` | Microsoft App Installer and Windows Package Manager (winget) | `9NBLGGH4NNS1` |
+| `AppInstaller` | Microsoft App Installer and Windows Package Manager (winget) | `Microsoft.AppInstaller` |
 | `Terminal` | Windows Terminal | `9N0DX20HK701` |
 | `VP9VideoExtensions` | VP9 Video Extensions | `9N4D0MSMP0PT` |
 | `WebMediaExtensions` | Web Media Extensions | `9N5TDP8VCMHS` |
@@ -116,15 +116,17 @@ that must keep their original filenames for `Add-AppxProvisionedPackage` to work
 The connected download performed for Microsoft App Installer is equivalent to:
 
 ```powershell
-winget download --id 9NBLGGH4NNS1 --source msstore `
+winget download --id Microsoft.AppInstaller --exact --source winget `
     --download-directory "customer\artifacts\BuiltIn-UWP-Apps\AppInstaller" `
     --skip-license --accept-source-agreements --accept-package-agreements `
     --disable-interactivity --architecture x64
 ```
 
-The repository-wide package builder is preferred because it also consolidates App Installer's
-framework dependencies into `SharedDependencies\`. For disconnected environments, run that builder
-on a connected workstation and transfer the resulting `BuiltIn-UWP-Apps.zip` as described below.
+The Microsoft Store product ID doesn't support `winget download`. The `Microsoft.AppInstaller`
+community manifest downloads the official MSIX bundle from the Microsoft winget-cli GitHub release.
+The repository-wide package builder expands its dependency archives and consolidates the required
+framework packages into `SharedDependencies\`. For disconnected environments, run that builder on
+a connected workstation and transfer the resulting `BuiltIn-UWP-Apps.zip` as described below.
 
 If `customer/parameters/imageManagement/downloads.json` already contains customized entries,
 do not overwrite it. Merge the entries with `"WingetPreserveLayout": true` and

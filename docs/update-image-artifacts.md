@@ -347,6 +347,7 @@ apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
 | --- | --- |
 | `WingetId` | Microsoft Store product code (alphanumeric) |
 | `WingetPreserveLayout` | `true` -- preserves the `winget download` folder layout; no `DestinationFileName` used |
+| `WingetSource` | Optional source override: `msstore` or `winget`. Preserve-layout entries default to `msstore`. |
 | `Architecture` | Optional. Omit for most apps (`x64` is the default). Set to `"neutral"` for multi-arch bundles that do not publish a separate x64 installer (e.g., Clipchamp). |
 | `DestinationFolders` | Single entry naming the app subfolder inside the parent artifact folder (e.g., `BuiltIn-UWP-Apps\\Calculator`) |
 
@@ -354,8 +355,9 @@ apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
 
 1. `winget download --id <WingetId> --download-directory <temp>` is called (with `--architecture x64` unless `Architecture` is `"neutral"`).
 2. The destination folder is cleaned before copying to prevent stale package accumulation.
-3. Only `x64` and `neutral` architecture files are copied from any `Dependencies\` subfolder; other arch variants are pruned.
-4. After all preserve-layout downloads complete, shared framework packages (VCLibs, WinAppSDK, UI.Xaml, etc.) are deduplicated across all app subfolders into a single `SharedDependencies\` folder at the parent artifact root, reducing the zip size.
+3. Dependency zip archives from community winget manifests are expanded before package processing.
+4. Only `x64` and `neutral` architecture files are copied from any `Dependencies\` subfolder; other arch variants are pruned.
+5. After all preserve-layout downloads complete, shared framework packages (VCLibs, WinAppSDK, UI.Xaml, etc.) are deduplicated across all app subfolders into a single `SharedDependencies\` folder at the parent artifact root, reducing the zip size.
 
 > **Note:** `WingetPreserveLayout` entries do not use `DestinationFileName`. The original filenames produced by `winget download` are kept so that `Add-AppxProvisionedPackage` can read the package metadata correctly.
 

@@ -883,8 +883,19 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         '--skip-license', '--accept-source-agreements', '--accept-package-agreements',
                         '--disable-interactivity'
                     )
-                    If ($PreserveLayout) {
-                        $WingetArguments += @('--source', 'msstore')
+                    $WingetSource = if ($null -ne $Download.WingetSource -and $Download.WingetSource -ne '') {
+                        [string]$Download.WingetSource
+                    } elseif ($PreserveLayout) {
+                        'msstore'
+                    } else {
+                        ''
+                    }
+                    If ($WingetSource -notin @('', 'msstore', 'winget')) {
+                        Throw "WingetSource for '$SoftwareName' must be 'msstore' or 'winget'."
+                    }
+                    If ($WingetSource -ne '') {
+                        Write-Output "[$SoftwareName] Source       : $WingetSource"
+                        $WingetArguments += @('--source', $WingetSource)
                     }
                     If ($WingetArch -eq 'neutral') {
                         Write-Output "[$SoftwareName] Architecture : (omitted - neutral/multi-arch)"
@@ -908,6 +919,17 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         # Do not rename any files; the install script will discover them by extension.
 
                         $PruneExts = @('.msixbundle', '.appxbundle', '.msix', '.appx')
+
+                        # Community winget manifests can provide MSIX framework dependencies as
+                        # zip archives. Expand them so the dependency packages can be consolidated
+                        # into SharedDependencies for offline image provisioning.
+                        $DependencyArchives = Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File -Filter '*.zip' |
+                            Where-Object { $_.FullName -match '(?i)\\dependencies\\' }
+                        foreach ($DependencyArchive in $DependencyArchives) {
+                            $DependencyExtractPath = Join-Path -Path $DependencyArchive.DirectoryName -ChildPath $DependencyArchive.BaseName
+                            Write-Output "[$SoftwareName] Expanding dependency archive: $($DependencyArchive.Name)"
+                            Expand-Archive -LiteralPath $DependencyArchive.FullName -DestinationPath $DependencyExtractPath -Force
+                        }
 
                         # --- Prune main bundle variants ---
                         # When winget downloads without --architecture it fetches every available
