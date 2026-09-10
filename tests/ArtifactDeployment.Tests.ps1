@@ -1011,6 +1011,206 @@ Describe 'InstallRoot MSI application lifecycle' {
     }
 }
 
+Describe 'DoD STIG local user logon rights' {
+    BeforeAll {
+        $stigScriptPath = Join-Path $repoRoot 'customer-examples\artifacts\DoD-STIGs\Apply-STIGsAVD.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [System.Management.Automation.Language.Parser]::ParseFile(
+            $stigScriptPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($parseErrors.Count -gt 0) {
+            throw "Apply-STIGsAVD.ps1 has parser errors: $($parseErrors.Message -join '; ')"
+        }
+        foreach ($functionName in @('Set-ExistingPrivilegeRight', 'Remove-PrivilegeRightPrincipals', 'Update-PrivilegeRightPlaceholders', 'Get-StigVersionMap')) {
+            $functionDefinition = $syntaxTree.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $functionName
+            }, $true)
+            if (-not $functionDefinition) {
+                throw "STIG helper function '$functionName' was not found."
+            }
+            Invoke-Expression $functionDefinition.Extent.Text
+        }
+        $stigScriptContent = Get-Content -LiteralPath $stigScriptPath -Raw
+    }
+
+    AfterAll {
+        Remove-Item function:\Set-ExistingPrivilegeRight -ErrorAction SilentlyContinue
+        Remove-Item function:\Remove-PrivilegeRightPrincipals -ErrorAction SilentlyContinue
+        Remove-Item function:\Update-PrivilegeRightPlaceholders -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-StigVersionMap -ErrorAction SilentlyContinue
+    }
+
+    It 'leaves the RDS allow right unchanged when the Windows 11 v2r8 STIG omits it' {
+        $content = @(
+            '[Unicode]'
+            'Unicode=yes'
+            '[Privilege Rights]'
+            'SeInteractiveLogonRight = *S-1-5-32-545,*S-1-5-32-544'
+            'SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546,*S-1-5-113'
+        )
+
+        $updated = @(Set-ExistingPrivilegeRight -Content $content -Name 'SeRemoteInteractiveLogonRight' -Principals @('*S-1-5-32-555', '*S-1-5-32-544'))
+
+        @($updated | Where-Object { $_ -like 'SeRemoteInteractiveLogonRight*' }).Count | Should Be 0
+        ($updated -join "`n") | Should Be ($content -join "`n")
+    }
+
+    It 'updates an RDS allow right when the STIG defines it' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeRemoteInteractiveLogonRight = *S-1-5-32-544'
+        )
+
+        $updated = @(Set-ExistingPrivilegeRight -Content $content -Name 'SeRemoteInteractiveLogonRight' -Principals @('*S-1-5-32-555', '*S-1-5-32-544'))
+
+        ($updated -contains 'SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544') | Should Be $true
+    }
+
+    It 'does not create any allow or deny right omitted by the STIG' {
+        $content = @(
+            '[Unicode]'
+            'Unicode=yes'
+            '[Privilege Rights]'
+            'SeBackupPrivilege = *S-1-5-32-544'
+        )
+
+        $updated = @(Set-ExistingPrivilegeRight -Content $content -Name 'SeInteractiveLogonRight' -Principals @('*S-1-5-32-545', '*S-1-5-32-544'))
+        $updated = @(Remove-PrivilegeRightPrincipals -Content $updated -Name 'SeDenyInteractiveLogonRight' -Principals @('*S-1-5-113', '*S-1-5-114'))
+
+        ($updated -join "`n") | Should Be ($content -join "`n")
+    }
+
+    It 'removes both local-account deny SIDs while preserving other deny principals' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeDenyInteractiveLogonRight = *S-1-5-113,*S-1-5-32-546,*S-1-5-114'
+            'SeDenyRemoteInteractiveLogonRight = Domain Admins,*S-1-5-32-546,*S-1-5-113,*S-1-5-114'
+        )
+
+        foreach ($denyRight in @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight')) {
+            $content = @(Remove-PrivilegeRightPrincipals -Content $content -Name $denyRight -Principals @('*S-1-5-113', '*S-1-5-114'))
+        }
+
+        ($content -join "`n") | Should Not Match 'S-1-5-11(3|4)'
+        ($content -contains 'SeDenyInteractiveLogonRight = *S-1-5-32-546') | Should Be $true
+        ($content -contains 'SeDenyRemoteInteractiveLogonRight = Domain Admins,*S-1-5-32-546') | Should Be $true
+    }
+
+    It 'replaces domain administrator placeholders as exact principals on domain-joined hosts' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeDenyNetworkLogonRight = ADD YOUR DOMAIN ADMINS,ADD YOUR ENTERPRISE ADMINS,*S-1-5-32-546,*S-1-5-113'
+        )
+
+        $updated = @(Update-PrivilegeRightPlaceholders -Content $content -DomainJoined $true)
+
+        ($updated -contains 'SeDenyNetworkLogonRight = Domain Admins,Enterprise Admins,*S-1-5-32-546,*S-1-5-113') | Should Be $true
+        ($updated -join "`n") | Should Not Match 'ADD YOUR'
+    }
+
+    It 'removes only domain administrator placeholder principals on workgroup hosts' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeDenyNetworkLogonRight = ADD YOUR DOMAIN ADMINS,ADD YOUR ENTERPRISE ADMINS,*S-1-5-32-546,*S-1-5-113'
+            'SeDenyBatchLogonRight = ADD YOUR DOMAIN ADMINS,ADD YOUR ENTERPRISE ADMINS'
+        )
+
+        $updated = @(Update-PrivilegeRightPlaceholders -Content $content -DomainJoined $false)
+
+        ($updated -contains 'SeDenyNetworkLogonRight = *S-1-5-32-546,*S-1-5-113') | Should Be $true
+        ($updated -contains 'SeDenyBatchLogonRight = ') | Should Be $true
+        ($updated -join "`n") | Should Not Match 'ADD YOUR'
+    }
+
+    It 'derives an individual registry value and release from each STIG folder name' {
+        $versions = Get-StigVersionMap -FolderName @(
+            'DoD Windows 11 v2r8'
+            'DoD Microsoft Edge v2r5'
+            'DoD Google Chrome V2R11'
+        )
+
+        $versions.Count | Should Be 3
+        $versions['DoD Windows 11'] | Should Be 'v2r8'
+        $versions['DoD Microsoft Edge'] | Should Be 'v2r5'
+        $versions['DoD Google Chrome'] | Should Be 'v2r11'
+    }
+
+    It 'rejects an applicable STIG folder without a release suffix' {
+        $versionError = $null
+        Try { Get-StigVersionMap -FolderName 'DoD Windows 11' } Catch { $versionError = $_ }
+
+        ($null -ne $versionError) | Should Be $true
+        $versionError.Exception.Message | Should Match 'Unable to determine the STIG name and version'
+    }
+
+    It 'configures both interactive and RDS rights when local logon is enabled' {
+        $stigScriptContent | Should Match "Set-ExistingPrivilegeRight -Content \`$Content -Name 'SeInteractiveLogonRight'"
+        $stigScriptContent | Should Match "'SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight'"
+        $stigScriptContent | Should Match "\*S-1-5-113', '\*S-1-5-114"
+    }
+}
+
+Describe 'DoD STIG image build safety' {
+    BeforeAll {
+        $stigScriptPath = Join-Path $repoRoot 'customer-examples\artifacts\DoD-STIGs\Apply-STIGsAVD.ps1'
+        $stigScriptContent = Get-Content -LiteralPath $stigScriptPath -Raw
+    }
+
+    It 'accepts only Windows 10 and Windows 11 operating systems' {
+        $stigScriptContent | Should Match "ElseIf \(\`$osCaption -match 'Windows 10'\)"
+        $stigScriptContent | Should Match "Unsupported operating system '\`$osCaption'"
+    }
+
+    It 'cleans stale temporary content and always removes the workspace' {
+        $stigScriptContent | Should Match "Try \{[\s\S]*?Removing stale temporary content"
+        $stigScriptContent | Should Match "Finally \{[\s\S]*?Remove-Item -LiteralPath \`$Script:TempDir -Recurse -Force -ErrorAction Stop"
+        ([regex]::Matches($stigScriptContent, 'Expand-Archive -Path')).Count | Should Be 2
+    }
+
+    It 'fails when required compliance remediations fail' {
+        $stigScriptContent | Should Match "Disable-WindowsOptionalFeature[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Remove-WindowsCapability[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Stop-Service \`$Service -Force -ErrorAction Stop"
+        $stigScriptContent | Should Match "Remove-AppxProvisionedPackage[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Remove-AppxPackage[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match 'throw "gpupdate\.exe failed with exit code'
+    }
+
+    It 'resets all PortProxy rules and validates the native exit code' {
+        $stigScriptContent | Should Match "-ArgumentList 'interface portproxy reset'"
+        $stigScriptContent | Should Match 'if \(\$netsh.ExitCode -ne 0\)'
+        $stigScriptContent | Should Not Match 'cmd /c netsh interface portproxy show all'
+    }
+
+    It 'uses individual folder-derived STIG versions for upgrade detection and registry stamps' {
+        $stigScriptContent | Should Match 'Get-StigVersionMap -FolderName @\(\$ApplicableFolders\.Name\)'
+        $stigScriptContent | Should Match 'Get-ItemPropertyValue -Path \$registryPath -Name \$stigName'
+        $stigScriptContent | Should Match 'New-ItemProperty -Path \$registryPath -Name \$stigName -PropertyType String -Value \$appliedVersion'
+        $stigScriptContent | Should Match 'Remove-ItemProperty -Path \$registryPath -Name ''Version'''
+        $stigScriptContent | Should Not Match '\$registryValueName'
+    }
+
+    It 'does not expose the obsolete package-level Version parameter' {
+        $stigScriptContent | Should Not Match '(?m)^\s*\[string\]\$Version\b'
+        $stigScriptContent | Should Not Match '(?m)^\.PARAMETER Version\s*$'
+    }
+
+    It 'disables both Windows PowerShell 2.0 optional features for V-253285' {
+        $stigScriptContent | Should Match "Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2Root' -StigId 'V-253285'"
+        $stigScriptContent | Should Match "Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2'\s+-StigId 'V-253285'"
+    }
+
+    It 'disables all Wi-Fi Direct adapters for V-288475' {
+        $stigScriptContent | Should Match "Get-NetAdapter -InterfaceDescription 'Microsoft Wi-Fi Direct\*' -IncludeHidden"
+        $stigScriptContent | Should Match '\$wifiDirectAdapters \| Disable-NetAdapter -Confirm:\$false -ErrorAction Stop'
+    }
+}
+
 Describe 'Customization success exit codes' {
     BeforeAll {
         $invokeCustomizationPath = Join-Path $repoRoot 'deployments\shared\scripts\Invoke-Customization.ps1'

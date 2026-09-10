@@ -28,25 +28,19 @@ This PowerShell script automates the application of Defense Information Systems 
 ### `AllowLocalUserLogon`
 
 - **Type:** Switch
-- **Description:** When specified, removes the local accounts SID (`*S-1-5-113`) from `SeDenyRemoteInteractiveLogonRight`, allowing local user accounts to connect via Remote Desktop and AVD. Guests and all other deny principals remain.
+- **Description:** When specified, permits eligible local accounts to log on both interactively and through Remote Desktop Services. For user-right assignments defined by the STIG, it preserves interactive logon for local Users and Administrators and removes the local-account deny SIDs (`*S-1-5-113` and `*S-1-5-114`) from interactive and Remote Desktop Services deny rights. It does not create or modify a user-right assignment that the STIG omits. Guests and all other deny principals remain.
+- **RDS membership:** A local account must still belong to either the local **Administrators** or **Remote Desktop Users** group to receive the Remote Desktop Services allow right.
 
 ### `STIGsUrl`
 
 - **Type:** String (URL)
-- **Default:** `'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_April_2026.zip'`
+- **Default:** `'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2026.zip'`
 - **Description:** URL of the STIG GPO package to download and apply
 
 ### `Upgrade`
 
 - **Type:** Switch
-- **Description:** When specified, checks STIG version and resets local group policy if the version has changed before re-applying
-
-### `Version`
-
-- **Type:** String
-- **Default:** `'2026.04'`
-- **Format:** `YYYY.MM`
-- **Description:** STIG version to stamp to the registry for tracking and upgrade detection
+- **Description:** When specified, compares every applicable STIG folder version with its registry value and resets local group policy if any value is missing or different before re-applying
 
 ## Usage Examples
 
@@ -62,10 +56,10 @@ This PowerShell script automates the application of Defense Information Systems 
 .\Apply-STIGsAVD.ps1 -SearchForApplications
 ```
 
-### Upgrade Mode with New Version
+### Upgrade Mode
 
 ```powershell
-.\Apply-STIGsAVD.ps1 -Upgrade -Version '2026.07'
+.\Apply-STIGsAVD.ps1 -Upgrade
 ```
 
 ### Custom Application List
@@ -140,36 +134,38 @@ converts it to a string array before splatting the parameters into this script:
 | V-253277 | MEDIUM | Disables Simple TCP/IP Services optional feature |
 | V-253278 | MEDIUM | Disables Telnet Client optional feature |
 | V-253279 | MEDIUM | Disables TFTP Client optional feature |
+| V-253285 | MEDIUM | Disables both Windows PowerShell 2.0 optional features on versions where they are present |
 | V-253286 | MEDIUM | Disables SMB v1 protocol |
+| V-288475 | MEDIUM | Disables all Wi-Fi Direct adapters, including hidden adapters |
 | V-268317 | — | Removes Microsoft Copilot (provisioned and user AppX packages) |
 | V-253359 | MEDIUM | Removes "Run as different user" from context menus |
 | V-253340/41/42 | MEDIUM | Restricts Application, Security, and System event log access |
 
 ### 7. Version Tracking
 
-- Stamps STIG version to registry at `HKLM:\Software\DoD\STIG`
+- Detects each applicable STIG release from its folder name, such as `DoD Windows 11 v2r8`
+- Stamps a separate registry value for every successfully applied STIG at `HKLM:\Software\DoD\STIG`
 - Enables upgrade detection on subsequent runs
 
 ## Offline Usage
 
 To use this script in air-gapped or offline environments:
 
-1. **Download LGPO Tool:**
+### Download LGPO Tool
 
-   - URL: https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip
-   - Place in the same directory as the script
+Download <https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip>
+and place it in the same directory as the script.
 
-2. **Download STIG GPO Package:**
+### Download STIG GPO Package
 
-   - URL: https://public.cyber.mil/stigs/gpo
-   - Download the latest package ZIP file
-   - Place in the same directory as the script
+Download the latest package ZIP file from <https://public.cyber.mil/stigs/gpo> and place it in the
+same directory as the script.
 
-3. **Run Script:**
+### Run Script
 
-   ```powershell
-   .\Apply-STIGsAVD.ps1
-   ```
+```powershell
+.\Apply-STIGsAVD.ps1
+```
 
 ## Logging
 
@@ -183,10 +179,11 @@ C:\Windows\Logs\Configuration\Apply-STIGs-<timestamp>.log
 
 The script implements version tracking to support upgrades:
 
-- **Initial Run:** Stamps version to `HKLM:\Software\DoD\STIG\Version`
-- **Upgrade Mode (`-Upgrade`):** Compares existing version with new version
-- **Version Mismatch:** Resets Local Group Policy before applying new STIGs
-- **Version Match:** Skips policy reset, applies STIGs incrementally
+- **Initial Run:** Creates one registry value per applicable STIG, using the STIG name and its `v<major>r<revision>` release
+- **Upgrade Mode (`-Upgrade`):** Compares every applicable package release with its existing registry value
+- **Missing or Different Value:** Resets Local Group Policy before applying all applicable STIGs
+- **All Values Match:** Skips policy reset and applies the STIGs incrementally
+- **Legacy Migration:** Removes the old package-level `Version` value after all individual values are stamped successfully
 
 ## Functions
 
@@ -198,15 +195,24 @@ The script implements version tracking to support upgrades:
 | `New-Log` | Initializes logging infrastructure |
 | `Reset-LocalPolicy` | Resets Local Group Policy and optionally Local Security Policy |
 | `Set-RegistryValue` | Creates or updates registry values |
+| `Get-StigVersionMap` | Extracts each STIG name and release from applicable package folder names |
 | `Update-LocalGPOTextFile` | Creates LGPO text files for registry-based policy settings |
 | `Write-Log` | Writes formatted log entries |
 
 ## Requirements
 
-- **OS:** Windows 10 or Windows 11
+- **OS:** Windows 10 or Windows 11; unsupported operating systems fail before any policy is applied
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
 - **Network Access:** Required for downloading LGPO and STIG packages (unless using offline mode)
+
+## Image Build Behavior
+
+- The temporary extraction directory is cleared before each run and removed in a `finally` block.
+- LGPO, `gpupdate`, service, optional-feature, capability, AppX, and PortProxy remediation failures stop the build rather than producing a partially hardened image.
+- Optional services, features, capabilities, and packages that are not installed are treated as not applicable.
+- The script does not initiate a restart. Image-build orchestration should restart the VM after this customization and before image capture.
+- Pre-stage `LGPO.zip` and the STIG package ZIP in this artifact for deterministic and air-gapped builds.
 
 ## Important Notes
 
@@ -242,8 +248,14 @@ Several STIG settings are incompatible with AVD and are automatically removed:
 
 ```text
 HKLM:\Software\DoD\STIG
-  Version: <YYYY.MM>
+  DoD Windows 11: v2r8
+  DoD Microsoft Edge: v2r5
+  DoD Windows Defender Firewall: v2r2
+  DoD Google Chrome: v2r11
 ```
+
+The exact values depend on the operating system, installed applications, and
+`ApplicationsToSTIG`/`SearchForApplications` selections for that run.
 
 ### Security Mitigations
 
@@ -275,7 +287,7 @@ HKLM:\SOFTWARE\WOW6432Node\Microsoft\Cryptography\WinTrust\Config
 
 - **Solution:** Verify AVD exceptions are applied correctly; check firewall settings
 
-**Issue:** Version not stamped to registry
+**Issue:** Individual STIG release values are not stamped to the registry
 
 - **Solution:** Ensure script runs with Administrator privileges
 

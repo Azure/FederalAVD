@@ -82,12 +82,12 @@
         "customizations": {
             "value": [
                 {
-                    // DoD-STIGs: applies DISA STIG GPOs. Version stamps the registry for
-                    // upgrade detection. SearchForApplications skips third-party app STIGs
+                    // DoD-STIGs: applies DISA STIG GPOs and stamps each detected STIG release
+                    // for upgrade detection. SearchForApplications skips third-party app STIGs
                     // when those apps are not installed.
                     "name": "DoD-STIGs",
                     "blobNameOrUri": "DoD-STIGs.zip",
-                    "arguments": "-Version 2025.10 -Upgrade -SearchForApplications"
+                    "arguments": "-Upgrade -SearchForApplications"
                 },
                 {
                     // DoD-InstallRoot: installs DoD root certificates. No arguments needed.

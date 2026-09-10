@@ -10,16 +10,13 @@
     This parameter defines whether or not the script verifies the applications defined in 'ApplicationsToSTIG' are installed before applying the settings.
 
 .PARAMETER AllowLocalUserLogon
-    This switch parameter defines whether or not local users can logon to the system remotely.
+    This switch parameter permits eligible local users to log on interactively and through Remote Desktop Services.
 
 .PARAMETER STIGsUrl
     This parameter defines the URL of the STIG GPOs ZIP file to be downloaded and applied.
 
 .PARAMETER Upgrade
-    This parameter indicates that the script will check the STIG version and reset the local group policy before applying the STIGs if the version has changed.
-
-.PARAMETER Version
-    This parameter defines the STIG version to be stamped to the registry (format: YYYY.MM, e.g., 2025.10). Used for version tracking and upgrade detection.
+    This parameter indicates that the script will compare each applicable STIG version with its registry stamp and reset local group policy before applying the STIGs if any version has changed.
 
 .NOTES
     To use this script offline, download the lgpo tool from 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' and store it in the root of the folder where the script is located.'
@@ -39,18 +36,23 @@ param (
 
     [switch]$Upgrade,
 
-    [string]$Version = '2026.07',
-
     [switch]$AllowLocalUserLogon
 )
 #region Initialization
 $Script:Name = 'Apply-STIGs'
 [string]$LGPOUrl = 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip'
 $osCaption = (Get-WmiObject -Class Win32_OperatingSystem).caption
-If ($osCaption -match 'Windows 11') { $osVersion = 11 } Else { $osVersion = 10 }
+If ($osCaption -match 'Windows 11') {
+    $osVersion = 11
+}
+ElseIf ($osCaption -match 'Windows 10') {
+    $osVersion = 10
+}
+Else {
+    throw "Unsupported operating system '$osCaption'. This artifact supports Windows 10 and Windows 11 only."
+}
 [string]$Script:TempDir = Join-Path -Path "$env:SystemRoot\Temp" -ChildPath $Script:Name
 [string]$Script:LGPOTempDir = Join-Path -Path $Script:TempDir -ChildPath 'LGPO'
-If (-not(Test-Path -Path $Script:LGPOTempDir)) { New-Item -Path $Script:LGPOTempDir -ItemType Directory -Force | Out-Null }
 
 [bool]$IsDomainJoined = (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
 #endregion
@@ -220,6 +222,116 @@ Function Get-InternetFile {
     End {
         Write-Log -Message "Ending ${CmdletName}"
     }
+}
+
+Function Set-ExistingPrivilegeRight {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$Content,
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Principals
+    )
+
+    $setting = "$Name = $($Principals -join ',')"
+    $matchingIndexes = @()
+    For ($index = 0; $index -lt $Content.Count; $index++) {
+        If ($Content[$index] -match "^\s*$([regex]::Escape($Name))\s*=") {
+            $matchingIndexes += $index
+        }
+    }
+
+    If ($matchingIndexes.Count -gt 1) {
+        throw "Security template contains multiple '$Name' assignments."
+    }
+    If ($matchingIndexes.Count -eq 1) {
+        $Content[$matchingIndexes[0]] = $setting
+    }
+    return $Content
+}
+
+Function Remove-PrivilegeRightPrincipals {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$Content,
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Principals
+    )
+
+    return $Content | ForEach-Object {
+        If ($_ -match "^\s*$([regex]::Escape($Name))\s*=\s*(?<Values>.*)$") {
+            $remainingPrincipals = @($matches.Values -split ',' | ForEach-Object { $_.Trim() } | Where-Object {
+                $_ -and $_ -notin $Principals
+            })
+            "$Name = $($remainingPrincipals -join ',')"
+        }
+        Else {
+            $_
+        }
+    }
+}
+
+Function Update-PrivilegeRightPlaceholders {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$Content,
+        [Parameter(Mandatory = $true)]
+        [bool]$DomainJoined
+    )
+
+    $placeholderReplacements = @{
+        'ADD YOUR ENTERPRISE ADMINS' = If ($DomainJoined) { 'Enterprise Admins' } Else { $null }
+        'ADD YOUR DOMAIN ADMINS'     = If ($DomainJoined) { 'Domain Admins' } Else { $null }
+    }
+
+    return $Content | ForEach-Object {
+        If ($_ -match '^(?<Prefix>\s*[^=]+\s*=\s*)(?<Values>.*)$') {
+            $prefix = $matches.Prefix
+            $principals = @($matches.Values -split ',' | ForEach-Object { $_.Trim() })
+            $updatedPrincipals = @($principals | ForEach-Object {
+                If ($placeholderReplacements.ContainsKey($_)) {
+                    $replacement = $placeholderReplacements[$_]
+                    If ($null -ne $replacement) { $replacement }
+                }
+                ElseIf ($_) {
+                    $_
+                }
+            })
+            "$prefix$($updatedPrincipals -join ',')"
+        }
+        Else {
+            $_
+        }
+    }
+}
+
+Function Get-StigVersionMap {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$FolderName
+    )
+
+    $versions = @{}
+    ForEach ($name in $FolderName) {
+        If ($name -notmatch '^(?<StigName>.+?)\s+(?<StigVersion>[vV]\d+[rR]\d+)$') {
+            throw "Unable to determine the STIG name and version from folder '$name'. Expected a name ending in v<major>r<revision>."
+        }
+
+        $stigName = $matches.StigName.Trim()
+        $stigVersion = $matches.StigVersion.ToLowerInvariant()
+        If ($versions.ContainsKey($stigName) -and $versions[$stigName] -ne $stigVersion) {
+            throw "Multiple versions of '$stigName' are applicable: '$($versions[$stigName])' and '$stigVersion'."
+        }
+        $versions[$stigName] = $stigVersion
+    }
+    return $versions
 }
 
 Function Update-LocalGPOTextFile {
@@ -426,7 +538,7 @@ Function Disable-OptionalFeatureIfEnabled {
     $feature = Get-WindowsOptionalFeature -Online -FeatureName $FeatureName -ErrorAction SilentlyContinue
     if ($feature -and $feature.State -eq 'Enabled') {
         Write-Log -Message "${StigId}: Disabling Windows Optional Feature '$FeatureName'."
-        Disable-WindowsOptionalFeature -Online -FeatureName $FeatureName -NoRestart -ErrorAction SilentlyContinue | Out-Null
+        Disable-WindowsOptionalFeature -Online -FeatureName $FeatureName -NoRestart -ErrorAction Stop | Out-Null
     }
     else {
         Write-Log -Message "${StigId}: '$FeatureName' is already disabled or not present. No action required."
@@ -458,64 +570,16 @@ Function Write-Log {
 
 New-Log -Path (Join-Path -Path "$env:SystemRoot\Logs" -ChildPath 'Configuration')
 Write-Log -Message "Starting '$PSCommandPath'."
+$ErrorActionPreference = 'Stop'
 
-# Use provided version parameter
-[version]$stigVersion = $Version
-If ($stigVersion) {
-    Write-Log -Message "STIG Version: $stigVersion"
+Try {
+If (Test-Path -LiteralPath $Script:TempDir) {
+    Write-Log -Message "Removing stale temporary content from '$Script:TempDir'."
+    Remove-Item -LiteralPath $Script:TempDir -Recurse -Force -ErrorAction Stop
 }
-Else {
-    Write-Log -Category Warning -Message "No STIG version provided. Version tracking will be skipped."
-}
+$null = New-Item -Path $Script:LGPOTempDir -ItemType Directory -Force -ErrorAction Stop
 
-# Check registry for existing version and determine if reset is needed
 $registryPath = 'HKLM:\Software\DoD\STIG'
-$registryValueName = 'Version'
-$needsReset = $false
-
-If ($Upgrade) {
-    Write-Log -Message "Upgrade mode enabled. Checking for version mismatch."
-    If (Test-Path -Path $registryPath) {
-        Try {
-            $existingVersion = Get-ItemPropertyValue -Path $registryPath -Name $registryValueName -ErrorAction SilentlyContinue
-            If ($existingVersion) {
-                [version]$appliedVersion = $existingVersion
-                Write-Log -Message "Existing STIG version in registry: $existingVersion"
-                If ($stigVersion -and $appliedVersion -ne $stigVersion) {
-                    Write-Log -Message "Version mismatch detected. Applied: $appliedVersion, New: $stigVersion. Policy reset will be performed."
-                    $needsReset = $true
-                }
-                Else {
-                    Write-Log -Message "Version matches. No policy reset needed."
-                }
-            }
-            Else {
-                Write-Log -Message "No existing version found in registry. Policy reset will be performed."
-                $needsReset = $true
-            }
-        }
-        Catch {
-            Write-Log -Message "Error reading registry version: $_. Policy reset will be performed."
-            $needsReset = $true
-        }
-    }
-    Else {
-        Write-Log -Message "Registry path does not exist. Policy reset will be performed."
-        $needsReset = $true
-    }
-
-    # Perform policy reset if needed
-    If ($needsReset) {
-        Write-Log -Message "Resetting Local Group Policy before applying new STIGs."
-        Try {
-            Reset-LocalPolicy -ResetSecurity -Verbose
-            Write-Log -Message "Local Group Policy reset completed successfully."
-        }
-        Catch {
-            throw "Error resetting Local Group Policy: $($_.Exception.Message)"
-        }
-    }
-}
 
 Write-Log -message "Checking for 'lgpo.exe' in '$env:SystemRoot\system32'."
 
@@ -575,12 +639,49 @@ Else {
     }
 }
 
+$ApplicableFolders = @($ApplicableFolders | Sort-Object -Property FullName -Unique)
+
 Write-Log -Message "Found $($ApplicableFolders.Count) applicable GPO folders:"
 $ApplicableFolders | ForEach-Object { Write-Log -Message "  $_" } 
 [array]$GPOFolders = @()
-ForEach ($folder in $ApplicableFolders.FullName) {
-    $gpoFolderPath = (Get-ChildItem -Path $folder -Filter 'GPOs' -Directory).FullName
-    $GPOFolders += $gpoFolderPath
+ForEach ($folder in $ApplicableFolders) {
+    $gpoFolderPaths = @(Get-ChildItem -Path $folder.FullName -Filter 'GPOs' -Directory)
+    If ($gpoFolderPaths.Count -ne 1) {
+        throw "Expected one GPOs directory under '$($folder.FullName)', found $($gpoFolderPaths.Count)."
+    }
+    $GPOFolders += $gpoFolderPaths[0].FullName
+}
+$applicableStigVersions = Get-StigVersionMap -FolderName @($ApplicableFolders.Name)
+$applicableStigVersions.GetEnumerator() | Sort-Object -Property Name | ForEach-Object {
+    Write-Log -Message "Applicable STIG version: $($_.Name) = $($_.Value)"
+}
+
+If ($Upgrade) {
+    Write-Log -Message 'Upgrade mode enabled. Comparing each applicable STIG with its registry stamp.'
+    $needsReset = $false
+    ForEach ($stigName in $applicableStigVersions.Keys) {
+        $desiredVersion = $applicableStigVersions[$stigName]
+        $existingVersion = Get-ItemPropertyValue -Path $registryPath -Name $stigName -ErrorAction SilentlyContinue
+        If ($existingVersion -ne $desiredVersion) {
+            $displayExistingVersion = If ($null -eq $existingVersion) { '<not stamped>' } Else { $existingVersion }
+            Write-Log -Message "STIG version mismatch for '$stigName'. Applied: $displayExistingVersion, Package: $desiredVersion. Policy reset will be performed."
+            $needsReset = $true
+        }
+    }
+
+    If ($needsReset) {
+        Write-Log -Message 'Resetting Local Group Policy before applying the applicable STIGs.'
+        Try {
+            Reset-LocalPolicy -ResetSecurity -Verbose
+            Write-Log -Message 'Local Group Policy reset completed successfully.'
+        }
+        Catch {
+            throw "Error resetting Local Group Policy: $($_.Exception.Message)"
+        }
+    }
+    Else {
+        Write-Log -Message 'All applicable STIG registry versions match the package. No policy reset needed.'
+    }
 }
 
 # Capture any pre-existing Edge/Chrome proxy config before the STIG GPO import below
@@ -612,61 +713,52 @@ ForEach ($gpoFolder in $GPOFolders) {
         ForEach-Object { Write-Output "  [GptTmpl] REMOVED : $_" }
         $Content = $Content | Where-Object { (-not ($_ -like 'NewAdministratorName*')) -and (-not ($_ -like 'EnableAdminAccount*')) }
 
-        # Replace or remove the 'ADD YOUR ENTERPRISE ADMINS' / 'ADD YOUR DOMAIN ADMINS'
-        # placeholder tokens that the DoD STIG GPO leaves in the [Privilege Rights] section.
-        if ($IsDomainJoined) {
-            Write-Log -Message "[GptTmpl] Replacing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' placeholders with actual group names - required for privilege right assignments to function correctly on domain-joined AVD session hosts."
-            $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
-                $replaced = $_ -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins' -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
-                Write-Output "  [GptTmpl] BEFORE  : $_"
-                Write-Output "  [GptTmpl] AFTER   : $replaced"
-            }
-            $Content = $Content -replace 'ADD YOUR ENTERPRISE ADMINS', 'Enterprise Admins'
-            $Content = $Content -replace 'ADD YOUR DOMAIN ADMINS', 'Domain Admins'
+        # Replace or remove the exact domain-group placeholder principals that the DoD STIG GPO
+        # leaves in the [Privilege Rights] section. Process each assignment once so logging and
+        # persisted content use the same transformation.
+        $placeholderRightsBefore = @($Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' })
+        If ($IsDomainJoined) {
+            Write-Log -Message "[GptTmpl] Replacing domain administrator placeholders with actual group names - required for privilege right assignments to function correctly on domain-joined AVD session hosts."
         }
-        else {
-            Write-Log -Message "[GptTmpl] Removing 'ADD YOUR ENTERPRISE ADMINS' and 'ADD YOUR DOMAIN ADMINS' placeholders - these domain group tokens are not applicable on non-domain-joined AVD session hosts and must be stripped to prevent policy application errors."
-            $Content | Where-Object { $_ -match 'ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS' } | ForEach-Object {
-                $cleaned = $_ -replace ",\s*ADD YOUR ENTERPRISE ADMINS", '' -replace "ADD YOUR ENTERPRISE ADMINS\s*,", '' -replace 'ADD YOUR ENTERPRISE ADMINS', ''
-                $cleaned = $cleaned -replace ",\s*ADD YOUR DOMAIN ADMINS", '' -replace "ADD YOUR DOMAIN ADMINS\s*,", '' -replace 'ADD YOUR DOMAIN ADMINS', ''
-                Write-Output "  [GptTmpl] BEFORE  : $_"
-                Write-Output "  [GptTmpl] AFTER   : $cleaned"
-            }
-            foreach ($placeholder in @('ADD YOUR ENTERPRISE ADMINS', 'ADD YOUR DOMAIN ADMINS')) {
-                $escaped = [regex]::Escape($placeholder)
-                $Content = $Content -replace ",\s*$escaped", ''
-                $Content = $Content -replace "$escaped\s*,", ''
-                $Content = $Content -replace $escaped, ''
-            }
+        Else {
+            Write-Log -Message "[GptTmpl] Removing domain administrator placeholders - these domain group principals are not applicable on non-domain-joined AVD session hosts."
+        }
+        $Content = @(Update-PrivilegeRightPlaceholders -Content $Content -DomainJoined $IsDomainJoined)
+        ForEach ($beforePlaceholderRight in $placeholderRightsBefore) {
+            $rightName = ($beforePlaceholderRight -split '=', 2)[0].Trim()
+            $afterPlaceholderRight = $Content | Where-Object { $_ -match "^\s*$([regex]::Escape($rightName))\s*=" }
+            Write-Output "  [GptTmpl] BEFORE  : $beforePlaceholderRight"
+            Write-Output "  [GptTmpl] AFTER   : $afterPlaceholderRight"
         }
 
-        # Set SeRemoteInteractiveLogonRight to allow RDS Users (S-1-5-32-555) and Administrators
-        # (S-1-5-32-544). The STIG restricts this to Administrators only; AVD requires RDS Users
-        # so that session host connections can be established.
-        Write-Log -Message "[GptTmpl] Updating 'SeRemoteInteractiveLogonRight' (Allow log on through Remote Desktop Services): Adding Remote Desktop Users (S-1-5-32-555) alongside Administrators (S-1-5-32-544) - the STIG restricts this right to Administrators only, which prevents AVD users from establishing session host connections."
-        $Content | Where-Object { $_ -like 'SeRemoteInteractiveLogonRight*' } | ForEach-Object {
-            Write-Output "  [GptTmpl] BEFORE  : $_"
-            Write-Output "  [GptTmpl] AFTER   : SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544"
+        # If the STIG defines SeRemoteInteractiveLogonRight, set it to RDS Users (S-1-5-32-555)
+        # and Administrators (S-1-5-32-544). Do not create user-right assignments omitted by the STIG.
+        $beforeRemoteInteractiveLogonRight = $Content | Where-Object { $_ -like 'SeRemoteInteractiveLogonRight*' }
+        If ($beforeRemoteInteractiveLogonRight) {
+            $Content = Set-ExistingPrivilegeRight -Content $Content -Name 'SeRemoteInteractiveLogonRight' -Principals @('*S-1-5-32-555', '*S-1-5-32-544')
+            $afterRemoteInteractiveLogonRight = $Content | Where-Object { $_ -like 'SeRemoteInteractiveLogonRight*' }
+            Write-Log -Message "[GptTmpl] Setting STIG-defined 'SeRemoteInteractiveLogonRight' (Allow log on through Remote Desktop Services) to Remote Desktop Users (S-1-5-32-555) and Administrators (S-1-5-32-544)."
+            Write-Output "  [GptTmpl] BEFORE  : $beforeRemoteInteractiveLogonRight"
+            Write-Output "  [GptTmpl] AFTER   : $afterRemoteInteractiveLogonRight"
         }
-        $Content = $Content | ForEach-Object {
-            if ($_ -like 'SeRemoteInteractiveLogonRight*') { 'SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544' } else { $_ }
+        Else {
+            Write-Log -Message "[GptTmpl] The STIG does not define 'SeRemoteInteractiveLogonRight'; leaving the existing system user-right assignment unchanged."
         }
        
         if ($AllowLocalUserLogon) {
-            # Remove *S-1-5-113 (Local account SID) from SeDenyRemoteInteractiveLogonRight so that
-            # local accounts are permitted to connect via Remote Desktop / AVD.
-            # *S-1-5-32-546 (Guests) and any other principals remain untouched.
-            Write-Log -Message "[GptTmpl] Updating 'SeDenyRemoteInteractiveLogonRight' (Deny log on through Remote Desktop Services): Removing Local accounts SID (*S-1-5-113) - AllowLocalUserLogon is enabled, permitting local user accounts to connect via Remote Desktop and AVD. Guests (S-1-5-32-546) and all other deny principals remain."
-            $Content | Where-Object { $_ -match 'SeDenyRemoteInteractiveLogonRight' -and $_ -match '\*S-1-5-113' } | ForEach-Object {
-                $cleaned = $_ -replace ',\s*\*S-1-5-113', '' -replace '\*S-1-5-113\s*,', '' -replace '\*S-1-5-113', ''
-                Write-Output "  [GptTmpl] BEFORE  : $_"
-                Write-Output "  [GptTmpl] AFTER   : $cleaned"
+            # Adjust only user-right assignments defined by the STIG. Remove both Local account deny
+            # SIDs from interactive and RDS deny rights because deny rights override allow rights.
+            If ($Content | Where-Object { $_ -like 'SeInteractiveLogonRight*' }) {
+                $Content = Set-ExistingPrivilegeRight -Content $Content -Name 'SeInteractiveLogonRight' -Principals @('*S-1-5-32-545', '*S-1-5-32-544')
             }
-            $Content = $Content | ForEach-Object {
-                if ($_ -match 'SeDenyRemoteInteractiveLogonRight' -and $_ -match '\*S-1-5-113') {
-                    $_ -replace ',\s*\*S-1-5-113', '' -replace '\*S-1-5-113\s*,', '' -replace '\*S-1-5-113', ''
-                }
-                else { $_ }
+            $localAccountDenySids = @('*S-1-5-113', '*S-1-5-114')
+            ForEach ($denyRight in @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight')) {
+                $beforeDenyRight = $Content | Where-Object { $_ -like "$denyRight*" }
+                $Content = Remove-PrivilegeRightPrincipals -Content $Content -Name $denyRight -Principals $localAccountDenySids
+                $afterDenyRight = $Content | Where-Object { $_ -like "$denyRight*" }
+                Write-Log -Message "[GptTmpl] Updating '$denyRight': Removing Local account deny SIDs S-1-5-113 and S-1-5-114 - AllowLocalUserLogon is enabled. Guests and all other deny principals remain."
+                Write-Output "  [GptTmpl] BEFORE  : $beforeDenyRight"
+                Write-Output "  [GptTmpl] AFTER   : $afterDenyRight"
             }
         }
         Set-Content -Path $SecEditFile -Value $Content -Encoding Unicode
@@ -752,7 +844,7 @@ if ($r.ExitCode -ne 0) {
 $GPUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/force /target:computer' -Wait -PassThru
 Write-Log -Message "'gpupdate.exe' exited with code [$($GPUpdate.ExitCode)])."
 if ($GPUpdate.ExitCode -ne 0) {
-    Write-Log -Category Warning -Message "gpupdate.exe failed with exit code [$($GPUpdate.ExitCode)]. Policy will be reapplied at startup."
+    throw "gpupdate.exe failed with exit code [$($GPUpdate.ExitCode)]."
 }
 
 # V-253289 MEDIUM: The Secondary Logon service must be disabled on Windows 11.
@@ -764,23 +856,14 @@ If ($Serviceobject) {
     If ($StartType -ne 'Disabled') {
         Set-RegistryValue -Name Start -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\seclogon' -PropertyType DWORD -Value 4
     }
-    If ($ServiceObject.Status -ne 'Stopped') {
-        Try {
-            Stop-Service $Service -Force
-        }
-        Catch {
-        }
-    }
+    If ($ServiceObject.Status -ne 'Stopped') { Stop-Service $Service -Force -ErrorAction Stop }
 }
 
 # V-257592 MEDIUM: Windows 11 must not have portproxy enabled or in use.
-$output = cmd /c netsh interface portproxy show all '2>&1'
-If ($output) {
-    Write-Log -Message "V-257592: Disabling PortProxy rules."
-    $netsh = Start-Process -FilePath 'netsh.exe' -ArgumentList 'interface portproxy delete' -Wait -PassThru -NoNewWindow
-    if ($netsh.ExitCode -ne 0) {
-        throw "netsh.exe failed to delete PortProxy rules with exit code [$($netsh.ExitCode)]."
-    }
+Write-Log -Message "V-257592: Resetting all PortProxy rules."
+$netsh = Start-Process -FilePath 'netsh.exe' -ArgumentList 'interface portproxy reset' -Wait -PassThru -NoNewWindow
+if ($netsh.ExitCode -ne 0) {
+    throw "netsh.exe failed to reset PortProxy rules with exit code [$($netsh.ExitCode)]."
 }
 
 # V-253396 MEDIUM: Explorer Data Execution Prevention must be enabled.
@@ -790,7 +873,7 @@ If ($output) {
 # (OS-level DEP boot configuration).  That rule was REMOVED in V2R7 and there is no
 # equivalent bcdedit requirement in the current STIG.  No bcdedit action is needed here.
 
-# -- Windows Optional Features (V-253275, V-253276, V-253277, V-253278, V-253279, V-253286) ----
+# -- Windows Optional Features (V-253275, V-253276, V-253277, V-253278, V-253279, V-253285, V-253286) ----
 # V-253275 HIGH: IIS must not be installed
 Disable-OptionalFeatureIfEnabled -FeatureName 'IIS-WebServer'         -StigId 'V-253275'
 Disable-OptionalFeatureIfEnabled -FeatureName 'IIS-HostableWebCore'   -StigId 'V-253275'
@@ -800,7 +883,7 @@ Disable-OptionalFeatureIfEnabled -FeatureName 'IIS-HostableWebCore'   -StigId 'V
 $snmpCap = Get-WindowsCapability -Online -Name 'SNMP.Client~~~~0.0.1.0' -ErrorAction SilentlyContinue
 if ($snmpCap -and $snmpCap.State -eq 'Installed') {
     Write-Log -Message 'V-253276: Removing SNMP Client Windows Capability.'
-    Remove-WindowsCapability -Online -Name 'SNMP.Client~~~~0.0.1.0' -ErrorAction SilentlyContinue | Out-Null
+    Remove-WindowsCapability -Online -Name 'SNMP.Client~~~~0.0.1.0' -ErrorAction Stop | Out-Null
 }
 else {
     Write-Log -Message 'V-253276: SNMP Client capability not installed. No action required.'
@@ -816,8 +899,25 @@ Disable-OptionalFeatureIfEnabled -FeatureName 'TelnetClient' -StigId 'V-253278'
 # V-253279 MEDIUM: TFTP Client must not be installed
 Disable-OptionalFeatureIfEnabled -FeatureName 'TFTP'         -StigId 'V-253279'
 
+# V-253285 MEDIUM: Windows PowerShell 2.0 must be disabled.
+# The finding is NA on Windows 11 24H2 and newer, where the features are normally absent.
+# Checking both feature names also protects older supported Windows 10/11 image versions.
+Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2Root' -StigId 'V-253285'
+Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2'     -StigId 'V-253285'
+
 # V-253286 MEDIUM: SMB v1 protocol must be disabled
 Disable-OptionalFeatureIfEnabled -FeatureName 'SMB1Protocol' -StigId 'V-253286'
+
+# V-288475 MEDIUM: All Wi-Fi Direct adapters must be disabled.
+# This finding was added in the Windows 11 STIG v2r9 after the July 2026 v2r8 GPO package.
+$wifiDirectAdapters = @(Get-NetAdapter -InterfaceDescription 'Microsoft Wi-Fi Direct*' -IncludeHidden -ErrorAction SilentlyContinue)
+if ($wifiDirectAdapters.Count -gt 0) {
+    Write-Log -Message "V-288475: Disabling $($wifiDirectAdapters.Count) Wi-Fi Direct adapter(s)."
+    $wifiDirectAdapters | Disable-NetAdapter -Confirm:$false -ErrorAction Stop
+}
+else {
+    Write-Log -Message 'V-288475: No Wi-Fi Direct adapters found. No action required.'
+}
 
 # WN11-00-000125 / V-268317 - Remove Microsoft Copilot
 # IMAGE BUILD: Remove-AppxProvisionedPackage removes the package from the image so it is not
@@ -828,13 +928,13 @@ Get-AppxProvisionedPackage -Online |
 Where-Object { $_.DisplayName -like '*Copilot*' } |
 ForEach-Object {
     Write-Log -Message "  Removing provisioned package: $($_.DisplayName)"
-    Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue | Out-Null
+    Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction Stop | Out-Null
 }
 Get-AppxPackage -AllUsers |
 Where-Object { $_.Name -like '*Copilot*' } |
 ForEach-Object {
     Write-Log -Message "  Removing user package: $($_.Name)"
-    Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+    Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction Stop
 }
 
 # V-253359 MEDIUM: Run as different user must be removed from context menus.
@@ -865,21 +965,18 @@ foreach ($log in $eventLogMap.Keys) {
         -Value $eventLogSddl
 }
 
-Remove-Item -Path $Script:TempDir -Recurse -Force -ErrorAction SilentlyContinue
-
-# Stamp STIG version to registry
-If ($stigVersion) {
-    Write-Log -Message "Stamping STIG version to registry: $stigVersion"
-    If (-not (Test-Path -Path $registryPath)) {
-        New-Item -Path $registryPath -Force | Out-Null
-        Write-Log -Message "Created registry path: $registryPath"
-    }
-    Set-ItemProperty -Path $registryPath -Name $registryValueName -Value $stigVersion -Force
-    Write-Log -Message "STIG version stamped successfully."
+# Stamp each successfully applied STIG with its own release version.
+If (-not (Test-Path -Path $registryPath)) {
+    New-Item -Path $registryPath -Force -ErrorAction Stop | Out-Null
+    Write-Log -Message "Created registry path: $registryPath"
 }
-Else {
-    Write-Log -Category Warning -Message "Unable to determine STIG version. Version not stamped to registry."
+ForEach ($stigName in ($applicableStigVersions.Keys | Sort-Object)) {
+    $appliedVersion = $applicableStigVersions[$stigName]
+    New-ItemProperty -Path $registryPath -Name $stigName -PropertyType String -Value $appliedVersion -Force -ErrorAction Stop | Out-Null
+    Write-Log -Message "Stamped applied STIG version: $stigName = $appliedVersion"
 }
+# Remove the legacy package-level stamp after individual STIG stamps succeed.
+Remove-ItemProperty -Path $registryPath -Name 'Version' -ErrorAction SilentlyContinue
 
 
 # Strip obsolete/missing CSE GUIDs from gPCUserExtensionNames in gpt.ini.
@@ -906,3 +1003,10 @@ if (Test-Path $gptPath) {
 }
 
 Write-Log -Message "Ending '$PSCommandPath'."
+}
+Finally {
+    If (Test-Path -LiteralPath $Script:TempDir) {
+        Write-Log -Message "Removing temporary content from '$Script:TempDir'."
+        Remove-Item -LiteralPath $Script:TempDir -Recurse -Force -ErrorAction Stop
+    }
+}

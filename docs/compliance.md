@@ -504,7 +504,7 @@ The script uses Microsoft's [LGPO.exe](https://www.microsoft.com/en-us/download/
 - Microsoft 365 / Office / Teams STIGs (detected automatically)
 - Third-party application STIGs: Adobe Acrobat Pro/Reader, Google Chrome, Mozilla Firefox
 - AVD-specific exceptions (remote interactive logon rights, ECC curve SSL fix that breaks AVD, firewall settings for non-domain joined VMs)
-- Version stamping to `HKLM:\Software\DoD\STIG` for upgrade detection
+- Individual STIG release stamping to `HKLM:\Software\DoD\STIG` for upgrade detection
 
 **Deploy in image build (recommended):** Baking STIGs into the golden image means every session host starts hardened without per-VM execution time at deployment. Follow the standard artifacts workflow:
 
@@ -530,7 +530,7 @@ cd C:\repos\FederalAVD\deployments
 > "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip"
 > ```
 >
-> DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and rebuild your image (or re-apply via `sessionHostCustomizations`). The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). Also update the `-Version` argument in your customizations entry to match (e.g., `'2026.04'` for the April 2026 release) so the version-tracking registry key stays current and upgrade detection works correctly.
+> DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and rebuild your image (or re-apply via `sessionHostCustomizations`). The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). The script detects each applicable STIG's `v<major>r<revision>` release directly from the extracted package folder name; no package-level version argument is required.
 
 **Step 3 — Add to the `customizations` parameter in your image build parameter file:**
 
@@ -566,7 +566,7 @@ artifact. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-ex
   "value": [
     {
       "blobNameOrUri": "DoD-STIGs.zip",
-      "arguments": "-Upgrade -Version '2026.07'"
+      "arguments": "-Upgrade"
     }
   ]
 }
