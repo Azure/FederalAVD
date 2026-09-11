@@ -1161,10 +1161,68 @@ Describe 'DoD STIG local user logon rights' {
         $versionError.Exception.Message | Should Match 'Unable to determine the STIG name and version'
     }
 
-    It 'configures both interactive and RDS rights when local logon is enabled' {
-        $stigScriptContent | Should Match "Set-ExistingPrivilegeRight -Content \`$Content -Name 'SeInteractiveLogonRight'"
-        $stigScriptContent | Should Match "'SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight'"
-        $stigScriptContent | Should Match "\*S-1-5-113', '\*S-1-5-114"
+    It 'permits local users through RDS without changing console interactive logon rights' {
+        $stigScriptContent | Should Match "\[Alias\('AllowLocalUserLogon'\)\]"
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$AllowLocalUserRemoteInteractiveLogon\s*$'
+        $stigScriptContent | Should Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyRemoteInteractiveLogonRight'"
+        $stigScriptContent | Should Not Match "Set-ExistingPrivilegeRight -Content \`$Content -Name 'SeInteractiveLogonRight'"
+        $stigScriptContent | Should Not Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyInteractiveLogonRight'"
+        $stigScriptContent | Should Match 'Local console interactive logon rights remain unchanged'
+    }
+
+    It 'keeps local interactive logon separate from execution-profile compatibility' {
+        $stigScriptContent | Should Match "\[ValidateSet\('ZeroTrustImageBuild', 'Packer', 'AzureVMImageBuilder', 'SessionHost'\)\]"
+        $stigScriptContent | Should Match "\[string\]\`$ExecutionProfile = 'ZeroTrustImageBuild'"
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$AllowLocalUserRemoteInteractiveLogon\s*$'
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -in @\('Packer', 'AzureVMImageBuilder'\)\) \{[\s\S]*?SeDenyNetworkLogonRight"
+    }
+
+    It 'supports domain-oriented final policy without pretending unresolved domain principals exist' {
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$OverrideDomainJoin'
+        $stigScriptContent | Should Match '\$EffectiveDomainJoined = \$DetectedDomainJoined -or \$OverrideDomainJoin'
+        $stigScriptContent | Should Match 'Update-PrivilegeRightPlaceholders -Content \$Content -DomainJoined \$DetectedDomainJoined'
+        $stigScriptContent | Should Match 'domain principals cannot be resolved until the system joins a domain'
+    }
+
+    It 'preserves Packer WinRM network logon and its administrative token' {
+        $stigScriptContent | Should Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyNetworkLogonRight'"
+        $stigScriptContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '1'"
+        $stigScriptContent | Should Not Match "RegistryValue 'AllowBasic' -Delete"
+    }
+
+    It 'preserves AIB WinRM transport and installs its deprovisioning override' {
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -eq 'AzureVMImageBuilder'\) \{[\s\S]*?RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '1'"
+        $stigScriptContent | Should Match "Copy-Item -LiteralPath \`$aibDeprovisioningSource -Destination 'C:\\DeprovisioningScript\.ps1' -Force"
+        $stigScriptContent | Should Match 'AzureVMImageBuilder\.state'
+    }
+
+    It 'provides a final Packer provisioner that restores policy and runs Sysprep' {
+        $packerFinalizerPath = Join-Path (Split-Path -Path $stigScriptPath -Parent) 'packer\Finalize-STIGsForPacker.ps1'
+        Test-Path -LiteralPath $packerFinalizerPath -PathType Leaf | Should Be $true
+
+        $packerFinalizerContent = Get-Content -LiteralPath $packerFinalizerPath -Raw
+        $packerFinalizerContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '0'"
+        $packerFinalizerContent | Should Match "RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '0'"
+        $packerFinalizerContent | Should Match "'\*S-1-5-113' \+ '\*S-1-5-114'"
+        $packerFinalizerContent | Should Match '/oobe /generalize /quiet /quit /mode:vm'
+        $packerFinalizerContent | Should Match 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE'
+    }
+
+    It 'provides an AIB deprovisioning override that restores policy before Sysprep' {
+        $aibDeprovisioningPath = Join-Path (Split-Path -Path $stigScriptPath -Parent) 'azure-vm-image-builder\DeprovisioningScript.ps1'
+        Test-Path -LiteralPath $aibDeprovisioningPath -PathType Leaf | Should Be $true
+
+        $aibDeprovisioningContent = Get-Content -LiteralPath $aibDeprovisioningPath -Raw
+        $aibDeprovisioningContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '0'"
+        $aibDeprovisioningContent | Should Match "RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '0'"
+        $aibDeprovisioningContent | Should Match "'\*S-1-5-113' \+ '\*S-1-5-114'"
+        $aibDeprovisioningContent | Should Match '/oobe /generalize /quiet /quit /mode:vm'
+        $aibDeprovisioningContent | Should Match 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE'
+    }
+
+    It 'preserves local firewall rules for workgroup systems and WinRM-based builders' {
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -in @\('Packer', 'AzureVMImageBuilder'\) -or -not \`$EffectiveDomainJoined\)"
+        ([regex]::Matches($stigScriptContent, "RegistryValue 'AllowLocalPolicyMerge' -Delete")).Count | Should Be 3
     }
 
     It 'classifies SKU 175 as Windows client even when ProductType is 3' {

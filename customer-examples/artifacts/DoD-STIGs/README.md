@@ -2,7 +2,7 @@
 
 ## Overview
 
-This PowerShell script automates the application of Defense Information Systems Agency (DISA) Security Technical Implementation Guides (STIGs) to Azure Virtual Desktop (AVD) session hosts. It uses the Local Group Policy Object (LGPO) tool to apply GPO settings, security templates, audit policies, and additional registry-based mitigations.
+This PowerShell script automates the application of Defense Information Systems Agency (DISA) Security Technical Implementation Guides (STIGs) to custom images for Azure Virtual Desktop (AVD) session hosts or deployed session hosts. It uses the Local Group Policy Object (LGPO) tool to apply GPO settings, security templates, audit policies, and additional registry-based mitigations.
 
 ## Purpose
 
@@ -25,11 +25,45 @@ This PowerShell script automates the application of Defense Information Systems 
 - **Type:** Switch
 - **Description:** When specified, verifies applications in `ApplicationsToSTIG` are installed before applying settings
 
-### `AllowLocalUserLogon`
+### `AllowLocalUserRemoteInteractiveLogon`
 
 - **Type:** Switch
-- **Description:** When specified, permits eligible local accounts to log on both interactively and through Remote Desktop Services. For user-right assignments defined by the STIG, it preserves interactive logon for local Users and Administrators and removes the local-account deny SIDs (`*S-1-5-113` and `*S-1-5-114`) from interactive and Remote Desktop Services deny rights. It does not create or modify a user-right assignment that the STIG omits. Guests and all other deny principals remain.
+- **Description:** When specified, permits eligible local accounts to log on through Remote Desktop Services by removing the local-account deny SIDs (`*S-1-5-113` and `*S-1-5-114`) from the STIG-defined Remote Desktop Services deny right. It does not modify local console `SeInteractiveLogonRight` or `SeDenyInteractiveLogonRight`. It does not create a user-right assignment that the STIG omits. Guests and all other deny principals remain.
 - **RDS membership:** A local account must still belong to either the local **Administrators** or **Remote Desktop Users** group to receive the Remote Desktop Services allow right.
+- **Compatibility alias:** The former `AllowLocalUserLogon` parameter name remains available as an alias with the same RDS-only behavior.
+
+### `ExecutionProfile`
+
+- **Type:** String
+- **Default:** `ZeroTrustImageBuild`
+- **Allowed values:** `ZeroTrustImageBuild`, `Packer`, `AzureVMImageBuilder`, `SessionHost`
+- **Description:** Identifies how the script is being executed so it applies only the compatibility exceptions required by that environment. `AllowLocalUserRemoteInteractiveLogon` remains independent because it controls intended local-account RDS access rather than build transport.
+
+| Profile | Execution path | Additional behavior |
+| --- | --- | --- |
+| `ZeroTrustImageBuild` | FederalAVD VM Run Command / VM agent | No remote build-account exception |
+| `Packer` | Local administrator over WinRM | Temporarily preserves local-account network logon, the remote administrative token, and local firewall rules during provisioning |
+| `AzureVMImageBuilder` | Microsoft Azure VM Image Builder over WinRM HTTPS/5986 | Temporarily preserves local-account network logon, the remote administrative token, local firewall rules, and service-controlled WinRM authentication during customization |
+| `SessionHost` | Post-deployment session-host customization | Selects firewall behavior from the effective domain-join state |
+
+The Packer template must use NTLM over HTTPS. The profile does not weaken the STIG prohibition on
+Basic authentication or permit unencrypted WinRM. Its local-network-logon, token-filtering, and
+firewall changes are temporary build-transport exceptions. Use the finalization provisioner in
+the `packer` subfolder to restore final policy and run Sysprep before Packer captures the image.
+
+Azure VM Image Builder is also built on Packer, but its service controls the Windows communicator
+and connects to the build VM through WinRM over HTTPS port 5986. The `AzureVMImageBuilder` profile
+temporarily enables the required WinRM policy state and automatically installs
+`azure-vm-image-builder/DeprovisioningScript.ps1` as `C:\DeprovisioningScript.ps1`. AIB invokes
+that exact path from its hidden final customizer. The override restores final STIG policy and then
+runs Sysprep, so no separate AIB finalizer customizer is required.
+
+### `OverrideDomainJoin`
+
+- **Type:** Switch
+- **Description:** Treats a workgroup build VM as intended for a domain-joined deployment when selecting final-state policy behavior. This is intended for uncommon cases where the captured image is guaranteed to join a domain.
+- **Principal limitation:** Domain Admins and Enterprise Admins cannot be resolved before the machine actually joins a domain. On a workgroup build VM, the script therefore removes the package placeholders even when this override is enabled. Apply the required domain user-right assignments through domain policy, or rerun policy after domain join.
+- **Firewall interaction:** With the override enabled, `ZeroTrustImageBuild` retains the domain-oriented STIG firewall merge setting. `Packer` and `AzureVMImageBuilder` temporarily remove it because their local WinRM firewall rules must remain effective during provisioning. Their finalizers restore it before capture.
 
 ### `STIGsUrl`
 
@@ -76,10 +110,49 @@ converts it to a string array before splatting the parameters into this script:
 "arguments": "-ApplicationsToSTIG @('Google Chrome','Mozilla Firefox') -SearchForApplications"
 ```
 
-### Allow Local User Logon
+### Allow Local User RDS Logon
 
 ```powershell
-.\Apply-STIGsAVD.ps1 -AllowLocalUserLogon
+.\Apply-STIGsAVD.ps1 -AllowLocalUserRemoteInteractiveLogon
+```
+
+### Packer Image Build
+
+Configure Packer to use NTLM over HTTPS, then select its execution profile:
+
+```powershell
+.\Apply-STIGsAVD.ps1 -ExecutionProfile Packer
+```
+
+After all other provisioning and validation, run
+[`packer/Finalize-STIGsForPacker.ps1`](packer/Finalize-STIGsForPacker.ps1) as the final Packer
+provisioner. The accompanying [`packer/README.md`](packer/README.md) contains workgroup and
+intended-domain HCL examples. The helper restores the temporary Packer exceptions, invokes
+Sysprep, and returns control to the Azure ARM builder for power-off and capture.
+
+### Azure VM Image Builder
+
+Select the Azure VM Image Builder execution profile in the AIB PowerShell customizer that invokes
+this artifact:
+
+```powershell
+.\Apply-STIGsAVD.ps1 -ExecutionProfile AzureVMImageBuilder
+```
+
+The artifact installs the required `C:\DeprovisioningScript.ps1` override automatically. Keep the
+STIG customizer after software installation and any customizers that need to restart Windows.
+Later AIB customizers may continue to use WinRM. At the end of customization, AIB's hidden final
+customizer invokes the override, which restores the temporary exceptions and performs Sysprep.
+See [`azure-vm-image-builder/README.md`](azure-vm-image-builder/README.md) for lifecycle details.
+
+### Image Intended for Domain Join
+
+For an agent-based build VM that is currently in a workgroup but is guaranteed to join a domain:
+
+```powershell
+.\Apply-STIGsAVD.ps1 `
+  -ExecutionProfile AzureVMImageBuilder `
+  -OverrideDomainJoin
 ```
 
 ## What the Script Does
@@ -120,7 +193,7 @@ converts it to a string array before splatting the parameters into this script:
 ### 5. AVD-Specific Exceptions
 
 - Configures Remote Desktop Users remote interactive logon rights
-- Adjusts deny logon rights for domain/workgroup environments and `AllowLocalUserLogon`
+- Optionally removes local-account SIDs from the RDS deny right through `AllowLocalUserRemoteInteractiveLogon`
 - Removes ECC curves SSL configuration that breaks AVD
 - Configures firewall settings for non-domain joined systems
 - Removes Edge proxy configuration (V-235798)
@@ -183,9 +256,10 @@ The following manual checks still need separate handling or deployment evidence:
 - Domain Controller-only findings are outside scope because this artifact rejects domain
   controllers and imports only Member Server GPOs.
 
-The artifact intentionally changes STIG-defined interactive-logon rights for AVD compatibility.
-In particular, allowing local RDS logon removes local-account deny SIDs, which is a documented
-deviation from Server 2022 V-254439 and Server 2025 V-278188. The artifact also removes the GPO
+The artifact intentionally changes STIG-defined remote-interactive-logon rights for AVD compatibility.
+In particular, allowing local RDS logon removes local-account deny SIDs from
+`SeDenyRemoteInteractiveLogonRight`, which is a documented deviation from Server 2022 V-254439
+and Server 2025 V-278188. Local console interactive logon rights remain unchanged. The artifact also removes the GPO
 setting that renames the built-in Administrator account, so Server 2022 V-254447 and Server 2025
 V-278197 must be addressed by the approved account-management process. These deviations must be
 included in the system security plan and accepted by the authorizing official where applicable.
@@ -266,6 +340,12 @@ The script implements version tracking to support upgrades:
 - LGPO, `gpupdate`, service, optional-feature, capability, AppX, and PortProxy remediation failures stop the build rather than producing a partially hardened image.
 - Optional services, features, capabilities, and packages that are not installed are treated as not applicable.
 - The script does not initiate a restart. Image-build orchestration should restart the VM after this customization and before image capture.
+- Packer builds must use the finalization provisioner in the `packer` subfolder as their last
+  provisioner. It restores temporary Packer compatibility policy and performs Sysprep before the
+  Azure ARM builder captures the VM.
+- Azure VM Image Builder builds automatically install the deprovisioning override from the
+  `azure-vm-image-builder` subfolder. Do not run a separate Sysprep customizer; AIB invokes the
+  override from its hidden final customizer.
 - Pre-stage `LGPO.zip` and the STIG package ZIP in this artifact for deterministic and air-gapped builds.
 
 ## Important Notes
@@ -282,17 +362,18 @@ Disable-LocalUser -Name $newAdminName
 
 ### Domain vs Workgroup
 
-The script automatically detects domain membership and adjusts policies accordingly:
+The script automatically detects domain membership and supports an explicit intended-domain override:
 
-- **Domain-Joined:** Includes Domain Admins and Enterprise Admins in deny logon rights
-- **Workgroup:** Applies deny logon rights to Guests only
+- **Actually domain joined:** Resolves Domain Admins and Enterprise Admins in STIG-defined user-right assignments.
+- **Workgroup:** Removes unresolved domain-principal placeholders.
+- **Workgroup with `OverrideDomainJoin`:** Selects domain-oriented final-state settings that do not require domain SID resolution. Domain-principal assignments remain deferred until domain join.
 
 ### AVD Compatibility
 
 Several STIG settings are incompatible with AVD and are automatically removed:
 
 - ECC curves SSL configuration
-- Firewall local policy merge (workgroup only)
+- Firewall local policy merge (workgroup and Packer profiles)
 - Edge proxy settings
 - CTRL+ALT+DEL requirement (workgroup only)
 
