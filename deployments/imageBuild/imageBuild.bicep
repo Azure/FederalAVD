@@ -571,8 +571,8 @@ var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
   ? dateTimeAdd(buildTimestamp, 'P${imageVersionEOLinDays}D')
   : ''
 
-var imageVmName = '${depPrefix}vmimg-${buildRunId}'
-var orchestrationVmName = '${depPrefix}vmorc-${buildRunId}'
+var imageVmName = '${depPrefix}img-${buildRunId}'
+var orchestrationVmName = '${depPrefix}orc-${buildRunId}'
 
 var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
