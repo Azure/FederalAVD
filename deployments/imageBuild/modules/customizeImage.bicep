@@ -483,7 +483,7 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
 }
 
 @batchSize(1)
-module customizationBatches 'applyCustomizationsBatch.bicep' = [
+module customizationBatch 'applyCustomizationsBatch.bicep' = [
   for i in range(0, batchCount): {
     params: {
       batchIndex: i
@@ -531,7 +531,7 @@ resource restartCustomizations 'Microsoft.Compute/virtualMachines/runCommands@20
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    customizationBatches
+    customizationBatch
   ]
 }
 
@@ -574,7 +574,7 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
   }
   dependsOn: [
     removeRunCommandsMicrosoftSoftware
-    customizationBatches
+    customizationBatch
     restartMicrosoftSoftware
     restartCustomizations
   ]

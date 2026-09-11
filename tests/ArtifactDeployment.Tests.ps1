@@ -1024,7 +1024,15 @@ Describe 'DoD STIG local user logon rights' {
         if ($parseErrors.Count -gt 0) {
             throw "Apply-STIGsAVD.ps1 has parser errors: $($parseErrors.Message -join '; ')"
         }
-        foreach ($functionName in @('Set-ExistingPrivilegeRight', 'Remove-PrivilegeRightPrincipals', 'Update-PrivilegeRightPlaceholders', 'Get-StigVersionMap')) {
+        foreach ($functionName in @(
+            'Set-ExistingPrivilegeRight'
+            'Remove-PrivilegeRightPrincipals'
+            'Update-PrivilegeRightPlaceholders'
+            'Get-StigVersionMap'
+            'Get-OperatingSystemContext'
+            'Get-GpoBackupDisplayName'
+            'Get-ApplicableGpoFolders'
+        )) {
             $functionDefinition = $syntaxTree.Find({
                 param($node)
                 $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
@@ -1043,6 +1051,9 @@ Describe 'DoD STIG local user logon rights' {
         Remove-Item function:\Remove-PrivilegeRightPrincipals -ErrorAction SilentlyContinue
         Remove-Item function:\Update-PrivilegeRightPlaceholders -ErrorAction SilentlyContinue
         Remove-Item function:\Get-StigVersionMap -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-OperatingSystemContext -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-GpoBackupDisplayName -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-ApplicableGpoFolders -ErrorAction SilentlyContinue
     }
 
     It 'leaves the RDS allow right unchanged when the Windows 11 v2r8 STIG omits it' {
@@ -1132,12 +1143,14 @@ Describe 'DoD STIG local user logon rights' {
             'DoD Windows 11 v2r8'
             'DoD Microsoft Edge v2r5'
             'DoD Google Chrome V2R11'
+            'DoD WinSvr 2022 MS and DC v2r9'
         )
 
-        $versions.Count | Should Be 3
+        $versions.Count | Should Be 4
         $versions['DoD Windows 11'] | Should Be 'v2r8'
         $versions['DoD Microsoft Edge'] | Should Be 'v2r5'
         $versions['DoD Google Chrome'] | Should Be 'v2r11'
+        $versions['DoD WinSvr 2022 MS'] | Should Be 'v2r9'
     }
 
     It 'rejects an applicable STIG folder without a release suffix' {
@@ -1148,10 +1161,152 @@ Describe 'DoD STIG local user logon rights' {
         $versionError.Exception.Message | Should Match 'Unable to determine the STIG name and version'
     }
 
-    It 'configures both interactive and RDS rights when local logon is enabled' {
-        $stigScriptContent | Should Match "Set-ExistingPrivilegeRight -Content \`$Content -Name 'SeInteractiveLogonRight'"
-        $stigScriptContent | Should Match "'SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight'"
-        $stigScriptContent | Should Match "\*S-1-5-113', '\*S-1-5-114"
+    It 'permits local users through RDS without changing console interactive logon rights' {
+        $stigScriptContent | Should Match "\[Alias\('AllowLocalUserLogon'\)\]"
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$AllowLocalUserRemoteInteractiveLogon\s*$'
+        $stigScriptContent | Should Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyRemoteInteractiveLogonRight'"
+        $stigScriptContent | Should Not Match "Set-ExistingPrivilegeRight -Content \`$Content -Name 'SeInteractiveLogonRight'"
+        $stigScriptContent | Should Not Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyInteractiveLogonRight'"
+        $stigScriptContent | Should Match 'Local console interactive logon rights remain unchanged'
+    }
+
+    It 'keeps local interactive logon separate from execution-profile compatibility' {
+        $stigScriptContent | Should Match "\[ValidateSet\('ZeroTrustImageBuild', 'Packer', 'AzureVMImageBuilder', 'SessionHost'\)\]"
+        $stigScriptContent | Should Match "\[string\]\`$ExecutionProfile = 'ZeroTrustImageBuild'"
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$AllowLocalUserRemoteInteractiveLogon\s*$'
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -in @\('Packer', 'AzureVMImageBuilder'\)\) \{[\s\S]*?SeDenyNetworkLogonRight"
+    }
+
+    It 'supports domain-oriented final policy without pretending unresolved domain principals exist' {
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$OverrideDomainJoin'
+        $stigScriptContent | Should Match '\$EffectiveDomainJoined = \$DetectedDomainJoined -or \$OverrideDomainJoin'
+        $stigScriptContent | Should Match 'Update-PrivilegeRightPlaceholders -Content \$Content -DomainJoined \$DetectedDomainJoined'
+        $stigScriptContent | Should Match 'domain principals cannot be resolved until the system joins a domain'
+    }
+
+    It 'preserves Packer WinRM network logon and its administrative token' {
+        $stigScriptContent | Should Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyNetworkLogonRight'"
+        $stigScriptContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '1'"
+        $stigScriptContent | Should Not Match "RegistryValue 'AllowBasic' -Delete"
+    }
+
+    It 'preserves AIB WinRM transport and installs its deprovisioning override' {
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -eq 'AzureVMImageBuilder'\) \{[\s\S]*?RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '1'"
+        $stigScriptContent | Should Match "Copy-Item -LiteralPath \`$aibDeprovisioningSource -Destination 'C:\\DeprovisioningScript\.ps1' -Force"
+        $stigScriptContent | Should Match 'AzureVMImageBuilder\.state'
+    }
+
+    It 'provides a final Packer provisioner that restores policy and runs Sysprep' {
+        $packerFinalizerPath = Join-Path (Split-Path -Path $stigScriptPath -Parent) 'packer\Finalize-STIGsForPacker.ps1'
+        Test-Path -LiteralPath $packerFinalizerPath -PathType Leaf | Should Be $true
+
+        $packerFinalizerContent = Get-Content -LiteralPath $packerFinalizerPath -Raw
+        $packerFinalizerContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '0'"
+        $packerFinalizerContent | Should Match "RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '0'"
+        $packerFinalizerContent | Should Match "'\*S-1-5-113' \+ '\*S-1-5-114'"
+        $packerFinalizerContent | Should Match '/oobe /generalize /quiet /quit /mode:vm'
+        $packerFinalizerContent | Should Match 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE'
+    }
+
+    It 'provides an AIB deprovisioning override that restores policy before Sysprep' {
+        $aibDeprovisioningPath = Join-Path (Split-Path -Path $stigScriptPath -Parent) 'azure-vm-image-builder\DeprovisioningScript.ps1'
+        Test-Path -LiteralPath $aibDeprovisioningPath -PathType Leaf | Should Be $true
+
+        $aibDeprovisioningContent = Get-Content -LiteralPath $aibDeprovisioningPath -Raw
+        $aibDeprovisioningContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '0'"
+        $aibDeprovisioningContent | Should Match "RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '0'"
+        $aibDeprovisioningContent | Should Match "'\*S-1-5-113' \+ '\*S-1-5-114'"
+        $aibDeprovisioningContent | Should Match '/oobe /generalize /quiet /quit /mode:vm'
+        $aibDeprovisioningContent | Should Match 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE'
+    }
+
+    It 'preserves local firewall rules for workgroup systems and WinRM-based builders' {
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -in @\('Packer', 'AzureVMImageBuilder'\) -or -not \`$EffectiveDomainJoined\)"
+        ([regex]::Matches($stigScriptContent, "RegistryValue 'AllowLocalPolicyMerge' -Delete")).Count | Should Be 3
+    }
+
+    It 'classifies SKU 175 as Windows client even when ProductType is 3' {
+        $context = Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+            Caption = 'Microsoft Windows 11 Enterprise multi-session'
+            ProductType = 3
+            OperatingSystemSKU = 175
+        })
+
+        $context.Family | Should Be 'Client'
+        $context.Release | Should Be '11'
+        $context.StigFolderPattern | Should Be '^DoD Windows 11 v\d+r\d+$'
+    }
+
+    It 'classifies supported ProductType 3 server releases as Windows Server' {
+        foreach ($release in '2022', '2025') {
+            $context = Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                Caption = "Microsoft Windows Server $release Datacenter"
+                ProductType = 3
+                OperatingSystemSKU = 8
+            })
+
+            $context.Family | Should Be 'Server'
+            $context.Release | Should Be $release
+            $context.StigFolderPattern | Should Be "^DoD WinSvr $release MS and DC v\d+r\d+$"
+        }
+    }
+
+    It 'rejects domain controllers and sunsetting or unsupported server releases' {
+        $domainControllerError = $null
+        Try {
+            Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                Caption = 'Microsoft Windows Server 2022 Datacenter'
+                ProductType = 2
+                OperatingSystemSKU = 8
+            })
+        }
+        Catch { $domainControllerError = $_ }
+
+        $domainControllerError.Exception.Message | Should Match 'Domain controllers must not be used'
+        foreach ($release in '2012 R2', '2016', '2019') {
+            $unsupportedServerError = $null
+            Try {
+                Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                    Caption = "Microsoft Windows Server $release Datacenter"
+                    ProductType = 3
+                    OperatingSystemSKU = 8
+                })
+            }
+            Catch { $unsupportedServerError = $_ }
+
+            $unsupportedServerError.Exception.Message | Should Match 'Supported releases are 2022 and 2025'
+        }
+    }
+
+    It 'selects only Member Server GPO backups from a mixed server package' {
+        $tempRoot = Join-Path $env:TEMP "FederalAVD-stig-gpo-test-$([guid]::NewGuid())"
+        Try {
+            $stigFolderPath = Join-Path $tempRoot 'DoD WinSvr 2022 MS and DC v2r9'
+            $gpoRoot = Join-Path $stigFolderPath 'GPOs'
+            foreach ($gpo in @(
+                @{ Folder = 'ms-comp'; Name = 'DoD WinSvr 2022 MS STIG Comp v2r9' }
+                @{ Folder = 'ms-user'; Name = 'DoD WinSvr 2022 MS STIG User v2r9' }
+                @{ Folder = 'dc-comp'; Name = 'DoD WinSvr 2022 DC STIG Comp v2r9' }
+            )) {
+                $path = Join-Path $gpoRoot $gpo.Folder
+                New-Item -Path $path -ItemType Directory -Force | Out-Null
+                $backup = "<GroupPolicyBackupScheme><GroupPolicyObject><GroupPolicyCoreSettings><DisplayName>$($gpo.Name)</DisplayName></GroupPolicyCoreSettings></GroupPolicyObject></GroupPolicyBackupScheme>"
+                Set-Content -LiteralPath (Join-Path $path 'Backup.xml') -Value $backup -Encoding ASCII
+            }
+
+            $selected = @(Get-ApplicableGpoFolders `
+                -StigFolder (Get-Item $stigFolderPath) `
+                -OperatingSystemFamily Server `
+                -OperatingSystemRelease '2022')
+
+            $selected.Count | Should Be 2
+            ($selected -join "`n") | Should Match 'ms-comp'
+            ($selected -join "`n") | Should Match 'ms-user'
+            ($selected -join "`n") | Should Not Match 'dc-comp'
+        }
+        Finally {
+            Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -1161,9 +1316,12 @@ Describe 'DoD STIG image build safety' {
         $stigScriptContent = Get-Content -LiteralPath $stigScriptPath -Raw
     }
 
-    It 'accepts only Windows 10 and Windows 11 operating systems' {
-        $stigScriptContent | Should Match "ElseIf \(\`$osCaption -match 'Windows 10'\)"
-        $stigScriptContent | Should Match "Unsupported operating system '\`$osCaption'"
+    It 'uses SKU-aware OS classification and supports current AVD Windows Server releases' {
+        $stigScriptContent | Should Match '\$enterpriseMultiSessionSku = 175'
+        $stigScriptContent | Should Match '\$operatingSystemSku -eq \$enterpriseMultiSessionSku -or \$productType -eq 1'
+        $stigScriptContent | Should Match "Windows Server \(2022\|2025\)"
+        $stigScriptContent | Should Not Match "Windows Server \(2016\|2019"
+        $stigScriptContent | Should Match 'Domain controllers must not be used as Azure Virtual Desktop session hosts'
     }
 
     It 'cleans stale temporary content and always removes the workspace' {
@@ -1175,6 +1333,8 @@ Describe 'DoD STIG image build safety' {
     It 'fails when required compliance remediations fail' {
         $stigScriptContent | Should Match "Disable-WindowsOptionalFeature[\s\S]*?-ErrorAction Stop"
         $stigScriptContent | Should Match "Remove-WindowsCapability[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Uninstall-WindowsFeature -Name \`$FeatureName -Restart:\`$false -ErrorAction Stop"
+        $stigScriptContent | Should Match "If \(-not \`$result.Success\)"
         $stigScriptContent | Should Match "Stop-Service \`$Service -Force -ErrorAction Stop"
         $stigScriptContent | Should Match "Remove-AppxProvisionedPackage[\s\S]*?-ErrorAction Stop"
         $stigScriptContent | Should Match "Remove-AppxPackage[\s\S]*?-ErrorAction Stop"
@@ -1200,6 +1360,32 @@ Describe 'DoD STIG image build safety' {
         $stigScriptContent | Should Not Match '(?m)^\.PARAMETER Version\s*$'
     }
 
+    It 'selects server GPOs by Backup.xml display name and separates client remediations' {
+        $stigScriptContent | Should Match 'Get-GpoBackupDisplayName -GpoFolder \$gpoFolder\.FullName'
+        $stigScriptContent | Should Match "DC STIG "
+        $stigScriptContent | Should Match "MS STIG \(Comp\|User\)"
+        $stigScriptContent | Should Match 'If \(\$isWindowsClient\) \{[\s\S]*?V-253289[\s\S]*?V-253340'
+        $stigScriptContent | Should Match 'Applying Windows Server \$osVersion supplemental STIG remediations'
+    }
+
+    It 'removes prohibited Server features with release-specific V-IDs' {
+        foreach ($feature in 'Simple-TCPIP', 'Telnet-Client', 'TFTP-Client', 'FS-SMB1', 'PowerShell-v2') {
+            $stigScriptContent | Should Match ([regex]::Escape("'$feature'"))
+        }
+        foreach ($stigId in 'V-254272', 'V-254273', 'V-254274', 'V-254275', 'V-254278',
+            'V-278020', 'V-278021', 'V-278022', 'V-278023', 'V-278026') {
+            $stigScriptContent | Should Match $stigId
+        }
+        $stigScriptContent | Should Match 'Uninstall-WindowsServerFeatureIfInstalled[\s\S]*?-StigId \$serverFeatureStigIds\[\$featureName\]'
+    }
+
+    It 'disables physical Wi-Fi and Bluetooth only on Server 2025' {
+        $stigScriptContent | Should Match "If \(\`$osVersion -eq '2025'\) \{[\s\S]*?V-278017[\s\S]*?PhysicalMediaType -eq 'Native 802\.11'"
+        $stigScriptContent | Should Match "V-278018[\s\S]*?Get-Service -Name 'bthserv'"
+        $stigScriptContent | Should Match "Set-Service -Name 'bthserv' -StartupType Disabled -ErrorAction Stop"
+        $stigScriptContent | Should Match "Stop-Service -Name 'bthserv' -Force -ErrorAction Stop"
+    }
+
     It 'disables both Windows PowerShell 2.0 optional features for V-253285' {
         $stigScriptContent | Should Match "Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2Root' -StigId 'V-253285'"
         $stigScriptContent | Should Match "Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2'\s+-StigId 'V-253285'"
@@ -1208,6 +1394,49 @@ Describe 'DoD STIG image build safety' {
     It 'disables all Wi-Fi Direct adapters for V-288475' {
         $stigScriptContent | Should Match "Get-NetAdapter -InterfaceDescription 'Microsoft Wi-Fi Direct\*' -IncludeHidden"
         $stigScriptContent | Should Match '\$wifiDirectAdapters \| Disable-NetAdapter -Confirm:\$false -ErrorAction Stop'
+    }
+}
+
+Describe 'Customization PowerShell argument parsing' {
+    BeforeAll {
+        $invokeCustomizationPath = Join-Path $repoRoot 'deployments\shared\scripts\Invoke-Customization.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [System.Management.Automation.Language.Parser]::ParseFile(
+            $invokeCustomizationPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($parseErrors.Count -gt 0) {
+            throw "Invoke-Customization.ps1 has parser errors: $($parseErrors.Message -join '; ')"
+        }
+        foreach ($functionName in @('Split-ArgumentString', 'ConvertTo-ParametersSplat')) {
+            $functionDefinition = $syntaxTree.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $functionName
+            }, $true)
+            if (-not $functionDefinition) {
+                throw "Customization argument function '$functionName' AST was not found."
+            }
+            Invoke-Expression $functionDefinition.Extent.Text
+        }
+    }
+
+    AfterAll {
+        Remove-Item function:\Split-ArgumentString -ErrorAction SilentlyContinue
+        Remove-Item function:\ConvertTo-ParametersSplat -ErrorAction SilentlyContinue
+    }
+
+    It 'binds a single switch argument as true' {
+        $parameterSplat = ConvertTo-ParametersSplat -ArgumentString '-AllowLocalUserRemoteInteractiveLogon'
+
+        $parameterSplat.ContainsKey('AllowLocalUserRemoteInteractiveLogon') | Should Be $true
+        $parameterSplat.AllowLocalUserRemoteInteractiveLogon | Should Be $true
+        (& {
+                param([switch]$AllowLocalUserRemoteInteractiveLogon)
+                [bool]$AllowLocalUserRemoteInteractiveLogon
+            } @parameterSplat) | Should Be $true
     }
 }
 
