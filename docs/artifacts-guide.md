@@ -501,7 +501,7 @@ Add other named parameters to the root script when the customization needs them.
 "arguments": "-AllowDeveloperTools $true"
 
 // Switch — no value means $true; omitting the parameter uses the script default
-"arguments": "-SearchForApplications -Upgrade"
+"arguments": "-SearchForApplications -AllowLocalUserRemoteInteractiveLogon"
 
 // String array — @() with single quotes, spaces after commas are fine
 "arguments": "-Domains @('portal.azure.com', 'core.windows.net')"

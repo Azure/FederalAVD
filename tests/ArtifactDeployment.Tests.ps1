@@ -1347,17 +1347,17 @@ Describe 'DoD STIG image build safety' {
         $stigScriptContent | Should Not Match 'cmd /c netsh interface portproxy show all'
     }
 
-    It 'uses individual folder-derived STIG versions for upgrade detection and registry stamps' {
+    It 'uses individual folder-derived STIG versions for registry evidence' {
         $stigScriptContent | Should Match 'Get-StigVersionMap -FolderName @\(\$ApplicableFolders\.Name\)'
-        $stigScriptContent | Should Match 'Get-ItemPropertyValue -Path \$registryPath -Name \$stigName'
         $stigScriptContent | Should Match 'New-ItemProperty -Path \$registryPath -Name \$stigName -PropertyType String -Value \$appliedVersion'
         $stigScriptContent | Should Match 'Remove-ItemProperty -Path \$registryPath -Name ''Version'''
         $stigScriptContent | Should Not Match '\$registryValueName'
     }
 
-    It 'does not expose the obsolete package-level Version parameter' {
+    It 'does not expose obsolete version or destructive policy-reset interfaces' {
         $stigScriptContent | Should Not Match '(?m)^\s*\[string\]\$Version\b'
         $stigScriptContent | Should Not Match '(?m)^\.PARAMETER Version\s*$'
+        $stigScriptContent | Should Not Match '(?m)^Function Reset-LocalPolicy\s*\{'
     }
 
     It 'selects server GPOs by Backup.xml display name and separates client remediations' {

@@ -21,9 +21,6 @@
 .PARAMETER STIGsUrl
     This parameter defines the URL of the STIG GPOs ZIP file to be downloaded and applied.
 
-.PARAMETER Upgrade
-    This parameter indicates that the script will compare each applicable STIG version with its registry stamp and reset local group policy before applying the STIGs if any version has changed.
-
 .NOTES
     To use this script offline, download the lgpo tool from 'https://download.microsoft.com/download/8/5/C/85C25433-A1B0-4FFA-9429-7E023E7DA8D8/LGPO.zip' and store it in the root of the folder where the script is located.'
     to the root of the folder where this script is located. Then download the latest STIG GPOs ZIP from 'https://public.cyber.mil/stigs/gpo' and it to the root
@@ -39,8 +36,6 @@ param (
     [switch]$SearchForApplications,
 
     [string]$STIGsUrl = 'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2026.zip',
-
-    [switch]$Upgrade,
 
     [ValidateSet('ZeroTrustImageBuild', 'Packer', 'AzureVMImageBuilder', 'SessionHost')]
     [string]$ExecutionProfile = 'ZeroTrustImageBuild',
@@ -552,69 +547,6 @@ Function New-Log {
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
 }
 
-Function Reset-LocalPolicy {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param(
-        [switch] $ResetSecurity,         # Also reset Local Security Policy via secedit
-        [switch] $SkipGpUpdate          # Skip gpupdate /force if you plan to reboot
-    )
-
-    begin {
-        $ErrorActionPreference = 'Stop'
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        $gpPath = Join-Path $env:windir 'System32\GroupPolicy' # LGPO (Computer/User Administrative Templates)
-    }
-    process {
-        Write-Log -message "${CmdletName}: Resetting Local Group Policy..."
-
-        if (Test-Path -LiteralPath $gpPath) {
-            Write-Log -message "${CmdletName}: Removing: $gpPath"
-            Remove-Item -LiteralPath $gpPath -Recurse -Force -ErrorAction Stop
-        }
-        else {
-            Write-Log -message "${CmdletName}: Path not found (already clean): $gpPath"
-        }
-        
-        if ($ResetSecurity) {
-            Write-Log -message "${CmdletName}: Resetting Local Security Policy..."
-            # Use defltbase.inf to restore default security baseline (Vista+)
-            $cfg = Join-Path $env:windir 'inf\defltwk.inf'
-            if (-not (Test-Path -LiteralPath $cfg)) {
-                throw "Default security template not found: $cfg"
-            }
-            Write-Log -message "${CmdletName}: Running secedit to reset Local Security Policy to defaults..."
-            $cmd = "secedit /configure /cfg `"$cfg`" /db defltbase.sdb /verbose"
-            $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $cmd" -Wait -PassThru
-            if ($proc.ExitCode -ne 0) {
-                throw "secedit returned non-zero exit code: $($proc.ExitCode)"
-            }
-        }
-        else {
-            Write-Log -message "${CmdletName}: Skipping Local Security Policy reset. (Use -ResetSecurity to include.)"
-        }
-
-        if (-not $SkipGpUpdate) {
-            # /target:computer limits processing to Machine-side policy only. During image
-            # build there is no real user session; running a full gpupdate causes the User-side
-            # Registry CSE to attempt to write STIG settings into HKCU paths that do not exist
-            # in the build context, producing Event 8194 / 0x80070003. User-side policies in
-            # GroupPolicy\User\Registry.pol are applied correctly when users log into deployed
-            # session hosts.
-            Write-Log -message "${CmdletName}: Forcing machine policy refresh (gpupdate /force /target:computer)..."
-            $gp = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c gpupdate /force /target:computer' -Wait -PassThru
-            if ($gp.ExitCode -ne 0) {
-                Write-Log -Category Warning -Message "${CmdletName}: gpupdate returned non-zero exit code: $($gp.ExitCode)"
-            }
-        }
-        else {
-            Write-Log -Message "${CmdletName}: Skipping gpupdate. (A reboot will also reapply policies.)"
-        }
-    }
-    end {
-        Write-Log -message "Completed ${CmdletName}."
-    }
-}
-
 Function Set-RegistryValue {
     [CmdletBinding()]
     param (
@@ -827,34 +759,6 @@ Try {
     $applicableStigVersions = Get-StigVersionMap -FolderName @($ApplicableFolders.Name)
     $applicableStigVersions.GetEnumerator() | Sort-Object -Property Name | ForEach-Object {
         Write-Log -Message "Applicable STIG version: $($_.Name) = $($_.Value)"
-    }
-
-    If ($Upgrade) {
-        Write-Log -Message 'Upgrade mode enabled. Comparing each applicable STIG with its registry stamp.'
-        $needsReset = $false
-        ForEach ($stigName in $applicableStigVersions.Keys) {
-            $desiredVersion = $applicableStigVersions[$stigName]
-            $existingVersion = Get-ItemPropertyValue -Path $registryPath -Name $stigName -ErrorAction SilentlyContinue
-            If ($existingVersion -ne $desiredVersion) {
-                $displayExistingVersion = If ($null -eq $existingVersion) { '<not stamped>' } Else { $existingVersion }
-                Write-Log -Message "STIG version mismatch for '$stigName'. Applied: $displayExistingVersion, Package: $desiredVersion. Policy reset will be performed."
-                $needsReset = $true
-            }
-        }
-
-        If ($needsReset) {
-            Write-Log -Message 'Resetting Local Group Policy before applying the applicable STIGs.'
-            Try {
-                Reset-LocalPolicy -ResetSecurity -Verbose
-                Write-Log -Message 'Local Group Policy reset completed successfully.'
-            }
-            Catch {
-                throw "Error resetting Local Group Policy: $($_.Exception.Message)"
-            }
-        }
-        Else {
-            Write-Log -Message 'All applicable STIG registry versions match the package. No policy reset needed.'
-        }
     }
 
     # Capture any pre-existing Edge/Chrome proxy config before the STIG GPO import below

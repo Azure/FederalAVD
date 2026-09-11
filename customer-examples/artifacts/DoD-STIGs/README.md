@@ -10,7 +10,7 @@ This PowerShell script automates the application of Defense Information Systems 
 - Configure security settings for AVD environments
 - Apply STIGs for common enterprise applications
 - Implement additional security mitigations beyond standard STIG GPOs
-- Support version tracking and automated upgrades
+- Record the applied version of each STIG for deployment evidence
 
 ## Parameters
 
@@ -71,11 +71,6 @@ runs Sysprep, so no separate AIB finalizer customizer is required.
 - **Default:** `'https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_July_2026.zip'`
 - **Description:** URL of the STIG GPO package to download and apply
 
-### `Upgrade`
-
-- **Type:** Switch
-- **Description:** When specified, compares every applicable STIG folder version with its registry value and resets local group policy if any value is missing or different before re-applying
-
 ## Usage Examples
 
 ### Basic Usage
@@ -88,12 +83,6 @@ runs Sysprep, so no separate AIB finalizer customizer is required.
 
 ```powershell
 .\Apply-STIGsAVD.ps1 -SearchForApplications
-```
-
-### Upgrade Mode
-
-```powershell
-.\Apply-STIGsAVD.ps1 -Upgrade
 ```
 
 ### Custom Application List
@@ -269,7 +258,7 @@ included in the system security plan and accepted by the authorizing official wh
 - Detects each applicable STIG release from its folder name, such as `DoD Windows 11 v2r8`
 - Records mixed Server package releases with an explicit Member Server role, such as `DoD WinSvr 2022 MS = v2r9`
 - Stamps a separate registry value for every successfully applied STIG at `HKLM:\Software\DoD\STIG`
-- Enables upgrade detection on subsequent runs
+- Preserves those registry stamps as deployment and compliance evidence
 
 ## Offline Usage
 
@@ -301,13 +290,16 @@ C:\Windows\Logs\Configuration\Apply-STIGs-<timestamp>.log
 
 ## Version Management
 
-The script implements version tracking to support upgrades:
+The script records one registry value per successfully applied STIG, using the STIG name and its
+`v<major>r<revision>` release. These values provide deployment evidence; they do not drive an
+in-place policy migration.
 
-- **Initial Run:** Creates one registry value per applicable STIG, using the STIG name and its `v<major>r<revision>` release
-- **Upgrade Mode (`-Upgrade`):** Compares every applicable package release with its existing registry value
-- **Missing or Different Value:** Resets Local Group Policy before applying all applicable STIGs
-- **All Values Match:** Skips policy reset and applies the STIGs incrementally
-- **Legacy Migration:** Removes the old package-level `Version` value after all individual values are stamped successfully
+When adopting a different STIG release, build and validate a clean image, then replace the existing
+session hosts through the normal image lifecycle. Re-running this script applies the current package
+incrementally, but it does not guarantee that settings removed from a newer STIG release are deleted.
+Destructive in-place policy reset is not supported because it can remove unrelated non-STIG Local
+Group Policy and Local Security Policy settings. The script removes the legacy package-level
+`Version` value after all individual release values are stamped successfully.
 
 ## Functions
 
@@ -321,7 +313,6 @@ The script implements version tracking to support upgrades:
 | `Get-ApplicableGpoFolders` | Selects applicable backups and excludes Domain Controller GPOs from Server packages |
 | `Uninstall-WindowsServerFeatureIfInstalled` | Removes a prohibited Server feature and fails if servicing does not report success |
 | `New-Log` | Initializes logging infrastructure |
-| `Reset-LocalPolicy` | Resets Local Group Policy and optionally Local Security Policy |
 | `Set-RegistryValue` | Creates or updates registry values |
 | `Get-StigVersionMap` | Extracts each STIG name and release from applicable package folder names |
 | `Update-LocalGPOTextFile` | Creates LGPO text files for registry-based policy settings |

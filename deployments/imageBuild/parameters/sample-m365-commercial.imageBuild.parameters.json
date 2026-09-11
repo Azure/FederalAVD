@@ -83,11 +83,11 @@
             "value": [
                 {
                     // DoD-STIGs: applies DISA STIG GPOs and stamps each detected STIG release
-                    // for upgrade detection. SearchForApplications skips third-party app STIGs
+                    // for deployment evidence. SearchForApplications skips third-party app STIGs
                     // when those apps are not installed.
                     "name": "DoD-STIGs",
                     "blobNameOrUri": "DoD-STIGs.zip",
-                    "arguments": "-Upgrade -SearchForApplications"
+                    "arguments": "-SearchForApplications"
                 },
                 {
                     // Configure-Office365Policy: optional overrides. Remove arguments

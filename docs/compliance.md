@@ -505,7 +505,7 @@ The script uses Microsoft's [LGPO.exe](https://www.microsoft.com/en-us/download/
 - Microsoft 365 / Office / Teams STIGs (detected automatically)
 - Third-party application STIGs: Adobe Acrobat Pro/Reader, Google Chrome, Mozilla Firefox
 - AVD-specific exceptions (remote interactive logon rights, ECC curve SSL fix that breaks AVD, firewall settings for non-domain joined VMs)
-- Individual STIG release stamping to `HKLM:\Software\DoD\STIG` for upgrade detection
+- Individual STIG release stamping to `HKLM:\Software\DoD\STIG` for deployment evidence
 
 For Windows Server, the script reads each GPO backup's `Backup.xml` metadata and applies only the
 matching Member Server computer/user GPOs from the mixed MS/DC package. Server stamps include the
@@ -543,7 +543,7 @@ cd C:\repos\FederalAVD\deployments
 > "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip"
 > ```
 >
-> DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and rebuild your image (or re-apply via `sessionHostCustomizations`). The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). The script detects each applicable STIG's `v<major>r<revision>` release directly from the extracted package folder name; no package-level version argument is required.
+> DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and build and validate a clean image. The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). The script detects each applicable STIG's `v<major>r<revision>` release directly from the extracted package folder name; no package-level version argument is required.
 
 **Step 3 — Add to the `customizations` parameter in your image build parameter file:**
 
@@ -551,6 +551,7 @@ cd C:\repos\FederalAVD\deployments
 "customizations": {
   "value": [
     {
+      "name": "DoD-STIGs",
       "blobNameOrUri": "DoD-STIGs.zip",
       "arguments": ""
     }
@@ -558,10 +559,11 @@ cd C:\repos\FederalAVD\deployments
 }
 ```
 
-Pass arguments to override defaults — for example, to target only specific applications or to run in upgrade mode:
+Pass arguments to override defaults — for example, to target only specific applications:
 
 ```json
 {
+  "name": "DoD-STIGs",
   "blobNameOrUri": "DoD-STIGs.zip",
   "arguments": "-ApplicationsToSTIG @('Google Chrome','Mozilla Firefox') -SearchForApplications"
 }
@@ -572,14 +574,15 @@ arrays, `$true` or `$false` for booleans, and a parameter name without a value f
 `Invoke-Customization.ps1` converts these values to typed named parameters before invoking the
 artifact. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for all parameters.
 
-**Deploy at VM runtime:** To apply STIGs to an existing fleet without rebuilding the image — for example, after a quarterly STIG package update — add the same artifact reference to the `sessionHostCustomizations` parameter in the host pool deployment instead of `customizations` in the image build. The mechanism is identical; only the parameter name differs.
+**Deploy at VM runtime:** To apply the current STIG package to an existing fleet, add the same artifact reference to the `sessionHostCustomizations` parameter in the host pool deployment instead of `customizations` in the image build. The mechanism is identical; only the parameter name differs. For a new STIG release, prefer building and validating a clean image because incremental application does not guarantee that settings removed from the newer release are deleted.
 
 ```json
 "sessionHostCustomizations": {
   "value": [
     {
+      "name": "DoD-STIGs",
       "blobNameOrUri": "DoD-STIGs.zip",
-      "arguments": "-Upgrade"
+      "arguments": "-ExecutionProfile SessionHost"
     }
   ]
 }

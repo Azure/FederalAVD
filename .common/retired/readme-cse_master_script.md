@@ -184,14 +184,13 @@ The master script uses PowerShell splatting to pass parameters:
 $DynParameters = @{
     TenantId = "12345678-1234-1234-1234-123456789012"
     CloudOnly = "True"
-    Upgrade = "True"
 }
 
 # Child script called with
 & $script.FullName @DynParameters
 
 # Equivalent to
-& $script.FullName -TenantId "12345678-1234-1234-1234-123456789012" -CloudOnly "True" -Upgrade "True"
+& $script.FullName -TenantId "12345678-1234-1234-1234-123456789012" -CloudOnly "True"
 ```
 
 ### Child Script Requirements

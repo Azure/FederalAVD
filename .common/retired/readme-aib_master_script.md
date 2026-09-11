@@ -313,7 +313,7 @@ Select-String -Path "C:\Windows\Logs\aib_master_script.log" -Pattern "error","fa
   {
     "name": "STIGs",
     "Uri": "https://saimageassets.blob.core.windows.net/artifacts/STIGs.zip",
-    "Arguments": "-CloudOnly 'True' -Upgrade 'True'"
+    "Arguments": "-CloudOnly 'True'"
   },
   {
     "name": "DesktopBackground",
