@@ -1397,6 +1397,49 @@ Describe 'DoD STIG image build safety' {
     }
 }
 
+Describe 'Customization PowerShell argument parsing' {
+    BeforeAll {
+        $invokeCustomizationPath = Join-Path $repoRoot 'deployments\shared\scripts\Invoke-Customization.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [System.Management.Automation.Language.Parser]::ParseFile(
+            $invokeCustomizationPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($parseErrors.Count -gt 0) {
+            throw "Invoke-Customization.ps1 has parser errors: $($parseErrors.Message -join '; ')"
+        }
+        foreach ($functionName in @('Split-ArgumentString', 'ConvertTo-ParametersSplat')) {
+            $functionDefinition = $syntaxTree.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $functionName
+            }, $true)
+            if (-not $functionDefinition) {
+                throw "Customization argument function '$functionName' AST was not found."
+            }
+            Invoke-Expression $functionDefinition.Extent.Text
+        }
+    }
+
+    AfterAll {
+        Remove-Item function:\Split-ArgumentString -ErrorAction SilentlyContinue
+        Remove-Item function:\ConvertTo-ParametersSplat -ErrorAction SilentlyContinue
+    }
+
+    It 'binds a single switch argument as true' {
+        $parameterSplat = ConvertTo-ParametersSplat -ArgumentString '-AllowLocalUserRemoteInteractiveLogon'
+
+        $parameterSplat.ContainsKey('AllowLocalUserRemoteInteractiveLogon') | Should Be $true
+        $parameterSplat.AllowLocalUserRemoteInteractiveLogon | Should Be $true
+        (& {
+                param([switch]$AllowLocalUserRemoteInteractiveLogon)
+                [bool]$AllowLocalUserRemoteInteractiveLogon
+            } @parameterSplat) | Should Be $true
+    }
+}
+
 Describe 'Customization success exit codes' {
     BeforeAll {
         $invokeCustomizationPath = Join-Path $repoRoot 'deployments\shared\scripts\Invoke-Customization.ps1'

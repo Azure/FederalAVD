@@ -361,7 +361,7 @@ function ConvertTo-ParametersSplat {
 
   if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @{} }
 
-  $tokens = Split-ArgumentString -ArgumentString $ArgumentString
+  $tokens = @(Split-ArgumentString -ArgumentString $ArgumentString)
   $parameters = @{}
   $i = 0
   while ($i -lt $tokens.Count) {
