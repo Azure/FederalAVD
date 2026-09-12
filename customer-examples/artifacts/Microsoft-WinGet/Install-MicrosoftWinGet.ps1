@@ -271,46 +271,16 @@ try {
         $provisionParameters.DependencyPackagePath = @($requiredDependencies | Select-Object -ExpandProperty FullName)
     }
 
-    # Remove every existing provisioned entry before an in-place update, not just the first match.
-    # A machine can carry a stale duplicate (for example an OS-baseline architecture-specific
-    # package) alongside the one this script previously added; leaving it behind lets Windows
-    # register the stale duplicate for a new user even though the intended version is current.
-    # Add-AppxProvisionedPackage can also silently succeed while failing to register the new
-    # version in the AppX staging manifest (event 327), leaving new user sessions without the
-    # app. Removing every prior entry first forces a clean install.
-    if ($null -ne $existingVersion) {
-        foreach ($existingProvisionedPackage in @(Get-ProvisionedPackages -IdentityName $bundleIdentity.Name)) {
-            Write-Log "Removing existing provisioned entry before update: $($existingProvisionedPackage.PackageName)"
-            try {
-                Remove-AppxProvisionedPackage -Online -PackageName $existingProvisionedPackage.PackageName -ErrorAction Stop | Out-Null
-            }
-            catch {
-                Write-Log "WARNING: Could not remove existing provisioned entry '$($existingProvisionedPackage.PackageName)': $_. Proceeding with provisioning anyway."
-            }
-        }
-    }
-
+    # Add-AppxProvisionedPackage supersedes an existing provisioned entry for the same package
+    # in place; no explicit removal is required before adding a newer version.
     Write-Log "Provisioning App Installer with $($requiredDependencies.Count) required dependency package(s)..."
     Add-AppxProvisionedPackage @provisionParameters | Out-Null
 
-    $remainingProvisionedPackages = @(Get-ProvisionedPackages -IdentityName $bundleIdentity.Name)
-    $verifiedPackage = $remainingProvisionedPackages |
+    $verifiedPackage = @(Get-ProvisionedPackages -IdentityName $bundleIdentity.Name) |
         Where-Object { $_.PackageName -like "$($bundleIdentity.Name)`_$($bundleIdentity.Version)_*" } |
         Select-Object -First 1
     if ($null -eq $verifiedPackage) {
         throw "App Installer $($bundleIdentity.Version) was not found in the provisioned package store after installation."
-    }
-
-    # Clean up any other stray entry left over from before this run (for example an OS-baseline
-    # architecture-specific package) so only the version just verified remains provisioned.
-    foreach ($strayPackage in @($remainingProvisionedPackages | Where-Object { $_.PackageName -ne $verifiedPackage.PackageName })) {
-        Write-Log "Removing stray provisioned entry: $($strayPackage.PackageName)"
-        try {
-            Remove-AppxProvisionedPackage -Online -PackageName $strayPackage.PackageName -ErrorAction Stop | Out-Null
-        }
-        catch {
-            Write-Log "WARNING: Could not remove stray provisioned entry '$($strayPackage.PackageName)': $_"
-        }
     }
 
     if ($verifiedPackage.PackageName -match '^(.+?)_[\d\.]+_[^_]+__([^_]+)$') {

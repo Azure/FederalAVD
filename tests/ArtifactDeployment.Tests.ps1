@@ -1712,8 +1712,9 @@ Describe 'Microsoft WinGet artifact' {
         $installerContent | Should Match "StubPackageOption = 'InstallFull'"
     }
 
-    It 'removes the existing provisioned entry before an in-place update' {
-        $installerContent | Should Match 'if \(\$null -ne \$existingVersion\) \{[\s\S]*?Remove-AppxProvisionedPackage -Online -PackageName \$existingProvisionedPackage\.PackageName'
+    It 'relies on in-place supersession instead of an unsupported explicit removal' {
+        $installerContent | Should Not Match 'Remove-AppxProvisionedPackage'
+        $installerContent | Should Match 'Add-AppxProvisionedPackage supersedes an existing provisioned entry'
     }
 
     It 'validates the complete release payload and filters dependency architectures' {
