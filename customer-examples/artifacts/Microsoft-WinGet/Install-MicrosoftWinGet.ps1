@@ -19,6 +19,11 @@
       *_License1.xml
 
     Add-AppxProvisionedPackage is called with -Regions all so the package survives sysprep.
+
+    The bundle carries a lightweight stub package one version behind the full package for
+    each architecture (Microsoft's Store streaming-install pattern). Without
+    -StubPackageOption InstallFull, new users register the older stub instead of the version
+    staged here.
 #>
 
 [CmdletBinding()]
@@ -111,17 +116,35 @@ function Get-AppxIdentity {
     }
 }
 
-function Get-ProvisionedVersion {
+function Get-ProvisionedPackages {
+    # Returns every provisioned entry for this identity name. A machine can carry more than
+    # one entry at once (for example, an OS-baseline architecture-specific package alongside
+    # a manually provisioned bundle) and callers must not assume there is only one match.
     param([string]$IdentityName)
 
-    $package = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-        Where-Object { $_.PackageName -like "$IdentityName`_*" } |
-        Select-Object -First 1
-    if ($null -eq $package) { return $null }
-    if ($package.PackageName -match '_([0-9]+(?:\.[0-9]+){1,3})_') {
+    return @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+        Where-Object { $_.PackageName -like "$IdentityName`_*" })
+}
+
+function Get-ProvisionedPackageVersion {
+    param([Parameter(Mandatory)][string]$PackageName)
+
+    if ($PackageName -match '_([0-9]+(?:\.[0-9]+){1,3})_') {
         return [Version]$Matches[1]
     }
     return $null
+}
+
+function Get-ProvisionedVersion {
+    # Returns the highest version among all matching provisioned entries, so a stale
+    # lower-version duplicate can never mask the presence of a newer one (or vice versa).
+    param([string]$IdentityName)
+
+    $versions = @(Get-ProvisionedPackages -IdentityName $IdentityName |
+        ForEach-Object { Get-ProvisionedPackageVersion -PackageName $_.PackageName } |
+        Where-Object { $null -ne $_ })
+    if ($versions.Count -eq 0) { return $null }
+    return ($versions | Sort-Object -Descending | Select-Object -First 1)
 }
 
 function Select-RequiredDependencies {
@@ -201,6 +224,7 @@ if ($null -ne $existingVersion -and $existingVersion -ge $bundleIdentity.Version
     Write-Log 'Install-MicrosoftWinGet: Complete'
     exit 0
 }
+Write-Log "Currently provisioned version: $(if ($null -ne $existingVersion) { $existingVersion } else { '<none>' })"
 
 $dependencyRoot = Join-Path $env:TEMP "Microsoft-WinGet-Dependencies-$([guid]::NewGuid().ToString('N'))"
 try {
@@ -240,21 +264,53 @@ try {
         PackagePath = $bundle.FullName
         LicensePath = $license.FullName
         Regions = 'all'
+        StubPackageOption = 'InstallFull'
         ErrorAction = 'Stop'
     }
     if ($requiredDependencies.Count -gt 0) {
         $provisionParameters.DependencyPackagePath = @($requiredDependencies | Select-Object -ExpandProperty FullName)
     }
 
+    # Remove every existing provisioned entry before an in-place update, not just the first match.
+    # A machine can carry a stale duplicate (for example an OS-baseline architecture-specific
+    # package) alongside the one this script previously added; leaving it behind lets Windows
+    # register the stale duplicate for a new user even though the intended version is current.
+    # Add-AppxProvisionedPackage can also silently succeed while failing to register the new
+    # version in the AppX staging manifest (event 327), leaving new user sessions without the
+    # app. Removing every prior entry first forces a clean install.
+    if ($null -ne $existingVersion) {
+        foreach ($existingProvisionedPackage in @(Get-ProvisionedPackages -IdentityName $bundleIdentity.Name)) {
+            Write-Log "Removing existing provisioned entry before update: $($existingProvisionedPackage.PackageName)"
+            try {
+                Remove-AppxProvisionedPackage -Online -PackageName $existingProvisionedPackage.PackageName -ErrorAction Stop | Out-Null
+            }
+            catch {
+                Write-Log "WARNING: Could not remove existing provisioned entry '$($existingProvisionedPackage.PackageName)': $_. Proceeding with provisioning anyway."
+            }
+        }
+    }
+
     Write-Log "Provisioning App Installer with $($requiredDependencies.Count) required dependency package(s)..."
     Add-AppxProvisionedPackage @provisionParameters | Out-Null
 
-    $verifiedPackage = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-        Where-Object { $_.PackageName -like "$($bundleIdentity.Name)`_*" } |
+    $remainingProvisionedPackages = @(Get-ProvisionedPackages -IdentityName $bundleIdentity.Name)
+    $verifiedPackage = $remainingProvisionedPackages |
+        Where-Object { $_.PackageName -like "$($bundleIdentity.Name)`_$($bundleIdentity.Version)_*" } |
         Select-Object -First 1
-    $verifiedVersion = Get-ProvisionedVersion -IdentityName $bundleIdentity.Name
-    if ($null -eq $verifiedPackage -or $null -eq $verifiedVersion -or $verifiedVersion -lt $bundleIdentity.Version) {
+    if ($null -eq $verifiedPackage) {
         throw "App Installer $($bundleIdentity.Version) was not found in the provisioned package store after installation."
+    }
+
+    # Clean up any other stray entry left over from before this run (for example an OS-baseline
+    # architecture-specific package) so only the version just verified remains provisioned.
+    foreach ($strayPackage in @($remainingProvisionedPackages | Where-Object { $_.PackageName -ne $verifiedPackage.PackageName })) {
+        Write-Log "Removing stray provisioned entry: $($strayPackage.PackageName)"
+        try {
+            Remove-AppxProvisionedPackage -Online -PackageName $strayPackage.PackageName -ErrorAction Stop | Out-Null
+        }
+        catch {
+            Write-Log "WARNING: Could not remove stray provisioned entry '$($strayPackage.PackageName)': $_"
+        }
     }
 
     if ($verifiedPackage.PackageName -match '^(.+?)_[\d\.]+_[^_]+__([^_]+)$') {
@@ -266,7 +322,7 @@ try {
         }
     }
 
-    Write-Log "Provisioned App Installer version: $verifiedVersion"
+    Write-Log "Provisioned App Installer version: $($bundleIdentity.Version)"
     Write-Log 'WinGet is provisioned for registration when each new user signs in.'
     Write-Log 'Install-MicrosoftWinGet: Complete'
 }

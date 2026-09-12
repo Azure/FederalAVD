@@ -37,6 +37,12 @@
     during sysprep (event ID 472: package folder moved to Deleted). This script passes
     -Regions all for every provisioning call.
 
+    Some bundles (confirmed for Microsoft Sticky Notes; also present in older, superseded
+    Photos releases) carry a lightweight stub package alongside the full package for the
+    same architecture (Microsoft's Store streaming-install pattern). Without
+    -StubPackageOption InstallFull, new users can register the older stub instead of the
+    version staged here.
+
     Reference: Microsoft internal support article (June 2026) -- "Windows Store apps are not
     retained after sysprep".
 
@@ -291,10 +297,11 @@ foreach ($AppFolder in $AppFolders) {
     # attempt fails and we have staged dependencies, retry with them.
     # ----------------------------------------------------------------
     $BaseParams = @{
-        Online      = $true
-        PackagePath = $MainPackage.FullName
-        SkipLicense = $true
-        Regions     = 'all'   # Required: without this, Windows removes the app during sysprep (event 472)
+        Online            = $true
+        PackagePath       = $MainPackage.FullName
+        SkipLicense       = $true
+        Regions           = 'all'   # Required: without this, Windows removes the app during sysprep (event 472)
+        StubPackageOption = 'InstallFull'   # Some bundles (e.g. Sticky Notes) carry a stub package alongside the full package
     }
 
     # When updating an already-provisioned package, explicitly remove the old entry

@@ -1611,6 +1611,10 @@ Describe 'Built-in UWP app download definitions' {
         $updateScript | Should Match 'Expanding dependency archive'
     }
 
+    It 'forces the full package instead of a bundled stub for new user registration' {
+        $installerContent | Should Match "StubPackageOption = 'InstallFull'"
+    }
+
     It 'corrects bundle payloads that winget saved with a single-package extension' {
         $tokens = $null
         $parseErrors = $null
@@ -1702,6 +1706,14 @@ Describe 'Microsoft WinGet artifact' {
         $installerContent | Should Match "Regions = 'all'"
         $installerContent | Should Match "Microsoft\.DesktopAppInstaller"
         $installerContent | Should Not Match '(?m)^\s*Repair-WinGetPackageManager\s+-AllUsers'
+    }
+
+    It 'forces the full package instead of the bundled stub for new user registration' {
+        $installerContent | Should Match "StubPackageOption = 'InstallFull'"
+    }
+
+    It 'removes the existing provisioned entry before an in-place update' {
+        $installerContent | Should Match 'if \(\$null -ne \$existingVersion\) \{[\s\S]*?Remove-AppxProvisionedPackage -Online -PackageName \$existingProvisionedPackage\.PackageName'
     }
 
     It 'validates the complete release payload and filters dependency architectures' {
