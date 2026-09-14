@@ -341,6 +341,8 @@ The `vdiOptimizationProfile` parameter controls which optimization sections `Opt
 
 **`vdiOptimizationAirGapped`:** When `true`, disables Windows components that make outbound calls to Microsoft cloud services: SmartScreen (Explorer + Edge), Defender cloud protection (MAPS/BAFS), online font providers, Teredo IPv6, WER uploads, DiagTrack telemetry, OneSettings downloads, cross-device clipboard, News and Interests widgets, settings sync, activity history uploads, and the Connected Devices Platform (CDP). Recommended for air-gapped or proxy-only government deployments. Applies regardless of the selected profile.
 
+This option applies a targeted subset of Microsoft's [Manage connections from Windows operating system components to Microsoft services](https://learn.microsoft.com/en-us/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services) guidance, not the complete Windows Restricted Traffic Limited Functionality Baseline. It intentionally leaves Network Connection Status Indicator (NCSI) configuration unchanged because disabling passive polling can break Windows network-awareness APIs. Enforce complete outbound restrictions with network-layer controls; this image option reduces unnecessary operating-system calls but is not an outbound firewall.
+
 > For the full list of settings, deliberate deviations from the Microsoft VDI guide, and rationale, see [`Optimize-AVDImage.ps1`](../deployments/imageBuild/scripts/README.md#optimize-avdimageps1).
 
 Ref: [Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)

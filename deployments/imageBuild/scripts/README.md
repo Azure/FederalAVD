@@ -117,7 +117,15 @@ the article's literal recommendations) are documented separately below.
 `AirGapped` disables components that otherwise make unsuccessful calls to Microsoft cloud services,
 including SmartScreen cloud lookups, online font providers, Teredo, WER uploads, Defender cloud
 protection, OneSettings, settings sync, activity-history uploads, widgets, and cross-device
-features. It applies independently of the selected optimization profile.
+features. It applies independently of the selected optimization profile. These settings are a
+targeted subset of Microsoft's
+[Manage connections from Windows operating system components to Microsoft services](https://learn.microsoft.com/en-us/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services)
+guidance, not the complete Windows Restricted Traffic Limited Functionality Baseline.
+
+Network Connection Status Indicator (NCSI) configuration is intentionally left unchanged. In
+particular, the script does not disable passive polling because doing so can break Windows network
+awareness APIs. Use network-layer egress controls when the environment must block all outbound
+access; `AirGapped` reduces unnecessary operating-system calls but is not an outbound firewall.
 
 #### Storage Sense, Files On-Demand, and FSLogix
 
