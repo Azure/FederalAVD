@@ -1349,7 +1349,7 @@
                                     "visible": true,
                                     "options": {
                                         "style": "Info",
-                                        "text": "VDI Image Optimization applies settings from the Microsoft VDI optimization guide to this image build. Those settings have been sorted and categorized into profiles based on how session hosts are managed and updated - specifically, whether updates are delivered through image replacement or applied directly to running VMs. Read each profile description in the dropdown carefully before selecting.",
+                                        "text": "VDI Image Optimization applies settings from Microsoft's Optimizing Windows configuration for VDI desktops article to this image build. Those settings have been sorted and categorized into profiles based on how session hosts are managed and updated - specifically, whether updates are delivered through image replacement or applied directly to running VMs. Read each profile description in the dropdown carefully before selecting.",
                                         "uri": "https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration"
                                     }
                                 },

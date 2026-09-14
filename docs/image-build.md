@@ -343,7 +343,7 @@ The `vdiOptimizationProfile` parameter controls which optimization sections `Opt
 
 > For the full list of settings, deliberate deviations from the Microsoft VDI guide, and rationale, see [`Optimize-AVDImage.ps1`](../deployments/imageBuild/scripts/README.md#optimize-avdimageps1).
 
-Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+Ref: [Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
 ### OneDrive, FSLogix, and Storage Sense
 

@@ -343,7 +343,7 @@ Files On-Demand, Storage Sense, and FSLogix profile containers, see
 The selected optimization profile describes the session-host lifecycle; it does not by itself
 install or configure OneDrive or FSLogix.
 
-Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+Ref: [Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
 #### `vdiOptimizationAirGapped`
 

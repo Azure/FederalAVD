@@ -159,7 +159,7 @@ expanding container.
 
 Microsoft recommends evaluating every optimization against application, security, servicing, and
 user-experience requirements. See the
-[Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+[Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 and the [FederalAVD Image Build guide](../../../docs/image-build.md#vdi-optimization).
 
 ### [Invoke-DiskCleanup.ps1](Invoke-DiskCleanup.ps1)
