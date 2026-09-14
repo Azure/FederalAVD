@@ -82,7 +82,7 @@ Where `SHNAME` is the session host name token and `##` is the availability set i
 
 ### Default abbreviations
 
-All abbreviations come from [`.common/data/resourceAbbreviations.json`](../.common/data/resourceAbbreviations.json). Location abbreviations come from [`.common/data/locations.json`](../.common/data/locations.json).
+All abbreviations come from [`deployments/shared/data/resourceAbbreviations.json`](../deployments/shared/data/resourceAbbreviations.json). Location abbreviations come from [`deployments/shared/data/locations.json`](../deployments/shared/data/locations.json).
 
 Key abbreviations:
 

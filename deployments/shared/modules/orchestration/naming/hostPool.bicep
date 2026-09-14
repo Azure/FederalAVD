@@ -44,10 +44,10 @@ targetScope = 'subscription'
 
 // ── Location resolution ───────────────────────────────────────────────────────
 var cloud      = toLower(environment().name)
-var allLocs    = loadJsonContent('../../../../../.common/data/locations.json')
+var allLocs    = loadJsonContent('../../../data/locations.json')
 var locsEnvProp = startsWith(cloud, 'us') ? 'other' : environment().name
 var locs       = allLocs[locsEnvProp]
-var abbr       = loadJsonContent('../../../../../.common/data/resourceAbbreviations.json')
+var abbr       = loadJsonContent('../../../data/resourceAbbreviations.json')
 
 // Air-gapped clouds prefix location strings with the cloud slug (e.g. 'usgov', 'ussec').
 var locationVms = startsWith(cloud, 'us')

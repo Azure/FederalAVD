@@ -482,7 +482,7 @@ var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
 //   ##            → availability set numeric index (e.g., '01')
 // ============================================================================
 var cloud = toLower(environment().name)
-var locationsObject = loadJsonContent('../../../.common/data/locations.json')
+var locationsObject = loadJsonContent('../../shared/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.

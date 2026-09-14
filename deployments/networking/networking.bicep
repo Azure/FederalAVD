@@ -141,11 +141,11 @@ var createPrivateDNSZones = createAzureBackupZone || createAzureBlobZone || crea
 var cloud = toLower(environment().name)
 var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')
 
-var locations = startsWith(cloud, 'us') ? (loadJsonContent('../../.common/data/locations.json')).other : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
+var locations = startsWith(cloud, 'us') ? (loadJsonContent('../shared/data/locations.json')).other : (loadJsonContent('../shared/data/locations.json'))[environment().name]
 #disable-next-line BCP329
 var locationAbbreviation = locations[startsWith(cloud, 'us') ? substring(location, 5, length(location)-5) : location].abbreviation
 var recoveryServicesGeo = startsWith(cloud, 'us') ? azureRecoveryServicesGeoCode : locations[location].recoveryServicesGeo
-var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
+var resourceAbbreviations = loadJsonContent('../shared/data/resourceAbbreviations.json')
 var nameConvSuffix = nameConvResTypeAtEnd ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
 
 var nameConv_Shared_Resources = nameConvResTypeAtEnd ? 'avd-${nameConvSuffix}' : 'RESOURCETYPE-avd-${nameConvSuffix}'

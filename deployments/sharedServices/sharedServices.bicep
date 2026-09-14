@@ -184,9 +184,9 @@ var cloud = toLower(environment().name)
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
 var locations = startsWith(cloud, 'us')
-  ? (loadJsonContent('../../.common/data/locations.json')).other
-  : (loadJsonContent('../../.common/data/locations.json'))[environment().name]
-var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
+  ? (loadJsonContent('../shared/data/locations.json')).other
+  : (loadJsonContent('../shared/data/locations.json'))[environment().name]
+var resourceAbbreviations = loadJsonContent('../shared/data/resourceAbbreviations.json')
 
 var identifier = 'operations'
 var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)

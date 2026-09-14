@@ -366,14 +366,14 @@ var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
-var locationsData = loadJsonContent('../../.common/data/locations.json')
+var locationsData = loadJsonContent('../shared/data/locations.json')
 var locations = startsWith(cloud, 'us') ? locationsData.other : locationsData[environment().name]
-var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
+var resourceAbbreviations = loadJsonContent('../shared/data/resourceAbbreviations.json')
 var downloads = startsWith(cloud, 'usn')
-  ? loadJsonContent('../../.common/data/topsecret.downloads.parameters.json')
+  ? loadJsonContent('../shared/data/topsecret.downloads.parameters.json')
   : startsWith(cloud, 'uss')
-      ? loadJsonContent('../../.common/data/secret.downloads.parameters.json')
-      : loadJsonContent('../../.common/data/public.downloads.parameters.json')
+      ? loadJsonContent('../shared/data/secret.downloads.parameters.json')
+      : loadJsonContent('../shared/data/public.downloads.parameters.json')
 var artifactsContainerUriNormalized = endsWith(artifactsContainerUri, '/')
   ? take(artifactsContainerUri, max(length(artifactsContainerUri) - 1, 0))
   : artifactsContainerUri

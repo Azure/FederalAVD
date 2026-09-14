@@ -8,9 +8,10 @@ writes them to a local folder.
 Run this script whenever you want to refresh the artifacts in the image management storage account -
 for example, after adding new software packages or after new versions are released.
 
-The script stages artifacts from both the repository-owned '.common\artifacts' folder and the
-customer-owned 'customer\artifacts' folder. Customer artifacts are overlaid on top of repository
-artifacts, allowing customers to extend or replace packages without modifying repo-provided content.
+The script stages artifacts from both the repository-owned 'deployments\shared\artifacts' folder and
+the customer-owned 'customer\artifacts' folder. Customer artifacts are overlaid on top of
+repository artifacts, allowing customers to extend or replace packages without modifying
+repo-provided content.
 
 This script does NOT deploy any Azure infrastructure. Deploy the imageManagement Bicep template
 first (see deployments/imageManagement/README.md), then use this script to populate the storage
@@ -185,7 +186,7 @@ Else {
 
 $ArtifactsContainerName = 'artifacts'
 $TempArtifactsDir = Join-Path -Path $TempDir -ChildPath 'Artifacts'
-$RepoArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
+$RepoArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath 'shared\artifacts')).FullName
 $ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath)) {
     Join-Path -Path $PSScriptRoot -ChildPath '..\customer'
 } else {
@@ -705,7 +706,7 @@ else {
 
 #region Download New Sources
 
-$downloadFilePath = (Join-Path -Path "$PSScriptRoot\.." -ChildPath ".common\data\$downloadsParametersPrefix.downloads.parameters.json")
+$downloadFilePath = (Join-Path -Path $PSScriptRoot -ChildPath "shared\data\$downloadsParametersPrefix.downloads.parameters.json")
 if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
 
     Write-Output ""

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "14466367471489466147"
+      "templateHash": "9198871499897357181"
     }
   },
   "definitions": {
@@ -377,7 +377,7 @@
       "type": "object",
       "defaultValue": {},
       "metadata": {
-        "description": "Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding\ndefault from .common/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.\nProduced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.\nCLI deployments: pass only the keys you want to change, e.g. { virtualMachines: \"win\" }.\nStandard Cloud Adoption Framework defaults:\n  resourceGroups: \"rg\"          hostPools: \"vdpool\"         desktopApplicationGroups: \"vddag\"\n  workspaces: \"vdws\"            scalingPlans: \"vdscaling\"   virtualMachines: \"vm\"\n  osdisks: \"disk\"               diskEncryptionSets: \"des\"   diskAccesses: \"da\"\n  availabilitySets: \"as\"        storageAccounts: \"sa\"       netAppAccounts: \"naa\"\n  netAppCapacityPools: \"nacp\"   keyVaults: \"kv\"             userAssignedIdentities: \"uai\"\n  privateEndpoints: \"pe\"        networkInterfaces: \"nic\"    logAnalyticsWorkspaces: \"law\"\n  dataCollectionEndpoints: \"dce\"  recoveryServicesVaults: \"rsv\""
+        "description": "Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding\ndefault from deployments/shared/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.\nProduced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.\nCLI deployments: pass only the keys you want to change, e.g. { virtualMachines: \"win\" }.\nStandard Cloud Adoption Framework defaults:\n  resourceGroups: \"rg\"          hostPools: \"vdpool\"         desktopApplicationGroups: \"vddag\"\n  workspaces: \"vdws\"            scalingPlans: \"vdscaling\"   virtualMachines: \"vm\"\n  osdisks: \"disk\"               diskEncryptionSets: \"des\"   diskAccesses: \"da\"\n  availabilitySets: \"as\"        storageAccounts: \"sa\"       netAppAccounts: \"naa\"\n  netAppCapacityPools: \"nacp\"   keyVaults: \"kv\"             userAssignedIdentities: \"uai\"\n  privateEndpoints: \"pe\"        networkInterfaces: \"nic\"    logAnalyticsWorkspaces: \"law\"\n  dataCollectionEndpoints: \"dce\"  recoveryServicesVaults: \"rsv\""
       }
     },
     "identitySolution": {

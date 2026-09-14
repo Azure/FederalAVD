@@ -24,8 +24,8 @@ If ($null -eq $Context) {
 }
 
 # Load location abbreviations and resource type abbreviations
-$locationsPath = Join-Path $PSScriptRoot -ChildPath '..\.common\data\locations.json'
-$resourceAbbreviationsPath = Join-Path $PSScriptRoot -ChildPath '..\.common\data\resourceAbbreviations.json'
+$locationsPath = Join-Path $PSScriptRoot -ChildPath '..\deployments\shared\data\locations.json'
+$resourceAbbreviationsPath = Join-Path $PSScriptRoot -ChildPath '..\deployments\shared\data\resourceAbbreviations.json'
 $locations = Get-Content -Path $locationsPath -Raw | ConvertFrom-Json
 $resourceAbbreviations = Get-Content -Path $resourceAbbreviationsPath -Raw | ConvertFrom-Json
 

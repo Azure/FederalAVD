@@ -219,7 +219,7 @@ Arguments are passed as a single string to `Invoke-Customization.ps1`, which par
 
 ## Artifacts Directory Structure
 
-Repo-provided artifacts live at `.common/artifacts/` (currently empty, reserved for future use). Customer-provided artifacts and overrides belong at `customer/artifacts/`.
+Repo-provided artifacts live at `deployments/shared/artifacts/` (currently empty, reserved for future use). Customer-provided artifacts and overrides belong at `customer/artifacts/`.
 
 > **Ready-to-use examples:** `customer-examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer-examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
 

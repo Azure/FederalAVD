@@ -104,7 +104,7 @@ param secretsKeyVaultNameOverride string = ''
 param encryptionKeyVaultNameOverride string = ''
 
 @description('''Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding
-default from .common/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.
+default from deployments/shared/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.
 Produced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.
 CLI deployments: pass only the keys you want to change, e.g. { virtualMachines: "win" }.
 Standard Cloud Adoption Framework defaults:

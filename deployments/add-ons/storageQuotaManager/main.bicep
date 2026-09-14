@@ -86,11 +86,11 @@ var storageSubscriptionId    = split(storageResourceGroupId, '/')[2]
 var storageResourceGroupName = split(storageResourceGroupId, '/')[4]
 
 var cloud                 = toLower(environment().name)
-var locationsObject       = loadJsonContent('../../../.common/data/locations.json')
+var locationsObject       = loadJsonContent('../../shared/data/locations.json')
 var locationsEnvProperty  = startsWith(cloud, 'us') ? 'other' : cloud
 var locations             = locationsObject[locationsEnvProperty]
 var regionAbbr            = locations[location].abbreviation
-var resourceAbbreviations = loadJsonContent('../../../.common/data/resourceAbbreviations.json')
+var resourceAbbreviations = loadJsonContent('../../shared/data/resourceAbbreviations.json')
 
 var automationAccountName = !empty(automationAccountNameOverride)
   ? automationAccountNameOverride
