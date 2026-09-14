@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus"
+    },
+    "imageTemplateName": {
+      "value": "it-avd-stigs"
+    },
+    "imageTemplateIdentityResourceId": {
+      "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-imagemgmt/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-avd-imagebuilder"
+    },
+    "subnetResourceId": {
+      "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-networking/providers/Microsoft.Network/virtualNetworks/vnet-avd-shared/subnets/snet-imagebuild"
+    },
+    "vmSize": {
+      "value": "Standard_D4ads_v6"
+    },
+    "imagePublisher": {
+      "value": "MicrosoftWindowsDesktop"
+    },
+    "imageOffer": {
+      "value": "office-365"
+    },
+    "imageSku": {
+      "value": "win11-23h2-avd-m365"
+    },
+    "galleryImageDefinitionResourceId": {
+      "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-imagemgmt/providers/Microsoft.Compute/galleries/gal_avd_shared/images/win11-avd-m365-stig"
+    },
+    "targetRegions": {
+      "value": [
+        {
+          "name": "eastus",
+          "replicaCount": 1,
+          "storageAccountType": "Standard_LRS"
+        }
+      ]
+    },
+    "installUpdates": {
+      "value": true
+    },
+    "overrideDomainJoin": {
+      "value": false
+    },
+    "tags": {
+      "value": {
+        "environment": "prod",
+        "workload": "avd"
+      }
+    }
+  }
+}

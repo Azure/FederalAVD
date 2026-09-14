@@ -26,6 +26,29 @@ The Federal AVD solution includes an automated custom image building capability.
 - Implementing security baselines and compliance requirements
 - Supporting air-gapped or restricted network environments
 
+### Why `imageBuild.bicep` Instead of Packer or Azure VM Image Builder (AIB)?
+
+Reference samples for both HashiCorp Packer and Azure VM Image Builder are provided under
+`customer-examples/packer/` and `customer-examples/azure-image-builder/` for teams that have an
+independent reason to use one of those tools. For everyone else, `imageBuild.bicep` is the
+recommended default — not because Packer or AIB are poorly implemented, but because of
+**documented, unconfigurable characteristics of those tools** that conflict with a Zero
+Trust/policy-governed posture:
+
+| Concern | `imageBuild.bicep` | Packer (`azure-arm` builder) | Azure VM Image Builder (AIB) |
+| --- | --- | --- | --- |
+| How customization is executed | `Microsoft.Compute/virtualMachines/runCommands` — an outbound-only ARM API call, no inbound network path to the build VM ever required | WinRM (port 5986) from wherever `packer build` runs, to the build VM | WinRM (Windows) / SSH (Linux) between an AIB-managed process and the build VM — documented as **not optional**: "Don't disable these settings as part of the build" |
+| Extra service-managed resource group | None — deploys directly into the image build resource group you already control | None (Packer deploys into the resource group you specify, or a temporary one it manages itself) | A separate **staging resource group** (ephemeral `IT_*` by default) that AIB creates per build |
+| Storage account network security inside that extra resource group | N/A | N/A | AIB's own staging storage account is created **without a firewall** — a documented prerequisite, not a bug ([source](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/image-builder-troubleshoot#prerequisites)) |
+| Key Vault public network access | Never required | Not required by the build tool itself | **Required everywhere in AIB's build path** — a Key Vault with public network access disabled causes a documented `RequestDisallowedByPolicy` failure, and Microsoft's own fix is "you must create the key vault with public access enabled" ([source](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/image-builder-troubleshoot#template-deployment-failed-because-of-a-policy-violation)) — a direct conflict with a FedRAMP High/IL4/IL5 policy requiring Key Vaults to disable public network access |
+| Live network path from the operator/control-plane during a build | None — the deployment is fire-and-forget via ARM | Required — `packer build` needs live WinRM reachability to the build VM for the whole build duration (a bastion/tunnel/agent with network line-of-sight) | None from the operator, but the AIB service itself needs the WinRM/SSH path above |
+| Air-gapped cloud (Azure Government Secret / Top Secret) support | This repo's documented, supported path — see [air-gapped-clouds.md](air-gapped-clouds.md) | Not documented or validated in this repo for air-gapped clouds | Not listed among AIB's published supported regions as of this writing ([source](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/image-builder-json#location)) |
+| Extra RBAC scopes needed | Only the roles already documented in [Prerequisites](#prerequisites) below | An extra `Microsoft.Network/virtualNetworks/subnets/join/action` grant scoped to the VNet's own resource group when it differs from the build resource group | The same VNet-resource-group join permission, **plus** a separate Contributor/Owner grant on the staging resource group if you supply your own (to avoid the ephemeral, unfirewalled default) |
+
+See `customer-examples/azure-image-builder/README.md` ("Zero Trust Considerations" and "Policy
+Considerations") and `customer-examples/packer/README.md` ("Required RBAC") for the full detail
+and citations behind this table.
+
 ---
 
 ---

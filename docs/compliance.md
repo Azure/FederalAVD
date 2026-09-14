@@ -275,7 +275,7 @@ The CISA ZTMM v2.0 is the primary implementation framework for federal civilian 
 | --- | --- | --- | --- |
 | Managed identity for workload authentication | Automation accounts, image build pipeline, FSLogix storage RBAC, Key Vault access — all use managed identities. | Optimal | Automatic |
 | Least-privilege service access | Role assignments are scoped to the minimum required resource and role. | Advanced | Automatic |
-| Secure image pipeline | Image build via Azure Image Builder with managed identity; images stored in Azure Compute Gallery with private access. | Advanced | Automatic (imageBuild template) |
+| Secure image pipeline | Image build executes customizations via `Microsoft.Compute/virtualMachines/runCommands` (outbound-only ARM API calls) with managed identity — **not** Azure VM Image Builder, which requires WinRM/SSH to the build VM, a service-managed staging resource group with an unfirewalled storage account, and Key Vaults with public network access enabled. Images stored in Azure Compute Gallery with private access. See [Image Build — Why `imageBuild.bicep` Instead of Packer or Azure VM Image Builder (AIB)?](image-build.md#why-imagebuildbicep-instead-of-packer-or-azure-vm-image-builder-aib) | Advanced | Automatic (imageBuild template) |
 | Key Vault for application secrets | Domain join and VM admin credentials retrieved from Key Vault at deploy time — never stored in template or parameter files. | Optimal | Configurable (`existingCredentialsKeyVaultResourceId`) |
 
 #### Pillar 5: Data
