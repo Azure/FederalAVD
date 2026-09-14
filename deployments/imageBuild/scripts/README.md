@@ -70,6 +70,34 @@ optimizes services, tasks, autologgers, network settings, and optional Windows f
 - **Parameters:** `OptimizationProfile`, `AirGapped`
 - **Output:** `C:\Windows\Logs\Optimize-AVDImage.log`
 
+#### Why Not the Virtual Desktop Optimization Tool (VDOT)?
+
+This script is a from-scratch, in-box implementation rather than a wrapper around the community
+[Virtual Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool).
+That choice is deliberate, not an oversight:
+
+- **VDOT carries more configuration surface and orchestration than this pipeline needs** —
+  per-OS-version JSON config selection, multiple script modules, and a scheduled-task-based
+  invocation model. Every one of those moving parts is another thing that can fail mid-build or
+  drift out of sync with a given Windows release.
+- **It has a track record of unreliability in the field** — build failures and inconsistent
+  results traced back to VDOT are a known, recurring pain point, not a hypothetical concern.
+- **`Optimize-AVDImage.ps1` is built directly from the official Microsoft
+  [Virtual desktop optimization principles](https://learn.microsoft.com/en-us/azure/virtual-desktop/optimize-windows-vdi)
+  article** — the same product-group-authored source VDOT itself is based on — and has been
+  tested against the profiles and scenarios this repo supports. Going straight to the PG's own
+  documented guidance, instead of through a third party's interpretation of it, keeps the two
+  from drifting apart and keeps the settings traceable to a single authoritative source.
+- **No external GitHub or community-tool dependency at build time.** The script is fully
+  self-contained in this repo — no download of a third-party tool is required, which matters for
+  air-gapped/Secret/Top Secret builds where GitHub isn't reachable, and for supply-chain review of
+  what actually runs against the image.
+
+Simplicity, validation against the PG's own documented settings, and elimination of an external
+runtime dependency were the priorities here, ahead of feature parity with everything VDOT exposes.
+Deliberate deviations from the referenced article itself (where this script's settings differ from
+the article's literal recommendations) are documented separately below.
+
 #### Optimization Profiles
 
 | Value | Behavior |

@@ -1506,7 +1506,7 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 - [Azure Compute Gallery Overview](https://learn.microsoft.com/azure/virtual-machines/azure-compute-gallery)
 - [Azure Virtual Desktop Image Management](https://learn.microsoft.com/azure/virtual-desktop/set-up-customize-master-image)
 - [FSLogix Documentation](https://learn.microsoft.com/fslogix/)
-- [Windows Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool)
+- [Windows Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool) — not used by this solution; see [Why Not the Virtual Desktop Optimization Tool (VDOT)?](scripts/README.md#why-not-the-virtual-desktop-optimization-tool-vdot) for why `Optimize-AVDImage.ps1` is an in-box implementation instead.
 
 ### Related Templates
 
