@@ -83,7 +83,7 @@ That choice is deliberate, not an oversight:
 - **It has a track record of unreliability in the field** — build failures and inconsistent
   results traced back to VDOT are a known, recurring pain point, not a hypothetical concern.
 - **`Optimize-AVDImage.ps1` is built directly from the official Microsoft
-  [Virtual desktop optimization principles](https://learn.microsoft.com/en-us/azure/virtual-desktop/optimize-windows-vdi)
+  [Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
   article** — the same product-group-authored source VDOT itself is based on — and has been
   tested against the profiles and scenarios this repo supports. Going straight to the PG's own
   documented guidance, instead of through a third party's interpretation of it, keeps the two
