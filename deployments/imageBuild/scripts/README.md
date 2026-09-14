@@ -92,6 +92,11 @@ That choice is deliberate, not an oversight:
   self-contained in this repo — no download of a third-party tool is required, which matters for
   air-gapped/Secret/Top Secret builds where GitHub isn't reachable, and for supply-chain review of
   what actually runs against the image.
+- **Settings are written as local Group Policy (Registry.pol), not ad-hoc registry edits.** This
+  ensures `HKEY_CURRENT_USER` policy settings apply to every user profile that logs on (not just
+  whichever account happened to be active at build time), and it makes every applied setting
+  reviewable the same way a domain GPO is — via `gpresult /h` or `rsop.msc` on the resulting
+  session host — instead of only being discoverable by manually diffing registry keys.
 
 Simplicity, validation against the PG's own documented settings, and elimination of an external
 runtime dependency were the priorities here, ahead of feature parity with everything VDOT exposes.
