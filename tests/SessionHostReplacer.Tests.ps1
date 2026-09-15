@@ -67,6 +67,27 @@ Describe 'Session Host Replacer shutdown retention form behavior' {
     }
 }
 
+Describe 'Session Host Replacer shutdown retention scaling protection' {
+    BeforeAll {
+        $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
+        $runScript = Get-Content -LiteralPath $runPath -Raw
+    }
+
+    It 'restores the scaling exclusion tag before retained hosts are filtered out' {
+        $retentionFilterPosition = $runScript.IndexOf('$sessionHostsFiltered = $sessionHostsFiltered | Where-Object')
+        $restorePosition = $runScript.IndexOf('Restoring scaling plan exclusion tag on shutdown retention VM')
+
+        $restorePosition | Should BeGreaterThan -1
+        $retentionFilterPosition | Should BeGreaterThan $restorePosition
+        $runScript | Should Match "scalingPlanExclusionValue -ne 'SessionHostReplacer'[\s\S]+operation\s+= 'Merge'"
+    }
+
+    It 'protects hosts newly placed into retention from same-run tag cleanup' {
+        $runScript | Should Match '\$retainedSessionHostNames = @\(@\(\$hostsInShutdownRetention\.SessionHostName\) \+ @\(\$deletionResults\.SuccessfulShutdowns\) \| Select-Object -Unique\)'
+        $runScript | Should Match '\$shutdownRetentionVMs = @\(\$shutdownRetentionVMs \+ @\(\$deletionResults\.SuccessfulShutdowns\) \| Select-Object -Unique\)'
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
 $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'

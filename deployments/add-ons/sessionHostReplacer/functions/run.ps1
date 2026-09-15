@@ -257,6 +257,7 @@ Write-LogEntry -Message "Filtered to {0} session hosts enabled for automatic rep
 # Further filter out VMs that are already in shutdown retention (to avoid redundant shutdown operations)
 if ($enableShutdownRetention) {
     $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
+    $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
     $hostsInShutdownRetention = @()
     
     Write-LogEntry -Message "Checking for session hosts already in shutdown retention using tag: $shutdownRetentionTag" -Level Trace
@@ -272,6 +273,27 @@ if ($enableShutdownRetention) {
             if ($hasRetentionTag) {
                 $hostsInShutdownRetention += $sessionHost
                 Write-LogEntry -Message "VM $vmName is in shutdown retention - will exclude from replacement processing" -Level Trace
+
+                if ($tagScalingPlanExclusionTag -and $tagScalingPlanExclusionTag -ne ' ') {
+                    $scalingPlanExclusionValue = if ($vm.tags.PSObject.Properties.Name -contains $tagScalingPlanExclusionTag) { $vm.tags.$tagScalingPlanExclusionTag } else { $null }
+                    if ($scalingPlanExclusionValue -ne 'SessionHostReplacer') {
+                        try {
+                            Write-LogEntry -Message "Restoring scaling plan exclusion tag on shutdown retention VM: $vmName" -Level Warning
+                            $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                            $Body = @{
+                                properties = @{
+                                    tags = @{ $tagScalingPlanExclusionTag = 'SessionHostReplacer' }
+                                }
+                                operation  = 'Merge'
+                            }
+                            Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                            Write-LogEntry -Message "Restored scaling plan exclusion tag on shutdown retention VM: $vmName" -Level Trace
+                        }
+                        catch {
+                            Write-LogEntry -Message "Failed to restore scaling plan exclusion tag on shutdown retention VM ${vmName}: $($_.Exception.Message)" -Level Warning
+                        }
+                    }
+                }
             }
         }
         else {
@@ -1162,12 +1184,11 @@ if ($deploymentResult) {
     $remainingToDeploy = [Math]::Max(0, $remainingToDeploy - $deploymentResult.SessionHostCount)
 }
 
-# Count VMs in shutdown retention for metrics (use count from earlier calculation to avoid stale cache issues)
-$shutdownRetentionCount = if ($enableShutdownRetention -and $hostsInShutdownRetention) { $hostsInShutdownRetention.Count } else { 0 }
-
 # Calculate actual current counts by subtracting completed deletions from initial counts
 $completedDeletionsCount = if ($deletionResults -and $deletionResults.SuccessfulDeletions) { $deletionResults.SuccessfulDeletions.Count } else { 0 }
 $completedShutdownsCount = if ($deletionResults -and $deletionResults.SuccessfulShutdowns) { $deletionResults.SuccessfulShutdowns.Count } else { 0 }
+$retainedSessionHostNames = @(@($hostsInShutdownRetention.SessionHostName) + @($deletionResults.SuccessfulShutdowns) | Select-Object -Unique)
+$shutdownRetentionCount = if ($enableShutdownRetention) { $retainedSessionHostNames.Count } else { 0 }
 $currentSessionHostCount = $sessionHosts.Count - $completedDeletionsCount
 $currentEnabledCount = $sessionHostsFiltered.Count - $completedDeletionsCount
 
@@ -1248,6 +1269,7 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
                 Write-LogEntry -Message "VM $vmName has shutdown retention tag - will preserve scaling exclusion tag" -Level Trace
             }
         }
+        $shutdownRetentionVMs = @($shutdownRetentionVMs + @($deletionResults.SuccessfulShutdowns) | Select-Object -Unique)
     }
     
     # Only proceed if a scaling exclusion tag is configured
