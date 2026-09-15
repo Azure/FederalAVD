@@ -533,6 +533,21 @@ var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride
 var templateSpecNameFinal         = !empty(templateSpecName)                        ? templateSpecName                        : shrNaming.outputs.templateSpecName
 var encryptionKeyName             = '${effectiveIdentifier}-shr-storage-cmk'
 
+// Start storage CMK provisioning before the Function App prerequisites. This gives the
+// key-scoped role assignment time to propagate before the initial CMK-enabled storage PUT.
+module storageCmk '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged') {
+  scope: resourceGroup(functionAppResourceGroupName)
+  params: {
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyManagementType: keyManagementStorageAccounts == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    location: location
+    tags: tags
+    parentResourceId: hostPoolResourceId
+    keyNames: [encryptionKeyName]
+    identityName: storageEncryptionIdentityName
+  }
+}
+
 // Extract compute gallery resource ID from custom image resource ID
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}
 // Image version format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}/versions/{version}
@@ -1018,6 +1033,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     permittedIPs: permittedIPs
     tags: tags
   }
+  dependsOn: [storageCmk]
 }
 
 module functionCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {

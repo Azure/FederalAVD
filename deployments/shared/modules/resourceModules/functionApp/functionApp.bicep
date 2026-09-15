@@ -159,25 +159,10 @@ resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
 }
 
 var useCmk = keyManagementStorageAccounts != 'PlatformManaged'
-// Always create a dedicated storage encryption UAI when CMK is selected.
+// Always use the dedicated storage encryption UAI created by the caller when CMK is selected.
 // The function app UAI (functionAppUserAssignedIdentityResourceId) is for the function app identity
 // (Graph API permissions, etc.) and must NOT be reused for CMK — it would never receive
 // Key Vault Crypto Service Encryption User, causing KeyVaultAuthenticationFailure at deploy time.
-var createStorageEncryptionUai = useCmk
-
-// Delegate all CMK resource creation (key, UAI, role assignment) to the unified module.
-// This replaces the inline key/UAI/RA boilerplate that was previously duplicated here.
-module cmk '../../orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (createStorageEncryptionUai) {
-  params: {
-    keyVaultResourceId: encryptionKeyVaultResourceId
-    keyManagementType: keyManagementStorageAccounts == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
-    location: location
-    tags: tags
-    parentResourceId: hostPoolResourceId
-    keyNames: [encryptionKeyName]
-    identityName: storageEncryptionIdentityName
-  }
-}
 
 // Resolve Key Vault URI for the storage account encryption property.
 resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = if (useCmk && !empty(encryptionKeyVaultResourceId)) {
@@ -279,7 +264,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   resource blobService 'blobServices' = {
     name: 'default'
   }
-  dependsOn: [cmk]
 }
 
 resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01' = [

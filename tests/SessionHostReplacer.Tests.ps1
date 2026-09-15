@@ -73,6 +73,33 @@ $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\mai
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
 $namingPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'
 $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
+$functionAppModulePath = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
+
+Describe 'Session Host Replacer storage CMK propagation sequencing' {
+    It 'starts CMK provisioning at the entry point before Function App deployment' {
+        $bicep = Get-Content -LiteralPath $bicepPath -Raw
+        $cmkPosition = $bicep.IndexOf("module storageCmk '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep'")
+        $functionAppPosition = $bicep.IndexOf("module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep'")
+
+        $cmkPosition | Should BeGreaterThan -1
+        $functionAppPosition | Should BeGreaterThan $cmkPosition
+        $bicep | Should Match 'module functionApp[\s\S]+dependsOn:\s*\[storageCmk\]'
+    }
+
+    It 'keeps CMK resource ownership out of the Function App module' {
+        Get-Content -LiteralPath $functionAppModulePath -Raw |
+            Should Not Match "module cmk '../../orchestration/customerManagedKeys/customerManagedKeys.bicep'"
+    }
+
+    It 'keeps the generated Function App deployment behind the top-level CMK deployment' {
+        $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
+
+        $template.resources.storageCmk.type | Should Be 'Microsoft.Resources/deployments'
+        ($template.resources.functionApp.dependsOn -contains 'storageCmk') | Should Be $true
+        ($template.resources.functionApp.properties.template.resources.PSObject.Properties.Name -contains 'cmk') |
+            Should Be $false
+    }
+}
 
 Describe 'Session Host Replacer centralized workbook placement' {
     It 'derives workbook scope from the selected Log Analytics workspace' {
