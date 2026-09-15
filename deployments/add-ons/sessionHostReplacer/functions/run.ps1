@@ -1174,8 +1174,8 @@ else {
 # Log comprehensive metrics for monitoring dashboard (after all operations complete)
 $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
 
-# Calculate current deployment status accounting for just-submitted deployments
-$currentlyDeploying = $runningDeployments.Count
+# Calculate deploying VM count accounting for ARM deployments and deployments submitted this run
+$currentlyDeploying = [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
 $remainingToDeploy = $hostPoolReplacementPlan.PossibleDeploymentsCount
 if ($deploymentResult) {
     # A deployment was just submitted this run, so it's now running

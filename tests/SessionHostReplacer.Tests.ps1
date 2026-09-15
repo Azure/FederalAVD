@@ -88,6 +88,27 @@ Describe 'Session Host Replacer shutdown retention scaling protection' {
     }
 }
 
+Describe 'Session Host Replacer currently deploying metric' {
+    BeforeAll {
+        $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
+        $workbookPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
+        $runScript = Get-Content -LiteralPath $runPath -Raw
+        $workbook = Get-Content -LiteralPath $workbookPath -Raw | ConvertFrom-Json
+        $currentStatusQuery = ($workbook.items | Where-Object { $_.name -eq 'kpi-tiles' }).content.query
+    }
+
+    It 'counts session hosts in running ARM deployments instead of deployment records' {
+        $runScript | Should Match '\$currentlyDeploying = \[int\]\(\(\$runningDeployments \| ForEach-Object \{ @\(\$_.SessionHostNames\)\.Count \} \| Measure-Object -Sum\)\.Sum\)'
+    }
+
+    It 'uses RunningDeployments from the latest metrics event' {
+        $currentStatusQuery | Should Match 'extend RunningDeployments = toint'
+        $currentStatusQuery | Should Match 'RunningDeployments:'
+        $currentStatusQuery | Should Match 'Deploying = coalesce\(RunningDeployments, 0\)'
+        $currentStatusQuery | Should Not Match 'deployingFromSubmitted|Deployment submitted:'
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
 $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'
