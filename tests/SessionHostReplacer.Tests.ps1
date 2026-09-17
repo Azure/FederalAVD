@@ -345,6 +345,17 @@ Describe 'Session Host Replacer scaling-aware readiness contracts' {
         $runScript | Should Match 'Test-NewSessionHostsAvailable[\s\S]+-ScalingPlanTarget \$scalingPlanTarget'
     }
 
+    It 'validates healthy latest-image hosts before the up-to-date early return' {
+        $upToDatePlanPosition = $runScript.IndexOf('if ($isUpToDate)')
+        $scalingPlanQueryPosition = $runScript.IndexOf('$scalingPlanTarget = Get-ScalingPlanCurrentTarget')
+        $earlyExitPosition = $runScript.IndexOf('# EARLY EXIT: Check if host pool is up to date')
+        $upToDateValidationPosition = $runScript.IndexOf('$upToDateHostReadiness = Test-NewSessionHostsAvailable')
+
+        $scalingPlanQueryPosition | Should BeLessThan $upToDatePlanPosition
+        $upToDateValidationPosition | Should BeGreaterThan $earlyExitPosition
+        $runScript | Should Match '\$scalingPlanUsable[\s\S]+\$upToDateHostReadiness = Test-NewSessionHostsAvailable'
+    }
+
     It 'wires the exact-image validation tag through Bicep and Form View' {
         $bicep | Should Match "param tagValidatedImage string = 'AutoReplaceValidatedImage'"
         $bicep | Should Match "name: 'Tag_ValidatedImage'\s+value: tagValidatedImage"

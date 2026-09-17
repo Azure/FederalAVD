@@ -77,9 +77,9 @@ The Session Host Replacer includes several optimizations to minimize Azure API c
 - **VM Caching**: Fetches all VMs once at function start and reuses throughout execution, updating cache after deletions instead of re-querying (reduces API calls by ~60%)
 - **Lightweight Up-to-Date Check**: Fast pre-check to detect if pool is already current before expensive operations
 - **Early Exit Path**: Immediately exits when no work needed, bypassing deployment/deletion logic and expensive API queries
-- **Lazy Power State Loading**: Only queries VM power states when deletion decisions require them (not queried if pool up-to-date)
-- **Scaling Plan Query Skipping**: Avoids scaling plan API call when pool already on latest image
-- **Conditional Operations**: Skips replacement plan calculation and availability checks when lightweight check confirms up-to-date status
+- **Lazy Power State Loading**: Queries VM power states only for deletion decisions or scaling-aware readiness validation
+- **Focused Steady-State Validation**: Up-to-date pools skip replacement planning but still validate latest-image hosts when an enabled scaling plan is present
+- **Conditional Operations**: Skips deployment and deletion calculations when the lightweight check confirms up-to-date status
 
 **Performance Impact**: Functions typically complete in <10 seconds when pool is up-to-date (vs 30-60 seconds for full evaluation), reducing execution costs by 70-80% for steady-state operations.
 
@@ -879,9 +879,9 @@ Session hosts use these tags for automation:
    - If up-to-date: Skip expensive operations and proceed to early exit path
    - **Performance**: Up-to-date pools complete in ~10 seconds vs 30-60 seconds
 3. **Early Exit Path** (if pool up-to-date):
-   - Skip scaling plan query
+  - Query the scaling plan and record exact-image validation evidence when it is enabled
    - Skip replacement plan calculation
-   - Skip power state queries
+  - Validate latest-image host health and scalable standby readiness
    - Only perform tag cleanup when cycle complete
    - Exit immediately
 4. **Discovery**: Enumerate all session hosts via AVD Host Pool API (only if work needed)
@@ -1019,9 +1019,9 @@ Session hosts use these tags for automation:
    - If up-to-date: Skip expensive operations and proceed to early exit path
    - **Performance**: Up-to-date pools complete in ~10 seconds vs 30-60 seconds
 3. **Early Exit Path** (if pool up-to-date):
-   - Skip scaling plan query (saves ~500ms API call)
+  - Query the scaling plan and record exact-image validation evidence when it is enabled
    - Skip replacement plan calculation
-   - Skip power state queries
+  - Validate latest-image host health and scalable standby readiness
    - Only perform tag cleanup when cycle complete
    - Exit immediately
 4. **Discovery**: Enumerate all session hosts via AVD Host Pool API (only if work needed)

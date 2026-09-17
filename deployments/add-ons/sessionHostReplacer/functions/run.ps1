@@ -510,9 +510,35 @@ if (-not $skipLightweightCheck) {
     }
 }
 
-# If up to date, skip expensive operations and go straight to early exit path
+# Query the scaling plan before either planning path so an up-to-date pool can establish
+# exact-image validation evidence for healthy hosts.
+$scalingPlanTarget = $null
+if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
+    try {
+        $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
+        $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
+        $hostPoolName = Read-FunctionAppSetting HostPoolName
+        $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+
+        Write-LogEntry -Message "$replacementMode mode: Querying scaling plan"
+        $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
+
+        if ($scalingPlanTarget -and $null -ne $scalingPlanTarget.CapacityPercentage) {
+            Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
+        }
+        else {
+            Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
+        }
+    }
+    catch {
+        Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
+        $scalingPlanTarget = $null
+    }
+}
+
+# If up to date, skip replacement planning and go straight to the early exit path.
 if ($isUpToDate) {
-    Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation and scaling plan query"
+    Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation"
     
     # Create a minimal replacement plan for early exit logic
     $hostPoolReplacementPlan = [PSCustomObject]@{
@@ -524,38 +550,11 @@ if ($isUpToDate) {
         TotalSessionHostsToReplace     = 0
     }
     
-    # Skip scaling plan query (not needed when up to date)
-    $scalingPlanTarget = $null
 }
 else {
     # Host pool needs work - run full replacement plan calculation
     Write-LogEntry -Message "Host pool requires updates - running full replacement plan calculation"
-    
-    # Query the scaling plan for DeleteFirst capacity or SideBySide standby readiness.
-    $scalingPlanTarget = $null
-    if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
-        try {
-            $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
-            $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
-            $hostPoolName = Read-FunctionAppSetting HostPoolName
-            $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
-            
-            Write-LogEntry -Message "$replacementMode mode: Querying scaling plan"
-            $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
-            
-            if ($scalingPlanTarget -and $scalingPlanTarget.CapacityPercentage) {
-                Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
-            }
-            else {
-                Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
-            }
-        }
-        catch {
-            Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
-            $scalingPlanTarget = $null
-        }
-    }
-    
+
     # Get full replacement plan with all calculations
     $hostPoolReplacementPlan = Get-SessionHostReplacementPlan `
         -ARMToken $ARMToken `
@@ -577,6 +576,19 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
     $failedDeployments.Count -eq 0) {
     
     Write-LogEntry -Message "Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed."
+
+    $scalingPlanUsable = $scalingPlanTarget -and
+        $scalingPlanTarget.Source -eq 'ScalingPlan' -and
+        $null -ne $scalingPlanTarget.CapacityPercentage
+    if ($scalingPlanUsable) {
+        $upToDateHostReadiness = Test-NewSessionHostsAvailable `
+            -ARMToken $ARMToken `
+            -SessionHosts $sessionHosts `
+            -LatestImageVersion $latestImageVersion `
+            -ScalingPlanTarget $scalingPlanTarget
+
+        Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
+    }
     
     # Update LastImageVersion now that the cycle is complete
     if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
