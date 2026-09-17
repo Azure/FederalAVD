@@ -117,6 +117,376 @@ Describe 'Session Host Replacer shutdown retention scaling protection' {
     }
 }
 
+Describe 'Session Host Replacer scaling-aware readiness' {
+    BeforeAll {
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
+
+        $latestImage = [PSCustomObject]@{
+            Definition = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd'
+            Version = '1.2.3'
+        }
+        $imageIdentity = "$($latestImage.Definition)|$($latestImage.Version)".ToLowerInvariant()
+        $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $validatedImageToken = [System.BitConverter]::ToString(
+                $hashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($imageIdentity))
+            ).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $hashAlgorithm.Dispose()
+        }
+
+        function New-ReadinessHost {
+            param (
+                [int] $Index,
+                [string] $Status = 'Available',
+                [bool] $AllowNewSession = $true,
+                [hashtable] $Tags = @{},
+                [string] $HealthCheckResult = 'HealthCheckSucceeded'
+            )
+
+            [PSCustomObject]@{
+                SessionHostName = "avd-$Index"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$Index"
+                ImageDefinition = $latestImage.Definition
+                ImageVersion = $latestImage.Version
+                Status = $Status
+                AllowNewSession = $AllowNewSession
+                Tags = $Tags
+                SessionHostHealthCheckResults = @(
+                    [PSCustomObject]@{ healthCheckResult = $HealthCheckResult }
+                )
+            }
+        }
+
+        function Invoke-ReadinessCheck {
+            param (
+                [array] $SessionHosts,
+                $ScalingPlanTarget
+            )
+
+            Test-NewSessionHostsAvailable `
+                -ARMToken 'test-token' `
+                -SessionHosts $SessionHosts `
+                -LatestImageVersion $latestImage `
+                -ScalingPlanTarget $ScalingPlanTarget `
+                -TagScalingPlanExclusionTag 'ScalingPlanExclusion' `
+                -TagValidatedImage 'AutoReplaceValidatedImage' `
+                -ResourceManagerUri 'https://management.azure.com'
+        }
+    }
+
+    BeforeEach {
+        $global:sessionHostReplacerTestPowerStates = @{}
+        Mock Write-LogEntry -ModuleName SessionHostReplacer.Lifecycle {}
+        Mock Get-VMPowerStates -ModuleName SessionHostReplacer.Lifecycle { $global:sessionHostReplacerTestPowerStates }
+        Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle {}
+    }
+
+    AfterAll {
+        Remove-Variable sessionHostReplacerTestPowerStates -Scope Global -ErrorAction SilentlyContinue
+        Remove-Module SessionHostReplacer -Force
+    }
+
+    It 'counts validated stopped hosts as scalable standby for the shared mode-independent check' {
+        $hosts = @(
+            1..4 | ForEach-Object { New-ReadinessHost -Index $_ }
+            5..10 | ForEach-Object {
+                $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
+                    AutoReplaceValidatedImage = $validatedImageToken
+                }
+                $global:sessionHostReplacerTestPowerStates[$sessionHost.ResourceId] = $true
+                $sessionHost
+            }
+        )
+
+        $result = Invoke-ReadinessCheck -SessionHosts $hosts -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 40
+        })
+
+        $result.SafeToProceed | Should Be $true
+        $result.AvailableCount | Should Be 4
+        $result.ScalableStandbyCount | Should Be 6
+        $result.ReadyCount | Should Be 10
+    }
+
+    It 'keeps the original all-online requirement when no scaling plan is evaluable' {
+        $hosts = @(
+            1..4 | ForEach-Object { New-ReadinessHost -Index $_ }
+            5..10 | ForEach-Object { New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false }
+        )
+
+        $result = Invoke-ReadinessCheck -SessionHosts $hosts -ScalingPlanTarget $null
+
+        $result.SafeToProceed | Should Be $false
+        $result.AvailableCount | Should Be 4
+        $result.AvailablePercentage | Should Be 40
+    }
+
+    It 'does not count stopped hosts without exact-image validation evidence' {
+        $onlineHost = New-ReadinessHost -Index 1
+        $standbyHost = New-ReadinessHost -Index 2 -Status 'Shutdown' -AllowNewSession $false
+        $global:sessionHostReplacerTestPowerStates[$standbyHost.ResourceId] = $true
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($onlineHost, $standbyHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 50
+        })
+
+        $result.SafeToProceed | Should Be $false
+        $result.ScalableStandbyCount | Should Be 0
+        $result.UnavailableHosts[0].ValidatedForImage | Should Be $false
+    }
+
+    It 'preserves administrator scaling exclusions and does not count the host as standby' {
+        $onlineHost = New-ReadinessHost -Index 1
+        $standbyHost = New-ReadinessHost -Index 2 -Status 'Shutdown' -AllowNewSession $false -Tags @{
+            AutoReplaceValidatedImage = $validatedImageToken
+            ScalingPlanExclusion = 'Administrator'
+        }
+        $global:sessionHostReplacerTestPowerStates[$standbyHost.ResourceId] = $true
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($onlineHost, $standbyHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 50
+        })
+
+        $result.SafeToProceed | Should Be $false
+        $standbyHost.Tags.ScalingPlanExclusion | Should Be 'Administrator'
+    }
+
+    It 'rejects failed health checks and non-Available online states: <Status>/<Health>' -TestCases @(
+        @{ Status = 'Available'; Health = 'HealthCheckFailed' }
+        @{ Status = 'NeedsAssistance'; Health = 'HealthCheckSucceeded' }
+        @{ Status = 'Upgrading'; Health = 'HealthCheckSucceeded' }
+        @{ Status = 'UpgradeFailed'; Health = 'HealthCheckSucceeded' }
+    ) {
+        param ($Status, $Health)
+
+        $goodHost = New-ReadinessHost -Index 1
+        $unhealthyHost = New-ReadinessHost -Index 2 -Status $Status -HealthCheckResult $Health
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($goodHost, $unhealthyHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 100
+        })
+
+        $result.SafeToProceed | Should Be $false
+        $result.AvailableCount | Should Be 1
+    }
+
+    It 'requires at least one host to be online even when every stopped host has evidence' {
+        $hosts = 1..3 | ForEach-Object {
+            $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
+                AutoReplaceValidatedImage = $validatedImageToken
+            }
+            $global:sessionHostReplacerTestPowerStates[$sessionHost.ResourceId] = $true
+            $sessionHost
+        }
+
+        $result = Invoke-ReadinessCheck -SessionHosts $hosts -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 0
+        })
+
+        $result.SafeToProceed | Should Be $false
+        $result.ScalableStandbyCount | Should Be 3
+        $result.RequiredOnlineCount | Should Be 1
+    }
+
+    It 'fails closed when validation evidence cannot be persisted' {
+        $sessionHost = New-ReadinessHost -Index 1 -Tags @{ ScalingPlanExclusion = 'SessionHostReplacer' }
+        Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle { throw 'tag update failed' }
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($sessionHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 100
+        })
+
+        $result.SafeToProceed | Should Be $false
+        $sessionHost.Tags.ContainsKey('AutoReplaceValidatedImage') | Should Be $false
+        $sessionHost.Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+    }
+
+    It 'removes only a replacer-owned exclusion after exact-image validation' {
+        $sessionHost = New-ReadinessHost -Index 1 -Tags @{
+            AutoReplaceValidatedImage = $validatedImageToken
+            ScalingPlanExclusion = 'SessionHostReplacer'
+        }
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($sessionHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 100
+        })
+
+        $result.SafeToProceed | Should Be $true
+        $sessionHost.Tags.ContainsKey('ScalingPlanExclusion') | Should Be $false
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 1 -ParameterFilter {
+            $Method -eq 'PATCH' -and $Body -match '"operation":\s*"Delete"'
+        }
+    }
+}
+
+Describe 'Session Host Replacer scaling-aware readiness contracts' {
+    BeforeAll {
+        $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
+        $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $bicep = Get-Content -LiteralPath $bicepPath -Raw
+        $runScript = Get-Content -LiteralPath $runPath -Raw
+        $configStep = $form.view.properties.steps | Where-Object { $_.name -eq 'replacerConfig' }
+        $validatedImageControl = $configStep.elements | Where-Object { $_.name -eq 'tagValidatedImage' }
+    }
+
+    It 'queries a scaling plan and applies readiness in both replacement modes' {
+        $runScript | Should Match ([regex]::Escape('$replacementMode -in @(''DeleteFirst'', ''SideBySide'')'))
+        $runScript | Should Match 'Test-NewSessionHostsAvailable[\s\S]+-ScalingPlanTarget \$scalingPlanTarget'
+    }
+
+    It 'wires the exact-image validation tag through Bicep and Form View' {
+        $bicep | Should Match "param tagValidatedImage string = 'AutoReplaceValidatedImage'"
+        $bicep | Should Match "name: 'Tag_ValidatedImage'\s+value: tagValidatedImage"
+        $validatedImageControl.defaultValue | Should Be 'AutoReplaceValidatedImage'
+        $form.view.outputs.parameters.tagValidatedImage | Should Be "[steps('replacerConfig').tagValidatedImage]"
+    }
+}
+
+Describe 'Session Host Replacer ten-host replacement scenarios' {
+    BeforeAll {
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
+
+        $latestImage = [PSCustomObject]@{
+            Definition = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd'
+            Version = '2.0.0'
+            Date = (Get-Date).AddDays(-1)
+        }
+        $oldHosts = 1..10 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "avd-$($_.ToString('00'))"
+                VMName = "avd-$($_.ToString('00'))"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$($_.ToString('00'))"
+                ImageDefinition = $latestImage.Definition
+                ImageVersion = '1.0.0'
+                Status = 'Available'
+                AllowNewSession = $true
+                Sessions = 0
+                ShutdownTimestamp = $null
+                PendingDrainTimeStamp = $null
+                IsUnavailable = $false
+            }
+        }
+
+        function Invoke-TenHostReplacementPlan {
+            param (
+                [string] $ReplacementMode,
+                $ScalingPlanTarget
+            )
+
+            Get-SessionHostReplacementPlan `
+                -ARMToken 'test-token' `
+                -SessionHosts $oldHosts `
+                -RunningDeployments @() `
+                -HostPoolName 'hp-test' `
+                -TargetSessionHostCount 10 `
+                -LatestImageVersion $latestImage `
+                -ReplaceSessionHostOnNewImageVersionDelayDays 0 `
+                -ReplacementMode $ReplacementMode `
+                -DrainGracePeriodHours 24 `
+                -MinimumCapacityPercentage 80 `
+                -MaxDeletionsPerCycle 50 `
+                -EnableProgressiveScaleUp $false `
+                -ScalingPlanTarget $ScalingPlanTarget `
+                -RemoveEntraDevice $false `
+                -RemoveIntuneDevice $false `
+                -HostPoolSubscriptionId 'test' `
+                -HostPoolResourceGroupName 'hosts' `
+                -ResourceManagerUri 'https://management.azure.com'
+        }
+    }
+
+    BeforeEach {
+        Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+        Mock Read-FunctionAppSetting -ModuleName SessionHostReplacer.Planning { 10 }
+        Mock Get-VMPowerStates -ModuleName SessionHostReplacer.Planning {
+            $states = @{}
+            foreach ($resourceId in $VMResourceIds) {
+                $states[$resourceId] = $false
+            }
+            $states
+        }
+    }
+
+    AfterAll {
+        Remove-Module SessionHostReplacer -Force
+    }
+
+    It 'SideBySide plans ten deployments and no deletion with a scaling plan' {
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 20
+            Phase = 'RampUp'
+            ScalingPlanName = 'weekday'
+            ScheduleName = 'weekday'
+        })
+
+        $plan.PossibleDeploymentsCount | Should Be 10
+        $plan.PossibleSessionHostDeleteCount | Should Be 0
+        $plan.TotalSessionHostsToReplace | Should Be 10
+    }
+
+    It 'SideBySide plans ten deployments and no deletion without a scaling plan' {
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -ScalingPlanTarget $null
+
+        $plan.PossibleDeploymentsCount | Should Be 10
+        $plan.PossibleSessionHostDeleteCount | Should Be 0
+        $plan.TotalSessionHostsToReplace | Should Be 10
+    }
+
+    It 'DeleteFirst keeps the configured 80 percent floor during RampUp and Peak' -TestCases @(
+        @{ Phase = 'RampUp' }
+        @{ Phase = 'Peak' }
+    ) {
+        param ($Phase)
+
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode DeleteFirst -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 20
+            Phase = $Phase
+            ScalingPlanName = 'weekday'
+            ScheduleName = 'weekday'
+        })
+
+        $plan.PossibleDeploymentsCount | Should Be 10
+        $plan.PossibleSessionHostDeleteCount | Should Be 2
+        $plan.SessionHostsPendingDelete.Count | Should Be 2
+    }
+
+    It 'DeleteFirst uses the 10 percent scaling floor during OffPeak' {
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode DeleteFirst -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 10
+            Phase = 'OffPeak'
+            ScalingPlanName = 'weekday'
+            ScheduleName = 'weekday'
+        })
+
+        $plan.PossibleDeploymentsCount | Should Be 10
+        $plan.PossibleSessionHostDeleteCount | Should Be 9
+        $plan.SessionHostsPendingDelete.Count | Should Be 9
+    }
+
+    It 'DeleteFirst uses the configured 80 percent floor without a scaling plan' {
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode DeleteFirst -ScalingPlanTarget $null
+
+        $plan.PossibleDeploymentsCount | Should Be 10
+        $plan.PossibleSessionHostDeleteCount | Should Be 2
+        $plan.SessionHostsPendingDelete.Count | Should Be 2
+    }
+}
+
 Describe 'Session Host Replacer currently deploying metric' {
     BeforeAll {
         $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'

@@ -732,6 +732,16 @@
               }
             },
             {
+              "name": "tagValidatedImage",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Validated Image Tag Name",
+              "toolTip": "Records successful AVD health validation for the exact image so a scaling-plan-managed stopped host can count as ready capacity.",
+              "defaultValue": "AutoReplaceValidatedImage",
+              "constraints": {
+                "required": true
+              }
+            },
+            {
               "name": "tagShutdownTimestamp",
               "type": "Microsoft.Common.TextBox",
               "visible": "[and(equals(steps('replacerConfig').replacementMode, 'SideBySide'), steps('replacerConfig').enableShutdownRetention)]",
@@ -3500,6 +3510,7 @@
         "tagDeployTimestamp": "[steps('replacerConfig').tagDeployTimestamp]",
         "tagPendingDrainTimestamp": "[steps('replacerConfig').tagPendingDrainTimestamp]",
         "tagScalingPlanExclusionTag": "[steps('replacerConfig').tagScalingPlanExclusionTag]",
+        "tagValidatedImage": "[steps('replacerConfig').tagValidatedImage]",
         "removeEntraDevice": "[steps('replacerConfig').removeEntraDevice]",
         "removeIntuneDevice": "[steps('replacerConfig').removeIntuneDevice]",
         "enableProgressiveScaleUp": "[steps('replacerConfig').enableProgressiveScaleUp]",

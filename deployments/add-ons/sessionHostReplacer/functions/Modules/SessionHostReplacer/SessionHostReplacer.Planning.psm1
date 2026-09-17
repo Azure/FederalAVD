@@ -628,8 +628,8 @@ function Get-SessionHostReplacementPlan {
     if (-not ($runningDeployments -and $runningDeployments.Count -gt 0)) {
         if ($ReplacementMode -eq 'DeleteFirst') {
             # DeleteFirst mode: Calculate deletions based on hosts that need replacing (not net-new)
-            # When growing the pool (e.g., 8→10), we deploy net-new + replacements, but only delete replacements
-            # Example: Current=8, Target=10, Need 1 replacement → Deploy 3 (1 replacement + 2 net-new), Delete 1 (only the old one)
+            # When growing the pool (e.g., 8->10), we deploy net-new + replacements, but only delete replacements
+            # Example: Current=8, Target=10, Need 1 replacement -> Deploy 3 (1 replacement + 2 net-new), Delete 1 (only the old one)
             
             # Calculate how many hosts to delete (only replace existing hosts, not net-new ones)
             $hostsToReplace = $sessionHostsToReplace.Count  # Hosts with old image or other issues
@@ -867,11 +867,14 @@ function Get-SessionHosts {
     # Extract properties from nested structure
     $sessionHosts = $sessionHostsResponse | ForEach-Object {
         [PSCustomObject]@{
-            Name            = $_.name
-            ResourceId      = $_.properties.resourceId
-            Sessions        = $_.properties.sessions
-            AllowNewSession = $_.properties.allowNewSession
-            Status          = $_.properties.status
+            Name                          = $_.name
+            ResourceId                    = $_.properties.resourceId
+            Sessions                      = $_.properties.sessions
+            AllowNewSession               = $_.properties.allowNewSession
+            Status                        = $_.properties.status
+            LastHeartBeat                 = $_.properties.lastHeartBeat
+            StatusTimestamp               = $_.properties.statusTimestamp
+            SessionHostHealthCheckResults = $_.properties.sessionHostHealthCheckResults
         }
     }
     

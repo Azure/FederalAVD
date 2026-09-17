@@ -233,6 +233,9 @@ param tagShutdownTimestamp string = 'AutoReplaceShutdownTimestamp'
 @description('Optional. Tag name for scaling plan exclusion. Default is ScalingPlanExclusion.')
 param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
 
+@description('Optional. Tag name used to record successful AVD health validation for the exact deployed image. Default is AutoReplaceValidatedImage.')
+param tagValidatedImage string = 'AutoReplaceValidatedImage'
+
 @description('Optional. Whether to remove Entra ID device records when deleting session hosts. Default is true.')
 param removeEntraDevice bool = true
 
@@ -990,6 +993,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         {
           name: 'Tag_ScalingPlanExclusionTag'
           value: tagScalingPlanExclusionTag
+        }
+        {
+          name: 'Tag_ValidatedImage'
+          value: tagValidatedImage
         }
         {
           name: 'TargetSessionHostCount'

@@ -1287,85 +1287,64 @@ The Session Host Replacer includes a critical safety mechanism that **prevents c
 The function performs an **availability health check** on newly deployed hosts before allowing any deletions or shutdowns:
 
 1. **Check Timing**: After deployment, before any delete/shutdown operations
-2. **Status Validation**: Verifies new hosts have `Status` = `Available` (not just registered in AVD)
-3. **Threshold**: By default, requires 100% of new hosts to be available (configurable via `minimumAvailablePercentage`)
-4. **Action on Failure**:
+2. **Online Validation**: Requires `Status = Available`, `AllowNewSession = true`, and no failed AVD health checks
+3. **Scaling-Aware Standby**: With an enabled, evaluable scaling plan, a stopped/deallocated host can count as ready only when it has exact-image validation evidence and no scaling exclusion tag
+4. **Readiness Floor**: Every latest-image host must be online healthy or validated scalable standby, and at least one must be online healthy
+5. **Strict Fallback**: Without a usable scaling plan, 100% of latest-image hosts must be online healthy
+6. **Action on Failure**:
    - **SideBySide Mode**: Allows deployment to complete, but **blocks all deletions/shutdowns** until next run
    - **DeleteFirst Mode**: **Halts the entire delete-deploy cycle** for current run
-5. **Metrics Logging**: Reports availability percentage for dashboard visibility
+7. **Metrics Logging**: Reports online healthy, scalable standby, and total ready counts
 
 **Status Check Details**:
 
-The check uses the AVD `Status` property (health check), **not** `AllowNewSession` (drain mode):
+Only `Available` hosts that accept new sessions and have no failed AVD health checks establish fresh validation evidence. `NeedsAssistance`, `Upgrading`, `UpgradeFailed`, `Unavailable`, and `NoHeartbeat` do not count as online healthy.
 
-- ✅ **Available** - Host is healthy and ready
-- ✅ **NeedsAssistance** - Minor issues but operational
-- ✅ **Upgrading** - Stack upgrade in progress
-- ✅ **UpgradeFailed** - Upgrade failed but host still functional
-- ❌ **Unavailable** - Host failed health check (blocks operations)
-- ❌ **Shutdown** - Host is deallocated (blocks operations)
-- ❌ **NoHeartbeat** - VM not reporting (blocks operations)
-
-**Configuration**:
-
-| Setting | Default | Description |
-| --- | --- | --- |
-| `minimumAvailablePercentage` | `100` | Minimum percentage of newly deployed hosts that must be Available before allowing deletions (1-100%). Set to 100 for maximum safety, or lower (e.g., 60) to allow operations if most hosts are healthy |
+Validation evidence is a SHA-256 token derived from the exact image definition and version and stored in the `AutoReplaceValidatedImage` tag by default. A host must complete one online healthy validation pass for that exact image before it can later count as scalable standby. The function removes only a `ScalingPlanExclusion` tag whose value is `SessionHostReplacer`; administrator-owned exclusions are preserved and prevent standby eligibility.
 
 **SideBySide Mode Behavior**:
 
 ```text
-Run 1: Deploy 10 new hosts → 7 Available, 3 Unavailable (70%)
-       Safety check fails (70% < 100% threshold)
-       → Deployment completes but NO deletions/shutdowns performed
-       → Old hosts remain operational (preserving capacity)
+Run 1: Deploy 10 new hosts -> 10 become online healthy
+  -> Exact-image validation evidence is recorded
+  -> Replacer-owned scaling exclusions are removed
 
-Run 2: Check again → 9 Available, 1 Unavailable (90%)
-       Safety check still fails (90% < 100% threshold)
-       → Still blocking deletions
-
-Run 3: Check again → 10 Available (100%)
-       Safety check passes
-       → Proceeds with deletions/shutdowns as planned
+Run 2: Scaling plan keeps 4 hosts online and deallocates 6
+  -> 4 online healthy + 6 validated scalable standby = 10 ready
+  -> Safety check passes and replacement can continue
 ```
 
 **DeleteFirst Mode Behavior**:
 
 ```text
-Run 1: Drain & delete 5 old hosts → Deploy 5 replacements
-       → 3 Available, 2 Unavailable (60%)
-       Safety check fails (60% < 100% threshold)
-       → HALTS all further delete-deploy cycles
-       → Preserves remaining old hosts
+Run 1: Drain and delete only the batch allowed by the phase-aware capacity floor
+  -> Deploy replacements and validate them online
 
-Run 2: Check previous deployment → 5 Available (100%)
-       Safety check passes
-       → Resumes normal operations
-       → Can proceed with next batch of deletions
+Run 2: Scaling plan deallocates validated replacements
+  -> Validated standby counts as ready
+  -> Existing DeleteFirst capacity and batch limits still cap further deletion
 ```
 
 **Logging Examples**:
 
 ```text
-INFO: Availability check: 8/10 (80%) new hosts available
-WARNING: Only 80% of new hosts are Available (threshold: 100%). Blocking deletions to preserve capacity.
-INFO: All newly deployed hosts are Available. Safe to proceed with deletions.
-METRICS: NewHosts: 10/10 (100%) Available
+INFO: NEW_HOST_VERIFICATION | OnlineHealthy: 4/10 | ScalableStandby: 6 | Ready: 10/10 (100%) | RequiredOnline: 1 | SafeToProceed: True
 ```
 
 **Benefits**:
 
 - ✅ **Prevents capacity loss** from bad image deployments
 - ✅ **Automatic recovery** - resumes operations when hosts become healthy
-- ✅ **Configurable threshold** - adjust based on risk tolerance
+- ✅ **Scaling-aware readiness** - recognizes validated capacity that autoscale can start
+- ✅ **Fail-closed evidence** - unvalidated, unhealthy, or excluded hosts block replacement
 - ✅ **Dashboard visibility** - availability metrics logged for monitoring
 - ✅ **Works in both modes** - protects SideBySide and DeleteFirst equally
 
 **Best Practices**:
 
-- Keep `minimumAvailablePercentage` at 100% for production (default)
-- Lower to 60-80% only in dev/test environments or when acceptable risk
-- Monitor METRICS logs for `NewHosts` availability percentage
+- Keep the scaling plan enabled and assigned if stopped hosts should count as ready
+- Expect existing latest-image hosts to require one online healthy validation pass after upgrade
+- Monitor `NEW_HOST_VERIFICATION` logs for online, standby, and ready counts
 - Investigate when multiple runs show low availability (image/config issues)
 
 ## Configuration
@@ -1389,7 +1368,6 @@ default while existing apps continue running their configured version until a pl
 | `targetSessionHostCount` | `0` | All | Target host pool size. Set to 0 for auto-detect mode (SideBySide only) or specific number for explicit count |
 | `drainGracePeriodHours` | `24` | All | Grace period in hours for session hosts **with active sessions** before forced deletion (1-168 hours) |
 | `minimumDrainMinutes` | `15` | All | Minimum drain time in minutes for session hosts **with zero sessions** before eligible for deletion (0-120 minutes). Acts as safety buffer for API lag and race conditions |
-| `minimumAvailablePercentage` | `100` | All | Minimum percentage of newly deployed hosts that must be Available before allowing deletions/shutdowns (1-100%). Safety mechanism to prevent capacity loss from failed deployments |
 
 ### SideBySide Mode Parameters
 
@@ -1485,6 +1463,7 @@ Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> e
 | `tagPendingDrainTimestamp` | `AutoReplacePendingDrainTimestamp` | Tag name for drain start timestamp |
 | `tagShutdownTimestamp` | `AutoReplaceShutdownTimestamp` | Tag name for shutdown timestamp (SideBySide with retention) |
 | `tagScalingPlanExclusionTag` | `ScalingPlanExclusion` | Tag name for excluding hosts from scaling plans. Applied to newly deployed hosts, hosts in drain, and shutdown retention VMs. Removed when cycle completes (or when new capacity is active in SideBySide+retention) |
+| `tagValidatedImage` | `AutoReplaceValidatedImage` | Tag name for exact-image AVD health validation evidence. Allows a confirmed stopped, unexcluded host to count as scaling-plan-managed ready capacity. |
 
 ### Device Cleanup Parameters
 

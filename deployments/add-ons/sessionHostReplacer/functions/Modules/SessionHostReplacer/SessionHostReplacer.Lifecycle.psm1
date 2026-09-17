@@ -671,7 +671,15 @@ function Test-NewSessionHostsAvailable {
         [Parameter()]
         [int] $MinimumAvailableCount = 1,
         [Parameter()]
-        [int] $MinimumAvailablePercentage = 100
+        [int] $MinimumAvailablePercentage = 100,
+        [Parameter()]
+        $ScalingPlanTarget,
+        [Parameter()]
+        [string] $TagScalingPlanExclusionTag = (Read-FunctionAppSetting Tag_ScalingPlanExclusionTag),
+        [Parameter()]
+        [string] $TagValidatedImage = (Read-FunctionAppSetting Tag_ValidatedImage),
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri)
     )
     
     Write-LogEntry -Message "Verifying new session hosts are available before proceeding with old host removal"
@@ -695,22 +703,160 @@ function Test-NewSessionHostsAvailable {
     }
     
     Write-LogEntry -Message "Found {0} new session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
+
+    $scalingPlanUsable = $ScalingPlanTarget -and
+        $ScalingPlanTarget.Source -eq 'ScalingPlan' -and
+        $null -ne $ScalingPlanTarget.CapacityPercentage
+
+    if ($scalingPlanUsable) {
+        $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
+        $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $validatedImageToken = [System.BitConverter]::ToString(
+                $hashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($imageIdentity))
+            ).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $hashAlgorithm.Dispose()
+        }
+
+        $newHostPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds @($newHosts.ResourceId)
+        $requiredOnlineCount = 1
+
+        $onlineHealthyHosts = @()
+        $scalableStandbyHosts = @()
+        $unreadyHosts = @()
+
+        foreach ($newHost in $newHosts) {
+            $failedHealthChecks = @($newHost.SessionHostHealthCheckResults | Where-Object {
+                $_.healthCheckResult -eq 'HealthCheckFailed'
+            })
+            $isOnlineHealthy = $newHost.Status -eq 'Available' -and
+                $newHost.AllowNewSession -and
+                $failedHealthChecks.Count -eq 0
+
+            if ($isOnlineHealthy) {
+                if ($newHost.Tags[$TagValidatedImage] -ne $validatedImageToken) {
+                    try {
+                        $tagsUri = "$ResourceManagerUri$($newHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                        $body = @{
+                            properties = @{
+                                tags = @{ $TagValidatedImage = $validatedImageToken }
+                            }
+                            operation = 'Merge'
+                        }
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        $newHost.Tags[$TagValidatedImage] = $validatedImageToken
+                        Write-LogEntry -Message "Recorded image validation evidence for $($newHost.SessionHostName)" -Level Trace
+                    }
+                    catch {
+                        Write-LogEntry -Message "Failed to record image validation evidence for $($newHost.SessionHostName): $($_.Exception.Message)" -Level Warning
+                    }
+                }
+
+                if ($newHost.Tags[$TagValidatedImage] -eq $validatedImageToken -and
+                    $TagScalingPlanExclusionTag -and
+                    $newHost.Tags[$TagScalingPlanExclusionTag] -eq 'SessionHostReplacer') {
+                    try {
+                        $tagsUri = "$ResourceManagerUri$($newHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                        $body = @{
+                            properties = @{
+                                tags = @{ $TagScalingPlanExclusionTag = '' }
+                            }
+                            operation = 'Delete'
+                        }
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        $newHost.Tags.Remove($TagScalingPlanExclusionTag)
+                        Write-LogEntry -Message "Released validated session host $($newHost.SessionHostName) to the scaling plan" -Level Trace
+                    }
+                    catch {
+                        Write-LogEntry -Message "Failed to release validated session host $($newHost.SessionHostName) to the scaling plan: $($_.Exception.Message)" -Level Warning
+                    }
+                }
+
+                $hasScalingExclusion = $TagScalingPlanExclusionTag -and
+                    $newHost.Tags.ContainsKey($TagScalingPlanExclusionTag)
+                $isValidatedForImage = $TagValidatedImage -and
+                    $newHost.Tags[$TagValidatedImage] -eq $validatedImageToken
+
+                if ($isValidatedForImage -and -not $hasScalingExclusion) {
+                    $onlineHealthyHosts += $newHost
+                    continue
+                }
+            }
+
+            $hasScalingExclusion = $TagScalingPlanExclusionTag -and
+                $newHost.Tags.ContainsKey($TagScalingPlanExclusionTag)
+            $isValidatedForImage = $TagValidatedImage -and
+                $newHost.Tags[$TagValidatedImage] -eq $validatedImageToken
+            $isScalableStandby = $newHostPowerStates[$newHost.ResourceId] -and
+                $newHost.Status -eq 'Shutdown' -and
+                -not $hasScalingExclusion -and
+                $isValidatedForImage
+
+            if ($isScalableStandby) {
+                $scalableStandbyHosts += $newHost
+            }
+            else {
+                $unreadyHosts += [PSCustomObject]@{
+                    SessionHostName = $newHost.SessionHostName
+                    Status = $newHost.Status
+                    PoweredOff = [bool]$newHostPowerStates[$newHost.ResourceId]
+                    AllowNewSession = $newHost.AllowNewSession
+                    HasScalingExclusion = [bool]$hasScalingExclusion
+                    ValidatedForImage = [bool]$isValidatedForImage
+                }
+            }
+        }
+
+        $onlineCount = $onlineHealthyHosts.Count
+        $standbyCount = $scalableStandbyHosts.Count
+        $readyCount = $onlineCount + $standbyCount
+        $readyPercentage = [Math]::Round(($readyCount / $newHosts.Count) * 100, 1)
+        $availablePercentage = [Math]::Round(($onlineCount / $newHosts.Count) * 100, 1)
+        $safeToProceed = $readyCount -eq $newHosts.Count -and $onlineCount -ge $requiredOnlineCount
+
+        $message = if ($safeToProceed) {
+            "$readyCount of $($newHosts.Count) new session host(s) are ready ($onlineCount online healthy, $standbyCount validated scalable standby)"
+        }
+        else {
+            "$readyCount of $($newHosts.Count) new session host(s) are ready ($onlineCount online healthy, $standbyCount validated scalable standby); need all hosts ready and at least $requiredOnlineCount online"
+        }
+
+        Write-LogEntry -Message "NEW_HOST_VERIFICATION | OnlineHealthy: {0}/{1} | ScalableStandby: {2} | Ready: {3}/{1} ({4}%) | RequiredOnline: {5} | SafeToProceed: {6}" -StringValues $onlineCount, $newHosts.Count, $standbyCount, $readyCount, $readyPercentage, $requiredOnlineCount, $safeToProceed
+
+        return [PSCustomObject]@{
+            AllAvailable = $onlineCount -eq $newHosts.Count
+            AvailableCount = $onlineCount
+            AvailablePercentage = $availablePercentage
+            ReadyCount = $readyCount
+            ReadyPercentage = $readyPercentage
+            ScalableStandbyCount = $standbyCount
+            RequiredOnlineCount = $requiredOnlineCount
+            TotalNewHosts = $newHosts.Count
+            UnavailableHosts = $unreadyHosts
+            SafeToProceed = $safeToProceed
+            Message = $message
+        }
+    }
     
-    # Check status of each new host
-    # Available statuses that indicate the host is working: Available, Needs Assistance (non-fatal), Upgrading, Upgrade Failed
-    # Statuses that indicate the host is NOT working: Unavailable, Shutdown, NoHeartbeat, NotJoinedToDomain, DomainTrustRelationshipLost, SxSStackListenerNotReady, FSLogixNotHealthy
-    $availableStatuses = @('Available', 'NeedsAssistance', 'Upgrading', 'UpgradeFailed')
-    
+    # Without an evaluable scaling plan, every new host must be online and healthy.
     $availableHosts = @()
     $unavailableHosts = @()
     
     foreach ($newHost in $newHosts) {
         $hostStatus = $newHost.Status
         $hostName = $newHost.SessionHostName
+        $failedHealthChecks = @($newHost.SessionHostHealthCheckResults | Where-Object {
+            $_.healthCheckResult -eq 'HealthCheckFailed'
+        })
+        $isAvailable = $hostStatus -eq 'Available' -and
+            $newHost.AllowNewSession -and
+            $failedHealthChecks.Count -eq 0
         
         Write-LogEntry -Message "New host {0} status: {1}" -StringValues $hostName, $hostStatus -Level Trace
         
-        if ($hostStatus -in $availableStatuses) {
+        if ($isAvailable) {
             $availableHosts += $newHost
             Write-LogEntry -Message "New host {0} is accessible (Status: {1})" -StringValues $hostName, $hostStatus -Level Trace
         }

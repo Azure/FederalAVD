@@ -531,17 +531,16 @@ else {
     # Host pool needs work - run full replacement plan calculation
     Write-LogEntry -Message "Host pool requires updates - running full replacement plan calculation"
     
-    # Query scaling plan for dynamic minimum capacity (DeleteFirst mode only)
-    # This is ONLY needed when we're actually going to delete hosts
+    # Query the scaling plan for DeleteFirst capacity or SideBySide standby readiness.
     $scalingPlanTarget = $null
-    if ($replacementMode -ieq 'DeleteFirst') {
+    if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
         try {
             $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
             $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
             $hostPoolName = Read-FunctionAppSetting HostPoolName
             $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
             
-            Write-LogEntry -Message "DeleteFirst mode: Querying scaling plan for dynamic minimum capacity target"
+            Write-LogEntry -Message "$replacementMode mode: Querying scaling plan"
             $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
             
             if ($scalingPlanTarget -and $scalingPlanTarget.CapacityPercentage) {
@@ -729,7 +728,11 @@ Write-LogEntry -Message "Host pool requires updates - proceeding with replacemen
 # This provides metrics for monitoring and is used as a safety check before removing old hosts
 # ONLY run this check if there are actually hosts to replace - otherwise shutdown hosts trigger false positives
 if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -gt 0) {
-    $newHostAvailability = Test-NewSessionHostsAvailable -ARMToken $ARMToken -SessionHosts $sessionHosts -LatestImageVersion $latestImageVersion
+    $newHostAvailability = Test-NewSessionHostsAvailable `
+        -ARMToken $ARMToken `
+        -SessionHosts $sessionHosts `
+        -LatestImageVersion $latestImageVersion `
+        -ScalingPlanTarget $scalingPlanTarget
 }
 else {
     # No hosts need replacement - all hosts are on latest image
