@@ -69,8 +69,37 @@ Describe 'Session Host Replacer shutdown retention form behavior' {
 
 Describe 'Session Host Replacer shutdown retention scaling protection' {
     BeforeAll {
+        $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
         $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
+        $lifecyclePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.Lifecycle.psm1'
+        $bicep = Get-Content -LiteralPath $bicepPath -Raw
         $runScript = Get-Content -LiteralPath $runPath -Raw
+        $lifecycleScript = Get-Content -LiteralPath $lifecyclePath -Raw
+    }
+
+    It 'enables shutdown retention only for Side-by-Side mode at deployment and runtime' {
+        $bicep | Should Match "var effectiveEnableShutdownRetention = replacementMode == 'SideBySide' && enableShutdownRetention"
+        $bicep | Should Match "name: 'EnableShutdownRetention'\s+value: string\(effectiveEnableShutdownRetention\)"
+        $runScript | Should Match ([regex]::Escape('$enableShutdownRetention = $replacementMode -eq ''SideBySide'' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)'))
+        $lifecycleScript | Should Match ([regex]::Escape('$EnableShutdownRetention = $ReplacementMode -eq ''SideBySide'' -and $EnableShutdownRetention'))
+    }
+
+    It 'excludes only retention-tagged hosts confirmed stopped or deallocated' {
+        $powerStatePosition = $runScript.IndexOf('$shutdownRetentionPowerStates = Get-VMPowerStates')
+        $retentionFilterPosition = $runScript.IndexOf('$hostsInShutdownRetention += $sessionHost')
+
+        $powerStatePosition | Should BeGreaterThan -1
+        $retentionFilterPosition | Should BeGreaterThan $powerStatePosition
+        $runScript | Should Match 'if \(-not \$shutdownRetentionPowerStates\[\$sessionHost\.ResourceId\]\)[\s\S]+Removed stale shutdown retention tag from active VM'
+    }
+
+    It 'deletes expired retained VMs only after confirming they are powered off' {
+        $powerStatePosition = $lifecycleScript.IndexOf('$shutdownVMPowerStates = Get-VMPowerStates')
+        $deletePosition = $lifecycleScript.IndexOf('has exceeded retention period - deleting')
+
+        $powerStatePosition | Should BeGreaterThan -1
+        $deletePosition | Should BeGreaterThan $powerStatePosition
+        $lifecycleScript | Should Match 'if \(-not \$shutdownVMPowerStates\[\$vmId\]\)[\s\S]+skipping retention cleanup'
     }
 
     It 'restores the scaling exclusion tag before retained hosts are filtered out' {

@@ -9,8 +9,8 @@ if ($Timer.IsPastDue) {
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
 # Log configuration settings for workbook visibility
-$enableShutdownRetention = Read-FunctionAppSetting EnableShutdownRetention -AsBoolean
 $replacementMode = Read-FunctionAppSetting ReplacementMode
+$enableShutdownRetention = $replacementMode -eq 'SideBySide' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)
 $minimumDrainMinutes = Read-FunctionAppSetting MinimumDrainMinutes
 $drainGracePeriodHours = Read-FunctionAppSetting DrainGracePeriodHours
 $minimumCapacityPercentage = Read-FunctionAppSetting MinimumCapacityPercentage
@@ -261,6 +261,11 @@ if ($enableShutdownRetention) {
     $hostsInShutdownRetention = @()
     
     Write-LogEntry -Message "Checking for session hosts already in shutdown retention using tag: $shutdownRetentionTag" -Level Trace
+
+    $shutdownRetentionVMResourceIds = @($cachedVMs | Where-Object {
+        $_.tags -and ($_.tags.PSObject.Properties.Name -contains $shutdownRetentionTag)
+    } | ForEach-Object { $_.id })
+    $shutdownRetentionPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds $shutdownRetentionVMResourceIds
     
     foreach ($sessionHost in $sessionHostsFiltered) {
         $vmName = $sessionHost.ResourceId.Split('/')[-1]
@@ -271,6 +276,25 @@ if ($enableShutdownRetention) {
             Write-LogEntry -Message "VM ${vmName}: Has tags=$($null -ne $vm.tags), Has retention tag=$hasRetentionTag" -Level Trace
             
             if ($hasRetentionTag) {
+                if (-not $shutdownRetentionPowerStates[$sessionHost.ResourceId]) {
+                    Write-LogEntry -Message "VM $vmName has a shutdown retention tag but is not confirmed stopped or deallocated - keeping it in replacement processing" -Level Warning
+                    try {
+                        $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                        $Body = @{
+                            operation  = 'Delete'
+                            properties = @{
+                                tags = @{ $shutdownRetentionTag = '' }
+                            }
+                        }
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        Write-LogEntry -Message "Removed stale shutdown retention tag from active VM: $vmName" -Level Warning
+                    }
+                    catch {
+                        Write-LogEntry -Message "Failed to remove stale shutdown retention tag from active VM ${vmName}: $($_.Exception.Message)" -Level Error
+                    }
+                    continue
+                }
+
                 $hostsInShutdownRetention += $sessionHost
                 Write-LogEntry -Message "VM $vmName is in shutdown retention - will exclude from replacement processing" -Level Trace
 

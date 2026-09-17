@@ -85,10 +85,16 @@ function Remove-ExpiredShutdownVMs {
     $retainedCount = 0
     $deletedVMNames = @()
     $currentTime = (Get-Date).ToUniversalTime()
+    $shutdownVMPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds @($shutdownVMs.id)
     
     foreach ($vm in $shutdownVMs) {
         $vmName = $vm.name
         $vmId = $vm.id
+
+        if (-not $shutdownVMPowerStates[$vmId]) {
+            Write-LogEntry -Message "VM $vmName has a shutdown retention tag but is not confirmed stopped or deallocated - skipping retention cleanup" -Level Warning
+            continue
+        }
         
         # Get the shutdown timestamp from tags
         $shutdownTimestampString = $vm.tags.$TagShutdownTimestamp
@@ -191,6 +197,8 @@ function Remove-SessionHosts {
         [Parameter()]
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
+
+    $EnableShutdownRetention = $ReplacementMode -eq 'SideBySide' -and $EnableShutdownRetention
 
     # Initialize results tracking
     $successfulDeletions = @()

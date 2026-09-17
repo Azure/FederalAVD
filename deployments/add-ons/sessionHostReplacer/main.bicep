@@ -500,6 +500,7 @@ var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtual
 // Pre-populated from the hpIdentifier tag on the hosts resource group.
 var effectiveIdentifier = !empty(identifier) ? identifier : 'replacer'
 var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
+var effectiveEnableShutdownRetention = replacementMode == 'SideBySide' && enableShutdownRetention
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {
@@ -910,15 +911,11 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
           name: 'MinimumHostIndex'
           value: string(minimumHostIndex)
         }
+        {
+          name: 'EnableShutdownRetention'
+          value: string(effectiveEnableShutdownRetention)
+        }
       ],
-      replacementMode == 'SideBySide'
-        ? [
-            {
-              name: 'EnableShutdownRetention'
-              value: string(enableShutdownRetention)
-            }
-          ]
-        : [],
       replacementMode == 'SideBySide'
         ? [
             {
