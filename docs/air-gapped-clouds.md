@@ -244,13 +244,13 @@ During session host deployment (host pool creation and Session Host Replacer ope
 
 ### How the Downloads Configuration Works
 
-The `Update-ImageArtifacts.ps1` script automatically selects the correct downloads configuration file from `.common/data/` based on the connected Azure environment:
+The `Update-ImageArtifacts.ps1` script automatically selects the correct downloads configuration file from `deployments/shared/data/` based on the connected Azure environment:
 
 | Azure Environment | Base File |
 | --- | --- |
-| AzureCloud / AzureUSGovernment | `.common/data/public.downloads.parameters.json` |
-| Azure Government Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
-| Azure Government Top Secret (IL7) | `.common/data/topsecret.downloads.parameters.json` |
+| AzureCloud / AzureUSGovernment | `deployments/shared/data/public.downloads.parameters.json` |
+| Azure Government Secret (IL6) | `deployments/shared/data/secret.downloads.parameters.json` |
+| Azure Government Top Secret (IL7) | `deployments/shared/data/topsecret.downloads.parameters.json` |
 
 The secret and top secret files are already in the repository. Each entry either has a working air-gapped cloud URL (the script downloads it automatically) or an **empty `DownloadUrl`** (you must place the file manually before running the script).
 

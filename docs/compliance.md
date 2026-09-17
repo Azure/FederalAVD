@@ -275,7 +275,7 @@ The CISA ZTMM v2.0 is the primary implementation framework for federal civilian 
 | --- | --- | --- | --- |
 | Managed identity for workload authentication | Automation accounts, image build pipeline, FSLogix storage RBAC, Key Vault access — all use managed identities. | Optimal | Automatic |
 | Least-privilege service access | Role assignments are scoped to the minimum required resource and role. | Advanced | Automatic |
-| Secure image pipeline | Image build via Azure Image Builder with managed identity; images stored in Azure Compute Gallery with private access. | Advanced | Automatic (imageBuild template) |
+| Secure image pipeline | Image build executes customizations via `Microsoft.Compute/virtualMachines/runCommands` (outbound-only ARM API calls) with managed identity — **not** Azure VM Image Builder, which requires WinRM/SSH to the build VM, a service-managed staging resource group with an unfirewalled storage account, and Key Vaults with public network access enabled. Images stored in Azure Compute Gallery with private access. See [Image Build — Why `imageBuild.bicep` Instead of Packer or Azure VM Image Builder (AIB)?](image-build.md#why-imagebuildbicep-instead-of-packer-or-azure-vm-image-builder-aib) | Advanced | Automatic (imageBuild template) |
 | Key Vault for application secrets | Domain join and VM admin credentials retrieved from Key Vault at deploy time — never stored in template or parameter files. | Optimal | Configurable (`existingCredentialsKeyVaultResourceId`) |
 
 #### Pillar 5: Data
@@ -499,12 +499,25 @@ A ready-to-use script is included in this repository at [`customer-examples/arti
 
 The script uses Microsoft's [LGPO.exe](https://www.microsoft.com/en-us/download/details.aspx?id=55319) to apply DISA STIG GPO packages from [public.cyber.mil](https://public.cyber.mil/stigs/gpo) to the local machine. It handles:
 
-- Windows 10 and Windows 11 STIG GPOs
+- Windows 10 and Windows 11 STIG GPOs, including correct handling of Windows Enterprise multi-session SKU 175
+- Windows Server 2022 and 2025 Member Server STIG GPOs; Windows Server 2016/2019 and domain controllers are rejected, and Domain Controller GPO backups are excluded
 - Microsoft Edge, Firewall, Defender Antivirus, Internet Explorer STIGs
 - Microsoft 365 / Office / Teams STIGs (detected automatically)
 - Third-party application STIGs: Adobe Acrobat Pro/Reader, Google Chrome, Mozilla Firefox
 - AVD-specific exceptions (remote interactive logon rights, ECC curve SSL fix that breaks AVD, firewall settings for non-domain joined VMs)
-- Version stamping to `HKLM:\Software\DoD\STIG` for upgrade detection
+- Individual STIG release stamping to `HKLM:\Software\DoD\STIG` for deployment evidence
+
+For Windows Server, the script reads each GPO backup's `Backup.xml` metadata and applies only the
+matching Member Server computer/user GPOs from the mixed MS/DC package. Server stamps include the
+role (for example, `DoD WinSvr 2022 MS = v2r9`). Supplemental Windows 11 V-ID remediations do not
+run on Server and are not claimed as Server compliance. A review of Server 2022 V2R10 and Server
+2025 V1R3 identified additional non-GPO checks for Server features, event-log file ACLs, physical
+wireless/Bluetooth devices, certificate files and stores, software/update status, account
+governance, and other organization-specific evidence. The artifact README documents the current
+automation and intentional AVD deviations. It removes prohibited Simple TCP/IP, Telnet, TFTP,
+SMBv1, and PowerShell 2.0 Server features and disables physical Wi-Fi and Bluetooth on Server 2025.
+Do not treat application of the GPO package or these supplemental actions alone as evidence that
+every manual Server finding is satisfied.
 
 **Deploy in image build (recommended):** Baking STIGs into the golden image means every session host starts hardened without per-VM execution time at deployment. Follow the standard artifacts workflow:
 
@@ -530,7 +543,7 @@ cd C:\repos\FederalAVD\deployments
 > "DownloadUrl": "https://dl.dod.cyber.mil/wp-content/uploads/stigs/zip/U_STIG_GPO_Package_October_2025.zip"
 > ```
 >
-> DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and rebuild your image (or re-apply via `sessionHostCustomizations`). The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). Also update the `-Version` argument in your customizations entry to match (e.g., `'2026.04'` for the April 2026 release) so the version-tracking registry key stays current and upgrade detection works correctly.
+> DISA publishes a new package quarterly (typically January, April, July, October). The filename embeds the month and year. **Update the `DownloadUrl` in your `customer/parameters/imageManagement/downloads.json` whenever a new quarterly package is released**, then re-run `Update-ImageArtifacts.ps1` and build and validate a clean image. The latest packages are listed at [public.cyber.mil/stigs/gpo](https://public.cyber.mil/stigs/gpo). The script detects each applicable STIG's `v<major>r<revision>` release directly from the extracted package folder name; no package-level version argument is required.
 
 **Step 3 — Add to the `customizations` parameter in your image build parameter file:**
 
@@ -538,6 +551,7 @@ cd C:\repos\FederalAVD\deployments
 "customizations": {
   "value": [
     {
+      "name": "DoD-STIGs",
       "blobNameOrUri": "DoD-STIGs.zip",
       "arguments": ""
     }
@@ -545,10 +559,11 @@ cd C:\repos\FederalAVD\deployments
 }
 ```
 
-Pass arguments to override defaults — for example, to target only specific applications or to run in upgrade mode:
+Pass arguments to override defaults — for example, to target only specific applications:
 
 ```json
 {
+  "name": "DoD-STIGs",
   "blobNameOrUri": "DoD-STIGs.zip",
   "arguments": "-ApplicationsToSTIG @('Google Chrome','Mozilla Firefox') -SearchForApplications"
 }
@@ -559,14 +574,15 @@ arrays, `$true` or `$false` for booleans, and a parameter name without a value f
 `Invoke-Customization.ps1` converts these values to typed named parameters before invoking the
 artifact. See [`customer-examples/artifacts/DoD-STIGs/README.md`](../customer-examples/artifacts/DoD-STIGs/README.md) for all parameters.
 
-**Deploy at VM runtime:** To apply STIGs to an existing fleet without rebuilding the image — for example, after a quarterly STIG package update — add the same artifact reference to the `sessionHostCustomizations` parameter in the host pool deployment instead of `customizations` in the image build. The mechanism is identical; only the parameter name differs.
+**Deploy at VM runtime:** To apply the current STIG package to an existing fleet, add the same artifact reference to the `sessionHostCustomizations` parameter in the host pool deployment instead of `customizations` in the image build. The mechanism is identical; only the parameter name differs. For a new STIG release, prefer building and validating a clean image because incremental application does not guarantee that settings removed from the newer release are deleted.
 
 ```json
 "sessionHostCustomizations": {
   "value": [
     {
+      "name": "DoD-STIGs",
       "blobNameOrUri": "DoD-STIGs.zip",
-      "arguments": "-Upgrade -Version '2026.07'"
+      "arguments": "-ExecutionProfile SessionHost"
     }
   ]
 }

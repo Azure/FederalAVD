@@ -339,35 +339,41 @@ var buildTimestamp = startsWith(deployment().name, 'Microsoft.Template-')
 var buildRunId = uniqueString(subscription().subscriptionId, deployment().name, buildTimestamp)
 
 // Function to ensure unique names in customization arrays by appending index to duplicates
-var uniqueCustomizers = map(range(0, length(customizations)), i => {
-  name: length(filter(customizations, item => item.name == customizations[i].name)) > 1
-    ? '${customizations[i].name}-${length(filter(take(customizations, i + 1), item => item.name == customizations[i].name))}'
-    : customizations[i].name
-  blobNameOrUri: customizations[i].blobNameOrUri
-  arguments: customizations[i].?arguments ?? ''
-  restart: customizations[i].?restart ?? false
-})
+var uniqueCustomizers = map(range(0, length(customizations)), i => union(
+  {
+    name: length(filter(customizations, item => item.name == customizations[i].name)) > 1
+      ? '${customizations[i].name}-${length(filter(take(customizations, i + 1), item => item.name == customizations[i].name))}'
+      : customizations[i].name
+    blobNameOrUri: customizations[i].blobNameOrUri
+    restart: customizations[i].?restart ?? false
+  },
+  empty(customizations[i].?arguments ?? '') ? {} : { arguments: customizations[i].arguments! },
+  empty(customizations[i].?successExitCodes ?? '') ? {} : { successExitCodes: customizations[i].successExitCodes! }
+))
 
-var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => {
-  name: length(filter(vdiCustomizations, item => item.name == vdiCustomizations[i].name)) > 1
-    ? '${vdiCustomizations[i].name}-${length(filter(take(vdiCustomizations, i + 1), item => item.name == vdiCustomizations[i].name))}'
-    : vdiCustomizations[i].name
-  blobNameOrUri: vdiCustomizations[i].blobNameOrUri
-  arguments: vdiCustomizations[i].?arguments ?? ''
-})
+var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => union(
+  {
+    name: length(filter(vdiCustomizations, item => item.name == vdiCustomizations[i].name)) > 1
+      ? '${vdiCustomizations[i].name}-${length(filter(take(vdiCustomizations, i + 1), item => item.name == vdiCustomizations[i].name))}'
+      : vdiCustomizations[i].name
+    blobNameOrUri: vdiCustomizations[i].blobNameOrUri
+  },
+  empty(vdiCustomizations[i].?arguments ?? '') ? {} : { arguments: vdiCustomizations[i].arguments! },
+  empty(vdiCustomizations[i].?successExitCodes ?? '') ? {} : { successExitCodes: vdiCustomizations[i].successExitCodes! }
+))
 
 var cloud = toLower(environment().name)
 // account for air-gapped cloud location prefixes
 #disable-next-line BCP329
 var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
-var locationsData = loadJsonContent('../../.common/data/locations.json')
+var locationsData = loadJsonContent('../shared/data/locations.json')
 var locations = startsWith(cloud, 'us') ? locationsData.other : locationsData[environment().name]
-var resourceAbbreviations = loadJsonContent('../../.common/data/resourceAbbreviations.json')
+var resourceAbbreviations = loadJsonContent('../shared/data/resourceAbbreviations.json')
 var downloads = startsWith(cloud, 'usn')
-  ? loadJsonContent('../../.common/data/topsecret.downloads.parameters.json')
+  ? loadJsonContent('../shared/data/topsecret.downloads.parameters.json')
   : startsWith(cloud, 'uss')
-      ? loadJsonContent('../../.common/data/secret.downloads.parameters.json')
-      : loadJsonContent('../../.common/data/public.downloads.parameters.json')
+      ? loadJsonContent('../shared/data/secret.downloads.parameters.json')
+      : loadJsonContent('../shared/data/public.downloads.parameters.json')
 var artifactsContainerUriNormalized = endsWith(artifactsContainerUri, '/')
   ? take(artifactsContainerUri, max(length(artifactsContainerUri) - 1, 0))
   : artifactsContainerUri
@@ -565,8 +571,8 @@ var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
   ? dateTimeAdd(buildTimestamp, 'P${imageVersionEOLinDays}D')
   : ''
 
-var imageVmName = '${depPrefix}vmimg-${buildRunId}'
-var orchestrationVmName = '${depPrefix}vmorc-${buildRunId}'
+var imageVmName = '${depPrefix}img-${buildRunId}'
+var orchestrationVmName = '${depPrefix}orc-${buildRunId}'
 
 var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'

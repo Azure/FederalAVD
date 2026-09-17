@@ -519,7 +519,7 @@
                             "visible": "[and(steps('prereqs').storage.enableZeroTrustStorage, equals(steps('imageCustomizations').downloadLatestMicrosoftContent, false))]",
                             "options": {
                                 "style": "Warning",
-                                "text": "This page of the wizard allows you to add image customizations by downloading blobs from the storage account selected on the 'Prerequisites' page and performing the defined actions. The blobs for the predefined installers listed below (i.e., FSLogix, Office, OneDrive, Teams, Virtual Desktop Optimization Tool) must be present in the storage account. The easiest way to upload them to the storage account is through the Deploy-ImageManagementResources script."
+                                "text": "This page of the wizard allows you to add image customizations by downloading blobs from the storage account selected on the 'Prerequisites' page and performing the defined actions. The blobs for the predefined installers listed below (i.e., FSLogix, Office, OneDrive, Teams) must be present in the storage account. The easiest way to upload them to the storage account is through the Deploy-ImageManagementResources script. VDI optimization is applied by an in-box script and does not require any blob."
                             }
                         },
                         {
@@ -528,7 +528,7 @@
                             "visible": "[and(not(contains(steps('basics').meApi.transformed.context, 'microsoft.us')), not(contains(steps('basics').meApi.transformed.context, 'microsoft.com')), steps('imageCustomizations').downloadLatestMicrosoftContent)]",
                             "options": {
                                 "style": "Warning",
-                                "text": "This page of the wizard allows you to add predefined and custom defined image customizations. The built-in customizations (i.e., FSLogix, Office, OneDrive, Teams, Windows Desktop Optimization Tool) require Internet access in order to be able to download the installers from Microsoft. If this is not available, then you must enable the Zero Trust option after completing the prerequisite deployment of Image Management Resources."
+                                "text": "This page of the wizard allows you to add predefined and custom defined image customizations. The built-in customizations (i.e., FSLogix, Office, OneDrive, Teams) require Internet access in order to be able to download the installers from Microsoft. If this is not available, then you must enable the Zero Trust option after completing the prerequisite deployment of Image Management Resources. VDI optimization is applied by an in-box script and does not require Internet access."
                             }
                         },
                         {
@@ -1091,7 +1091,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addCustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization. Can only contain alphanumerics and no spaces,2.  Blob Name (or URI): Enter the case-sensitive blob name or url, optionally, 3. Arguments: Enter any arguments, and finally, Restart: Optionally, select Yes or No to introduce a system restart after this customizer runs."
+                                        "text": "Enter customizations for your image below. Specify a name, case-sensitive blob name or URI, optional arguments, optional comma-separated success exit codes (default 0,3010), and whether to restart after the customization."
                                     }
                                 },
                                 {
@@ -1149,6 +1149,24 @@
                                                 }
                                             },
                                             {
+                                                "id": "successExitCodes",
+                                                "header": "Success Exit Codes",
+                                                "width": "1fr",
+                                                "element": {
+                                                    "type": "Microsoft.Common.TextBox",
+                                                    "placeholder": "Default: 0,3010",
+                                                    "constraints": {
+                                                        "required": false,
+                                                        "validations": [
+                                                            {
+                                                                "regex": "^$|^-?[0-9]+(\\s*,\\s*-?[0-9]+)*$",
+                                                                "message": "Enter comma-separated integer exit codes, such as 0,3010."
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            {
                                                 "id": "restart",
                                                 "header": "Restart",
                                                 "width": "1fr",
@@ -1194,7 +1212,7 @@
                                     "type": "Microsoft.Common.TextBlock",
                                     "visible": "[steps('imageCustomizations').customSoftware.addVDICustomSoftware]",
                                     "options": {
-                                        "text": "Enter customizations for your image below. The columns are explained as follows: 1. Name: Enter the name of the customization (can only contain alphanumerics and no spaces), 2. Blob Name (or url): enter the case-sensitive blob name or url, optionally 3. Arguments: any arguments."
+                                        "text": "Enter customizations for your image below. Specify a name, case-sensitive blob name or URI, optional arguments, and optional comma-separated success exit codes (default 0,3010)."
                                     }
                                 },
                                 {
@@ -1248,6 +1266,24 @@
                                                     "placeholder": "Example: /verysilent /mergetasks='!runcode'",
                                                     "constraints": {
                                                         "required": false
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "id": "successExitCodes",
+                                                "header": "Success Exit Codes",
+                                                "width": "1fr",
+                                                "element": {
+                                                    "type": "Microsoft.Common.TextBox",
+                                                    "placeholder": "Default: 0,3010",
+                                                    "constraints": {
+                                                        "required": false,
+                                                        "validations": [
+                                                            {
+                                                                "regex": "^$|^-?[0-9]+(\\s*,\\s*-?[0-9]+)*$",
+                                                                "message": "Enter comma-separated integer exit codes, such as 0,3010."
+                                                            }
+                                                        ]
                                                     }
                                                 }
                                             }
@@ -1313,7 +1349,7 @@
                                     "visible": true,
                                     "options": {
                                         "style": "Info",
-                                        "text": "VDI Image Optimization applies settings from the Microsoft VDI optimization guide to this image build. Those settings have been sorted and categorized into profiles based on how session hosts are managed and updated - specifically, whether updates are delivered through image replacement or applied directly to running VMs. Read each profile description in the dropdown carefully before selecting.",
+                                        "text": "VDI Image Optimization applies settings from Microsoft's Optimizing Windows configuration for VDI desktops article to this image build. Those settings have been sorted and categorized into profiles based on how session hosts are managed and updated - specifically, whether updates are delivered through image replacement or applied directly to running VMs. Read each profile description in the dropdown carefully before selecting.",
                                         "uri": "https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration"
                                     }
                                 },

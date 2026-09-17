@@ -9,8 +9,8 @@ if ($Timer.IsPastDue) {
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
 # Log configuration settings for workbook visibility
-$enableShutdownRetention = Read-FunctionAppSetting EnableShutdownRetention -AsBoolean
 $replacementMode = Read-FunctionAppSetting ReplacementMode
+$enableShutdownRetention = $replacementMode -eq 'SideBySide' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)
 $minimumDrainMinutes = Read-FunctionAppSetting MinimumDrainMinutes
 $drainGracePeriodHours = Read-FunctionAppSetting DrainGracePeriodHours
 $minimumCapacityPercentage = Read-FunctionAppSetting MinimumCapacityPercentage
@@ -257,9 +257,15 @@ Write-LogEntry -Message "Filtered to {0} session hosts enabled for automatic rep
 # Further filter out VMs that are already in shutdown retention (to avoid redundant shutdown operations)
 if ($enableShutdownRetention) {
     $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
+    $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
     $hostsInShutdownRetention = @()
     
     Write-LogEntry -Message "Checking for session hosts already in shutdown retention using tag: $shutdownRetentionTag" -Level Trace
+
+    $shutdownRetentionVMResourceIds = @($cachedVMs | Where-Object {
+        $_.tags -and ($_.tags.PSObject.Properties.Name -contains $shutdownRetentionTag)
+    } | ForEach-Object { $_.id })
+    $shutdownRetentionPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds $shutdownRetentionVMResourceIds
     
     foreach ($sessionHost in $sessionHostsFiltered) {
         $vmName = $sessionHost.ResourceId.Split('/')[-1]
@@ -270,8 +276,48 @@ if ($enableShutdownRetention) {
             Write-LogEntry -Message "VM ${vmName}: Has tags=$($null -ne $vm.tags), Has retention tag=$hasRetentionTag" -Level Trace
             
             if ($hasRetentionTag) {
+                if (-not $shutdownRetentionPowerStates[$sessionHost.ResourceId]) {
+                    Write-LogEntry -Message "VM $vmName has a shutdown retention tag but is not confirmed stopped or deallocated - keeping it in replacement processing" -Level Warning
+                    try {
+                        $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                        $Body = @{
+                            operation  = 'Delete'
+                            properties = @{
+                                tags = @{ $shutdownRetentionTag = '' }
+                            }
+                        }
+                        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        Write-LogEntry -Message "Removed stale shutdown retention tag from active VM: $vmName" -Level Warning
+                    }
+                    catch {
+                        Write-LogEntry -Message "Failed to remove stale shutdown retention tag from active VM ${vmName}: $($_.Exception.Message)" -Level Error
+                    }
+                    continue
+                }
+
                 $hostsInShutdownRetention += $sessionHost
                 Write-LogEntry -Message "VM $vmName is in shutdown retention - will exclude from replacement processing" -Level Trace
+
+                if ($tagScalingPlanExclusionTag -and $tagScalingPlanExclusionTag -ne ' ') {
+                    $scalingPlanExclusionValue = if ($vm.tags.PSObject.Properties.Name -contains $tagScalingPlanExclusionTag) { $vm.tags.$tagScalingPlanExclusionTag } else { $null }
+                    if ($scalingPlanExclusionValue -ne 'SessionHostReplacer') {
+                        try {
+                            Write-LogEntry -Message "Restoring scaling plan exclusion tag on shutdown retention VM: $vmName" -Level Warning
+                            $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                            $Body = @{
+                                properties = @{
+                                    tags = @{ $tagScalingPlanExclusionTag = 'SessionHostReplacer' }
+                                }
+                                operation  = 'Merge'
+                            }
+                            Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                            Write-LogEntry -Message "Restored scaling plan exclusion tag on shutdown retention VM: $vmName" -Level Trace
+                        }
+                        catch {
+                            Write-LogEntry -Message "Failed to restore scaling plan exclusion tag on shutdown retention VM ${vmName}: $($_.Exception.Message)" -Level Warning
+                        }
+                    }
+                }
             }
         }
         else {
@@ -464,9 +510,35 @@ if (-not $skipLightweightCheck) {
     }
 }
 
-# If up to date, skip expensive operations and go straight to early exit path
+# Query the scaling plan before either planning path so an up-to-date pool can establish
+# exact-image validation evidence for healthy hosts.
+$scalingPlanTarget = $null
+if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
+    try {
+        $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
+        $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
+        $hostPoolName = Read-FunctionAppSetting HostPoolName
+        $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+
+        Write-LogEntry -Message "$replacementMode mode: Querying scaling plan"
+        $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
+
+        if ($scalingPlanTarget -and $null -ne $scalingPlanTarget.CapacityPercentage) {
+            Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
+        }
+        else {
+            Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
+        }
+    }
+    catch {
+        Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
+        $scalingPlanTarget = $null
+    }
+}
+
+# If up to date, skip replacement planning and go straight to the early exit path.
 if ($isUpToDate) {
-    Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation and scaling plan query"
+    Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation"
     
     # Create a minimal replacement plan for early exit logic
     $hostPoolReplacementPlan = [PSCustomObject]@{
@@ -478,39 +550,11 @@ if ($isUpToDate) {
         TotalSessionHostsToReplace     = 0
     }
     
-    # Skip scaling plan query (not needed when up to date)
-    $scalingPlanTarget = $null
 }
 else {
     # Host pool needs work - run full replacement plan calculation
     Write-LogEntry -Message "Host pool requires updates - running full replacement plan calculation"
-    
-    # Query scaling plan for dynamic minimum capacity (DeleteFirst mode only)
-    # This is ONLY needed when we're actually going to delete hosts
-    $scalingPlanTarget = $null
-    if ($replacementMode -ieq 'DeleteFirst') {
-        try {
-            $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
-            $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
-            $hostPoolName = Read-FunctionAppSetting HostPoolName
-            $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
-            
-            Write-LogEntry -Message "DeleteFirst mode: Querying scaling plan for dynamic minimum capacity target"
-            $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
-            
-            if ($scalingPlanTarget -and $scalingPlanTarget.CapacityPercentage) {
-                Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
-            }
-            else {
-                Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
-            }
-        }
-        catch {
-            Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
-            $scalingPlanTarget = $null
-        }
-    }
-    
+
     # Get full replacement plan with all calculations
     $hostPoolReplacementPlan = Get-SessionHostReplacementPlan `
         -ARMToken $ARMToken `
@@ -532,6 +576,19 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
     $failedDeployments.Count -eq 0) {
     
     Write-LogEntry -Message "Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed."
+
+    $scalingPlanUsable = $scalingPlanTarget -and
+        $scalingPlanTarget.Source -eq 'ScalingPlan' -and
+        $null -ne $scalingPlanTarget.CapacityPercentage
+    if ($scalingPlanUsable) {
+        $upToDateHostReadiness = Test-NewSessionHostsAvailable `
+            -ARMToken $ARMToken `
+            -SessionHosts $sessionHosts `
+            -LatestImageVersion $latestImageVersion `
+            -ScalingPlanTarget $scalingPlanTarget
+
+        Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
+    }
     
     # Update LastImageVersion now that the cycle is complete
     if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
@@ -683,7 +740,11 @@ Write-LogEntry -Message "Host pool requires updates - proceeding with replacemen
 # This provides metrics for monitoring and is used as a safety check before removing old hosts
 # ONLY run this check if there are actually hosts to replace - otherwise shutdown hosts trigger false positives
 if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -gt 0) {
-    $newHostAvailability = Test-NewSessionHostsAvailable -ARMToken $ARMToken -SessionHosts $sessionHosts -LatestImageVersion $latestImageVersion
+    $newHostAvailability = Test-NewSessionHostsAvailable `
+        -ARMToken $ARMToken `
+        -SessionHosts $sessionHosts `
+        -LatestImageVersion $latestImageVersion `
+        -ScalingPlanTarget $scalingPlanTarget
 }
 else {
     # No hosts need replacement - all hosts are on latest image
@@ -1152,8 +1213,8 @@ else {
 # Log comprehensive metrics for monitoring dashboard (after all operations complete)
 $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
 
-# Calculate current deployment status accounting for just-submitted deployments
-$currentlyDeploying = $runningDeployments.Count
+# Calculate deploying VM count accounting for ARM deployments and deployments submitted this run
+$currentlyDeploying = [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
 $remainingToDeploy = $hostPoolReplacementPlan.PossibleDeploymentsCount
 if ($deploymentResult) {
     # A deployment was just submitted this run, so it's now running
@@ -1162,12 +1223,11 @@ if ($deploymentResult) {
     $remainingToDeploy = [Math]::Max(0, $remainingToDeploy - $deploymentResult.SessionHostCount)
 }
 
-# Count VMs in shutdown retention for metrics (use count from earlier calculation to avoid stale cache issues)
-$shutdownRetentionCount = if ($enableShutdownRetention -and $hostsInShutdownRetention) { $hostsInShutdownRetention.Count } else { 0 }
-
 # Calculate actual current counts by subtracting completed deletions from initial counts
 $completedDeletionsCount = if ($deletionResults -and $deletionResults.SuccessfulDeletions) { $deletionResults.SuccessfulDeletions.Count } else { 0 }
 $completedShutdownsCount = if ($deletionResults -and $deletionResults.SuccessfulShutdowns) { $deletionResults.SuccessfulShutdowns.Count } else { 0 }
+$retainedSessionHostNames = @(@($hostsInShutdownRetention.SessionHostName) + @($deletionResults.SuccessfulShutdowns) | Select-Object -Unique)
+$shutdownRetentionCount = if ($enableShutdownRetention) { $retainedSessionHostNames.Count } else { 0 }
 $currentSessionHostCount = $sessionHosts.Count - $completedDeletionsCount
 $currentEnabledCount = $sessionHostsFiltered.Count - $completedDeletionsCount
 
@@ -1248,6 +1308,7 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
                 Write-LogEntry -Message "VM $vmName has shutdown retention tag - will preserve scaling exclusion tag" -Level Trace
             }
         }
+        $shutdownRetentionVMs = @($shutdownRetentionVMs + @($deletionResults.SuccessfulShutdowns) | Select-Object -Unique)
     }
     
     # Only proceed if a scaling exclusion tag is configured

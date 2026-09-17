@@ -219,7 +219,7 @@ Arguments are passed as a single string to `Invoke-Customization.ps1`, which par
 
 ## Artifacts Directory Structure
 
-Repo-provided artifacts live at `.common/artifacts/` (currently empty, reserved for future use). Customer-provided artifacts and overrides belong at `customer/artifacts/`.
+Repo-provided artifacts live at `deployments/shared/artifacts/` (currently empty, reserved for future use). Customer-provided artifacts and overrides belong at `customer/artifacts/`.
 
 > **Ready-to-use examples:** `customer-examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer-examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
 
@@ -248,6 +248,31 @@ When `Invoke-Customization.ps1` downloads and executes an artifact during deploy
 ZIP artifacts must contain exactly one root-level PowerShell script. The runtime does not use a
 declared entry point and does not guarantee which script is selected when multiple root scripts
 exist. Put helper scripts in a subdirectory and invoke them explicitly from the root script.
+
+Every artifact type validates its result against the optional `successExitCodes` customization
+property. Supply a comma-separated string of integer exit codes, such as `"0,1641,3010"`. When
+omitted or blank, the Run Command does not submit that parameter, so the script default of
+`"0,3010"` applies: `0` is normal success and `3010` is success with a reboot required. Exit code
+`1641` is not accepted by default because it indicates that the installer initiated a restart;
+add it only when that behavior is intentional.
+
+```json
+{
+   "name": "Install-CustomApp",
+   "blobNameOrUri": "CustomApp.zip",
+   "arguments": "-DeploymentType Install",
+   "successExitCodes": "0,1641,3010",
+   "restart": true
+}
+```
+
+The orchestrator captures the process exit code for EXE, MSI, and BAT artifacts and uses
+`$LASTEXITCODE` for direct PowerShell and ZIP-contained PowerShell scripts. It logs accepted reboot
+codes but does not restart the VM automatically; the image-build `restart` property controls the
+subsequent restart. An exit code not in `successExitCodes` fails the customization.
+
+The optional `arguments` property follows the same omission behavior. When it is omitted or blank,
+the Run Command does not submit the parameter and the script's empty-string default applies.
 
 For application artifacts that can also be published as VM Applications, use the same root script
 for both lifecycle actions:
@@ -476,7 +501,7 @@ Add other named parameters to the root script when the customization needs them.
 "arguments": "-AllowDeveloperTools $true"
 
 // Switch — no value means $true; omitting the parameter uses the script default
-"arguments": "-SearchForApplications -Upgrade"
+"arguments": "-SearchForApplications -AllowLocalUserRemoteInteractiveLogon"
 
 // String array — @() with single quotes, spaces after commas are fine
 "arguments": "-Domains @('portal.azure.com', 'core.windows.net')"

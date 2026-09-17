@@ -10,6 +10,9 @@ type artifactCustomizationType = {
 
   @description('Optional arguments passed to the customization artifact.')
   arguments: string?
+
+  @description('Optional comma-separated exit codes treated as success. Defaults to 0,3010.')
+  successExitCodes: string?
 }
 
 @export()
@@ -23,6 +26,9 @@ type restartableArtifactCustomizationType = {
   @description('Optional arguments passed to the customization artifact.')
   arguments: string?
 
+  @description('Optional comma-separated exit codes treated as success. Defaults to 0,3010.')
+  successExitCodes: string?
+
   @description('Restart the target virtual machine after the customization completes.')
   restart: bool?
 }
@@ -31,7 +37,8 @@ type restartableArtifactCustomizationType = {
 type resolvedCustomizationType = {
   name: string
   uri: string
-  arguments: string
+  arguments: string?
+  successExitCodes: string?
   restart: bool
 }
 

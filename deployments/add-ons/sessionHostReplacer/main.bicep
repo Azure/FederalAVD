@@ -233,6 +233,9 @@ param tagShutdownTimestamp string = 'AutoReplaceShutdownTimestamp'
 @description('Optional. Tag name for scaling plan exclusion. Default is ScalingPlanExclusion.')
 param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
 
+@description('Optional. Tag name used to record successful AVD health validation for the exact deployed image. Default is AutoReplaceValidatedImage.')
+param tagValidatedImage string = 'AutoReplaceValidatedImage'
+
 @description('Optional. Whether to remove Entra ID device records when deleting session hosts. Default is true.')
 param removeEntraDevice bool = true
 
@@ -482,7 +485,7 @@ var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
 //   ##            → availability set numeric index (e.g., '01')
 // ============================================================================
 var cloud = toLower(environment().name)
-var locationsObject = loadJsonContent('../../../.common/data/locations.json')
+var locationsObject = loadJsonContent('../../shared/data/locations.json')
 var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
 var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
@@ -500,6 +503,7 @@ var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtual
 // Pre-populated from the hpIdentifier tag on the hosts resource group.
 var effectiveIdentifier = !empty(identifier) ? identifier : 'replacer'
 var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
+var effectiveEnableShutdownRetention = replacementMode == 'SideBySide' && enableShutdownRetention
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {
@@ -532,6 +536,21 @@ var storageAccountName            = !empty(storageAccountNameOverride)          
 var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)   ? storageEncryptionIdentityNameOverride   : shrNaming.outputs.storageEncryptionIdentityName
 var templateSpecNameFinal         = !empty(templateSpecName)                        ? templateSpecName                        : shrNaming.outputs.templateSpecName
 var encryptionKeyName             = '${effectiveIdentifier}-shr-storage-cmk'
+
+// Start storage CMK provisioning before the Function App prerequisites. This gives the
+// key-scoped role assignment time to propagate before the initial CMK-enabled storage PUT.
+module storageCmk '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = if (keyManagementStorageAccounts != 'PlatformManaged') {
+  scope: resourceGroup(functionAppResourceGroupName)
+  params: {
+    keyVaultResourceId: encryptionKeyVaultResourceId
+    keyManagementType: keyManagementStorageAccounts == 'CustomerManagedHSM' ? 'CustomerManagedHSM' : 'CustomerManaged'
+    location: location
+    tags: tags
+    parentResourceId: hostPoolResourceId
+    keyNames: [encryptionKeyName]
+    identityName: storageEncryptionIdentityName
+  }
+}
 
 // Extract compute gallery resource ID from custom image resource ID
 // Image definition format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/galleries/{gallery}/images/{imageName}
@@ -895,15 +914,11 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
           name: 'MinimumHostIndex'
           value: string(minimumHostIndex)
         }
+        {
+          name: 'EnableShutdownRetention'
+          value: string(effectiveEnableShutdownRetention)
+        }
       ],
-      replacementMode == 'SideBySide'
-        ? [
-            {
-              name: 'EnableShutdownRetention'
-              value: string(enableShutdownRetention)
-            }
-          ]
-        : [],
       replacementMode == 'SideBySide'
         ? [
             {
@@ -980,6 +995,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
           value: tagScalingPlanExclusionTag
         }
         {
+          name: 'Tag_ValidatedImage'
+          value: tagValidatedImage
+        }
+        {
           name: 'TargetSessionHostCount'
           value: string(targetSessionHostCount)
         }
@@ -1018,6 +1037,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     permittedIPs: permittedIPs
     tags: tags
   }
+  dependsOn: [storageCmk]
 }
 
 module functionCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {

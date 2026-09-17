@@ -444,6 +444,7 @@ resource extension_NvidiaGpuDriverWindows 'Microsoft.Compute/virtualMachines/ext
 
 module customizations 'invokeCustomizations.bicep' = [
   for i in range(0, sessionHostCount): if (!empty(sessionHostCustomizations)) {
+    name: '${virtualMachineNames[i]}-customizations'
     params: {
       artifactsContainerUri: artifactsContainerUri
       customizations: sessionHostCustomizations
@@ -519,6 +520,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
 
 module updateOSDiskNetworkAccess 'getOSDisk.bicep' = [
   for i in range(0, sessionHostCount): {
+    name: '${virtualMachineNames[i]}-update-os-disk-network-access'
     params: {
       diskAccessId: diskAccessId
       diskName: virtualMachine[i].properties.storageProfile.osDisk.name

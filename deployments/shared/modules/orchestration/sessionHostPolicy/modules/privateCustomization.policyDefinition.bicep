@@ -35,7 +35,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
         type: 'Array'
         metadata: {
           displayName: 'Ordered private customizations'
-          description: 'Ordered customization objects containing name, artifactUri, and arguments.'
+          description: 'Ordered customization objects containing name, artifactUri, arguments, and optional successExitCodes.'
         }
       }
       finalRunCommandName: {

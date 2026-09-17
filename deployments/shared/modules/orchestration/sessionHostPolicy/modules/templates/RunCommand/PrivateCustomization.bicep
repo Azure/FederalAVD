@@ -2,6 +2,7 @@ type resolvedPolicyCustomizationType = {
   name: string
   artifactUri: string
   arguments: string?
+  successExitCodes: string?
 }
 
 param customizations resolvedPolicyCustomizationType[]
@@ -24,6 +25,7 @@ module customization 'PrivateCustomizationRunCommand.bicep' = [
     params: {
       artifactUri: customization.artifactUri
       arguments: customization.?arguments ?? ''
+      successExitCodes: customization.?successExitCodes ?? ''
       location: location
       runCommandName: customization.name
       userAssignedIdentityResourceId: userAssignedIdentityResourceId

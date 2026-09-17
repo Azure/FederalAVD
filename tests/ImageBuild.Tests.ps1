@@ -616,4 +616,12 @@ Describe 'Image Build Run Command capacity protection' {
         $customizeModule = Get-Content -LiteralPath $customizeModulePath -Raw
         $customizeModule | Should Match 'var customizationBatchSize = 20'
     }
+
+    It 'names each customization deployment after its customizer type without truncation collisions' {
+        $batchModule = Get-Content -LiteralPath $batchModulePath -Raw
+        $batchModule | Should Match "batchContext == 'vdi' \? 'vdiCustomizer' : 'customizer'"
+        $batchModule.Contains("'`${customization.name}-`${customizationDeploymentSuffix}'") | Should Be $true
+        $batchModule | Should Match 'uniqueString\(customization\.name\)'
+        $batchModule | Should Not Match "name: 'apply-\`\$\{batchContext\}"
+    }
 }

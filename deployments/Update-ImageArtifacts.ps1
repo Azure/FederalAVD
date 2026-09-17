@@ -8,9 +8,10 @@ writes them to a local folder.
 Run this script whenever you want to refresh the artifacts in the image management storage account -
 for example, after adding new software packages or after new versions are released.
 
-The script stages artifacts from both the repository-owned '.common\artifacts' folder and the
-customer-owned 'customer\artifacts' folder. Customer artifacts are overlaid on top of repository
-artifacts, allowing customers to extend or replace packages without modifying repo-provided content.
+The script stages artifacts from both the repository-owned 'deployments\shared\artifacts' folder and
+the customer-owned 'customer\artifacts' folder. Customer artifacts are overlaid on top of
+repository artifacts, allowing customers to extend or replace packages without modifying
+repo-provided content.
 
 This script does NOT deploy any Azure infrastructure. Deploy the imageManagement Bicep template
 first (see deployments/imageManagement/README.md), then use this script to populate the storage
@@ -185,7 +186,7 @@ Else {
 
 $ArtifactsContainerName = 'artifacts'
 $TempArtifactsDir = Join-Path -Path $TempDir -ChildPath 'Artifacts'
-$RepoArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath '..\.common\artifacts')).FullName
+$RepoArtifactsDir = (Get-Item -Path (Join-Path -Path $PSScriptRoot -ChildPath 'shared\artifacts')).FullName
 $ResolvedCustomerRootPath = if ([string]::IsNullOrWhiteSpace($CustomerRootPath)) {
     Join-Path -Path $PSScriptRoot -ChildPath '..\customer'
 } else {
@@ -705,7 +706,7 @@ else {
 
 #region Download New Sources
 
-$downloadFilePath = (Join-Path -Path "$PSScriptRoot\.." -ChildPath ".common\data\$downloadsParametersPrefix.downloads.parameters.json")
+$downloadFilePath = (Join-Path -Path $PSScriptRoot -ChildPath "shared\data\$downloadsParametersPrefix.downloads.parameters.json")
 if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
 
     Write-Output ""
@@ -782,6 +783,10 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     $packageCount = ($Downloads.PSObject.Properties.Name).Count
     Write-Output "Processing $packageCount package(s) from '$downloadFilePath'."
 
+    # Cache release metadata by repository so multiple assets requested from the same release
+    # are resolved atomically and do not consume one GitHub API request per asset.
+    $GitHubReleaseCache = @{}
+
     # Clean winget's own working directory so stale files from previous runs do not
     # accumulate. winget creates %TEMP%\WinGet independently of --download-directory.
     $WingetTempDir = Join-Path -Path $Env:TEMP -ChildPath 'WinGet'
@@ -796,6 +801,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         Write-Output ""
         Write-Output "=== $SoftwareName ==="
         $DownloadUrl = $null
+        $DownloadAssets = @()
         $UseWinget = $false
         If ($null -ne $Download.WingetId -and $Download.WingetId -ne '') {
             $UseWinget = $true
@@ -842,11 +848,35 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         }
         ElseIf ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo
-            $FileNamePattern = $Download.GitHubFileNamePattern
             $ReleasesUri = "https://api.github.com/repos/$Repo/releases/latest"
             Write-Output "[$SoftwareName] Retrieving URL from GitHub ($Repo)..."
-            $DownloadUrl = ((Invoke-RestMethod -Method GET -Uri $ReleasesUri).assets | Where-Object name -like $FileNamePattern).browser_download_url
-            Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            If (-not $GitHubReleaseCache.ContainsKey($Repo)) {
+                $GitHubReleaseCache[$Repo] = Invoke-RestMethod -Method GET -Uri $ReleasesUri
+            }
+            $FileNamePatterns = @($Download.GitHubFileNamePatterns | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+            If ($FileNamePatterns.Count -gt 0) {
+                foreach ($FileNamePattern in $FileNamePatterns) {
+                    $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                    If ($MatchingAssets.Count -ne 1) {
+                        Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
+                    }
+                    $DownloadAssets += [pscustomobject]@{
+                        Name = [string]$MatchingAssets[0].name
+                        Url = [string]$MatchingAssets[0].browser_download_url
+                        Digest = [string]$MatchingAssets[0].digest
+                    }
+                }
+                Write-Output "[$SoftwareName] Resolved $($DownloadAssets.Count) asset(s) from release '$($GitHubReleaseCache[$Repo].tag_name)'."
+            }
+            Else {
+                $FileNamePattern = $Download.GitHubFileNamePattern
+                $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                If ($MatchingAssets.Count -ne 1) {
+                    Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
+                }
+                $DownloadUrl = $MatchingAssets[0].browser_download_url
+                Write-Verbose "[$SoftwareName] Resolved URL: $DownloadUrl"
+            }
         }
         If ($UseWinget) {
             If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
@@ -883,8 +913,19 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         '--skip-license', '--accept-source-agreements', '--accept-package-agreements',
                         '--disable-interactivity'
                     )
-                    If ($PreserveLayout) {
-                        $WingetArguments += @('--source', 'msstore')
+                    $WingetSource = if ($null -ne $Download.WingetSource -and $Download.WingetSource -ne '') {
+                        [string]$Download.WingetSource
+                    } elseif ($PreserveLayout) {
+                        'msstore'
+                    } else {
+                        ''
+                    }
+                    If ($WingetSource -notin @('', 'msstore', 'winget')) {
+                        Throw "WingetSource for '$SoftwareName' must be 'msstore' or 'winget'."
+                    }
+                    If ($WingetSource -ne '') {
+                        Write-Output "[$SoftwareName] Source       : $WingetSource"
+                        $WingetArguments += @('--source', $WingetSource)
                     }
                     If ($WingetArch -eq 'neutral') {
                         Write-Output "[$SoftwareName] Architecture : (omitted - neutral/multi-arch)"
@@ -908,6 +949,17 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         # Do not rename any files; the install script will discover them by extension.
 
                         $PruneExts = @('.msixbundle', '.appxbundle', '.msix', '.appx')
+
+                        # Community winget manifests can provide MSIX framework dependencies as
+                        # zip archives. Expand them so the dependency packages can be consolidated
+                        # into SharedDependencies for offline image provisioning.
+                        $DependencyArchives = Get-ChildItem -Path $TempSoftwareDownloadDir -Recurse -File -Filter '*.zip' |
+                            Where-Object { $_.FullName -match '(?i)\\dependencies\\' }
+                        foreach ($DependencyArchive in $DependencyArchives) {
+                            $DependencyExtractPath = Join-Path -Path $DependencyArchive.DirectoryName -ChildPath $DependencyArchive.BaseName
+                            Write-Output "[$SoftwareName] Expanding dependency archive: $($DependencyArchive.Name)"
+                            Expand-Archive -LiteralPath $DependencyArchive.FullName -DestinationPath $DependencyExtractPath -Force
+                        }
 
                         # --- Prune main bundle variants ---
                         # When winget downloads without --architecture it fetches every available
@@ -1041,6 +1093,81 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                                 $null = $CustomerPreserveLayoutParentFolders.Add((Join-Path -Path $CustomerArtifactsDir -ChildPath $parentRelative))
                             }
                         }
+                    }
+                }
+            }
+        }
+        ElseIf ($DownloadAssets.Count -gt 0) {
+            Write-Output "[$SoftwareName] Downloading $($DownloadAssets.Count) grouped GitHub release asset(s)..."
+            $DestFolders = @(if (@($Download.DestinationFolders).Count -gt 0) { $Download.DestinationFolders } else { '' })
+            $PrimaryDestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolders[0]
+            If (-not (Test-Path -Path $PrimaryDestinationDir)) {
+                New-Item -Path $PrimaryDestinationDir -ItemType Directory -Force | Out-Null
+            }
+            foreach ($CleanupPattern in @($Download.DestinationCleanupPatterns)) {
+                Get-ChildItem -LiteralPath $PrimaryDestinationDir -File -Filter $CleanupPattern -ErrorAction SilentlyContinue |
+                    Remove-Item -Force
+            }
+            $VersionText = @(
+                "SoftwareName = $SoftwareName"
+                "GitHubRepo = $Repo"
+                "GitHubRelease = $($GitHubReleaseCache[$Repo].tag_name)"
+            )
+            foreach ($DownloadAsset in $DownloadAssets) {
+                $DownloadedAssetPath = @(Get-InternetFile `
+                    -Url $DownloadAsset.Url `
+                    -OutputDirectory $PrimaryDestinationDir `
+                    -OutputFileName $DownloadAsset.Name)[-1]
+                If (-not (Test-Path -LiteralPath $DownloadedAssetPath -PathType Leaf)) {
+                    Throw "[$SoftwareName] GitHub release asset '$($DownloadAsset.Name)' was not downloaded."
+                }
+                If (-not [string]::IsNullOrWhiteSpace($DownloadAsset.Digest)) {
+                    If ($DownloadAsset.Digest -notmatch '^sha256:([0-9A-Fa-f]{64})$') {
+                        Throw "[$SoftwareName] Unsupported digest '$($DownloadAsset.Digest)' for '$($DownloadAsset.Name)'."
+                    }
+                    $ExpectedHash = $Matches[1].ToUpperInvariant()
+                    $ActualHash = (Get-FileHash -LiteralPath $DownloadedAssetPath -Algorithm SHA256).Hash
+                    If ($ActualHash -ne $ExpectedHash) {
+                        Throw "[$SoftwareName] SHA256 mismatch for '$($DownloadAsset.Name)'."
+                    }
+                }
+                $VersionText += "Downloaded File = $($DownloadAsset.Name)"
+            }
+            $VersionText += "Downloaded on = $(Get-Date)"
+            $VersionText += "--------------------------------------------------"
+            Add-Content -Path $FileVersionInfoFile -Value $VersionText
+
+            $copySize = [math]::Round((($DownloadAssets | ForEach-Object {
+                (Get-Item -LiteralPath (Join-Path $PrimaryDestinationDir $_.Name)).Length
+            } | Measure-Object -Sum).Sum) / 1MB, 1)
+            Write-Output "[$SoftwareName] Downloaded grouped assets directly to '$($DestFolders[0])' ($copySize MB)."
+
+            foreach ($DestFolder in @($DestFolders | Select-Object -Skip 1)) {
+                $DestinationDir = Join-Path -Path $ArtifactsDir -ChildPath $DestFolder
+                If (-not (Test-Path -Path $DestinationDir)) {
+                    New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
+                }
+                foreach ($CleanupPattern in @($Download.DestinationCleanupPatterns)) {
+                    Get-ChildItem -LiteralPath $DestinationDir -File -Filter $CleanupPattern -ErrorAction SilentlyContinue |
+                        Remove-Item -Force
+                }
+                foreach ($DownloadAsset in $DownloadAssets) {
+                    Copy-Item -LiteralPath (Join-Path $PrimaryDestinationDir $DownloadAsset.Name) -Destination $DestinationDir -Force
+                }
+            }
+
+            if ($CopyDownloadsToCustomerArtifacts) {
+                foreach ($DestFolder in $DestFolders) {
+                    $CustomerDestinationDir = Join-Path -Path $CustomerArtifactsDir -ChildPath $DestFolder
+                    If (-not (Test-Path -Path $CustomerDestinationDir)) {
+                        New-Item -Path $CustomerDestinationDir -ItemType Directory -Force | Out-Null
+                    }
+                    foreach ($CleanupPattern in @($Download.DestinationCleanupPatterns)) {
+                        Get-ChildItem -LiteralPath $CustomerDestinationDir -File -Filter $CleanupPattern -ErrorAction SilentlyContinue |
+                            Remove-Item -Force
+                    }
+                    foreach ($DownloadAsset in $DownloadAssets) {
+                        Copy-Item -LiteralPath (Join-Path $PrimaryDestinationDir $DownloadAsset.Name) -Destination $CustomerDestinationDir -Force
                     }
                 }
             }

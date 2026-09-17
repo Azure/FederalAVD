@@ -343,7 +343,7 @@ Files On-Demand, Storage Sense, and FSLogix profile containers, see
 The selected optimization profile describes the session-host lifecycle; it does not by itself
 install or configure OneDrive or FSLogix.
 
-Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+Ref: [Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 
 #### `vdiOptimizationAirGapped`
 
@@ -370,6 +370,8 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
   - `name` (required): Customization name (alphanumeric, no spaces)
   - `blobNameOrUri` (required): Blob name or full URI
   - `arguments` (optional): Installation arguments
+  - `successExitCodes` (optional): Comma-separated successful exit codes; when omitted or blank,
+    the script default of `0,3010` applies
   - `restart` (optional): Introduce restart after execution
 
 **Example:**
@@ -380,6 +382,7 @@ Ref: [Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/window
     "name": "VSCode",
     "blobNameOrUri": "VSCode.zip",
     "arguments": "/verysilent /mergetasks=!runcode",
+    "successExitCodes": "0,3010",
     "restart": false
   },
   {
@@ -1503,7 +1506,7 @@ This sets the `endOfLifeDate` property, visible in Azure Portal and queryable vi
 - [Azure Compute Gallery Overview](https://learn.microsoft.com/azure/virtual-machines/azure-compute-gallery)
 - [Azure Virtual Desktop Image Management](https://learn.microsoft.com/azure/virtual-desktop/set-up-customize-master-image)
 - [FSLogix Documentation](https://learn.microsoft.com/fslogix/)
-- [Windows Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool)
+- [Windows Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Windows-Desktop-Optimization-Tool) — not used by this solution; see [Why Not the Virtual Desktop Optimization Tool (VDOT)?](scripts/README.md#why-not-the-virtual-desktop-optimization-tool-vdot) for why `Optimize-AVDImage.ps1` is an in-box implementation instead.
 
 ### Related Templates
 

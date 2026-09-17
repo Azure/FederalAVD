@@ -6,6 +6,9 @@ customer/artifacts/**
 !customer/artifacts/.gitkeep
 !customer/artifacts/README.md
 
+# Local STIG source packages and extracted review evidence
+customer/STIG-Temp/
+
 customer/parameters/**
 !customer/parameters/README.md
 !customer/parameters/**/

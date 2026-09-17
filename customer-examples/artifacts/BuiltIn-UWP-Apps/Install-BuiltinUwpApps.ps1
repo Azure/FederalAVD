@@ -37,6 +37,12 @@
     during sysprep (event ID 472: package folder moved to Deleted). This script passes
     -Regions all for every provisioning call.
 
+    Some bundles (confirmed for Microsoft Sticky Notes; also present in older, superseded
+    Photos releases) carry a lightweight stub package alongside the full package for the
+    same architecture (Microsoft's Store streaming-install pattern). Without
+    -StubPackageOption InstallFull, new users can register the older stub instead of the
+    version staged here.
+
     Reference: Microsoft internal support article (June 2026) -- "Windows Store apps are not
     retained after sysprep".
 
@@ -87,6 +93,62 @@ function Get-PackageFileVersion {
         catch { return [Version]'0.0.0.0' }
     }
     return [Version]'0.0.0.0'
+}
+
+function Get-AppxPackageIdentityName {
+    param([System.IO.FileInfo]$PackageFile)
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+    $Archive = [System.IO.Compression.ZipFile]::OpenRead($PackageFile.FullName)
+    try {
+        $ManifestEntry = $Archive.Entries |
+            Where-Object { $_.FullName -iin @('AppxManifest.xml', 'AppxMetadata/AppxBundleManifest.xml') } |
+            Select-Object -First 1
+        if ($null -eq $ManifestEntry) { return $null }
+
+        $Reader = [System.IO.StreamReader]::new($ManifestEntry.Open())
+        try {
+            [xml]$Manifest = $Reader.ReadToEnd()
+        }
+        finally {
+            $Reader.Dispose()
+        }
+
+        $Identity = $Manifest.SelectSingleNode("/*[local-name()='Package' or local-name()='Bundle']/*[local-name()='Identity']")
+        if ($null -eq $Identity) { return $null }
+        return [string]$Identity.Name
+    }
+    finally {
+        $Archive.Dispose()
+    }
+}
+
+function Repair-MislabeledBundleExtension {
+    param([System.IO.FileInfo]$PackageFile)
+
+    if ($PackageFile.Extension -notin @('.msix', '.appx')) { return }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+    $Archive = [System.IO.Compression.ZipFile]::OpenRead($PackageFile.FullName)
+    try {
+        $IsBundle = $null -ne ($Archive.Entries |
+            Where-Object { $_.FullName -ieq 'AppxMetadata/AppxBundleManifest.xml' } |
+            Select-Object -First 1)
+    }
+    finally {
+        $Archive.Dispose()
+    }
+
+    if (-not $IsBundle) { return }
+
+    $CorrectExtension = if ($PackageFile.Extension -ieq '.msix') { '.msixbundle' } else { '.appxbundle' }
+    $CorrectPath = [System.IO.Path]::ChangeExtension($PackageFile.FullName, $CorrectExtension)
+    if (Test-Path -LiteralPath $CorrectPath) {
+        throw "Cannot correct mislabeled bundle '$($PackageFile.FullName)' because '$CorrectPath' already exists."
+    }
+
+    Write-Log "Correcting mislabeled bundle extension: '$($PackageFile.Name)' -> '$([System.IO.Path]::GetFileName($CorrectPath))'."
+    Move-Item -LiteralPath $PackageFile.FullName -Destination $CorrectPath -ErrorAction Stop
 }
 
 #endregion Helpers
@@ -149,6 +211,13 @@ foreach ($AppFolder in $AppFolders) {
     Write-Log ""
     Write-Log "=== $($AppFolder.Name) ==="
 
+    # Some winget manifests declare InstallerType msix while their URL points to an
+    # MSIX bundle. winget then saves the bundle with a .msix extension, which causes
+    # DISM to process it as a single package and silently omit it from provisioning.
+    Get-ChildItem -Path $AppFolder.FullName -File -ErrorAction Stop |
+        Where-Object { $_.Extension -in @('.msix', '.appx') } |
+        ForEach-Object { Repair-MislabeledBundleExtension -PackageFile $_ }
+
     # ----------------------------------------------------------------
     # Locate the main bundle at the root of the app folder.
     # Prefer larger files (bundles) over small single-arch packages.
@@ -189,11 +258,13 @@ foreach ($AppFolder in $AppFolders) {
     # provisioned on this image. Compare against the provisioned
     # package's version so we never downgrade.
     # ----------------------------------------------------------------
-    # Derive the stable package family key by stripping from the first version
-    # segment onward. This matches across different installed vs staged versions.
-    # e.g. Microsoft.WindowsCalculator_2021.2508.4.0_Universal_X64
-    #   -> Microsoft.WindowsCalculator
-    $PackageNamePrefix = [System.IO.Path]::GetFileNameWithoutExtension($MainPackage.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+    # Read the stable package identity from the embedded manifest so friendly winget
+    # filenames such as "App Installer" still match Microsoft.DesktopAppInstaller in
+    # the provisioned store. Fall back to the filename for nonstandard packages.
+    $PackageNamePrefix = Get-AppxPackageIdentityName -PackageFile $MainPackage
+    if ([string]::IsNullOrWhiteSpace($PackageNamePrefix)) {
+        $PackageNamePrefix = [System.IO.Path]::GetFileNameWithoutExtension($MainPackage.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+    }
     $ExistingProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
         Where-Object { $_.PackageName -like "*$PackageNamePrefix*" } |
         Select-Object -First 1
@@ -226,10 +297,11 @@ foreach ($AppFolder in $AppFolders) {
     # attempt fails and we have staged dependencies, retry with them.
     # ----------------------------------------------------------------
     $BaseParams = @{
-        Online      = $true
-        PackagePath = $MainPackage.FullName
-        SkipLicense = $true
-        Regions     = 'all'   # Required: without this, Windows removes the app during sysprep (event 472)
+        Online            = $true
+        PackagePath       = $MainPackage.FullName
+        SkipLicense       = $true
+        Regions           = 'all'   # Required: without this, Windows removes the app during sysprep (event 472)
+        StubPackageOption = 'InstallFull'   # Some bundles (e.g. Sticky Notes) carry a stub package alongside the full package
     }
 
     # When updating an already-provisioned package, explicitly remove the old entry
@@ -389,6 +461,7 @@ foreach ($Row in ($ChangeLog | Sort-Object App)) {
 
     if ($Row.Change -eq 'ERROR') {
         Write-Log ("  FAIL  {0,-30} provisioning error (see log above)" -f $Row.App)
+        $HealthIssues.Add("$($Row.App): provisioning failed")
         continue
     }
 
@@ -397,9 +470,10 @@ foreach ($Row in ($ChangeLog | Sort-Object App)) {
     $CheckPath = Join-Path -Path $PSScriptRoot -ChildPath $Row.App
     $CheckMain = Get-ChildItem -Path $CheckPath -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Extension -in $PkgExtensions2 } | Select-Object -First 1
-    $CheckPrefix = if ($null -ne $CheckMain) {
-        [System.IO.Path]::GetFileNameWithoutExtension($CheckMain.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
-    } else { '' }
+    $CheckPrefix = if ($null -ne $CheckMain) { Get-AppxPackageIdentityName -PackageFile $CheckMain } else { '' }
+    if ([string]::IsNullOrWhiteSpace($CheckPrefix) -and $null -ne $CheckMain) {
+        $CheckPrefix = [System.IO.Path]::GetFileNameWithoutExtension($CheckMain.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
+    }
 
     if (-not $CheckPrefix) {
         Write-Log ("  SKIP  {0,-30} could not derive package prefix for verification" -f $Row.App)
@@ -472,7 +546,7 @@ else {
 }
 
 Write-Log ""
-if ($HealthIssues.Count -eq 0) {
+if ($ErrorCount -eq 0 -and $HealthIssues.Count -eq 0) {
     Write-Log "Health        : PASS -- all packages verified, no issues found"
 }
 else {

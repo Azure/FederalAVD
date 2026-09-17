@@ -465,13 +465,24 @@ module privateCustomizationPolicyAssignment '../../shared/modules/orchestration/
         }
         customizations: {
           value: [
-            for customization in sessionHostCustomizations: {
-              name: replace(customization.name, ' ', '-')
-              artifactUri: startsWith(customization.blobNameOrUri, 'https://')
-                ? customization.blobNameOrUri
-                : '${normalizedArtifactsContainerUri}/${sessionHostCustomizationConfigurationIsValid ? customization.blobNameOrUri : customization.blobNameOrUri}'
-              arguments: customization.?arguments ?? ''
-            }
+            for customization in sessionHostCustomizations: union(
+              {
+                name: replace(customization.name, ' ', '-')
+                artifactUri: startsWith(customization.blobNameOrUri, 'https://')
+                  ? customization.blobNameOrUri
+                  : '${normalizedArtifactsContainerUri}/${sessionHostCustomizationConfigurationIsValid ? customization.blobNameOrUri : customization.blobNameOrUri}'
+              },
+              empty(customization.?arguments ?? '')
+                ? {}
+                : {
+                    arguments: customization.arguments!
+                  },
+              empty(customization.?successExitCodes ?? '')
+                ? {}
+                : {
+                    successExitCodes: customization.successExitCodes!
+                  }
+            )
           ]
         }
         finalRunCommandName: {

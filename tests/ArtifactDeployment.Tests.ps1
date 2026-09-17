@@ -1010,3 +1010,801 @@ Describe 'InstallRoot MSI application lifecycle' {
         ([regex]::Matches($content, '-notin \$SuccessExitCodes|-in \$SuccessExitCodes')).Count | Should Be 2
     }
 }
+
+Describe 'DoD STIG local user logon rights' {
+    BeforeAll {
+        $stigScriptPath = Join-Path $repoRoot 'customer-examples\artifacts\DoD-STIGs\Apply-STIGsAVD.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [System.Management.Automation.Language.Parser]::ParseFile(
+            $stigScriptPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($parseErrors.Count -gt 0) {
+            throw "Apply-STIGsAVD.ps1 has parser errors: $($parseErrors.Message -join '; ')"
+        }
+        foreach ($functionName in @(
+            'Set-ExistingPrivilegeRight'
+            'Remove-PrivilegeRightPrincipals'
+            'Update-PrivilegeRightPlaceholders'
+            'Get-StigVersionMap'
+            'Get-OperatingSystemContext'
+            'Get-GpoBackupDisplayName'
+            'Get-ApplicableGpoFolders'
+        )) {
+            $functionDefinition = $syntaxTree.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $functionName
+            }, $true)
+            if (-not $functionDefinition) {
+                throw "STIG helper function '$functionName' was not found."
+            }
+            Invoke-Expression $functionDefinition.Extent.Text
+        }
+        $stigScriptContent = Get-Content -LiteralPath $stigScriptPath -Raw
+    }
+
+    AfterAll {
+        Remove-Item function:\Set-ExistingPrivilegeRight -ErrorAction SilentlyContinue
+        Remove-Item function:\Remove-PrivilegeRightPrincipals -ErrorAction SilentlyContinue
+        Remove-Item function:\Update-PrivilegeRightPlaceholders -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-StigVersionMap -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-OperatingSystemContext -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-GpoBackupDisplayName -ErrorAction SilentlyContinue
+        Remove-Item function:\Get-ApplicableGpoFolders -ErrorAction SilentlyContinue
+    }
+
+    It 'leaves the RDS allow right unchanged when the Windows 11 v2r8 STIG omits it' {
+        $content = @(
+            '[Unicode]'
+            'Unicode=yes'
+            '[Privilege Rights]'
+            'SeInteractiveLogonRight = *S-1-5-32-545,*S-1-5-32-544'
+            'SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546,*S-1-5-113'
+        )
+
+        $updated = @(Set-ExistingPrivilegeRight -Content $content -Name 'SeRemoteInteractiveLogonRight' -Principals @('*S-1-5-32-555', '*S-1-5-32-544'))
+
+        @($updated | Where-Object { $_ -like 'SeRemoteInteractiveLogonRight*' }).Count | Should Be 0
+        ($updated -join "`n") | Should Be ($content -join "`n")
+    }
+
+    It 'updates an RDS allow right when the STIG defines it' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeRemoteInteractiveLogonRight = *S-1-5-32-544'
+        )
+
+        $updated = @(Set-ExistingPrivilegeRight -Content $content -Name 'SeRemoteInteractiveLogonRight' -Principals @('*S-1-5-32-555', '*S-1-5-32-544'))
+
+        ($updated -contains 'SeRemoteInteractiveLogonRight = *S-1-5-32-555,*S-1-5-32-544') | Should Be $true
+    }
+
+    It 'does not create any allow or deny right omitted by the STIG' {
+        $content = @(
+            '[Unicode]'
+            'Unicode=yes'
+            '[Privilege Rights]'
+            'SeBackupPrivilege = *S-1-5-32-544'
+        )
+
+        $updated = @(Set-ExistingPrivilegeRight -Content $content -Name 'SeInteractiveLogonRight' -Principals @('*S-1-5-32-545', '*S-1-5-32-544'))
+        $updated = @(Remove-PrivilegeRightPrincipals -Content $updated -Name 'SeDenyInteractiveLogonRight' -Principals @('*S-1-5-113', '*S-1-5-114'))
+
+        ($updated -join "`n") | Should Be ($content -join "`n")
+    }
+
+    It 'removes both local-account deny SIDs while preserving other deny principals' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeDenyInteractiveLogonRight = *S-1-5-113,*S-1-5-32-546,*S-1-5-114'
+            'SeDenyRemoteInteractiveLogonRight = Domain Admins,*S-1-5-32-546,*S-1-5-113,*S-1-5-114'
+        )
+
+        foreach ($denyRight in @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight')) {
+            $content = @(Remove-PrivilegeRightPrincipals -Content $content -Name $denyRight -Principals @('*S-1-5-113', '*S-1-5-114'))
+        }
+
+        ($content -join "`n") | Should Not Match 'S-1-5-11(3|4)'
+        ($content -contains 'SeDenyInteractiveLogonRight = *S-1-5-32-546') | Should Be $true
+        ($content -contains 'SeDenyRemoteInteractiveLogonRight = Domain Admins,*S-1-5-32-546') | Should Be $true
+    }
+
+    It 'replaces domain administrator placeholders as exact principals on domain-joined hosts' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeDenyNetworkLogonRight = ADD YOUR DOMAIN ADMINS,ADD YOUR ENTERPRISE ADMINS,*S-1-5-32-546,*S-1-5-113'
+        )
+
+        $updated = @(Update-PrivilegeRightPlaceholders -Content $content -DomainJoined $true)
+
+        ($updated -contains 'SeDenyNetworkLogonRight = Domain Admins,Enterprise Admins,*S-1-5-32-546,*S-1-5-113') | Should Be $true
+        ($updated -join "`n") | Should Not Match 'ADD YOUR'
+    }
+
+    It 'removes only domain administrator placeholder principals on workgroup hosts' {
+        $content = @(
+            '[Privilege Rights]'
+            'SeDenyNetworkLogonRight = ADD YOUR DOMAIN ADMINS,ADD YOUR ENTERPRISE ADMINS,*S-1-5-32-546,*S-1-5-113'
+            'SeDenyBatchLogonRight = ADD YOUR DOMAIN ADMINS,ADD YOUR ENTERPRISE ADMINS'
+        )
+
+        $updated = @(Update-PrivilegeRightPlaceholders -Content $content -DomainJoined $false)
+
+        ($updated -contains 'SeDenyNetworkLogonRight = *S-1-5-32-546,*S-1-5-113') | Should Be $true
+        ($updated -contains 'SeDenyBatchLogonRight = ') | Should Be $true
+        ($updated -join "`n") | Should Not Match 'ADD YOUR'
+    }
+
+    It 'derives an individual registry value and release from each STIG folder name' {
+        $versions = Get-StigVersionMap -FolderName @(
+            'DoD Windows 11 v2r8'
+            'DoD Microsoft Edge v2r5'
+            'DoD Google Chrome V2R11'
+            'DoD WinSvr 2022 MS and DC v2r9'
+        )
+
+        $versions.Count | Should Be 4
+        $versions['DoD Windows 11'] | Should Be 'v2r8'
+        $versions['DoD Microsoft Edge'] | Should Be 'v2r5'
+        $versions['DoD Google Chrome'] | Should Be 'v2r11'
+        $versions['DoD WinSvr 2022 MS'] | Should Be 'v2r9'
+    }
+
+    It 'rejects an applicable STIG folder without a release suffix' {
+        $versionError = $null
+        Try { Get-StigVersionMap -FolderName 'DoD Windows 11' } Catch { $versionError = $_ }
+
+        ($null -ne $versionError) | Should Be $true
+        $versionError.Exception.Message | Should Match 'Unable to determine the STIG name and version'
+    }
+
+    It 'permits local users through RDS without changing console interactive logon rights' {
+        $stigScriptContent | Should Match "\[Alias\('AllowLocalUserLogon'\)\]"
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$AllowLocalUserRemoteInteractiveLogon\s*$'
+        $stigScriptContent | Should Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyRemoteInteractiveLogonRight'"
+        $stigScriptContent | Should Not Match "Set-ExistingPrivilegeRight -Content \`$Content -Name 'SeInteractiveLogonRight'"
+        $stigScriptContent | Should Not Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyInteractiveLogonRight'"
+        $stigScriptContent | Should Match 'Local console interactive logon rights remain unchanged'
+    }
+
+    It 'keeps local interactive logon separate from execution-profile compatibility' {
+        $stigScriptContent | Should Match "\[ValidateSet\('ZeroTrustImageBuild', 'Packer', 'AzureVMImageBuilder', 'SessionHost'\)\]"
+        $stigScriptContent | Should Match "\[string\]\`$ExecutionProfile = 'ZeroTrustImageBuild'"
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$AllowLocalUserRemoteInteractiveLogon\s*$'
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -in @\('Packer', 'AzureVMImageBuilder'\)\) \{[\s\S]*?SeDenyNetworkLogonRight"
+    }
+
+    It 'supports domain-oriented final policy without pretending unresolved domain principals exist' {
+        $stigScriptContent | Should Match '(?m)^\s*\[switch\]\$OverrideDomainJoin'
+        $stigScriptContent | Should Match '\$EffectiveDomainJoined = \$DetectedDomainJoined -or \$OverrideDomainJoin'
+        $stigScriptContent | Should Match 'Update-PrivilegeRightPlaceholders -Content \$Content -DomainJoined \$DetectedDomainJoined'
+        $stigScriptContent | Should Match 'domain principals cannot be resolved until the system joins a domain'
+    }
+
+    It 'preserves Packer WinRM network logon and its administrative token' {
+        $stigScriptContent | Should Match "Remove-PrivilegeRightPrincipals -Content \`$Content -Name 'SeDenyNetworkLogonRight'"
+        $stigScriptContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '1'"
+        $stigScriptContent | Should Not Match "RegistryValue 'AllowBasic' -Delete"
+    }
+
+    It 'preserves AIB WinRM transport and installs its deprovisioning override' {
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -eq 'AzureVMImageBuilder'\) \{[\s\S]*?RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '1'"
+        $stigScriptContent | Should Match "Copy-Item -LiteralPath \`$aibDeprovisioningSource -Destination 'C:\\DeprovisioningScript\.ps1' -Force"
+        $stigScriptContent | Should Match 'AzureVMImageBuilder\.state'
+    }
+
+    It 'provides a final Packer provisioner that restores policy and runs Sysprep' {
+        $packerFinalizerPath = Join-Path (Split-Path -Path $stigScriptPath -Parent) 'packer\Finalize-STIGsForPacker.ps1'
+        Test-Path -LiteralPath $packerFinalizerPath -PathType Leaf | Should Be $true
+
+        $packerFinalizerContent = Get-Content -LiteralPath $packerFinalizerPath -Raw
+        $packerFinalizerContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '0'"
+        $packerFinalizerContent | Should Match "RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '0'"
+        $packerFinalizerContent | Should Match "'\*S-1-5-113' \+ '\*S-1-5-114'"
+        $packerFinalizerContent | Should Match '/oobe /generalize /quiet /quit /mode:vm'
+        $packerFinalizerContent | Should Match 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE'
+    }
+
+    It 'provides an AIB deprovisioning override that restores policy before Sysprep' {
+        $aibDeprovisioningPath = Join-Path (Split-Path -Path $stigScriptPath -Parent) 'azure-vm-image-builder\DeprovisioningScript.ps1'
+        Test-Path -LiteralPath $aibDeprovisioningPath -PathType Leaf | Should Be $true
+
+        $aibDeprovisioningContent = Get-Content -LiteralPath $aibDeprovisioningPath -Raw
+        $aibDeprovisioningContent | Should Match "RegistryValue 'LocalAccountTokenFilterPolicy'[\s\S]*?-RegistryData '0'"
+        $aibDeprovisioningContent | Should Match "RegistryValue 'AllowBasic'[\s\S]*?-RegistryData '0'"
+        $aibDeprovisioningContent | Should Match "'\*S-1-5-113' \+ '\*S-1-5-114'"
+        $aibDeprovisioningContent | Should Match '/oobe /generalize /quiet /quit /mode:vm'
+        $aibDeprovisioningContent | Should Match 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE'
+    }
+
+    It 'preserves local firewall rules for workgroup systems and WinRM-based builders' {
+        $stigScriptContent | Should Match "If \(\`$ExecutionProfile -in @\('Packer', 'AzureVMImageBuilder'\) -or -not \`$EffectiveDomainJoined\)"
+        ([regex]::Matches($stigScriptContent, "RegistryValue 'AllowLocalPolicyMerge' -Delete")).Count | Should Be 3
+    }
+
+    It 'classifies SKU 175 as Windows client even when ProductType is 3' {
+        $context = Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+            Caption = 'Microsoft Windows 11 Enterprise multi-session'
+            ProductType = 3
+            OperatingSystemSKU = 175
+        })
+
+        $context.Family | Should Be 'Client'
+        $context.Release | Should Be '11'
+        $context.StigFolderPattern | Should Be '^DoD Windows 11 v\d+r\d+$'
+    }
+
+    It 'classifies supported ProductType 3 server releases as Windows Server' {
+        foreach ($release in '2022', '2025') {
+            $context = Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                Caption = "Microsoft Windows Server $release Datacenter"
+                ProductType = 3
+                OperatingSystemSKU = 8
+            })
+
+            $context.Family | Should Be 'Server'
+            $context.Release | Should Be $release
+            $context.StigFolderPattern | Should Be "^DoD WinSvr $release MS and DC v\d+r\d+$"
+        }
+    }
+
+    It 'rejects domain controllers and sunsetting or unsupported server releases' {
+        $domainControllerError = $null
+        Try {
+            Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                Caption = 'Microsoft Windows Server 2022 Datacenter'
+                ProductType = 2
+                OperatingSystemSKU = 8
+            })
+        }
+        Catch { $domainControllerError = $_ }
+
+        $domainControllerError.Exception.Message | Should Match 'Domain controllers must not be used'
+        foreach ($release in '2012 R2', '2016', '2019') {
+            $unsupportedServerError = $null
+            Try {
+                Get-OperatingSystemContext -OperatingSystem ([pscustomobject]@{
+                    Caption = "Microsoft Windows Server $release Datacenter"
+                    ProductType = 3
+                    OperatingSystemSKU = 8
+                })
+            }
+            Catch { $unsupportedServerError = $_ }
+
+            $unsupportedServerError.Exception.Message | Should Match 'Supported releases are 2022 and 2025'
+        }
+    }
+
+    It 'selects only Member Server GPO backups from a mixed server package' {
+        $tempRoot = Join-Path $env:TEMP "FederalAVD-stig-gpo-test-$([guid]::NewGuid())"
+        Try {
+            $stigFolderPath = Join-Path $tempRoot 'DoD WinSvr 2022 MS and DC v2r9'
+            $gpoRoot = Join-Path $stigFolderPath 'GPOs'
+            foreach ($gpo in @(
+                @{ Folder = 'ms-comp'; Name = 'DoD WinSvr 2022 MS STIG Comp v2r9' }
+                @{ Folder = 'ms-user'; Name = 'DoD WinSvr 2022 MS STIG User v2r9' }
+                @{ Folder = 'dc-comp'; Name = 'DoD WinSvr 2022 DC STIG Comp v2r9' }
+            )) {
+                $path = Join-Path $gpoRoot $gpo.Folder
+                New-Item -Path $path -ItemType Directory -Force | Out-Null
+                $backup = "<GroupPolicyBackupScheme><GroupPolicyObject><GroupPolicyCoreSettings><DisplayName>$($gpo.Name)</DisplayName></GroupPolicyCoreSettings></GroupPolicyObject></GroupPolicyBackupScheme>"
+                Set-Content -LiteralPath (Join-Path $path 'Backup.xml') -Value $backup -Encoding ASCII
+            }
+
+            $selected = @(Get-ApplicableGpoFolders `
+                -StigFolder (Get-Item $stigFolderPath) `
+                -OperatingSystemFamily Server `
+                -OperatingSystemRelease '2022')
+
+            $selected.Count | Should Be 2
+            ($selected -join "`n") | Should Match 'ms-comp'
+            ($selected -join "`n") | Should Match 'ms-user'
+            ($selected -join "`n") | Should Not Match 'dc-comp'
+        }
+        Finally {
+            Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'DoD STIG image build safety' {
+    BeforeAll {
+        $stigScriptPath = Join-Path $repoRoot 'customer-examples\artifacts\DoD-STIGs\Apply-STIGsAVD.ps1'
+        $stigScriptContent = Get-Content -LiteralPath $stigScriptPath -Raw
+    }
+
+    It 'uses SKU-aware OS classification and supports current AVD Windows Server releases' {
+        $stigScriptContent | Should Match '\$enterpriseMultiSessionSku = 175'
+        $stigScriptContent | Should Match '\$operatingSystemSku -eq \$enterpriseMultiSessionSku -or \$productType -eq 1'
+        $stigScriptContent | Should Match "Windows Server \(2022\|2025\)"
+        $stigScriptContent | Should Not Match "Windows Server \(2016\|2019"
+        $stigScriptContent | Should Match 'Domain controllers must not be used as Azure Virtual Desktop session hosts'
+    }
+
+    It 'cleans stale temporary content and always removes the workspace' {
+        $stigScriptContent | Should Match "Try \{[\s\S]*?Removing stale temporary content"
+        $stigScriptContent | Should Match "Finally \{[\s\S]*?Remove-Item -LiteralPath \`$Script:TempDir -Recurse -Force -ErrorAction Stop"
+        ([regex]::Matches($stigScriptContent, 'Expand-Archive -Path')).Count | Should Be 2
+    }
+
+    It 'fails when required compliance remediations fail' {
+        $stigScriptContent | Should Match "Disable-WindowsOptionalFeature[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Remove-WindowsCapability[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Uninstall-WindowsFeature -Name \`$FeatureName -Restart:\`$false -ErrorAction Stop"
+        $stigScriptContent | Should Match "If \(-not \`$result.Success\)"
+        $stigScriptContent | Should Match "Stop-Service \`$Service -Force -ErrorAction Stop"
+        $stigScriptContent | Should Match "Remove-AppxProvisionedPackage[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match "Remove-AppxPackage[\s\S]*?-ErrorAction Stop"
+        $stigScriptContent | Should Match 'throw "gpupdate\.exe failed with exit code'
+    }
+
+    It 'resets all PortProxy rules and validates the native exit code' {
+        $stigScriptContent | Should Match "-ArgumentList 'interface portproxy reset'"
+        $stigScriptContent | Should Match 'if \(\$netsh.ExitCode -ne 0\)'
+        $stigScriptContent | Should Not Match 'cmd /c netsh interface portproxy show all'
+    }
+
+    It 'uses individual folder-derived STIG versions for registry evidence' {
+        $stigScriptContent | Should Match 'Get-StigVersionMap -FolderName @\(\$ApplicableFolders\.Name\)'
+        $stigScriptContent | Should Match 'New-ItemProperty -Path \$registryPath -Name \$stigName -PropertyType String -Value \$appliedVersion'
+        $stigScriptContent | Should Match 'Remove-ItemProperty -Path \$registryPath -Name ''Version'''
+        $stigScriptContent | Should Not Match '\$registryValueName'
+    }
+
+    It 'does not expose obsolete version or destructive policy-reset interfaces' {
+        $stigScriptContent | Should Not Match '(?m)^\s*\[string\]\$Version\b'
+        $stigScriptContent | Should Not Match '(?m)^\.PARAMETER Version\s*$'
+        $stigScriptContent | Should Not Match '(?m)^Function Reset-LocalPolicy\s*\{'
+    }
+
+    It 'selects server GPOs by Backup.xml display name and separates client remediations' {
+        $stigScriptContent | Should Match 'Get-GpoBackupDisplayName -GpoFolder \$gpoFolder\.FullName'
+        $stigScriptContent | Should Match "DC STIG "
+        $stigScriptContent | Should Match "MS STIG \(Comp\|User\)"
+        $stigScriptContent | Should Match 'If \(\$isWindowsClient\) \{[\s\S]*?V-253289[\s\S]*?V-253340'
+        $stigScriptContent | Should Match 'Applying Windows Server \$osVersion supplemental STIG remediations'
+    }
+
+    It 'removes prohibited Server features with release-specific V-IDs' {
+        foreach ($feature in 'Simple-TCPIP', 'Telnet-Client', 'TFTP-Client', 'FS-SMB1', 'PowerShell-v2') {
+            $stigScriptContent | Should Match ([regex]::Escape("'$feature'"))
+        }
+        foreach ($stigId in 'V-254272', 'V-254273', 'V-254274', 'V-254275', 'V-254278',
+            'V-278020', 'V-278021', 'V-278022', 'V-278023', 'V-278026') {
+            $stigScriptContent | Should Match $stigId
+        }
+        $stigScriptContent | Should Match 'Uninstall-WindowsServerFeatureIfInstalled[\s\S]*?-StigId \$serverFeatureStigIds\[\$featureName\]'
+    }
+
+    It 'disables physical Wi-Fi and Bluetooth only on Server 2025' {
+        $stigScriptContent | Should Match "If \(\`$osVersion -eq '2025'\) \{[\s\S]*?V-278017[\s\S]*?PhysicalMediaType -eq 'Native 802\.11'"
+        $stigScriptContent | Should Match "V-278018[\s\S]*?Get-Service -Name 'bthserv'"
+        $stigScriptContent | Should Match "Set-Service -Name 'bthserv' -StartupType Disabled -ErrorAction Stop"
+        $stigScriptContent | Should Match "Stop-Service -Name 'bthserv' -Force -ErrorAction Stop"
+    }
+
+    It 'disables both Windows PowerShell 2.0 optional features for V-253285' {
+        $stigScriptContent | Should Match "Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2Root' -StigId 'V-253285'"
+        $stigScriptContent | Should Match "Disable-OptionalFeatureIfEnabled -FeatureName 'MicrosoftWindowsPowerShellV2'\s+-StigId 'V-253285'"
+    }
+
+    It 'disables all Wi-Fi Direct adapters for V-288475' {
+        $stigScriptContent | Should Match "Get-NetAdapter -InterfaceDescription 'Microsoft Wi-Fi Direct\*' -IncludeHidden"
+        $stigScriptContent | Should Match '\$wifiDirectAdapters \| Disable-NetAdapter -Confirm:\$false -ErrorAction Stop'
+    }
+}
+
+Describe 'Customization PowerShell argument parsing' {
+    BeforeAll {
+        $invokeCustomizationPath = Join-Path $repoRoot 'deployments\shared\scripts\Invoke-Customization.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [System.Management.Automation.Language.Parser]::ParseFile(
+            $invokeCustomizationPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($parseErrors.Count -gt 0) {
+            throw "Invoke-Customization.ps1 has parser errors: $($parseErrors.Message -join '; ')"
+        }
+        foreach ($functionName in @('Split-ArgumentString', 'ConvertTo-ParametersSplat')) {
+            $functionDefinition = $syntaxTree.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $functionName
+            }, $true)
+            if (-not $functionDefinition) {
+                throw "Customization argument function '$functionName' AST was not found."
+            }
+            Invoke-Expression $functionDefinition.Extent.Text
+        }
+    }
+
+    AfterAll {
+        Remove-Item function:\Split-ArgumentString -ErrorAction SilentlyContinue
+        Remove-Item function:\ConvertTo-ParametersSplat -ErrorAction SilentlyContinue
+    }
+
+    It 'binds a single switch argument as true' {
+        $parameterSplat = ConvertTo-ParametersSplat -ArgumentString '-AllowLocalUserRemoteInteractiveLogon'
+
+        $parameterSplat.ContainsKey('AllowLocalUserRemoteInteractiveLogon') | Should Be $true
+        $parameterSplat.AllowLocalUserRemoteInteractiveLogon | Should Be $true
+        (& {
+                param([switch]$AllowLocalUserRemoteInteractiveLogon)
+                [bool]$AllowLocalUserRemoteInteractiveLogon
+            } @parameterSplat) | Should Be $true
+    }
+}
+
+Describe 'Customization success exit codes' {
+    BeforeAll {
+        $invokeCustomizationPath = Join-Path $repoRoot 'deployments\shared\scripts\Invoke-Customization.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [System.Management.Automation.Language.Parser]::ParseFile(
+            $invokeCustomizationPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($parseErrors.Count -gt 0) {
+            throw "Invoke-Customization.ps1 has parser errors: $($parseErrors.Message -join '; ')"
+        }
+        $conversionFunction = $syntaxTree.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'ConvertTo-SuccessExitCodes'
+        }, $true)
+        $successFunction = $syntaxTree.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Test-ArtifactExecutionSuccess'
+        }, $true)
+        if (-not $conversionFunction -or -not $successFunction) {
+            throw 'Customization exit-code function AST was not found.'
+        }
+        Invoke-Expression $conversionFunction.Extent.Text
+        Invoke-Expression $successFunction.Extent.Text
+        $invokeCustomizationContent = Get-Content -LiteralPath $invokeCustomizationPath -Raw
+    }
+
+    AfterAll {
+        Remove-Item function:\ConvertTo-SuccessExitCodes -ErrorAction SilentlyContinue
+        Remove-Item function:\Test-ArtifactExecutionSuccess -ErrorAction SilentlyContinue
+    }
+
+    It 'parses defaults and custom comma-separated integer lists' {
+        (@(ConvertTo-SuccessExitCodes -Value '0,3010') -join ',') | Should Be '0,3010'
+        (@(ConvertTo-SuccessExitCodes -Value '0, 1641, 3010, 3010') -join ',') | Should Be '0,1641,3010'
+    }
+
+    It 'rejects empty and invalid success exit-code lists' {
+        $emptyFailure = $null
+        $invalidFailure = $null
+        try { ConvertTo-SuccessExitCodes -Value '' } catch { $emptyFailure = $_ }
+        try { ConvertTo-SuccessExitCodes -Value '0,success' } catch { $invalidFailure = $_ }
+
+        $emptyFailure.Exception.Message | Should Match 'cannot be empty'
+        $invalidFailure.Exception.Message | Should Match "invalid integer 'success'"
+    }
+
+    It 'accepts configured codes and rejects codes outside the list' {
+        $accepted = @(0, 1641, 3010)
+        Test-ArtifactExecutionSuccess -ExitCode 0 -AcceptedExitCodes $accepted -InvocationSucceeded $true | Should Be $true
+        Test-ArtifactExecutionSuccess -ExitCode 1641 -AcceptedExitCodes $accepted -InvocationSucceeded $true | Should Be $true
+        Test-ArtifactExecutionSuccess -ExitCode 3010 -AcceptedExitCodes $accepted -InvocationSucceeded $false -IsPowerShellScript $true | Should Be $true
+        Test-ArtifactExecutionSuccess -ExitCode 1603 -AcceptedExitCodes $accepted -InvocationSucceeded $true | Should Be $false
+    }
+
+    It 'does not let a failed PowerShell invocation inherit the initialized zero code' {
+        Test-ArtifactExecutionSuccess -ExitCode 0 -AcceptedExitCodes @(0, 3010) -InvocationSucceeded $false -IsPowerShellScript $true | Should Be $false
+    }
+
+    It 'captures and validates all supported artifact execution types' {
+        $invokeCustomizationContent | Should Match "\[string\]\`$SuccessExitCodes = '0,3010'"
+        $invokeCustomizationContent | Should Match '\$Install\.ExitCode -AcceptedExitCodes'
+        $invokeCustomizationContent | Should Match '\$MsiExec\.ExitCode -AcceptedExitCodes'
+        $invokeCustomizationContent | Should Match 'cmd\.exe[\s\S]*?-Wait -PassThru'
+        $invokeCustomizationContent | Should Match '\$BatProcess\.ExitCode -AcceptedExitCodes'
+        ([regex]::Matches($invokeCustomizationContent, '-IsPowerShellScript \$true')).Count | Should Be 2
+    }
+
+    It 'conditionally passes supplied success exit codes through every customization Bicep path' {
+        $runCommandPaths = @(
+            'deployments\imageBuild\modules\applyCustomization.bicep'
+            'deployments\shared\modules\orchestration\sessionHosts\invokeCustomizations.bicep'
+            'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\PrivateCustomizationRunCommand.bicep'
+        )
+        foreach ($bicepPath in $runCommandPaths) {
+            $content = Get-Content -LiteralPath (Join-Path $repoRoot $bicepPath) -Raw
+            $content | Should Match "name: 'SuccessExitCodes'"
+            $content | Should Match "\? \[\]"
+        }
+
+        $types = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\resourceModules\types\customizationTypes.bicep') -Raw
+        ([regex]::Matches($types, 'successExitCodes: string\??')).Count | Should Be 3
+
+        $bicepPaths = $runCommandPaths + @(
+            'deployments\imageBuild\modules\customizeImage.bicep'
+            'deployments\automatedHostPools\policy\main.bicep'
+            'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\PrivateCustomization.bicep'
+        )
+        $bicepContent = $bicepPaths | ForEach-Object {
+            Get-Content -LiteralPath (Join-Path $repoRoot $_) -Raw
+        }
+        ($bicepContent -join "`n") | Should Not Match "'0,3010'"
+    }
+
+    It 'conditionally passes nonblank arguments through every customization Run Command path' {
+        $runCommandPaths = @(
+            'deployments\imageBuild\modules\applyCustomization.bicep'
+            'deployments\shared\modules\orchestration\sessionHosts\invokeCustomizations.bicep'
+            'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\PrivateCustomizationRunCommand.bicep'
+        )
+        foreach ($bicepPath in $runCommandPaths) {
+            $content = Get-Content -LiteralPath (Join-Path $repoRoot $bicepPath) -Raw
+            $content | Should Match "name: 'Arguments'"
+            $content | Should Match 'empty\([^\r\n]*arguments'
+        }
+
+        $invokeCustomizationContent | Should Match "\[string\]\`$Arguments = ''"
+    }
+
+    It 'exposes success exit codes in every customization portal grid' {
+        $formExpectations = @{
+            'deployments\imageBuild\uiFormDefinition.json' = 2
+            'deployments\hostpools\uiFormDefinition.json' = 1
+            'deployments\automatedHostPools\uiFormDefinition.json' = 1
+            'deployments\add-ons\sessionHosts\uiFormDefinition.json' = 1
+            'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json' = 1
+        }
+        foreach ($relativePath in $formExpectations.Keys) {
+            $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+            ([regex]::Matches($content, '"id":\s*"successExitCodes"')).Count | Should Be $formExpectations[$relativePath]
+        }
+    }
+}
+
+Describe 'Built-in UWP app download definitions' {
+    BeforeAll {
+        $repoRoot = Split-Path -Path $PSScriptRoot -Parent
+        $downloads = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\imageManagement\downloads.json') -Raw | ConvertFrom-Json
+        $builderContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\_build\Build-BuiltinUwpApps.ps1') -Raw
+        $installerContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\Install-BuiltinUwpApps.ps1') -Raw
+        $readmeContent = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\artifacts\BuiltIn-UWP-Apps\README.md') -Raw
+    }
+
+    It 'keeps Microsoft App Installer out of the generic UWP artifact' {
+        ($downloads.PSObject.Properties.Name -notcontains 'MicrosoftAppInstaller') | Should Be $true
+        $builderContent | Should Not Match 'Microsoft\.AppInstaller'
+        $readmeContent | Should Match 'separate `Microsoft-WinGet` artifact'
+    }
+
+    It 'defaults the standalone builder to every documented built-in app ID' {
+        $tokens = $null
+        $parseErrors = $null
+        $builderAst = [System.Management.Automation.Language.Parser]::ParseInput(
+            $builderContent,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        $parseErrors.Count | Should Be 0
+        $appStoreIdsParameter = $builderAst.ParamBlock.Parameters | Where-Object {
+            $_.Name.VariablePath.UserPath -eq 'AppStoreIds'
+        }
+        $appStoreIdsParameter | Should Not BeNullOrEmpty
+        $defaultIds = @($appStoreIdsParameter.DefaultValue.SafeGetValue())
+        $downloadIds = @($downloads.PSObject.Properties |
+            Where-Object { @($_.Value.DestinationFolders) -like 'BuiltIn-UWP-Apps\*' } |
+            ForEach-Object { [string]$_.Value.WingetId })
+        ($defaultIds | Sort-Object) -join ',' | Should Be (($downloadIds | Sort-Object) -join ',')
+        $defaultIds.Count | Should Be 14
+        $readmeContent | Should Match 'By default it includes every Store ID in the table'
+    }
+
+    It 'supports a winget source override and expands dependency archives' {
+        $updateScript = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\Update-ImageArtifacts.ps1') -Raw
+        $updateScript | Should Match '\$Download\.WingetSource'
+        $updateScript | Should Match 'Expanding dependency archive'
+    }
+
+    It 'forces the full package instead of a bundled stub for new user registration' {
+        $installerContent | Should Match "StubPackageOption = 'InstallFull'"
+    }
+
+    It 'corrects bundle payloads that winget saved with a single-package extension' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(
+            $installerContent,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        $parseErrors.Count | Should Be 0
+        $repairFunction = $ast.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Repair-MislabeledBundleExtension'
+        }, $true)
+        $repairFunction | Should Not BeNullOrEmpty
+
+        $testRoot = Join-Path $env:TEMP "FederalAVD-AppInstaller-$([guid]::NewGuid())"
+        try {
+            $metadataPath = Join-Path $testRoot 'content\AppxMetadata'
+            New-Item -Path $metadataPath -ItemType Directory -Force | Out-Null
+            '<Bundle><Identity Name="Microsoft.DesktopAppInstaller" /></Bundle>' |
+                Set-Content -LiteralPath (Join-Path $metadataPath 'AppxBundleManifest.xml') -Encoding ASCII
+            $mislabeledPath = Join-Path $testRoot 'AppInstaller.msix'
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [System.IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $testRoot 'content'), $mislabeledPath)
+
+            function Write-Log { param([string]$Message) }
+            $identityFunction = $ast.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq 'Get-AppxPackageIdentityName'
+            }, $true)
+            $identityFunction | Should Not BeNullOrEmpty
+            Invoke-Expression $identityFunction.Extent.Text
+            Invoke-Expression $repairFunction.Extent.Text
+            Repair-MislabeledBundleExtension -PackageFile (Get-Item $mislabeledPath)
+
+            Test-Path -LiteralPath $mislabeledPath | Should Be $false
+            $correctedPackage = Get-Item (Join-Path $testRoot 'AppInstaller.msixbundle')
+            $correctedPackage | Should Not BeNullOrEmpty
+            Get-AppxPackageIdentityName -PackageFile $correctedPackage | Should Be 'Microsoft.DesktopAppInstaller'
+        }
+        finally {
+            Remove-Item function:\Get-AppxPackageIdentityName -ErrorAction SilentlyContinue
+            Remove-Item function:\Repair-MislabeledBundleExtension -ErrorAction SilentlyContinue
+            Remove-Item function:\Write-Log -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'does not report passing health when an app failed provisioning' {
+        $installerContent | Should Match '\$HealthIssues\.Add\("\$\(\$Row\.App\): provisioning failed"\)'
+        $installerContent | Should Match 'if \(\$ErrorCount -eq 0 -and \$HealthIssues\.Count -eq 0\)'
+    }
+}
+
+Describe 'Microsoft WinGet artifact' {
+    BeforeAll {
+        $repoRoot = Split-Path -Path $PSScriptRoot -Parent
+        $downloads = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\imageManagement\downloads.json') -Raw | ConvertFrom-Json
+        $artifactRoot = Join-Path $repoRoot 'customer-examples\artifacts\Microsoft-WinGet'
+        $installerPath = Join-Path $artifactRoot 'Install-MicrosoftWinGet.ps1'
+        $installerContent = Get-Content -LiteralPath $installerPath -Raw
+        $builderPath = Join-Path $artifactRoot '_build\Build-MicrosoftWinGet.ps1'
+        $builderContent = Get-Content -LiteralPath $builderPath -Raw
+        $readmeContent = Get-Content -LiteralPath (Join-Path $artifactRoot 'README.md') -Raw
+    }
+
+    It 'stages the four official assets from the Microsoft winget-cli release' {
+        $entry = $downloads.MicrosoftWinGet
+        $entry.GitHubRepo | Should Be 'microsoft/winget-cli'
+        (@($entry.GitHubFileNamePatterns) -join ',') | Should Be (
+            'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle,' +
+            'DesktopAppInstaller_Dependencies.zip,' +
+            'DesktopAppInstaller_Dependencies.json,' +
+            '*_License1.xml'
+        )
+        (@($entry.DestinationFolders) -join ',') | Should Be 'Microsoft-WinGet'
+        $updateScript = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\Update-ImageArtifacts.ps1') -Raw
+        $updateScript | Should Match '\$GitHubReleaseCache\[\$Repo\]'
+        $updateScript | Should Match '\$MatchingAssets\.Count -ne 1'
+        $updateScript | Should Match '-OutputDirectory \$PrimaryDestinationDir'
+        $updateScript | Should Match '\$DestFolders = @\(if \(@\(\$Download\.DestinationFolders\)\.Count -gt 0\)'
+    }
+
+    It 'uses license-aware all-users image provisioning instead of the repair cmdlet' {
+        $installerContent | Should Match 'Add-AppxProvisionedPackage @provisionParameters'
+        $installerContent | Should Match 'LicensePath = \$license\.FullName'
+        $installerContent | Should Match "Regions = 'all'"
+        $installerContent | Should Match "Microsoft\.DesktopAppInstaller"
+        $installerContent | Should Not Match '(?m)^\s*Repair-WinGetPackageManager\s+-AllUsers'
+    }
+
+    It 'forces the full package instead of the bundled stub for new user registration' {
+        $installerContent | Should Match "StubPackageOption = 'InstallFull'"
+    }
+
+    It 'relies on in-place supersession instead of an unsupported explicit removal' {
+        $installerContent | Should Not Match 'Remove-AppxProvisionedPackage'
+        $installerContent | Should Match 'Add-AppxProvisionedPackage supersedes an existing provisioned entry'
+    }
+
+    It 'validates the complete release payload and filters dependency architectures' {
+        $installerContent | Should Match 'DesktopAppInstaller_Dependencies\.zip'
+        $installerContent | Should Match 'DesktopAppInstaller_Dependencies\.json'
+        $installerContent | Should Match '\*_License1\.xml'
+        $installerContent | Should Match "Architecture -notin @\('x86', 'x64', 'neutral'\)"
+        $installerContent | Should Match '\$dependencyDefinition\.Dependencies'
+        $installerContent | Should Match 'foreach \(\$requiredArchitecture in @\(''x86'', ''x64''\)\)'
+        $readmeContent | Should Match 'Do not mix assets from\s+different releases'
+    }
+
+    It 'returns only file objects when dependency selection writes log messages' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(
+            $installerContent,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        $parseErrors.Count | Should Be 0
+        $selectionFunction = $ast.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Select-RequiredDependencies'
+        }, $true)
+        $selectionFunction | Should Not BeNullOrEmpty
+
+        $testRoot = Join-Path $env:TEMP "FederalAVD-WinGetDependencies-$([guid]::NewGuid())"
+        try {
+            New-Item -Path $testRoot -ItemType Directory -Force | Out-Null
+            $requiredFile = New-Item -Path (Join-Path $testRoot 'required.appx') -ItemType File
+            $ignoredFile = New-Item -Path (Join-Path $testRoot 'ignored.appx') -ItemType File
+            function Write-Log { param([string]$Message) Write-Output "LOG: $Message" }
+            function Get-AppxIdentity {
+                param([System.IO.FileInfo]$PackageFile)
+                [pscustomobject]@{
+                    Name = $PackageFile.BaseName
+                    Version = [Version]'1.0.0.0'
+                    Architecture = if ($PackageFile.BaseName -eq 'ignored') { 'arm64' } else { 'x64' }
+                }
+            }
+            function Get-AppxPackage { @() }
+            Invoke-Expression $selectionFunction.Extent.Text
+
+            $result = @(Select-RequiredDependencies -DependencyPackages @($requiredFile, $ignoredFile))
+            $result.Count | Should Be 1
+            $result[0] | Should BeOfType System.IO.FileInfo
+            $result[0].FullName | Should Be $requiredFile.FullName
+        }
+        finally {
+            Remove-Item function:\Select-RequiredDependencies -ErrorAction SilentlyContinue
+            Remove-Item function:\Get-AppxIdentity -ErrorAction SilentlyContinue
+            Remove-Item function:\Get-AppxPackage -ErrorAction SilentlyContinue
+            Remove-Item function:\Write-Log -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'contains one ASCII PowerShell entry script with valid syntax' {
+        @(Get-ChildItem -LiteralPath $artifactRoot -File -Filter '*.ps1').Count | Should Be 1
+        (Get-Content -LiteralPath $installerPath | Where-Object { $_ -match '[^\x00-\x7E]' }) | Should BeNullOrEmpty
+        $tokens = $null
+        $parseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile(
+            $installerPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        ) | Out-Null
+        $parseErrors.Count | Should Be 0
+    }
+
+    It 'builds a transfer zip from one stable release with digest verification' {
+        $builderContent | Should Match 'releases/latest'
+        $builderContent | Should Match 'releases/tags/\$ReleaseTag'
+        $builderContent | Should Match '\$release\.draft -or \$release\.prerelease'
+        $builderContent | Should Match 'Expected exactly one asset matching'
+        $builderContent | Should Match 'Get-FileHash -LiteralPath \$destinationPath -Algorithm SHA256'
+        $builderContent | Should Match "'transfer-manifest\.json'"
+        $builderContent | Should Match 'Compress-Archive'
+        $readmeContent | Should Match 'Build-MicrosoftWinGet\.ps1'
+
+        (Get-Content -LiteralPath $builderPath | Where-Object { $_ -match '[^\x00-\x7E]' }) | Should BeNullOrEmpty
+        $tokens = $null
+        $parseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile(
+            $builderPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        ) | Out-Null
+        $parseErrors.Count | Should Be 0
+    }
+}

@@ -6,7 +6,7 @@
 
 ## Overview
 
-`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from `customer/artifacts/` (overlaid on any repo-provided artifacts in `.common/artifacts/`), packages them as zip files, and either uploads them to the image management artifacts storage account or writes them to a local folder. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
+`Update-ImageArtifacts.ps1` is a PowerShell script that downloads the latest software sources, stages artifacts from `customer/artifacts/` (overlaid on any repo-provided artifacts in `deployments/shared/artifacts/`), packages them as zip files, and either uploads them to the image management artifacts storage account or writes them to a local folder. Run it whenever you want to refresh what is available to image build deployments — for example, after adding a new software package or after a new version is released.
 
 > **Infrastructure vs. Artifacts:** This script does **not** deploy any Azure resources. To upload artifacts, deploy the imageManagement template first (see [imageManagement README](../deployments/imageManagement/README.md) or [Quick Start Step 2](quick-start.md#step-2-deploy-image-management-resources)), then use this script to populate the storage account. Alternatively, use `Deploy-ImageManagement.ps1 -UpdateArtifacts` to do both in one step. To create packages locally without an Azure subscription or storage account, use `-PackageOnly -OutputPath <folder>`.
 
@@ -27,7 +27,7 @@ applications.
 Three sequential phases:
 
 1. **Download** — Fetches the latest versions of software from the internet using the downloads parameter file (skipped with `-SkipDownloadingNewSources` or when no downloads file exists)
-2. **Package** — Compresses each subdirectory in the staged artifacts view (repo base in `.common/artifacts/` overlaid by `customer/artifacts/`)
+2. **Package** — Compresses each subdirectory in the staged artifacts view (repo base in `deployments/shared/artifacts/` overlaid by `customer/artifacts/`)
 3. **Upload** — Uploads all packaged artifacts to the `artifacts` blob container in the storage account
 
 ## Prerequisites
@@ -44,11 +44,11 @@ Three sequential phases:
 
 ### Required Files
 
-Base downloads parameter files are in `.common/data/` and are selected automatically based on the connected Azure environment — no action needed:
+Base downloads parameter files are in `deployments/shared/data/` and are selected automatically based on the connected Azure environment — no action needed:
 
-  - `.common/data/public.downloads.parameters.json` (commercial / government)
-  - `.common/data/secret.downloads.parameters.json` (Azure Secret)
-  - `.common/data/topsecret.downloads.parameters.json` (Azure Top Secret)
+  - `deployments/shared/data/public.downloads.parameters.json` (commercial / government)
+  - `deployments/shared/data/secret.downloads.parameters.json` (Azure Secret)
+  - `deployments/shared/data/topsecret.downloads.parameters.json` (Azure Top Secret)
 
 To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), place a customer-owned downloads file at `customer/parameters/imageManagement/downloads.json`. A ready-to-use example that covers a broad set of common packages is provided at:
   - `customer-examples/parameters/imageManagement/downloads.json`
@@ -176,14 +176,14 @@ If `customer/parameters/imageManagement/downloads.json` exists, the script merge
 
 ## Environment Detection
 
-The script automatically selects the base downloads file from `.common/data/` based on the connected Azure environment:
+The script automatically selects the base downloads file from `deployments/shared/data/` based on the connected Azure environment:
 
 | Azure Environment | Base File |
 | --- | --- |
-| AzureCloud | `.common/data/public.downloads.parameters.json` |
-| AzureUSGovernment | `.common/data/public.downloads.parameters.json` |
-| Azure Secret (IL6) | `.common/data/secret.downloads.parameters.json` |
-| Azure Top Secret (IL7) | `.common/data/topsecret.downloads.parameters.json` |
+| AzureCloud | `deployments/shared/data/public.downloads.parameters.json` |
+| AzureUSGovernment | `deployments/shared/data/public.downloads.parameters.json` |
+| Azure Secret (IL6) | `deployments/shared/data/secret.downloads.parameters.json` |
+| Azure Top Secret (IL7) | `deployments/shared/data/topsecret.downloads.parameters.json` |
 
 The base files contain the software entries that are required by the image build template (FSLogix, M365, OneDrive, Teams, WebView2, etc.). To include optional or customer-specific software on top, create `customer/parameters/imageManagement/downloads.json`.
 
@@ -256,7 +256,7 @@ Retrieves the latest version from a JSON API endpoint.
 
 #### 4. GitHub Releases
 
-Fetches the latest release asset from a GitHub repository.
+Fetches one or more assets from the latest release of a GitHub repository.
 
 ```json
 "PowerShell7": {
@@ -271,7 +271,18 @@ Fetches the latest release asset from a GitHub repository.
 | Field | Description |
 | --- | --- |
 | `GitHubRepo` | `owner/repo` path on GitHub |
-| `GitHubFileNamePattern` | Wildcard pattern to match the desired release asset filename |
+| `GitHubFileNamePattern` | Wildcard pattern that must match exactly one release asset |
+| `GitHubFileNamePatterns` | Array of wildcard patterns for a grouped download; every pattern must match exactly one asset from the same release |
+| `DestinationCleanupPatterns` | Optional wildcard patterns for stale payload files to remove from each destination before copying grouped assets; authored files are preserved |
+
+Use either `GitHubFileNamePattern` with `DestinationFileName` for one asset, or
+`GitHubFileNamePatterns` for a group whose original release filenames must be preserved. A grouped
+download writes directly to its first artifact destination and verifies any SHA256 digest published
+by GitHub. Additional destinations receive the verified files from that first destination.
+
+Release metadata is cached by repository for the duration of the update. Each pattern must match
+exactly one asset; zero or multiple matches stop that download rather than selecting an arbitrary
+file.
 
 #### 5. Winget
 
@@ -347,6 +358,7 @@ apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
 | --- | --- |
 | `WingetId` | Microsoft Store product code (alphanumeric) |
 | `WingetPreserveLayout` | `true` -- preserves the `winget download` folder layout; no `DestinationFileName` used |
+| `WingetSource` | Optional source override: `msstore` or `winget`. Preserve-layout entries default to `msstore`. |
 | `Architecture` | Optional. Omit for most apps (`x64` is the default). Set to `"neutral"` for multi-arch bundles that do not publish a separate x64 installer (e.g., Clipchamp). |
 | `DestinationFolders` | Single entry naming the app subfolder inside the parent artifact folder (e.g., `BuiltIn-UWP-Apps\\Calculator`) |
 
@@ -354,8 +366,9 @@ apps (Calculator, Paint, Snipping Tool, etc.) and codec extensions.
 
 1. `winget download --id <WingetId> --download-directory <temp>` is called (with `--architecture x64` unless `Architecture` is `"neutral"`).
 2. The destination folder is cleaned before copying to prevent stale package accumulation.
-3. Only `x64` and `neutral` architecture files are copied from any `Dependencies\` subfolder; other arch variants are pruned.
-4. After all preserve-layout downloads complete, shared framework packages (VCLibs, WinAppSDK, UI.Xaml, etc.) are deduplicated across all app subfolders into a single `SharedDependencies\` folder at the parent artifact root, reducing the zip size.
+3. Dependency zip archives from community winget manifests are expanded before package processing.
+4. Only `x64` and `neutral` architecture files are copied from any `Dependencies\` subfolder; other arch variants are pruned.
+5. After all preserve-layout downloads complete, shared framework packages (VCLibs, WinAppSDK, UI.Xaml, etc.) are deduplicated across all app subfolders into a single `SharedDependencies\` folder at the parent artifact root, reducing the zip size.
 
 > **Note:** `WingetPreserveLayout` entries do not use `DestinationFileName`. The original filenames produced by `winget download` are kept so that `Add-AppxProvisionedPackage` can read the package metadata correctly.
 
@@ -386,7 +399,7 @@ Use `""` (empty string) as one of the folder names to also place the file direct
 
 > **Getting started quickly:** `customer-examples/artifacts/` contains ready-to-use packages for common software (Chrome, FSLogix, LGPO, VS Code, STIGs, and more). Copy any folder directly into `customer/artifacts/` and run the script. See [`customer/README.md`](../customer/README.md) for the full list and copy commands.
 
-The script stages a merged view — `.common/artifacts/` first, then `customer/artifacts/` on top — then packages the result. Currently `.common/artifacts/` is empty, so all content comes from `customer/artifacts/`.
+The script stages a merged view — `deployments/shared/artifacts/` first, then `customer/artifacts/` on top — then packages the result. Currently `deployments/shared/artifacts/` is empty, so all content comes from `customer/artifacts/`.
 
 > **Where to place pre-staged files:**
 > - **Required air-gapped artifacts** (WebView2, VC Redist, WebRTC): place the file directly in `customer/artifacts/` using the exact filename specified in the downloads file (e.g., `WebView2.exe`). The script picks them up by filename from the root of the artifacts directory.
@@ -405,7 +418,7 @@ stagedArtifacts/
 └── teamsbootstrapper.exe              → uploaded as-is (root file)
 ```
 
-If `.common/artifacts/` contains packages in the future, `customer/artifacts/` overlays on top — customer files always win when names match.
+If `deployments/shared/artifacts/` contains packages in the future, `customer/artifacts/` overlays on top — customer files always win when names match.
 
 Each subdirectory is compressed into a zip file and uploaded to the `artifacts` blob container.
 
@@ -433,7 +446,7 @@ Pass this URL as `artifactsContainerUri` in image build deployments.
 - Use `-SkipDownloadingNewSources` when download endpoints are unreachable and you want to re-package and re-upload already-staged content. For normal air-gapped cloud deployments, the script downloads automatically — see the [Air-Gapped Cloud Guide](air-gapped-clouds.md).
 
 **Parameter file not found**
-- The base downloads files are in `.common/data/` and are included with the repository — they should always be present
+- The base downloads files are in `deployments/shared/data/` and are included with the repository — they should always be present
 - If you expect optional downloads to be merged, verify `customer/parameters/imageManagement/downloads.json` exists and contains valid JSON
 
 ## Related Resources

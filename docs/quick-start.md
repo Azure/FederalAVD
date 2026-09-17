@@ -21,10 +21,11 @@ Choose a different path only when the workload requires it. Answer these four ro
    supports pooled and personal desktops. Automated is a pooled Azure Commercial preview where
    Azure Virtual Desktop owns VM creation, update, scaling, and deletion. The management approach
    can't be changed on an existing host pool.
-2. **Where will software customization occur?** A marketplace or existing image can go directly to
-    Step 4. Use Image Management (Step 2) without Image Build when session-host customizations need
-    centrally hosted scripts or installers. Add Image Build (Step 3) only when FederalAVD must bake
-    and publish a custom image.
+2. **Where will software customization occur?** A marketplace image or an existing custom image in
+    Azure Compute Gallery can go directly to Step 4. The gallery image can come from Packer, Azure
+    VM Image Builder, or another approved image pipeline. Use Image Management (Step 2) without
+    Image Build when session-host customizations need centrally hosted scripts or installers. Add
+    Image Build (Step 3) only when FederalAVD must bake and publish the custom image.
 3. **Where will FSLogix profiles be stored?** Step 4 can deploy storage dedicated to the host pool or
     use existing storage. Deploy the [FSLogix Storage add-on](../deployments/add-ons/fslogixStorage/README.md)
     first when the profile storage itself must be provisioned independently or shared by multiple
@@ -47,6 +48,7 @@ host-maintenance, capacity, and replacement owners.
 | --- | --- | --- | --- |
 | 🧪 | **[Standard PoC / Evaluation](#poc-fast-path)** — existing VNet, marketplace images, no compliance requirements | Step 4 only | ~20 min |
 | 🧪 | **[Automated PoC / Evaluation](../deployments/automatedHostPools/README.md#deploy)** — Azure Commercial, existing VNet, marketplace image | Steps 1 → 4 | ~30 min |
+| 🖼️ | **Existing Azure Compute Gallery image** — custom image already published by Packer, Azure VM Image Builder, or another pipeline | Step 4 only | ~20 min |
 | 📦 | **Runtime host customizations** — marketplace/existing image plus centrally hosted scripts or installers | Steps 2 → 4 | Varies |
 | 🖼️ | **[Custom software, no CMK](#step-2-deploy-image-management-resources)** — pre-install software baked into images | Steps 2 → 3 → 4 | 2–4 hrs |
 | 🏛️ | **[Compliance / Image Management CMK](#step-1-deploy-avd-shared-services)** — protect artifact storage and, when building images, gallery image versions | Steps 1 → 2 → Step 3 if building → 4 | Varies |
@@ -54,6 +56,36 @@ host-maintenance, capacity, and replacement owners.
 | 🌐 | **No existing VNet?** — add [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first to any path above | + Step 0 | +30 min |
 | 💾 | **Shared FSLogix storage with no CMK, diagnostics, or backup, or with all prerequisite resource IDs already available** | FSLogix Storage add-on → Step 4 pool(s) | Varies |
 | 🔐 | **Shared FSLogix storage that needs FederalAVD to create its CMK, monitoring, or Azure Files backup prerequisites** | Step 1 → FSLogix Storage add-on → Step 4 pool(s) | Varies |
+
+### Deployment Decision Diagram
+
+```mermaid
+graph TD
+    A[Start] --> TYPE{Pooled or<br/>personal?}
+    TYPE -->|Personal| STD[Standard management]
+    TYPE -->|Pooled| OWNER{Who owns the<br/>VM lifecycle?}
+    OWNER -->|FederalAVD, manual,<br/>or customer tooling| STD
+    OWNER -->|Azure Virtual Desktop<br/>Commercial preview| AUTO[Automated management]
+    STD --> B{Have Existing<br/>VNet?}
+    AUTO --> B
+    B -->|No - Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
+    B -->|Yes| SS
+    C --> SS
+    SS{Separate Shared Services?<br/>Required for automated or<br/>Image Management storage/<br/>gallery CMK} -->|Yes| KV2[🔒 Step 1: Deploy<br/>AVD Shared Services]
+    SS -->|No| SOFTWARE
+    KV2 --> SOFTWARE
+    SOFTWARE{Software path?} -->|Marketplace or existing<br/>Compute Gallery image| PROFILE
+    SOFTWARE -->|Runtime host<br/>customizations| IMG[📦 Step 2: Deploy Image<br/>Management + Artifacts]
+    SOFTWARE -->|Build custom image| IMG
+    IMG --> BUILD{Bake a custom image?}
+    BUILD -->|Yes| IB[🎨 Step 3: Build<br/>Custom Image]
+    BUILD -->|No| PROFILE
+    IB --> PROFILE
+    PROFILE{FSLogix storage?} -->|Deploy for this host pool<br/>or select existing| HP
+    PROFILE -->|Provision shared storage;<br/>selected CMK/monitoring/backup<br/>resources must already exist| FS[💾 FSLogix Storage<br/>add-on]
+    FS --> HP
+    HP[🏢 Step 4: Deploy<br/>selected Host Pool]
+```
 
 > **🏛️ Compliance / Image Management CMK path:** Step 1 must precede Step 2 when CMK must protect
 > Image Management artifact or build-log storage. When custom images also require CMK, Step 2
@@ -81,6 +113,44 @@ host-maintenance, capacity, and replacement owners.
 > [Compliance Configuration](parameters.md#compliance-configuration-reference). The portal form
 > flags non-compliant defaults in a Zero Trust tab.
 
+## Prerequisites
+
+**Required for all paths:**
+
+- Azure subscription with **Owner** role (or Contributor + User Access Administrator)
+- Virtual Network with at least one subnet, or include Step 0 in the selected path
+- Entra security group with AVD users (note the object ID)
+- Az PowerShell module: `Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`
+
+**Additional when FederalAVD builds a custom image (Steps 2-3):** **Storage Blob Data Contributor**
+on the artifacts storage account. `Owner` and `Contributor` do not grant blob data-plane access
+when shared key access is disabled. See
+[troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
+
+**Additional for CMK:** **Key Vault Crypto Officer** on the encryption Key Vault. ARM control-plane
+access does not grant Key Vault data-plane access. See
+[troubleshooting](troubleshooting.md#key-vault-crypto-officer-missing).
+
+### 60-Second Preflight Checklist {#preflight-checklist}
+
+Complete this checklist before publishing or deploying any template:
+
+| # | Check | Quick fix if no |
+| --- | --- | --- |
+| 1 | My identity has **Owner** (or Contributor + User Access Administrator) on the target subscription | [Assign role in Azure Portal](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal) |
+| 2 | `Microsoft.DesktopVirtualization` is registered on the subscription | `Register-AzResourceProvider -ProviderNamespace 'Microsoft.DesktopVirtualization'` |
+| 3 | `EncryptionAtHost` is registered, or I will disable it in the deployment form | `Register-AzProviderFeature -FeatureName EncryptionAtHost -ProviderNamespace Microsoft.Compute` |
+| 4 | I have an existing VNet with a session-host subnet, or selected Step 0 | [Deploy networking](#step-0-deploy-networking-infrastructure-greenfield) |
+| 5 | I have an Entra security group containing AVD users and know its object ID | Create a group in Entra ID and note its object ID |
+| 6 | The Az PowerShell module is installed | `Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force` |
+| 7 | I know the correct Azure environment and region | Use `AzureCloud` for Commercial or `AzureUSGovernment` for Government |
+| 8 | *(FederalAVD image builds only)* My identity has **Storage Blob Data Contributor** on the artifacts storage account | Assign the data-plane role before uploading artifacts |
+| 9 | *(CMK only)* My identity has **Key Vault Crypto Officer** on the encryption Key Vault | Assign the key data-plane role before deployment |
+| 10 | The selected VM size is available with sufficient vCPU quota | Run `tools/Test-AvdVmSize.ps1 -Location <region>` |
+
+> `Test-AvdVmSize.ps1` checks VM availability and quota, but it does not check
+> `EncryptionAtHost`; register that feature separately when it is enabled.
+
 ## Recommended First Deployment Workflow
 
 Use the **Template Spec portal forms for the first deployment in every Azure cloud**. The forms
@@ -95,39 +165,53 @@ The standard and automated deployments have different, immutable session-host li
 so production planning should confirm that choice before the host pool becomes a long-lived
 environment.
 
-### 1. Publish the Core Template Specs
+> **Before running a command:** Complete the [60-Second Preflight Checklist](#preflight-checklist).
+> Confirm the target subscription, required deployment roles, provider registration, Entra group,
+> VM SKU quota, and any path-specific Storage Blob Data Contributor or Key Vault Crypto Officer
+> access first.
 
-From the repository root, connect to the target subscription and publish the core forms. The
-example below publishes the standard host-pool form:
+### 1. Publish the Template Specs for Your Chosen Path
+
+From the repository root, connect to the target subscription. Then set `$templatesToPublish` to the
+exact list shown for the row selected under [Choose Your Path](#choose-your-path).
+
+| Chosen path | Set `$templatesToPublish` to |
+| --- | --- |
+| Standard PoC / Evaluation | `@('HostPool')` |
+| Automated PoC / Evaluation | `@('SharedServices', 'AutomatedHostPool')` |
+| Existing Azure Compute Gallery image | `@('HostPool')` |
+| Runtime host customizations | `@('ImageManagement', 'HostPool')` |
+| Custom software, no CMK | `@('ImageManagement', 'ImageBuild', 'HostPool')` |
+| Compliance / Image Management CMK | `@('SharedServices', 'ImageManagement', 'HostPool')`; add `'ImageBuild'` when building a custom image |
+| No existing VNet | Add `'Networking'` to the selected path |
+| Shared FSLogix storage with existing prerequisites | `@('AddOns', 'HostPool')` |
+| Shared FSLogix storage requiring new prerequisites | `@('SharedServices', 'AddOns', 'HostPool')` |
+| Air-gapped Secret / Top Secret | Use the path-specific command in the [Air-Gapped First Deployment Checklist](air-gapped-clouds.md#first-deployment-checklist) |
+
+The command below converts that chosen list into explicit switches. This matters because the script
+has defaults that publish Image Build, Host Pool, and add-on forms even when they are not specified.
 
 ```powershell
 Connect-AzAccount -Environment '<environment>'
 Set-AzContext -Subscription '<subscription-id>'
 
+$templatesToPublish = @('HostPool') # Replace with the exact list from your chosen path above
+
 .\tools\New-TemplateSpecs.ps1 `
     -Location '<region>' `
-    -createNetwork $true `
-    -createSharedServices $true `
-    -createImageManagement $true `
-    -createCustomImage $true `
-    -createHostPool $true `
-    -createAutomatedHostPool $false `
-    -CreateAddOns $false
+    -createNetwork ($templatesToPublish -contains 'Networking') `
+    -createSharedServices ($templatesToPublish -contains 'SharedServices') `
+    -createImageManagement ($templatesToPublish -contains 'ImageManagement') `
+    -createCustomImage ($templatesToPublish -contains 'ImageBuild') `
+    -createHostPool ($templatesToPublish -contains 'HostPool') `
+    -createAutomatedHostPool ($templatesToPublish -contains 'AutomatedHostPool') `
+    -CreateAddOns ($templatesToPublish -contains 'AddOns')
 ```
 
-All switches are explicit because the script defaults do not publish Networking, Security and
-Monitoring, or Image Management. Publishing a Template Spec does not deploy the workload; it makes
-the guided form available in the Azure portal. Add-ons can be published later when needed.
-
-For an automated host pool, reverse the two host-pool switches:
-
-```powershell
--createHostPool $false `
--createAutomatedHostPool $true
-```
-
-Publish only the Step 4 form that matches your selected management approach. The automated form is
-available only in Azure Commercial.
+Publishing a Template Spec does not deploy the workload; it makes the guided form available in the
+Azure portal. Publish only the Step 4 form matching the selected management approach. The automated
+form is available only in Azure Commercial. `AddOns` publishes the complete add-on Template Spec
+collection, including FSLogix Storage; deploy only the add-on selected by the chosen path.
 
 ### 2. Deploy Only the Components Your Path Requires
 
@@ -173,79 +257,13 @@ After the first successful UI deployment, use the saved parameter files for Powe
 or CI/CD. The component sections below link to those repeat-deployment commands and technical
 references; they are not required to understand the initial form-driven deployment.
 
-<details>
-<summary><b>Full deployment decision diagram</b></summary>
-
-```mermaid
-graph TD
-    A[Start] --> TYPE{Pooled or<br/>personal?}
-    TYPE -->|Personal| STD[Standard management]
-    TYPE -->|Pooled| OWNER{Who owns the<br/>VM lifecycle?}
-    OWNER -->|FederalAVD, manual,<br/>or customer tooling| STD
-    OWNER -->|Azure Virtual Desktop<br/>Commercial preview| AUTO[Automated management]
-    STD --> B{Have Existing<br/>VNet?}
-    AUTO --> B
-    B -->|No - Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
-    B -->|Yes| SS
-    C --> SS
-    SS{Separate Shared Services?<br/>Required for automated or<br/>Image Management storage/<br/>gallery CMK} -->|Yes| KV2[🔒 Step 1: Deploy<br/>AVD Shared Services]
-    SS -->|No| SOFTWARE
-    KV2 --> SOFTWARE
-    SOFTWARE{Software path?} -->|Marketplace or<br/>existing image| PROFILE
-    SOFTWARE -->|Runtime host<br/>customizations| IMG[📦 Step 2: Deploy Image<br/>Management + Artifacts]
-    SOFTWARE -->|Build custom image| IMG
-    IMG --> BUILD{Bake a custom image?}
-    BUILD -->|Yes| IB[🎨 Step 3: Build<br/>Custom Image]
-    BUILD -->|No| PROFILE
-    IB --> PROFILE
-    PROFILE{FSLogix storage?} -->|Deploy for this host pool<br/>or select existing| HP
-    PROFILE -->|Provision shared storage;<br/>selected CMK/monitoring/backup<br/>resources must already exist| FS[💾 FSLogix Storage<br/>add-on]
-    FS --> HP
-    HP[🏢 Step 4: Deploy<br/>selected Host Pool]
-```
-
-</details>
-
 For production operations after Step 4, use the
 [host-pool management guide](host-pool-management.md) to choose in-place maintenance or image-based
 replacement and assign the recurring lifecycle owner.
 
 ---
 
-## Prerequisites
-
-**Required for all paths:**
-
-- Azure subscription with **Owner** role (or Contributor + User Access Administrator)
-- Virtual Network with at least one subnet — or deploy [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first
-- Entra security group with AVD users (note the object ID)
-- Az PowerShell module: `Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`
-
-**Additional for custom images (Steps 2–3):** **Storage Blob Data Contributor** on the artifacts storage account — `Owner`/`Contributor` does not cover blob data-plane access when shared key access is disabled (the default). See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
-
-**Additional for CMK (Steps 1 + 4):** **Key Vault Crypto Officer** on the encryption Key Vault — ARM control plane ≠ Key Vault data plane. See [troubleshooting](troubleshooting.md#key-vault-crypto-officer-missing).
-
-<details>
-<summary><b>60-second preflight checklist, deployer roles, and detailed setup guides</b></summary>
-
-### 60-Second Preflight Checklist {#preflight-checklist}
-
-Run through these before starting any deployment. All "yes" → proceed. Any "no" → follow the quick fix.
-
-| # | Check | Quick fix if no |
-| --- | ------- | ---------------- |
-| 1 | My identity has **Owner** (or Contributor + User Access Administrator) on the target subscription | [Assign role in Azure Portal](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal) |
-| 2 | `Microsoft.DesktopVirtualization` is registered on the subscription | `Register-AzResourceProvider -ProviderNamespace 'Microsoft.DesktopVirtualization'` |
-| 3 | `EncryptionAtHost` feature is registered (or I've set `encryptionAtHost: false` in my params) | `Register-AzProviderFeature -FeatureName EncryptionAtHost -ProviderNamespace Microsoft.Compute` |
-| 4 | I have an existing VNet with at least one subnet | [Deploy networking (Step 0)](#step-0-deploy-networking-infrastructure-greenfield) |
-| 5 | I have an Entra security group containing AVD users and know its object ID | Create a group in Entra ID and note its object ID |
-| 6 | The Az PowerShell module is installed | `Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force` |
-| 7 | I'm using the correct `-Environment` flag for my cloud | `Connect-AzAccount -Environment AzureUSGovernment` for Gov; omit for Commercial |
-| 8 | *(Custom images only)* My identity has **Storage Blob Data Contributor** on the artifacts storage account | `Owner`/`Contributor` does not cover blob data-plane access. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403). |
-| 9 | *(CMK only)* My identity has **Key Vault Crypto Officer** on the encryption Key Vault | `Owner`/`Contributor` does not cover key operations. See [troubleshooting](troubleshooting.md#key-vault-crypto-officer-missing). |
-| 10 | VM size is available in my region with sufficient vCPU quota | Run `tools/Test-AvdVmSize.ps1 -Location <region>`. See [vCPU Quota Exhaustion](troubleshooting.md#vcpu-quota-exhaustion). |
-
-> Run `tools/Test-AvdVmSize.ps1 -Location <region>` to automate checks 3 and 10 (EncryptionAtHost is **not** checked by this script — register that separately).
+## Detailed Prerequisites and Deployment Methods
 
 <details>
 <summary><b>Required Deployer Roles by Deployment</b></summary>
@@ -279,8 +297,6 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 - **[Entra Kerberos (Hybrid)](entra-kerberos-hybrid.md)** — Setup for hybrid identity with on-premises AD
 - **[Entra Kerberos (Cloud-Only)](entra-kerberos-cloud-only.md)** — Setup for pure cloud identities
 
-</details>
-
 <details>
 <summary><b>Deployment methods by component (Blue Button, Template Spec, PowerShell/CLI)</b></summary>
 
@@ -304,44 +320,23 @@ Run through these before starting any deployment. All "yes" → proceed. Any "no
 
 ## ✈️ Air-Gapped Clouds (Azure Secret / Top Secret) — Start Here
 
-> **This section is for Azure Government Secret (IL6) and Azure Government Top Secret (IL7) deployments.**
-> If you are deploying to Azure Commercial or Azure Government (IL2/IL4/IL5), continue to the
-> component deployment steps below.
+Use the **standard host-pool deployment** in Secret and Top Secret; automated host pools are a
+Commercial-only preview. Blue Button is unavailable, so publish Template Specs from an approved
+management workstation and use their guided forms for the first deployment.
 
-Air-gapped cloud deployments differ from connected deployments in three ways:
+Deploy Step 1 by default for the IL6/IL7 monitoring, audit, secrets, and key-management baseline.
+Omit it only when approved shared services provide equivalent controls. Add Step 0 when networking
+does not exist. A verified marketplace image or an approved custom image already replicated to an
+Azure Compute Gallery in the air-gapped cloud can go directly to Step 4. Microsoft 365 Apps, Teams,
+OneDrive, unavailable software, or substantial preconfiguration require Steps 2 and 3 with
+pre-staged artifacts when no suitable gallery image exists. Never depend on public runtime or
+image-build downloads.
 
-1. **Blue Button is unavailable.** Use the same Template Spec portal forms recommended for every
-    first deployment.
-2. **Software cannot be downloaded from public endpoints during the build.** Stage required
-    artifacts from a connected system or approved cloud software distribution endpoints and keep
-    `downloadLatestMicrosoftContent` set to `false`.
-3. **Image choice depends on the workload.** A plain marketplace image can be used when a suitable
-    SKU exists in the target cloud and no additional software or image-time configuration is
-    required. Microsoft 365 Apps, Teams, OneDrive, unavailable software, and substantial
-    preconfiguration require a custom image with a complete offline artifact set.
-
-The transfer inventory changes as vendor packages and air-gapped cloud endpoints change. Use the
-[Air-Gapped Cloud Guide](air-gapped-clouds.md) as the authoritative checklist for agents, Office,
-Teams, OneDrive, browser policy templates, UWP apps, and Windows updates.
-
-### Your Deployment Path
-
-Use the standard host-pool deployment in Secret and Top Secret. Step 1 is the recommended IL6/IL7
-baseline; omit it only when approved shared services provide equivalent security and monitoring
-controls. Step 0 remains conditional on whether networking already exists. Steps 2 and 3 are
-required only when the workload needs a custom image:
-
-```text
-Step 0 (optional): Networking
-Step 1 (strongly recommended; required before Image Management CMK or for policy prerequisites): AVD Shared Services
-Step 2 (conditional): Image Management - deploy infrastructure + upload artifacts
-Step 3 (conditional): Image Build - bake required software and configuration into the image
-Step 4: Standard Host Pool - use a verified marketplace SKU or the custom gallery image
-```
-
-Even when using a marketplace image, verify that the selected SKU exists and that the AVD Agent,
-Boot Loader, and required service endpoints are available from the target enclave. Before starting
-Step 2, complete the staging checklist in the [full air-gapped reference](air-gapped-clouds.md).
+Continue with the **[Air-Gapped First Deployment Checklist](air-gapped-clouds.md#first-deployment-checklist)**
+for the exact publishing command, approved PowerShell connection process, artifact transfer
+inventory, image settings, internally hosted AVD Agent URLs, and validation steps. That checklist is
+the authoritative executable flow for Secret and Top Secret; the general component sections below
+remain reference material for individual forms.
 
 ---
 
@@ -355,6 +350,22 @@ the only guided portal form because Blue Button links are unavailable.
 only after reviewing repository changes, then use the new version for subsequent form deployments.
 For advanced publishing options and RBAC, see
 [Template Spec creation](hostpool-deployment.md#b-template-spec-creation).
+
+---
+
+## Start Your Connected-Cloud Deployment
+
+For Azure Commercial and Azure Government, start at the first step in the path selected above:
+
+- **No approved VNet or subnet:** [Step 0 - Networking](#step-0-deploy-networking-infrastructure-greenfield)
+- **Automated host pool, Image Management CMK, or shared prerequisites needed first:** [Step 1 - AVD Shared Services](#step-1-deploy-avd-shared-services)
+- **Runtime artifacts or custom image:** [Step 2 - Image Management](#step-2-deploy-image-management-resources)
+- **Image Management already exists and a custom image must be baked:** [Step 3 - Image Build](#step-3-build-custom-image-optional)
+- **Existing VNet and marketplace or existing Compute Gallery image:** [Step 4 - Host Pool](#step-4-deploy-host-pool)
+
+Secret and Top Secret operators should follow the
+[air-gapped checklist](air-gapped-clouds.md#first-deployment-checklist) instead of this connected-cloud
+jump list.
 
 ---
 
@@ -587,7 +598,8 @@ After deployment, note the resource IDs from the deployment outputs:
 
 ## Step 2: Deploy Image Management Resources
 
-**⏭️ Skip this step if:** You're using marketplace images without customization.
+**⏭️ Skip this step if:** You're using a marketplace image or an existing custom image from Azure
+Compute Gallery without FederalAVD-hosted runtime artifacts.
 
 **Required for:** Custom image builds, or session-host runtime customizations that need FederalAVD
 to host scripts and installers. Image Management can be deployed as artifact infrastructure without
@@ -704,7 +716,8 @@ This enables least-privilege: the person running imageBuild needs no rights to c
 
 ## Step 3: Build Custom Image (Optional)
 
-**⏭️ Skip this step if:** You're okay with marketplace images or installing software at session host runtime.
+**⏭️ Skip this step if:** You're using a marketplace image, an existing custom image from Azure
+Compute Gallery, or installing software at session-host runtime.
 
 **Benefits:** Faster session host deployment, consistent configuration, pre-installed software.
 
@@ -769,7 +782,11 @@ Replacer independently handles image-driven replacement.
 1. In the Azure portal, open **Template Specs** and deploy **AVD Host Pool** or
     **AVD Automated Host Pool**, according to the decision above.
 2. Use the form to select identity, image, session hosts, FSLogix, monitoring, backup, security, and
-    private connectivity. Supply outputs from earlier steps only when those components were deployed.
+    private connectivity. For an existing custom image, select its Azure Compute Gallery image
+    version resource ID; the image can be produced by
+    [Packer](../customer-examples/packer/README.md),
+    [Azure VM Image Builder](../customer-examples/azure-image-builder/README.md), or another image
+    pipeline. Supply outputs from earlier steps only when those components were deployed.
 3. At **Review + create**, select **Create**. After submission, select **Download template and
     parameters** and save them as
     `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` for standard management or
@@ -903,7 +920,7 @@ New-AzDeployment `
 
 ---
 
-## Tier 3: Multi-Tiered Administration
+## Multi-Team Administration
 
 In enterprise environments, different teams own different pieces of the infrastructure. The Federal AVD solution is designed so that each deployment step produces **outputs** that the next team consumes as **parameters** — enabling clean organizational boundaries without credential sharing or giving every team subscription Owner rights.
 
@@ -954,9 +971,11 @@ Assign these roles so each team can deploy their components without subscription
 
 ---
 
-## Tier 4: Full Automation
+## Full Automation
 
-Once you have working manual deployments for each step (Tiers 1–3), you can chain them together into a pipeline. The Federal AVD solution is built for this pattern: each step is a standalone deployment that produces machine-readable outputs feeding the next step.
+Once you have working manual deployments for each required step, you can chain them together into a
+pipeline. The Federal AVD solution is built for this pattern: each step is a standalone deployment
+that produces machine-readable outputs feeding the next step.
 
 The **[End-to-End Automation Guide](automation-guide.md)** covers:
 
@@ -1062,4 +1081,7 @@ New-AzDeployment -Location "usgovvirginia" -Name $deploymentName -TemplateFile "
 
 ---
 
-**Tier 1 — no custom images?** [Jump to Step 4](#step-4-deploy-host-pool) and you're done. **Need images?** Follow [Steps 2 → 3 → 4](#step-2-deploy-image-management-resources). **Enterprise / multi-team?** See [Tier 3](#tier-3-multi-tiered-administration). **Automating everything?** Start with the [Automation Guide](automation-guide.md).
+**No custom images?** [Jump to Step 4](#step-4-deploy-host-pool). **Need images?** Follow
+[Steps 2 → 3 → 4](#step-2-deploy-image-management-resources). **Enterprise or multi-team?** See
+[Multi-Team Administration](#multi-team-administration). **Automating everything?** Start with the
+[Automation Guide](automation-guide.md).

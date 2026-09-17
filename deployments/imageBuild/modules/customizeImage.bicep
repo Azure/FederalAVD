@@ -41,24 +41,30 @@ var restartVmScript = loadTextContent('../scripts/Restart-Vm.ps1')
 var removeMicrosoftSoftwareRunCommandName = 'remove-microsoft-software-runCommands'
 
 var customizers = [
-  for customization in customizations: {
-    name: replace(customization.name, ' ', '-')
-    uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
-      ? customization.blobNameOrUri
-      : '${artifactsContainerUri}/${customization.blobNameOrUri}'
-    arguments: customization.?arguments ?? ''
-    restart: customization.?restart ?? false
-  }
+  for customization in customizations: union(
+    {
+      name: replace(customization.name, ' ', '-')
+      uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
+        ? customization.blobNameOrUri
+        : '${artifactsContainerUri}/${customization.blobNameOrUri}'
+      restart: customization.?restart ?? false
+    },
+    empty(customization.?arguments ?? '') ? {} : { arguments: customization.arguments! },
+    empty(customization.?successExitCodes ?? '') ? {} : { successExitCodes: customization.successExitCodes! }
+  )
 ]
 
 var vdiCustomizers = [
-  for customization in vdiCustomizations: {
-    name: replace(customization.name, ' ', '-')
-    uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
-      ? customization.blobNameOrUri
-      : '${artifactsContainerUri}/${customization.blobNameOrUri}'
-    arguments: customization.?arguments ?? ''
-  }
+  for customization in vdiCustomizations: union(
+    {
+      name: replace(customization.name, ' ', '-')
+      uri: startsWith(toLower(customization.blobNameOrUri), 'https://') || startsWith(toLower(customization.blobNameOrUri), 'http://')
+        ? customization.blobNameOrUri
+        : '${artifactsContainerUri}/${customization.blobNameOrUri}'
+    },
+    empty(customization.?arguments ?? '') ? {} : { arguments: customization.arguments! },
+    empty(customization.?successExitCodes ?? '') ? {} : { successExitCodes: customization.successExitCodes! }
+  )
 ]
 
 var useBuildDir = !empty(customizations) || installFsLogix || !empty(office365AppsToInstall) || installOneDrive || installTeams || !empty(vdiCustomizations)
@@ -477,7 +483,7 @@ resource restartMicrosoftSoftware 'Microsoft.Compute/virtualMachines/runCommands
 }
 
 @batchSize(1)
-module customizationBatches 'applyCustomizationsBatch.bicep' = [
+module customizationBatch 'applyCustomizationsBatch.bicep' = [
   for i in range(0, batchCount): {
     params: {
       batchIndex: i
@@ -488,7 +494,8 @@ module customizationBatches 'applyCustomizationsBatch.bicep' = [
         j => {
           name: customizers[i * customizationBatchSize + j].name
           uri: customizers[i * customizationBatchSize + j].uri
-          arguments: customizers[i * customizationBatchSize + j].arguments
+          arguments: customizers[i * customizationBatchSize + j].?arguments
+          successExitCodes: customizers[i * customizationBatchSize + j].?successExitCodes
           restart: customizers[i * customizationBatchSize + j].restart
         }
       )
@@ -524,7 +531,7 @@ resource restartCustomizations 'Microsoft.Compute/virtualMachines/runCommands@20
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [
-    customizationBatches
+    customizationBatch
   ]
 }
 
@@ -567,7 +574,7 @@ resource microsoftUpdates 'Microsoft.Compute/virtualMachines/runCommands@2023-03
   }
   dependsOn: [
     removeRunCommandsMicrosoftSoftware
-    customizationBatches
+    customizationBatch
     restartMicrosoftSoftware
     restartCustomizations
   ]
@@ -631,7 +638,8 @@ module vdiCustomizationBatches 'applyCustomizationsBatch.bicep' = [
         j => {
           name: vdiCustomizers[i * customizationBatchSize + j].name
           uri: vdiCustomizers[i * customizationBatchSize + j].uri
-          arguments: vdiCustomizers[i * customizationBatchSize + j].arguments
+          arguments: vdiCustomizers[i * customizationBatchSize + j].?arguments
+          successExitCodes: vdiCustomizers[i * customizationBatchSize + j].?successExitCodes
           restart: false
         }
       )

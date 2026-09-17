@@ -32,7 +32,7 @@ customer/artifacts/
 
 ## How Update-ImageArtifacts.ps1 uses this folder
 
-1. Stages `.common/artifacts/` as the base layer (reserved for repo-provided packages; currently empty)
+1. Stages `deployments/shared/artifacts/` as the base layer (reserved for repo-provided packages; currently empty)
 2. Overlays `customer/artifacts/` on top — your files always win when names match
 3. Compresses each subfolder into a `.zip` file (e.g., `Google-Chrome-Enterprise/` -> `Google-Chrome-Enterprise.zip`)
 4. Uploads all zips to the `artifacts` blob container in the image management storage account

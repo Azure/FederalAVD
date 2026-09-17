@@ -10,6 +10,12 @@
     The build script lives below the artifact root so Invoke-Customization.ps1 cannot select it as
     the artifact entry script. The generated zip contains only the runtime installer and payload.
 
+.PARAMETER AppStoreIds
+    Microsoft Store product IDs to include. Defaults to all apps listed in the artifact README.
+
+.EXAMPLE
+    .\Build-BuiltinUwpApps.ps1 -OutputPath 'C:\AirGapTransfer\BuiltIn-UWP-Apps.zip'
+
 .EXAMPLE
     .\Build-BuiltinUwpApps.ps1 `
         -AppStoreIds @('9WZDNCRFHVN5', '9PCFS5B6T72H', '9MZ95KL8MR0L') `
@@ -18,9 +24,23 @@
 
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [Parameter(Mandatory)]
     [ValidateNotNullOrEmpty()]
-    [string[]]$AppStoreIds,
+    [string[]]$AppStoreIds = @(
+        '9WZDNCRFHVN5'
+        '9PCFS5B6T72H'
+        '9MZ95KL8MR0L'
+        '9MSMLRH6LZF3'
+        '9P1J8S7CCWWT'
+        '9WZDNCRFJBH4'
+        '9NBLGGH4QGHW'
+        '9N0DX20HK701'
+        '9N4D0MSMP0PT'
+        '9N5TDP8VCMHS'
+        '9PG2DK419DRG'
+        '9MVZQVXJBQ9V'
+        '9N95Q1ZZPMH4'
+        '9PMMSR1CGPWG'
+    ),
 
     [Parameter(Mandatory)]
     [ValidateNotNullOrEmpty()]
@@ -137,8 +157,8 @@ if ($AppStoreIds.Count -ne (@($AppStoreIds | Sort-Object -Unique)).Count) {
     throw 'AppStoreIds contains duplicate values.'
 }
 foreach ($storeId in $AppStoreIds) {
-    if ($storeId -notmatch '^[A-Za-z0-9]{10,14}$') {
-        throw "Invalid Microsoft Store product ID '$storeId'. Use the alphanumeric product ID shown by winget."
+    if ($storeId -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]{1,127}$') {
+        throw "Invalid winget package ID '$storeId'. Use the package ID shown by winget search."
     }
 }
 
@@ -170,11 +190,13 @@ try {
         $appDownloadDirectory = Join-Path $DownloadRoot $storeId
         New-Item -Path $appDownloadDirectory -ItemType Directory -Force | Out-Null
         $wingetArguments = @(
-            'download', '--id', $storeId, '--source', 'msstore',
+            'download', '--id', $storeId,
             '--download-directory', $appDownloadDirectory,
             '--skip-license', '--accept-source-agreements', '--accept-package-agreements',
             '--disable-interactivity'
         )
+        $wingetSource = if ($storeId -match '\.') { 'winget' } else { 'msstore' }
+        $wingetArguments += @('--source', $wingetSource)
         if ($storeId -notin $NeutralArchitectureIds) {
             $wingetArguments += @('--architecture', 'x64')
         }
@@ -183,6 +205,13 @@ try {
         & winget @wingetArguments
         if ($LASTEXITCODE -ne 0) {
             throw "winget download failed for '$storeId' with exit code $LASTEXITCODE."
+        }
+
+        $dependencyArchives = Get-ChildItem -Path $appDownloadDirectory -Recurse -File -Filter '*.zip' |
+            Where-Object { $_.FullName -match '(?i)\\dependencies\\' }
+        foreach ($dependencyArchive in $dependencyArchives) {
+            $dependencyExtractPath = Join-Path $dependencyArchive.DirectoryName $dependencyArchive.BaseName
+            Expand-Archive -LiteralPath $dependencyArchive.FullName -DestinationPath $dependencyExtractPath -Force
         }
 
         $mainCandidates = @(Get-ChildItem -Path $appDownloadDirectory -File |

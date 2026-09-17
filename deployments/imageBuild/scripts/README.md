@@ -70,6 +70,39 @@ optimizes services, tasks, autologgers, network settings, and optional Windows f
 - **Parameters:** `OptimizationProfile`, `AirGapped`
 - **Output:** `C:\Windows\Logs\Optimize-AVDImage.log`
 
+#### Why Not the Virtual Desktop Optimization Tool (VDOT)?
+
+This script is a from-scratch, in-box implementation rather than a wrapper around the community
+[Virtual Desktop Optimization Tool](https://github.com/The-Virtual-Desktop-Team/Virtual-Desktop-Optimization-Tool).
+That choice is deliberate, not an oversight:
+
+- **VDOT carries more configuration surface and orchestration than this pipeline needs** —
+  per-OS-version JSON config selection, multiple script modules, and a scheduled-task-based
+  invocation model. Every one of those moving parts is another thing that can fail mid-build or
+  drift out of sync with a given Windows release.
+- **It has a track record of unreliability in the field** — build failures and inconsistent
+  results traced back to VDOT are a known, recurring pain point, not a hypothetical concern.
+- **`Optimize-AVDImage.ps1` is built directly from the official Microsoft
+  [Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+  article** — the same product-group-authored source VDOT itself is based on — and has been
+  tested against the profiles and scenarios this repo supports. Going straight to the PG's own
+  documented guidance, instead of through a third party's interpretation of it, keeps the two
+  from drifting apart and keeps the settings traceable to a single authoritative source.
+- **No external GitHub or community-tool dependency at build time.** The script is fully
+  self-contained in this repo — no download of a third-party tool is required, which matters for
+  air-gapped/Secret/Top Secret builds where GitHub isn't reachable, and for supply-chain review of
+  what actually runs against the image.
+- **Settings are written as local Group Policy (Registry.pol), not ad-hoc registry edits.** This
+  ensures `HKEY_CURRENT_USER` policy settings apply to every user profile that logs on (not just
+  whichever account happened to be active at build time), and it makes every applied setting
+  reviewable the same way a domain GPO is — via `gpresult /h` or `rsop.msc` on the resulting
+  session host — instead of only being discoverable by manually diffing registry keys.
+
+Simplicity, validation against the PG's own documented settings, and elimination of an external
+runtime dependency were the priorities here, ahead of feature parity with everything VDOT exposes.
+Deliberate deviations from the referenced article itself (where this script's settings differ from
+the article's literal recommendations) are documented separately below.
+
 #### Optimization Profiles
 
 | Value | Behavior |
@@ -84,7 +117,15 @@ optimizes services, tasks, autologgers, network settings, and optional Windows f
 `AirGapped` disables components that otherwise make unsuccessful calls to Microsoft cloud services,
 including SmartScreen cloud lookups, online font providers, Teredo, WER uploads, Defender cloud
 protection, OneSettings, settings sync, activity-history uploads, widgets, and cross-device
-features. It applies independently of the selected optimization profile.
+features. It applies independently of the selected optimization profile. These settings are a
+targeted subset of Microsoft's
+[Manage connections from Windows operating system components to Microsoft services](https://learn.microsoft.com/en-us/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services)
+guidance, not the complete Windows Restricted Traffic Limited Functionality Baseline.
+
+Network Connection Status Indicator (NCSI) configuration is intentionally left unchanged. In
+particular, the script does not disable passive polling because doing so can break Windows network
+awareness APIs. Use network-layer egress controls when the environment must block all outbound
+access; `AirGapped` reduces unnecessary operating-system calls but is not an outbound firewall.
 
 #### Storage Sense, Files On-Demand, and FSLogix
 
@@ -126,7 +167,7 @@ expanding container.
 
 Microsoft recommends evaluating every optimization against application, security, servicing, and
 user-experience requirements. See the
-[Microsoft VDI optimization guide](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
+[Optimizing Windows configuration for VDI desktops](https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration)
 and the [FederalAVD Image Build guide](../../../docs/image-build.md#vdi-optimization).
 
 ### [Invoke-DiskCleanup.ps1](Invoke-DiskCleanup.ps1)

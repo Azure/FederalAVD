@@ -39,7 +39,7 @@ as fallbacks only when the Template Spec UI is unavailable:
 - `deployments/networking/parameters/`
 
 Put your artifact packages in `customer/artifacts/`. `deployments/Update-ImageArtifacts.ps1`
-stages `.common/artifacts/` first (currently empty, reserved for future repo-provided packages)
+stages `deployments/shared/artifacts/` first (currently empty, reserved for future repo-provided packages)
 then overlays `customer/artifacts/` on top — your files always win when names match.
 
 ## Examples

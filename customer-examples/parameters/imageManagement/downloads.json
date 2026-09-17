@@ -272,6 +272,25 @@
             "BuiltIn-UWP-Apps\\StickyNotes"
         ]
     },
+    "MicrosoftWinGet": {
+        "Description": "Official Microsoft App Installer bundle, dependencies, metadata, and offline license from one winget-cli release.",
+        "GitHubRepo": "microsoft/winget-cli",
+        "GitHubFileNamePatterns": [
+            "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle",
+            "DesktopAppInstaller_Dependencies.zip",
+            "DesktopAppInstaller_Dependencies.json",
+            "*_License1.xml"
+        ],
+        "DestinationCleanupPatterns": [
+            "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle",
+            "DesktopAppInstaller_Dependencies.zip",
+            "DesktopAppInstaller_Dependencies.json",
+            "*_License1.xml"
+        ],
+        "DestinationFolders": [
+            "Microsoft-WinGet"
+        ]
+    },
     "WindowsTerminal": {
         "Description": "Windows Terminal - built-in UWP app provisioned for all users",
         "WingetId": "9N0DX20HK701",

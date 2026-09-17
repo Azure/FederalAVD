@@ -1170,16 +1170,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[steps('hosts').customizations.addCustomScripts]",
                   "options": {
-                    "text": "Specify each customization's name, blob name (or full URI), and optional arguments. For array parameters, use @() syntax - e.g. -Domains @('site1.gov','site2.com')."
-                  }
-                },
-                {
-                  "name": "customizationInfoBox",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[steps('hosts').customizations.addCustomScripts]",
-                  "options": {
-                    "style": "Info",
-                    "text": "Some software installations may interfere with the host pool join process and should be run after joining completes. Note that the session host will be available for connections before post-join customizations run."
+                    "text": "Specify each customization's name, blob name (or full URI), optional arguments, and optional comma-separated success exit codes (default 0,3010). For array parameters, use @() syntax - e.g. -Domains @('site1.gov','site2.com')."
                   }
                 },
                 {
@@ -1236,6 +1227,24 @@
                           "placeholder": "Example: /install /silent",
                           "constraints": {
                             "required": false
+                          }
+                        }
+                      },
+                      {
+                        "id": "successExitCodes",
+                        "header": "Success Exit Codes",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "Default: 0,3010",
+                          "constraints": {
+                            "required": false,
+                            "validations": [
+                              {
+                                "regex": "^$|^-?[0-9]+(\\s*,\\s*-?[0-9]+)*$",
+                                "message": "Enter comma-separated integer exit codes, such as 0,3010."
+                              }
+                            ]
                           }
                         }
                       }

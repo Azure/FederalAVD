@@ -77,6 +77,11 @@ Automatically maintains the current host count at replacement cycle start:
 - Function captures initial count when first outdated host detected
 - Maintained throughout entire replacement cycle
 
+### Scaling-Aware Readiness
+Before either replacement mode removes more old capacity, every latest-image host must be ready. A host is ready when it is online, accepting sessions, and has no failed AVD health checks, or when an enabled scaling plan can start it and it has validation evidence for the exact image. At least one latest-image host must remain online healthy.
+
+Without an enabled, evaluable scaling plan, all latest-image hosts must be online healthy. Existing hosts need one online healthy validation pass before they can count as stopped standby capacity. Administrator-owned scaling exclusions are preserved and excluded hosts never count as scalable standby. Shutdown retention remains optional and SideBySide-only; readiness works the same with retention enabled or disabled.
+
 ### Ringed Rollout Support
 Delay replacement after new image detection for validation:
 
@@ -185,6 +190,7 @@ The following settings are automatically configured but can be customized:
 | `Tag_DeployTimestamp` | `AutoReplaceDeployTimestamp` | Tag storing deployment time |
 | `Tag_PendingDrainTimestamp` | `AutoReplacePendingDrainTimestamp` | Tag storing drain start time |
 | `Tag_ScalingPlanExclusionTag` | `ScalingPlanExclusion` | Tag to exclude from scaling plan |
+| `Tag_ValidatedImage` | `AutoReplaceValidatedImage` | Exact-image AVD health validation evidence used for scaling-aware standby readiness |
 | `RemoveEntraDevice` | `false` | Remove device from Entra ID on deletion |
 | `RemoveIntuneDevice` | `false` | Remove device from Intune on deletion |
 

@@ -233,7 +233,7 @@ New-AzResourceGroupDeployment `
 | --------- | :--: | :-----: | ----------- |
 | `artifactsContainerUri` | string | `''` | URI of the blob storage container holding scripts and artifacts |
 | `artifactsUserAssignedIdentityResourceId` | string | `''` | Resource ID of the managed identity with `Storage Blob Data Reader` access |
-| `sessionHostCustomizations` | array | `[]` | Custom script extension configurations for post-provisioning customization |
+| `sessionHostCustomizations` | array | `[]` | Post-provisioning customizations. Each object accepts `name`, `blobNameOrUri`, optional `arguments`, and optional comma-separated `successExitCodes` (default `0,3010`). |
 
 ### Identity and Domain Join
 
