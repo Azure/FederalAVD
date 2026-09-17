@@ -816,6 +816,8 @@ Session hosts use these tags for automation:
 
 ## Process Flows
 
+See [Session Host Replacer Flow Diagrams](replacement-flow.md) for the shared evaluation path and detailed SideBySide and DeleteFirst lifecycle flows.
+
 ### SideBySide Mode Workflow
 
 ```text

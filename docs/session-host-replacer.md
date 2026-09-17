@@ -46,7 +46,7 @@ The Session Host Replacer is an automated Azure Function that manages the lifecy
 
 See the [complete mode comparison](../deployments/add-ons/sessionHostReplacer/README.md#replacement-modes) for detailed decision guidance.
 
-See [Session Host Replacer Flow Diagrams](session-host-replacer-flow.md) for the shared evaluation path and detailed SideBySide and DeleteFirst lifecycle flows.
+See [Session Host Replacer Flow Diagrams](../deployments/add-ons/sessionHostReplacer/replacement-flow.md) for the shared evaluation path and detailed SideBySide and DeleteFirst lifecycle flows.
 
 ## Quick Start
 

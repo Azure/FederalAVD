@@ -1,4 +1,4 @@
-[**Home**](../README.md) | [**Session Host Replacer**](session-host-replacer.md) | [**Add-Ons**](add-ons.md)
+[**Home**](../../../README.md) | [**Session Host Replacer**](README.md) | [**Add-Ons**](../../../docs/add-ons.md)
 
 # Session Host Replacer Flow Diagrams
 
