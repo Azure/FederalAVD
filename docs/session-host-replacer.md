@@ -1,6 +1,8 @@
 ﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
-# Session Host Replacer Add-On The Session Host Replacer is now available as a standalone add-on. For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/sessionHostReplacer/README.md)**.
+# Session Host Replacer Add-On
+
+**Note:** For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/sessionHostReplacer/README.md)**.
 
 > **Standard host pools only.** Session Host Replacer creates and registers replacement VMs, so it
 > must not target an automated host pool that uses Session Host Configuration. Automated pools use
