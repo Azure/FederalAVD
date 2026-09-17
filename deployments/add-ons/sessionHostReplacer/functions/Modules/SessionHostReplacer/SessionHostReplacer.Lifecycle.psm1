@@ -731,11 +731,11 @@ function Test-NewSessionHostsAvailable {
             $failedHealthChecks = @($newHost.SessionHostHealthCheckResults | Where-Object {
                 $_.healthCheckResult -eq 'HealthCheckFailed'
             })
-            $isOnlineHealthy = $newHost.Status -eq 'Available' -and
-                $newHost.AllowNewSession -and
+            $isHealthValidated = $newHost.Status -eq 'Available' -and
                 $failedHealthChecks.Count -eq 0
+            $isOnlineHealthy = $isHealthValidated -and $newHost.AllowNewSession
 
-            if ($isOnlineHealthy) {
+            if ($isHealthValidated) {
                 if ($newHost.Tags[$TagValidatedImage] -ne $validatedImageToken) {
                     try {
                         $tagsUri = "$ResourceManagerUri$($newHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
@@ -747,7 +747,7 @@ function Test-NewSessionHostsAvailable {
                         }
                         Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
                         $newHost.Tags[$TagValidatedImage] = $validatedImageToken
-                        Write-LogEntry -Message "Recorded image validation evidence for $($newHost.SessionHostName)" -Level Trace
+                        Write-LogEntry -Message "Recorded image validation evidence for $($newHost.SessionHostName)"
                     }
                     catch {
                         Write-LogEntry -Message "Failed to record image validation evidence for $($newHost.SessionHostName): $($_.Exception.Message)" -Level Warning
@@ -779,7 +779,7 @@ function Test-NewSessionHostsAvailable {
                 $isValidatedForImage = $TagValidatedImage -and
                     $newHost.Tags[$TagValidatedImage] -eq $validatedImageToken
 
-                if ($isValidatedForImage -and -not $hasScalingExclusion) {
+                if ($isOnlineHealthy -and $isValidatedForImage -and -not $hasScalingExclusion) {
                     $onlineHealthyHosts += $newHost
                     continue
                 }
@@ -798,14 +798,17 @@ function Test-NewSessionHostsAvailable {
                 $scalableStandbyHosts += $newHost
             }
             else {
-                $unreadyHosts += [PSCustomObject]@{
+                $unreadyHost = [PSCustomObject]@{
                     SessionHostName = $newHost.SessionHostName
                     Status = $newHost.Status
                     PoweredOff = [bool]$newHostPowerStates[$newHost.ResourceId]
                     AllowNewSession = $newHost.AllowNewSession
+                    FailedHealthCheckCount = $failedHealthChecks.Count
                     HasScalingExclusion = [bool]$hasScalingExclusion
                     ValidatedForImage = [bool]$isValidatedForImage
                 }
+                $unreadyHosts += $unreadyHost
+                Write-LogEntry -Message "New host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Warning
             }
         }
 

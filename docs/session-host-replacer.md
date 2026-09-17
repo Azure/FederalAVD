@@ -78,7 +78,7 @@ Automatically maintains the current host count at replacement cycle start:
 - Maintained throughout entire replacement cycle
 
 ### Scaling-Aware Readiness
-Before either replacement mode removes more old capacity, every latest-image host must be ready. A host is ready when it is online, accepting sessions, and has no failed AVD health checks, or when an enabled scaling plan can start it and it has validation evidence for the exact image. At least one latest-image host must remain online healthy.
+Before either replacement mode removes more old capacity, every latest-image host must be ready. A host is ready when it is online, accepting sessions, and has no failed AVD health checks, or when an enabled scaling plan can start it and it has validation evidence for the exact image. At least one latest-image host must remain online healthy. An `Available` drained host can establish image evidence, but it does not count as online ready until it accepts sessions.
 
 Without an enabled, evaluable scaling plan, all latest-image hosts must be online healthy. Existing hosts need one online healthy validation pass before they can count as stopped standby capacity. Administrator-owned scaling exclusions are preserved and excluded hosts never count as scalable standby. Shutdown retention remains optional and SideBySide-only; readiness works the same with retention enabled or disabled.
 

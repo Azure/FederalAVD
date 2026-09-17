@@ -240,6 +240,24 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.UnavailableHosts[0].ValidatedForImage | Should Be $false
     }
 
+    It 'records evidence for an Available drained host without counting it as online ready' {
+        $onlineHost = New-ReadinessHost -Index 1
+        $drainedHost = New-ReadinessHost -Index 2 -AllowNewSession $false
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($onlineHost, $drainedHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 50
+        })
+
+        $drainedHost.Tags.AutoReplaceValidatedImage | Should Be $validatedImageToken
+        $result.SafeToProceed | Should Be $false
+        $result.AvailableCount | Should Be 1
+        $result.UnavailableHosts[0].AllowNewSession | Should Be $false
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 2 -ParameterFilter {
+            $Method -eq 'PATCH' -and $Body -match '"operation":\s*"Merge"'
+        }
+    }
+
     It 'preserves administrator scaling exclusions and does not count the host as standby' {
         $onlineHost = New-ReadinessHost -Index 1
         $standbyHost = New-ReadinessHost -Index 2 -Status 'Shutdown' -AllowNewSession $false -Tags @{
