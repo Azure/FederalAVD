@@ -225,6 +225,18 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.AvailablePercentage | Should Be 40
     }
 
+    It 'records validation evidence when no scaling plan is evaluable' {
+        $sessionHost = New-ReadinessHost -Index 1
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($sessionHost) -ScalingPlanTarget $null
+
+        $result.SafeToProceed | Should Be $true
+        $sessionHost.Tags.AutoReplaceValidatedImage | Should Be $validatedImageToken
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 1 -ParameterFilter {
+            $Method -eq 'PATCH' -and $Body -match '"operation":\s*"Merge"'
+        }
+    }
+
     It 'does not count stopped hosts without exact-image validation evidence' {
         $onlineHost = New-ReadinessHost -Index 1
         $standbyHost = New-ReadinessHost -Index 2 -Status 'Shutdown' -AllowNewSession $false
@@ -295,7 +307,7 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.AvailableCount | Should Be 1
     }
 
-    It 'requires at least one host to be online even when every stopped host has evidence' {
+    It 'allows zero online hosts when the active scaling plan target is zero percent' {
         $hosts = 1..3 | ForEach-Object {
             $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
                 AutoReplaceValidatedImage = $validatedImageToken
@@ -309,9 +321,9 @@ Describe 'Session Host Replacer scaling-aware readiness' {
             CapacityPercentage = 0
         })
 
-        $result.SafeToProceed | Should Be $false
+        $result.SafeToProceed | Should Be $true
         $result.ScalableStandbyCount | Should Be 3
-        $result.RequiredOnlineCount | Should Be 1
+        $result.RequiredOnlineCount | Should Be 0
     }
 
     It 'fails closed when validation evidence cannot be persisted' {
@@ -371,7 +383,7 @@ Describe 'Session Host Replacer scaling-aware readiness contracts' {
 
         $scalingPlanQueryPosition | Should BeLessThan $upToDatePlanPosition
         $upToDateValidationPosition | Should BeGreaterThan $earlyExitPosition
-        $runScript | Should Match '\$scalingPlanUsable[\s\S]+\$upToDateHostReadiness = Test-NewSessionHostsAvailable'
+        $runScript | Should Match '\$upToDateHostReadiness = Test-NewSessionHostsAvailable[\s\S]+-ScalingPlanTarget \$scalingPlanTarget'
     }
 
     It 'wires the exact-image validation tag through Bicep and Form View' {
@@ -507,12 +519,83 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.SessionHostsPendingDelete.Count | Should Be 9
     }
 
+    It 'DeleteFirst accepts a zero percent scaling floor during OffPeak' {
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode DeleteFirst -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 0
+            Phase = 'OffPeak'
+            ScalingPlanName = 'weekend'
+            ScheduleName = 'weekend'
+        })
+
+        $plan.PossibleDeploymentsCount | Should Be 10
+        $plan.PossibleSessionHostDeleteCount | Should Be 10
+        $plan.SessionHostsPendingDelete.Count | Should Be 10
+    }
+
     It 'DeleteFirst uses the configured 80 percent floor without a scaling plan' {
         $plan = Invoke-TenHostReplacementPlan -ReplacementMode DeleteFirst -ScalingPlanTarget $null
 
         $plan.PossibleDeploymentsCount | Should Be 10
         $plan.PossibleSessionHostDeleteCount | Should Be 2
         $plan.SessionHostsPendingDelete.Count | Should Be 2
+    }
+}
+
+Describe 'Session Host Replacer zero-percent scaling schedule discovery' {
+    BeforeAll {
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
+    }
+
+    BeforeEach {
+        Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+        Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Planning {
+            @(
+                [PSCustomObject]@{
+                    name = 'weekend-plan'
+                    properties = [PSCustomObject]@{
+                        timeZone = 'UTC'
+                        hostPoolReferences = @(
+                            [PSCustomObject]@{
+                                hostPoolArmPath = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/hp-test'
+                                scalingPlanEnabled = $true
+                            }
+                        )
+                        schedules = @(
+                            [PSCustomObject]@{
+                                name = 'weekend'
+                                daysOfWeek = @('Saturday')
+                                rampUpStartTime = [PSCustomObject]@{ hour = 6; minute = 0 }
+                                peakStartTime = [PSCustomObject]@{ hour = 8; minute = 0 }
+                                rampDownStartTime = [PSCustomObject]@{ hour = 18; minute = 0 }
+                                offPeakStartTime = [PSCustomObject]@{ hour = 20; minute = 0 }
+                                rampUpMinimumHostsPct = 20
+                                rampDownMinimumHostsPct = 0
+                            }
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    AfterAll {
+        Remove-Module SessionHostReplacer -Force
+    }
+
+    It 'returns an active zero-percent OffPeak target as a usable scaling plan' {
+        $currentDateTime = [datetime]::SpecifyKind([datetime]'2026-09-19T23:00:00', [System.DateTimeKind]::Utc)
+
+        $target = Get-ScalingPlanCurrentTarget `
+            -ARMToken 'test-token' `
+            -HostPoolResourceId '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/hp-test' `
+            -CurrentDateTime $currentDateTime `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $target.Source | Should Be 'ScalingPlan'
+        $target.Phase | Should Be 'OffPeak'
+        $target.CapacityPercentage | Should Be 0
     }
 }
 

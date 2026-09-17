@@ -1289,7 +1289,7 @@ The function performs an **availability health check** on newly deployed hosts b
 1. **Check Timing**: After deployment, before any delete/shutdown operations
 2. **Online Validation**: Requires `Status = Available`, `AllowNewSession = true`, and no failed AVD health checks to count as online ready capacity
 3. **Scaling-Aware Standby**: With an enabled, evaluable scaling plan, a stopped/deallocated host can count as ready only when it has exact-image validation evidence and no scaling exclusion tag
-4. **Readiness Floor**: Every latest-image host must be online healthy or validated scalable standby, and at least one must be online healthy
+4. **Readiness Floor**: Every latest-image host must be online healthy or validated scalable standby. At least one must be online healthy unless the active scaling-plan target is exactly `0%`
 5. **Strict Fallback**: Without a usable scaling plan, 100% of latest-image hosts must be online healthy
 6. **Action on Failure**:
    - **SideBySide Mode**: Allows deployment to complete, but **blocks all deletions/shutdowns** until next run
@@ -1300,7 +1300,7 @@ The function performs an **availability health check** on newly deployed hosts b
 
 An `Available` host with no failed AVD health checks can establish fresh validation evidence even while it is in drain mode. It does not count as online ready capacity until `AllowNewSession = true`. `NeedsAssistance`, `Upgrading`, `UpgradeFailed`, `Unavailable`, and `NoHeartbeat` do not establish evidence or count as online healthy.
 
-Validation evidence is a SHA-256 token derived from the exact image definition and version and stored in the `AutoReplaceValidatedImage` tag by default. A host must complete one online healthy validation pass for that exact image before it can later count as scalable standby. The function removes only a `ScalingPlanExclusion` tag whose value is `SessionHostReplacer`; administrator-owned exclusions are preserved and prevent standby eligibility.
+Validation evidence is a SHA-256 token derived from the exact image definition and version and stored in the `AutoReplaceValidatedImage` tag by default. Healthy latest-image hosts record evidence whether or not a scaling plan is enabled. A host must complete one healthy validation pass for that exact image before it can later count as scalable standby. The function removes only a `ScalingPlanExclusion` tag whose value is `SessionHostReplacer`; administrator-owned exclusions are preserved and prevent standby eligibility.
 
 **SideBySide Mode Behavior**:
 

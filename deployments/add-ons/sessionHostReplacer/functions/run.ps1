@@ -577,18 +577,13 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
     
     Write-LogEntry -Message "Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed."
 
-    $scalingPlanUsable = $scalingPlanTarget -and
-        $scalingPlanTarget.Source -eq 'ScalingPlan' -and
-        $null -ne $scalingPlanTarget.CapacityPercentage
-    if ($scalingPlanUsable) {
-        $upToDateHostReadiness = Test-NewSessionHostsAvailable `
-            -ARMToken $ARMToken `
-            -SessionHosts $sessionHosts `
-            -LatestImageVersion $latestImageVersion `
-            -ScalingPlanTarget $scalingPlanTarget
+    $upToDateHostReadiness = Test-NewSessionHostsAvailable `
+        -ARMToken $ARMToken `
+        -SessionHosts $sessionHosts `
+        -LatestImageVersion $latestImageVersion `
+        -ScalingPlanTarget $scalingPlanTarget
 
-        Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
-    }
+    Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
     
     # Update LastImageVersion now that the cycle is complete
     if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {

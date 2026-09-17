@@ -33,7 +33,7 @@ function Get-ScalingPlanCurrentTarget {
     
     .EXAMPLE
     $scalingTarget = Get-ScalingPlanCurrentTarget -ARMToken $token -HostPoolResourceId $hostPoolId
-    if ($scalingTarget.CapacityPercentage) {
+    if ($null -ne $scalingTarget.CapacityPercentage) {
         Write-LogEntry -Message "Current scaling plan target: {0}%" -StringValues $scalingTarget.CapacityPercentage
     }
     #>
@@ -221,7 +221,7 @@ function Get-ScalingPlanCurrentTarget {
             }
             
             # Apply more conservative (higher) percentage if next phase requires more capacity
-            if ($nextPhaseCapacity -and $nextPhaseCapacity -gt $capacityPercentage) {
+            if ($null -ne $nextPhaseCapacity -and $nextPhaseCapacity -gt $capacityPercentage) {
                 Write-LogEntry -Message "Safety look-ahead: Transitioning from $activePhase to $nextPhaseName in <$lookAheadMinutes min. Using more conservative $nextPhaseCapacity% instead of $capacityPercentage%" -Level Trace
                 $capacityPercentage = $nextPhaseCapacity
                 $activePhase = "$activePhase->$nextPhaseName (look-ahead)"
@@ -234,7 +234,7 @@ function Get-ScalingPlanCurrentTarget {
             }
         }
         
-        if ($activeSchedule -and $capacityPercentage) {
+        if ($activeSchedule -and $null -ne $capacityPercentage) {
             return [PSCustomObject]@{
                 CapacityPercentage = $capacityPercentage
                 ScalingPlanName = $scalingPlanName
@@ -277,12 +277,12 @@ function Get-ScalingPlanCurrentTarget {
                     }
                 }
                 
-                if ($fallbackCapacityPct) {
+                if ($null -ne $fallbackCapacityPct) {
                     break
                 }
             }
             
-            if ($fallbackCapacityPct) {
+            if ($null -ne $fallbackCapacityPct) {
                 return [PSCustomObject]@{
                     CapacityPercentage = $fallbackCapacityPct
                     ScalingPlanName = $scalingPlanName
@@ -641,7 +641,7 @@ function Get-SessionHostReplacementPlan {
             $effectiveMinimumCapacityPct = $MinimumCapacityPercentage
             $capacitySource = 'Static configuration'
         
-        if ($ScalingPlanTarget -and $ScalingPlanTarget.CapacityPercentage) {
+        if ($ScalingPlanTarget -and $null -ne $ScalingPlanTarget.CapacityPercentage) {
             $scalingPlanPct = $ScalingPlanTarget.CapacityPercentage
             $phase = $ScalingPlanTarget.Phase
             

@@ -704,24 +704,55 @@ function Test-NewSessionHostsAvailable {
     
     Write-LogEntry -Message "Found {0} new session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
 
+    $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
+    $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $validatedImageToken = [System.BitConverter]::ToString(
+            $hashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($imageIdentity))
+        ).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $hashAlgorithm.Dispose()
+    }
+
+    if ([string]::IsNullOrWhiteSpace($TagValidatedImage)) {
+        Write-LogEntry -Message "Tag_ValidatedImage is not configured - exact-image validation evidence cannot be recorded" -Level Warning
+    }
+    else {
+        foreach ($newHost in $newHosts) {
+            $failedHealthChecks = @($newHost.SessionHostHealthCheckResults | Where-Object {
+                $_.healthCheckResult -eq 'HealthCheckFailed'
+            })
+            $isHealthValidated = $newHost.Status -eq 'Available' -and
+                $failedHealthChecks.Count -eq 0
+
+            if ($isHealthValidated -and $newHost.Tags[$TagValidatedImage] -ne $validatedImageToken) {
+                try {
+                    $tagsUri = "$ResourceManagerUri$($newHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                    $body = @{
+                        properties = @{
+                            tags = @{ $TagValidatedImage = $validatedImageToken }
+                        }
+                        operation = 'Merge'
+                    }
+                    Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                    $newHost.Tags[$TagValidatedImage] = $validatedImageToken
+                    Write-LogEntry -Message "Recorded image validation evidence for $($newHost.SessionHostName)"
+                }
+                catch {
+                    Write-LogEntry -Message "Failed to record image validation evidence for $($newHost.SessionHostName): $($_.Exception.Message)" -Level Warning
+                }
+            }
+        }
+    }
+
     $scalingPlanUsable = $ScalingPlanTarget -and
         $ScalingPlanTarget.Source -eq 'ScalingPlan' -and
         $null -ne $ScalingPlanTarget.CapacityPercentage
 
     if ($scalingPlanUsable) {
-        $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
-        $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
-        try {
-            $validatedImageToken = [System.BitConverter]::ToString(
-                $hashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($imageIdentity))
-            ).Replace('-', '').ToLowerInvariant()
-        }
-        finally {
-            $hashAlgorithm.Dispose()
-        }
-
         $newHostPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds @($newHosts.ResourceId)
-        $requiredOnlineCount = 1
+        $requiredOnlineCount = if ($ScalingPlanTarget.CapacityPercentage -eq 0) { 0 } else { 1 }
 
         $onlineHealthyHosts = @()
         $scalableStandbyHosts = @()
@@ -736,24 +767,6 @@ function Test-NewSessionHostsAvailable {
             $isOnlineHealthy = $isHealthValidated -and $newHost.AllowNewSession
 
             if ($isHealthValidated) {
-                if ($newHost.Tags[$TagValidatedImage] -ne $validatedImageToken) {
-                    try {
-                        $tagsUri = "$ResourceManagerUri$($newHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
-                        $body = @{
-                            properties = @{
-                                tags = @{ $TagValidatedImage = $validatedImageToken }
-                            }
-                            operation = 'Merge'
-                        }
-                        Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
-                        $newHost.Tags[$TagValidatedImage] = $validatedImageToken
-                        Write-LogEntry -Message "Recorded image validation evidence for $($newHost.SessionHostName)"
-                    }
-                    catch {
-                        Write-LogEntry -Message "Failed to record image validation evidence for $($newHost.SessionHostName): $($_.Exception.Message)" -Level Warning
-                    }
-                }
-
                 if ($newHost.Tags[$TagValidatedImage] -eq $validatedImageToken -and
                     $TagScalingPlanExclusionTag -and
                     $newHost.Tags[$TagScalingPlanExclusionTag] -eq 'SessionHostReplacer') {
@@ -864,12 +877,15 @@ function Test-NewSessionHostsAvailable {
             Write-LogEntry -Message "New host {0} is accessible (Status: {1})" -StringValues $hostName, $hostStatus -Level Trace
         }
         else {
-            $unavailableHosts += [PSCustomObject]@{
+            $unavailableHost = [PSCustomObject]@{
                 SessionHostName = $hostName
                 Status          = $hostStatus
                 ImageVersion    = $newHost.ImageVersion
+                AllowNewSession = $newHost.AllowNewSession
+                FailedHealthCheckCount = $failedHealthChecks.Count
             }
-            Write-LogEntry -Message "New host {0} is NOT accessible (Status: {1})" -StringValues $hostName, $hostStatus -Level Warning
+            $unavailableHosts += $unavailableHost
+            Write-LogEntry -Message "New host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Warning
         }
     }
     
