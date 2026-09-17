@@ -11,6 +11,7 @@
 The Session Host Replacer is an automated Azure Function that manages the lifecycle of Azure Virtual Desktop session hosts. It monitors session host image versions and automatically drains and replaces outdated VMs to maintain fleet health, security compliance, and image currency.
 
 **Key Features:**
+
 - **Flexible replacement strategies**: SideBySide (zero-downtime) or DeleteFirst (cost-optimized)
 - **Image version tracking** with automatic updates
 - **Graceful session draining** with configurable grace periods (default: 24 hours)
@@ -45,6 +46,8 @@ The Session Host Replacer is an automated Azure Function that manages the lifecy
 
 See the [complete mode comparison](../deployments/add-ons/sessionHostReplacer/README.md#replacement-modes) for detailed decision guidance.
 
+See [Session Host Replacer Flow Diagrams](session-host-replacer-flow.md) for the shared evaluation path and detailed SideBySide and DeleteFirst lifecycle flows.
+
 ## Quick Start
 
 For detailed deployment instructions, prerequisites, and configuration options, refer to the complete add-on documentation:
@@ -54,6 +57,7 @@ For detailed deployment instructions, prerequisites, and configuration options, 
 ## Key Capabilities
 
 ### Progressive Scale-Up
+
 Gradual deployment rollouts that start with small percentages and increase after successful deployments:
 
 - Configurable initial percentage (e.g., 10% of needed hosts)
@@ -62,6 +66,7 @@ Gradual deployment rollouts that start with small percentages and increase after
 - Works in both SideBySide and DeleteFirst modes
 
 ### Shutdown Retention (SideBySide Mode)
+
 Rollback capability by retaining old session hosts in shutdown state:
 
 - Configurable retention period (1-7 days)
@@ -70,6 +75,7 @@ Rollback capability by retaining old session hosts in shutdown state:
 - No additional cost (deallocated VMs only incur disk storage costs)
 
 ### Auto-Detect Target Count (SideBySide Mode)
+
 Automatically maintains the current host count at replacement cycle start:
 
 - Perfect for environments using dynamic scaling plans
@@ -78,11 +84,13 @@ Automatically maintains the current host count at replacement cycle start:
 - Maintained throughout entire replacement cycle
 
 ### Scaling-Aware Readiness
+
 Before either replacement mode removes more old capacity, every latest-image host must be ready. A host is ready when it is online, accepting sessions, and has no failed AVD health checks, or when an enabled scaling plan can start it and it has validation evidence for the exact image. At least one latest-image host must remain online healthy unless the active scaling-plan target is exactly `0%`. An `Available` drained host can establish image evidence, but it does not count as online ready until it accepts sessions.
 
 Healthy latest-image hosts record exact-image validation evidence whether or not a scaling plan is enabled. Without an enabled, evaluable scaling plan, all latest-image hosts must be online healthy. Existing hosts need one healthy validation pass before they can count as stopped standby capacity. Administrator-owned scaling exclusions are preserved and excluded hosts never count as scalable standby. Shutdown retention remains optional and SideBySide-only; readiness works the same with retention enabled or disabled.
 
 ### Ringed Rollout Support
+
 Delay replacement after new image detection for validation:
 
 - Configurable delay (0-30 days)
@@ -91,6 +99,7 @@ Delay replacement after new image detection for validation:
 - Enables gradual exposure of new images
 
 ### Device Cleanup & Hostname Reuse
+
 Automatic cleanup of stale device records with intelligent hostname reuse:
 
 - Removes Entra ID and Intune device records
@@ -99,6 +108,7 @@ Automatic cleanup of stale device records with intelligent hostname reuse:
 - Automatic verification of resource cleanup before reuse
 
 ### Comprehensive Monitoring
+
 Pre-built Azure Monitor Workbook dashboard:
 
 - Real-time replacement cycle progress
