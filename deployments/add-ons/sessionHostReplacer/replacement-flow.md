@@ -73,6 +73,7 @@ SideBySide-specific behavior:
 
 - New hosts are deployed before old hosts are drained or removed.
 - Failed readiness preserves the old hosts and waits for a later invocation.
+- During an active `0%` scaling period, validated latest-image hosts may all be scalable standby; stale hosts can still be deleted or deallocated for shutdown retention.
 - Shutdown retention is available only in this mode.
 - Entra ID or Intune cleanup failures are reported but do not block unrelated replacements because hostnames are not reused.
 
@@ -115,6 +116,7 @@ DeleteFirst-specific behavior:
 
 - The effective whole-pool capacity floor uses the configured minimum during `RampUp` and `Peak`, and the active scaling-plan target during `RampDown` and `OffPeak`.
 - An active `0%` scaling target permits a zero-host floor during the applicable off-hours phase.
+- OffPeak remains owned by the most recent selected schedule day until the next selected day's RampUp, including across midnight and unselected days.
 - `MaxDeletionsPerCycle` remains an independent emergency brake.
 - New deletions stop while a previously deleted host is not registered.
 - Required Entra ID or Intune cleanup is blocking because stale records can prevent hostname reuse.

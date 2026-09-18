@@ -486,6 +486,55 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.TotalSessionHostsToReplace | Should Be 10
     }
 
+    It 'SideBySide retires stale hosts when validated replacements are scaled to zero' {
+        $newHosts = 11..20 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "avd-$($_.ToString('00'))"
+                VMName = "avd-$($_.ToString('00'))"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$($_.ToString('00'))"
+                ImageDefinition = $latestImage.Definition
+                ImageVersion = $latestImage.Version
+                Status = 'Shutdown'
+                AllowNewSession = $false
+                Sessions = 0
+                ShutdownTimestamp = $null
+                PendingDrainTimeStamp = $null
+                IsUnavailable = $false
+            }
+        }
+
+        $plan = Get-SessionHostReplacementPlan `
+            -ARMToken 'test-token' `
+            -SessionHosts @($oldHosts + $newHosts) `
+            -RunningDeployments @() `
+            -HostPoolName 'hp-test' `
+            -TargetSessionHostCount 10 `
+            -LatestImageVersion $latestImage `
+            -ReplaceSessionHostOnNewImageVersionDelayDays 0 `
+            -ReplacementMode SideBySide `
+            -DrainGracePeriodHours 24 `
+            -MinimumCapacityPercentage 80 `
+            -MaxDeletionsPerCycle 50 `
+            -EnableProgressiveScaleUp $false `
+            -ScalingPlanTarget ([PSCustomObject]@{
+                Source = 'ScalingPlan'
+                CapacityPercentage = 0
+                Phase = 'OffPeak'
+                ScalingPlanName = 'weekend'
+                ScheduleName = 'weekend'
+            }) `
+            -RemoveEntraDevice $false `
+            -RemoveIntuneDevice $false `
+            -HostPoolSubscriptionId 'test' `
+            -HostPoolResourceGroupName 'hosts' `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $plan.PossibleDeploymentsCount | Should Be 0
+        $plan.PossibleSessionHostDeleteCount | Should Be 10
+        $plan.SessionHostsPendingDelete.Count | Should Be 10
+        @($plan.SessionHostsPendingDelete | Where-Object { $_.ImageVersion -eq $latestImage.Version }).Count | Should Be 0
+    }
+
     It 'DeleteFirst keeps the configured 80 percent floor during RampUp and Peak' -TestCases @(
         @{ Phase = 'RampUp' }
         @{ Phase = 'Peak' }
@@ -565,13 +614,23 @@ Describe 'Session Host Replacer zero-percent scaling schedule discovery' {
                         schedules = @(
                             [PSCustomObject]@{
                                 name = 'weekend'
-                                daysOfWeek = @('Saturday')
+                                daysOfWeek = @('Saturday', 'Sunday')
                                 rampUpStartTime = [PSCustomObject]@{ hour = 6; minute = 0 }
                                 peakStartTime = [PSCustomObject]@{ hour = 8; minute = 0 }
                                 rampDownStartTime = [PSCustomObject]@{ hour = 18; minute = 0 }
                                 offPeakStartTime = [PSCustomObject]@{ hour = 20; minute = 0 }
                                 rampUpMinimumHostsPct = 20
                                 rampDownMinimumHostsPct = 0
+                            },
+                            [PSCustomObject]@{
+                                name = 'weekday'
+                                daysOfWeek = @('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+                                rampUpStartTime = [PSCustomObject]@{ hour = 6; minute = 0 }
+                                peakStartTime = [PSCustomObject]@{ hour = 8; minute = 0 }
+                                rampDownStartTime = [PSCustomObject]@{ hour = 18; minute = 0 }
+                                offPeakStartTime = [PSCustomObject]@{ hour = 20; minute = 0 }
+                                rampUpMinimumHostsPct = 50
+                                rampDownMinimumHostsPct = 25
                             }
                         )
                     }
@@ -596,6 +655,35 @@ Describe 'Session Host Replacer zero-percent scaling schedule discovery' {
         $target.Source | Should Be 'ScalingPlan'
         $target.Phase | Should Be 'OffPeak'
         $target.CapacityPercentage | Should Be 0
+    }
+
+    It 'carries the previous zero-percent OffPeak target across midnight until the next RampUp' {
+        $currentDateTime = [datetime]::SpecifyKind([datetime]'2026-09-21T01:00:00', [System.DateTimeKind]::Utc)
+
+        $target = Get-ScalingPlanCurrentTarget `
+            -ARMToken 'test-token' `
+            -HostPoolResourceId '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/hp-test' `
+            -CurrentDateTime $currentDateTime `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $target.Source | Should Be 'ScalingPlan'
+        $target.ScheduleName | Should Be 'weekend (fallback)'
+        $target.Phase | Should Be 'OffPeak (no schedule)'
+        $target.CapacityPercentage | Should Be 0
+    }
+
+    It 'raises the carried zero-percent target within 30 minutes of the next RampUp' {
+        $currentDateTime = [datetime]::SpecifyKind([datetime]'2026-09-21T05:45:00', [System.DateTimeKind]::Utc)
+
+        $target = Get-ScalingPlanCurrentTarget `
+            -ARMToken 'test-token' `
+            -HostPoolResourceId '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/hp-test' `
+            -CurrentDateTime $currentDateTime `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $target.Source | Should Be 'ScalingPlan'
+        $target.Phase | Should Be 'OffPeak->RampUp (look-ahead)'
+        $target.CapacityPercentage | Should Be 50
     }
 }
 

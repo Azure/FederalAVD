@@ -135,10 +135,20 @@ function Get-ScalingPlanCurrentTarget {
         $activeSchedule = $null
         $activePhase = $null
         $capacityPercentage = $null
+        $lookAheadMinutes = 30
         
         foreach ($schedule in $schedules) {
+            $rampUpStart = New-TimeSpan -Hours $schedule.rampUpStartTime.hour -Minutes $schedule.rampUpStartTime.minute
+
             # Check if current day is in schedule's days of week
             if ($schedule.daysOfWeek -notcontains $currentDayOfWeek) {
+                continue
+            }
+
+            # A schedule day begins at RampUp, not midnight. Before today's RampUp,
+            # the most recent selected day's OffPeak settings are still active.
+            if ($currentTimeSpan -lt $rampUpStart) {
+                Write-LogEntry -Message "Schedule '$($schedule.name)' has not reached RampUp at $($rampUpStart.ToString('hh\:mm')); retaining the previous schedule's OffPeak settings" -Level Trace
                 continue
             }
             
@@ -147,7 +157,6 @@ function Get-ScalingPlanCurrentTarget {
             # Determine which phase we're in based on time
             # Phases: RampUp -> Peak -> RampDown -> OffPeak (wraps to next day's RampUp)
             # Times are returned as objects with hour/minute properties, not strings
-            $rampUpStart = New-TimeSpan -Hours $schedule.rampUpStartTime.hour -Minutes $schedule.rampUpStartTime.minute
             $peakStart = New-TimeSpan -Hours $schedule.peakStartTime.hour -Minutes $schedule.peakStartTime.minute
             $rampDownStart = New-TimeSpan -Hours $schedule.rampDownStartTime.hour -Minutes $schedule.rampDownStartTime.minute
             $offPeakStart = New-TimeSpan -Hours $schedule.offPeakStartTime.hour -Minutes $schedule.offPeakStartTime.minute
@@ -191,7 +200,6 @@ function Get-ScalingPlanCurrentTarget {
             # If we're within 30 minutes of transitioning to a higher-capacity phase, use that phase's percentage instead
             # This prevents starting aggressive deletions right before scaling plan needs to add capacity
             # 30-minute window accounts for: deletion verification (~5 min) + deployment time (~20 min) + buffer
-            $lookAheadMinutes = 30
             $lookAheadTime = $currentTimeSpan.Add([TimeSpan]::FromMinutes($lookAheadMinutes))
             $nextPhaseCapacity = $null
             $nextPhaseName = $null
@@ -261,6 +269,7 @@ function Get-ScalingPlanCurrentTarget {
             $currentDayIndex = $dayOrder[$currentDayOfWeek]
             $fallbackCapacityPct = $null
             $fallbackScheduleName = $null
+            $fallbackPhase = 'OffPeak (no schedule)'
             
             # Search backwards through days to find most recent scheduled day
             for ($i = 1; $i -le 7; $i++) {
@@ -281,13 +290,30 @@ function Get-ScalingPlanCurrentTarget {
                     break
                 }
             }
+
+            # The previous schedule owns OffPeak until today's RampUp. Preserve the
+            # 30-minute higher-capacity look-ahead when that transition crosses days.
+            $nextSchedule = $schedules | Where-Object {
+                $_.daysOfWeek -contains $currentDayOfWeek
+            } | Select-Object -First 1
+            if ($nextSchedule) {
+                $nextRampUpStart = New-TimeSpan -Hours $nextSchedule.rampUpStartTime.hour -Minutes $nextSchedule.rampUpStartTime.minute
+                $minutesUntilRampUp = ($nextRampUpStart - $currentTimeSpan).TotalMinutes
+                if ($minutesUntilRampUp -ge 0 -and
+                    $minutesUntilRampUp -le $lookAheadMinutes -and
+                    $nextSchedule.rampUpMinimumHostsPct -gt $fallbackCapacityPct) {
+                    Write-LogEntry -Message "Safety look-ahead: Transitioning from carried OffPeak to RampUp in <$lookAheadMinutes min. Using more conservative $($nextSchedule.rampUpMinimumHostsPct)% instead of $fallbackCapacityPct%" -Level Trace
+                    $fallbackCapacityPct = $nextSchedule.rampUpMinimumHostsPct
+                    $fallbackPhase = 'OffPeak->RampUp (look-ahead)'
+                }
+            }
             
             if ($null -ne $fallbackCapacityPct) {
                 return [PSCustomObject]@{
                     CapacityPercentage = $fallbackCapacityPct
                     ScalingPlanName = $scalingPlanName
                     ScheduleName = "$fallbackScheduleName (fallback)"
-                    Phase = 'OffPeak (no schedule)'
+                    Phase = $fallbackPhase
                     Source = 'ScalingPlan'
                 }
             }
