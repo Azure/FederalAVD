@@ -219,6 +219,16 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
 
 - **Do not modify files under `deployments/`** without understanding the full template — many
   parameters have cross-solution dependencies.
+- **Never infer Windows policy behavior from a registry value name, an existing script, generated
+  ARM JSON, or an unofficial registry list.** Before adding, changing, or describing a Windows
+  policy setting in any script or artifact, verify it against both the current ADMX/ADML files for
+  the target Windows or product version and current official Microsoft documentation. Confirm the
+  policy's friendly name, Computer/User scope, registry path, value name, value type, enabled and
+  disabled encoding, supported Windows editions/builds, restart or sign-in requirements, and known
+  functional side effects. If the sources conflict or do not document the intended outcome, stop
+  and report the uncertainty rather than guessing. Static source checks prove configuration, not
+  user-visible behavior; validate UX claims on a representative Windows build before calling them
+  fixed. Use `.github/skills/federalavd-windows-policy-validation/SKILL.md` for this workflow.
 - **Prefer shared-module reuse when behavior is cross-solution.** If the same capability is
   implemented in multiple deployment entry points, prefer composing or extending
   `deployments/shared/modules/orchestration/*` and `deployments/shared/modules/resourceModules/*`

@@ -39,6 +39,7 @@ $optimizerExpectations = @(
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold' -Value 0",
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30",
     "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1",
     "Set-PolicyValue -Path `$searchPath -Name 'EnableDynamicContentInWSB' -Value 0"
 )
 foreach ($expectedText in $optimizerExpectations) {
@@ -57,7 +58,8 @@ foreach ($expectedText in @(
     "Set-PolicyValue -Path `$airGappedSearchPath -Name 'EnableDynamicContentInWSB' -Value 0",
     "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1",
     "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1",
-    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1",
     "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' -Name 'DODownloadMode' -Value 99",
     "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' -Name 'AutoDownloadAndUpdateMapData' -Value 0",
     "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Messaging' -Name 'AllowMessageSync' -Value 0",
@@ -76,6 +78,9 @@ foreach ($expectedText in @(
 }
 if ($airGappedSection -notmatch '(?s)if \(-not \$RunNonPersistentSections\) \{\s+Set-PolicyValue .*?Windows Error Reporting.*?-Name ''Disabled''.*?-Name ''DontSendAdditionalData''') {
     throw 'Optimize-AVDImage.ps1 air-gapped mode does not avoid duplicate nonpersistent WER policy writes.'
+}
+if ($optimizerText -match "(?m)^\s*Set-PolicyValue .*?-Name 'AllowTelemetry' -Value 0") {
+    throw 'Optimize-AVDImage.ps1 disables required diagnostic data used by Intune reporting.'
 }
 if ($optimizerText -match "(?m)^\s*Set-PolicyValue .*PreventNetworkTrafficPreUserSignIn") {
     throw 'Optimize-AVDImage.ps1 enables PreventNetworkTrafficPreUserSignIn, which conflicts with silent OneDrive configuration.'

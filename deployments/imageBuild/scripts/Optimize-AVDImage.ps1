@@ -717,14 +717,19 @@ try {
         Write-Log "--- Section 5: Registry / Policy Settings (All VDI) ---"
 
         # -- Telemetry (DataCollection.admx) --
-        # AllowTelemetry=1 (Basic): minimum for Endpoint Analytics and Update Compliance.
-        # NonPersistent VMs override to 0 in Section 6.
+        # AllowTelemetry=1 (Required): minimum for Endpoint Analytics and Windows Update reporting.
+        # NonPersistent and air-gapped profiles retain this value in Sections 6 and 7.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'DoNotShowFeedbackNotifications' -Value 1
 
         # -- Privacy / Consumer Experiences (CloudContent.admx) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1
+        # "Turn off cloud consumer account state content" (Windows 11 Enterprise).
+        # Prevents consumer-account cloud content, including Store app offers, from
+        # being presented in Windows experiences while leaving installed apps usable.
+        # Ref: https://learn.microsoft.com/windows/client-management/mdm/policy-csp-experience#disableconsumeraccountstatecontent
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1
         # DisableSoftLanding = Windows Tips. DisableWindowsTips has no ADMX definition.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -Value 1
         # NOTE: DisableThirdPartySuggestions and DisableWindowsSpotlightFeatures are User
@@ -1173,8 +1178,10 @@ try {
 
         Write-Log ""
 
-        # Override telemetry to 0 for NonPersistent VMs (transient; no per-VM diagnostic value).
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 0
+        # DataCollection.admx "Allow Diagnostic Data": 1 sends required diagnostic data.
+        # Preserve Intune Endpoint Analytics and Windows Update reporting for pooled hosts.
+        # Ref: https://learn.microsoft.com/windows/client-management/mdm/policy-csp-system#allowtelemetry
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1
 
         # -- WER - disabled NonPersistent only; transient VMs discard crash data at recycle --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' -Name 'Disabled' -Value 1
@@ -1241,9 +1248,11 @@ try {
             Set-PolicyValue -Path $airGappedSearchPath -Name 'ConnectedSearchUseWeb' -Value 0
             Set-PolicyValue -Path $airGappedSearchPath -Name 'EnableDynamicContentInWSB' -Value 0
 
-            # CloudContent.admx: turn off Microsoft consumer experiences and cloud optimized content.
+            # CloudContent.admx: turn off Microsoft consumer experiences, cloud optimized
+            # content, and consumer-account content such as Store app offers.
             Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1
             Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1
 
             # DataCollection.admx: suppress feedback prompts.
             Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'DoNotShowFeedbackNotifications' -Value 1
@@ -1273,9 +1282,10 @@ try {
             Set-PolicyValue -Path $airGappedUserCloudContent -Name 'IncludeEnterpriseSpotlight' -Value 0
         }
 
-        # DataCollection.admx: Security diagnostic data. This intentionally overrides
-        # the full Persistent profile's AllowTelemetry=1 setting.
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 0
+        # DataCollection.admx "Allow Diagnostic Data": retain required diagnostic data
+        # for Intune management and reporting, including on restricted networks.
+        # Ref: https://learn.microsoft.com/windows/client-management/mdm/policy-csp-system#allowtelemetry
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1
 
         # NCSI passive polling disabled - SKIP (breaks network awareness APIs; see README)
         # Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'DisablePassivePolling' -Value 1
