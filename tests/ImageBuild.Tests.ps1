@@ -37,12 +37,45 @@ $optimizerExpectations = @(
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'AllowStorageSenseTemporaryFilesCleanup' -Value 1",
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold' -Value 30",
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold' -Value 0",
-    "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30"
+    "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1",
+    "Set-PolicyValue -Path `$searchPath -Name 'EnableDynamicContentInWSB' -Value 0"
 )
 foreach ($expectedText in $optimizerExpectations) {
     if (-not $optimizerText.Contains($expectedText)) {
         throw "Optimize-AVDImage.ps1 is missing required behavior: $expectedText"
     }
+}
+$airGappedSection = [regex]::Match(
+    $optimizerText,
+    '(?s)# SECTION 7 - Air-Gapped / Restricted Network Settings.*?# end if AirGapped - Section 7'
+).Value
+foreach ($expectedText in @(
+    'if (-not $RunFullOptimization) {',
+    "Set-PolicyValue -Path `$airGappedSearchPath -Name 'DisableWebSearch' -Value 1",
+    "Set-PolicyValue -Path `$airGappedSearchPath -Name 'ConnectedSearchUseWeb' -Value 0",
+    "Set-PolicyValue -Path `$airGappedSearchPath -Name 'EnableDynamicContentInWSB' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' -Name 'DODownloadMode' -Value 99",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' -Name 'AutoDownloadAndUpdateMapData' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Messaging' -Name 'AllowMessageSync' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Speech' -Name 'AllowSpeechModelUpdate' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\FindMyDevice' -Name 'AllowFindMyDevice' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageHealth' -Name 'AllowDiskHealthModelUpdates' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications' -Name 'NoCloudApplicationNotification' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' -Name 'PreventDeviceMetadataFromNetwork' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform' -Name 'NoGenTicket' -Value 1",
+    "Set-PolicyValue -Path `$airGappedUserCloudContent -Name 'DisableWindowsSpotlightFeatures' -Value 1",
+    "Set-PolicyValue -Path `$airGappedUserCloudContent -Name 'DisableTailoredExperiencesWithDiagnosticData' -Value 1"
+)) {
+    if (-not $airGappedSection.Contains($expectedText)) {
+        throw "Optimize-AVDImage.ps1 air-gapped mode is missing required behavior: $expectedText"
+    }
+}
+if ($airGappedSection -notmatch '(?s)if \(-not \$RunNonPersistentSections\) \{\s+Set-PolicyValue .*?Windows Error Reporting.*?-Name ''Disabled''.*?-Name ''DontSendAdditionalData''') {
+    throw 'Optimize-AVDImage.ps1 air-gapped mode does not avoid duplicate nonpersistent WER policy writes.'
 }
 if ($optimizerText -match "(?m)^\s*Set-PolicyValue .*PreventNetworkTrafficPreUserSignIn") {
     throw 'Optimize-AVDImage.ps1 enables PreventNetworkTrafficPreUserSignIn, which conflicts with silent OneDrive configuration.'

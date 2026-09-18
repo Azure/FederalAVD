@@ -116,8 +116,12 @@ the article's literal recommendations) are documented separately below.
 
 `AirGapped` disables components that otherwise make unsuccessful calls to Microsoft cloud services,
 including SmartScreen cloud lookups, online font providers, Teredo, WER uploads, Defender cloud
-protection, OneSettings, settings sync, activity-history uploads, widgets, and cross-device
-features. It applies independently of the selected optimization profile. These settings are a
+protection, OneSettings, settings sync, activity-history uploads, widgets, cross-device features,
+web Search results, Search highlights, cloud-delivered consumer content, telemetry, feedback,
+online tips, device metadata, maps, messaging, speech-model updates, storage-health model updates,
+cloud notifications, and Delivery Optimization cloud coordination. User-scope Spotlight and
+tailored-content restrictions are written to local User Group Policy. It applies independently of
+the selected optimization profile. These settings are a
 targeted subset of Microsoft's
 [Manage connections from Windows operating system components to Microsoft services](https://learn.microsoft.com/en-us/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services)
 guidance, not the complete Windows Restricted Traffic Limited Functionality Baseline.
@@ -159,6 +163,7 @@ expanding container.
 | Storage Sense | Disable | Enable and configure | Dehydrates eligible cloud content and cleans temporary profile content before FSLogix compaction. |
 | Optimize Drives | Evaluate or disable | Manual on nonpersistent hosts | Disabled service startup prevents FSLogix VHD disk compaction. |
 | Windows Search | Evaluate or disable | Leave at default | Disabling it breaks Outlook and File Explorer search. |
+| Start/Search online content | Allow by default | Disable web results, dynamic content, and cloud-optimized experiences | Suppresses Microsoft Store offers and other online suggestions while preserving installed-app and local-file search. |
 | Microsoft Store Install Service | Disable on nonpersistent hosts | Leave at default | WinAppSDK applications can require the on-demand service at first launch. |
 | Sync Host (`OneSyncSvc`) | Candidate for disabling | Leave at default | Mail, contacts, and calendar applications depend on synchronization at sign-in. |
 | Diagnostic services | Disable | Disable only on nonpersistent hosts | Persistent users retain self-service diagnostic capabilities. |
