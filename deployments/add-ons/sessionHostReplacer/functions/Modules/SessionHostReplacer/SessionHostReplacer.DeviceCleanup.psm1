@@ -199,7 +199,7 @@ function Confirm-SessionHostDeletions {
     Array of session host objects (to get resource IDs)
     
     .PARAMETER MaxWaitMinutes
-    Maximum time to wait for VM deletion confirmation (default: 5)
+    Maximum time to wait for deletion confirmation (default: 10)
     
     .PARAMETER PollIntervalSeconds
     Seconds between polling attempts (default: 30)
@@ -374,9 +374,9 @@ function Confirm-SessionHostDeletions {
             }
             
             # Log per-host status after each check
-            $vmStatus = if ($sh.VMConfirmed) { "✓" } else { "✗" }
-            $entraStatus = if ($sh.EntraIDConfirmed) { "✓" } else { "✗" }
-            $intuneStatus = if ($sh.IntuneConfirmed) { "✓" } else { "✗" }
+            $vmStatus = if ($sh.VMConfirmed) { 'Confirmed' } else { 'Pending' }
+            $entraStatus = if ($sh.EntraIDConfirmed) { 'Confirmed' } else { 'Pending' }
+            $intuneStatus = if ($sh.IntuneConfirmed) { 'Confirmed' } else { 'Pending' }
             $fullyConfirmed = $sh.VMConfirmed -and $sh.EntraIDConfirmed -and $sh.IntuneConfirmed
             if ($fullyConfirmed) {
                 Write-LogEntry -Message "Full deletion confirmed for {0}: VM={1} EntraID={2} Intune={3}" -StringValues $sh.Name, $vmStatus, $entraStatus, $intuneStatus -Level Trace

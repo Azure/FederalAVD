@@ -19,7 +19,7 @@ Before deploying, understand the two replacement strategies:
 
 - **Cost optimized** - no host pool doubling
 - **Temporary capacity reduction** - some hosts unavailable during replacement
-- **Hostname reuse** - requires device cleanup (Graph API permissions mandatory)
+- **Hostname reuse** - always verifies VM absence and can optionally remove Entra ID and Intune records before reuse
 - **Best for**: Dev/test, cost-sensitive, IP/quota constrained, dedicated host environments
 
 See [README.md - Replacement Modes](README.md#replacement-modes) for detailed comparison.
@@ -63,16 +63,16 @@ replaceSessionHostOnNewImageVersionDelayDays: 7  // Wait 7 days to validate new 
 
 ```bicep
 replacementMode: 'DeleteFirst'
-targetSessionHostCount: 50  // Explicit count required (no auto-detect)
-maxDeletionsPerCycle: 5     // Replace 5 hosts per run
+targetSessionHostCount: 0   // Auto-detect at the start of each replacement cycle
+maxDeletionsPerCycle: 50    // Absolute blast-radius ceiling per cycle
 minimumCapacityPercentage: 80  // Maintain at least 80% capacity
 drainGracePeriodHours: 24
 minimumDrainMinutes: 15
-removeEntraDevice: true     // REQUIRED for hostname reuse
-removeIntuneDevice: true    // REQUIRED for hostname reuse
+removeEntraDevice: true     // Recommended cleanup before hostname reuse
+removeIntuneDevice: true    // Recommended cleanup before hostname reuse
 ```
 
-**Important**: DeleteFirst mode requires Graph API permissions to be configured (see [README.md - Permissions Setup](README.md#permissions-setup)).
+Graph API permissions are required only for the enabled Entra ID and Intune cleanup options. Disabling cleanup avoids those permissions but can leave stale directory records that interfere with rejoining a reused hostname.
 
 ### Timer Schedule Guidance
 

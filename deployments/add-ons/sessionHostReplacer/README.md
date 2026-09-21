@@ -144,17 +144,17 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - ✅ **Hostname reuse** - leverages deleted names for new hosts
 - ✅ **Dedicated host preservation** - maintains host group assignments
 - ❌ **Temporary capacity reduction** - some hosts unavailable during replacement
-- ❌ **Requires device cleanup** - Graph API permissions mandatory for name reuse
+- ⚠️ **Directory cleanup is recommended** - VM absence is always verified; optional Entra ID and Intune cleanup requires Graph permissions and reduces stale-record risk during hostname reuse
 - ❌ **Slower rollouts** - limited by max deletions per cycle
 
 **Configuration parameters**:
 
 - `replacementMode`: `DeleteFirst`
 - `targetSessionHostCount`: 0 (auto-detect) or Specific number
-- `maxDeletionsPerCycle`: Maximum hosts to replace per run (default: 5)
+- `maxDeletionsPerCycle`: Absolute replacement ceiling per cycle (default: 50)
 - `minimumCapacityPercentage`: Safety floor for available capacity (default: 80%)
-- `removeEntraDevice`: Must be `true` for hostname reuse
-- `removeIntuneDevice`: Must be `true` for hostname reuse
+- `removeEntraDevice`: Optionally remove Entra ID records before hostname reuse (default: `true`)
+- `removeIntuneDevice`: Optionally remove Intune records before hostname reuse (default: `true`)
 
 **Use cases**:
 
@@ -173,8 +173,8 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 | **Hostname reuse** | No (generates new names) | Yes (reuses deleted names) |
 | **Dedicated host support** | No (new hosts on different hosts) | Yes (preserves assignments) |
 | **Shutdown retention** | Yes (optional) | No |
-| **Auto-detect target count** | Yes | No (explicit count required) |
-| **Device cleanup required** | Optional | Mandatory (for hostname reuse) |
+| **Auto-detect target count** | Yes | Yes |
+| **Device cleanup required** | Optional | Optional; recommended for hostname reuse |
 | **Progressive scale-up** | Yes | Yes |
 | **Subnet IP requirements** | 2x during replacement | 1x (no spike) |
 | **Rollback capability** | Yes (with shutdown retention) | No |
@@ -219,7 +219,7 @@ The Session Host Replacer Function App supports two identity options:
 
 - **Pre-created** before deployment
 - **Regional requirement**: Must be in the same Azure region as the Function App because Microsoft.Web cannot attach a user-assigned identity across regional isolation boundaries
-- **Required for**: Device cleanup with hostname reuse in DeleteFirst mode (Graph permissions must exist before first run)
+- **Best for**: Pre-authorizing optional device cleanup before the first DeleteFirst run
 - **Best for**: Environments with a large number of host pools
 - **Benefit**: Graph permissions can be granted before deployment
 
@@ -235,14 +235,14 @@ The Session Host Replacer Function App supports two identity options:
 - `Device.ReadWrite.All` - For Entra ID device deletion
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
-> **Important for DeleteFirst Mode:** Graph API permissions must be configured **before** the first function execution if using device cleanup for hostname reuse. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
+> **Important for DeleteFirst Mode:** If Entra ID or Intune cleanup is enabled, configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
 
 #### 2. Grant Graph API Permissions to Managed Identity
 
-**Why This Is Required:**
+**Why This Is Needed When Device Cleanup Is Enabled:**
 
 - The Function App needs to clean up stale device registrations in Entra ID and Intune
-- This enables hostname reuse (required for DeleteFirst mode, optional for SideBySide)
+- This removes stale directory records before DeleteFirst reuses hostnames
 - Service principals/managed identities require **Application Permissions** (not delegated permissions)
 
 **When to Grant Permissions:**
@@ -800,7 +800,7 @@ Set to `0` to automatically maintain the current count when replacement cycles b
 5. After replacement completes, scaling plan increases to 75 hosts
 6. Next image update will use "75" as the target
 
-**Important**: Auto-detect mode is only supported in **SideBySide mode**. DeleteFirst mode requires an explicit target count.
+Auto-detect mode is supported in both replacement modes. In DeleteFirst mode, the captured target is persisted with the recovery state so retries continue toward the same cycle target.
 
 ### Tag Schema
 
@@ -969,9 +969,13 @@ See [Session Host Replacer Flow Diagrams](replacement-flow.md) for the shared ev
                     └─────────────────────┬───────────────────┘
                                           │
                     ┌─────────────────────▼───────────────────┐
+                    │  SAVE PendingHostMappings               │
+                    │  Before Destructive Operations          │
+                    └─────────────────────┬───────────────────┘
+                                          │
+                    ┌─────────────────────▼───────────────────┐
                     │  Delete Session Hosts                   │
                     │  + VM + Disks + NIC + Device Cleanup    │
-                    │  → SAVE to PendingHostMappings          │
                     └─────────────────────┬───────────────────┘
                                           │
                     ┌─────────────────────▼───────────────────┐
@@ -1028,7 +1032,7 @@ See [Session Host Replacer Flow Diagrams](replacement-flow.md) for the shared ev
    - Exit immediately
 4. **Discovery**: Enumerate all session hosts via AVD Host Pool API (only if work needed)
 5. **Tag Validation**: Filter to hosts with `IncludeInAutoReplace: true`
-6. **Target Count Validation**: Verify explicit target count is set (auto-detect not supported)
+6. **Target Count Determination**: Use an explicit count or persist the current count when an auto-detected replacement cycle begins
 7. **Image Version Check**: Compare each host's image to latest marketplace/gallery version
 8. **Scaling Plan Query** (if work needed): Query active scaling plan schedule for dynamic capacity target
 9. **Availability Safety Check**: Verify any existing newly-deployed hosts meet availability threshold before proceeding with new deletions
@@ -1038,7 +1042,7 @@ See [Session Host Replacer Flow Diagrams](replacement-flow.md) for the shared ev
     - **Protection**: Prevents false positives from powered-off VMs (only trust IsUnavailable flag set when VM query fails)
 10. **Capacity Calculation**: Determine max deletions respecting:
     - `maxDeletionsPerCycle`: Upper limit per run
-    - `minimumCapacityPercentage`: Safety floor (overridden by scaling plan if available)
+    - `minimumCapacityPercentage`: Static fallback and active-hours safety floor when a scaling plan is available
     - **Dynamic capacity from scaling plan** (phase-aware deletion throttling):
       - **Peak/RampUp phases**: Uses max(configured minimum, scaling plan %) as floor (conservative during business hours)
       - **RampDown/OffPeak phases**: Uses scaling plan % directly (more aggressive during off-hours)
@@ -1058,13 +1062,13 @@ See [Session Host Replacer Flow Diagrams](replacement-flow.md) for the shared ev
     - **Success tracking**: Only reuse names from successfully deleted hosts
 16. **Cache Update**: Remove deleted VMs from cache (more efficient than re-querying all VMs)
 17. **Complete Deletion Verification**: Verify removal across all systems before proceeding:
-    - **VM deletion**: Poll Azure Resource Manager until 404 confirmed (up to 5 minutes)
+    - **VM deletion**: Poll Azure Resource Manager until 404 confirmed (up to 10 minutes by default)
     - **Entra ID removal**: Query Microsoft Graph until device record removed
     - **Intune removal**: Query Microsoft Graph until device record removed
     - **Unified verification loop**: Checks all three systems together for each host until all confirmed
     - **Graph propagation handling**: Accounts for delayed propagation (can lag VM deletion by 30+ seconds)
     - **Per-host status logging**: Reports individual verification results after each check iteration
-    - **Exponential backoff**: 5-second initial delay, increases with retries, 5-minute maximum wait
+    - **Polling interval**: Recheck incomplete systems every 30 seconds for up to 10 minutes by default
 18. **Deployment Submission**: Deploy replacement hosts:
     - Reuse deleted hostnames (prevents name exhaustion)
     - Reuse dedicated host assignments (prevents stranding hosts)
@@ -1271,7 +1275,7 @@ INFO: All 2 pending host(s) successfully registered - clearing mappings
 
 - Monitor logs for "PendingRegistration" status (indicates registration issues)
 - Investigate if mappings persist across multiple runs (configuration/networking problem)
-- Ensure Graph API permissions granted for device cleanup (required for hostname reuse)
+- If device cleanup is enabled, ensure the corresponding Graph API permissions are granted
 - Verify registration token is valid and not expired
 
 ### New Host Availability Safety Check
@@ -1404,7 +1408,7 @@ default while existing apps continue running their configured version until a pl
 | Setting | Default | Applies To | Description |
 | --- | --- | --- | --- |
 | `replacementMode` | `SideBySide` | All | Replacement strategy: `SideBySide` (zero-downtime) or `DeleteFirst` (cost-optimized) |
-| `targetSessionHostCount` | `0` | All | Target host pool size. Set to 0 for auto-detect mode (SideBySide only) or specific number for explicit count |
+| `targetSessionHostCount` | `0` | All | Target host pool size. Set to 0 for auto-detect mode in either replacement mode, or use a specific number for explicit count |
 | `drainGracePeriodHours` | `24` | All | Grace period in hours for session hosts **with active sessions** before forced deletion (1-168 hours) |
 | `minimumDrainMinutes` | `15` | All | Minimum drain time in minutes for session hosts **with zero sessions** before eligible for deletion (0-120 minutes). Acts as safety buffer for API lag and race conditions |
 
@@ -1421,8 +1425,8 @@ default while existing apps continue running their configured version until a pl
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `maxDeletionsPerCycle` | `5` | Maximum hosts to delete and deploy per cycle (1-50). Controls replacement pace - function deletes this many, then deploys same count |
-| `minimumCapacityPercentage` | `80` | Safety floor: minimum percentage of target capacity to maintain (50-100%). Deletions capped to prevent dropping below threshold. Higher = more conservative, lower = more aggressive. **Note**: Automatically overridden by scaling plan schedules when available (see Dynamic Capacity below) |
+| `maxDeletionsPerCycle` | `50` | Absolute ceiling for hosts deleted and replaced per cycle (1-100). Progressive scale-up can select a smaller batch, and the capacity floor can reduce it further |
+| `minimumCapacityPercentage` | `80` | Online healthy capacity floor as a percentage of target capacity (20-100%). During RampUp, Peak, and look-ahead into RampUp, the effective floor is the greater of this value and the scaling-plan target. RampDown and OffPeak use the scaling-plan target directly |
 
 #### Dynamic Capacity from Scaling Plans
 
@@ -1508,8 +1512,8 @@ Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> e
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `removeEntraDevice` | `true` | Remove Entra ID device records when deleting session hosts. **Required for DeleteFirst mode** (hostname reuse) |
-| `removeIntuneDevice` | `true` | Remove Intune device records when deleting session hosts. **Required for DeleteFirst mode** (hostname reuse) |
+| `removeEntraDevice` | `true` | Remove Entra ID device records when deleting session hosts. Recommended before DeleteFirst hostname reuse; requires `Device.ReadWrite.All` when enabled |
+| `removeIntuneDevice` | `true` | Remove Intune device records when deleting session hosts. Recommended before DeleteFirst hostname reuse; requires `DeviceManagementManagedDevices.ReadWrite.All` when enabled |
 
 ### Scheduling Parameters
 
@@ -1586,8 +1590,8 @@ drainGracePeriodHours: 4    // Shorter grace period for dev
 minimumDrainMinutes: 5      // Minimal safety buffer
 maxDeletionsPerCycle: 5     // Replace 5 hosts per cycle
 minimumCapacityPercentage: 70  // More aggressive (allow up to 30% reduction)
-removeEntraDevice: true     // Required for hostname reuse
-removeIntuneDevice: true    // Required for hostname reuse
+removeEntraDevice: true     // Recommended before hostname reuse
+removeIntuneDevice: true    // Recommended before hostname reuse
 ```
 
 #### Example 3: Gradual Ringed Rollout (Large Production)
@@ -1758,7 +1762,7 @@ traces
 
 **Resolution:**
 
-The function automatically polls for deletion completion (up to 5 minutes). If this happens:
+The function automatically polls for deletion completion every 30 seconds for up to 10 minutes by default. If this happens:
 
 1. Check if deletion verification completed:
 
@@ -1831,9 +1835,9 @@ Scale-up resets when new image version detected or previous cycle completes.
 
 **Causes & Solutions:**
 
-**A. Using DeleteFirst mode:**
+**A. Deployment state is unavailable:**
 
-Auto-detect is only supported in SideBySide mode. Set explicit `targetSessionHostCount`.
+Both modes support auto-detect. DeleteFirst requires deployment-state storage to persist the captured cycle target and recovery mappings. Verify that the managed identity has `Storage Table Data Contributor` on the storage account.
 
 **B. Cycle not started yet:**
 

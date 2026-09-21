@@ -512,7 +512,7 @@
               "name": "maxDeletionsPerCycle",
               "type": "Microsoft.Common.Slider",
               "label": "Blast Radius Limit (VMs per cycle)",
-              "toolTip": "Blast Radius Limit: Caps the absolute number of VMs deleted/deployed per cycle, regardless of available headroom above the safety floor. Limits impact if issues occur during replacement. Example: With 500 target VMs and 50% floor (250 minimum), you have 250 VM headroom. Setting this to 50 means max 50 deleted per cycle despite having 250 of headroom. Guidance: Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower = slower/safer, higher = faster replacement. Works with Progressive Scale-Up which further limits initial cycles.",
+              "toolTip": "Blast Radius Limit: Caps the absolute number of VMs deleted and replaced per cycle, regardless of available headroom above the safety floor. Progressive Scale-Up can select a smaller initial batch, and the capacity floor can reduce it further. Example: With 500 target VMs and a 50% floor, setting this to 50 limits each cycle to 50 deletions even though 250 VMs of headroom exists. Guidance: Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower is slower and more conservative.",
               "min": 1,
               "max": 100,
               "defaultValue": 50,
@@ -548,7 +548,7 @@
               "name": "maxDeploymentBatchSize",
               "type": "Microsoft.Common.Slider",
               "label": "Deployment Batch Size Ceiling",
-              "toolTip": "Deployment Ceiling: Maximum number of VMs that can be deployed in a single cycle, but actual deployments are controlled by Progressive Scale-Up which starts conservatively and increases gradually. How it works: With Progressive Scale-Up enabled (default), initial cycles deploy a small percentage (e.g., 20%), then gradually increase (50%, 80%, 100%) after successful runs. This ceiling prevents deploying more than this limit even at 100%. Example: 100 target VMs, ceiling set to 100, Progressive Scale-Up at 20%: Cycle 1 deploys ~20 VMs (not 100), then 40 VMs, then 64 VMs, then up to 100 VM ceiling. Guidance: Set to maximum you're comfortable deploying simultaneously. Progressive Scale-Up provides safety for initial cycles.",
+              "toolTip": "Deployment Ceiling: Maximum number of VMs deployed in a SideBySide cycle. With Progressive Scale-Up enabled, the percentage-based confidence ramp can select a smaller batch; this setting remains the absolute ceiling. Guidance: Set it to the largest deployment you are comfortable submitting simultaneously.",
               "min": 1,
               "max": 1000,
               "defaultValue": 100,
@@ -583,13 +583,13 @@
               "name": "progressiveScaleUpTextBlock",
               "type": "Microsoft.Common.TextBlock",
               "options": {
-                "text": "Progressive scale-up starts with a small percentage of hosts and gradually increases after successful deployments. This helps identify issues before deploying to all hosts."
+                "text": "Progressive scale-up starts with a percentage of the remaining needed hosts and increases after successful deployment and registration. The SideBySide deployment ceiling or DeleteFirst blast-radius ceiling still applies."
               }
             },
             {
               "name": "enableProgressiveScaleUp",
               "type": "Microsoft.Common.CheckBox",
-              "defaultValue": true,
+              "defaultValue": false,
               "label": "Enable Progressive Scale-Up",
               "toolTip": "Enable percentage-based progressive deployment of session host replacements."
             },

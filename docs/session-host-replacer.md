@@ -43,7 +43,7 @@ The Session Host Replacer is an automated Azure Function that manages the lifecy
 - **Temporary capacity reduction**: Deletes idle hosts before deploying replacements
 - **Hostname reuse**: Leverages deleted names for new hosts
 - **Dedicated host preservation**: Maintains host group assignments
-- **Device cleanup required**: Graph API permissions mandatory
+- **Optional device cleanup**: Can remove Entra ID and Intune records before hostname reuse
 - **Best for**: Cost-sensitive environments, resource constraints (IPs/quotas), dedicated hosts
 
 See the [complete mode comparison](../deployments/add-ons/sessionHostReplacer/README.md#replacement-modes) for detailed decision guidance.
@@ -62,7 +62,7 @@ For detailed deployment instructions, prerequisites, and configuration options, 
 
 Gradual deployment rollouts that start with small percentages and increase after successful deployments:
 
-- Configurable initial percentage (e.g., 10% of needed hosts)
+- Configurable initial percentage (default: 20% of remaining needed hosts)
 - Incremental scale-up after consecutive successes
 - Automatic reset on failures or new image versions
 - Works in both SideBySide and DeleteFirst modes
@@ -76,10 +76,11 @@ Rollback capability by retaining old session hosts in shutdown state:
 - Enables quick rollback if issues discovered with new image
 - No additional cost (deallocated VMs only incur disk storage costs)
 
-### Auto-Detect Target Count (SideBySide Mode)
+### Auto-Detect Target Count
 
 Automatically maintains the current host count at replacement cycle start:
 
+- Works in both SideBySide and DeleteFirst modes
 - Perfect for environments using dynamic scaling plans
 - Adapts to manual scaling adjustments between image updates
 - Function captures initial count when first outdated host detected

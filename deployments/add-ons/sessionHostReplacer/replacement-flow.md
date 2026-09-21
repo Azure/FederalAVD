@@ -116,11 +116,11 @@ flowchart TD
 
 DeleteFirst-specific behavior:
 
-- The effective online healthy capacity floor uses the configured minimum during `RampUp`, `Peak`, and look-ahead into `RampUp`; it uses the active scaling-plan target during `RampDown` and `OffPeak`.
+- During `RampUp`, `Peak`, and look-ahead into `RampUp`, the effective online healthy capacity floor is the greater of the configured minimum and the active scaling-plan target. During `RampDown` and `OffPeak`, it uses the active scaling-plan target directly.
 - Drained, unhealthy, unavailable, and scaled-down hosts do not authorize deletion of additional online healthy hosts. They remain eligible for replacement without consuming the online floor.
 - An active `0%` scaling target permits a zero-host floor during the applicable off-hours phase.
 - OffPeak remains owned by the most recent selected schedule day until the next selected day's RampUp, including across midnight and unselected days.
-- `MaxDeletionsPerCycle` remains an independent emergency brake.
+- `MaxDeletionsPerCycle` remains an independent absolute blast-radius ceiling. Progressive scale-up may select a smaller batch, and the capacity floor may reduce it further.
 - New deletions stop while a previously deleted host is not registered.
 - New deletions fail closed when the recovery state cannot be read or the pending-host mapping cannot be saved.
 - A failed zero-floor deployment can recover even when the host pool temporarily has no registrations.

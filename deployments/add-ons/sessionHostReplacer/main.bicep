@@ -189,7 +189,7 @@ param minimumDrainMinutes int = 15
 @maxValue(100)
 param minimumCapacityPercentage int = 80
 
-@description('Optional. Maximum number of hosts to delete and deploy per cycle in DeleteFirst mode. Controls the pace of replacements - function deletes this many idle hosts, then deploys the same number of replacements. Lower values = slower, safer updates. Only applies when replacementMode is DeleteFirst. Default is 5.')
+@description('Optional. Absolute blast-radius ceiling for hosts deleted and replaced per cycle in DeleteFirst mode. Progressive scale-up can select a smaller batch, and the online healthy capacity floor can reduce it further. Lower values are slower and more conservative. Only applies when replacementMode is DeleteFirst. Default is 50.')
 @minValue(1)
 @maxValue(100)
 param maxDeletionsPerCycle int = 50
@@ -242,15 +242,15 @@ param removeEntraDevice bool = true
 @description('Optional. Whether to remove Intune device records when deleting session hosts. Default is true.')
 param removeIntuneDevice bool = true
 
-@description('Optional. Enable progressive scale-up with percentage-based batching for deployments. When enabled, the function will start with a small percentage of needed hosts and gradually increase. Default is false.')
+@description('Optional. Enable percentage-based progressive batching for both replacement modes. The function starts with a percentage of the remaining needed hosts and increases after successful deployment and registration. Mode-specific batch ceilings still apply. Default is false.')
 param enableProgressiveScaleUp bool = false
 
-@description('Optional. Initial deployment size as percentage of total needed hosts. Used when progressive scale-up is enabled. Default is 10%.')
+@description('Optional. Initial deployment size as a percentage of the hosts still needed. Used when progressive scale-up is enabled. Default is 20%.')
 @minValue(1)
 @maxValue(100)
 param initialDeploymentPercentage int = 20
 
-@description('Optional. Percentage increment added after each successful deployment run. Used when progressive scale-up is enabled. Default is 20%.')
+@description('Optional. Percentage increment added after the configured number of successful deployment and registration runs. Used when progressive scale-up is enabled. Default is 40%.')
 @minValue(5)
 @maxValue(50)
 param scaleUpIncrementPercentage int = 40

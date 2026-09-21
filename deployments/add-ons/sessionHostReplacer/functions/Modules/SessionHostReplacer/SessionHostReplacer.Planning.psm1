@@ -709,12 +709,6 @@ function Get-SessionHostReplacementPlan {
             Write-LogEntry -Message "DeleteFirst mode: $drainingHostsCount host(s) currently draining (not accepting new sessions), $availableHostsCount available, $totalHostsCount total" -Level Trace
         }
         
-        # Emergency brake: Respect the MaxDeletionsPerCycle limit
-        if ($canDelete -gt $MaxDeletionsPerCycle) {
-            Write-LogEntry -Message "DeleteFirst mode: MaxDeletionsPerCycle limit triggered - capping deletions from $canDelete to $MaxDeletionsPerCycle"
-            $canDelete = $MaxDeletionsPerCycle
-        }
-        
         $canDelete = [Math]::Max($canDelete, 0)  # Ensure non-negative
         
         Write-LogEntry -Message "Delete-First mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, available capacity: $availableHostsCount, minimum: $minimumAbsoluteHosts at $effectiveMinimumCapacityPct%, draining: $drainingHostsCount, max per cycle: $MaxDeletionsPerCycle) [Capacity source: $capacitySource]"
