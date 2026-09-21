@@ -1201,10 +1201,11 @@ A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
 
 **Protection Mechanisms**:
 
-1. **Pre-Deletion Save**: Mappings written to Table Storage BEFORE any deletions occur
+1. **Pre-Deletion Save**: Mappings must be written to Table Storage BEFORE any deletions occur; a read or write failure stops DeleteFirst processing
 2. **Persistence Through Failures**: Mappings NOT cleared on deployment failure
 3. **Registration Verification**: Checks if deployed VMs actually appear in host pool
-4. **Block New Deletions**: If unresolved hosts exist, prevents deleting more capacity:
+4. **Exact Retry Set**: Partial registration retries only the unresolved saved hostnames
+5. **Block New Deletions**: If unresolved hosts exist, prevents deleting more capacity:
 
 ```text
    Run 1: Delete 01, 02 → Deploy fails → Mappings kept
@@ -1213,7 +1214,7 @@ A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
    Run N: 01, 02 now registered → Clear mappings → Resume normal operations
    ```
 
-5. **Progressive Scale-Up Integration**: Only counts as "successful deployment" when hosts register
+6. **Progressive Scale-Up Integration**: Only counts as "successful deployment" when hosts register
 
 **Table Storage Schema**:
 
@@ -1348,6 +1349,42 @@ INFO: NEW_HOST_VERIFICATION | OnlineHealthy: 4/10 | ScalableStandby: 6 | Ready: 
 - Expect existing latest-image hosts to require one online healthy validation pass after upgrade
 - Monitor `NEW_HOST_VERIFICATION` logs for online, standby, and ready counts
 - Investigate when multiple runs show low availability (image/config issues)
+
+### Resiliency Test Harness
+
+`tests/SessionHostReplacer.Orchestration.Tests.ps1` invokes the actual timer control flow across
+multiple deterministic runs while supplying mocked cloud boundaries, replacement plans, and
+readiness results. The real planning and readiness implementations are exercised separately by
+`tests/SessionHostReplacer.Tests.ps1`.
+
+The current orchestration scenarios verify:
+
+- SideBySide retries a failed deployment and preserves old hosts until replacements are ready.
+- DeleteFirst recovers from a failed deployment even when no session hosts remain registered.
+- Partial registration retries only unresolved saved hostnames and never starts another deletion batch.
+- Recovery mappings are cleared after the final hosts register.
+- An unavailable pre-deletion state checkpoint and malformed recovery JSON both fail closed.
+- Asynchronous ARM failures clean up orphaned resources before exact-name retry; cleanup failure blocks redeployment.
+- Repeated `Running` status and ARM-discovered in-flight deployments block duplicate deletion and submission.
+- Partial Entra ID or Intune cleanup is retried and revalidated before hostname reuse.
+- Interruptions after host removal or after ARM accepts a deployment recover without another deletion or deployment.
+- ARM success with pending AVD registration waits without deleting device records or redeploying.
+- VM absence is revalidated before hostname reuse even when Entra ID and Intune cleanup are disabled.
+- Accepted DeleteFirst deployments require a state checkpoint; if that write fails, replacement VM presence blocks duplicate deployment.
+
+Run the focused resiliency suite with:
+
+```powershell
+Invoke-Pester -Script @(
+  '.\tests\SessionHostReplacer.Orchestration.Tests.ps1'
+  '.\tests\SessionHostReplacer.Tests.ps1'
+) -PassThru
+```
+
+This suite provides bounded assurance for the modeled transitions. Remaining failure-injection work
+includes drain notification failures, timer overlap, daylight-saving transitions, and Azure
+integration tests against an isolated host pool. A deployment that remains `Running` indefinitely
+fails closed and requires the ARM deployment to reach a terminal state or receive operator action.
 
 ## Configuration
 
@@ -1884,18 +1921,18 @@ $vm.Tags["AutoReplacePendingDrainTimestamp"]  # Should be ISO 8601 timestamp
 **Symptoms:**
 
 - Only 2 hosts replaced per cycle despite many needing replacement
-- Many hosts powered off but not being deleted
-- Host pool shows low available capacity but high total count
+- Non-serving hosts are replaced before online healthy hosts
+- Online healthy host replacement pauses when the configured floor is reached
 
-**Cause:** Peak/RampUp phase enforces higher capacity floor; powered-off hosts count toward total capacity
+**Cause:** Peak/RampUp phase enforces the higher online healthy capacity floor. This also applies during the 30-minute look-ahead into RampUp.
 
 **Explanation:**
 
-The capacity floor calculation uses **total host count** (including powered-off VMs) to maintain minimum capacity:
+The capacity floor calculation protects hosts that are online, accepting sessions, and healthy:
 
-- Peak phase: 80% capacity floor (default) = need 8 of 10 hosts minimum
-- Max deletions during Peak: 10 - 8 = 2 per cycle
-- Powered-off hosts are prioritized for deletion but still count toward floor
+- Peak phase: 80% capacity floor (default) = retain at least 8 online healthy hosts for a target of 10
+- If only 8 hosts are online healthy, no additional online healthy host is selected for deletion
+- Powered-off, drained, unavailable, or unhealthy hosts can be selected without consuming the online healthy floor
 
 **Resolution Options:**
 

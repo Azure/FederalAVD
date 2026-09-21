@@ -538,6 +538,7 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
     It 'DeleteFirst keeps the configured 80 percent floor during RampUp and Peak' -TestCases @(
         @{ Phase = 'RampUp' }
         @{ Phase = 'Peak' }
+        @{ Phase = 'OffPeak->RampUp (look-ahead)' }
     ) {
         param ($Phase)
 
@@ -588,6 +589,76 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.PossibleDeploymentsCount | Should Be 10
         $plan.PossibleSessionHostDeleteCount | Should Be 2
         $plan.SessionHostsPendingDelete.Count | Should Be 2
+    }
+
+    It 'DeleteFirst replaces only non-serving hosts when online capacity is already at its floor' {
+        $degradedHosts = @($oldHosts | ForEach-Object { $_.PSObject.Copy() })
+        $degradedHosts[8].Status = 'NeedsAssistance'
+        $degradedHosts[9].Status = 'Unavailable'
+
+        $plan = Get-SessionHostReplacementPlan `
+            -ARMToken 'test-token' `
+            -SessionHosts $degradedHosts `
+            -RunningDeployments @() `
+            -HostPoolName 'hp-test' `
+            -TargetSessionHostCount 10 `
+            -LatestImageVersion $latestImage `
+            -ReplaceSessionHostOnNewImageVersionDelayDays 0 `
+            -ReplacementMode DeleteFirst `
+            -DrainGracePeriodHours 24 `
+            -MinimumCapacityPercentage 80 `
+            -MaxDeletionsPerCycle 50 `
+            -EnableProgressiveScaleUp $false `
+            -ScalingPlanTarget $null `
+            -RemoveEntraDevice $false `
+            -RemoveIntuneDevice $false `
+            -HostPoolSubscriptionId 'test' `
+            -HostPoolResourceGroupName 'hosts' `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $plan.PossibleSessionHostDeleteCount | Should Be 2
+        $plan.SessionHostsPendingDelete.Count | Should Be 2
+        @($plan.SessionHostsPendingDelete | Where-Object {
+            $_.Status -eq 'Available' -and $_.AllowNewSession
+        }).Count | Should Be 0
+    }
+
+    It 'DeleteFirst can replace scaled-down hosts without consuming the online floor' {
+        $scaledDownHosts = @($oldHosts | ForEach-Object { $_.PSObject.Copy() })
+        foreach ($sessionHost in $scaledDownHosts[1..9]) {
+            $sessionHost.Status = 'Shutdown'
+            $sessionHost.AllowNewSession = $false
+        }
+
+        $plan = Get-SessionHostReplacementPlan `
+            -ARMToken 'test-token' `
+            -SessionHosts $scaledDownHosts `
+            -RunningDeployments @() `
+            -HostPoolName 'hp-test' `
+            -TargetSessionHostCount 10 `
+            -LatestImageVersion $latestImage `
+            -ReplaceSessionHostOnNewImageVersionDelayDays 0 `
+            -ReplacementMode DeleteFirst `
+            -DrainGracePeriodHours 24 `
+            -MinimumCapacityPercentage 80 `
+            -MaxDeletionsPerCycle 50 `
+            -EnableProgressiveScaleUp $false `
+            -ScalingPlanTarget ([PSCustomObject]@{
+                Source = 'ScalingPlan'
+                CapacityPercentage = 10
+                Phase = 'OffPeak'
+                ScalingPlanName = 'weekday'
+                ScheduleName = 'weekday'
+            }) `
+            -RemoveEntraDevice $false `
+            -RemoveIntuneDevice $false `
+            -HostPoolSubscriptionId 'test' `
+            -HostPoolResourceGroupName 'hosts' `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $plan.PossibleSessionHostDeleteCount | Should Be 9
+        $plan.SessionHostsPendingDelete.Count | Should Be 9
+        @($plan.SessionHostsPendingDelete | Where-Object { $_.Status -eq 'Available' }).Count | Should Be 0
     }
 }
 
@@ -705,6 +776,39 @@ Describe 'Session Host Replacer currently deploying metric' {
         $currentStatusQuery | Should Match 'RunningDeployments:'
         $currentStatusQuery | Should Match 'Deploying = coalesce\(RunningDeployments, 0\)'
         $currentStatusQuery | Should Not Match 'deployingFromSubmitted|Deployment submitted:'
+    }
+}
+
+Describe 'Session Host Replacer DeleteFirst recovery contracts' {
+    BeforeAll {
+        $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
+        $deploymentPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.Deployment.psm1'
+        $runScript = Get-Content -LiteralPath $runPath -Raw
+        $deploymentScript = Get-Content -LiteralPath $deploymentPath -Raw
+    }
+
+    It 'retries only unresolved pending host names after partial registration' {
+        $retryNamePosition = $runScript.IndexOf('$deletedSessionHostNames = @($unresolvedHosts)')
+        $deploymentPosition = $runScript.IndexOf('Deploy-SessionHosts -ARMToken $ARMToken', $retryNamePosition)
+
+        $retryNamePosition | Should BeGreaterThan -1
+        $deploymentPosition | Should BeGreaterThan $retryNamePosition
+        $runScript | Should Match ([regex]::Escape('-PreferredSessionHostNames $deletedSessionHostNames'))
+    }
+
+    It 'fails closed when recovery state cannot be read' {
+        $runScript | Should Match ([regex]::Escape("if (`$replacementMode -eq 'DeleteFirst' -and `$deploymentState.LastStatus -eq 'Error')"))
+        $runScript | Should Match 'Delete-First mode cannot continue because deployment recovery state could not be read'
+    }
+
+    It 'requires the pending-host checkpoint to persist before deletion' {
+        $savePosition = $runScript.IndexOf('Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess')
+        $deletePosition = $runScript.IndexOf('$deletionResults = Remove-SessionHosts', $savePosition)
+
+        $savePosition | Should BeGreaterThan -1
+        $deletePosition | Should BeGreaterThan $savePosition
+        $deploymentScript | Should Match '\[switch\] \$RequireSuccess'
+        $deploymentScript | Should Match 'if \(\$RequireSuccess\) \{\s+throw'
     }
 }
 

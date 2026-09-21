@@ -85,7 +85,9 @@ DeleteFirst removes a capacity-safe batch before deploying replacements. It reco
 flowchart TD
     A["Receive shared<br/>replacement plan"] --> B{"Previously deleted hosts<br/>unresolved?"}
     B -- Yes --> C["Block additional<br/>deletions"]
-    C --> D["Retry only pending<br/>replacement hosts"]
+    C --> C1{"VM and required directory<br/>cleanup confirmed?"}
+    C1 -- No --> Z
+    C1 -- Yes --> D["Retry only pending<br/>replacement hosts"]
     D --> E["Deploy using saved names<br/>and placement"]
     E --> Z["Finish this invocation<br/>and verify later"]
     B -- No --> F{"Existing latest-image<br/>hosts ready?"}
@@ -93,7 +95,7 @@ flowchart TD
     G --> Z
     F -- Yes --> H[Calculate replacement batch]
     H --> I["Apply progressive and<br/>maximum deletion limits"]
-    I --> J["Apply whole-pool<br/>capacity floor"]
+    I --> J["Protect online healthy<br/>capacity floor"]
     J --> K{Any hosts safe to remove?}
     K -- No --> Z
     K -- Yes --> L["Save hostname and<br/>placement mapping"]
@@ -114,12 +116,20 @@ flowchart TD
 
 DeleteFirst-specific behavior:
 
-- The effective whole-pool capacity floor uses the configured minimum during `RampUp` and `Peak`, and the active scaling-plan target during `RampDown` and `OffPeak`.
+- The effective online healthy capacity floor uses the configured minimum during `RampUp`, `Peak`, and look-ahead into `RampUp`; it uses the active scaling-plan target during `RampDown` and `OffPeak`.
+- Drained, unhealthy, unavailable, and scaled-down hosts do not authorize deletion of additional online healthy hosts. They remain eligible for replacement without consuming the online floor.
 - An active `0%` scaling target permits a zero-host floor during the applicable off-hours phase.
 - OffPeak remains owned by the most recent selected schedule day until the next selected day's RampUp, including across midnight and unselected days.
 - `MaxDeletionsPerCycle` remains an independent emergency brake.
 - New deletions stop while a previously deleted host is not registered.
-- Required Entra ID or Intune cleanup is blocking because stale records can prevent hostname reuse.
+- New deletions fail closed when the recovery state cannot be read or the pending-host mapping cannot be saved.
+- A failed zero-floor deployment can recover even when the host pool temporarily has no registrations.
+- VM deletion is revalidated before hostname reuse even when directory cleanup is disabled.
+- Required Entra ID or Intune cleanup is retried and revalidated before hostname reuse.
+- A tracked or ARM-discovered running deployment blocks the invocation from deleting or deploying again.
+- A deployment that remains `Running` fails closed until ARM or an operator moves it to a terminal state.
+- A successful ARM deployment with pending AVD registration waits without cleanup or duplicate deployment.
+- Accepted deployments require a durable tracking-state write; VM presence remains the duplicate-deployment gate if that write fails.
 - Shutdown retention is always disabled.
 
 ## Drain Notification

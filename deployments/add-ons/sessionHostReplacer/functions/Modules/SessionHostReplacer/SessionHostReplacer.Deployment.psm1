@@ -241,7 +241,10 @@ function Save-DeploymentState {
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         
         [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+
+        [Parameter()]
+        [switch] $RequireSuccess
     )
     
     try {
@@ -338,6 +341,9 @@ function Save-DeploymentState {
     }
     catch {
         Write-LogEntry -Message "Failed to save deployment state: $_" -Level Error
+        if ($RequireSuccess) {
+            throw
+        }
     }
 }
 
@@ -596,7 +602,7 @@ function Deploy-SessionHosts {
             } else {
                 $imageRef | Add-Member -NotePropertyName 'version' -NotePropertyValue 'latest' -Force
             }
-            Write-LogEntry -Message "ImageReference.version was not set for marketplace image — defaulting to 'latest'" -Level Trace
+            Write-LogEntry -Message "ImageReference.version was not set for marketplace image - defaulting to 'latest'" -Level Trace
         }
     }
 

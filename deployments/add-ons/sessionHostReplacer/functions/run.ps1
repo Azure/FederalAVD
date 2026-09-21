@@ -108,7 +108,7 @@ if ($enableShutdownRetention) {
 }
 
 # Get session hosts and update tags if needed (pass cached VMs)
-$sessionHosts = Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs
+$sessionHosts = @(Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs)
 Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
 
 # Check previous deployment status and pending host mappings
@@ -117,6 +117,32 @@ $previousDeploymentStatus = $null
 # Get deployment state if needed (for progressive scale-up OR DeleteFirst mode)
 if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
     $deploymentState = Get-DeploymentState
+
+    if ($replacementMode -eq 'DeleteFirst' -and $deploymentState.LastStatus -eq 'Error') {
+        throw "Delete-First mode cannot continue because deployment recovery state could not be read"
+    }
+
+    if ($replacementMode -eq 'DeleteFirst' -and $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+        try {
+            $pendingMappings = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+            if ($pendingMappings -isnot [System.Collections.IDictionary]) {
+                throw "PendingHostMappings must be a JSON object keyed by session host name"
+            }
+            $expectedHostNames = @($pendingMappings.Keys)
+            $registeredHostNames = @($sessionHosts.SessionHostName)
+            $missingHosts = @($expectedHostNames | Where-Object { $_ -notin $registeredHostNames })
+
+            if ($missingHosts.Count -eq 0) {
+                Write-LogEntry -Message "All {0} pending host(s) are registered - clearing recovery mappings" -StringValues $expectedHostNames.Count -Level Trace
+                $deploymentState.PendingHostMappings = '{}'
+                Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
+            }
+        }
+        catch {
+            Write-LogEntry -Message "Delete-First recovery state is invalid or could not be updated: $($_.Exception.Message)" -Level Error
+            throw
+        }
+    }
     
     if (-not [string]::IsNullOrEmpty($deploymentState.LastDeploymentName)) {
         Write-LogEntry -Message "Checking status of previous deployment: {0}" -StringValues $deploymentState.LastDeploymentName
@@ -219,6 +245,7 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
                 }
                 catch {
                     Write-LogEntry -Message "Error during failed deployment cleanup: $_" -Level Error
+                    throw
                 }
                 
                 # DO NOT clear pending host mappings - those hosts still need deployment after cleanup
@@ -246,6 +273,16 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
             
             # Save updated state
             Save-DeploymentState -DeploymentState $deploymentState
+
+            if ($previousDeploymentStatus.Running) {
+                Write-LogEntry -Message "Skipping this cycle while deployment {0} remains in progress" -StringValues $deploymentState.LastDeploymentName -Level Warning
+                return
+            }
+
+            if ($previousDeploymentStatus.Succeeded -and $replacementMode -eq 'DeleteFirst' -and -not $allHostsRegistered) {
+                Write-LogEntry -Message "Skipping this cycle while successfully deployed hosts complete AVD registration" -Level Warning
+                return
+            }
         }
     }
 }
@@ -340,6 +377,11 @@ $deploymentsInfo = Get-Deployments -ARMToken $ARMToken
 $runningDeployments = $deploymentsInfo.RunningDeployments
 $failedDeployments = $deploymentsInfo.FailedDeployments
 Write-LogEntry -Message "Found {0} running deployments and {1} failed deployments" -StringValues $runningDeployments.Count, $failedDeployments.Count
+
+if ($runningDeployments.Count -gt 0) {
+    Write-LogEntry -Message "Skipping this cycle while {0} session host deployment(s) remain in progress: {1}" -StringValues $runningDeployments.Count, ($runningDeployments.DeploymentName -join ', ') -Level Warning
+    return
+}
 
 # Clean up failed deployments and orphaned VMs
 if ($failedDeployments.Count -gt 0) {
@@ -783,7 +825,7 @@ if ($replacementMode -eq 'DeleteFirst') {
     $deploymentState = Get-DeploymentState
     if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
         try {
-            $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable
+            $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable -ErrorAction Stop
             Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run" -StringValues $hostPropertyMapping.Count
                 
             # Check if any pending hosts are still unresolved (deleted but not registered)
@@ -804,8 +846,8 @@ if ($replacementMode -eq 'DeleteFirst') {
             }
         }
         catch {
-            Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Warning
-            $hostPropertyMapping = @{}
+            Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Error
+            throw
         }
     }
     
@@ -824,6 +866,48 @@ if ($replacementMode -eq 'DeleteFirst') {
     if ($hasPendingUnresolvedHosts) {
         Write-LogEntry -Message "SAFETY CHECK FAILED: Cannot delete more hosts while previous deletions have unresolved deployments or registration issues" -Level Warning
         Write-LogEntry -Message "Will retry deployment of pending hosts without deleting additional capacity" -Level Warning
+        $deletedSessionHostNames = @($unresolvedHosts)
+
+        $GraphToken = $null
+        if ($removeEntraDevice -or $removeIntuneDevice) {
+            $graphEndpoint = Get-GraphEndpoint
+            $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
+            if ([string]::IsNullOrEmpty($GraphToken)) {
+                throw "Graph token acquisition failed while validating pending Delete-First cleanup"
+            }
+        }
+
+        $recoverySessionHosts = foreach ($unresolvedHost in $unresolvedHosts) {
+            $savedProperties = $hostPropertyMapping[$unresolvedHost]
+            $vmName = if ($savedProperties.VMName) { $savedProperties.VMName } else { $unresolvedHost }
+            $resourceId = if ($savedProperties.ResourceId) {
+                $savedProperties.ResourceId
+            }
+            else {
+                "/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines/$vmName"
+            }
+
+            if ($removeEntraDevice -or $removeIntuneDevice) {
+                Remove-DeviceFromDirectories -DeviceName $unresolvedHost -GraphToken $GraphToken -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+            }
+
+            [PSCustomObject]@{
+                SessionHostName = $unresolvedHost
+                ResourceId = $resourceId
+            }
+        }
+
+        $recoveryVerification = Confirm-SessionHostDeletions `
+            -ARMToken $ARMToken `
+            -GraphToken $GraphToken `
+            -DeletedHostNames $unresolvedHosts `
+            -SessionHosts @($recoverySessionHosts) `
+            -RemoveEntraDevice $removeEntraDevice `
+            -RemoveIntuneDevice $removeIntuneDevice
+
+        if ($recoveryVerification.IncompleteHosts.Count -gt 0) {
+            throw "Pending Delete-First cleanup remains incomplete - cannot safely reuse hostnames"
+        }
         
         # CRITICAL FIX: Adjust deployment count to only retry pending hosts, not add extra capacity
         # The planning function doesn't know about pending deleted hosts, so it calculates as if pool is short
@@ -857,6 +941,8 @@ if ($replacementMode -eq 'DeleteFirst') {
                         HostId      = $sessionHost.HostId
                         HostGroupId = $sessionHost.HostGroupId
                         Zones       = $sessionHost.Zones
+                        VMName      = $sessionHost.VMName
+                        ResourceId  = $sessionHost.ResourceId
                     }
                     
                     if ($sessionHost.HostId -or $sessionHost.HostGroupId) {
@@ -878,7 +964,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             else {
                 $deploymentState.PendingHostMappings = '{}'
             }
-            Save-DeploymentState -DeploymentState $deploymentState
+            Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
 
             # Acquire Graph token if device cleanup is enabled
             $GraphToken = $null
@@ -1008,43 +1094,41 @@ if ($replacementMode -eq 'DeleteFirst') {
             Write-LogEntry -Message "Retrying deployment for {0} pending host(s) from previous failed deployment" -StringValues $hostPropertyMapping.Count -Level Warning
         }
         
+        $deploymentAccepted = $false
         try {
             $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
+            $deploymentAccepted = $true
             
             # Log deployment submission immediately for workbook visibility
             Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
             
-            # Update deployment state for progressive scale-up tracking
-            if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
-                $deploymentState = Get-DeploymentState               
-                # Save deployment info for checking on next run
-                $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
-                $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
-                $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
-                $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
-                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
-                
-                # Save session host names for cleanup tracking if deployment fails
-                if ($deploymentResult.SessionHostNames -and $deploymentResult.SessionHostNames.Count -gt 0) {
-                    # Build mapping with just VM names as keys (DeleteFirst mode will have full properties, this is simplified)
-                    $deploymentMapping = @{}
-                    foreach ($vmName in $deploymentResult.SessionHostNames) {
-                        $deploymentMapping[$vmName] = @{}
+            $deploymentState = Get-DeploymentState
+            $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
+            $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
+            $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
+            $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
+            $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+            $deploymentState.LastStatus = 'Running'
+
+            if ($deploymentResult.SessionHostNames -and $deploymentResult.SessionHostNames.Count -gt 0) {
+                foreach ($vmName in $deploymentResult.SessionHostNames) {
+                    if (-not $hostPropertyMapping.ContainsKey($vmName)) {
+                        $hostPropertyMapping[$vmName] = @{}
                     }
-                    $deploymentState.PendingHostMappings = ($deploymentMapping | ConvertTo-Json -Compress)
-                    Write-LogEntry -Message "Saved {0} session host name(s) to deployment state for cleanup tracking" -StringValues $deploymentResult.SessionHostNames.Count -Level Trace
                 }
-                else {
-                    $deploymentState.PendingHostMappings = '{}'
-                }
-                
-                Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
-                
-                # Save state
-                Save-DeploymentState -DeploymentState $deploymentState
+                $deploymentState.PendingHostMappings = ($hostPropertyMapping | ConvertTo-Json -Compress)
+                Write-LogEntry -Message "Saved {0} session host name(s) to deployment state for cleanup tracking" -StringValues $deploymentResult.SessionHostNames.Count -Level Trace
             }
+
+            Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
+            Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
         }
         catch {
+            if ($deploymentAccepted) {
+                Write-LogEntry -Message "Deployment was accepted but its tracking state could not be saved: $_" -Level Error
+                throw
+            }
+
             Write-LogEntry -Message "Deployment failed with error: $_" -Level Error
             
             # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled

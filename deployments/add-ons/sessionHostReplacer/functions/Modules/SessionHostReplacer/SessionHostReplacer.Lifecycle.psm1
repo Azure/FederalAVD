@@ -665,6 +665,7 @@ function Test-NewSessionHostsAvailable {
         [Parameter(Mandatory = $true)]
         [string] $ARMToken,
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         $SessionHosts,
         [Parameter(Mandatory = $true)]
         $LatestImageVersion,

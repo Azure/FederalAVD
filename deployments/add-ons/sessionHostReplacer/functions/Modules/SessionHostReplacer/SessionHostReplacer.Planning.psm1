@@ -674,7 +674,7 @@ function Get-SessionHostReplacementPlan {
             # Phase-aware capacity strategy:
             # - RampUp/Peak: Use configured minimum as safety floor (users are active/arriving)
             # - RampDown/OffPeak: Use scaling plan percentage directly (fewer users expected, safe to be more aggressive)
-            if ($phase -in @('RampUp', 'Peak')) {
+            if ($phase -in @('RampUp', 'Peak') -or $phase -like '*->RampUp*') {
                 # During active hours, maintain the configured minimum as a safety floor
                 $effectiveMinimumCapacityPct = [math]::Max($MinimumCapacityPercentage, $scalingPlanPct)
                 $capacitySource = "Scaling plan ($($ScalingPlanTarget.ScalingPlanName), $phase phase) with configured minimum floor"
@@ -707,17 +707,6 @@ function Get-SessionHostReplacementPlan {
         
         if ($drainingHostsCount -gt 0) {
             Write-LogEntry -Message "DeleteFirst mode: $drainingHostsCount host(s) currently draining (not accepting new sessions), $availableHostsCount available, $totalHostsCount total" -Level Trace
-        }
-        
-        # Calculate max safe deletions:
-        # After deletion: (TotalHosts - N) will remain
-        # Requirement: (TotalHosts - N) >= MinimumAbsoluteHosts
-        # Therefore: N <= TotalHosts - MinimumAbsoluteHosts
-        $maxSafeDeletions = $totalHostsCount - $minimumAbsoluteHosts
-        
-        if ($canDelete -gt $maxSafeDeletions) {
-            Write-LogEntry -Message "DeleteFirst mode: Safety floor triggered - limiting deletions from $canDelete to $maxSafeDeletions to maintain minimum $effectiveMinimumCapacityPct% capacity (need $minimumAbsoluteHosts hosts, currently $totalHostsCount total, after deletion would have $($totalHostsCount - $canDelete)) [Source: $capacitySource]" -Level Warning
-            $canDelete = $maxSafeDeletions
         }
         
         # Emergency brake: Respect the MaxDeletionsPerCycle limit
@@ -790,7 +779,54 @@ function Get-SessionHostReplacementPlan {
         # Prioritize hosts for deletion: powered-off first, then idle, then draining, then fewest sessions
         # This ensures VMs that are already powered off are replaced before active ones
         $sortedHostsToReplace = $sessionHostsAvailableForReplace | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName
-        $sessionHostsPendingDelete = (@($sortedHostsToReplace) + @($selectedGoodHostsTotDelete)) | Select-Object -First $canDelete
+        $orderedDeletionCandidates = @($sortedHostsToReplace) + @($selectedGoodHostsTotDelete)
+        $sessionHostsPendingDelete = $orderedDeletionCandidates | Select-Object -First $canDelete
+
+        if ($ReplacementMode -eq 'DeleteFirst') {
+            $onlineHealthyHostsCount = @($SessionHosts | Where-Object {
+                $failedHealthChecks = @($_.SessionHostHealthCheckResults | Where-Object {
+                    $_.healthCheckResult -eq 'HealthCheckFailed'
+                })
+                $_.Status -eq 'Available' -and
+                    $_.AllowNewSession -and
+                    -not $_.IsUnavailable -and
+                    $failedHealthChecks.Count -eq 0
+            }).Count
+            $maximumOnlineHealthyDeletions = [Math]::Max(0, $onlineHealthyHostsCount - $minimumAbsoluteHosts)
+            $onlineHealthyDeletions = 0
+            $capacitySafeCandidates = @()
+
+            foreach ($candidate in $orderedDeletionCandidates) {
+                if ($capacitySafeCandidates.Count -ge $canDelete) {
+                    break
+                }
+
+                $failedHealthChecks = @($candidate.SessionHostHealthCheckResults | Where-Object {
+                    $_.healthCheckResult -eq 'HealthCheckFailed'
+                })
+                $isOnlineHealthy = $candidate.Status -eq 'Available' -and
+                    $candidate.AllowNewSession -and
+                    -not $candidate.IsUnavailable -and
+                    -not $candidate.PoweredOff -and
+                    $failedHealthChecks.Count -eq 0
+
+                if ($isOnlineHealthy -and $onlineHealthyDeletions -ge $maximumOnlineHealthyDeletions) {
+                    continue
+                }
+
+                $capacitySafeCandidates += $candidate
+                if ($isOnlineHealthy) {
+                    $onlineHealthyDeletions++
+                }
+            }
+
+            if ($capacitySafeCandidates.Count -lt $canDelete) {
+                Write-LogEntry -Message "DeleteFirst mode: Online healthy capacity floor limited deletions from $canDelete to $($capacitySafeCandidates.Count). Current online healthy: $onlineHealthyHostsCount, required after deletion: $minimumAbsoluteHosts at $effectiveMinimumCapacityPct% [Source: $capacitySource]" -Level Warning
+            }
+
+            $sessionHostsPendingDelete = $capacitySafeCandidates
+            $canDelete = $sessionHostsPendingDelete.Count
+        }
         
         # In SideBySide mode, apply progressive scale-up to deletions
         # In DeleteFirst mode, skip this - deletions are already controlled by deployment progressive scale-up (they're aligned 1:1)
