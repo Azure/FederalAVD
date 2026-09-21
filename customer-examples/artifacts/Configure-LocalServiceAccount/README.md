@@ -25,11 +25,16 @@ requested group memberships exist. Existing group memberships are not removed.
 ## Prerequisites
 
 1. Create a Key Vault secret containing the service account password.
-2. Attach a UAMI to the session host VMs. In a standard FederalAVD host pool, the identity supplied
-   as `artifactsUserAssignedIdentityResourceId` is attached to each VM.
-3. Grant the UAMI `Key Vault Secrets User` on the vault or secret.
-4. Grant the UAMI `Storage Blob Data Reader` on private artifact storage.
+2. Attach the Key Vault access UAMI to each session host VM.
+3. Grant that UAMI `Key Vault Secrets User` on the vault or secret, and pass its client ID to
+  `UserAssignedIdentityClientId`.
+4. Configure an artifact download UAMI with `Storage Blob Data Reader` on the artifact storage and
+  supply its resource ID as `artifactsUserAssignedIdentityResourceId`.
 5. Ensure the session hosts can resolve and reach the Key Vault endpoint.
+
+The Key Vault access UAMI and artifact download UAMI can be different identities. When they are
+different, both must be attached to the session host VM. This script uses only the Key Vault UAMI
+client ID supplied through `UserAssignedIdentityClientId`.
 
 The same secret can be used on every system. Use a strong password and rotate it by updating the
 secret and rerunning this artifact on the session hosts.
@@ -50,8 +55,10 @@ is needed because this artifact contains no external files.
 
 ## Host pool example
 
-The Key Vault URI is available on the vault's Azure portal Overview page. Use the UAMI resource ID
-for `artifactsUserAssignedIdentityResourceId` and its client ID in the script arguments.
+The Key Vault URI is available on the vault's Azure portal Overview page. In this example,
+`artifactsUserAssignedIdentityResourceId` identifies the UAMI that downloads the artifact from
+storage. `UserAssignedIdentityClientId` identifies the UAMI that this script uses to read the Key
+Vault secret. They do not have to identify the same UAMI.
 
 ```json
 {
@@ -59,14 +66,14 @@ for `artifactsUserAssignedIdentityResourceId` and its client ID in the script ar
     "value": "https://<storage-account>.blob.core.windows.net/artifacts"
   },
   "artifactsUserAssignedIdentityResourceId": {
-    "value": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.ManagedIdentity/userAssignedIdentities/<identity-name>"
+    "value": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.ManagedIdentity/userAssignedIdentities/<artifact-download-identity>"
   },
   "sessionHostCustomizations": {
     "value": [
       {
         "name": "Configure-LocalServiceAccount",
         "blobNameOrUri": "Configure-LocalServiceAccount.zip",
-        "arguments": "-AccountName svc-scanner -KeyVaultUri https://kv-security.vault.azure.net/ -SecretName scanner-password -UserAssignedIdentityClientId 00000000-0000-0000-0000-000000000000 -LocalGroups @('Administrators')",
+        "arguments": "-AccountName svc-scanner -KeyVaultUri https://kv-security.vault.azure.net/ -SecretName scanner-password -UserAssignedIdentityClientId <key-vault-access-uami-client-id> -LocalGroups @('Administrators')",
         "successExitCodes": "0"
       }
     ]
