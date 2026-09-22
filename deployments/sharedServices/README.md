@@ -11,8 +11,8 @@ This subscription-scoped Bicep deployment creates regional services that can be 
 Management, host pools, and add-ons:
 
 - Separate Secrets and Encryption Key Vaults
-- Optional centralized Log Analytics workspace, AVD Insights Data Collection Rule (DCR), Data
-  Collection Endpoint (DCE), and Azure Monitor Agent user-assigned identity
+- Optional centralized Log Analytics workspace, AVD Insights Data Collection Rule (DCR), and Data
+  Collection Endpoint (DCE)
 - Optional Recovery Services vault and Azure Files snapshot backup policy for FSLogix storage
 - Optional private endpoints for the deployed Key Vaults and Recovery Services vault
 
@@ -39,14 +39,12 @@ Operations subscription
 │   │   └── Private endpoint (optional)
 │   ├── Encryption Key Vault (optional, enabled by default)
 │   │   └── Private endpoint (optional)
-│   ├── Azure Monitor Agent identity (only when monitoring uses another subscription)
 │   └── FSLogix Recovery Services vault and backup policy (optional)
 │       └── Private endpoint (optional)
 └── Monitoring resource group (when monitoring uses this subscription)
     ├── Log Analytics workspace
     ├── AVD Insights DCR
-    ├── DCE
-  └── Azure Monitor Agent identity (optional; same-subscription placement)
+    └── DCE
 
 Optional monitoring subscription
 └── Monitoring resource group (when a different subscription is selected)
@@ -55,9 +53,7 @@ Optional monitoring subscription
     └── DCE
 ```
 
-When monitoring is deployed to another subscription, the Azure Monitor Agent identity remains in
-the operations subscription so automated host pools in that subscription can use it. All resources
-from one Shared Services deployment use the same Azure region.
+All resources from one Shared Services deployment use the same Azure region.
 
 ### Resource Conditions
 
@@ -68,7 +64,6 @@ from one Shared Services deployment use the same Azure region.
 | Encryption Key Vault | `deployEncryptionKeyVault = true` | Premium SKU; soft delete and purge protection enabled |
 | Key Vault private endpoints | `privateEndpoint = true` and the applicable vault is deployed | Uses the supplied subnet; DNS integration is optional in Bicep but normally required operationally |
 | Monitoring resource group, workspace, DCR, and DCE | `deployMonitoring = true` | Can be placed in the operations subscription or another selected subscription |
-| Azure Monitor Agent identity | `deployMonitoring = true` and `deployAzureMonitorAgentIdentity = true` | Intended for reuse by automated host pools in the operations subscription and region |
 | Recovery Services vault and Azure Files policy | `deployFSLogixBackupVault = true` | Snapshot data remains in each storage account; the vault maintains backup policy and metadata |
 | Recovery Services private endpoint | Backup vault deployed, `privateEndpoint = true`, and private endpoint/DNS inputs supplied | Requires the Azure Backup, Blob, and Queue private DNS zones for complete DNS integration |
 
@@ -102,8 +97,8 @@ Important dependencies:
 The deployment identity must be able to:
 
 - Create subscription deployments and resource groups in the operations subscription
-- Create the selected Key Vault, monitoring, managed identity, Recovery Services, private endpoint,
-  and diagnostic-setting resources
+- Create the selected Key Vault, monitoring, Recovery Services, private endpoint, and
+  diagnostic-setting resources
 - Deploy monitoring resources into the selected monitoring subscription, when different
 - Associate the workspace and DCE with an existing Azure Monitor Private Link Scope (AMPLS), when
   selected
@@ -170,7 +165,6 @@ disables public access whenever its private endpoint option is enabled.
 | Parameter | Default | Purpose |
 | --- | --- | --- |
 | `deployMonitoring` | `false` | Deploy a shared workspace, AVD Insights DCR, and DCE |
-| `deployAzureMonitorAgentIdentity` | `true` | Deploy the regional identity used by automated-host monitoring |
 | `logAnalyticsWorkspaceSubscriptionId` | Empty | Monitoring subscription; empty uses the operations subscription |
 | `logAnalyticsWorkspaceSku` | `PerGB2018` | Workspace pricing tier |
 | `logAnalyticsWorkspaceRetentionInDays` | `30` | Workspace retention; allowed range is 30-730 days |
@@ -179,7 +173,8 @@ disables public access whenever its private endpoint option is enabled.
 Supplying AMPLS disables public network access on the DCE and adds the workspace and DCE as scoped
 resources. The networking platform must manage the AMPLS access modes, private endpoint, private DNS
 zones, and name resolution. The general `privateEndpoint` setting does not create Azure Monitor
-private endpoints.
+private endpoints. Shared Services does not deploy an identity for Azure Monitor Agent; each
+session host uses its own system-assigned managed identity.
 
 ### FSLogix Azure Files Backup
 
@@ -288,7 +283,6 @@ Outputs for resources that were not selected are empty strings.
 | `logAnalyticsWorkspaceResourceId` | Host pool: `existingLogAnalyticsWorkspaceResourceId` |
 | `avdInsightsDataCollectionRuleResourceId` | Host pool: `existingAVDInsightsDataCollectionRuleResourceId` |
 | `dataCollectionEndpointResourceId` | Host pool: `existingDataCollectionEndpointResourceId` |
-| `azureMonitorAgentIdentityResourceId` | Automated host pool: `monitoringUserAssignedIdentityResourceId` |
 | `azureMonitorPrivateLinkScopeResourceId` | Host pool: `azureMonitorPrivateLinkScopeResourceId` |
 | `fslogixBackupVaultResourceId` | Pooled host pool: `existingFilesBackupVaultResourceId` |
 | `fslogixBackupPolicyName` | Pooled host pool: `existingFilesBackupPolicyName` |

@@ -59,7 +59,6 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 | **sharedServices** | `logAnalyticsWorkspaceResourceId` | **hostpool** | `existingLogAnalyticsWorkspaceResourceId` |
 | **sharedServices** | `avdInsightsDataCollectionRuleResourceId` | **hostpool** | `existingAVDInsightsDataCollectionRuleResourceId` |
 | **sharedServices** | `dataCollectionEndpointResourceId` | **hostpool** | `existingDataCollectionEndpointResourceId` |
-| **sharedServices** | `azureMonitorAgentIdentityResourceId` | **automatedHostPool** | `monitoringUserAssignedIdentityResourceId` |
 | **sharedServices** | `azureMonitorPrivateLinkScopeResourceId` | **hostpool** | `azureMonitorPrivateLinkScopeResourceId` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **hostpool** | `existingFilesBackupVaultResourceId` |
 | **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |

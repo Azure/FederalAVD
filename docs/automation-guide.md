@@ -107,7 +107,6 @@ The deployment uses the `sharedServices` path and parameter-file name.
 | `logAnalyticsWorkspaceResourceId` | Image Management — `logAnalyticsWorkspaceResourceId`; Host Pool — `existingLogAnalyticsWorkspaceResourceId`. Only present when `deployMonitoring` was `true`. |
 | `avdInsightsDataCollectionRuleResourceId` | Host Pool — `existingAVDInsightsDataCollectionRuleResourceId`. Only present when `deployMonitoring` was `true`. |
 | `dataCollectionEndpointResourceId` | Host Pool — `existingDataCollectionEndpointResourceId`. Only present when `deployMonitoring` was `true`. |
-| `azureMonitorAgentIdentityResourceId` | Automated Host Pool — `monitoringUserAssignedIdentityResourceId`. Only present when monitoring and shared AMA identity deployment were enabled. |
 | `azureMonitorPrivateLinkScopeResourceId` | Host Pool — `azureMonitorPrivateLinkScopeResourceId`; centralized monitoring/DNS automation. Empty when AMPLS integration is disabled. |
 | `fslogixBackupVaultResourceId` | Pooled Host Pool — `existingFilesBackupVaultResourceId`; FSLogix Storage add-on — `recoveryServicesVaultResourceId`. Only present when `deployFSLogixBackupVault` was `true`. |
 | `fslogixBackupPolicyName` | Pooled Host Pool — `existingFilesBackupPolicyName`; FSLogix Storage add-on — `fileSharePolicyName`. Only present when `deployFSLogixBackupVault` was `true`. |
@@ -123,9 +122,7 @@ The deployment uses the `sharedServices` path and parameter-file name.
 - The AVD Insights DCR and DCE are region/workspace-scoped, not host-pool-specific — deploying them once here lets every host pool that reuses this workspace share the same DCR/DCE instead of the first host pool deployment creating its own.
 - Deploy Shared Services from the workload subscription. By default its Log Analytics Workspace,
   DCR, and DCE use that subscription; set `logAnalyticsWorkspaceSubscriptionId` to place them in
-  a centralized monitoring subscription. When subscriptions differ, the shared Azure Monitor Agent
-  identity remains in the workload operations resource group because automated session hosts must
-  use an identity from their own subscription.
+  a centralized monitoring subscription.
 - `azureMonitorPrivateLinkScopeResourceId` associates the shared Log Analytics Workspace and DCE
   with an existing AMPLS, matching the host pool inline monitoring behavior. The networking platform
   must own the AMPLS, private endpoints, access modes, and cloud-specific private DNS configuration.

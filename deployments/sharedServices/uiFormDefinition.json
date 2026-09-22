@@ -29,7 +29,7 @@
               "name": "subscription",
               "type": "Microsoft.Common.DropDown",
               "label": "Operations Resources Subscription",
-              "toolTip": "Select the workload subscription for the operations resource group, Key Vaults, FSLogix Recovery Services vault, and the shared Azure Monitor Agent identity when monitoring uses a different subscription.",
+              "toolTip": "Select the workload subscription for the operations resource group, Key Vaults, and FSLogix Recovery Services vault.",
               "constraints": {
                 "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
                 "required": true
@@ -44,7 +44,6 @@
                 "Microsoft.Insights/dataCollectionEndpoints",
                 "Microsoft.Insights/dataCollectionRules",
                 "Microsoft.KeyVault/vaults",
-                "Microsoft.ManagedIdentity/userAssignedIdentities",
                 "Microsoft.OperationalInsights/workspaces",
                 "Microsoft.RecoveryServices/vaults"
               ]
@@ -568,23 +567,6 @@
               "constraints": {
                 "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
                 "required": true
-              }
-            },
-            {
-              "name": "deployAzureMonitorAgentIdentity",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Deploy Shared Azure Monitor Agent Identity",
-              "defaultValue": true,
-              "visible": "[steps('monitoring').deployMonitoring]",
-              "toolTip": "Deploy a regional user-assigned identity for automated session hosts. It is placed in the monitoring resource group when monitoring and operations use the same subscription; otherwise it remains with the workload in the operations resource group."
-            },
-            {
-              "name": "azureMonitorAgentIdentityInfo",
-              "type": "Microsoft.Common.InfoBox",
-              "visible": "[and(steps('monitoring').deployMonitoring, steps('monitoring').deployAzureMonitorAgentIdentity)]",
-              "options": {
-                "style": "Info",
-                "text": "[if(equals(steps('monitoring').subscription.subscriptionId, steps('basics').subscription.subscriptionId), 'The shared Azure Monitor Agent user-assigned identity will be deployed in the monitoring resource group because monitoring and operations use the same subscription.', 'The shared Azure Monitor Agent user-assigned identity will be deployed in the operations resource group so it remains in the workload subscription. The Microsoft AMA policy initiative requires this identity to be in the same subscription as automated session hosts.')]"
               }
             },
             {
@@ -1285,19 +1267,6 @@
                   }
                 },
                 {
-                  "name": "rtCodeUai",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "User Assigned Identities abbreviation",
-                  "defaultValue": "uai",
-                  "toolTip": "Abbreviation substituted for the Resource Type component in the shared Azure Monitor Agent identity name.",
-                  "visible": "[and(steps('monitoring').deployMonitoring, steps('monitoring').deployAzureMonitorAgentIdentity, or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
-                  "constraints": {
-                    "required": true,
-                    "regex": "^[a-z0-9]{1,10}$",
-                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
-                  }
-                },
-                {
                   "name": "rtCodePe",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Private Endpoints abbreviation",
@@ -1387,7 +1356,6 @@
                     "Microsoft.Resources/resourceGroups",
                     "Microsoft.KeyVault/vaults",
                     "Microsoft.RecoveryServices/vaults",
-                    "Microsoft.ManagedIdentity/userAssignedIdentities",
                     "Microsoft.Network/privateEndpoints"
                   ]
                 }
@@ -1418,7 +1386,6 @@
         "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault)), steps('operations').privateDnsSection.keyVaultPrivateDnsZone, '')]",
         "permittedIPs": "[filter(map(steps('operations').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
         "deployMonitoring": "[steps('monitoring').deployMonitoring]",
-        "deployAzureMonitorAgentIdentity": "[and(steps('monitoring').deployMonitoring, steps('monitoring').deployAzureMonitorAgentIdentity)]",
         "logAnalyticsWorkspaceSubscriptionId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').subscription.subscriptionId, '')]",
         "logAnalyticsWorkspaceSku": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.sku, 'PerGB2018')]",
         "logAnalyticsWorkspaceRetentionInDays": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.retentionDays, 30)]",
@@ -1433,7 +1400,7 @@
         "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureQueuePrivateDnsZone, '')]",
         "secretsKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),'',steps('tagsAndNaming').naming.secretsKeyVaultNameOverride)]",
         "encryptionKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),'',steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride)]",
-        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
+        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"
       }
     }

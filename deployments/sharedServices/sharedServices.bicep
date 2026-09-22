@@ -89,9 +89,6 @@ param permittedIPs array = []
 @description('Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as "logAnalyticsWorkspaceResourceId", "avdInsightsDataCollectionRuleResourceId", and "dataCollectionEndpointResourceId" - pass those to "existingLogAnalyticsWorkspaceResourceId", "existingAVDInsightsDataCollectionRuleResourceId", and "existingDataCollectionEndpointResourceId" on the host pool deployment (and "logAnalyticsWorkspaceResourceId" to the Image Management deployment) so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment creating its own.')
 param deployMonitoring bool = false
 
-@description('Optional. Deploy a regional user-assigned identity for Azure Monitor Agent authentication. The identity is created in the monitoring resource group when monitoring uses the operations subscription; otherwise it is created in the operations resource group so it remains with the workload.')
-param deployAzureMonitorAgentIdentity bool = true
-
 @description('Optional. The subscription ID where the Log Analytics Workspace and related monitoring resources will be deployed. If not provided, the operations subscription is used.')
 param logAnalyticsWorkspaceSubscriptionId string = ''
 
@@ -192,7 +189,6 @@ var identifier = 'operations'
 var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)
   ? subscription().subscriptionId
   : logAnalyticsWorkspaceSubscriptionId
-var monitoringUsesDeploymentSubscription = effectiveLogAnalyticsWorkspaceSubscription == subscription().subscriptionId
 
 #disable-next-line BCP329
 var locationAbbreviation = locations[varLocation].abbreviation
@@ -306,18 +302,6 @@ var dataCollectionEndpointName = buildCustomName(
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 
-var azureMonitorAgentIdentityName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.?userAssignedIdentities ?? resourceAbbreviations.userAssignedIdentities,
-  'ama',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
-
 // Stable 6-char unique string seeded on subscription + resource group name.
 // Add location to the seed when the convention has no location component,
 // so deployments to different regions don't produce identical Key Vault names.
@@ -378,26 +362,6 @@ module monitoringResourceGroup '../shared/modules/resourceModules/resources/reso
     name: monitoringResourceGroupName
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
-}
-
-module localAzureMonitorAgentIdentity '../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployMonitoring && deployAzureMonitorAgentIdentity && monitoringUsesDeploymentSubscription) {
-  scope: resourceGroup(monitoringResourceGroupName)
-  params: {
-    name: azureMonitorAgentIdentityName
-    location: location
-    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
-  }
-  dependsOn: [monitoringResourceGroup]
-}
-
-module crossSubscriptionAzureMonitorAgentIdentity '../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = if (deployMonitoring && deployAzureMonitorAgentIdentity && !monitoringUsesDeploymentSubscription) {
-  scope: resourceGroup(operationsResourceGroupName)
-  params: {
-    name: azureMonitorAgentIdentityName
-    location: location
-    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
-  }
-  dependsOn: [operationsResourceGroup]
 }
 
 var effectiveAzureMonitorPrivateLinkScopeResourceId = deployMonitoring ? azureMonitorPrivateLinkScopeResourceId : ''
@@ -515,13 +479,6 @@ output avdInsightsDataCollectionRuleResourceId string = deployMonitoring ? monit
 
 @description('The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as "existingDataCollectionEndpointResourceId" to the host pool deployment.')
 output dataCollectionEndpointResourceId string = deployMonitoring ? monitoring!.outputs.dataCollectionEndpointResourceId : ''
-
-@description('The resource ID of the regional Azure Monitor Agent user-assigned identity. Pass as "monitoringUserAssignedIdentityResourceId" to automated host pool deployments in this subscription and region.')
-output azureMonitorAgentIdentityResourceId string = deployMonitoring && deployAzureMonitorAgentIdentity
-  ? (monitoringUsesDeploymentSubscription
-      ? localAzureMonitorAgentIdentity!.outputs.resourceId
-      : crossSubscriptionAzureMonitorAgentIdentity!.outputs.resourceId)
-  : ''
 
 @description('The resource ID of the existing Azure Monitor Private Link Scope associated with the monitoring resources. Empty when monitoring or AMPLS integration is disabled.')
 output azureMonitorPrivateLinkScopeResourceId string = effectiveAzureMonitorPrivateLinkScopeResourceId
