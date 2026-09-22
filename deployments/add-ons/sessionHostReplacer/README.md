@@ -362,7 +362,23 @@ The deployment creates or uses an existing Function App:
   - PowerShell 7.4 runtime
 - 💡 **Cost Tip**: P0v3 is the most cost-effective option and fully supports all required features
 
-#### 4. Other Required Resources
+#### 4. Network Requirements for Zero Trust Networking
+
+These resources are required only when Zero Trust networking (`privateEndpoint: true`) is enabled:
+
+1. **Function App outbound subnet**
+   - Dedicated to Function App virtual network integration
+   - Delegated to `Microsoft.Web/serverFarms`
+2. **Private endpoint subnet**
+   - Must not have any subnet delegations
+   - Must be different from the Function App outbound subnet
+3. **Private DNS zones**
+   - Required for the Function App and storage private endpoints to resolve correctly
+
+The session host VM subnet is also required for replacement hosts, but it does not require the
+`Microsoft.Web/serverFarms` delegation.
+
+#### 5. Other Required Resources
 
 1. **Template Spec** (optional but recommended for portal-based deployments)
 2. **Application Insights** (recommended for monitoring)
