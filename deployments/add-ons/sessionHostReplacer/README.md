@@ -235,7 +235,8 @@ The Session Host Replacer Function App supports two identity options:
 - `Device.ReadWrite.All` - For Entra ID device deletion
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
-> **Important for DeleteFirst Mode:** If Entra ID or Intune cleanup is enabled, configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
+> [!IMPORTANT]
+> **DeleteFirst mode:** If Entra ID or Intune cleanup is enabled, configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
 >
 > Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
 > Leave Intune cleanup disabled unless your environment support team confirms availability. Grant
@@ -303,17 +304,17 @@ The Session Host Replacer Function App supports two identity options:
    # Connect-MgGraph -Environment USGovDoD -Scopes $requiredScopes
    ```
 
-   > [!IMPORTANT]
-   > For Azure Government Secret and Azure Government Top Secret, do not use the public cloud
-   > labels as Graph environment names. Follow the Microsoft Graph connection instructions
-   > available inside your environment or from your environment support team. Configure and
-   > connect the Microsoft Graph PowerShell SDK with the authorized environment-specific values,
-   > requesting `Application.Read.All` and `AppRoleAssignment.ReadWrite.All`. This public
-   > repository intentionally does not publish or infer restricted environment names or endpoints.
-   > Authorized operators can start with the restricted
-   > [Azure Government Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/overview/azure-government-secret-differences-from-global-azure?branch=live)
-   > or
-   > [Azure Government Top Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/overview/azure-government-top-secret-differences-from-global-azure?branch=live).
+> [!IMPORTANT]
+> For Azure Government Secret and Azure Government Top Secret, do not use the public cloud
+> labels as Graph environment names. Follow the Microsoft Graph connection instructions
+> available inside your environment or from your environment support team. Configure and
+> connect the Microsoft Graph PowerShell SDK with the authorized environment-specific values,
+> requesting `Application.Read.All` and `AppRoleAssignment.ReadWrite.All`. This public
+> repository intentionally does not publish or infer restricted environment names or endpoints.
+> Authorized operators can start with the restricted
+> [Azure Government Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/overview/azure-government-secret-differences-from-global-azure?branch=live)
+> or
+> [Azure Government Top Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/overview/azure-government-top-secret-differences-from-global-azure?branch=live).
 
 4. **Verify the active Graph context before changing permissions:**
 
@@ -351,11 +352,11 @@ The Session Host Replacer Function App supports two identity options:
    - `Entra` grants `Device.ReadWrite.All`.
    - `Intune` grants `DeviceManagementManagedDevices.ReadWrite.All`.
 
-   > [!IMPORTANT]
-   > Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
-   > Leave Intune cleanup disabled and use `-DeviceCleanupTarget Entra` unless your environment
-   > support team confirms Intune availability. Do not assume that
-   > `DeviceManagementManagedDevices.ReadWrite.All` exists there.
+> [!IMPORTANT]
+> Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
+> Leave Intune cleanup disabled and use `-DeviceCleanupTarget Entra` unless your environment
+> support team confirms Intune availability. Do not assume that
+> `DeviceManagementManagedDevices.ReadWrite.All` exists there.
 
 **Understanding Graph API Permissions:**
 
