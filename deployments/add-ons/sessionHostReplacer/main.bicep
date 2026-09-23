@@ -239,7 +239,7 @@ param tagValidatedImage string = 'AutoReplaceValidatedImage'
 @description('Optional. Whether to remove Entra ID device records when deleting session hosts. Default is true.')
 param removeEntraDevice bool = true
 
-@description('Optional. Whether to remove Intune device records when deleting session hosts. Default is true.')
+@description('Optional. Whether to remove Intune device records when deleting session hosts. Intune is not currently available in Azure Government Secret and Top Secret; leave this disabled unless availability is confirmed for the target environment. Default is true.')
 param removeIntuneDevice bool = true
 
 @description('Optional. Enable percentage-based progressive batching for both replacement modes. The function starts with a percentage of the remaining needed hosts and increases after successful deployment and registration. Mode-specific batch ceilings still apply. Default is false.')
@@ -492,7 +492,6 @@ var locations = locationsObject[locationsEnvProperty]
 var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(cloud, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
-
 var locationForLookup = startsWith(cloud, 'us') ? substring(location, 5, max(length(location) - 5, 0)) : location
 var functionAppRegionAbbreviation = locations[locationForLookup].abbreviation
 

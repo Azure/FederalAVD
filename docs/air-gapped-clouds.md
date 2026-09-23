@@ -41,6 +41,45 @@ and commands required to register the environment with `Add-AzEnvironment`, conn
 > or locations. If you cannot access the links, use the Microsoft Learn content available inside the
 > target environment or contact the environment support team.
 
+### Microsoft Graph Connection for Session Host Replacer
+
+Microsoft Graph configuration is separate from the Azure PowerShell context. It is needed only when
+the Session Host Replacer is configured to remove Entra ID or Intune device records.
+
+Before granting Graph permissions in Azure Government Secret or Azure Government Top Secret,
+follow the Microsoft Graph PowerShell connection instructions available inside the target
+environment or from the environment support team. Do not substitute public labels for the
+restricted Graph environment name, and do not infer Graph endpoints from the Azure PowerShell
+environment. Authorized operators can start with the restricted
+[Azure Government Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/overview/azure-government-secret-differences-from-global-azure?branch=live)
+or
+[Azure Government Top Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/overview/azure-government-top-secret-differences-from-global-azure?branch=live).
+
+After connecting with the environment-authorized values and the
+`Application.Read.All` and `AppRoleAssignment.ReadWrite.All` scopes, verify the active context:
+
+```powershell
+Get-MgContext |
+    Select-Object Account, TenantId, Environment, Scopes
+```
+
+Then use the Session Host Replacer
+[Graph permission procedure](../deployments/add-ons/sessionHostReplacer/README.md#2-grant-graph-api-permissions-to-managed-identity).
+The helper uses the existing Graph context and does not contain restricted environment names or
+endpoints. Intune is not currently available in these environments, so select only Entra device
+cleanup when running the helper and set `removeIntuneDevice` to `false`. If Intune becomes available,
+enable it only after your environment support team confirms availability and the required Microsoft
+Graph application role is advertised in that environment.
+
+Entra Kerberos automation for Azure Files has a separate application-update identity requiring
+`Application.ReadWrite.All` and `DelegatedPermissionGrant.ReadWrite.All`. After connecting to the
+authorized Graph environment, use
+`tools/Set-EntraKerberosManagedIdentityPermissions.ps1` and
+`tools/Test-EntraKerberosManagedIdentityPermissions.ps1`. These helpers also use only the existing
+Graph context and discover role IDs from that environment. If either required application role is
+unavailable, do not use the automated Entra Kerberos application-update path; complete the
+environment-approved manual configuration instead.
+
 ## First Deployment Checklist
 
 Use this sequence for the first deployment. The sections later in this guide provide the package

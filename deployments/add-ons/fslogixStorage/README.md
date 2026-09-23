@@ -127,8 +127,10 @@ identity is attached to the temporary VM and is used to acquire Microsoft Graph 
 
 The application-update identity must already have the Microsoft Graph application permissions
 `Application.ReadWrite.All` and `DelegatedPermissionGrant.ReadWrite.All`. The add-on does not grant
-these tenant-level permissions, matching the host-pool deployment. Use
-`tools/Test-EntraKerberosManagedIdentityPermissions.ps1` to validate the identity before deployment.
+these tenant-level permissions, matching the host-pool deployment. Connect to the correct Microsoft
+Graph environment first, use `tools/Set-EntraKerberosManagedIdentityPermissions.ps1` to grant the
+permissions, and use `tools/Test-EntraKerberosManagedIdentityPermissions.ps1` to validate the
+identity before deployment. Neither helper selects or disconnects the Graph environment.
 When automation is not selected, complete the documented manual Entra Kerberos tasks after
 deployment. Multifactor authentication exclusions remain manual in either mode.
 

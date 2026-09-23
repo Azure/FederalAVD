@@ -763,7 +763,7 @@
               "name": "deviceCleanupInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Device Cleanup Automation Overview\n\nDevice cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined to prevent accumulation of orphaned device records.\n\nRequired Microsoft Graph API Permissions\n\nThe function app's managed identity requires the following permissions:\n- 'Device.ReadWrite.All' - Required for Entra ID device deletion\n- 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion\n\nAir-Gapped Cloud Limitations\n\nIntune is not currently available in Air-Gapped Clouds such as Azure Government Secret and Azure Government Top Secret. In these environments, the Intune Device Cleanup option will be automatically disabled.",
+                "text": "Device Cleanup Automation Overview\n\nDevice cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined to prevent accumulation of orphaned device records.\n\nRequired Microsoft Graph API Permissions\n\nGrant only the permission for each enabled cleanup target:\n- 'Device.ReadWrite.All' - Required for Entra ID device deletion\n- 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion\n\nAir-Gapped Cloud Limitations\n\nIntune is not currently available in Azure Government Secret or Azure Government Top Secret. Leave Intune cleanup disabled unless your environment support team confirms availability, and grant only permissions advertised by Microsoft Graph in that environment.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
               }
@@ -779,7 +779,7 @@
               "name": "removeIntuneDevice",
               "type": "Microsoft.Common.CheckBox",
               "label": "Remove Intune Device Records",
-              "toolTip": "Remove Intune device records when deleting session hosts.",
+              "toolTip": "Remove Intune device records when deleting session hosts. Intune is not currently available in Azure Government Secret or Top Secret; leave disabled unless availability is confirmed for the target environment.",
               "defaultValue": true
             },
             {

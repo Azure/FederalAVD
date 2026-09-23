@@ -1,4 +1,4 @@
-# Verify and grant Microsoft Graph application permissions to the Session Host Replacer identity.
+# Verify and grant Microsoft Graph application permissions used by Entra Kerberos automation.
 # Connect to the correct Microsoft Graph environment before running this script.
 
 [CmdletBinding()]
@@ -6,10 +6,6 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
     [string]$ManagedIdentityObjectId,
-
-    [Parameter(Mandatory = $true)]
-    [ValidateSet('Entra', 'Intune')]
-    [string[]]$DeviceCleanupTarget,
 
     [Parameter(Mandatory = $false)]
     [string]$ManagedIdentityClientId
@@ -20,14 +16,9 @@ $requiredScopes = @(
     'Application.Read.All'
     'AppRoleAssignment.ReadWrite.All'
 )
-$permissionByTarget = @{
-    Entra  = 'Device.ReadWrite.All'
-    Intune = 'DeviceManagementManagedDevices.ReadWrite.All'
-}
 $requiredPermissions = @(
-    $DeviceCleanupTarget |
-        Select-Object -Unique |
-        ForEach-Object { $permissionByTarget[$_] }
+    'Application.ReadWrite.All'
+    'DelegatedPermissionGrant.ReadWrite.All'
 )
 
 try {
@@ -58,19 +49,11 @@ Write-Host "  Environment: $($graphContext.Environment)" -ForegroundColor White
 Write-Host 'The script will not change or disconnect this context.' -ForegroundColor Gray
 
 try {
-    Write-Host "`nRetrieving managed identity details..." -ForegroundColor Yellow
     $managedIdentitySp = Get-MgServicePrincipal -ServicePrincipalId $ManagedIdentityObjectId
-
-    Write-Host 'Found managed identity:' -ForegroundColor Green
-    Write-Host "  Display Name: $($managedIdentitySp.DisplayName)" -ForegroundColor White
-    Write-Host "  Object ID: $($managedIdentitySp.Id)" -ForegroundColor White
-    Write-Host "  App ID: $($managedIdentitySp.AppId)" -ForegroundColor White
-
     if ($ManagedIdentityClientId -and $managedIdentitySp.AppId -ne $ManagedIdentityClientId) {
         throw "The managed identity App ID '$($managedIdentitySp.AppId)' does not match the supplied client ID '$ManagedIdentityClientId'."
     }
 
-    Write-Host "`nRetrieving the Microsoft Graph service principal from the active environment..." -ForegroundColor Yellow
     $graphServicePrincipals = @(
         Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'" -Property 'id,appId,displayName,appRoles'
     )
@@ -89,7 +72,7 @@ try {
             }
         )
         if ($matchingRoles.Count -ne 1) {
-            throw "Expected one enabled application role named '$permissionName' but found $($matchingRoles.Count) in the active Microsoft Graph environment. Do not request a cleanup target whose service is unavailable in that environment."
+            throw "Expected one enabled application role named '$permissionName' but found $($matchingRoles.Count) in the active Microsoft Graph environment."
         }
         $permissionRoles[$permissionName] = $matchingRoles[0]
     }
@@ -136,10 +119,9 @@ try {
         throw "Permission verification failed for: $($missingPermissions -join ', ')."
     }
 
-    Write-Host "`nRequired Microsoft Graph application permissions are present." -ForegroundColor Cyan
+    Write-Host "`nRequired Entra Kerberos automation permissions are present." -ForegroundColor Cyan
     Write-Host 'No unrelated Microsoft Graph permissions were removed.' -ForegroundColor Gray
-    Write-Host 'Allow time for propagation, then restart the Function App to clear cached tokens.' -ForegroundColor Cyan
 }
 catch {
-    throw "Failed to configure Microsoft Graph permissions. $($_.Exception.Message)"
+    throw "Failed to configure Entra Kerberos Microsoft Graph permissions. $($_.Exception.Message)"
 }

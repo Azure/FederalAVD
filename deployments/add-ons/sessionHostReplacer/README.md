@@ -236,6 +236,10 @@ The Session Host Replacer Function App supports two identity options:
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
 > **Important for DeleteFirst Mode:** If Entra ID or Intune cleanup is enabled, configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
+>
+> Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
+> Leave Intune cleanup disabled unless your environment support team confirms availability. Grant
+> only `Device.ReadWrite.All` for Entra cleanup.
 
 #### 2. Grant Graph API Permissions to Managed Identity
 
@@ -274,49 +278,84 @@ The Session Host Replacer Function App supports two identity options:
    cd deployments/add-ons/sessionHostReplacer
    ```
 
-3. Run the permission script with your managed identity's Object ID:
+3. **Connect to the correct Microsoft Graph environment.**
 
-   **For Commercial Azure:**
+   The permission helper intentionally does not select an environment, connect, or disconnect. This
+   prevents it from guessing a cloud and lets it use the environment already authorized for your
+   tenant.
 
-   ```powershell
-   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId $objectId
-   ```
-
-   **For Azure Government (GCC High):**
-
-   ```powershell
-   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId $objectId -Environment USGov
-   ```
-
-   **For Azure Government (DoD):**
+   For Commercial Azure, Azure Government (GCC High), or Azure Government DoD, connect with the
+   environment name supported by your installed Microsoft Graph PowerShell SDK:
 
    ```powershell
-   .\Set-GraphPermissions.ps1 -ManagedIdentityObjectId $objectId -Environment USGovDoD
+   $requiredScopes = @(
+       'Application.Read.All'
+       'AppRoleAssignment.ReadWrite.All'
+   )
+
+   # Commercial Azure
+   Connect-MgGraph -Environment Global -Scopes $requiredScopes
+
+   # Azure Government (GCC High) - use instead of the command above
+   # Connect-MgGraph -Environment USGov -Scopes $requiredScopes
+
+   # Azure Government DoD - use instead of the command above
+   # Connect-MgGraph -Environment USGovDoD -Scopes $requiredScopes
    ```
 
-   > **Note:** For US Secret and Top Secret clouds, you must first update the graph endpoint placeholders in the script using the reference links provided in the script comments.
+   > [!IMPORTANT]
+   > For Azure Government Secret and Azure Government Top Secret, do not use the public cloud
+   > labels as Graph environment names. Follow the Microsoft Graph connection instructions
+   > available inside your environment or from your environment support team. Configure and
+   > connect the Microsoft Graph PowerShell SDK with the authorized environment-specific values,
+   > requesting `Application.Read.All` and `AppRoleAssignment.ReadWrite.All`. This public
+   > repository intentionally does not publish or infer restricted environment names or endpoints.
+   > Authorized operators can start with the restricted
+   > [Azure Government Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/overview/azure-government-secret-differences-from-global-azure?branch=live)
+   > or
+   > [Azure Government Top Secret differences guidance](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/overview/azure-government-top-secret-differences-from-global-azure?branch=live).
 
-4. **Verify the permissions were granted:**
+4. **Verify the active Graph context before changing permissions:**
 
    ```powershell
-   # Check permissions in Azure AD
-   Connect-MgGraph -Scopes "Application.Read.All"
-   $mi = Get-MgServicePrincipal -ServicePrincipalId <object-id>
-   $assignments = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id
-   $graph = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
-
-   $assignments | Where-Object { $_.ResourceId -eq $graph.Id } | ForEach-Object {
-       $role = $graph.AppRoles | Where-Object { $_.Id -eq $_.AppRoleId }
-       [PSCustomObject]@{
-           Permission = $role.Value
-           GrantedAt = $_.CreatedDateTime
-       }
-   }
+   Get-MgContext |
+       Select-Object Account, TenantId, Environment, Scopes
    ```
 
-   You should see:
-   - `Device.ReadWrite.All`
-   - `DeviceManagementManagedDevices.ReadWrite.All`
+   Confirm the account, tenant, and environment are correct and that both required scopes are
+   present. The connected account must be authorized to grant Microsoft Graph application roles,
+   such as through Privileged Role Administrator or Global Administrator.
+
+5. **Run the permission helper against the existing context:**
+
+   ```powershell
+   # Entra ID device cleanup only
+   .\Set-GraphPermissions.ps1 `
+       -ManagedIdentityObjectId $objectId `
+       -DeviceCleanupTarget Entra
+
+   # Entra ID and Intune device cleanup
+   # Use only where Intune is available and both cleanup options are enabled.
+   # .\Set-GraphPermissions.ps1 `
+   #     -ManagedIdentityObjectId $objectId `
+   #     -DeviceCleanupTarget Entra, Intune
+   ```
+
+   The helper discovers the application-role IDs from the Microsoft Graph service principal in the
+   active environment, grants only missing permissions, verifies the result, and preserves
+   unrelated Graph permissions. It fails without an active context or when required scopes are
+   missing. It does not disconnect the context.
+
+   You should see the permissions for the selected cleanup targets reported as present:
+
+   - `Entra` grants `Device.ReadWrite.All`.
+   - `Intune` grants `DeviceManagementManagedDevices.ReadWrite.All`.
+
+   > [!IMPORTANT]
+   > Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
+   > Leave Intune cleanup disabled and use `-DeviceCleanupTarget Entra` unless your environment
+   > support team confirms Intune availability. Do not assume that
+   > `DeviceManagementManagedDevices.ReadWrite.All` exists there.
 
 **Understanding Graph API Permissions:**
 
@@ -325,25 +364,44 @@ For service principals and managed identities calling Graph API:
 - ✅ **Application Permissions (App Roles)** - Required, appear in token's `roles` claim
 - ✅ `Device.ReadWrite.All` IS sufficient for device deletion when used by service principals
 
-**Manual Permission Grant (if script fails):**
+**Manual Permission Grant (if the helper cannot be used):**
 
 ```powershell
-# Connect with required scopes
-Connect-MgGraph -Scopes "Application.Read.All","AppRoleAssignment.ReadWrite.All"
+# First connect to the correct Graph environment as described above.
+$context = Get-MgContext
+if (-not $context) {
+    throw 'Connect to the correct Microsoft Graph environment before continuing.'
+}
 
 # Get managed identity and Graph service principals
 $mi = Get-MgServicePrincipal -ServicePrincipalId <managed-identity-object-id>
-$graph = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
+$graph = Get-MgServicePrincipal `
+    -Filter "appId eq '00000003-0000-0000-c000-000000000000'" `
+    -Property 'id,appRoles'
 
-# Grant Device.ReadWrite.All
-$roleId = "1138cb37-bd11-4084-a2b7-9f71582aeddb"
-New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id `
-    -PrincipalId $mi.Id -ResourceId $graph.Id -AppRoleId $roleId
+# Add DeviceManagementManagedDevices.ReadWrite.All only when Intune cleanup is enabled and Intune
+# is available in the active environment.
+$permissions = @('Device.ReadWrite.All')
+foreach ($permissionName in $permissions) {
+    $appRole = $graph.AppRoles |
+        Where-Object {
+            $_.Value -eq $permissionName -and
+            $_.IsEnabled -and
+            $_.AllowedMemberTypes -contains 'Application'
+        }
+    if (-not $appRole) {
+        throw "Application permission '$permissionName' is unavailable in the active environment."
+    }
 
-# Grant DeviceManagementManagedDevices.ReadWrite.All
-$roleId = "243333ab-4d21-40cb-a475-36241daa0842"
-New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $mi.Id `
-    -PrincipalId $mi.Id -ResourceId $graph.Id -AppRoleId $roleId
+    $bodyParameter = @{
+        principalId = $mi.Id
+        resourceId  = $graph.Id
+        appRoleId   = $appRole.Id
+    }
+    New-MgServicePrincipalAppRoleAssignment `
+        -ServicePrincipalId $mi.Id `
+        -BodyParameter $bodyParameter
+}
 ```
 
 #### 3. Azure Function App Requirements
@@ -1529,7 +1587,7 @@ Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> e
 | Setting | Default | Description |
 | --- | --- | --- |
 | `removeEntraDevice` | `true` | Remove Entra ID device records when deleting session hosts. Recommended before DeleteFirst hostname reuse; requires `Device.ReadWrite.All` when enabled |
-| `removeIntuneDevice` | `true` | Remove Intune device records when deleting session hosts. Recommended before DeleteFirst hostname reuse; requires `DeviceManagementManagedDevices.ReadWrite.All` when enabled |
+| `removeIntuneDevice` | `true` | Remove Intune device records when deleting session hosts. Recommended before DeleteFirst hostname reuse; requires `DeviceManagementManagedDevices.ReadWrite.All` when enabled. Intune is not currently available in Azure Government Secret and Top Secret; set to `false` unless availability is confirmed for the target environment. |
 
 ### Scheduling Parameters
 
@@ -1675,8 +1733,10 @@ traces
 **Resolution:**
 
 ```powershell
-# Check if permission is granted
-.\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id>
+# Connect to the correct Microsoft Graph environment as described in the prerequisites, then verify.
+.\Set-GraphPermissions.ps1 `
+    -ManagedIdentityObjectId <object-id> `
+    -DeviceCleanupTarget Entra
 
 # If granted but not in token:
 1. Wait 10-60 minutes for Azure AD propagation
@@ -1763,8 +1823,10 @@ traces
 | where message contains "Removing session host" or message contains "Entra" or message contains "Intune"
 | order by timestamp desc
 
-# Verify Graph permissions
-.\Set-GraphPermissions.ps1 -ManagedIdentityObjectId <object-id>
+# After connecting to the correct Microsoft Graph environment, verify Graph permissions.
+.\Set-GraphPermissions.ps1 `
+    -ManagedIdentityObjectId <object-id> `
+    -DeviceCleanupTarget Entra
 ```
 
 #### 6. DeleteFirst Mode: Deployment Conflicts

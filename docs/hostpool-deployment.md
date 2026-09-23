@@ -1234,16 +1234,29 @@ Create the Confidential VM Orchestrator service principal:
 # Install Microsoft Graph module
 Install-Module -Name Microsoft.Graph -Scope CurrentUser
 
-# Connect to Graph
-Connect-Graph -Tenant "<tenant-id>" -Scopes Application.ReadWrite.All
+# Connect to the correct Microsoft Graph environment first.
+# In Secret or Top Secret, use the authorized environment-specific instructions and values.
+Connect-MgGraph `
+    -Environment '<authorized-graph-environment-name>' `
+    -TenantId '<tenant-id>' `
+    -Scopes 'Application.ReadWrite.All'
+Get-MgContext | Select-Object Account, TenantId, Environment, Scopes
 
-# Create service principal
-New-MgServicePrincipal -AppId bf7b6499-ff71-4aa2-97a4-f372087be7f0 -DisplayName "Confidential VM Orchestrator"
+# Create the service principal only when it does not already exist.
+$orchestratorAppId = 'bf7b6499-ff71-4aa2-97a4-f372087be7f0'
+$orchestrator = Get-MgServicePrincipal -Filter "appId eq '$orchestratorAppId'"
+if (-not $orchestrator) {
+    $orchestrator = New-MgServicePrincipal `
+        -AppId $orchestratorAppId `
+        -DisplayName 'Confidential VM Orchestrator'
+}
 
 # Get the object ID (needed for deployment parameter)
-Get-MgServicePrincipal -Filter "displayName eq 'Confidential VM Orchestrator'" | 
-    Select-Object Id, DisplayName
+$orchestrator | Select-Object Id, DisplayName
 ```
+
+This public repository intentionally does not publish or infer Microsoft Graph environment names
+or endpoints for Azure Government Secret or Azure Government Top Secret.
 
 Use the returned `Id` value for the `confidentialVMOrchestratorObjectId` parameter.
 

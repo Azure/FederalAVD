@@ -300,9 +300,7 @@ param keyExpirationInDays int = 180
 param confidentialVMOSDiskEncryption bool = false
 
 @description('''Optional. The object ID of the Confidential VM Orchestrator enterprise application with application ID "bf7b6499-ff71-4aa2-97a4-f372087be7f0".
-This is required when "confidentialVMOSDiskEncryption" is set to "true". You must create this application in your tenant before deploying this solution using the following PowerShell script:
-  Connect-AzureAD -Tenant "your tenant ID"
-  New-AzureADServicePrincipal -AppId bf7b6499-ff71-4aa2-97a4-f372087be7f0 -DisplayName "Confidential VM Orchestrator"
+This is required when "confidentialVMOSDiskEncryption" is set to "true". Create the enterprise application in your tenant before deployment by following the environment-specific Microsoft Graph procedure in docs/hostpool-deployment.md.
 ''')
 param confidentialVMOrchestratorObjectId string = ''
 

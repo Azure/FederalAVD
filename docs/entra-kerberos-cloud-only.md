@@ -47,10 +47,9 @@ The User Assigned Managed Identity requires the following **Application** permis
 
 You can use the following PowerShell script to create the User Assigned Managed Identity and assign the required Graph permissions.
 
-After assignment, run `tools/Test-EntraKerberosManagedIdentityPermissions.ps1 -ManagedIdentityName <name>`
-to verify the two required application permissions. This verification tool is separate from
-`deployments/add-ons/sessionHostReplacer/Set-GraphPermissions.ps1`, which grants different device
-cleanup permissions to the Session Host Replacer identity.
+Use `tools/Set-EntraKerberosManagedIdentityPermissions.ps1` to grant the two permissions, then use
+`tools/Test-EntraKerberosManagedIdentityPermissions.ps1` to verify them. These tools are separate
+from the Session Host Replacer permission helper, which grants device-cleanup permissions.
 
 > [!IMPORTANT]
 > To run this script successfully, you need permissions in two scopes:
@@ -64,13 +63,7 @@ $SubscriptionId = "<Your Subscription ID>"
 $ResourceGroupName = "<Your Resource Group Name>"
 $IdentityName = "id-avd-storage-automation"
 $Location = "<Region>"
-$Environment = "AzureCloud" # Options: AzureCloud, AzureUSGovernment
-
-# Set Microsoft Graph environment based on Azure environment
-$graphEnvironment = switch ($Environment) {
-    "AzureUSGovernment" { "USGov" }
-    default { "Global" }
-}
+$Environment = "<authorized-azure-environment-name>"
 
 # Connect to Azure
 Connect-AzAccount -Environment $Environment
@@ -84,35 +77,25 @@ if (-not $identity) {
 }
 Write-Host "Identity Created: $($identity.Name)"
 
-# 2. Assign Graph Permissions
-# Connect to Microsoft Graph
-Connect-MgGraph -Environment $graphEnvironment -Scopes "AppRoleAssignment.ReadWrite.All", "Application.Read.All"
+# 2. Connect Microsoft Graph separately.
+# Follow the connection instructions for the target environment. Do not infer the Graph
+# environment name or endpoint from the Azure environment in Secret or Top Secret.
+$requiredScopes = @('Application.Read.All', 'AppRoleAssignment.ReadWrite.All')
+Connect-MgGraph -Environment '<authorized-graph-environment-name>' -Scopes $requiredScopes
+Get-MgContext | Select-Object Account, TenantId, Environment, Scopes
 
-$sp = Get-MgServicePrincipal -Filter "AppId eq '$($identity.ClientId)'"
-$graphSPN = Get-MgServicePrincipal -Filter "AppId eq '00000003-0000-0000-c000-000000000000'"
+# 3. Grant and verify the application-update identity permissions.
+.\tools\Set-EntraKerberosManagedIdentityPermissions.ps1 `
+    -ManagedIdentityObjectId $identity.PrincipalId `
+    -ManagedIdentityClientId $identity.ClientId
 
-# List of required permissions
-$permissions = @(
-    "Application.ReadWrite.All",
-    "DelegatedPermissionGrant.ReadWrite.All"
-)
-
-foreach ($permName in $permissions) {
-    $appRole = $graphSPN.AppRoles | Where-Object { $_.Value -eq $permName -and $_.AllowedMemberTypes -contains "Application" }
-    
-    if ($appRole) {
-        try {
-            New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -PrincipalId $sp.Id -ResourceId $graphSPN.Id -AppRoleId $appRole.Id
-            Write-Host "Assigned $permName" -ForegroundColor Green
-        }
-        catch {
-            Write-Warning "Failed to assign $permName (it might already exist): $($_.Exception.Message)"
-        }
-    } else {
-        Write-Error "Permission $permName not found in Graph Service Principal."
-    }
-}
+.\tools\Test-EntraKerberosManagedIdentityPermissions.ps1 `
+    -ManagedIdentityObjectId $identity.PrincipalId
 ```
+
+For Azure Government Secret and Azure Government Top Secret, obtain both authorized environment
+names from the environment-specific instructions available inside the enclave or from the
+environment support team. This repository intentionally does not publish or infer those values.
 
 ## What the Solution Does
 

@@ -26,6 +26,14 @@ $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
 $enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
 $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice -AsBoolean
 $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean
+$requiredGraphPermissions = @()
+if ($removeEntraDevice) {
+    $requiredGraphPermissions += 'Device.ReadWrite.All'
+}
+if ($removeIntuneDevice) {
+    $requiredGraphPermissions += 'DeviceManagementManagedDevices.ReadWrite.All'
+}
+$requiredGraphPermissionsText = $requiredGraphPermissions -join ', '
 
 # Build settings log with N/A for non-applicable values based on replacement mode
 $settingsLog = @{
@@ -975,14 +983,14 @@ if ($replacementMode -eq 'DeleteFirst') {
                 
                     if ([string]::IsNullOrEmpty($GraphToken)) {
                         Write-LogEntry -Message "CRITICAL ERROR: Get-AccessToken returned null or empty Graph token but device cleanup is enabled." -Level Error
-                        Write-LogEntry -Message "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Error
+                        Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Error
                         Write-LogEntry -Message "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
                         throw "Graph token acquisition failed but device cleanup is required in DeleteFirst mode"
                     }
                 }
                 catch {
                     Write-LogEntry -Message "CRITICAL ERROR: Failed to acquire Graph access token but device cleanup is enabled: $_" -Level Error
-                    Write-LogEntry -Message "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Error
+                    Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Error
                     Write-LogEntry -Message "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
                     throw "Graph token acquisition failed but device cleanup is required in Delete-First mode"
                 }
@@ -1035,7 +1043,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                     }
                     
                     Write-LogEntry -Message "Delete-First mode cannot proceed - hostname reuse will fail if devices still exist in Entra ID/Intune" -Level Error
-                    Write-LogEntry -Message "TROUBLESHOOTING: Verify managed identity has Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All)" -Level Error
+                    Write-LogEntry -Message "TROUBLESHOOTING: Verify managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Error
                     throw "Device cleanup verification failed in Delete-First mode - cannot safely reuse hostnames"
                 }
                 
@@ -1238,13 +1246,13 @@ else {
                 
                 if ([string]::IsNullOrEmpty($GraphToken)) {
                     Write-Warning "Get-AccessToken returned null or empty Graph token. Device cleanup will be skipped."
-                    Write-LogEntry -Message "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Warning
+                    Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Warning
                     $GraphToken = $null
                 }
             }
             catch {
                 Write-Warning "Failed to acquire Graph access token: $_. Device cleanup will be skipped."
-                Write-LogEntry -Message "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Warning
+                Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Warning
                 $GraphToken = $null
             }
         }
