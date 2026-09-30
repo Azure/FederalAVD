@@ -491,7 +491,7 @@ var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
 var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
-  : startsWith(cloud, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
+  : startsWith(cloud, 'us') ? 'https://graph${replace(environment().suffixes.storage, 'core', '')}' : 'https://graph.microsoft.com'
 var locationForLookup = startsWith(cloud, 'us') ? substring(location, 5, max(length(location) - 5, 0)) : location
 var functionAppRegionAbbreviation = locations[locationForLookup].abbreviation
 
