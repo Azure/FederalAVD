@@ -81,7 +81,7 @@ var parentResourceTags = !empty(hostPoolResourceId) ? { 'cm-resource-parent': ho
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(environment().name, 'us')
-      ? 'https://graph.${environment().suffixes.storage}'
+      ? 'https://graph${replace(environment().suffixes.storage, 'core', '')}'
       : 'https://graph.microsoft.com'
 
 resource appUpdateUai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = if (!empty(appUpdateUserAssignedIdentityResourceId)) {
