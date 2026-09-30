@@ -2141,7 +2141,7 @@
                   "toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide a custom full URL to override the default.', 'If left empty, the default behavior is to download from publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds). Provide either a blob name (if using the storage account selected above) or a custom full URL to override the default.')]",
                   "constraints": {
                     "required": false,
-                    "regex": "^(https?://.*\\.msi|[^/\\\\]+\\.msi)$",
+                    "regex": "^(https?://.*\\.msi|[^/\\\\]+\\.msi)?$",
                     "validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
                   },
                   "visible": "[steps('hosts').customizations.customizeAgentDownload]"
@@ -2154,7 +2154,7 @@
                   "toolTip": "[if(empty(steps('hosts').customizations.storageAccount), 'Optional. Provide a custom full URL to override defaults (go.microsoft.com for public clouds, aka.ms perma-links for air-gapped clouds). This URL will be used as fallback if the endpoint download fails.', 'Optional. Provide a blob name (using storage account above) or full URL to override defaults. This will be used as fallback if the endpoint download fails')]",
                   "constraints": {
                     "required": false,
-                    "regex": "^(https?://.*\\.msi|[^/\\\\]+\\.msi)$",
+                    "regex": "^(https?://.*\\.msi|[^/\\\\]+\\.msi)?$",
                     "validationMessage": "Must be either a full URL (https://...) or a blob name ending in .msi"
                   },
                   "visible": "[steps('hosts').customizations.customizeAgentDownload]"
