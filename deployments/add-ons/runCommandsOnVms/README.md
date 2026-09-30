@@ -83,6 +83,8 @@ New-AzResourceGroupDeployment `
 ```
 
 **Note:** The managed identity must have **Storage Blob Data Reader** role on the storage account.
+The same identity can be used for script access and logging when it has the required read and write
+data-plane permissions.
 
 #### Example 3: Inline Script Content
 
