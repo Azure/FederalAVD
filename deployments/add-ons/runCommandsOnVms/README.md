@@ -4,10 +4,16 @@ This solution will allow you to run one or multiple scripts on selected virtual 
 
 ## Requirements
 
-- Permissions: below are the minimum required permissions to deploy this solution
-  - **Virtual Machine Contributor** on the resource group containing the target VMs — required to create and manage Run Command resources on the VMs
+- **Deployment user or service principal**
+  - **Virtual Machine Contributor** on the resource group containing the target VMs. This permits the deployment to create Run Command resources and update the VMs when managed identities are attached.
+  - **Managed Identity Operator** on each user-assigned managed identity supplied for scripts or logging. The deployment attaches those identities to the target VMs. This role is not needed when no user-assigned identity is supplied.
+- **Managed identities used by the deployment** (these are runtime permissions, not permissions for the deployment user)
+  - **Storage Blob Data Reader** on the scripts container for an identity used to download scripts from private Blob Storage.
+  - **Storage Blob Data Contributor** on the logs container for an identity used to write Run Command output and error logs.
+- **Azure portal form users**
+  - The form queries storage accounts and containers to populate its selectors. Portal users need read access to the selected storage account and its container resources, and read access to any selected user-assigned identity. This is Azure Resource Manager access for the form; it does not grant blob data access.
 
-> **Note:** No subscription-level permissions are required. The deployment is resource group scoped and ARM reads each VM's location automatically, so VMs in different Azure regions within the same resource group are fully supported.
+> **Note:** No subscription-level role is required when the deployment and target VMs are in the specified resource group. If a supplied identity or storage account is in another resource group, grant the required permissions at that resource's scope. VMs in different Azure regions within the target resource group are supported.
 
 ## Deployment Options
 
@@ -82,9 +88,11 @@ New-AzResourceGroupDeployment `
     -Verbose
 ```
 
-**Note:** The managed identity must have **Storage Blob Data Reader** role on the storage account.
-The same identity can be used for script access and logging when it has the required read and write
-data-plane permissions.
+**Note:** The identity used to download scripts needs **Storage Blob Data Reader** on the scripts
+container. If logging is enabled, the identity used for logs needs **Storage Blob Data Contributor**
+on the logs container. The same identity can be used for both when it has the required read and
+write data-plane permissions. When either identity is supplied, the deployment user also needs
+**Managed Identity Operator** on that identity so it can be attached to the VMs.
 
 #### Example 3: Inline Script Content
 
