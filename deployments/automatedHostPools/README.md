@@ -476,6 +476,68 @@ offer, and SKU. Parameter-file deployments must provide one of those regional ve
 
 Compute Gallery images continue to use the selected gallery image-version resource ID.
 
+## Image Updates
+
+After an image build publishes a new version, run
+[Update-AutomatedHostPoolImage.ps1](./Update-AutomatedHostPoolImage.ps1). Do not redeploy the
+template. The script uses the host pool's native
+[session host update](https://learn.microsoft.com/azure/virtual-desktop/session-host-update)
+and runs these steps:
+
+1. Confirms the host pool is automated and that no session host update is scheduled, running,
+   paused, or in an error state.
+2. Picks the target image:
+   - Compute Gallery: the latest version of the current image definition. The version must be
+     succeeded, published, not excluded from latest, targeted to the session host region, and fully
+     replicated there.
+   - Marketplace: the highest version available in the region.
+   - You can override the target with `-ImageDefinitionResourceId` or `-ImageVersionResourceId`.
+3. Exits without changes if that image is already configured, unless you pass `-Force`.
+4. Updates the image in the Session Host Configuration with a PATCH that sends only `imageInfo`.
+   Availability zones and Key Vault credential references are not sent, so the portal's zone and
+   secret re-entry limitations do not apply.
+5. Disables autoscale for this host pool on any assigned scaling plan, as Microsoft requires
+   during an update. Other host pools on the same plan are not affected.
+6. Starts the update immediately, or schedules it for `-ScheduledDateTime`. That time is wall-clock
+   time in `-TimeZone`, which defaults to the host pool management time zone. A schedule must be in
+   the future and no more than 14 days out.
+
+`-MaxVmsRemoved`, `-LogOffDelayMinutes`, `-LogOffMessage`, and `-DeleteOriginalVm` override the
+deployed batch settings for this update only. If you omit them, the update uses the host pool
+management values.
+
+The script doesn't wait for completion unless you pass `-WaitForCompletion`. With that switch, it
+polls until the update finishes and re-enables autoscale only after the update succeeds. If you
+don't wait, or the update fails or is cancelled, autoscale stays disabled. Run the script with
+`-EnableScalingPlans` once the update is finished.
+
+```powershell
+# Preview without changing anything
+.\Update-AutomatedHostPoolImage.ps1 -HostPoolName vdpool-avd-auto-01-use2 `
+    -HostPoolResourceGroupName rg-avd-control-plane-use2 -WhatIf
+
+# Schedule tonight, two hosts per batch
+.\Update-AutomatedHostPoolImage.ps1 -HostPoolName vdpool-avd-auto-01-use2 `
+    -HostPoolResourceGroupName rg-avd-control-plane-use2 `
+    -ScheduledDateTime '2026-10-03 22:00' -TimeZone 'Eastern Standard Time' -MaxVmsRemoved 2
+
+# Re-enable autoscale after a scheduled update completes
+.\Update-AutomatedHostPoolImage.ps1 -HostPoolName vdpool-avd-auto-01-use2 `
+    -HostPoolResourceGroupName rg-avd-control-plane-use2 -EnableScalingPlans
+```
+
+Requirements:
+
+- The Az.Accounts module, signed in to the host pool subscription. The script uses
+  `Invoke-AzRestMethod`, so it works in every Azure cloud.
+- `Desktop Virtualization Host Pool Contributor` (or `Contributor`) on the host pool, and
+  `Desktop Virtualization Contributor` on any assigned scaling plan.
+- Read access to the Compute Gallery image definition, or to the Marketplace image in the region.
+- The image must be in the same subscription as the host pool, a service requirement for session
+  host updates.
+- Only one update can be scheduled or running per host pool, and Microsoft doesn't allow editing
+  a scheduled update. To change one, cancel it in the portal and run the script again.
+
 ## Ephemeral OS Disks
 
 Set `useEphemeralOsDisk` to `true` and select `CacheDisk` or `TempDisk` with
