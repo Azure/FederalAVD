@@ -358,7 +358,10 @@ Premium**. Direct deployments can select another supported service and SKU with 
 ## Session Host Availability
 
 Automated host pools support Availability Zones when the selected VM SKU exposes zones in the
-session-host region. Where Availability Zones are unavailable or unsuitable, select **Availability
+session-host region. The deployment stores the selected zones in ascending order regardless of the
+order in the portal selection or parameter file. After session hosts exist,
+Azure Virtual Desktop does not allow the zone list in Session Host Configuration to change. Where
+Availability Zones are unavailable or unsuitable, select **Availability
 Set** to create one managed Availability Set in the dedicated session-host resource group. The
 deployment uses one resource-group-scoped Azure Policy `Modify` assignment to add that set before the Compute
 resource provider processes each VM creation request.

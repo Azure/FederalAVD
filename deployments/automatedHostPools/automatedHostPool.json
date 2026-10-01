@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "3101358905599267167"
+      "templateHash": "2904872966459855900"
     }
   },
   "definitions": {
@@ -5054,7 +5054,7 @@
           "avdServicePrincipalObjectId": "[if(parameters('deployDynamicScalingPlan'), createObject('value', parameters('avdServicePrincipalObjectId')), createObject('value', ''))]",
           "sessionHostConfigurationProperties": {
             "value": {
-              "availabilityZones": "[if(and(variables('availabilityConfigurationIsValid'), equals(parameters('availability'), 'AvailabilityZones')), parameters('availabilityZones'), null())]",
+              "availabilityZones": "[if(and(variables('availabilityConfigurationIsValid'), equals(parameters('availability'), 'AvailabilityZones')), sort(parameters('availabilityZones'), lambda('a', 'b', less(lambdaVariables('a'), lambdaVariables('b')))), null())]",
               "diskInfo": {
                 "managedDisk": {
                   "type": "[parameters('diskSku')]"

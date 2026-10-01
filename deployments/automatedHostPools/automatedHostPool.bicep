@@ -803,7 +803,10 @@ module controlPlane 'modules/controlPlane.bicep' = {
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     avdServicePrincipalObjectId: deployDynamicScalingPlan ? avdServicePrincipalObjectId : ''
     sessionHostConfigurationProperties: {
-      availabilityZones: availabilityConfigurationIsValid && availability == 'AvailabilityZones' ? availabilityZones : null
+      // Ascending order keeps the stored value consistent with portal edits, which submit zones numerically.
+      availabilityZones: availabilityConfigurationIsValid && availability == 'AvailabilityZones'
+        ? sort(availabilityZones, (a, b) => a < b)
+        : null
       diskInfo: {
         managedDisk: {
           type: diskSku
