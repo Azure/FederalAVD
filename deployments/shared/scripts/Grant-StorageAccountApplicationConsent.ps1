@@ -17,6 +17,24 @@ $logPath = "C:\Windows\Logs"
 $logFile = Join-Path -Path $logPath -ChildPath "Grant-StorageAccountApplicationConsent-$(Get-Date -Format 'yyyyMMdd-HHmm').log"
 Start-Transcript -Path $logFile -Force
 
+# Gets an access token for the specified Microsoft Graph resource from the VM managed identity
+function Get-GraphAccessToken {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $Resource,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ClientId
+    )
+
+    $tokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$Resource&client_id=$ClientId"
+    $response = Invoke-RestMethod -Headers @{ Metadata = "true" } -Uri $tokenUri
+    if (-not $response -or -not $response.access_token) {
+        throw "Failed to obtain access token for $Resource from IMDS."
+    }
+    return $response.access_token
+}
+
 # Helper function to invoke Graph API with retry logic for DoD endpoints
 function Invoke-GraphApiWithRetry {
     param (
@@ -37,7 +55,10 @@ function Invoke-GraphApiWithRetry {
         [string] $Body,
         
         [Parameter()]
-        [hashtable] $Headers = @{}
+        [hashtable] $Headers = @{},
+
+        [Parameter()]
+        [string] $ClientId = $script:ClientId
     )
     
     # Ensure GraphEndpoint doesn't have trailing slash
@@ -54,17 +75,25 @@ function Invoke-GraphApiWithRetry {
         $requestHeaders['Content-Type'] = 'application/json'
     }
     
-    # List of endpoints to try
-    $endpointsToTry = @($graphBase)
+    # List of endpoints to try. Tokens are audience-specific, so the DoD endpoint gets its own token.
+    $endpointsToTry = @(
+        @{ Endpoint = $graphBase; Token = $AccessToken }
+    )
     
-    # If we're using GCCH endpoint, also try DoD
+    # If we're using GCCH endpoint, also try DoD with a fresh token
     if ($graphBase -eq 'https://graph.microsoft.us') {
-        $endpointsToTry += 'https://dod-graph.microsoft.us'
+        $endpointsToTry += @{ Endpoint = 'https://dod-graph.microsoft.us'; Token = $null }
     }
     
     $lastError = $null
-    foreach ($endpoint in $endpointsToTry) {
+    foreach ($endpointConfig in $endpointsToTry) {
+        $endpoint = $endpointConfig.Endpoint
         try {
+            if (-not $endpointConfig.Token) {
+                Write-Host "Requesting access token for $endpoint from IMDS..."
+                $endpointConfig.Token = Get-GraphAccessToken -Resource $endpoint -ClientId $ClientId
+            }
+            $requestHeaders['Authorization'] = "Bearer $($endpointConfig.Token)"
             $attemptUri = "$endpoint$Uri"
             
             $params = @{
@@ -118,8 +147,8 @@ function Invoke-GraphApiWithRetry {
                 # If we can't parse error details, just continue
             }
             
-            # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
-            if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1]) {
+            # Retry on authentication/authorization errors (401, 403) against the next Graph endpoint
+            if ($statusCode -in @(401, 403) -and $endpoint -ne $endpointsToTry[-1].Endpoint) {
                 Write-Warning "Graph API call to $endpoint failed with status $statusCode$errorDetails. Trying alternate endpoint..."
                 continue
             }
@@ -144,16 +173,9 @@ try {
     
     # Get Graph Access Token using Managed Identity
     $GraphUri = if ($GraphEndpoint[-1] -eq '/') { $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) } else { $GraphEndpoint }
-    $TokenUri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$GraphUri&client_id=$ClientId"
     Write-Output "Requesting access token from IMDS..."
-    $Response = Invoke-RestMethod -Headers @{ Metadata = "true" } -Uri $TokenUri
-    If ($Response) {
-        Write-Output "Successfully obtained access token"
-        $AccessToken = $Response.access_token
-    }
-    else {
-        throw "Failed to obtain access token from IMDS."
-    }
+    $AccessToken = Get-GraphAccessToken -Resource $GraphUri -ClientId $ClientId
+    Write-Output "Successfully obtained access token"
         
     # Search for the application by DisplayName
     $searchUri = "/v1.0/applications?" + '$filter=' + "startswith(displayName, '$AppDisplayNamePrefix')"

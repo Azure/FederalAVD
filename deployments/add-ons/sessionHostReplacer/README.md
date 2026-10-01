@@ -1629,15 +1629,13 @@ Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> e
 
 **DoD (USGovDoD):**
 
-```json
-{
-    "ResourceManagerUri": "https://management.usgovcloudapi.net/",
-    "GraphEndpoint": "https://dod-graph.microsoft.us",
-    "StorageSuffix": "core.usgovcloudapi.net"
-}
-```
+DoD tenants deploy into the same Azure US Government cloud, so the template configures the same
+settings as GCC High, including `"GraphEndpoint": "https://graph.microsoft.us"`. At runtime, if a
+Graph call to `https://graph.microsoft.us` returns 401 or 403, the function acquires a new token
+for `https://dod-graph.microsoft.us` and retries the call against that endpoint. No DoD-specific
+configuration is required.
 
-> **Note:** Azure US Secret and US Top Secret clouds are supported via automatic environment detection during bicep deployment. The Graph endpoint is dynamically constructed as `https://graph.${environment().suffixes.storage}` and automatically configured in the Function App settings.
+> **Note:** Azure US Secret and US Top Secret clouds are supported via automatic environment detection during bicep deployment. The Graph endpoint is dynamically constructed as `https://graph${replace(environment().suffixes.storage, 'core', '')}` (for example, storage suffix `core.microsoft.scloud` produces `https://graph.microsoft.scloud`) and automatically configured in the Function App settings.
 
 ### Configuration Examples
 

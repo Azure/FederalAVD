@@ -773,8 +773,8 @@ function Invoke-GraphApiWithRetry {
                 }
             }
             
-            # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
-            if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1].Endpoint) {
+            # Retry on authentication/authorization errors (401, 403) against the next Graph endpoint
+            if ($statusCode -in @(401, 403) -and $endpoint -ne $endpointsToTry[-1].Endpoint) {
                 Write-LogEntry -Message "Graph API call to $endpoint failed with status $statusCode. Trying next endpoint..." -Level Warning
                 continue
             }
