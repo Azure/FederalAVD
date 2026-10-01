@@ -109,5 +109,5 @@ command-line syntax instead of PowerShell parameter splatting.
 | [Notepad-PlusPlus](Notepad-PlusPlus/) | Notepad++ | `NotepadPlusPlus` |
 | [PuTTY](PuTTY/) | PuTTY SSH client | `PuTTY` |
 | [Use-KeyVault-Secret](Use-KeyVault-Secret/) | Retrieve an Azure Key Vault secret from a Run Command using a user-assigned managed identity | — |
-| [Windows-11-RSAT-Offline](Windows-11-RSAT-Offline/) | Install selected Windows 11 RSAT capabilities from manually staged Features on Demand media | — (manually staged) |
+| [Windows-11-RSAT](Windows-11-RSAT/) | Install selected Windows 11 RSAT capabilities from preferred offline media with online fallback | — (optional manually staged payload) |
 | [Windows-Catalog-Updates](Windows-Catalog-Updates/) | Windows patches from Microsoft Update Catalog (air-gapped) | — (manually staged) |

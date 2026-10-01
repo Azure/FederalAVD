@@ -1,21 +1,35 @@
-# Windows 11 RSAT Offline
+# Windows 11 RSAT Offline-First
 
-Installs these Windows 11 Remote Server Administration Tools (RSAT) capabilities without access
-to Windows Update or WSUS:
+Installs these Windows 11 Remote Server Administration Tools (RSAT) capabilities:
 
 - `Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0`
 - `Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0`
 - `Rsat.DHCP.Tools~~~~0.0.1.0`
 
-The installer uses `Add-WindowsCapability` with both `-Source` and `-LimitAccess`. It is
-idempotent: capabilities already in the `Installed` state are skipped, and each newly installed
-capability is checked before the script succeeds.
+The installer is offline-first:
+
+1. If `Payload` contains CAB files, it first calls `Add-WindowsCapability` with `-Source` and
+   `-LimitAccess`.
+2. If the offline source is absent or cannot install a capability, it retries without `-Source`
+   or `-LimitAccess`, allowing Windows servicing to acquire the content online.
+3. Use `-OfflineOnly` to prohibit the online fallback and fail if the staged source is absent or
+   incomplete.
+
+The online path uses the source selected by Windows servicing policy. To download directly from
+Microsoft, the target must be able to reach Windows Update and its optional-content policy must
+permit direct Windows Update downloads. A WSUS-managed or network-restricted host can fail unless
+that policy is configured appropriately.
+
+The script is idempotent: capabilities already in the `Installed` state are skipped, and each
+newly installed capability is checked before the script succeeds.
 
 ## Supported configuration
 
 - Windows 11 Enterprise or Windows 11 Enterprise multi-session, x64
-- A Features on Demand source matching the target Windows 11 release, architecture, and installed
-  language
+- For offline installation, a Features on Demand source matching the target Windows 11 release,
+  architecture, and installed language
+- For online fallback, access to Windows Update and servicing policy that permits optional-content
+  downloads from Microsoft
 - Image-build or session-host customization running as Administrator or SYSTEM
 
 Do not use Windows 10, Windows Server, Arm64, or a different Windows 11 release's Features on
@@ -27,11 +41,34 @@ could not be found) or `0x800f0950` (capability installation failed).
 Copy this example into the git-ignored customer artifact directory:
 
 ```powershell
-Copy-Item -Recurse -Path 'customer-examples\artifacts\Windows-11-RSAT-Offline' `
+Copy-Item -Recurse -Path 'customer-examples\artifacts\Windows-11-RSAT' `
     -Destination 'customer\artifacts\'
 ```
 
-## Get the Microsoft source media
+## Choose the content source
+
+### Online installation
+
+No payload preparation is required. Leave the `Payload` directory absent and run the artifact
+normally. The script calls:
+
+```powershell
+Add-WindowsCapability -Online -Name '<capability-name>' -NoRestart
+```
+
+Windows servicing then uses its configured source. If the device is managed by WSUS, configure
+the **Specify settings for optional component installation and component repair** policy to allow
+repair content and optional features to download directly from Windows Update when that is the
+intended source. The artifact does not change organizational Windows Update policy.
+
+Online installation is not suitable for an air-gapped image build.
+
+### Offline installation
+
+Stage the source as described below. When CAB files are present, the installer always attempts the
+offline source before any online request.
+
+## Get the Microsoft source media for offline installation
 
 Microsoft does not provide a stable public URL for the Windows 11 Features on Demand payload, so
 it cannot be added to `downloads.json`. Obtain the **Windows 11 Languages and Optional Features**
@@ -99,7 +136,7 @@ artifact's `Payload` directory:
 $isoPath = 'C:\Downloads\Windows11-LanguagesAndOptionalFeatures.iso'
 $diskImage = Mount-DiskImage -ImagePath $isoPath -PassThru
 $fodDrive = (($diskImage | Get-Volume).DriveLetter + ':')
-$payloadPath = '.\customer\artifacts\Windows-11-RSAT-Offline\Payload'
+$payloadPath = '.\customer\artifacts\Windows-11-RSAT\Payload'
 New-Item -Path $payloadPath -ItemType Directory -Force | Out-Null
 Copy-Item -Path "$fodDrive\LanguagesAndOptionalFeatures\*" `
     -Destination $payloadPath `
@@ -111,7 +148,7 @@ Dismount-DiskImage -ImagePath $isoPath
 For the currently mounted ISO at `F:`, the equivalent copy command is:
 
 ```powershell
-$payloadPath = '.\customer\artifacts\Windows-11-RSAT-Offline\Payload'
+$payloadPath = '.\customer\artifacts\Windows-11-RSAT\Payload'
 New-Item -Path $payloadPath -ItemType Directory -Force | Out-Null
 Copy-Item -Path 'F:\LanguagesAndOptionalFeatures\*' `
     -Destination $payloadPath `
@@ -135,7 +172,7 @@ $windowsIsoDrive = 'E:'
 $fodIsoDrive = 'F:'
 $imageIndex = 6 # Replace with the index for the target Windows 11 edition.
 $mountPath = 'C:\FodWork\Mount'
-$repositoryPath = '.\customer\artifacts\Windows-11-RSAT-Offline\Payload'
+$repositoryPath = '.\customer\artifacts\Windows-11-RSAT\Payload'
 
 New-Item -Path $mountPath, $repositoryPath -ItemType Directory -Force | Out-Null
 dism.exe /Mount-Image `
@@ -219,8 +256,8 @@ Get-ChildItem -LiteralPath $repositoryPath -File -Recurse |
 The resulting package layout is:
 
 ```text
-Windows-11-RSAT-Offline/
-    Install-Windows11RSATOffline.ps1
+Windows-11-RSAT/
+    Install-Windows11RSAT.ps1
     README.md
     Payload/
         Microsoft-Windows-*-FOD-Package*.cab
@@ -243,12 +280,12 @@ Package the manually staged artifact without attempting any internet downloads:
 
 For a connected Azure environment, replace `-PackageOnly` and `-OutputPath` with
 `-StorageAccountResourceId '<artifactsStorageAccountResourceId>'`. The resulting artifact is
-`Windows-11-RSAT-Offline.zip`.
+`Windows-11-RSAT.zip`.
 
 Record and verify its SHA-256 hash before and after an offline transfer:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 'C:\AirGapTransfer\Windows-11-RSAT-Offline.zip'
+Get-FileHash -Algorithm SHA256 'C:\AirGapTransfer\Windows-11-RSAT.zip'
 ```
 
 ## Add to an image build
@@ -257,14 +294,28 @@ Add this entry to the image build `customizations` array:
 
 ```json
 {
-    "name": "Windows-11-RSAT-Offline",
-    "blobNameOrUri": "Windows-11-RSAT-Offline.zip",
+    "name": "Windows-11-RSAT",
+    "blobNameOrUri": "Windows-11-RSAT.zip",
     "restart": true
 }
 ```
 
-No runtime internet access is required. Set `restart` to `true` so Component-Based Servicing can
-complete any pending operations before later customizations run.
+With a complete matching payload, no runtime internet access is required because the offline
+attempt succeeds before the fallback is used. For a strict air-gapped deployment, pass
+`-OfflineOnly` so an absent, incomplete, or mismatched payload fails without attempting an online
+source:
+
+```json
+{
+    "name": "Windows-11-RSAT",
+    "blobNameOrUri": "Windows-11-RSAT.zip",
+    "arguments": "-OfflineOnly",
+    "restart": true
+}
+```
+
+Set `restart` to `true` so Component-Based Servicing can complete any pending operations before
+later customizations run.
 
 ## Validation
 
@@ -281,11 +332,13 @@ Get-WindowsCapability -Online -Name $names |
 ```
 
 All three capabilities must report `Installed`. The installer log is written to
-`C:\Windows\Logs\Software\Install-Windows11RSATOffline-<timestamp>.log`.
+`C:\Windows\Logs\Software\Install-Windows11RSAT-<timestamp>.log`.
 
 ## References
 
 - <https://learn.microsoft.com/windows-hardware/manufacture/desktop/features-on-demand-v2--capabilities>
 - <https://learn.microsoft.com/windows-hardware/manufacture/desktop/features-on-demand-non-language-fod>
 - <https://learn.microsoft.com/powershell/module/dism/add-windowscapability>
+- <https://learn.microsoft.com/windows-hardware/manufacture/desktop/configure-a-windows-repair-source>
+- <https://learn.microsoft.com/windows/deployment/update/optional-content>
 - <https://learn.microsoft.com/microsoft-365/commerce/licenses/download-vl-products>
