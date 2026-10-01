@@ -56,9 +56,18 @@ function Assert-SupportedHost {
     }
 
     $operatingSystem = Get-CimInstance -ClassName Win32_OperatingSystem
-    if ([int]$operatingSystem.ProductType -ne 1 -or [Environment]::OSVersion.Version.Build -lt 22000) {
-        throw "This artifact supports only Windows 11 client operating systems. Detected '$($operatingSystem.Caption)' build $([Environment]::OSVersion.Version.Build)."
+    $productType = [int]$operatingSystem.ProductType
+    $editionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction SilentlyContinue).EditionID
+    $build = [Environment]::OSVersion.Version.Build
+
+    # Windows 11 Enterprise multi-session reports ProductType 3 (server) with EditionID ServerRdsh.
+    $isClient = $productType -eq 1
+    $isMultiSession = $productType -eq 3 -and $editionId -eq 'ServerRdsh'
+    if ((-not $isClient -and -not $isMultiSession) -or $build -lt 22000) {
+        throw "This artifact supports only Windows 11 Enterprise and Windows 11 Enterprise multi-session. Detected '$($operatingSystem.Caption)' (ProductType $productType, EditionID '$editionId') build $build."
     }
+
+    Write-Log -Message "Detected '$($operatingSystem.Caption)' (ProductType $productType, EditionID '$editionId') build $build."
 }
 
 New-Log
