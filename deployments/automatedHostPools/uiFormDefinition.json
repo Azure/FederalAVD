@@ -721,7 +721,7 @@
 											"advancedQueryOptions": {
 												"suggestedObjectsOptions": {}
 											},
-											"selectionMaximum": 3,
+											"selectionMaximum": 10,
 											"selectionMinimum": 1,
 											"bladeTitle": "Select Groups",
 											"searchBoxLabel": "Search for a group",
@@ -3130,6 +3130,113 @@
 							]
 						},
 						{
+							"name": "updates",
+							"type": "Microsoft.Common.Section",
+							"label": "Session Host Update and Cleanup",
+							"elements": [
+								{
+									"name": "updateDefaultsInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "These settings do not start or schedule an update during this deployment. Azure stores them as defaults for future image and Session Host Configuration updates. During an update, selected hosts enter drain mode, connected users are notified, and users who remain after the delay are signed out before their host is replaced. You can override these defaults via the portal or using the image update script for an individual update."
+									}
+								},
+								{
+									"name": "availabilitySetCapacityWarning",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('hosts').availability.option, 'AvailabilitySets')]",
+									"options": {
+										"style": "Warning",
+										"text": "A managed Availability Set supports 200 VMs. Session Host Update creates replacement VMs before deleting the originals, so the initial host count, or the largest dynamic autoscaling maximum, plus Maximum Concurrent VM Replacements must not exceed 200. The original VM must be deleted after a successful update."
+									}
+								},
+								{
+									"name": "maxVmsRemoved",
+									"type": "Microsoft.Common.Slider",
+									"label": "Maximum Concurrent VM Replacements",
+									"defaultValue": 1,
+									"min": 1,
+									"max": 20,
+									"showStepMarkers": false
+								},
+								{
+									"name": "availabilitySetStaticCapacityError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), not(steps('controlPlane').dynamicScaling.deploy), greater(add(steps('hosts').hostDetails.sessionHostCount, steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))]",
+									"options": {
+										"style": "Error",
+										"text": "Availability Set capacity is exceeded. Reduce Initial Session Host Count or Maximum Concurrent VM Replacements until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
+									}
+								},
+								{
+									"name": "availabilitySetDynamicCapacityError",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), steps('controlPlane').dynamicScaling.deploy, not(empty(filter(steps('controlPlane').dynamicScaling.schedules, (schedule) => or(greater(add(int(if(empty(schedule.rampUpMaximumHostPoolSize), '0', schedule.rampUpMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200), greater(add(int(if(empty(schedule.rampDownMaximumHostPoolSize), '0', schedule.rampDownMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))))))]",
+									"options": {
+										"style": "Error",
+										"text": "Availability Set capacity is exceeded. Reduce the largest Ramp-up Max Hosts or Ramp-down Max Hosts value, or Maximum Concurrent VM Replacements, until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
+									}
+								},
+								{
+									"name": "logOffDelayMinutes",
+									"type": "Microsoft.Common.Slider",
+									"label": "User Logoff Delay (Minutes)",
+									"defaultValue": 30,
+									"min": 0,
+									"max": 60,
+									"showStepMarkers": false
+								},
+								{
+									"name": "logOffMessage",
+									"type": "Microsoft.Common.TextBox",
+									"label": "User Logoff Message",
+									"defaultValue": "This session host is being updated. Save your work and sign out.",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "deleteOriginalVm",
+									"type": "Microsoft.Common.CheckBox",
+									"label": "Delete the Original VM after a Successful Update",
+									"defaultValue": true,
+									"visible": "[not(equals(steps('hosts').availability.option, 'AvailabilitySets'))]"
+								},
+								{
+									"name": "failedCleanupInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"style": "Info",
+										"text": "Failed Session Host Cleanup applies only when provisioning a new or replacement host fails. It does not control successful host replacement or user sessions."
+									}
+								},
+								{
+									"name": "failedSessionHostCleanupPolicy",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Failed Session Host Cleanup",
+									"defaultValue": "Keep one failed host",
+									"constraints": {
+										"required": true,
+										"allowedValues": [
+											{
+												"label": "Keep one failed host",
+												"value": "KeepOne"
+											},
+											{
+												"label": "Keep all failed hosts",
+												"value": "KeepAll"
+											},
+											{
+												"label": "Keep no failed hosts",
+												"value": "KeepNone"
+											}
+										]
+									}
+								}
+							]
+						},
+						{
 							"name": "monitoring",
 							"type": "Microsoft.Common.Section",
 							"label": "Monitoring",
@@ -3237,97 +3344,6 @@
 									"constraints": {
 										"allowedValues": "[steps('hosts').resourceSkusApi.transformed.deploymentVMSizes]",
 										"required": true
-									}
-								}
-							]
-						},
-						{
-							"name": "updates",
-							"type": "Microsoft.Common.Section",
-							"label": "Automated Updates and Cleanup",
-							"elements": [
-								{
-									"name": "availabilitySetCapacityWarning",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[equals(steps('hosts').availability.option, 'AvailabilitySets')]",
-									"options": {
-										"style": "Warning",
-										"text": "A managed Availability Set supports 200 VMs. Session Host Update creates replacement VMs before deleting the originals, so the initial host count, or the largest dynamic autoscaling maximum, plus Maximum Concurrent VM Replacements must not exceed 200. The original VM must be deleted after a successful update."
-									}
-								},
-								{
-									"name": "maxVmsRemoved",
-									"type": "Microsoft.Common.Slider",
-									"label": "Maximum Concurrent VM Replacements",
-									"defaultValue": 1,
-									"min": 1,
-									"max": 20,
-									"showStepMarkers": false
-								},
-								{
-									"name": "availabilitySetStaticCapacityError",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), not(steps('controlPlane').dynamicScaling.deploy), greater(add(steps('hosts').hostDetails.sessionHostCount, steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))]",
-									"options": {
-										"style": "Error",
-										"text": "Availability Set capacity is exceeded. Reduce Initial Session Host Count or Maximum Concurrent VM Replacements until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
-									}
-								},
-								{
-									"name": "availabilitySetDynamicCapacityError",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(equals(steps('hosts').availability.option, 'AvailabilitySets'), steps('controlPlane').dynamicScaling.deploy, not(empty(filter(steps('controlPlane').dynamicScaling.schedules, (schedule) => or(greater(add(int(if(empty(schedule.rampUpMaximumHostPoolSize), '0', schedule.rampUpMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200), greater(add(int(if(empty(schedule.rampDownMaximumHostPoolSize), '0', schedule.rampDownMaximumHostPoolSize)), steps('operationsAndMonitoring').updates.maxVmsRemoved), 200))))))]",
-									"options": {
-										"style": "Error",
-										"text": "Availability Set capacity is exceeded. Reduce the largest Ramp-up Max Hosts or Ramp-down Max Hosts value, or Maximum Concurrent VM Replacements, until their sum is 200 or less. If you need more than 200 total VMs, select Availability Zones when supported or No infrastructure redundancy required."
-									}
-								},
-								{
-									"name": "logOffDelayMinutes",
-									"type": "Microsoft.Common.Slider",
-									"label": "User Logoff Delay (Minutes)",
-									"defaultValue": 30,
-									"min": 0,
-									"max": 240,
-									"showStepMarkers": false
-								},
-								{
-									"name": "logOffMessage",
-									"type": "Microsoft.Common.TextBox",
-									"label": "User Logoff Message",
-									"defaultValue": "This session host is being updated. Save your work and sign out.",
-									"constraints": {
-										"required": true
-									}
-								},
-								{
-									"name": "deleteOriginalVm",
-									"type": "Microsoft.Common.CheckBox",
-									"label": "Delete the Original VM after a Successful Update",
-									"defaultValue": true,
-									"visible": "[not(equals(steps('hosts').availability.option, 'AvailabilitySets'))]"
-								},
-								{
-									"name": "failedSessionHostCleanupPolicy",
-									"type": "Microsoft.Common.DropDown",
-									"label": "Failed Session Host Cleanup",
-									"defaultValue": "Keep one failed host",
-									"constraints": {
-										"required": true,
-										"allowedValues": [
-											{
-												"label": "Keep one failed host",
-												"value": "KeepOne"
-											},
-											{
-												"label": "Keep all failed hosts",
-												"value": "KeepAll"
-											},
-											{
-												"label": "Keep no failed hosts",
-												"value": "KeepNone"
-											}
-										]
 									}
 								}
 							]

@@ -471,3 +471,49 @@ Describe 'Automated host-pool workspace selection' {
         ($form.view.outputs.parameters.PSObject.Properties.Name -join ',') | Should Match '(^|,)existingFeedWorkspaceResourceId(,|$)'
     }
 }
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
+$bicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json'
+$updateScriptPath = Join-Path $repoRoot 'deployments\automatedHostPools\Update-AutomatedHostPoolImage.ps1'
+
+Describe 'Automated host-pool update logoff delay' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $bicep = Get-Content -LiteralPath $bicepPath -Raw
+        $arm = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
+        $updateScript = Get-Content -LiteralPath $updateScriptPath -Raw
+        $operationsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'operationsAndMonitoring' }
+        $updatesSection = $operationsStep.elements | Where-Object { $_.name -eq 'updates' }
+        $logoffDelay = $updatesSection.elements | Where-Object { $_.name -eq 'logOffDelayMinutes' }
+    }
+
+    It 'enforces the same 60-minute maximum in every deployment surface' {
+        $logoffDelay.min | Should Be 0
+        $logoffDelay.max | Should Be 60
+        $bicep | Should Match '@minValue\(0\)[\r\n]+@maxValue\(60\)[\r\n]+param updateLogOffDelayMinutes'
+        $arm.parameters.updateLogOffDelayMinutes.minValue | Should Be 0
+        $arm.parameters.updateLogOffDelayMinutes.maxValue | Should Be 60
+        $updateScript | Should Match '\[ValidateRange\(0, 60\)\][\r\n]+\s*\[int\]\$LogOffDelayMinutes'
+        $updateScript | Should Not Match 'ValidateRange\(0, 10080\)'
+        $updateScript | Should Match '\$effectiveLogOffDelayMinutes -lt 0 -or \$effectiveLogOffDelayMinutes -gt 60'
+        $form.view.outputs.parameters.updateLogOffDelayMinutes | Should Be "[steps('operationsAndMonitoring').updates.logOffDelayMinutes]"
+    }
+
+    It 'explains future update behavior before monitoring settings' {
+        $elementNames = @($operationsStep.elements.name)
+        $updatesIndex = [array]::IndexOf($elementNames, 'updates')
+        $monitoringIndex = [array]::IndexOf($elementNames, 'monitoring')
+        $updateDefaultsInfo = $updatesSection.elements | Where-Object { $_.name -eq 'updateDefaultsInfo' }
+        $failedCleanupInfo = $updatesSection.elements | Where-Object { $_.name -eq 'failedCleanupInfo' }
+
+        $updatesSection.label | Should Be 'Session Host Update and Cleanup'
+        $updatesIndex | Should BeGreaterThan -1
+        $updatesIndex | Should BeLessThan $monitoringIndex
+        $updateDefaultsInfo.options.text | Should Match 'do not start or schedule an update'
+        $updateDefaultsInfo.options.text | Should Match 'users who remain after the delay are signed out'
+        $failedCleanupInfo.options.text | Should Match 'provisioning a new or replacement host fails'
+        $failedCleanupInfo.options.text | Should Match 'does not control successful host replacement or user sessions'
+    }
+}

@@ -442,8 +442,9 @@ param sessionHostVmApplications vmApplicationAssignmentType[] = []
 @minValue(1)
 param updateMaxVmsRemoved int = 1
 
-@description('Optional. Minutes users have to sign out before an updated host is removed.')
+@description('Optional. Minutes users have to sign out before an updated host is removed. Must be between 0 and 60 minutes.')
 @minValue(0)
+@maxValue(60)
 param updateLogOffDelayMinutes int = 30
 
 @description('Optional. Message shown to users before an updated host is removed.')

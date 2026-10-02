@@ -60,7 +60,7 @@
 
 .PARAMETER LogOffDelayMinutes
     Minutes users have to sign out before a host is replaced. Defaults to the Session Host
-    Management value.
+    Management value. Must be between 0 and 60 minutes.
 
 .PARAMETER LogOffMessage
     Message sent to signed-in users before a host is replaced. Defaults to the Session Host
@@ -149,7 +149,7 @@ param(
     [int]$MaxVmsRemoved,
 
     [Parameter(ParameterSetName = 'Update')]
-    [ValidateRange(0, 10080)]
+    [ValidateRange(0, 60)]
     [int]$LogOffDelayMinutes,
 
     [Parameter(ParameterSetName = 'Update')]
@@ -535,9 +535,19 @@ if ($updateSettings.Count -gt 0) {
 }
 
 $effectiveSettings = $management.properties.update
+$effectiveLogOffDelayMinutes = if ($updateSettings.ContainsKey('logOffDelayMinutes')) {
+    $updateSettings.logOffDelayMinutes
+}
+else {
+    $effectiveSettings.logOffDelayMinutes
+}
+if ($effectiveLogOffDelayMinutes -lt 0 -or $effectiveLogOffDelayMinutes -gt 60) {
+    throw "The effective logoff delay must be between 0 and 60 minutes. Redeploy the host pool or pass -LogOffDelayMinutes with a supported value."
+}
+
 Write-Step ("Batch settings: maxVmsRemoved={0}, logOffDelayMinutes={1}, deleteOriginalVm={2}" -f `
     $(if ($updateSettings.ContainsKey('maxVmsRemoved')) { $updateSettings.maxVmsRemoved } else { $effectiveSettings.maxVmsRemoved }),
-    $(if ($updateSettings.ContainsKey('logOffDelayMinutes')) { $updateSettings.logOffDelayMinutes } else { $effectiveSettings.logOffDelayMinutes }),
+    $effectiveLogOffDelayMinutes,
     $(if ($updateSettings.ContainsKey('deleteOriginalVm')) { $updateSettings.deleteOriginalVm } else { $effectiveSettings.deleteOriginalVm }))
 
 # ---------------------------------------------------------------------------

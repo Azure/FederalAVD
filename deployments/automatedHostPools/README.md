@@ -504,7 +504,8 @@ and runs these steps:
 
 `-MaxVmsRemoved`, `-LogOffDelayMinutes`, `-LogOffMessage`, and `-DeleteOriginalVm` override the
 deployed batch settings for this update only. If you omit them, the update uses the host pool
-management values.
+management values. `-LogOffDelayMinutes` accepts values from 0 through 60, matching the Azure
+portal limit.
 
 The script doesn't wait for completion unless you pass `-WaitForCompletion`. With that switch, it
 polls until the update finishes and re-enables autoscale only after the update succeeds. If you
