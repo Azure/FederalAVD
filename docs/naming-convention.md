@@ -126,6 +126,7 @@ Key abbreviations:
   "freeform1":               "",
   "freeform2":               "",
   "locationAbbreviation":    "",
+  "imageManagementStoragePrefix": "",
   "vmsLocationAbbreviation": "",
   "cpLocationAbbreviation":  "",
   "fslogixStoragePrefix":    "",
@@ -144,6 +145,7 @@ Key abbreviations:
 | `freeform1` | `string` | No | First free-text slot. Use for organisation or team prefix. |
 | `freeform2` | `string` | No | Second free-text slot. Use for any additional static token. |
 | `locationAbbreviation` | `string` | No | Override for the deployment region abbreviation in Shared Services, Image Management, and the Template Spec publishing script. Leave blank to auto-derive. |
+| `imageManagementStoragePrefix` | `string` | No | Shared prefix for Image Management artifacts and build-logs storage accounts. Use 1-5 lowercase letters or numbers. The generated names append `imgassets` or `imglogs`, the location abbreviation, and a deterministic 6-character uniqueness suffix. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. Leave blank to derive names from the standard Image Management storage naming pattern. |
 | `vmsLocationAbbreviation` | `string` | No | Override for the session hosts (VMs) region abbreviation. Leave blank to auto-derive from the deployment location. |
 | `cpLocationAbbreviation` | `string` | No | Override for the control plane region abbreviation. Leave blank to auto-derive. |
 | `fslogixStoragePrefix` | `string` | No | Custom prefix for FSLogix storage accounts (≤ 13 lowercase alphanumeric characters, no hyphens). Leave blank to use the auto-derived prefix `fslogix{unique}`. |

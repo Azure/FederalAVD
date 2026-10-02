@@ -4956,11 +4956,11 @@
                   "label": "Custom FSLogix Storage Account Prefix",
                   "placeholder": "e.g. fslogix, myprefix",
                   "defaultValue": "",
-                  "toolTip": "Custom prefix for FSLogix storage account names (max 13 characters). The full name is this prefix plus a 2-digit instance index (e.g. myprefix01, myprefix02), keeping the total at or below 15 characters — required for AD DS computer account compatibility. Must be lowercase alphanumeric; hyphens are stripped. Leave empty to use the default naming convention (fslogix + a unique string), which is suitable for cloud-only FSLogix with no AD DS join.",
+                  "toolTip": "Custom prefix for FSLogix storage account names. Use up to 13 lowercase letters or numbers. The full name is this prefix plus a 2-digit instance index (e.g. myprefix01, myprefix02), keeping the total at or below 15 characters — required for AD DS computer account compatibility. Leave empty to use the default naming convention (fslogix + a unique string), which is suitable for cloud-only FSLogix with no AD DS join.",
                   "constraints": {
                     "required": false,
-                    "regex": "^[a-z0-9-]{0,13}$",
-                    "validationMessage": "Use up to 13 lowercase letters, digits, or hyphens (hyphens are stripped from the final name, so the effective prefix is at most 13 alphanumeric characters)."
+                    "regex": "^[a-z0-9]{0,13}$",
+                    "validationMessage": "Use up to 13 lowercase letters or numbers."
                   }
                 },
                 {

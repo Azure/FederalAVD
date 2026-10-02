@@ -166,6 +166,28 @@ Describe 'Common host-pool UI form behavior' {
     }
 }
 
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
+
+Describe 'Standard host-pool FSLogix storage prefix' {
+    It 'allows only an optional lowercase alphanumeric prefix up to 13 characters' {
+        $form = Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json
+        $tagsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'tagsAndNaming' }
+        $namingSection = $tagsStep.elements | Where-Object { $_.name -eq 'naming' }
+        $prefix = $namingSection.elements | Where-Object { $_.name -eq 'fslogixStoragePrefixValue' }
+
+        $prefix.constraints.required | Should Be $false
+        $prefix.constraints.regex | Should Be '^[a-z0-9]{0,13}$'
+        $prefix.toolTip | Should Match 'lowercase letters or numbers'
+        $prefix.constraints.validationMessage | Should Match 'lowercase letters or numbers'
+        '' | Should Match $prefix.constraints.regex
+        'fslogix123456' | Should Match $prefix.constraints.regex
+        'fslogix1234567' | Should Not Match $prefix.constraints.regex
+        'fslogix-prefix' | Should Not Match $prefix.constraints.regex
+        ([regex]::IsMatch('FSLOGIX', $prefix.constraints.regex)) | Should Be $false
+    }
+}
+
 Describe 'Session host resource naming defaults' {
     It 'uses stable shared defaults independent of resource type abbreviations' {
         $repoRoot = Split-Path -Parent $PSScriptRoot

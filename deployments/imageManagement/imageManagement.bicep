@@ -99,6 +99,8 @@ Key properties:
   workload            — solution identifier inserted into names, e.g. "avd"
   freeform1, environment, freeform2 — optional static/context tokens
   locationAbbreviation — override for the region abbreviation
+  imageManagementStoragePrefix — optional shared prefix for artifacts and build-logs storage accounts;
+                                 1-5 lowercase alphanumeric characters
   resourceTypeCodes   — object with per-resource-type abbreviation overrides
     { resourceGroups, computeGalleries, userAssignedIdentities, storageAccounts, privateEndpoints, networkInterfaces, diskEncryptionSets }
 This object is produced automatically when deploying via the Azure Portal UI.
@@ -222,6 +224,23 @@ var customEncryptionIdentityName = buildCustomName(
 // containing resource group already carries the full convention name).
 // RT position mirrors the convention: prefix when RT-first, suffix when RT-last.
 var saRtCode = toLower(cnv_rtCodes.storageAccounts)  // e.g. 'sa'
+var imageManagementStoragePrefix = string(namingConvention.?imageManagementStoragePrefix ?? '')
+var imageManagementStoragePrefixChars = !empty(imageManagementStoragePrefix)
+  ? map(range(0, length(imageManagementStoragePrefix)), i => substring(imageManagementStoragePrefix, i, 1))
+  : []
+var invalidImageManagementStoragePrefixChars = filter(
+  imageManagementStoragePrefixChars,
+  character => !contains('abcdefghijklmnopqrstuvwxyz0123456789', character)
+)
+var imageManagementStoragePrefixIsValid = empty(imageManagementStoragePrefix) || (length(imageManagementStoragePrefix) <= 5 && imageManagementStoragePrefix == toLower(imageManagementStoragePrefix) && empty(invalidImageManagementStoragePrefixChars))
+  ? true
+  : fail('namingConvention.imageManagementStoragePrefix must contain no more than 5 lowercase letters or numbers.')
+var imageManagementStorageLocationIsValid = empty(imageManagementStoragePrefix) || length(cnv_loc) <= 4
+  ? true
+  : fail('The location abbreviation must contain no more than 4 characters when namingConvention.imageManagementStoragePrefix is specified.')
+var effectiveImageManagementStoragePrefix = imageManagementStoragePrefixIsValid && imageManagementStorageLocationIsValid
+  ? imageManagementStoragePrefix
+  : imageManagementStoragePrefix
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 'image-management' is intentionally hardcoded — this solution always deploys a single
@@ -269,9 +288,13 @@ var saUniqueSuffix = !contains(cnv_components, 'location')
 // account name is being built.
 var saUniqueLen = 24 - length(saRtCode) - 9 - length(cnv_loc)
 var saUnique    = take(saUniqueSuffix, saUniqueLen > 0 ? saUniqueLen : 1)
-var artifactsStorageAccountName = cnv_rtFirst
-  ? '${saRtCode}imgassets${cnv_loc}${saUnique}'
-  : 'imgassets${cnv_loc}${saUnique}${saRtCode}'
+// Custom pattern budget: 5-character prefix + 9-character purpose + 4-character location + 6-character uniqueness = 24.
+var customPrefixSaUnique = take(uniqueString(subscription().subscriptionId, resourceGroupName, location), 6)
+var artifactsStorageAccountName = !empty(effectiveImageManagementStoragePrefix)
+  ? '${effectiveImageManagementStoragePrefix}imgassets${cnv_loc}${customPrefixSaUnique}'
+  : cnv_rtFirst
+      ? '${saRtCode}imgassets${cnv_loc}${saUnique}'
+      : 'imgassets${cnv_loc}${saUnique}${saRtCode}'
 var sasExpirationPeriod = '180.00:00:00' // 180 days
 var storageKind = 'StorageV2'
 var storageSkuName = 'Standard_LRS'
@@ -318,9 +341,11 @@ var galleryConfidentialVmDiskEncryptionSetName = buildCustomName(
 )
 var galleryConfidentialVmDiskEncryptionKeyName = '${identifier}-gallery-cvm-cmk'
 
-var logsStorageName = cnv_rtFirst
-  ? '${saRtCode}imglogs${cnv_loc}${saUnique}'
-  : 'imglogs${cnv_loc}${saUnique}${saRtCode}'
+var logsStorageName = !empty(effectiveImageManagementStoragePrefix)
+  ? '${effectiveImageManagementStoragePrefix}imglogs${cnv_loc}${customPrefixSaUnique}'
+  : cnv_rtFirst
+      ? '${saRtCode}imglogs${cnv_loc}${saUnique}'
+      : 'imglogs${cnv_loc}${saUnique}${saRtCode}'
 var logsContainerName = 'image-customization-logs'
 var logsPrivateEndpointName = replace(
   replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
