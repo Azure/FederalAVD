@@ -2,6 +2,10 @@
 
 # Features
 
+This page describes individual FederalAVD capabilities. See
+[Secure Endpoint Architecture](secure-endpoint-architecture.md) for how those capabilities combine
+with customer-owned controls into an endpoint lifecycle and controlled AI service access layer.
+
 ## Zero Trust Architecture
 
 This solution is designed to align with Microsoft's Zero Trust security principles for Azure Virtual Desktop. Zero Trust is a security framework that assumes breach and verifies each request as though it originates from an uncontrolled network. The implementation includes multiple layers of security controls that work together to protect your AVD environment.

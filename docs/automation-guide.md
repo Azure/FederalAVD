@@ -6,6 +6,10 @@ This guide describes how to chain the FederalAVD deployment steps together in an
 
 Each step maps to an existing script or ARM/Bicep deployment. You can wire them together in whatever automation tool you use (Azure DevOps, GitHub Actions, a shell script, a runbook, etc.).
 
+This workflow implements the build, deploy, observe, and replace phases of the
+[Secure Endpoint Architecture](secure-endpoint-architecture.md#secure-endpoint-lifecycle).
+Organizational validation and release approval remain explicit lifecycle steps.
+
 ---
 
 ## The Pipeline at a Glance

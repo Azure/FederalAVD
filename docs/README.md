@@ -12,6 +12,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 | --- | --- |
 | [Quick Start Guide](quick-start.md) | Start here to choose standard or automated host-pool management, select only the required deployment steps, and complete a first deployment. New to FederalAVD? See the [PoC callout in Step 4](quick-start.md#step-4-deploy-host-pool). [Top 5 first-deployment mistakes](troubleshooting.md#top-5-first-deployment-mistakes). |
 | [Choose a Host Pool Management Approach](host-pool-management.md) | Decision guide for standard versus automated host pools, including lifecycle ownership, cloud and workload support, autoscale, image updates, and where Session Host Replacer fits. |
+| [Secure Endpoint Architecture](secure-endpoint-architecture.md) | Conceptual security and lifecycle operating model that connects endpoint definition, control layers, AI service access, shared responsibility, evidence, and controlled host replacement. |
 | [Design](design.md) | Architecture overview — resource organization, naming conventions, resource group layout, and CAF alignment. |
 | [Features](features.md) | Capability overview — Zero Trust architecture, multi-subscription support, encryption options, and key solution characteristics. Intro to federal ZT mandates. |
 | [Solution Limitations](limitations.md) | Known constraints and unsupported scenarios — identity solution limitations, feature gaps, and workarounds. Read before designing a deployment. |

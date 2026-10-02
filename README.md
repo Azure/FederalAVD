@@ -174,7 +174,12 @@ FederalAVD's AVD Insights configuration does not collect the Windows Security ev
 supplemental DCR or SIEM agent when audit requirements include Security events. See the
 [Compliance Control Mapping](docs/compliance.md#audit-and-accountability-au).
 
-**[Zero Trust Architecture Details](docs/features.md#zero-trust-architecture)**
+- **[Secure Endpoint Architecture](docs/secure-endpoint-architecture.md)** - How endpoint definition,
+  control layers, lifecycle, AI service access, and evidence work together
+- **[Zero Trust Architecture Details](docs/features.md#zero-trust-architecture)** - Individual
+  security capabilities and deployment considerations
+- **[Compliance Control Mapping](docs/compliance.md)** - Control mappings, configuration
+  conditions, and assessment context
 
 ---
 
@@ -200,6 +205,7 @@ Support for multiple identity configurations to meet organizational requirements
 
 - 📖 [Quick Start Guide](docs/quick-start.md) - Step-by-step deployment instructions with path selection (PoC / custom software / enterprise CMK)
 - 🤖 [End-to-End Automation Guide](docs/automation-guide.md) - Chaining steps together and passing outputs
+- 🛡️ [Secure Endpoint Architecture](docs/secure-endpoint-architecture.md) - Conceptual security and lifecycle operating model
 - 🏗️ [Design](docs/design.md) - Architecture and resource organization
 - ⚙️ [Parameters Reference](docs/parameters.md) - Per-solution parameter documentation index
 

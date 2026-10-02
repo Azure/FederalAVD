@@ -4,6 +4,10 @@
 
 This Azure Virtual Desktop (AVD) solution will deploy fully operational AVD hostpool(s) to an Azure subscription.
 
+This page describes the Azure resource topology. See [Secure Endpoint Architecture](secure-endpoint-architecture.md)
+for the control-layer, shared-responsibility, lifecycle, evidence, and AI access model implemented
+through that topology.
+
 The deployment utilizes the Cloud Adoption Framework naming conventions and organizes resources and resource groups in accordance with several available parameters:
 
 - Persona Identifier (***identifier***): This parameter is used to uniquely identify the persona of the host pool(s). Each persona, or each group of users with distinct business functions and technical requirements, would require a specific host-pool configuration and thus we use the persona term to identify the host pool. For more information about personas see [User Personas | AVD Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/scenarios/azure-virtual-desktop/migrate-assess#user-personas).

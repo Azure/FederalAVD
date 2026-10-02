@@ -12,6 +12,11 @@ Use a **standard host pool** in these clouds. FederalAVD's automated host pool u
 preview service. See [Choose a Host Pool Management Approach](host-pool-management.md) before
 deploying Step 4.
 
+The control-layer and replacement model remains the same across cloud boundaries, but available
+services and authorized dependencies differ. See
+[Secure Endpoint Architecture](secure-endpoint-architecture.md#cloud-boundary-portability) for the
+conceptual model.
+
 ## Choose the Image Path
 
 A custom image is not universally required. Choose the smallest path that meets the workload:
