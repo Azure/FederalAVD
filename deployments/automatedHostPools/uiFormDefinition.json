@@ -3717,11 +3717,11 @@
 									"label": "Custom FSLogix Storage Account Prefix",
 									"defaultValue": "",
 									"visible": "[steps('profiles').deployStorage]",
-									"toolTip": "Optional. Use up to 13 lowercase letters, numbers, or hyphens. Hyphens are removed from the storage account name and a two-digit index is appended.",
+									"toolTip": "Optional. Use up to 13 lowercase letters or numbers. A two-digit index is appended to the storage account name.",
 									"constraints": {
 										"required": false,
-										"regex": "^[a-z0-9-]{0,13}$",
-										"validationMessage": "Use up to 13 lowercase letters, numbers, or hyphens."
+										"regex": "^[a-z0-9]{0,13}$",
+										"validationMessage": "Use up to 13 lowercase letters or numbers."
 									}
 								},
 								{
