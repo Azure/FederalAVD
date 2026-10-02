@@ -110,9 +110,14 @@ correctness boundary because several definitions intentionally use broad resourc
 Do not assign them to a resource group containing unrelated VMs, NICs, or managed disks.
 
 Use `modules/policyAssignment.bicep` for assignments. Pass a stable `ownerId` so assignment metadata
-identifies the owning deployment. The standalone add-on also protects its resource-group boundary
-with the `FederalAVD-SessionHostPolicy-Owner` tag. Use explicit dependencies when enforcement relies
-on RBAC propagation or another assignment being present first.
+identifies the owning deployment. Optional definitions, assignments, RBAC, and remediations must use
+the same feature condition so disabled capabilities do not add subscription policy definitions or
+resource-group assignments. Use a top-level capability module when definition, assignment, RBAC,
+and remediation form a reusable lifecycle.
+
+The standalone add-on also protects its resource-group boundary with the
+`FederalAVD-SessionHostPolicy-Owner` tag. Use explicit dependencies when enforcement relies on RBAC
+propagation or another assignment being present first.
 
 ## Nested Templates And Build Order
 

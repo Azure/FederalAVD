@@ -110,9 +110,10 @@ does not expose directly, including encryption at host, OS disk sizing, Disk Enc
 system-assigned identity, accelerated networking, and managed-disk network access. Applying these
 settings to the initial VM, NIC, or disk request avoids a post-provisioning replacement workflow.
 
-The creation-settings and monitoring initiatives group policies that share a lifecycle, assignment
-scope, and remediation identity. This reduces assignment and propagation overhead while retaining
-member-level effects for optional capabilities. Creation-settings policy resources use the
+Each optional creation capability has a separate deterministic assignment and is deployed only
+when selected. Definitions, assignments, and capability-specific RBAC use the same condition.
+This keeps unrelated definitions out of the subscription and prevents one host pool's choices from
+changing a shared initiative used by another pool. Creation-setting policy resources use the
 `avdSessionHost*` name family and the following shared metadata so they can be discovered together
 without depending on the repository name or deployment method:
 
@@ -120,11 +121,10 @@ without depending on the repository name or deployment method:
 - `solution: AVD Session Host Governance`
 - `component: Creation Settings`
 
-The creation initiative is assigned by the automated host-pool deployment as
-`avd-sh-creation-settings`. Its resource-type predicates require assignment to a dedicated session-host
-resource group, whether the hosts are service-created, portal-created, or deployed through another
-workflow. Monitoring and post-provisioning policies retain automated-host-pool metadata because their
-request-shape and sequencing assumptions have not been generalized.
+Assignments use deterministic `avd-sh-*` names at the dedicated session-host resource-group scope.
+Their resource-type predicates require that boundary whether the hosts are service-created,
+portal-created, or deployed through another workflow. Monitoring keeps its initiative because its
+agent and association members share one lifecycle and sequencing contract.
 
 ### VM CMK Ownership
 
@@ -169,18 +169,16 @@ The policy module tags the dedicated session-host resource group with
 and managed disks receive the same ownership tag when created or updated. Session Host
 Configuration `vmTags` remains available for additional VM-only tags.
 
-The DES member of the creation-settings initiative uses the Azure Policy `Modify` effect to add or
-replace the VM OS disk `diskEncryptionSet.id` during the VM create request. Unlike the remediation
-policies that use `DeployIfNotExists`, this member is not a DINE deployment because the target is a
-property on the VM request rather than a related child resource. Existing running VMs are outside the initial
-remediation contract because changing encryption on an attached OS disk can require deallocation.
+The DES assignment uses the Azure Policy `Modify` effect to add or replace the VM OS disk
+`diskEncryptionSet.id` during the VM create request. Unlike remediation policies that use
+`DeployIfNotExists`, it is not a DINE deployment because the target is a property on the VM request
+rather than a related child resource. Existing running VMs are outside the initial remediation
+contract because changing encryption on an attached OS disk can require deallocation.
 
-The creation-settings initiative uses one assignment for compute settings, Disk Encryption Set,
-system-assigned identity, accelerated networking, and managed-disk network access. Disk Encryption
-Set and managed-disk network access use member-level effects. Accelerated networking also uses a
-member-level effect so `enableAcceleratedNetworking: false` leaves the NIC property unmanaged.
-Within the compute member, `encryptionAtHost: false` skips only that operation; a nonzero OS disk
-size remains enforceable independently.
+Compute, Disk Encryption Set, system-assigned identity, accelerated networking, Availability Set,
+and managed-disk network access use separate assignments. The compute definition and assignment
+deploy only when encryption at host is enabled or a nonzero OS disk size is requested. The other
+definitions and assignments deploy only when their corresponding capability is selected.
 
 ## Capability Matrix
 
@@ -188,7 +186,7 @@ size remains enforceable independently.
 | --- | --- | --- | --- |
 | Encryption at host | Inject `securityProfile.encryptionAtHost` with `Modify` when enabled; leave the property unmanaged when disabled | `encryptionAtHost` | Implemented; enabled by default |
 | OS disk size | Inject a nonzero requested size with `Modify`, then expand the guest OS partition in the unified configuration Run Command | `diskSizeGB` | Implemented |
-| Accelerated networking | Set the NIC property with `Modify` when enabled; disable the initiative member otherwise | `enableAcceleratedNetworking` | Implemented; enabled by default |
+| Accelerated networking | Set the NIC property with `Modify` when enabled; omit its definition and assignment otherwise | `enableAcceleratedNetworking` | Implemented; enabled by default |
 | Guest Attestation | Deploy the extension to Trusted Launch and Confidential VMs | `integrityMonitoring` | Implemented; enabled by default |
 | Session host configuration | Run one post-provisioning command for the Windows time zone, time zone redirection, optional FSLogix, and guest OS partition expansion | Unified custom policy definition | Implemented |
 | VM identity | Enable system-assigned identity during creation while preserving existing user-assigned identities | Custom `Modify` policy modeled on built-in policy `17b3de92-f710-4cf4-aa55-0e7859f1ed7b` | Implemented |
@@ -275,8 +273,8 @@ monitoring design.
 1. Validate Session Host Configuration resource APIs, VM tagging behavior, and built-in policy
    availability in each supported Azure cloud.
 2. Extract the FSLogix storage deployment into a standalone add-on with stable outputs.
-3. Deploy the creation-settings initiative, then deploy the custom AMA, DCR, and optional DCE
-   monitoring initiative with the roles declared by its policies.
+3. Deploy each selected creation-setting definition and assignment, then deploy the custom AMA,
+   DCR, and optional DCE monitoring initiative with the roles declared by its policies.
 4. Deploy the FSLogix policy from a source-controlled Bicep definition with successful Run Command
    compliance and identity-based storage authentication.
 5. Deploy private customizations as one serial policy deployment after granting the artifact UAI

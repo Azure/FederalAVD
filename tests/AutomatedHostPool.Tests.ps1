@@ -6,7 +6,6 @@ $armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool
 $policyAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
 $availabilitySetAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\availabilitySet.bicep'
 $availabilitySetPolicyPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\virtualMachine-availabilitySet.policyDefinition.bicep'
-$creationSettingsPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\sessionHostCreationSettings.policySetDefinition.bicep'
 $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
 
 Describe 'Automated host-pool Availability Set placement' {
@@ -19,7 +18,6 @@ Describe 'Automated host-pool Availability Set placement' {
         $policyAdapter = Get-Content -LiteralPath $policyAdapterPath -Raw
         $availabilitySetAdapter = Get-Content -LiteralPath $availabilitySetAdapterPath -Raw
         $availabilitySetPolicy = Get-Content -LiteralPath $availabilitySetPolicyPath -Raw
-        $creationSettings = Get-Content -LiteralPath $creationSettingsPath -Raw
         $readme = Get-Content -LiteralPath $readmePath -Raw
         $hostsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'hosts' }
         $hostDetails = $hostsStep.elements | Where-Object { $_.name -eq 'hostDetails' }
@@ -70,12 +68,11 @@ Describe 'Automated host-pool Availability Set placement' {
         $availabilitySetPolicy | Should Not Match 'availabilitySetResourceIds'
         $availabilitySetPolicy | Should Not Match 'first\(skip\('
         $availabilitySetPolicy | Should Not Match 'last\(split\(field\('
-        $creationSettings | Should Match "policyDefinitionReferenceId: 'configureAvailabilitySet'"
-        $creationSettings | Should Match "availabilitySetResourceId:"
-        $creationSettings | Should Not Match 'availabilitySetResourceIds'
-        ([regex]::Matches($creationSettings, "policyDefinitionReferenceId: 'configureAvailabilitySet'")).Count | Should Be 1
-        $policyAdapter | Should Match "availabilitySetEffect:"
-        $policyAdapter | Should Match "value: empty\(availabilitySetResourceId\) \? 'Disabled' : 'Modify'"
+        $policyAdapter | Should Match "module availabilitySetPolicyDefinition .* = if \(!empty\(availabilitySetResourceId\)\)"
+        $policyAdapter | Should Match "module availabilitySetPolicyAssignment .* = if \(!empty\(availabilitySetResourceId\)\)"
+        $policyAdapter | Should Match "name: 'avd-sh-availability-set'"
+        $policyAdapter | Should Match "policyDefinitionResourceId: availabilitySetPolicyDefinition!\.outputs\.policyDefinitionResourceId"
+        $policyAdapter | Should Match "value: 'Modify'"
         $policyAdapter | Should Not Match 'availabilitySetResourceIds'
         $bicep | Should Match "availabilitySetResourceId: deployAvailabilitySet \? availabilitySet!\.outputs\.resourceId : ''"
         $readme | Should Match 'before the Compute\s+resource provider processes each VM creation request'
@@ -108,6 +105,39 @@ Describe 'Automated host-pool Availability Set placement' {
         $formJson | Should Match "schedule\.rampUpMaximumHostPoolSize"
         $formJson | Should Match "schedule\.rampDownMaximumHostPoolSize"
         $formJson | Should Match '"deleteOriginalVm": "\[if\(equals\(steps\(''hosts''\)\.availability\.option, ''AvailabilitySets''\), true,'
+    }
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$policyAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
+
+Describe 'Automated host-pool conditional policy capabilities' {
+    BeforeAll {
+        $policyAdapter = Get-Content -LiteralPath $policyAdapterPath -Raw
+    }
+
+    It 'does not deploy the fixed creation-settings initiative' {
+        $policyAdapter | Should Not Match 'sessionHostCreationSettings'
+        $policyAdapter | Should Not Match 'avd-sh-creation-settings'
+    }
+
+    It 'conditions creation-setting definitions and assignments on their capabilities' {
+        $policyAdapter | Should Match 'var configureSessionHostCompute = encryptionAtHost \|\| diskSizeGB > 0'
+        $policyAdapter | Should Match "module sessionHostComputePolicyDefinition .* = if \(configureSessionHostCompute\)"
+        $policyAdapter | Should Match "module sessionHostComputePolicyAssignment .* = if \(configureSessionHostCompute\)"
+        $policyAdapter | Should Match "module diskEncryptionSetPolicyDefinition .* = if \(!empty\(diskEncryptionSetResourceId\)\)"
+        $policyAdapter | Should Match "module diskEncryptionSetPolicyAssignment .* = if \(!empty\(diskEncryptionSetResourceId\)\)"
+        $policyAdapter | Should Match "module acceleratedNetworkingPolicyDefinition .* = if \(enableAcceleratedNetworking\)"
+        $policyAdapter | Should Match "module acceleratedNetworkingPolicyAssignment .* = if \(enableAcceleratedNetworking\)"
+        $policyAdapter | Should Match "module availabilitySetPolicyDefinition .* = if \(!empty\(availabilitySetResourceId\)\)"
+        $policyAdapter | Should Match "module availabilitySetPolicyAssignment .* = if \(!empty\(availabilitySetResourceId\)\)"
+    }
+
+    It 'reuses capability modules for monitoring and managed-disk isolation' {
+        $policyAdapter | Should Match "module sessionHostSystemAssignedIdentityPolicyDefinition .* = if \(enableMonitoring\)"
+        $policyAdapter | Should Match 'assignSystemIdentityPolicy: true'
+        $policyAdapter | Should Match "module managedDiskNetworkAccessPolicyAssignment '.+/managedDiskNetworkAccess\.bicep' = if \(disableManagedDiskPublicNetworkAccess\)"
+        $policyAdapter | Should Not Match 'policyIdentityDiskPoolOperator'
     }
 }
 

@@ -642,11 +642,16 @@ storage operations. It uses the session-host subnet, which must allow outbound T
 
 When dynamic scaling is disabled, select the desired initial `sessionHostCount`. ARM first creates
 Session Host Management without a provisioning request, which is the API's zero-host state. It then
-deploys storage, policy assignments, and role assignments. A Run Command on the deployment helper VM
-waits five minutes for Azure Policy and role assignments to propagate before ARM updates Session Host
-Management with the requested host count. When dynamic scaling is enabled, the deployment activates
-the scaling plan after the same policy wait and the active schedule determines initial capacity.
-Session Host Management uses `canaryPolicy: Auto` for subsequent image and configuration updates.
+deploys storage, policy assignments, and role assignments. Universal session-host configuration and
+ownership assignments are always deployed. Optional policy definitions, assignments, and RBAC are
+deployed only for the selected compute, encryption, networking, availability, monitoring, disk,
+application, attestation, or customization capabilities.
+
+A Run Command on the deployment helper VM waits five minutes for Azure Policy and role assignments
+to propagate before ARM updates Session Host Management with the requested host count. When dynamic
+scaling is enabled, the deployment activates the scaling plan after the same policy wait and the
+active schedule determines initial capacity. Session Host Management uses `canaryPolicy: Auto` for
+subsequent image and configuration updates.
 
 Azure Policy assignment propagation is eventually consistent and ARM does not expose a separate
 policy-readiness resource. The five-minute delay reduces the chance that initial hosts are created

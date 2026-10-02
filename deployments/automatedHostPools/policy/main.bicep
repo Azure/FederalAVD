@@ -61,14 +61,14 @@ param dataCollectionEndpointResourceId string = ''
 @description('Optional. Deploy Guest Attestation to Trusted Launch and Confidential VM session hosts for integrity monitoring.')
 param integrityMonitoring bool = true
 
-@description('Optional. Enforce encryption at host on session hosts. When false, the creation-settings initiative does not manage this property.')
+@description('Optional. Enforce encryption at host on session hosts. When false and diskSizeGB is zero, the compute policy is not deployed.')
 param encryptionAtHost bool = true
 
 @minValue(0)
 @description('Optional. OS disk size in GB. Set to zero to preserve the image default.')
 param diskSizeGB int = 0
 
-@description('Optional. Enforce accelerated networking on session host network interfaces. When false, the creation-settings initiative disables this member. The selected VM size must support accelerated networking.')
+@description('Optional. Enforce accelerated networking on session host network interfaces. When false, the accelerated-networking policy is not deployed. The selected VM size must support accelerated networking.')
 param enableAcceleratedNetworking bool = true
 
 @description('Optional. Windows time zone configured on automated session hosts.')
@@ -139,6 +139,7 @@ var normalizedArtifactsContainerUri = endsWith(artifactsContainerUri, '/')
 var finalSessionHostCustomizationName = !empty(sessionHostCustomizations)
   ? replace(last(sessionHostCustomizations)!.name, ' ', '-')
   : 'PrivateCustomization-Final'
+var configureSessionHostCompute = encryptionAtHost || diskSizeGB > 0
 var parentResourceTags = empty(hostPoolResourceId) ? {} : { 'cm-resource-parent': hostPoolResourceId }
 var resourceGroupTags = union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTags, empty(hostPoolResourceId) ? {} : {
   'FederalAVD-SessionHostPolicy-Owner': hostPoolResourceId
@@ -166,7 +167,7 @@ module policyIdentity '../../shared/modules/resourceModules/managedIdentity/user
   }
 }
 
-module diskEncryptionSetPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/virtualMachine-diskEncryptionSet.policyDefinition.bicep' = {
+module diskEncryptionSetPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/virtualMachine-diskEncryptionSet.policyDefinition.bicep' = if (!empty(diskEncryptionSetResourceId)) {
   params: {}
 }
 
@@ -178,35 +179,20 @@ module privateCustomizationPolicyDefinition '../../shared/modules/orchestration/
   params: {}
 }
 
-module managedDiskNetworkAccessPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/managedDiskNetworkAccess.policyDefinition.bicep' = {
+module sessionHostComputePolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/sessionHostCompute.policyDefinition.bicep' = if (configureSessionHostCompute) {
   params: {}
 }
 
-module sessionHostComputePolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/sessionHostCompute.policyDefinition.bicep' = {
+module availabilitySetPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/virtualMachine-availabilitySet.policyDefinition.bicep' = if (!empty(availabilitySetResourceId)) {
   params: {}
 }
 
-module availabilitySetPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/virtualMachine-availabilitySet.policyDefinition.bicep' = {
+module sessionHostSystemAssignedIdentityPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/systemAssignedIdentity.policyDefinition.bicep' = if (enableMonitoring) {
   params: {}
 }
 
-module sessionHostSystemAssignedIdentityPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/systemAssignedIdentity.policyDefinition.bicep' = {
+module acceleratedNetworkingPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/networkInterfaceAcceleratedNetworking.policyDefinition.bicep' = if (enableAcceleratedNetworking) {
   params: {}
-}
-
-module acceleratedNetworkingPolicyDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/networkInterfaceAcceleratedNetworking.policyDefinition.bicep' = {
-  params: {}
-}
-
-module sessionHostCreationSettingsPolicySetDefinition '../../shared/modules/orchestration/sessionHostPolicy/modules/sessionHostCreationSettings.policySetDefinition.bicep' = {
-  params: {
-    diskEncryptionSetPolicyDefinitionResourceId: diskEncryptionSetPolicyDefinition.outputs.policyDefinitionResourceId
-    sessionHostComputePolicyDefinitionResourceId: sessionHostComputePolicyDefinition.outputs.policyDefinitionResourceId
-    sessionHostSystemAssignedIdentityPolicyDefinitionResourceId: sessionHostSystemAssignedIdentityPolicyDefinition.outputs.policyDefinitionResourceId
-    acceleratedNetworkingPolicyDefinitionResourceId: acceleratedNetworkingPolicyDefinition.outputs.policyDefinitionResourceId
-    managedDiskNetworkAccessPolicyDefinitionResourceId: managedDiskNetworkAccessPolicyDefinition.outputs.policyDefinitionResourceId
-    availabilitySetPolicyDefinitionResourceId: availabilitySetPolicyDefinition.outputs.policyDefinitionResourceId
-  }
 }
 
 module policyIdentityVirtualMachineContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
@@ -239,16 +225,6 @@ module policyIdentityTagContributor '../../shared/modules/resourceModules/author
   }
 }
 
-module policyIdentityDiskPoolOperator '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (disableManagedDiskPublicNetworkAccess) {
-  scope: resourceGroup(sessionHostResourceGroupName)
-  params: {
-    roleDefinitionId: '60fc6e62-5479-42d4-8bf4-67625fcc2840'
-    principalId: policyIdentity.outputs.principalId
-    principalType: 'ServicePrincipal'
-    assignmentDescription: 'Allows Azure Policy to disable public network access on automated AVD session host managed disks.'
-  }
-}
-
 module policyIdentityArtifactManagedIdentityOperator '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(sessionHostCustomizations)) {
   scope: resourceGroup(
     split(artifactsUserAssignedIdentityResourceId, '/')[2],
@@ -267,15 +243,15 @@ module policyIdentityArtifactManagedIdentityOperator '../../shared/modules/resou
   }
 }
 
-module sessionHostCreationSettingsPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = {
+module sessionHostComputePolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = if (configureSessionHostCompute) {
   scope: resourceGroup(sessionHostResourceGroupName)
   params: {
-    name: 'avd-sh-creation-settings'
+    name: 'avd-sh-compute'
     location: location
     policyIdentityResourceId: policyIdentity.outputs.resourceId
-    policyDefinitionResourceId: sessionHostCreationSettingsPolicySetDefinition.outputs.policySetDefinitionResourceId
-    displayName: 'Configure AVD session host creation settings'
-    description: 'Configures compute security, optional Disk Encryption Set and Availability Set placement, system-assigned identity, accelerated networking, and optional managed-disk network access during resource creation or update.'
+    policyDefinitionResourceId: sessionHostComputePolicyDefinition!.outputs.policyDefinitionResourceId
+    displayName: 'Configure AVD session host compute settings'
+    description: 'Configures encryption at host and an optional OS disk size during session host creation or update.'
     parameters: {
       effect: {
         value: 'Modify'
@@ -286,36 +262,100 @@ module sessionHostCreationSettingsPolicyAssignment '../../shared/modules/orchest
       diskSizeGB: {
         value: diskSizeGB
       }
-      enableAcceleratedNetworking: {
-        value: enableAcceleratedNetworking
-      }
-      acceleratedNetworkingEffect: {
-        value: enableAcceleratedNetworking ? 'Modify' : 'Disabled'
-      }
-      diskEncryptionSetEffect: {
-        value: empty(diskEncryptionSetResourceId) ? 'Disabled' : 'Modify'
+    }
+    nonComplianceMessage: 'Session host virtual machines must use the selected compute settings.'
+    ownerId: policyOwnerId
+  }
+  dependsOn: [
+    policyIdentityVirtualMachineContributor
+  ]
+}
+
+module diskEncryptionSetPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = if (!empty(diskEncryptionSetResourceId)) {
+  scope: resourceGroup(sessionHostResourceGroupName)
+  params: {
+    name: 'avd-sh-disk-encryption'
+    location: location
+    policyIdentityResourceId: policyIdentity.outputs.resourceId
+    policyDefinitionResourceId: diskEncryptionSetPolicyDefinition!.outputs.policyDefinitionResourceId
+    displayName: 'Configure the AVD session host Disk Encryption Set'
+    description: 'Assigns the selected Disk Encryption Set to session host OS disks during creation or update.'
+    parameters: {
+      effect: {
+        value: 'Modify'
       }
       diskEncryptionSetResourceId: {
         value: diskEncryptionSetResourceId
       }
-      managedDiskNetworkAccessEffect: {
-        value: disableManagedDiskPublicNetworkAccess ? 'Modify' : 'Disabled'
+    }
+    nonComplianceMessage: 'Session host OS disks must use the selected Disk Encryption Set.'
+    ownerId: policyOwnerId
+  }
+  dependsOn: [
+    policyIdentityVirtualMachineContributor
+  ]
+}
+
+module acceleratedNetworkingPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = if (enableAcceleratedNetworking) {
+  scope: resourceGroup(sessionHostResourceGroupName)
+  params: {
+    name: 'avd-sh-accelerated-network'
+    location: location
+    policyIdentityResourceId: policyIdentity.outputs.resourceId
+    policyDefinitionResourceId: acceleratedNetworkingPolicyDefinition!.outputs.policyDefinitionResourceId
+    displayName: 'Configure accelerated networking on AVD session hosts'
+    description: 'Enables accelerated networking on session host network interfaces during creation or update.'
+    parameters: {
+      effect: {
+        value: 'Modify'
       }
-      availabilitySetEffect: {
-        value: empty(availabilitySetResourceId) ? 'Disabled' : 'Modify'
+      enableAcceleratedNetworking: {
+        value: true
+      }
+    }
+    nonComplianceMessage: 'Session host network interfaces must enable accelerated networking.'
+    ownerId: policyOwnerId
+  }
+  dependsOn: [
+    policyIdentityNetworkContributor
+  ]
+}
+
+module availabilitySetPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = if (!empty(availabilitySetResourceId)) {
+  scope: resourceGroup(sessionHostResourceGroupName)
+  params: {
+    name: 'avd-sh-availability-set'
+    location: location
+    policyIdentityResourceId: policyIdentity.outputs.resourceId
+    policyDefinitionResourceId: availabilitySetPolicyDefinition!.outputs.policyDefinitionResourceId
+    displayName: 'Assign AVD session hosts to the managed Availability Set'
+    description: 'Assigns session host virtual machines to the selected managed Availability Set during creation.'
+    parameters: {
+      effect: {
+        value: 'Modify'
       }
       availabilitySetResourceId: {
         value: availabilitySetResourceId
       }
     }
-    nonComplianceMessage: 'Session host resources must use the selected creation-time compute, identity, networking, availability, encryption, and managed-disk settings.'
+    nonComplianceMessage: 'Session host virtual machines must use the selected managed Availability Set.'
     ownerId: policyOwnerId
   }
   dependsOn: [
     policyIdentityVirtualMachineContributor
-    policyIdentityNetworkContributor
-    policyIdentityDiskPoolOperator
   ]
+}
+
+module managedDiskNetworkAccessPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/managedDiskNetworkAccess.bicep' = if (disableManagedDiskPublicNetworkAccess) {
+  params: {
+    location: location
+    targetResourceGroupName: sessionHostResourceGroupName
+    policyIdentityResourceId: policyIdentity.outputs.resourceId
+    policyIdentityPrincipalId: policyIdentity.outputs.principalId
+    createAssignment: true
+    createRemediation: false
+    ownerId: policyOwnerId
+  }
 }
 
 module resourceOwnershipTagPolicyAssignment '../../shared/modules/orchestration/sessionHostPolicy/modules/policyAssignment.bicep' = if (!empty(hostPoolResourceId)) {
@@ -347,15 +387,15 @@ module monitoringPolicyAssignment '../../shared/modules/orchestration/sessionHos
     targetResourceGroupName: sessionHostResourceGroupName
     policyIdentityResourceId: policyIdentity.outputs.resourceId
     policyIdentityPrincipalId: policyIdentity.outputs.principalId
-    systemIdentityPolicyDefinitionResourceId: sessionHostSystemAssignedIdentityPolicyDefinition.outputs.policyDefinitionResourceId
+    systemIdentityPolicyDefinitionResourceId: sessionHostSystemAssignedIdentityPolicyDefinition!.outputs.policyDefinitionResourceId
     dataCollectionRuleResourceId: monitoringConfigurationIsValid ? dataCollectionRuleResourceId : dataCollectionRuleResourceId
     dataCollectionEndpointResourceId: dataCollectionEndpointResourceId
-    assignSystemIdentityPolicy: false
+    assignSystemIdentityPolicy: true
     createRemediation: false
     ownerId: policyOwnerId
   }
   dependsOn: [
-    sessionHostCreationSettingsPolicyAssignment
+    policyIdentityVirtualMachineContributor
   ]
 }
 
@@ -502,10 +542,12 @@ module privateCustomizationPolicyAssignment '../../shared/modules/orchestration/
 }
 
 output diskEncryptionSetPolicyAssignmentResourceId string = !empty(diskEncryptionSetResourceId)
-  ? sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
+  ? diskEncryptionSetPolicyAssignment!.outputs.resourceId
   : ''
 output diskEncryptionSetResourceId string = diskEncryptionSetResourceId
-output acceleratedNetworkingPolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
+output acceleratedNetworkingPolicyAssignmentResourceId string = enableAcceleratedNetworking
+  ? acceleratedNetworkingPolicyAssignment!.outputs.resourceId
+  : ''
 output dataCollectionEndpointPolicyAssignmentResourceId string = enableMonitoring && !empty(dataCollectionEndpointResourceId)
   ? monitoringPolicyAssignment!.outputs.monitoringPolicyAssignmentResourceId
   : ''
@@ -514,11 +556,13 @@ output guestAttestationPolicyAssignmentResourceId string = integrityMonitoring
   ? guestAttestationPolicyAssignment!.outputs.policyAssignmentResourceId
   : ''
 output managedDiskNetworkAccessPolicyAssignmentResourceId string = disableManagedDiskPublicNetworkAccess
-  ? sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
+  ? managedDiskNetworkAccessPolicyAssignment!.outputs.policyAssignmentResourceId
   : ''
 output monitoringPolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.monitoringPolicyAssignmentResourceId : ''
 output dataCollectionRulePolicyAssignmentResourceId string = enableMonitoring ? monitoringPolicyAssignment!.outputs.monitoringPolicyAssignmentResourceId : ''
-output sessionHostIdentityPolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
+output sessionHostIdentityPolicyAssignmentResourceId string = enableMonitoring
+  ? monitoringPolicyAssignment!.outputs.identityPolicyAssignmentResourceId
+  : ''
 output policyIdentityResourceId string = policyIdentity.outputs.resourceId
 output resourceOwnershipTagPolicyAssignmentResourceId string = !empty(hostPoolResourceId)
   ? resourceOwnershipTagPolicyAssignment!.outputs.resourceId
@@ -529,4 +573,6 @@ output sessionHostCustomizationPolicyAssignmentResourceIds array = !empty(sessio
 output sessionHostVmApplicationPolicyAssignmentResourceId string = !empty(sessionHostVmApplications)
   ? sessionHostVmApplicationPolicyAssignment!.outputs.policyAssignmentResourceId
   : ''
-output sessionHostComputePolicyAssignmentResourceId string = sessionHostCreationSettingsPolicyAssignment.outputs.resourceId
+output sessionHostComputePolicyAssignmentResourceId string = configureSessionHostCompute
+  ? sessionHostComputePolicyAssignment!.outputs.resourceId
+  : ''

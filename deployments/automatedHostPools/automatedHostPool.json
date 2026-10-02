@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "4056490698143628348"
+      "templateHash": "1888899299499928547"
     }
   },
   "definitions": {
@@ -14861,7 +14861,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.47.16.16243",
-              "templateHash": "15540717547422980887"
+              "templateHash": "17318680216684311440"
             }
           },
           "definitions": {
@@ -15078,7 +15078,7 @@
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Enforce encryption at host on session hosts. When false, the creation-settings initiative does not manage this property."
+                "description": "Optional. Enforce encryption at host on session hosts. When false and diskSizeGB is zero, the compute policy is not deployed."
               }
             },
             "diskSizeGB": {
@@ -15093,7 +15093,7 @@
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Enforce accelerated networking on session host network interfaces. When false, the creation-settings initiative disables this member. The selected VM size must support accelerated networking."
+                "description": "Optional. Enforce accelerated networking on session host network interfaces. When false, the accelerated-networking policy is not deployed. The selected VM size must support accelerated networking."
               }
             },
             "virtualMachinesTimeZone": {
@@ -15195,6 +15195,7 @@
             "vmApplicationConfigurationIsValid": "[if(and(equals(length(variables('validVmApplications')), length(parameters('sessionHostVmApplications'))), equals(length(union(variables('vmApplicationDefinitionResourceIds'), createArray())), length(variables('vmApplicationDefinitionResourceIds')))), true(), fail('sessionHostVmApplications must contain valid Gallery application version resource IDs and cannot contain more than one version of the same application.'))]",
             "normalizedArtifactsContainerUri": "[if(endsWith(parameters('artifactsContainerUri'), '/'), take(parameters('artifactsContainerUri'), max(sub(length(parameters('artifactsContainerUri')), 1), 0)), parameters('artifactsContainerUri'))]",
             "finalSessionHostCustomizationName": "[if(not(empty(parameters('sessionHostCustomizations'))), replace(last(parameters('sessionHostCustomizations')).name, ' ', '-'), 'PrivateCustomization-Final')]",
+            "configureSessionHostCompute": "[or(parameters('encryptionAtHost'), greater(parameters('diskSizeGB'), 0))]",
             "parentResourceTags": "[if(empty(parameters('hostPoolResourceId')), createObject(), createObject('cm-resource-parent', parameters('hostPoolResourceId')))]",
             "resourceGroupTags": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), variables('parentResourceTags'), if(empty(parameters('hostPoolResourceId')), createObject(), createObject('FederalAVD-SessionHostPolicy-Owner', parameters('hostPoolResourceId'))))]",
             "managedIdentityTags": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject()), variables('parentResourceTags'))]"
@@ -15350,6 +15351,7 @@
               }
             },
             "diskEncryptionSetPolicyDefinition": {
+              "condition": "[not(empty(parameters('diskEncryptionSetResourceId')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('diskEncryptionSetPolicyDefinition-{0}', uniqueString('diskEncryptionSetPolicyDefinition', deployment().name))]",
@@ -16329,114 +16331,8 @@
                 }
               }
             },
-            "managedDiskNetworkAccessPolicyDefinition": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('managedDiskNetworkAccessPolicyDefinition-{0}', uniqueString('managedDiskNetworkAccessPolicyDefinition', deployment().name))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {},
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "2633149560114965319"
-                    }
-                  },
-                  "parameters": {
-                    "policyDefinitionName": {
-                      "type": "string",
-                      "defaultValue": "avdSessionHostManagedDiskNetworkAccess-Modify"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/policyDefinitions",
-                      "apiVersion": "2024-05-01",
-                      "name": "[parameters('policyDefinitionName')]",
-                      "properties": {
-                        "displayName": "Disable public access on AVD session host managed disks",
-                        "description": "Disables public network access and denies all network export access on managed disks in the session host resource group.",
-                        "mode": "Indexed",
-                        "metadata": {
-                          "category": "Azure Virtual Desktop",
-                          "solution": "AVD Session Host Governance",
-                          "component": "Managed Disk Network Access",
-                          "version": "1.0.0"
-                        },
-                        "parameters": {
-                          "effect": {
-                            "type": "String",
-                            "allowedValues": [
-                              "Modify",
-                              "Disabled"
-                            ],
-                            "defaultValue": "Modify"
-                          }
-                        },
-                        "policyRule": {
-                          "if": {
-                            "allOf": [
-                              {
-                                "field": "type",
-                                "equals": "Microsoft.Compute/disks"
-                              },
-                              {
-                                "anyOf": [
-                                  {
-                                    "field": "Microsoft.Compute/disks/publicNetworkAccess",
-                                    "notEquals": "Disabled"
-                                  },
-                                  {
-                                    "field": "Microsoft.Compute/disks/networkAccessPolicy",
-                                    "notEquals": "DenyAll"
-                                  }
-                                ]
-                              }
-                            ]
-                          },
-                          "then": {
-                            "effect": "[[parameters('effect')]",
-                            "details": {
-                              "conflictEffect": "audit",
-                              "roleDefinitionIds": [
-                                "/providers/Microsoft.Authorization/roleDefinitions/60fc6e62-5479-42d4-8bf4-67625fcc2840"
-                              ],
-                              "operations": [
-                                {
-                                  "operation": "AddOrReplace",
-                                  "field": "Microsoft.Compute/disks/publicNetworkAccess",
-                                  "value": "Disabled"
-                                },
-                                {
-                                  "operation": "AddOrReplace",
-                                  "field": "Microsoft.Compute/disks/networkAccessPolicy",
-                                  "value": "DenyAll"
-                                }
-                              ]
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "policyDefinitionResourceId": {
-                      "type": "string",
-                      "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
-                    }
-                  }
-                }
-              }
-            },
             "sessionHostComputePolicyDefinition": {
+              "condition": "[variables('configureSessionHostCompute')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('sessionHostComputePolicyDefinition-{0}', uniqueString('sessionHostComputePolicyDefinition', deployment().name))]",
@@ -16593,6 +16489,7 @@
               }
             },
             "availabilitySetPolicyDefinition": {
+              "condition": "[not(empty(parameters('availabilitySetResourceId')))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('availabilitySetPolicyDefinition-{0}', uniqueString('availabilitySetPolicyDefinition', deployment().name))]",
@@ -16703,6 +16600,7 @@
               }
             },
             "sessionHostSystemAssignedIdentityPolicyDefinition": {
+              "condition": "[parameters('enableMonitoring')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('sessionHostSystemAssignedIdentityPolicyDefinition-{0}', uniqueString('sessionHostSystemAssignedIdentityPolicyDefinition', deployment().name))]",
@@ -16797,6 +16695,7 @@
               }
             },
             "acceleratedNetworkingPolicyDefinition": {
+              "condition": "[parameters('enableAcceleratedNetworking')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('acceleratedNetworkingPolicyDefinition-{0}', uniqueString('acceleratedNetworkingPolicyDefinition', deployment().name))]",
@@ -16901,241 +16800,6 @@
                   }
                 }
               }
-            },
-            "sessionHostCreationSettingsPolicySetDefinition": {
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('sessionHostCreationSettingsPolicySetDefinition-{0}', uniqueString('sessionHostCreationSettingsPolicySetDefinition', deployment().name))]",
-              "location": "[deployment().location]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "diskEncryptionSetPolicyDefinitionResourceId": {
-                    "value": "[reference('diskEncryptionSetPolicyDefinition').outputs.policyDefinitionResourceId.value]"
-                  },
-                  "sessionHostComputePolicyDefinitionResourceId": {
-                    "value": "[reference('sessionHostComputePolicyDefinition').outputs.policyDefinitionResourceId.value]"
-                  },
-                  "sessionHostSystemAssignedIdentityPolicyDefinitionResourceId": {
-                    "value": "[reference('sessionHostSystemAssignedIdentityPolicyDefinition').outputs.policyDefinitionResourceId.value]"
-                  },
-                  "acceleratedNetworkingPolicyDefinitionResourceId": {
-                    "value": "[reference('acceleratedNetworkingPolicyDefinition').outputs.policyDefinitionResourceId.value]"
-                  },
-                  "managedDiskNetworkAccessPolicyDefinitionResourceId": {
-                    "value": "[reference('managedDiskNetworkAccessPolicyDefinition').outputs.policyDefinitionResourceId.value]"
-                  },
-                  "availabilitySetPolicyDefinitionResourceId": {
-                    "value": "[reference('availabilitySetPolicyDefinition').outputs.policyDefinitionResourceId.value]"
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "9008776933724556754"
-                    }
-                  },
-                  "parameters": {
-                    "policySetDefinitionName": {
-                      "type": "string",
-                      "defaultValue": "avdSessionHostCreationSettings"
-                    },
-                    "diskEncryptionSetPolicyDefinitionResourceId": {
-                      "type": "string"
-                    },
-                    "sessionHostComputePolicyDefinitionResourceId": {
-                      "type": "string"
-                    },
-                    "sessionHostSystemAssignedIdentityPolicyDefinitionResourceId": {
-                      "type": "string"
-                    },
-                    "acceleratedNetworkingPolicyDefinitionResourceId": {
-                      "type": "string"
-                    },
-                    "managedDiskNetworkAccessPolicyDefinitionResourceId": {
-                      "type": "string"
-                    },
-                    "availabilitySetPolicyDefinitionResourceId": {
-                      "type": "string"
-                    }
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/policySetDefinitions",
-                      "apiVersion": "2024-05-01",
-                      "name": "[parameters('policySetDefinitionName')]",
-                      "properties": {
-                        "displayName": "Configure AVD session host creation settings",
-                        "description": "Groups custom creation-time policies for settings that Session Host Configuration does not expose directly.",
-                        "metadata": {
-                          "category": "Azure Virtual Desktop",
-                          "solution": "AVD Session Host Governance",
-                          "component": "Creation Settings",
-                          "version": "1.1.0"
-                        },
-                        "parameters": {
-                          "effect": {
-                            "type": "String",
-                            "allowedValues": [
-                              "Modify",
-                              "Disabled"
-                            ],
-                            "defaultValue": "Modify"
-                          },
-                          "encryptionAtHost": {
-                            "type": "Boolean",
-                            "defaultValue": true
-                          },
-                          "diskSizeGB": {
-                            "type": "Integer",
-                            "defaultValue": 0
-                          },
-                          "enableAcceleratedNetworking": {
-                            "type": "Boolean",
-                            "defaultValue": true
-                          },
-                          "acceleratedNetworkingEffect": {
-                            "type": "String",
-                            "allowedValues": [
-                              "Modify",
-                              "Disabled"
-                            ],
-                            "defaultValue": "Disabled"
-                          },
-                          "diskEncryptionSetEffect": {
-                            "type": "String",
-                            "allowedValues": [
-                              "Modify",
-                              "Disabled"
-                            ],
-                            "defaultValue": "Disabled"
-                          },
-                          "diskEncryptionSetResourceId": {
-                            "type": "String",
-                            "defaultValue": ""
-                          },
-                          "managedDiskNetworkAccessEffect": {
-                            "type": "String",
-                            "allowedValues": [
-                              "Modify",
-                              "Disabled"
-                            ],
-                            "defaultValue": "Disabled"
-                          },
-                          "availabilitySetEffect": {
-                            "type": "String",
-                            "allowedValues": [
-                              "Modify",
-                              "Disabled"
-                            ],
-                            "defaultValue": "Disabled"
-                          },
-                          "availabilitySetResourceId": {
-                            "type": "String",
-                            "defaultValue": "",
-                            "metadata": {
-                              "description": "Resource ID of the managed Availability Set assigned to session host virtual machines.",
-                              "strongType": "Microsoft.Compute/availabilitySets"
-                            }
-                          }
-                        },
-                        "policyDefinitions": [
-                          {
-                            "policyDefinitionReferenceId": "configureSessionHostCompute",
-                            "policyDefinitionId": "[parameters('sessionHostComputePolicyDefinitionResourceId')]",
-                            "parameters": {
-                              "effect": {
-                                "value": "[[parameters('effect')]"
-                              },
-                              "encryptionAtHost": {
-                                "value": "[[parameters('encryptionAtHost')]"
-                              },
-                              "diskSizeGB": {
-                                "value": "[[parameters('diskSizeGB')]"
-                              }
-                            }
-                          },
-                          {
-                            "policyDefinitionReferenceId": "configureDiskEncryptionSet",
-                            "policyDefinitionId": "[parameters('diskEncryptionSetPolicyDefinitionResourceId')]",
-                            "parameters": {
-                              "effect": {
-                                "value": "[[parameters('diskEncryptionSetEffect')]"
-                              },
-                              "diskEncryptionSetResourceId": {
-                                "value": "[[parameters('diskEncryptionSetResourceId')]"
-                              }
-                            }
-                          },
-                          {
-                            "policyDefinitionReferenceId": "configureSystemAssignedIdentity",
-                            "policyDefinitionId": "[parameters('sessionHostSystemAssignedIdentityPolicyDefinitionResourceId')]",
-                            "parameters": {
-                              "effect": {
-                                "value": "[[parameters('effect')]"
-                              }
-                            }
-                          },
-                          {
-                            "policyDefinitionReferenceId": "configureAcceleratedNetworking",
-                            "policyDefinitionId": "[parameters('acceleratedNetworkingPolicyDefinitionResourceId')]",
-                            "parameters": {
-                              "effect": {
-                                "value": "[[parameters('acceleratedNetworkingEffect')]"
-                              },
-                              "enableAcceleratedNetworking": {
-                                "value": "[[parameters('enableAcceleratedNetworking')]"
-                              }
-                            }
-                          },
-                          {
-                            "policyDefinitionReferenceId": "configureManagedDiskNetworkAccess",
-                            "policyDefinitionId": "[parameters('managedDiskNetworkAccessPolicyDefinitionResourceId')]",
-                            "parameters": {
-                              "effect": {
-                                "value": "[[parameters('managedDiskNetworkAccessEffect')]"
-                              }
-                            }
-                          },
-                          {
-                            "policyDefinitionReferenceId": "configureAvailabilitySet",
-                            "policyDefinitionId": "[parameters('availabilitySetPolicyDefinitionResourceId')]",
-                            "parameters": {
-                              "effect": {
-                                "value": "[[parameters('availabilitySetEffect')]"
-                              },
-                              "availabilitySetResourceId": {
-                                "value": "[[parameters('availabilitySetResourceId')]"
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "policySetDefinitionResourceId": {
-                      "type": "string",
-                      "value": "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', parameters('policySetDefinitionName'))]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "acceleratedNetworkingPolicyDefinition",
-                "availabilitySetPolicyDefinition",
-                "diskEncryptionSetPolicyDefinition",
-                "managedDiskNetworkAccessPolicyDefinition",
-                "sessionHostComputePolicyDefinition",
-                "sessionHostSystemAssignedIdentityPolicyDefinition"
-              ]
             },
             "policyIdentityVirtualMachineContributor": {
               "type": "Microsoft.Resources/deployments",
@@ -17433,105 +17097,6 @@
                 "policyIdentity"
               ]
             },
-            "policyIdentityDiskPoolOperator": {
-              "condition": "[parameters('disableManagedDiskPublicNetworkAccess')]",
-              "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
-              "name": "[format('policyIdentityDiskPoolOperator-{0}', uniqueString('policyIdentityDiskPoolOperator', deployment().name))]",
-              "resourceGroup": "[parameters('sessionHostResourceGroupName')]",
-              "properties": {
-                "expressionEvaluationOptions": {
-                  "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                  "roleDefinitionId": {
-                    "value": "60fc6e62-5479-42d4-8bf4-67625fcc2840"
-                  },
-                  "principalId": {
-                    "value": "[reference('policyIdentity').outputs.principalId.value]"
-                  },
-                  "principalType": {
-                    "value": "ServicePrincipal"
-                  },
-                  "assignmentDescription": {
-                    "value": "Allows Azure Policy to disable public network access on automated AVD session host managed disks."
-                  }
-                },
-                "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "contentVersion": "1.0.0.0",
-                  "metadata": {
-                    "_generator": {
-                      "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "16353651651669948269"
-                    }
-                  },
-                  "parameters": {
-                    "roleDefinitionId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
-                      }
-                    },
-                    "principalId": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Principal ID of the identity receiving the role."
-                      }
-                    },
-                    "principalType": {
-                      "type": "string",
-                      "defaultValue": "ServicePrincipal",
-                      "allowedValues": [
-                        "ServicePrincipal",
-                        "Group",
-                        "User",
-                        "ForeignGroup",
-                        "Device",
-                        ""
-                      ],
-                      "metadata": {
-                        "description": "Principal type of the assigned principal."
-                      }
-                    },
-                    "assignmentDescription": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Optional description for the assignment."
-                      }
-                    }
-                  },
-                  "variables": {
-                    "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
-                  },
-                  "resources": [
-                    {
-                      "type": "Microsoft.Authorization/roleAssignments",
-                      "apiVersion": "2022-04-01",
-                      "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
-                      "properties": {
-                        "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
-                        "principalId": "[parameters('principalId')]",
-                        "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
-                        "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
-                      }
-                    }
-                  ],
-                  "outputs": {
-                    "resourceId": {
-                      "type": "string",
-                      "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
-                    }
-                  }
-                }
-              },
-              "dependsOn": [
-                "policyIdentity"
-              ]
-            },
             "policyIdentityArtifactManagedIdentityOperator": {
               "condition": "[not(empty(parameters('sessionHostCustomizations')))]",
               "type": "Microsoft.Resources/deployments",
@@ -17679,10 +17244,11 @@
                 "policyIdentity"
               ]
             },
-            "sessionHostCreationSettingsPolicyAssignment": {
+            "sessionHostComputePolicyAssignment": {
+              "condition": "[variables('configureSessionHostCompute')]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "[format('sessionHostCreationSettingsPolicyAssignment-{0}', uniqueString('sessionHostCreationSettingsPolicyAssignment', deployment().name))]",
+              "name": "[format('sessionHostComputePolicyAssignment-{0}', uniqueString('sessionHostComputePolicyAssignment', deployment().name))]",
               "resourceGroup": "[parameters('sessionHostResourceGroupName')]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -17691,7 +17257,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "avd-sh-creation-settings"
+                    "value": "avd-sh-compute"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -17700,13 +17266,13 @@
                     "value": "[reference('policyIdentity').outputs.resourceId.value]"
                   },
                   "policyDefinitionResourceId": {
-                    "value": "[reference('sessionHostCreationSettingsPolicySetDefinition').outputs.policySetDefinitionResourceId.value]"
+                    "value": "[reference('sessionHostComputePolicyDefinition').outputs.policyDefinitionResourceId.value]"
                   },
                   "displayName": {
-                    "value": "Configure AVD session host creation settings"
+                    "value": "Configure AVD session host compute settings"
                   },
                   "description": {
-                    "value": "Configures compute security, optional Disk Encryption Set and Availability Set placement, system-assigned identity, accelerated networking, and optional managed-disk network access during resource creation or update."
+                    "value": "Configures encryption at host and an optional OS disk size during session host creation or update."
                   },
                   "parameters": {
                     "value": {
@@ -17718,32 +17284,11 @@
                       },
                       "diskSizeGB": {
                         "value": "[parameters('diskSizeGB')]"
-                      },
-                      "enableAcceleratedNetworking": {
-                        "value": "[parameters('enableAcceleratedNetworking')]"
-                      },
-                      "acceleratedNetworkingEffect": {
-                        "value": "[if(parameters('enableAcceleratedNetworking'), 'Modify', 'Disabled')]"
-                      },
-                      "diskEncryptionSetEffect": {
-                        "value": "[if(empty(parameters('diskEncryptionSetResourceId')), 'Disabled', 'Modify')]"
-                      },
-                      "diskEncryptionSetResourceId": {
-                        "value": "[parameters('diskEncryptionSetResourceId')]"
-                      },
-                      "managedDiskNetworkAccessEffect": {
-                        "value": "[if(parameters('disableManagedDiskPublicNetworkAccess'), 'Modify', 'Disabled')]"
-                      },
-                      "availabilitySetEffect": {
-                        "value": "[if(empty(parameters('availabilitySetResourceId')), 'Disabled', 'Modify')]"
-                      },
-                      "availabilitySetResourceId": {
-                        "value": "[parameters('availabilitySetResourceId')]"
                       }
                     }
                   },
                   "nonComplianceMessage": {
-                    "value": "Session host resources must use the selected creation-time compute, identity, networking, availability, encryption, and managed-disk settings."
+                    "value": "Session host virtual machines must use the selected compute settings."
                   },
                   "ownerId": {
                     "value": "[variables('policyOwnerId')]"
@@ -17827,10 +17372,880 @@
               },
               "dependsOn": [
                 "policyIdentity",
-                "policyIdentityDiskPoolOperator",
-                "policyIdentityNetworkContributor",
                 "policyIdentityVirtualMachineContributor",
-                "sessionHostCreationSettingsPolicySetDefinition"
+                "sessionHostComputePolicyDefinition"
+              ]
+            },
+            "diskEncryptionSetPolicyAssignment": {
+              "condition": "[not(empty(parameters('diskEncryptionSetResourceId')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('diskEncryptionSetPolicyAssignment-{0}', uniqueString('diskEncryptionSetPolicyAssignment', deployment().name))]",
+              "resourceGroup": "[parameters('sessionHostResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-disk-encryption"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[reference('policyIdentity').outputs.resourceId.value]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[reference('diskEncryptionSetPolicyDefinition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "displayName": {
+                    "value": "Configure the AVD session host Disk Encryption Set"
+                  },
+                  "description": {
+                    "value": "Assigns the selected Disk Encryption Set to session host OS disks during creation or update."
+                  },
+                  "parameters": {
+                    "value": {
+                      "effect": {
+                        "value": "Modify"
+                      },
+                      "diskEncryptionSetResourceId": {
+                        "value": "[parameters('diskEncryptionSetResourceId')]"
+                      }
+                    }
+                  },
+                  "nonComplianceMessage": {
+                    "value": "Session host OS disks must use the selected Disk Encryption Set."
+                  },
+                  "ownerId": {
+                    "value": "[variables('policyOwnerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "7560315600099103668"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "nonComplianceMessage": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "[parameters('displayName')]",
+                        "description": "[parameters('description')]",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": "[parameters('parameters')]",
+                        "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "diskEncryptionSetPolicyDefinition",
+                "policyIdentity",
+                "policyIdentityVirtualMachineContributor"
+              ]
+            },
+            "acceleratedNetworkingPolicyAssignment": {
+              "condition": "[parameters('enableAcceleratedNetworking')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('acceleratedNetworkingPolicyAssignment-{0}', uniqueString('acceleratedNetworkingPolicyAssignment', deployment().name))]",
+              "resourceGroup": "[parameters('sessionHostResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-accelerated-network"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[reference('policyIdentity').outputs.resourceId.value]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[reference('acceleratedNetworkingPolicyDefinition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "displayName": {
+                    "value": "Configure accelerated networking on AVD session hosts"
+                  },
+                  "description": {
+                    "value": "Enables accelerated networking on session host network interfaces during creation or update."
+                  },
+                  "parameters": {
+                    "value": {
+                      "effect": {
+                        "value": "Modify"
+                      },
+                      "enableAcceleratedNetworking": {
+                        "value": true
+                      }
+                    }
+                  },
+                  "nonComplianceMessage": {
+                    "value": "Session host network interfaces must enable accelerated networking."
+                  },
+                  "ownerId": {
+                    "value": "[variables('policyOwnerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "7560315600099103668"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "nonComplianceMessage": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "[parameters('displayName')]",
+                        "description": "[parameters('description')]",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": "[parameters('parameters')]",
+                        "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "acceleratedNetworkingPolicyDefinition",
+                "policyIdentity",
+                "policyIdentityNetworkContributor"
+              ]
+            },
+            "availabilitySetPolicyAssignment": {
+              "condition": "[not(empty(parameters('availabilitySetResourceId')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('availabilitySetPolicyAssignment-{0}', uniqueString('availabilitySetPolicyAssignment', deployment().name))]",
+              "resourceGroup": "[parameters('sessionHostResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "avd-sh-availability-set"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[reference('policyIdentity').outputs.resourceId.value]"
+                  },
+                  "policyDefinitionResourceId": {
+                    "value": "[reference('availabilitySetPolicyDefinition').outputs.policyDefinitionResourceId.value]"
+                  },
+                  "displayName": {
+                    "value": "Assign AVD session hosts to the managed Availability Set"
+                  },
+                  "description": {
+                    "value": "Assigns session host virtual machines to the selected managed Availability Set during creation."
+                  },
+                  "parameters": {
+                    "value": {
+                      "effect": {
+                        "value": "Modify"
+                      },
+                      "availabilitySetResourceId": {
+                        "value": "[parameters('availabilitySetResourceId')]"
+                      }
+                    }
+                  },
+                  "nonComplianceMessage": {
+                    "value": "Session host virtual machines must use the selected managed Availability Set."
+                  },
+                  "ownerId": {
+                    "value": "[variables('policyOwnerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "7560315600099103668"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyDefinitionResourceId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "nonComplianceMessage": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/policyAssignments",
+                      "apiVersion": "2024-05-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "identity": {
+                        "type": "UserAssigned",
+                        "userAssignedIdentities": {
+                          "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                        }
+                      },
+                      "properties": {
+                        "displayName": "[parameters('displayName')]",
+                        "description": "[parameters('description')]",
+                        "enforcementMode": "Default",
+                        "metadata": {
+                          "category": "Azure Virtual Desktop",
+                          "managedBy": "FederalAVD",
+                          "ownerId": "[parameters('ownerId')]"
+                        },
+                        "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                        "parameters": "[parameters('parameters')]",
+                        "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "availabilitySetPolicyDefinition",
+                "policyIdentity",
+                "policyIdentityVirtualMachineContributor"
+              ]
+            },
+            "managedDiskNetworkAccessPolicyAssignment": {
+              "condition": "[parameters('disableManagedDiskPublicNetworkAccess')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('managedDiskNetworkAccessPolicyAssignment-{0}', uniqueString('managedDiskNetworkAccessPolicyAssignment', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "targetResourceGroupName": {
+                    "value": "[parameters('sessionHostResourceGroupName')]"
+                  },
+                  "policyIdentityResourceId": {
+                    "value": "[reference('policyIdentity').outputs.resourceId.value]"
+                  },
+                  "policyIdentityPrincipalId": {
+                    "value": "[reference('policyIdentity').outputs.principalId.value]"
+                  },
+                  "createAssignment": {
+                    "value": true
+                  },
+                  "createRemediation": {
+                    "value": false
+                  },
+                  "ownerId": {
+                    "value": "[variables('policyOwnerId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "16927574307321719176"
+                    }
+                  },
+                  "parameters": {
+                    "location": {
+                      "type": "string"
+                    },
+                    "targetResourceGroupName": {
+                      "type": "string"
+                    },
+                    "policyIdentityResourceId": {
+                      "type": "string"
+                    },
+                    "policyIdentityPrincipalId": {
+                      "type": "string"
+                    },
+                    "createAssignment": {
+                      "type": "bool",
+                      "defaultValue": true
+                    },
+                    "createRemediation": {
+                      "type": "bool",
+                      "defaultValue": false
+                    },
+                    "ownerId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": {
+                    "definition": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('definition-{0}', uniqueString('definition', deployment().name))]",
+                      "location": "[deployment().location]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {},
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.47.16.16243",
+                              "templateHash": "2633149560114965319"
+                            }
+                          },
+                          "parameters": {
+                            "policyDefinitionName": {
+                              "type": "string",
+                              "defaultValue": "avdSessionHostManagedDiskNetworkAccess-Modify"
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Authorization/policyDefinitions",
+                              "apiVersion": "2024-05-01",
+                              "name": "[parameters('policyDefinitionName')]",
+                              "properties": {
+                                "displayName": "Disable public access on AVD session host managed disks",
+                                "description": "Disables public network access and denies all network export access on managed disks in the session host resource group.",
+                                "mode": "Indexed",
+                                "metadata": {
+                                  "category": "Azure Virtual Desktop",
+                                  "solution": "AVD Session Host Governance",
+                                  "component": "Managed Disk Network Access",
+                                  "version": "1.0.0"
+                                },
+                                "parameters": {
+                                  "effect": {
+                                    "type": "String",
+                                    "allowedValues": [
+                                      "Modify",
+                                      "Disabled"
+                                    ],
+                                    "defaultValue": "Modify"
+                                  }
+                                },
+                                "policyRule": {
+                                  "if": {
+                                    "allOf": [
+                                      {
+                                        "field": "type",
+                                        "equals": "Microsoft.Compute/disks"
+                                      },
+                                      {
+                                        "anyOf": [
+                                          {
+                                            "field": "Microsoft.Compute/disks/publicNetworkAccess",
+                                            "notEquals": "Disabled"
+                                          },
+                                          {
+                                            "field": "Microsoft.Compute/disks/networkAccessPolicy",
+                                            "notEquals": "DenyAll"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "then": {
+                                    "effect": "[[parameters('effect')]",
+                                    "details": {
+                                      "conflictEffect": "audit",
+                                      "roleDefinitionIds": [
+                                        "/providers/Microsoft.Authorization/roleDefinitions/60fc6e62-5479-42d4-8bf4-67625fcc2840"
+                                      ],
+                                      "operations": [
+                                        {
+                                          "operation": "AddOrReplace",
+                                          "field": "Microsoft.Compute/disks/publicNetworkAccess",
+                                          "value": "Disabled"
+                                        },
+                                        {
+                                          "operation": "AddOrReplace",
+                                          "field": "Microsoft.Compute/disks/networkAccessPolicy",
+                                          "value": "DenyAll"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "policyDefinitionResourceId": {
+                              "type": "string",
+                              "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "diskOperator": {
+                      "condition": "[parameters('createAssignment')]",
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('diskOperator-{0}', uniqueString('diskOperator', deployment().name))]",
+                      "resourceGroup": "[parameters('targetResourceGroupName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "roleDefinitionId": {
+                            "value": "60fc6e62-5479-42d4-8bf4-67625fcc2840"
+                          },
+                          "principalId": {
+                            "value": "[parameters('policyIdentityPrincipalId')]"
+                          },
+                          "principalType": {
+                            "value": "ServicePrincipal"
+                          },
+                          "assignmentDescription": {
+                            "value": "Allows Azure Policy to disable public and export access on session host managed disks."
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.47.16.16243",
+                              "templateHash": "16353651651669948269"
+                            }
+                          },
+                          "parameters": {
+                            "roleDefinitionId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                              }
+                            },
+                            "principalId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Principal ID of the identity receiving the role."
+                              }
+                            },
+                            "principalType": {
+                              "type": "string",
+                              "defaultValue": "ServicePrincipal",
+                              "allowedValues": [
+                                "ServicePrincipal",
+                                "Group",
+                                "User",
+                                "ForeignGroup",
+                                "Device",
+                                ""
+                              ],
+                              "metadata": {
+                                "description": "Principal type of the assigned principal."
+                              }
+                            },
+                            "assignmentDescription": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Optional description for the assignment."
+                              }
+                            }
+                          },
+                          "variables": {
+                            "roleDefinitionIdVar": "[if(contains(parameters('roleDefinitionId'), '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('roleDefinitionId'), format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('roleDefinitionId')))]"
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Authorization/roleAssignments",
+                              "apiVersion": "2022-04-01",
+                              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar'))]",
+                              "properties": {
+                                "roleDefinitionId": "[variables('roleDefinitionIdVar')]",
+                                "principalId": "[parameters('principalId')]",
+                                "principalType": "[if(not(empty(parameters('principalType'))), parameters('principalType'), null())]",
+                                "description": "[if(not(empty(parameters('assignmentDescription'))), parameters('assignmentDescription'), null())]"
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "assignment": {
+                      "condition": "[parameters('createAssignment')]",
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('assignment-{0}', uniqueString('assignment', deployment().name))]",
+                      "resourceGroup": "[parameters('targetResourceGroupName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "name": {
+                            "value": "avd-sh-managed-disk-network"
+                          },
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
+                          "policyIdentityResourceId": {
+                            "value": "[parameters('policyIdentityResourceId')]"
+                          },
+                          "policyDefinitionResourceId": {
+                            "value": "[reference('definition').outputs.policyDefinitionResourceId.value]"
+                          },
+                          "displayName": {
+                            "value": "Disable public access on AVD session host managed disks"
+                          },
+                          "description": {
+                            "value": "Disables public network access and denies network export access on managed disks in the target resource group."
+                          },
+                          "parameters": {
+                            "value": {
+                              "effect": {
+                                "value": "Modify"
+                              }
+                            }
+                          },
+                          "nonComplianceMessage": {
+                            "value": "Session host managed disks must disable public and export network access."
+                          },
+                          "ownerId": {
+                            "value": "[parameters('ownerId')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.47.16.16243",
+                              "templateHash": "7560315600099103668"
+                            }
+                          },
+                          "parameters": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "location": {
+                              "type": "string"
+                            },
+                            "policyIdentityResourceId": {
+                              "type": "string"
+                            },
+                            "policyDefinitionResourceId": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "parameters": {
+                              "type": "object",
+                              "defaultValue": {}
+                            },
+                            "nonComplianceMessage": {
+                              "type": "string",
+                              "defaultValue": ""
+                            },
+                            "ownerId": {
+                              "type": "string"
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Authorization/policyAssignments",
+                              "apiVersion": "2024-05-01",
+                              "name": "[parameters('name')]",
+                              "location": "[parameters('location')]",
+                              "identity": {
+                                "type": "UserAssigned",
+                                "userAssignedIdentities": {
+                                  "[format('{0}', parameters('policyIdentityResourceId'))]": {}
+                                }
+                              },
+                              "properties": {
+                                "displayName": "[parameters('displayName')]",
+                                "description": "[parameters('description')]",
+                                "enforcementMode": "Default",
+                                "metadata": {
+                                  "category": "Azure Virtual Desktop",
+                                  "managedBy": "FederalAVD",
+                                  "ownerId": "[parameters('ownerId')]"
+                                },
+                                "policyDefinitionId": "[parameters('policyDefinitionResourceId')]",
+                                "parameters": "[parameters('parameters')]",
+                                "nonComplianceMessages": "[if(empty(parameters('nonComplianceMessage')), createArray(), createArray(createObject('message', parameters('nonComplianceMessage'))))]"
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
+                            }
+                          }
+                        }
+                      },
+                      "dependsOn": [
+                        "definition",
+                        "diskOperator"
+                      ]
+                    },
+                    "remediation": {
+                      "condition": "[and(parameters('createAssignment'), parameters('createRemediation'))]",
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2025-04-01",
+                      "name": "[format('remediation-{0}', uniqueString('remediation', deployment().name))]",
+                      "resourceGroup": "[parameters('targetResourceGroupName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "name": {
+                            "value": "avd-sh-managed-disk-network"
+                          },
+                          "policyAssignmentId": {
+                            "value": "[reference('assignment').outputs.resourceId.value]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.47.16.16243",
+                              "templateHash": "18339808056175490507"
+                            }
+                          },
+                          "parameters": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "policyAssignmentId": {
+                              "type": "string"
+                            },
+                            "policyDefinitionReferenceId": {
+                              "type": "string",
+                              "defaultValue": ""
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.PolicyInsights/remediations",
+                              "apiVersion": "2021-10-01",
+                              "name": "[parameters('name')]",
+                              "properties": {
+                                "policyAssignmentId": "[parameters('policyAssignmentId')]",
+                                "policyDefinitionReferenceId": "[if(empty(parameters('policyDefinitionReferenceId')), null(), parameters('policyDefinitionReferenceId'))]",
+                                "resourceDiscoveryMode": "ReEvaluateCompliance"
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
+                            }
+                          }
+                        }
+                      },
+                      "dependsOn": [
+                        "assignment"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "policyDefinitionResourceId": {
+                      "type": "string",
+                      "value": "[reference('definition').outputs.policyDefinitionResourceId.value]"
+                    },
+                    "policyAssignmentResourceId": {
+                      "type": "string",
+                      "value": "[if(parameters('createAssignment'), reference('assignment').outputs.resourceId.value, '')]"
+                    },
+                    "remediationResourceId": {
+                      "type": "string",
+                      "value": "[if(and(parameters('createAssignment'), parameters('createRemediation')), reference('remediation').outputs.resourceId.value, '')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "policyIdentity"
               ]
             },
             "resourceOwnershipTagPolicyAssignment": {
@@ -17991,7 +18406,7 @@
                     "value": "[parameters('dataCollectionEndpointResourceId')]"
                   },
                   "assignSystemIdentityPolicy": {
-                    "value": false
+                    "value": true
                   },
                   "createRemediation": {
                     "value": false
@@ -19367,7 +19782,7 @@
               },
               "dependsOn": [
                 "policyIdentity",
-                "sessionHostCreationSettingsPolicyAssignment",
+                "policyIdentityVirtualMachineContributor",
                 "sessionHostSystemAssignedIdentityPolicyDefinition"
               ]
             },
@@ -21042,7 +21457,7 @@
           "outputs": {
             "diskEncryptionSetPolicyAssignmentResourceId": {
               "type": "string",
-              "value": "[if(not(empty(parameters('diskEncryptionSetResourceId'))), reference('sessionHostCreationSettingsPolicyAssignment').outputs.resourceId.value, '')]"
+              "value": "[if(not(empty(parameters('diskEncryptionSetResourceId'))), reference('diskEncryptionSetPolicyAssignment').outputs.resourceId.value, '')]"
             },
             "diskEncryptionSetResourceId": {
               "type": "string",
@@ -21050,7 +21465,7 @@
             },
             "acceleratedNetworkingPolicyAssignmentResourceId": {
               "type": "string",
-              "value": "[reference('sessionHostCreationSettingsPolicyAssignment').outputs.resourceId.value]"
+              "value": "[if(parameters('enableAcceleratedNetworking'), reference('acceleratedNetworkingPolicyAssignment').outputs.resourceId.value, '')]"
             },
             "dataCollectionEndpointPolicyAssignmentResourceId": {
               "type": "string",
@@ -21066,7 +21481,7 @@
             },
             "managedDiskNetworkAccessPolicyAssignmentResourceId": {
               "type": "string",
-              "value": "[if(parameters('disableManagedDiskPublicNetworkAccess'), reference('sessionHostCreationSettingsPolicyAssignment').outputs.resourceId.value, '')]"
+              "value": "[if(parameters('disableManagedDiskPublicNetworkAccess'), reference('managedDiskNetworkAccessPolicyAssignment').outputs.policyAssignmentResourceId.value, '')]"
             },
             "monitoringPolicyAssignmentResourceId": {
               "type": "string",
@@ -21078,7 +21493,7 @@
             },
             "sessionHostIdentityPolicyAssignmentResourceId": {
               "type": "string",
-              "value": "[reference('sessionHostCreationSettingsPolicyAssignment').outputs.resourceId.value]"
+              "value": "[if(parameters('enableMonitoring'), reference('monitoringPolicyAssignment').outputs.identityPolicyAssignmentResourceId.value, '')]"
             },
             "policyIdentityResourceId": {
               "type": "string",
@@ -21098,7 +21513,7 @@
             },
             "sessionHostComputePolicyAssignmentResourceId": {
               "type": "string",
-              "value": "[reference('sessionHostCreationSettingsPolicyAssignment').outputs.resourceId.value]"
+              "value": "[if(variables('configureSessionHostCompute'), reference('sessionHostComputePolicyAssignment').outputs.resourceId.value, '')]"
             }
           }
         }
