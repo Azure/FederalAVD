@@ -125,6 +125,7 @@ Key abbreviations:
   "environment":             "prod",
   "freeform1":               "",
   "freeform2":               "",
+  "locationAbbreviation":    "",
   "vmsLocationAbbreviation": "",
   "cpLocationAbbreviation":  "",
   "fslogixStoragePrefix":    "",
@@ -142,6 +143,7 @@ Key abbreviations:
 | `environment` | `string` | No | Static environment label. Fills the `environment` component. Example: `prod`, `dev`, `test`. |
 | `freeform1` | `string` | No | First free-text slot. Use for organisation or team prefix. |
 | `freeform2` | `string` | No | Second free-text slot. Use for any additional static token. |
+| `locationAbbreviation` | `string` | No | Override for the deployment region abbreviation in Shared Services, Image Management, and the Template Spec publishing script. Leave blank to auto-derive. |
 | `vmsLocationAbbreviation` | `string` | No | Override for the session hosts (VMs) region abbreviation. Leave blank to auto-derive from the deployment location. |
 | `cpLocationAbbreviation` | `string` | No | Override for the control plane region abbreviation. Leave blank to auto-derive. |
 | `fslogixStoragePrefix` | `string` | No | Custom prefix for FSLogix storage accounts (≤ 13 lowercase alphanumeric characters, no hyphens). Leave blank to use the auto-derived prefix `fslogix{unique}`. |
@@ -184,6 +186,33 @@ param namingConvention = {
 ```
 
 **Portal (Tags & Naming step):** Use the component picker in the *Tags & Naming* step. The UI assembles this object automatically and writes it to the deployment as `namingConvention`. Copy the resulting object to align other solution deployments.
+
+**Template Spec publishing script:**
+
+```powershell
+$namingConvention = @{
+  components = @('freeform1', 'workload', 'purpose', 'environment', 'location', 'resourceType')
+  delimiter = '-'
+  workload = 'avd'
+  environment = 'prod'
+  freeform1 = 'contoso'
+  locationAbbreviation = 'use2'
+  resourceTypeCodes = @{
+    resourceGroups = 'rg'
+    templateSpecs = 'ts'
+  }
+}
+
+.\tools\New-TemplateSpecs.ps1 `
+  -Location 'eastus2' `
+  -NamingConvention $namingConvention
+```
+
+The publishing script uses `purpose = operations` for its default resource group and a distinct
+purpose for each Template Spec. Its `components` array must include `purpose`; otherwise multiple
+Template Specs would resolve to the same name. Supplying `-ResourceGroupName` continues to override
+resource-group name generation without changing Template Spec names. When `-NamingConvention` is
+omitted, existing default Template Spec names are retained for versioning continuity.
 
 ---
 

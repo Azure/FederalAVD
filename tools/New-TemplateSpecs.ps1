@@ -11,11 +11,88 @@ param (
     [bool]$createHostPool = $true,
     [bool]$createAutomatedHostPool = $false,
     [bool]$CreateAddOns = $true,
-    [bool]$nameConvResTypeAtEnd = $false,
+    [ValidateNotNull()]
+    [object]$NamingConvention = @{
+        components = @('resourceType', 'workload', 'purpose', 'location')
+        delimiter = '-'
+        workload = 'avd'
+    },
     [bool]$incrementVersion = $true
 )
 
 $ErrorActionPreference = 'Stop'
+$namingConventionSupplied = $PSBoundParameters.ContainsKey('NamingConvention')
+
+function Get-ObjectPropertyValue {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$InputObject,
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName,
+        [object]$DefaultValue
+    )
+
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        if ($InputObject.Contains($PropertyName) -and $null -ne $InputObject[$PropertyName]) {
+            return $InputObject[$PropertyName]
+        }
+
+        return $DefaultValue
+    }
+
+    $property = $InputObject.PSObject.Properties[$PropertyName]
+    if ($null -ne $property -and $null -ne $property.Value) {
+        return $property.Value
+    }
+
+    return $DefaultValue
+}
+
+function New-ConventionName {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$Components,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Delimiter,
+        [Parameter(Mandatory = $true)]
+        [string]$ResourceTypeCode,
+        [Parameter(Mandatory = $true)]
+        [string]$Purpose,
+        [Parameter(Mandatory = $true)]
+        [string]$LocationAbbreviation,
+        [AllowEmptyString()]
+        [string]$Workload = '',
+        [AllowEmptyString()]
+        [string]$Environment = '',
+        [AllowEmptyString()]
+        [string]$Freeform1 = '',
+        [AllowEmptyString()]
+        [string]$Freeform2 = ''
+    )
+
+    $values = @{
+        resourceType = $ResourceTypeCode
+        purpose = $Purpose
+        location = $LocationAbbreviation
+        workload = $Workload
+        environment = $Environment
+        freeform1 = $Freeform1
+        freeform2 = $Freeform2
+    }
+
+    $nameParts = foreach ($component in $Components) {
+        if ($component -ne 'none' -and -not [string]::IsNullOrWhiteSpace([string]$values[$component])) {
+            [string]$values[$component]
+        }
+    }
+
+    if ($nameParts.Count -eq 0) {
+        throw "The naming convention produced an empty name for purpose '$Purpose'."
+    }
+
+    return [string]::Join($Delimiter, $nameParts)
+}
 
 $Context = Get-AzContext
 If ($null -eq $Context) {
@@ -48,13 +125,42 @@ if ($null -eq $locationAbbr) {
     $locationAbbr = $Location
 }
 
+$components = @(Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'components' -DefaultValue @('resourceType', 'workload', 'purpose', 'location'))
+$allowedComponents = @('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none')
+$invalidComponents = @($components | Where-Object { $_ -notin $allowedComponents })
+if ($invalidComponents.Count -gt 0) {
+    throw "NamingConvention.components contains unsupported values: $($invalidComponents -join ', ')."
+}
+if ($components -notcontains 'purpose') {
+    throw "NamingConvention.components must contain 'purpose' so each Template Spec receives a distinct name."
+}
+
+$delimiter = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'delimiter' -DefaultValue '-')
+$workload = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'workload' -DefaultValue 'avd')
+$environment = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'environment' -DefaultValue '')
+$freeform1 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform1' -DefaultValue '')
+$freeform2 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform2' -DefaultValue '')
+$locationAbbreviationOverride = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'locationAbbreviation' -DefaultValue '')
+if (-not [string]::IsNullOrWhiteSpace($locationAbbreviationOverride)) {
+    $locationAbbr = $locationAbbreviationOverride
+}
+
+$resourceTypeCodes = Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'resourceTypeCodes' -DefaultValue @{}
+$resourceGroupTypeCode = [string](Get-ObjectPropertyValue -InputObject $resourceTypeCodes -PropertyName 'resourceGroups' -DefaultValue $resourceAbbreviations.resourceGroups)
+$templateSpecTypeCode = [string](Get-ObjectPropertyValue -InputObject $resourceTypeCodes -PropertyName 'templateSpecs' -DefaultValue $resourceAbbreviations.templateSpecs)
+
 if ($null -eq $ResourceGroupName -or $ResourceGroupName -eq '') {
     Write-Output 'Resource Group Name not provided. Using default naming convention'
-    if ($nameConvResTypeAtEnd) {
-        $ResourceGroupName = "avd-operations-$locationAbbr-$($resourceAbbreviations.resourceGroups)"
-    } else {
-        $ResourceGroupName = "$($resourceAbbreviations.resourceGroups)-avd-operations-$locationAbbr"
-    }
+    $ResourceGroupName = New-ConventionName `
+        -Components $components `
+        -Delimiter $delimiter `
+        -ResourceTypeCode $resourceGroupTypeCode `
+        -Purpose 'operations' `
+        -LocationAbbreviation $locationAbbr `
+        -Workload $workload `
+        -Environment $environment `
+        -Freeform1 $freeform1 `
+        -Freeform2 $freeform2
     Write-Output "Resource Group Name: $ResourceGroupName"
 }
 
@@ -74,7 +180,7 @@ $templateSpecs = @()
 
 if ($createSharedServices) {
     $templateSpecs += @{
-        Name = 'avd-shared-services'
+        Purpose = 'shared-services'
         DisplayName = 'AVD Shared Services'
         Description = 'Deploys optional shared AVD services: Key Vaults, monitoring resources, and an FSLogix Recovery Services vault and policy'
         TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\sharedServices.json'
@@ -84,7 +190,7 @@ if ($createSharedServices) {
 
 if ($createNetwork) {
     $templateSpecs += @{
-        Name = 'avd-networking'
+        Purpose = 'networking'
         DisplayName = 'AVD Network Spoke'
         Description = 'Deploys the networking components to support Azure Virtual Desktop'
         TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\networking\networking.json'
@@ -94,7 +200,7 @@ if ($createNetwork) {
 
 if ($createCustomImage) {
     $templateSpecs += @{
-        Name = 'avd-custom-image'
+        Purpose = 'custom-image'
         DisplayName = 'AVD Custom Image'
         Description = 'Generates a custom image for Azure Virtual Desktop'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageBuild\imageBuild.json'
@@ -104,7 +210,7 @@ if ($createCustomImage) {
 
 if ($createImageManagement) {
     $templateSpecs += @{
-        Name = 'avd-image-management'
+        Purpose = 'image-management'
         DisplayName = 'AVD Image Management'
         Description = 'Deploys the image management resources for Azure Virtual Desktop'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageManagement\imageManagement.json'
@@ -114,7 +220,7 @@ if ($createImageManagement) {
 
 if ($createHostPool) {
     $templateSpecs += @{
-        Name = 'avd-hostpool'
+        Purpose = 'hostpool'
         DisplayName = 'AVD Host Pool'
         Description = 'Deploys an Azure Virtual Desktop Host Pool'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpools\hostpool.json'
@@ -124,7 +230,7 @@ if ($createHostPool) {
 
 if ($createAutomatedHostPool) {
     $templateSpecs += @{
-        Name = 'avd-automated-hostpool'
+        Purpose = 'automated-hostpool'
         DisplayName = 'AVD Automated Host Pool'
         Description = 'Deploys an Azure Commercial AVD pooled host pool with automated session host management'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\automatedHostPools\automatedHostPool.json'
@@ -134,19 +240,20 @@ if ($createAutomatedHostPool) {
 
 if ($CreateAddOns) {
     $addOns = @(
-        @{ Name = 'run-commands-on-vms'; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
-        @{ Name = 'update-storage-account-key-on-session-hosts'; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
-        @{ Name = 'avd-fslogix-storage'; DisplayName = 'AVD FSLogix Storage'; Description = 'Deploys standalone Azure Files or Azure NetApp Files storage for FSLogix profile containers'; FolderName = 'fslogixStorage' },
-        @{ Name = 'avd-storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
-        @{ Name = 'avd-session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
-        @{ Name = 'avd-session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
-        @{ Name = 'avd-session-host-policy'; DisplayName = 'AVD Session Host Policy'; Description = 'Assigns reusable Azure Policy capabilities, including VM Applications, to a dedicated session-host resource group'; FolderName = 'sessionHostPolicy' }
-        @{ Name = 'avd-alerts'; DisplayName = 'AVD Alerts'; Description = 'Deploys Azure Monitor alerts for Azure Virtual Desktop'; FolderName = 'avdAlerts' }
+        @{ Purpose = 'run-commands-on-vms'; PreserveLegacyWithoutWorkload = $true; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
+        @{ Purpose = 'update-storage-account-key-on-session-hosts'; PreserveLegacyWithoutWorkload = $true; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
+        @{ Purpose = 'fslogix-storage'; DisplayName = 'AVD FSLogix Storage'; Description = 'Deploys standalone Azure Files or Azure NetApp Files storage for FSLogix profile containers'; FolderName = 'fslogixStorage' },
+        @{ Purpose = 'storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
+        @{ Purpose = 'session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
+        @{ Purpose = 'session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
+        @{ Purpose = 'session-host-policy'; DisplayName = 'AVD Session Host Policy'; Description = 'Assigns reusable Azure Policy capabilities, including VM Applications, to a dedicated session-host resource group'; FolderName = 'sessionHostPolicy' }
+        @{ Purpose = 'alerts'; DisplayName = 'AVD Alerts'; Description = 'Deploys Azure Monitor alerts for Azure Virtual Desktop'; FolderName = 'avdAlerts' }
     )
 
     foreach ($addOn in $addOns) {
         $templateSpecs += @{
-            Name = $addOn.Name
+            Purpose = $addOn.Purpose
+            PreserveLegacyWithoutWorkload = $addOn.PreserveLegacyWithoutWorkload
             DisplayName = $addOn.DisplayName
             Description = $addOn.Description
             TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath "..\deployments\add-ons\$($addOn.FolderName)\main.json"
@@ -157,11 +264,26 @@ if ($CreateAddOns) {
 
 # Create all template specs using consistent naming convention
 foreach ($templateSpec in $templateSpecs) {
-    if ($nameConvResTypeAtEnd) {
-        $templateSpecName = "$($templateSpec.Name)-$locationAbbr-$($resourceAbbreviations.templateSpecs)"
-    } else {
-        $templateSpecName = "$($resourceAbbreviations.templateSpecs)-$($templateSpec.Name)-$locationAbbr"
+    $templateSpecWorkload = if (
+        -not $namingConventionSupplied -and
+        $templateSpec.PreserveLegacyWithoutWorkload
+    ) {
+        ''
     }
+    else {
+        $workload
+    }
+
+    $templateSpecName = New-ConventionName `
+        -Components $components `
+        -Delimiter $delimiter `
+        -ResourceTypeCode $templateSpecTypeCode `
+        -Purpose $templateSpec.Purpose `
+        -LocationAbbreviation $locationAbbr `
+        -Workload $templateSpecWorkload `
+        -Environment $environment `
+        -Freeform1 $freeform1 `
+        -Freeform2 $freeform2
     
     # Determine version number
     $version = '1.0.0'

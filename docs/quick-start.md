@@ -212,6 +212,10 @@ Publishing a Template Spec does not deploy the workload; it makes the guided for
 Azure portal. Publish only the Step 4 form matching the selected management approach. The automated
 form is available only in Azure Commercial. `AddOns` publishes the complete add-on Template Spec
 collection, including FSLogix Storage; deploy only the add-on selected by the chosen path.
+To apply an enterprise naming standard to the publishing resource group and Template Specs, pass a
+`-NamingConvention` hashtable using the schema and example in the
+[Naming Convention guide](naming-convention.md#passing-the-parameter). An explicit
+`-ResourceGroupName` overrides only the generated resource-group name.
 
 ### 2. Deploy Only the Components Your Path Requires
 
