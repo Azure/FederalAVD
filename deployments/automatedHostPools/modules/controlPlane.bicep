@@ -26,14 +26,14 @@ param workspaceFriendlyName string = ''
 @description('Optional. Desktop application-group friendly name.')
 param desktopFriendlyName string = ''
 
-@description('Optional. Name of the deployment VM used to update the SessionDesktop friendly name.')
-param deploymentVirtualMachineName string = ''
+@description('Required. Name of the temporary deployment VM used for propagation waits and SessionDesktop updates.')
+param deploymentVirtualMachineName string
 
-@description('Optional. Client ID of the deployment identity used to update the SessionDesktop friendly name.')
-param deploymentUserAssignedIdentityClientId string = ''
+@description('Required. Client ID of the temporary deployment identity used for SessionDesktop updates.')
+param deploymentUserAssignedIdentityClientId string
 
-@description('Optional. Resource group containing the deployment VM.')
-param deploymentResourceGroupName string = ''
+@description('Required. Resource group containing the temporary deployment VM.')
+param deploymentResourceGroupName string
 
 @description('Optional. Azure region containing the deployment VM.')
 param deploymentLocation string = location
@@ -230,13 +230,32 @@ module hostPoolPermissions 'permissions.bicep' = {
   }
 }
 
+module rbacPropagationWait '../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
+  scope: resourceGroup(deploymentResourceGroupName)
+  params: {
+    virtualMachineName: deploymentVirtualMachineName
+    name: 'RBAC-Propagation-Wait'
+    location: deploymentLocation
+    script: loadTextContent('../scripts/Wait-RbacPropagation.ps1')
+    parameters: [
+      {
+        name: 'WaitSeconds'
+        value: '90'
+      }
+    ]
+    timeoutInSeconds: 120
+    treatFailureAsDeploymentFailure: true
+  }
+  dependsOn: [hostPoolPermissions]
+}
+
 module sessionHostConfiguration 'sessionHostConfiguration.bicep' = {
   params: {
     resourceGroupName: resourceGroupName
     hostPoolName: hostPoolName
     properties: sessionHostConfigurationProperties
   }
-  dependsOn: [hostPoolPermissions]
+  dependsOn: [rbacPropagationWait]
 }
 
 module dynamicScalingPlan '../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/deployDynamic.bicep' = if (deployDynamicScalingPlan) {
@@ -315,6 +334,7 @@ module updateDesktopFriendlyName '../../shared/modules/resourceModules/compute/v
     timeoutInSeconds: 120
     treatFailureAsDeploymentFailure: true
   }
+  dependsOn: [rbacPropagationWait]
 }
 
 module workspace '../../shared/modules/resourceModules/desktopVirtualization/workspaces/deploy.bicep' = {

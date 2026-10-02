@@ -569,7 +569,6 @@ var avdPrivateLinkConfigurationIsValid = hostPoolPrivateEndpointConfigurationIsV
   ? true
   : fail('AVD Private Link requires a host-pool endpoint subnet, a workspace feed endpoint subnet for FeedAndHostPool or All, and an existing global feed or global endpoint subnet for All.')
 var deployGlobalFeed = avdPrivateLinkPrivateRoutes == 'All' && empty(existingGlobalFeedResourceId)
-var createDeploymentVm = deployFSLogixStorage || !empty(desktopFriendlyName)
 var fslogixStorageSolution 'AzureFiles' | 'AzureNetAppFiles' = startsWith(fslogixStorageService, 'AzureFiles') ? 'AzureFiles' : 'AzureNetAppFiles'
 var fslogixDomainCredentialsRequired = contains(identitySolution, 'DomainServices') || fslogixStorageSolution == 'AzureNetAppFiles' || (identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups))
 var fslogixShareNamesLookup = {
@@ -688,7 +687,7 @@ module storageResourceGroup '../shared/modules/resourceModules/resources/resourc
   }
 }
 
-module deploymentResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
+module deploymentResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
     name: naming.outputs.resourceGroupDeployment
     location: location
@@ -729,7 +728,7 @@ module virtualMachinesDiskCmk '../shared/modules/orchestration/customerManagedKe
   dependsOn: [sessionHostResourceGroup]
 }
 
-module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy.bicep' = if (createDeploymentVm) {
+module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy.bicep' = {
   params: {
     confidentialVMOSDiskEncryption: false
     deploymentVmSize: deploymentVirtualMachineSize
@@ -784,10 +783,8 @@ module controlPlane 'modules/controlPlane.bicep' = {
     existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
     workspaceFriendlyName: workspaceFriendlyName
     desktopFriendlyName: desktopFriendlyName
-    deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
-    deploymentUserAssignedIdentityClientId: createDeploymentVm
-      ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
-      : ''
+    deploymentVirtualMachineName: deploymentHelper.outputs.virtualMachineName
+    deploymentUserAssignedIdentityClientId: deploymentHelper.outputs.deploymentUserAssignedIdentityClientId
     deploymentResourceGroupName: naming.outputs.resourceGroupDeployment
     deploymentLocation: location
     appGroupSecurityGroupIds: appGroupSecurityGroupIds
@@ -947,8 +944,8 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
     createNetAppCapacityPool: true
     appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
-    deploymentUserAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
-    deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    deploymentUserAssignedIdentityClientId: deploymentHelper.outputs.deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentHelper.outputs.virtualMachineName
     #disable-next-line BCP422
     domainJoinUserPassword: fslogixDomainCredentialsRequired
       ? credentialsKeyVault.getSecret(last(split(effectiveDomainJoinPasswordSecretUri, '/'))!)
@@ -1070,7 +1067,7 @@ module sessionHostPolicy 'policy/main.bicep' = {
 module policyPropagationWait 'modules/waitForPolicyPropagation.bicep' = {
   params: {
     resourceGroupName: naming.outputs.resourceGroupDeployment
-    virtualMachineName: deploymentHelper!.outputs.virtualMachineName
+    virtualMachineName: deploymentHelper.outputs.virtualMachineName
     location: location
   }
   dependsOn: [sessionHostPolicy]
@@ -1117,14 +1114,14 @@ module activateDynamicScalingPlan 'modules/activateDynamicScalingPlan.bicep' = i
   ]
 }
 
-module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (createDeploymentVm) {
+module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = {
   params: {
     location: location
     resourceGroupDeployment: naming.outputs.resourceGroupDeployment
     resourceGroupHosts: naming.outputs.resourceGroupHosts
-    userAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
-    deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
-    roleAssignmentIds: deploymentHelper!.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
+    userAssignedIdentityClientId: deploymentHelper.outputs.deploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: deploymentHelper.outputs.virtualMachineName
+    roleAssignmentIds: deploymentHelper.outputs.deploymentUserAssignedIdentityRoleAssignmentIds
     virtualMachineNames: []
     removeHostRunCommands: false
   }

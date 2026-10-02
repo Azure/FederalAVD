@@ -3323,14 +3323,13 @@
 							"name": "deploymentVm",
 							"type": "Microsoft.Common.Section",
 							"label": "Deployment Virtual Machine",
-							"visible": "[or(steps('profiles').deployStorage, not(empty(steps('controlPlane').workspace.desktopFriendlyName)))]",
 							"elements": [
 								{
 									"name": "deploymentVmInfo",
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Info",
-										"text": "FSLogix storage configuration and session desktop renaming use a temporary virtual machine for operations that cannot be completed through ARM. The VM is automatically deleted after deployment completes."
+										"text": "This deployment always creates a temporary virtual machine for RBAC and Azure Policy propagation waits, session desktop renaming, and optional FSLogix storage configuration. The VM uses the session-host subnet, which must allow outbound TCP 443 to the AzureResourceManager service tag. The VM and its resource group are automatically deleted after deployment completes."
 									}
 								},
 								{
@@ -4037,7 +4036,7 @@
 				"fslogixPrivateEndpoint": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
 				"fslogixPrivateEndpointSubnetResourceId": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.privateEndpointSubnet.id, '')]",
 				"azureFilePrivateDnsZoneResourceId": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilePrivateDnsZone, '')]",
-				"deploymentVirtualMachineSize": "[if(or(steps('profiles').deployStorage, not(empty(steps('controlPlane').workspace.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_D2ads_v5')]",
+				"deploymentVirtualMachineSize": "[steps('operationsAndMonitoring').deploymentVm.size]",
 				"fslogixPermittedIPs": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
 				"enableMonitoring": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",
 				"logAnalyticsWorkspaceResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, not(empty(steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace))), steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace.id, '')]",

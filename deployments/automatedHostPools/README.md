@@ -55,14 +55,16 @@ in parallel; dependencies exist only where one phase consumes another phase's re
 
 1. Resolves names and creates the control-plane, session-host, storage, deployment-helper, and
   optional global-feed resource groups.
-2. Starts Azure Virtual Desktop service-principal RBAC, the deployment helper, and FSLogix
+2. Starts Azure Virtual Desktop service-principal RBAC, the always-deployed temporary deployment
+  helper, and FSLogix
   customer-managed-key resources as soon as their scopes exist. Independent preparation continues
   while RBAC completes.
 3. After service-principal RBAC completes, creates the pooled automated host pool, application
   group, workspace association, AVD Private Link endpoints, optional global-feed workspace, and
   dynamic scaling plan as one control-plane phase.
 4. Grants the host-pool managed identity access to the host, network, image, credential-vault, and
-  host-pool scopes, then creates `sessionHostConfigurations/default`.
+  host-pool scopes, waits 90 seconds for Azure RBAC propagation, then creates
+  `sessionHostConfigurations/default`.
 5. Creates `sessionHostManagements/default` without a provisioning request, which is the API's
   zero-host state. The API does not accept an explicit `instanceCount: 0`.
 6. In parallel, deploys optional FSLogix storage, registers newly created Azure Files shares with
@@ -72,7 +74,8 @@ in parallel; dependencies exist only where one phase consumes another phase's re
   asynchronous.
 7. Updates `sessionHostManagements/default` with the requested `instanceCount` only after the
   zero-host resource, storage-dependent policy inputs, and policy assignments are ready.
-8. Removes the temporary deployment helper after final session-host provisioning is submitted.
+8. Removes the temporary deployment helper and its resource group after final session-host
+  provisioning is submitted.
 
 Shared naming, AVD resources, FSLogix, Key Vault RBAC, and generic role-assignment modules are reused
 rather than copied. Resources created by FederalAVD, including FSLogix storage, private endpoints,
@@ -629,6 +632,13 @@ the credentials vault before the scaling plan is activated. This allows schedule
 replacement operations to resolve the configured administrator and domain credential secret URIs.
 
 ## Policy Readiness
+
+The deployment always creates a temporary deployment-helper VM. Before creating the Session Host
+Configuration, a Run Command waits 90 seconds after the host-pool managed-identity role assignments
+complete. This targeted delay reduces first-deployment validation failures caused by Azure RBAC
+propagation. The helper also performs SessionDesktop friendly-name updates and optional FSLogix
+storage operations. It uses the session-host subnet, which must allow outbound TCP 443 to the
+`AzureResourceManager` service tag.
 
 When dynamic scaling is disabled, select the desired initial `sessionHostCount`. ARM first creates
 Session Host Management without a provisioning request, which is the API's zero-host state. It then

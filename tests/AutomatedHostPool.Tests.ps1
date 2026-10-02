@@ -297,6 +297,46 @@ Describe 'Automated host-pool identity permissions' {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
+$entryTemplatePath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$controlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
+$rbacWaitScriptPath = Join-Path $repoRoot 'deployments\automatedHostPools\scripts\Wait-RbacPropagation.ps1'
+$readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
+
+Describe 'Automated host-pool deployment helper lifecycle' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $entryTemplate = Get-Content -LiteralPath $entryTemplatePath -Raw
+        $controlPlane = Get-Content -LiteralPath $controlPlanePath -Raw
+        $rbacWaitScript = Get-Content -LiteralPath $rbacWaitScriptPath -Raw
+        $readme = Get-Content -LiteralPath $readmePath -Raw
+        $operationsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'operationsAndMonitoring' }
+        $deploymentVm = $operationsStep.elements | Where-Object { $_.name -eq 'deploymentVm' }
+    }
+
+    It 'always deploys and cleans up the temporary helper VM' {
+        (@($deploymentVm.PSObject.Properties.Name) -notcontains 'visible') | Should Be $true
+        $form.view.outputs.parameters.deploymentVirtualMachineSize | Should Be "[steps('operationsAndMonitoring').deploymentVm.size]"
+        $entryTemplate | Should Not Match 'createDeploymentVm'
+        $entryTemplate | Should Match "module deploymentResourceGroup .* = \{"
+        $entryTemplate | Should Match "module deploymentHelper .* = \{"
+        $entryTemplate | Should Match "module cleanupDeploymentHelper .* = \{"
+        $deploymentVm.elements[0].options.text | Should Match 'AzureResourceManager service tag'
+        $readme | Should Match 'always creates a temporary deployment-helper VM'
+    }
+
+    It 'waits 90 seconds after host-pool RBAC before session-host validation' {
+        $controlPlane | Should Match "module rbacPropagationWait[\s\S]+name: 'RBAC-Propagation-Wait'"
+        $controlPlane | Should Match "name: 'WaitSeconds'[\s\S]+value: '90'"
+        $controlPlane | Should Match 'rbacPropagationWait[\s\S]+dependsOn: \[hostPoolPermissions\]'
+        $controlPlane | Should Match 'sessionHostConfiguration[\s\S]+dependsOn: \[rbacPropagationWait\]'
+        $controlPlane | Should Match 'updateDesktopFriendlyName[\s\S]+dependsOn: \[rbacPropagationWait\]'
+        $rbacWaitScript | Should Match 'Start-Sleep -Seconds \$WaitSeconds'
+        $readme | Should Match 'waits 90 seconds'
+    }
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $policyPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
 $entryTemplatePath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $controlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
@@ -400,7 +440,8 @@ Describe 'Automated host-pool VM Application assignments' {
         $permissionsSource | Should Match "var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'"
         $permissionsSource | Should Match "module vmApplicationGalleryReaderRoles '.+/compute/galleries/roleAssignment.bicep'"
         $permissionsSource | Should Match "galleryName: last\(split\(galleryResourceId, '/'\)\)"
-        $controlPlaneSource | Should Match 'module sessionHostConfiguration[\s\S]+dependsOn: \[hostPoolPermissions\]'
+        $controlPlaneSource | Should Match "module rbacPropagationWait[\s\S]+name: 'RBAC-Propagation-Wait'[\s\S]+value: '90'[\s\S]+dependsOn: \[hostPoolPermissions\]"
+        $controlPlaneSource | Should Match 'module sessionHostConfiguration[\s\S]+dependsOn: \[rbacPropagationWait\]'
     }
 }
 
