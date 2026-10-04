@@ -3,6 +3,60 @@
 
 #Region Session Host Planning
 
+function Get-ReplacementCapacityPolicy {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [int] $TargetSessionHostCount,
+        [Parameter(Mandatory = $true)]
+        [int] $MinimumCapacityPercentage,
+        [Parameter()]
+        $ScalingPlanTarget
+    )
+
+    $effectiveMinimumCapacityPct = $MinimumCapacityPercentage
+    $capacitySource = 'Static configuration'
+    $destructiveOperationsFrozen = $false
+
+    if ($ScalingPlanTarget -and
+        $ScalingPlanTarget.Source -eq 'ScalingPlan' -and
+        $null -ne $ScalingPlanTarget.CapacityPercentage) {
+        $scalingPlanPct = [int]$ScalingPlanTarget.CapacityPercentage
+        $phase = [string]$ScalingPlanTarget.Phase
+        $destructiveOperationsFrozen = $phase -in @('RampUp', 'Peak') -or $phase -like '*->RampUp*'
+
+        if ($destructiveOperationsFrozen) {
+            $effectiveMinimumCapacityPct = [Math]::Max($MinimumCapacityPercentage, $scalingPlanPct)
+            $capacitySource = "Scaling plan ($($ScalingPlanTarget.ScalingPlanName), $phase phase) with configured minimum floor"
+        }
+        else {
+            $effectiveMinimumCapacityPct = $scalingPlanPct
+            $capacitySource = "Scaling plan ($($ScalingPlanTarget.ScalingPlanName), $phase phase)"
+        }
+    }
+
+    if ($TargetSessionHostCount -le 0) {
+        $minimumOnlineHealthyHosts = 0
+    }
+    elseif ($TargetSessionHostCount -eq 1) {
+        $minimumOnlineHealthyHosts = 1
+    }
+    else {
+        $percentageFloor = [Math]::Ceiling($TargetSessionHostCount * ($effectiveMinimumCapacityPct / 100.0))
+        $minimumOnlineHealthyHosts = [Math]::Min(
+            $TargetSessionHostCount - 1,
+            [Math]::Max(1, $percentageFloor)
+        )
+    }
+
+    return [PSCustomObject]@{
+        EffectiveMinimumCapacityPercentage = $effectiveMinimumCapacityPct
+        MinimumOnlineHealthyHosts = $minimumOnlineHealthyHosts
+        CapacitySource = $capacitySource
+        DestructiveOperationsFrozen = $destructiveOperationsFrozen
+    }
+}
+
 function Get-ScalingPlanCurrentTarget {
     <#
     .SYNOPSIS
@@ -135,7 +189,7 @@ function Get-ScalingPlanCurrentTarget {
         $activeSchedule = $null
         $activePhase = $null
         $capacityPercentage = $null
-        $lookAheadMinutes = 30
+        $lookAheadMinutes = 60
         
         foreach ($schedule in $schedules) {
             $rampUpStart = New-TimeSpan -Hours $schedule.rampUpStartTime.hour -Minutes $schedule.rampUpStartTime.minute
@@ -196,10 +250,7 @@ function Get-ScalingPlanCurrentTarget {
                 Write-LogEntry -Message "Matched phase: OffPeak (current $currentDisplay >= $offPeakDisplay OR < $rampUpDisplay)" -Level Trace
             }
             
-            # SAFETY: Look-ahead check to prevent capacity issues near phase transitions
-            # If we're within 30 minutes of transitioning to a higher-capacity phase, use that phase's percentage instead
-            # This prevents starting aggressive deletions right before scaling plan needs to add capacity
-            # 30-minute window accounts for: deletion verification (~5 min) + deployment time (~20 min) + buffer
+            # Freeze destructive work before RampUp so autoscale can prepare user capacity.
             $lookAheadTime = $currentTimeSpan.Add([TimeSpan]::FromMinutes($lookAheadMinutes))
             $nextPhaseCapacity = $null
             $nextPhaseName = $null
@@ -292,7 +343,7 @@ function Get-ScalingPlanCurrentTarget {
             }
 
             # The previous schedule owns OffPeak until today's RampUp. Preserve the
-            # 30-minute higher-capacity look-ahead when that transition crosses days.
+            # 60-minute higher-capacity look-ahead when that transition crosses days.
             $nextSchedule = $schedules | Where-Object {
                 $_.daysOfWeek -contains $currentDayOfWeek
             } | Select-Object -First 1
@@ -417,17 +468,28 @@ function Get-SessionHostReplacementPlan {
                 $TargetSessionHostCount = $deploymentState.TargetSessionHostCount
                 Write-LogEntry -Message "Auto-detect mode: Using stored target count of $TargetSessionHostCount from current replacement cycle"
             } else {
-                # First run of a new replacement cycle - store current count as target
-                $TargetSessionHostCount = $SessionHosts.Count
+                $pendingHostNames = @()
+                if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+                    $pendingMappings = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+                    $pendingHostNames = @($pendingMappings.Keys)
+                }
+
+                $registeredHostNames = @($SessionHosts.SessionHostName)
+                $unresolvedPendingCount = @($pendingHostNames | Where-Object { $_ -notin $registeredHostNames }).Count
+                $TargetSessionHostCount = $SessionHosts.Count + $unresolvedPendingCount
+                if ($TargetSessionHostCount -le 0) {
+                    throw "Auto-detect mode cannot establish a positive target from an empty host pool"
+                }
+
+                # First run of a new replacement cycle - store current and recoverable count as target
                 $deploymentState.TargetSessionHostCount = $TargetSessionHostCount
-                Save-DeploymentState -DeploymentState $deploymentState -HostPoolName $HostPoolName
-                Write-LogEntry -Message "Auto-detect mode: Detected $TargetSessionHostCount session hosts - storing as target for this replacement cycle"
+                Save-DeploymentState -DeploymentState $deploymentState -HostPoolName $HostPoolName -RequireSuccess
+                Write-LogEntry -Message "Auto-detect mode: Detected target of $TargetSessionHostCount session hosts, including $unresolvedPendingCount unresolved recovery host(s)"
             }
         }
         catch {
-            # If state storage fails, fall back to current count (stateless mode)
-            $TargetSessionHostCount = $SessionHosts.Count
-            Write-LogEntry -Message "Auto-detect mode: Unable to access deployment state storage. Using current count of $TargetSessionHostCount. Note: Managed identity needs 'Storage Table Data Contributor' role on storage account for persistent target tracking. Error: $_" -Level Warning
+            Write-LogEntry -Message "Auto-detect mode cannot safely establish or persist the replacement target: $_" -Level Error
+            throw
         }
     }
     
@@ -663,35 +725,13 @@ function Get-SessionHostReplacementPlan {
             # Only delete hosts that are being replaced, not the net-new ones
             $canDelete = [Math]::Min($canDeploy, $hostsToReplace)
             
-            # Determine effective minimum capacity percentage (dynamic from scaling plan or static from config)
-            $effectiveMinimumCapacityPct = $MinimumCapacityPercentage
-            $capacitySource = 'Static configuration'
-        
-        if ($ScalingPlanTarget -and $null -ne $ScalingPlanTarget.CapacityPercentage) {
-            $scalingPlanPct = $ScalingPlanTarget.CapacityPercentage
-            $phase = $ScalingPlanTarget.Phase
-            
-            # Phase-aware capacity strategy:
-            # - RampUp/Peak: Use configured minimum as safety floor (users are active/arriving)
-            # - RampDown/OffPeak: Use scaling plan percentage directly (fewer users expected, safe to be more aggressive)
-            if ($phase -in @('RampUp', 'Peak') -or $phase -like '*->RampUp*') {
-                # During active hours, maintain the configured minimum as a safety floor
-                $effectiveMinimumCapacityPct = [math]::Max($MinimumCapacityPercentage, $scalingPlanPct)
-                $capacitySource = "Scaling plan ($($ScalingPlanTarget.ScalingPlanName), $phase phase) with configured minimum floor"
-                Write-LogEntry -Message "Peak/RampUp phase: Using configured minimum ($MinimumCapacityPercentage%) as floor. Scaling plan: $scalingPlanPct%, Effective: $effectiveMinimumCapacityPct%"
-            }
-            else {
-                # During off-hours, trust the scaling plan's lower capacity targets
-                $effectiveMinimumCapacityPct = $scalingPlanPct
-                $capacitySource = "Scaling plan ($($ScalingPlanTarget.ScalingPlanName), $phase phase)"
-                Write-LogEntry -Message "RampDown/OffPeak phase: Using scaling plan target directly. Effective capacity: $effectiveMinimumCapacityPct%"
-            }
-            
-            Write-LogEntry -Message "Dynamic capacity from scaling plan (Schedule: $($ScalingPlanTarget.ScheduleName), Phase: $phase): $scalingPlanPct% -> effective: $effectiveMinimumCapacityPct%"
-        }
-        else {
-            Write-LogEntry -Message "Using static minimum capacity from configuration: $effectiveMinimumCapacityPct%"
-        }
+        $capacityPolicy = Get-ReplacementCapacityPolicy `
+            -TargetSessionHostCount $TargetSessionHostCount `
+            -MinimumCapacityPercentage $MinimumCapacityPercentage `
+            -ScalingPlanTarget $ScalingPlanTarget
+        $effectiveMinimumCapacityPct = $capacityPolicy.EffectiveMinimumCapacityPercentage
+        $capacitySource = $capacityPolicy.CapacitySource
+        Write-LogEntry -Message "Replacement capacity policy: minimum online healthy hosts=$($capacityPolicy.MinimumOnlineHealthyHosts), effective percentage=$effectiveMinimumCapacityPct%, destructive freeze=$($capacityPolicy.DestructiveOperationsFrozen) [Source: $capacitySource]"
         
         # Safety floor: Ensure that after deletion, we maintain minimum capacity relative to target
         # The minimum is calculated as a percentage of the TARGET pool size
@@ -703,7 +743,7 @@ function Get-SessionHostReplacementPlan {
         $totalHostsCount = $SessionHosts.Count
         
         # Calculate minimum required hosts based on target (starting pool size)
-        $minimumAbsoluteHosts = [Math]::Ceiling($TargetSessionHostCount * ($effectiveMinimumCapacityPct / 100.0))
+        $minimumAbsoluteHosts = $capacityPolicy.MinimumOnlineHealthyHosts
         
         if ($drainingHostsCount -gt 0) {
             Write-LogEntry -Message "DeleteFirst mode: $drainingHostsCount host(s) currently draining (not accepting new sessions), $availableHostsCount available, $totalHostsCount total" -Level Trace
@@ -882,6 +922,112 @@ function Get-SessionHostReplacementPlan {
         ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
         TargetSessionHostCount         = $TargetSessionHostCount
         TotalSessionHostsToReplace     = $sessionHostsToReplace.Count
+    }
+}
+
+function Get-SessionHostDeletionSafety {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ARMToken,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [array] $SessionHosts,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [array] $DeletionCandidates,
+        [Parameter(Mandatory = $true)]
+        [int] $TargetSessionHostCount,
+        [Parameter(Mandatory = $true)]
+        [int] $MinimumCapacityPercentage,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('DeleteFirst', 'SideBySide')]
+        [string] $ReplacementMode,
+        [Parameter()]
+        $ScalingPlanTarget
+    )
+
+    $capacityPolicy = Get-ReplacementCapacityPolicy `
+        -TargetSessionHostCount $TargetSessionHostCount `
+        -MinimumCapacityPercentage $MinimumCapacityPercentage `
+        -ScalingPlanTarget $ScalingPlanTarget
+
+    if ($capacityPolicy.DestructiveOperationsFrozen) {
+        return [PSCustomObject]@{
+            SafeCandidates = @()
+            OnlineHealthyHosts = 0
+            MinimumOnlineHealthyHosts = $capacityPolicy.MinimumOnlineHealthyHosts
+            DestructiveOperationsFrozen = $true
+            Reason = "Destructive replacement is frozen during $($ScalingPlanTarget.Phase)"
+        }
+    }
+
+    if ($ReplacementMode -eq 'DeleteFirst' -and $TargetSessionHostCount -le 1) {
+        return [PSCustomObject]@{
+            SafeCandidates = @()
+            OnlineHealthyHosts = 0
+            MinimumOnlineHealthyHosts = 1
+            DestructiveOperationsFrozen = $false
+            Reason = 'DeleteFirst exact-name replacement is blocked for a single-host target'
+        }
+    }
+
+    $powerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds @($SessionHosts.ResourceId)
+    $onlineHealthyHostNames = @($SessionHosts | Where-Object {
+        $failedHealthChecks = @($_.SessionHostHealthCheckResults | Where-Object {
+            $_.healthCheckResult -eq 'HealthCheckFailed'
+        })
+        $_.Status -eq 'Available' -and
+            $_.AllowNewSession -and
+            -not $_.IsUnavailable -and
+            -not $powerStates[$_.ResourceId] -and
+            $failedHealthChecks.Count -eq 0
+    } | ForEach-Object { $_.SessionHostName })
+
+    $minimumOnlineHealthyHosts = if ($ReplacementMode -eq 'SideBySide') {
+        if ($TargetSessionHostCount -gt 0) { 1 } else { 0 }
+    }
+    else {
+        $capacityPolicy.MinimumOnlineHealthyHosts
+    }
+
+    $maximumOnlineHealthyDeletions = [Math]::Max(0, $onlineHealthyHostNames.Count - $minimumOnlineHealthyHosts)
+    $onlineHealthyDeletions = 0
+    $safeCandidates = @()
+
+    foreach ($candidate in $DeletionCandidates) {
+        $currentHost = $SessionHosts | Where-Object {
+            $_.SessionHostName -eq $candidate.SessionHostName
+        } | Select-Object -First 1
+        if (-not $currentHost) {
+            Write-LogEntry -Message "Final safety check skipped stale deletion candidate $($candidate.SessionHostName)" -Level Warning
+            continue
+        }
+
+        $isOnlineHealthy = $currentHost.SessionHostName -in $onlineHealthyHostNames
+        if ($isOnlineHealthy -and $onlineHealthyDeletions -ge $maximumOnlineHealthyDeletions) {
+            continue
+        }
+
+        $safeCandidates += $currentHost
+        if ($isOnlineHealthy) {
+            $onlineHealthyDeletions++
+        }
+    }
+
+    $reason = if ($safeCandidates.Count -eq $DeletionCandidates.Count) {
+        'All deletion candidates passed the final capacity check'
+    }
+    else {
+        "Final capacity check reduced deletion candidates from $($DeletionCandidates.Count) to $($safeCandidates.Count)"
+    }
+
+    return [PSCustomObject]@{
+        SafeCandidates = @($safeCandidates)
+        OnlineHealthyHosts = $onlineHealthyHostNames.Count
+        MinimumOnlineHealthyHosts = $minimumOnlineHealthyHosts
+        DestructiveOperationsFrozen = $false
+        Reason = $reason
     }
 }
 
@@ -1143,4 +1289,4 @@ function Get-SessionHosts {
 #EndRegion Session Host Planning
 
 # Export functions
-Export-ModuleMember -Function Get-SessionHostReplacementPlan, Get-SessionHosts, Get-ScalingPlanCurrentTarget
+Export-ModuleMember -Function Get-SessionHostReplacementPlan, Get-SessionHosts, Get-ScalingPlanCurrentTarget, Get-SessionHostDeletionSafety

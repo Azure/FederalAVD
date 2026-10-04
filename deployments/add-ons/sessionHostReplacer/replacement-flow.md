@@ -32,7 +32,7 @@ Readiness then treats a latest-image host as either:
 - Online ready: health validated and accepting new sessions.
 - Scalable standby: exact-image evidence exists, the VM is stopped or deallocated, AVD status is `Shutdown`, no administrator scaling exclusion applies, and an enabled scaling plan can start it.
 
-Without an enabled, evaluable scaling plan, all latest-image hosts must be online ready. With a scaling plan, at least one must be online ready unless the active target is exactly `0%`.
+Without an enabled, evaluable scaling plan, all latest-image hosts must be online ready. With a scaling plan, every latest-image host must be either online ready or validated scalable standby, and at least one must be online ready even when the active target is `0%`.
 
 ## SideBySide
 
@@ -72,8 +72,9 @@ flowchart TD
 SideBySide-specific behavior:
 
 - New hosts are deployed before old hosts are drained or removed.
+- Replacement deployment and validation can continue during the 60-minute pre-`RampUp`, `RampUp`, and `Peak` freeze, but removal of old hosts waits until `RampDown` or `OffPeak`.
 - Failed readiness preserves the old hosts and waits for a later invocation.
-- During an active `0%` scaling period, validated latest-image hosts may all be scalable standby; stale hosts can still be deleted or deallocated for shutdown retention.
+- During an active `0%` scaling period, at least one latest-image host must remain online ready; the other validated latest-image hosts may be scalable standby.
 - Shutdown retention is available only in this mode.
 - Entra ID or Intune cleanup failures are reported but do not block unrelated replacements because hostnames are not reused.
 
@@ -90,10 +91,10 @@ flowchart TD
     C1 -- Yes --> D["Retry only pending<br/>replacement hosts"]
     D --> E["Deploy using saved names<br/>and placement"]
     E --> Z["Finish this invocation<br/>and verify later"]
-    B -- No --> F{"Existing latest-image<br/>hosts ready?"}
-    F -- No --> G["Block delete and<br/>deploy cycle"]
+    B -- No --> F{"Pre-RampUp, RampUp,<br/>or Peak freeze active?"}
+    F -- Yes --> G["Continue validation and recovery;<br/>start no destructive batch"]
     G --> Z
-    F -- Yes --> H[Calculate replacement batch]
+    F -- No --> H[Calculate replacement batch]
     H --> I["Apply progressive and<br/>maximum deletion limits"]
     I --> J["Protect online healthy<br/>capacity floor"]
     J --> K{Any hosts safe to remove?}
@@ -116,21 +117,26 @@ flowchart TD
 
 DeleteFirst-specific behavior:
 
-- During `RampUp`, `Peak`, and look-ahead into `RampUp`, the effective online healthy capacity floor is the greater of the configured minimum and the active scaling-plan target. During `RampDown` and `OffPeak`, it uses the active scaling-plan target directly.
+- The scaling plan remains enabled. Replacer-owned exclusion tags protect draining and newly deployed hosts while ordinary validated hosts remain available to autoscale.
+- New destructive batches freeze 60 minutes before `RampUp` and throughout `RampUp` and `Peak`. Deployment recovery, registration checks, health validation, and release of validated hosts to autoscale continue.
+- During `RampDown` and `OffPeak`, the active scaling-plan target controls replacement pace, but at least one online healthy host remains. Without an evaluable scaling plan, the configured percentage is used and capped at target minus one so pools of two or more can progress.
 - Drained, unhealthy, unavailable, and scaled-down hosts do not authorize deletion of additional online healthy hosts. They remain eligible for replacement without consuming the online floor.
-- An active `0%` scaling target permits a zero-host floor during the applicable off-hours phase.
+- An active `0%` scaling target still retains one online healthy host.
 - OffPeak remains owned by the most recent selected schedule day until the next selected day's RampUp, including across midnight and unselected days.
 - `MaxDeletionsPerCycle` remains an independent absolute blast-radius ceiling. Progressive scale-up may select a smaller batch, and the capacity floor may reduce it further.
 - New deletions stop while a previously deleted host is not registered.
+- Registration alone does not authorize another destructive batch; the replacement must pass exact-image, AVD availability, health, power-state, and session-acceptance checks.
 - New deletions fail closed when the recovery state cannot be read or the pending-host mapping cannot be saved.
-- A failed zero-floor deployment can recover even when the host pool temporarily has no registrations.
+- Recovery can redeploy exact unresolved names after an externally caused or legacy empty-pool incident, but new cycles do not intentionally create one.
 - VM deletion is revalidated before hostname reuse even when directory cleanup is disabled.
+- Only a definitive ARM `404` or `ResourceNotFound` confirms VM deletion; authorization, throttling, timeout, network, and service errors remain unresolved.
 - Required Entra ID or Intune cleanup is retried and revalidated before hostname reuse.
 - A tracked or ARM-discovered running deployment blocks the invocation from deleting or deploying again.
 - A deployment that remains `Running` fails closed until ARM or an operator moves it to a terminal state.
 - A successful ARM deployment with pending AVD registration waits without cleanup or duplicate deployment.
 - Accepted deployments require a durable tracking-state write; VM presence remains the duplicate-deployment gate if that write fails.
 - Shutdown retention is always disabled.
+- Exact-name DeleteFirst replacement is blocked for a single-host target because it cannot preserve one available host.
 
 ## Drain Notification
 

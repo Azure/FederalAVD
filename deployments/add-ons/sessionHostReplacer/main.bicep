@@ -184,7 +184,7 @@ param drainGracePeriodHours int = 24
 @maxValue(120)
 param minimumDrainMinutes int = 15
 
-@description('Optional. Safety floor: minimum percentage of target capacity to maintain during DeleteFirst mode. Deletions are capped to prevent dropping below this threshold. Higher values = more conservative (e.g., 80% keeps more hosts running), lower values = more aggressive (e.g., 50% allows faster replacement). Only applies when replacementMode is DeleteFirst. Default is 80%.')
+@description('Optional. DeleteFirst safety floor used when no enabled scaling-plan schedule is evaluable. With a scaling plan, RampDown and OffPeak use its target but always retain at least one online healthy host; new destructive batches freeze 60 minutes before RampUp and throughout RampUp and Peak. The floor is capped at target minus one so pools with at least two hosts can progress one host at a time. Only applies when replacementMode is DeleteFirst. Default is 80%.')
 @minValue(20)
 @maxValue(100)
 param minimumCapacityPercentage int = 80

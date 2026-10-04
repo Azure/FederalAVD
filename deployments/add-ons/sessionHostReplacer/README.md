@@ -1501,51 +1501,53 @@ default while existing apps continue running their configured version until a pl
 | Setting | Default | Description |
 | --- | --- | --- |
 | `maxDeletionsPerCycle` | `50` | Absolute ceiling for hosts deleted and replaced per cycle (1-100). Progressive scale-up can select a smaller batch, and the capacity floor can reduce it further |
-| `minimumCapacityPercentage` | `80` | Online healthy capacity floor as a percentage of target capacity (20-100%). During RampUp, Peak, and look-ahead into RampUp, the effective floor is the greater of this value and the scaling-plan target. RampDown and OffPeak use the scaling-plan target directly |
+| `minimumCapacityPercentage` | `80` | Static online healthy floor when no enabled scaling-plan schedule can be evaluated. With a scaling plan, RampDown and OffPeak use its target but retain at least one online healthy host; new destructive batches freeze 60 minutes before RampUp and throughout RampUp and Peak |
 
 #### Dynamic Capacity from Scaling Plans
 
-**DeleteFirst mode only**: When a scaling plan is assigned to the host pool, the `minimumCapacityPercentage` is automatically and dynamically adjusted based on the active schedule phase:
+**DeleteFirst mode only**: The scaling plan remains enabled and continues to own ordinary host power management. The replacer protects draining and newly deployed hosts with its scaling-exclusion value, then releases validated replacements back to autoscale.
 
 **How it works**:
 - Function queries the scaling plan on each run
 - Determines current phase (RampUp, Peak, RampDown, OffPeak)
-- Applies **phase-aware capacity strategy**:
-  - **RampUp & Peak**: Uses configured `minimumCapacityPercentage` as a safety floor (whichever is higher: config or scaling plan)
-  - **RampDown & OffPeak**: Uses scaling plan percentage directly (allows aggressive replacements when users aren't expected)
+- Applies a phase-aware replacement strategy:
+  - **60 minutes before RampUp, RampUp, and Peak**: Starts no new destructive batch. Recovery, deployment monitoring, registration, validation, and release of healthy replacements continue.
+  - **RampDown and OffPeak**: Uses the scaling-plan percentage to size safe batches, while retaining at least one online healthy host.
 - Falls back to static `minimumCapacityPercentage` if no scaling plan found
+- Caps a static percentage floor at target minus one while replacement is active so pools with at least two hosts can progress one host at a time
 
 **Example scenario**:
 
 - Your scaling plan: 90% (Peak), 80% (RampDown), 50% (OffPeak), 60% (RampUp)
 - Your configured `minimumCapacityPercentage`: 70%
-- **Effective capacity**:
-  - **Peak**: 90% (scaling plan higher than config)
-  - **RampUp**: 70% (config floor enforced)
-  - **RampDown**: 80% (scaling plan used directly)
-  - **OffPeak**: 50% (scaling plan used directly - aggressive replacements allowed)
+- **Replacement behavior**:
+  - **Peak and RampUp**: No new destructive batch
+  - **60 minutes before RampUp**: No new destructive batch; autoscale prepares capacity
+  - **RampDown**: Safe batch sized from the 80% target
+  - **OffPeak**: Safe batch sized from the 50% target, never below one online healthy host
 
 **Benefits**:
 
 - ✅ **Intelligent timing**: Aligns replacements with business usage patterns
 - ✅ **Faster off-peak updates**: Aggressive during low-usage windows (can go below configured minimum)
-- ✅ **Peak protection**: Never goes below your configured minimum during business hours
+- ✅ **Peak protection**: Starts no new destructive work while users are ramping up or at peak
 - ✅ **Respects scaling intent**: Trusts that your scaling plan's off-peak percentages are appropriate
 - ✅ **Automatic**: No manual coordination needed
 - ✅ **Transparent**: Logs show which capacity source and phase logic is being used
 
 **Safety features**:
 
-- **Phase-aware floor**: Configured minimum acts as safety floor during RampUp/Peak phases only
-- **30-minute look-ahead**: Prevents starting aggressive deletions within 30 minutes of transitioning to RampUp/Peak phase
-- **Example**: Run at 5:45 AM during OffPeak → detects 6:00 AM RampUp transition → enforces configured minimum floor to ensure capacity is ready before users arrive
+- **One-host absolute floor**: A zero-percent OffPeak target never authorizes deletion of the last online healthy host
+- **60-minute RampUp freeze**: Prevents a new destructive batch from competing with autoscale as it prepares user capacity
+- **Example**: Run at 5:15 AM before a 6:00 AM RampUp -> continue recovery and validation, but start no new delete/deploy batch
+- **Single-host protection**: Exact-name DeleteFirst replacement is blocked for a target of one because uninterrupted availability is impossible without temporary capacity
 
 **Logging examples**:
 
 ```text
-Peak/RampUp phase: Using configured minimum (70%) as floor. Scaling plan: 60%, Effective: 70%
-RampDown/OffPeak phase: Using scaling plan target directly. Effective capacity: 50%
-Dynamic capacity from scaling plan (Schedule: Weekday, Phase: OffPeak): 50% -> effective: 50%
+Destructive replacement is frozen during scaling phase 'OffPeak->RampUp (look-ahead)'.
+FINAL_DELETE_SAFETY | OnlineHealthy: 10 | RequiredRemaining: 5 | Candidates: 5/8 | Frozen: False
+Replacement capacity policy: minimum online healthy hosts=1, effective percentage=0%, destructive freeze=False
 ```
 
 **Requirements**:
@@ -1997,32 +1999,33 @@ $vm = Get-AzVM -ResourceGroupName "rg-sessionhosts" -Name "vm-001"
 $vm.Tags["AutoReplacePendingDrainTimestamp"]  # Should be ISO 8601 timestamp
 ```
 
-#### 11. Replacement Progressing Slowly During Peak Hours
+#### 11. Replacement Pauses Before RampUp or During Peak Hours
 
 **Symptoms:**
 
-- Only 2 hosts replaced per cycle despite many needing replacement
-- Non-serving hosts are replaced before online healthy hosts
-- Online healthy host replacement pauses when the configured floor is reached
+- No new destructive batch starts even though hosts still need replacement
+- Running deployments and health validation continue
+- Validated hosts are released to autoscale
 
-**Cause:** Peak/RampUp phase enforces the higher online healthy capacity floor. This also applies during the 30-minute look-ahead into RampUp.
+**Cause:** The replacer freezes new destructive work 60 minutes before RampUp and throughout RampUp and Peak so the scaling plan can prepare and maintain user capacity.
 
 **Explanation:**
 
-The capacity floor calculation protects hosts that are online, accepting sessions, and healthy:
+The function continues non-destructive work:
 
-- Peak phase: 80% capacity floor (default) = retain at least 8 online healthy hosts for a target of 10
-- If only 8 hosts are online healthy, no additional online healthy host is selected for deletion
-- Powered-off, drained, unavailable, or unhealthy hosts can be selected without consuming the online healthy floor
+- Monitor running ARM deployments
+- Recover unresolved exact-name replacements
+- Validate registration, image identity, AVD status, health, and power state
+- Remove replacer-owned scaling exclusions from validated hosts
+- Start no additional drain or deletion operation
 
 **Resolution Options:**
 
-1. **Wait for off-hours** - RampDown/OffPeak phase uses lower capacity floor (e.g., 10% = 1 of 10 minimum) for faster replacement:
+1. **Wait for RampDown or OffPeak** - The next safe invocation resumes destructive batching while retaining at least one online healthy host:
 
 ```kusto
 traces
-| where message contains "Dynamic capacity from scaling plan"
-| where message contains "Phase:"
+| where message contains "Destructive replacement is frozen"
 | order by timestamp desc
 | take 10
 ```

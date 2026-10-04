@@ -65,7 +65,7 @@ replaceSessionHostOnNewImageVersionDelayDays: 7  // Wait 7 days to validate new 
 replacementMode: 'DeleteFirst'
 targetSessionHostCount: 0   // Auto-detect at the start of each replacement cycle
 maxDeletionsPerCycle: 50    // Absolute blast-radius ceiling per cycle
-minimumCapacityPercentage: 80  // Maintain at least 80% capacity
+minimumCapacityPercentage: 80 // Static DeleteFirst floor; scaling plans retain at least one host and freeze before RampUp
 drainGracePeriodHours: 24
 minimumDrainMinutes: 15
 removeEntraDevice: true     // Recommended cleanup before hostname reuse
@@ -95,6 +95,7 @@ timerSchedule: '0 0 8-17 * * 1-5'  // 8 AM - 5 PM, Mon-Fri
 ```
 
 **Staggered Across Multiple Deployments**:
+
 - Deployment 1: `'0 0,30 * * * *'` (runs at :00 and :30)
 - Deployment 2: `'0 15,45 * * * *'` (runs at :15 and :45)
 - Avoids concurrent ARM API load
@@ -111,6 +112,7 @@ timerSchedule: '0 0 8-17 * * 1-5'  // 8 AM - 5 PM, Mon-Fri
 6. **Restart the Function App**
 
 ### Option 2: Deploy via PowerShell
+
 From the repository root:
 
 ```powershell
@@ -184,7 +186,6 @@ See [README.md](README.md) for:
 - Full configuration reference
 - Troubleshooting guide
 - Monitoring best practices
-
 
 ### Module not reloading?
 

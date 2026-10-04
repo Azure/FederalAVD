@@ -87,8 +87,15 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 TotalNewHosts = 0
                 AvailableCount = 0
                 AvailablePercentage = 0
-                SafeToProceed = $true
+                SafeToProceed = $false
                 Message = 'No new hosts to verify'
+            }
+            ScalingPlanTarget = [PSCustomObject]@{
+                CapacityPercentage = $null
+                ScalingPlanName = $null
+                ScheduleName = $null
+                Phase = $null
+                Source = $null
             }
             FailDeploymentRuns = @()
             AcceptedButThrowRuns = @()
@@ -200,16 +207,30 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Mock Get-LatestImageVersion { $global:shrSimulation.LatestImage }
         Mock Compare-ImageVersion { -1 }
         Mock Get-ScalingPlanCurrentTarget {
-            [PSCustomObject]@{
-                CapacityPercentage = $null
-                ScalingPlanName = $null
-                ScheduleName = $null
-                Phase = $null
-                Source = $null
-            }
+            $global:shrSimulation.ScalingPlanTarget
         }
         Mock Get-SessionHostReplacementPlan { $global:shrSimulation.Plan }
         Mock Test-NewSessionHostsAvailable { $global:shrSimulation.Readiness }
+        Mock Get-SessionHostDeletionSafety {
+            param (
+                $ARMToken,
+                $SessionHosts,
+                $DeletionCandidates,
+                $TargetSessionHostCount,
+                $MinimumCapacityPercentage,
+                $ReplacementMode,
+                $ScalingPlanTarget
+            )
+            [PSCustomObject]@{
+                SafeCandidates = @($DeletionCandidates)
+                OnlineHealthyHosts = @($SessionHosts | Where-Object {
+                    $_.Status -eq 'Available' -and $_.AllowNewSession
+                }).Count
+                MinimumOnlineHealthyHosts = if ($TargetSessionHostCount -gt 0) { 1 } else { 0 }
+                DestructiveOperationsFrozen = $false
+                Reason = 'Simulated final safety check passed'
+            }
+        }
         Mock Deploy-SessionHosts {
             param (
                 $NewSessionHostsCount,
@@ -351,6 +372,31 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Invoke-OrchestrationCycle -RunNumber 4
         $global:shrSimulation.DeletionCalls.Count | Should Be 1
         $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01', 'avd-02')
+    }
+
+    It 'DeleteFirst does not start a new destructive batch during the pre-RampUp freeze' {
+        $global:shrSimulation.Mode = 'DeleteFirst'
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSimulation.ScalingPlanTarget = [PSCustomObject]@{
+            CapacityPercentage = 50
+            ScalingPlanName = 'weekday'
+            ScheduleName = 'weekday'
+            Phase = 'OffPeak->RampUp (look-ahead)'
+            Source = 'ScalingPlan'
+        }
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 2
+            PossibleSessionHostDeleteCount = 2
+            SessionHostsPendingDelete = @($global:shrSimulation.Hosts)
+            ExistingSessionHostNames = @($global:shrSimulation.Hosts.SessionHostName)
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 2
+        }
+
+        Invoke-OrchestrationCycle -RunNumber 1
+
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
     }
 
     It 'DeleteFirst recovers an empty pool, retries only unresolved names, and performs no further deletion' {

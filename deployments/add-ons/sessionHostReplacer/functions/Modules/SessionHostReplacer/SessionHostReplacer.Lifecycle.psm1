@@ -692,13 +692,13 @@ function Test-NewSessionHostsAvailable {
     }
     
     if (-not $newHosts -or $newHosts.Count -eq 0) {
-        Write-LogEntry -Message "No new session hosts found on latest image version - skipping availability check" -Level Trace
+        Write-LogEntry -Message "No new session hosts found on latest image version - replacement readiness is not established" -Level Warning
         return [PSCustomObject]@{
-            AllAvailable      = $true
+            AllAvailable      = $false
             AvailableCount    = 0
             TotalNewHosts     = 0
             UnavailableHosts  = @()
-            SafeToProceed     = $true
+            SafeToProceed     = $false
             Message           = "No new hosts to verify"
         }
     }
@@ -753,7 +753,7 @@ function Test-NewSessionHostsAvailable {
 
     if ($scalingPlanUsable) {
         $newHostPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds @($newHosts.ResourceId)
-        $requiredOnlineCount = if ($ScalingPlanTarget.CapacityPercentage -eq 0) { 0 } else { 1 }
+        $requiredOnlineCount = [Math]::Min($newHosts.Count, [Math]::Max(1, $MinimumAvailableCount))
 
         $onlineHealthyHosts = @()
         $scalableStandbyHosts = @()

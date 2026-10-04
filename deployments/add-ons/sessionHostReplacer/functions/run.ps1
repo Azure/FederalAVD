@@ -586,6 +586,13 @@ if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
     }
 }
 
+$destructiveOperationsFrozen = $scalingPlanTarget -and
+    $scalingPlanTarget.Source -eq 'ScalingPlan' -and
+    ($scalingPlanTarget.Phase -in @('RampUp', 'Peak') -or $scalingPlanTarget.Phase -like '*->RampUp*')
+if ($destructiveOperationsFrozen) {
+    Write-LogEntry -Message "Destructive replacement is frozen during scaling phase '$($scalingPlanTarget.Phase)'. Deployment recovery and host validation will continue." -Level Warning
+}
+
 # If up to date, skip replacement planning and go straight to the early exit path.
 if ($isUpToDate) {
     Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation"
@@ -635,8 +642,8 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
 
     Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
     
-    # Update LastImageVersion now that the cycle is complete
-    if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
+    # Update cycle state now that replacement is complete.
+    if ((Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) -or $replacementMode -eq 'DeleteFirst') {
         $deploymentState = Get-DeploymentState
         $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
         
@@ -644,8 +651,13 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
         if ($deploymentState.LastImageVersion -ne $currentImageVersion) {
             Write-LogEntry -Message "Cycle complete - updating LastImageVersion from $($deploymentState.LastImageVersion) to $currentImageVersion" -Level Trace
             $deploymentState.LastImageVersion = $currentImageVersion
-            Save-DeploymentState -DeploymentState $deploymentState
         }
+
+        if ($targetSessionHostCount -eq 0 -and $deploymentState.PendingHostMappings -eq '{}') {
+            $deploymentState.TargetSessionHostCount = 0
+            Write-LogEntry -Message "Cycle complete - clearing the auto-detected target so the next cycle can detect intentional pool-size changes" -Level Trace
+        }
+        Save-DeploymentState -DeploymentState $deploymentState
     }
     
     # CRITICAL: Check if scaling exclusion tags need to be removed before exiting
@@ -869,6 +881,11 @@ if ($replacementMode -eq 'DeleteFirst') {
         # Skip the entire delete/deploy cycle - exit DeleteFirst flow
         $shouldSkipEntireFlow = $true
     }
+
+    if ($destructiveOperationsFrozen -and -not $hasPendingUnresolvedHosts) {
+        Write-LogEntry -Message "DeleteFirst mode will not start a new delete/deploy batch during the 60-minute pre-RampUp freeze, RampUp, or Peak." -Level Warning
+        $shouldSkipEntireFlow = $true
+    }
     
     # Log pending host retry scenario
     if ($hasPendingUnresolvedHosts) {
@@ -926,6 +943,29 @@ if ($replacementMode -eq 'DeleteFirst') {
         $hostPoolReplacementPlan.PossibleDeploymentsCount = $pendingHostCount
     }
     
+    if (-not $shouldSkipEntireFlow -and
+        -not $hasPendingUnresolvedHosts -and
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and
+        $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+        $freshSessionHosts = @(Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs)
+        $finalSafety = Get-SessionHostDeletionSafety `
+            -ARMToken $ARMToken `
+            -SessionHosts $freshSessionHosts `
+            -DeletionCandidates @($hostPoolReplacementPlan.SessionHostsPendingDelete) `
+            -TargetSessionHostCount $hostPoolReplacementPlan.TargetSessionHostCount `
+            -MinimumCapacityPercentage $minimumCapacityPercentage `
+            -ReplacementMode DeleteFirst `
+            -ScalingPlanTarget $scalingPlanTarget
+
+        Write-LogEntry -Message "FINAL_DELETE_SAFETY | OnlineHealthy: {0} | RequiredRemaining: {1} | Candidates: {2}/{3} | Frozen: {4} | Result: {5}" -StringValues $finalSafety.OnlineHealthyHosts, $finalSafety.MinimumOnlineHealthyHosts, $finalSafety.SafeCandidates.Count, $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, $finalSafety.DestructiveOperationsFrozen, $finalSafety.Reason
+        $hostPoolReplacementPlan.SessionHostsPendingDelete = @($finalSafety.SafeCandidates)
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount = $finalSafety.SafeCandidates.Count
+        if ($finalSafety.SafeCandidates.Count -eq 0) {
+            $hostPoolReplacementPlan.PossibleDeploymentsCount = 0
+            $shouldSkipEntireFlow = $true
+        }
+    }
+
     # Execute deletion logic only if we're not in a pending host retry scenario
     if (-not $shouldSkipEntireFlow -and -not $hasPendingUnresolvedHosts) {
         if ($newHostAvailability.TotalNewHosts -gt 0) {
@@ -1234,8 +1274,26 @@ else {
         Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
     }
 
-    # STEP 3: Delete session hosts (only if safety check passed or no new hosts to verify)
-    if (($newHostAvailability.SafeToProceed -or $newHostAvailability.TotalNewHosts -eq 0) -and $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+    if ($newHostAvailability.SafeToProceed -and
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and
+        $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+        $freshSessionHosts = @(Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs)
+        $finalSafety = Get-SessionHostDeletionSafety `
+            -ARMToken $ARMToken `
+            -SessionHosts $freshSessionHosts `
+            -DeletionCandidates @($hostPoolReplacementPlan.SessionHostsPendingDelete) `
+            -TargetSessionHostCount $hostPoolReplacementPlan.TargetSessionHostCount `
+            -MinimumCapacityPercentage $minimumCapacityPercentage `
+            -ReplacementMode SideBySide `
+            -ScalingPlanTarget $scalingPlanTarget
+
+        Write-LogEntry -Message "FINAL_DELETE_SAFETY | OnlineHealthy: {0} | RequiredRemaining: {1} | Candidates: {2}/{3} | Frozen: {4} | Result: {5}" -StringValues $finalSafety.OnlineHealthyHosts, $finalSafety.MinimumOnlineHealthyHosts, $finalSafety.SafeCandidates.Count, $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, $finalSafety.DestructiveOperationsFrozen, $finalSafety.Reason
+        $hostPoolReplacementPlan.SessionHostsPendingDelete = @($finalSafety.SafeCandidates)
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount = $finalSafety.SafeCandidates.Count
+    }
+
+    # STEP 3: Delete session hosts only when replacements and the final capacity check are ready.
+    if ($newHostAvailability.SafeToProceed -and $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
         Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, ($hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName -join ',') -Level Trace
                
         # Acquire Graph token if device cleanup is enabled

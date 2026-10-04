@@ -189,6 +189,13 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         Remove-Module SessionHostReplacer -Force
     }
 
+    It 'fails closed when no latest-image hosts exist' {
+        $result = Invoke-ReadinessCheck -SessionHosts @() -ScalingPlanTarget $null
+
+        $result.SafeToProceed | Should Be $false
+        $result.TotalNewHosts | Should Be 0
+    }
+
     It 'counts validated stopped hosts as scalable standby for the shared mode-independent check' {
         $hosts = @(
             1..4 | ForEach-Object { New-ReadinessHost -Index $_ }
@@ -307,7 +314,7 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.AvailableCount | Should Be 1
     }
 
-    It 'allows zero online hosts when the active scaling plan target is zero percent' {
+    It 'requires one online host when the active scaling plan target is zero percent' {
         $hosts = 1..3 | ForEach-Object {
             $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
                 AutoReplaceValidatedImage = $validatedImageToken
@@ -321,9 +328,9 @@ Describe 'Session Host Replacer scaling-aware readiness' {
             CapacityPercentage = 0
         })
 
-        $result.SafeToProceed | Should Be $true
+        $result.SafeToProceed | Should Be $false
         $result.ScalableStandbyCount | Should Be 3
-        $result.RequiredOnlineCount | Should Be 0
+        $result.RequiredOnlineCount | Should Be 1
     }
 
     It 'fails closed when validation evidence cannot be persisted' {
@@ -569,7 +576,7 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.SessionHostsPendingDelete.Count | Should Be 9
     }
 
-    It 'DeleteFirst accepts a zero percent scaling floor during OffPeak' {
+    It 'DeleteFirst retains one online healthy host during zero-percent OffPeak' {
         $plan = Invoke-TenHostReplacementPlan -ReplacementMode DeleteFirst -ScalingPlanTarget ([PSCustomObject]@{
             Source = 'ScalingPlan'
             CapacityPercentage = 0
@@ -579,8 +586,8 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         })
 
         $plan.PossibleDeploymentsCount | Should Be 10
-        $plan.PossibleSessionHostDeleteCount | Should Be 10
-        $plan.SessionHostsPendingDelete.Count | Should Be 10
+        $plan.PossibleSessionHostDeleteCount | Should Be 9
+        $plan.SessionHostsPendingDelete.Count | Should Be 9
     }
 
     It 'DeleteFirst uses the configured 80 percent floor without a scaling plan' {
@@ -743,8 +750,8 @@ Describe 'Session Host Replacer zero-percent scaling schedule discovery' {
         $target.CapacityPercentage | Should Be 0
     }
 
-    It 'raises the carried zero-percent target within 30 minutes of the next RampUp' {
-        $currentDateTime = [datetime]::SpecifyKind([datetime]'2026-09-21T05:45:00', [System.DateTimeKind]::Utc)
+    It 'raises the carried zero-percent target within 60 minutes of the next RampUp' {
+        $currentDateTime = [datetime]::SpecifyKind([datetime]'2026-09-21T05:15:00', [System.DateTimeKind]::Utc)
 
         $target = Get-ScalingPlanCurrentTarget `
             -ARMToken 'test-token' `
@@ -755,6 +762,123 @@ Describe 'Session Host Replacer zero-percent scaling schedule discovery' {
         $target.Source | Should Be 'ScalingPlan'
         $target.Phase | Should Be 'OffPeak->RampUp (look-ahead)'
         $target.CapacityPercentage | Should Be 50
+    }
+
+    It 'keeps the carried OffPeak target outside the 60-minute RampUp freeze' {
+        $currentDateTime = [datetime]::SpecifyKind([datetime]'2026-09-21T04:59:00', [System.DateTimeKind]::Utc)
+
+        $target = Get-ScalingPlanCurrentTarget `
+            -ARMToken 'test-token' `
+            -HostPoolResourceId '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/hp-test' `
+            -CurrentDateTime $currentDateTime `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $target.Phase | Should Be 'OffPeak (no schedule)'
+        $target.CapacityPercentage | Should Be 0
+    }
+}
+
+Describe 'Session Host Replacer final deletion safety' {
+    BeforeAll {
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
+    }
+
+    BeforeEach {
+        Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+        Mock Get-VMPowerStates -ModuleName SessionHostReplacer.Planning {
+            $states = @{}
+            foreach ($resourceId in $VMResourceIds) {
+                $states[$resourceId] = $false
+            }
+            $states
+        }
+    }
+
+    AfterAll {
+        Remove-Module SessionHostReplacer -Force
+    }
+
+    It 'shrinks a two-host DeleteFirst batch to preserve one usable host' {
+        $hosts = @(
+            1..2 | ForEach-Object {
+                [PSCustomObject]@{
+                    SessionHostName = "avd-0$_"
+                    ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-0$_"
+                    Status = 'Available'
+                    AllowNewSession = $true
+                    IsUnavailable = $false
+                    SessionHostHealthCheckResults = @(
+                        [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+                    )
+                }
+            }
+        )
+
+        $result = Get-SessionHostDeletionSafety `
+            -ARMToken 'test-token' `
+            -SessionHosts $hosts `
+            -DeletionCandidates $hosts `
+            -TargetSessionHostCount 2 `
+            -MinimumCapacityPercentage 80 `
+            -ReplacementMode DeleteFirst
+
+        $result.SafeCandidates.Count | Should Be 1
+        $result.MinimumOnlineHealthyHosts | Should Be 1
+    }
+
+    It 'blocks exact-name DeleteFirst replacement for a single-host target' {
+        $sessionHost = [PSCustomObject]@{
+            SessionHostName = 'avd-01'
+            ResourceId = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-01'
+            Status = 'Available'
+            AllowNewSession = $true
+            IsUnavailable = $false
+            SessionHostHealthCheckResults = @(
+                [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+            )
+        }
+
+        $result = Get-SessionHostDeletionSafety `
+            -ARMToken 'test-token' `
+            -SessionHosts @($sessionHost) `
+            -DeletionCandidates @($sessionHost) `
+            -TargetSessionHostCount 1 `
+            -MinimumCapacityPercentage 80 `
+            -ReplacementMode DeleteFirst
+
+        $result.SafeCandidates.Count | Should Be 0
+        $result.Reason | Should Match 'single-host'
+    }
+
+    It 'freezes destructive work during the pre-RampUp window' {
+        $sessionHost = [PSCustomObject]@{
+            SessionHostName = 'avd-01'
+            ResourceId = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-01'
+            Status = 'Available'
+            AllowNewSession = $true
+            IsUnavailable = $false
+            SessionHostHealthCheckResults = @(
+                [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+            )
+        }
+
+        $result = Get-SessionHostDeletionSafety `
+            -ARMToken 'test-token' `
+            -SessionHosts @($sessionHost) `
+            -DeletionCandidates @($sessionHost) `
+            -TargetSessionHostCount 2 `
+            -MinimumCapacityPercentage 80 `
+            -ReplacementMode DeleteFirst `
+            -ScalingPlanTarget ([PSCustomObject]@{
+                Source = 'ScalingPlan'
+                CapacityPercentage = 50
+                Phase = 'OffPeak->RampUp (look-ahead)'
+                ScalingPlanName = 'weekday'
+            })
+
+        $result.DestructiveOperationsFrozen | Should Be $true
+        $result.SafeCandidates.Count | Should Be 0
     }
 }
 
@@ -783,8 +907,10 @@ Describe 'Session Host Replacer DeleteFirst recovery contracts' {
     BeforeAll {
         $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
         $deploymentPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.Deployment.psm1'
+        $deviceCleanupPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.DeviceCleanup.psm1'
         $runScript = Get-Content -LiteralPath $runPath -Raw
         $deploymentScript = Get-Content -LiteralPath $deploymentPath -Raw
+        $deviceCleanupScript = Get-Content -LiteralPath $deviceCleanupPath -Raw
     }
 
     It 'retries only unresolved pending host names after partial registration' {
@@ -809,6 +935,12 @@ Describe 'Session Host Replacer DeleteFirst recovery contracts' {
         $deletePosition | Should BeGreaterThan $savePosition
         $deploymentScript | Should Match '\[switch\] \$RequireSuccess'
         $deploymentScript | Should Match 'if \(\$RequireSuccess\) \{\s+throw'
+    }
+
+    It 'confirms VM deletion only for ResourceNotFound or HTTP 404' {
+        $deviceCleanupScript | Should Match "error\.code -eq 'ResourceNotFound'"
+        $deviceCleanupScript | Should Match '\$statusCode -eq 404'
+        $deviceCleanupScript | Should Match 'Unable to verify VM deletion'
     }
 }
 

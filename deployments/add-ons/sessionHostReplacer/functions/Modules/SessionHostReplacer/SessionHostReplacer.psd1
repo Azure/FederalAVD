@@ -55,6 +55,7 @@
         'Get-SessionHostReplacementPlan'
         'Get-SessionHosts'
         'Get-ScalingPlanCurrentTarget'
+        'Get-SessionHostDeletionSafety'
         
         # Lifecycle functions (from SessionHostReplacer.Lifecycle.psm1)
         'Remove-SessionHosts'

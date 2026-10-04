@@ -327,9 +327,20 @@ function Confirm-SessionHostDeletions {
                     }
                 }
                 catch {
-                    # Exception likely means VM not found
-                    $sh.VMConfirmed = $true
-                    Write-LogEntry -Message "VM deletion confirmed: {0}" -StringValues $sh.VMName -Level Trace
+                    $statusCode = if ($_.Exception.Response) {
+                        [int]$_.Exception.Response.StatusCode
+                    }
+                    else {
+                        $null
+                    }
+
+                    if ($statusCode -eq 404) {
+                        $sh.VMConfirmed = $true
+                        Write-LogEntry -Message "VM deletion confirmed: {0}" -StringValues $sh.VMName -Level Trace
+                    }
+                    else {
+                        Write-LogEntry -Message "Unable to verify VM deletion for {0}: {1}" -StringValues $sh.VMName, $_.Exception.Message -Level Warning
+                    }
                 }
             }
             
