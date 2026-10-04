@@ -18,9 +18,8 @@ Automated Azure Function for managing Azure Virtual Desktop session host lifecyc
 - [Prerequisites](#prerequisites)
 - [Deployment](#deployment)
 - [Configuration](#configuration)
-- [Permissions Setup](#permissions-setup)
 - [How It Works](#how-it-works)
-- [Process Flows](#process-flows)
+- [Canonical Replacement Flow](#canonical-replacement-flow)
 - [Troubleshooting](#troubleshooting)
 - [Maintenance](#maintenance)
 
@@ -767,71 +766,6 @@ Update-AzTag -ResourceId "/subscriptions/.../resourceGroups/$resourceGroup/provi
 
 > **Tip:** You can also set these tags in your session host deployment template to automatically opt in new hosts.
 
-## Configuration
-
-### Function Timer Schedule
-
-The Session Host Replacer runs on a configurable timer schedule. **By default, it runs every 30 minutes.**
-
-**To customize the schedule**, modify the timer trigger in the function configuration:
-
-1. Navigate to the Function App in Azure Portal
-2. Go to **Functions** → **session-host-replacer** → **Integration**
-3. Click on the **Timer** trigger
-4. Modify the **Schedule** using NCRONTAB format
-
-**Common Schedule Examples:**
-
-| Schedule | NCRONTAB Expression | Description |
-| :------- | :------------------ | :---------- |
-| Every 30 minutes | `0 */30 * * * *` | Default - runs 48 times per day |
-| Every hour | `0 0 * * * *` | Runs at the top of every hour |
-| Every 2 hours | `0 0 */2 * * *` | Runs every 2 hours |
-| Business hours only | `0 0 8-17 * * *` | Runs hourly between 8 AM - 5 PM |
-| Off-peak hours | `0 0 0-6,18-23 * * *` | Runs hourly during midnight-6 AM and 6 PM-11 PM |
-| Nightly only | `0 0 2 * * *` | Runs once daily at 2 AM |
-| Weekdays only | `0 0 * * * 1-5` | Runs hourly on Monday-Friday |
-
-**NCRONTAB Format Reference:**
-
-```text
-{second} {minute} {hour} {day} {month} {day-of-week}
-
-Examples:
-0 30 9-17 * * *     - Every 30 minutes between 9 AM and 5 PM
-0 0 20 * * *        - Every day at 8 PM
-0 0 */4 * * *       - Every 4 hours
-0 0 1 * * 0         - Every Sunday at 1 AM
-```
-
-> **💡 Best Practice for Production:** Consider running the function during off-peak hours to minimize impact on active users. For example, `0 0 1-6 * * *` runs hourly between 1 AM and 6 AM.
-
-> **⚠️ Important:** The function execution time does not affect deployment timing. Even if the function runs during business hours, the drain grace period (default: 24 hours) ensures users are not disrupted until their sessions naturally end.
-
-### Application Settings
-
-The following settings are automatically configured during deployment but can be adjusted in the Function App's **Configuration** blade:
-
-```json
-{
-    "HostPoolName": "vdpool-prod-001",
-    "HostPoolResourceGroupName": "rg-avd-hostpool",
-    "HostPoolSubscriptionId": "...",
-    "VirtualMachinesResourceGroupName": "rg-avd-sessionhosts",
-    "VirtualMachinesSubscriptionId": "...",
-    "TargetSessionHostCount": "0",
-    "MaxDeploymentBatchSize": "10",
-    "SessionHostDrainGraceMinutes": "1440",
-    "UserAssignedIdentityClientId": "...",
-    "ResourceManagerUri": "https://management.azure.com/",
-    "GraphEndpoint": "https://graph.microsoft.com",
-    "RemoveEntraDevice": "true",
-    "RemoveIntuneDevice": "true"
-}
-```
-
-> **Note:** Most settings should not be changed after deployment. If you need to adjust configuration, redeploy the function app with updated parameters.
-
 ## How It Works
 
 ### Replacement Triggers
@@ -889,581 +823,21 @@ Session hosts use these tags for automation:
 | `AutoReplaceShutdownTimestamp` | When host was shutdown (SideBySide with retention) | `2024-12-20T16:00:00Z` | When shutdown for retention |
 | `ScalingPlanExclusion` | Exclude from scaling | `SessionHostReplacer` | Set at deployment, during drain mode, and shutdown retention. Checked and restored on retained VMs each run; removed only from active hosts when the cycle completes or retention begins |
 
-## Process Flows
-
-See [Session Host Replacer Flow Diagrams](replacement-flow.md) for the shared evaluation path and detailed SideBySide and DeleteFirst lifecycle flows.
-
-### SideBySide Mode Workflow
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  Timer Trigger (Configurable) → Lightweight Up-to-Date Check        │
-└─────────────────────────────────────────────────────────────────────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-         ┌────▼─────┐            ┌──────▼─────────┐
-         │  Already │            │  Needs Work    │
-         │ Up-to-   │            │  (Image        │
-         │  Date?   │            │   outdated)    │
-         └────┬─────┘            └─────┬──────────┘
-              │                        │
-      ┌───────▼────────┐               │
-      │  Early Exit    │               │
-      │  (Tag cleanup  │               │
-      │   only, ~10s)  │       ┌───────▼─────────┐
-      └────────────────┘       │  VM Cache       │
-                               │  (Query once,   │
-                               │   reuse data)   │
-                               └───────┬─────────┘
-                                       │
-                    ┌──────────────────┴─────────────────┐
-                    │                                    │
-               ┌────▼────────┐                   ┌───────▼───────┐
-               │  Drain Old  │                   │ Deploy New    │
-               │  Hosts      │                   │ Hosts First   │
-               │  (Set Tag)  │                   │ (Parallel)    │
-               └────┬────────┘                   └───────┬───────┘
-                    │                                    │
-                    │        ┌───────────────────────────┘
-                    │        │
-               ┌────▼────────▼────────┐
-               │  Wait for Grace      │
-               │  Period & Drain      │
-               │  (24h default)       │
-               └────┬─────────────────┘
-                    │
-               ┌─────────▼────────────┐
-               │  Lazy Power State    │
-               │  Query (only when    │
-               │  deletion eligible)  │
-               └────┬─────────────────┘
-                    │
-               ┌────▼─────────────────┐
-               │  Shutdown or Delete  │
-               │  + Device Cleanup    │
-               │  (Based on Setting)  │
-               └──────────────────────┘
-
-```
-
-**Detailed Steps**:
-
-1. **VM Caching**: Fetch all VMs once at start and reuse throughout execution (~60% fewer API calls)
-2. **Lightweight Up-to-Date Check**: Fast pre-check to detect if pool already current:
-   - Check running/failed deployments
-   - Quick image version comparison (first mismatch exits loop)
-   - If up-to-date: Skip expensive operations and proceed to early exit path
-   - **Performance**: Up-to-date pools complete in ~10 seconds vs 30-60 seconds
-3. **Early Exit Path** (if pool up-to-date):
-  - Query the scaling plan and record exact-image validation evidence when it is enabled
-   - Skip replacement plan calculation
-  - Validate latest-image host health and scalable standby readiness
-   - Only perform tag cleanup when cycle complete
-   - Exit immediately
-4. **Discovery**: Enumerate all session hosts via AVD Host Pool API (only if work needed)
-5. **Tag Validation**: Filter to hosts with `IncludeInAutoReplace: true`
-6. **Image Version Check**: Compare each host's image to latest marketplace/gallery version
-7. **New Cycle Detection** (if progressive scale-up enabled): Check if image version changed, reset state before planning
-8. **Target Count Determination**: Use explicit count or auto-detect current count at cycle start
-9. **Capacity Planning**: Calculate automatic buffer (equals target count) for zero-downtime updates
-10. **Progressive Scale-Up** (if enabled): Calculate batch size based on consecutive successes (uses reset state if new cycle)
-11. **Deployment Submission**: Deploy new hosts using Template Spec (up to MaxDeploymentBatchSize)
-12. **Availability Safety Check**: Verify newly deployed hosts have `Status` = `Available` before proceeding
-13. **Drain Decision**: Mark old hosts for draining if:
-    - New hosts are successfully deployed and registered
-    - New hosts meet availability threshold (default 100%)
-    - Image version differs from latest
-    - Minimum drain time not yet met (if zero sessions)
-14. **Grace Period Tracking**: Monitor via `AutoReplacePendingDrainTimestamp` tag
-15. **Lazy Power State Loading**: Only query VM power states when hosts become eligible for deletion (not queried if pool up-to-date)
-16. **Deletion or Shutdown**: After grace period + zero sessions + availability check passed:
-    - **Without shutdown retention**: Delete VM, disks, NIC, session host registration
-    - **With shutdown retention**: Shutdown (deallocate) VM and set `AutoReplaceShutdownTimestamp` tag
-17. **Device Cleanup** (if enabled): Remove from Entra ID and Intune
-18. **Expired Shutdown Cleanup**: Automatically delete VMs that have been shutdown beyond retention period (uses cached VM data)
-19. **State Tracking**: Save deployment state to Table Storage for progressive scale-up and auto-detect mode
-
-### DeleteFirst Mode Workflow
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  Timer Trigger (Configurable) → Lightweight Up-to-Date Check        │
-└─────────────────────────────────────────────────────────────────────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-         ┌────▼─────┐            ┌──────▼─────────┐
-         │  Already │            │  Needs Work    │
-         │ Up-to-   │            │  (Image        │
-         │  Date?   │            │   outdated)    │
-         └────┬─────┘            └─────┬──────────┘
-              │                        │
-      ┌───────▼────────┐               │
-      │  Early Exit    │               │
-      │  (Tag cleanup  │               │
-      │   only, ~10s)  │       ┌───────▼─────────┐
-      └────────────────┘       │  VM Cache       │
-                               │  (Query once,   │
-                               │   reuse data)   │
-                               └───────┬─────────┘
-                                       │
-                ┌──────────────────────┴────────────────────────┐
-                │                                               │
-           ┌────▼──────────────┐                   ┌────────────▼─────────┐
-           │ Check Pending     │                   │  Capacity Check      │
-           │ Host Mappings     │                   │  (Respect Min %      │
-           │ (From previous    │                   │   + Scaling Plan)    │
-           │  failed run?)     │                   └────────────┬─────────┘
-           └────┬──────────────┘                                │
-                │                                               │
-       ┌────────▼─────────┐                                     │
-       │  Unresolved      │                                     │
-       │  Hosts Exist?    │                                     │
-       └────┬────────┬────┘                                     │
-            │        │                                          │
-         Yes│        │No                                        │
-            │        └────────────────────┐                     │
-       ┌────▼──────────────┐              │                     │
-       │ BLOCK New         │              │                     │
-       │ Deletions         │              │                     │
-       │ → Retry           │              │                     │
-       │ Deployment Only   │         ┌────▼─────────────────────▼──────┐
-       └────┬──────────────┘         │  Drain Old Hosts                │
-            │                        │  (Set Tag)                      │
-            └────────────────────────┴────┬────────────────────────────┘
-                                          │
-                    ┌─────────────────────▼───────────────────┐
-                    │  Wait for Grace Period & Zero Sessions  │
-                    │  (24h for active, 15min for zero)       │
-                    └─────────────────────┬───────────────────┘
-                                          │
-                    ┌─────────────────────▼───────────────────┐
-                    │  Lazy Power State Query                 │
-                    │  (only when deletion eligible)          │
-                    └─────────────────────┬───────────────────┘
-                                          │
-                    ┌─────────────────────▼───────────────────┐
-                    │  SAVE PendingHostMappings               │
-                    │  Before Destructive Operations          │
-                    └─────────────────────┬───────────────────┘
-                                          │
-                    ┌─────────────────────▼───────────────────┐
-                    │  Delete Session Hosts                   │
-                    │  + VM + Disks + NIC + Device Cleanup    │
-                    └─────────────────────┬───────────────────┘
-                                          │
-                    ┌─────────────────────▼───────────────────┐
-                    │  Wait for Azure Resource Cleanup        │
-                    │  (Poll until fully deleted)             │
-                    └─────────────────────┬───────────────────┘
-                                          │
-                    ┌─────────────────────▼───────────────────┐
-                    │  Deploy Replacements                    │
-                    │  (Reuse deleted names + dedicated       │
-                    │   host assignments from mappings)       │
-                    └─────────────────────┬───────────────────┘
-                                          │
-                           ┌──────────────┴──────────────┐
-                           │                             │
-                    ┌──────▼────────┐           ┌────────▼────────────┐
-                    │  Deployment   │           │  Deployment         │
-                    │  Succeeded?   │           │  Failed?            │
-                    └──────┬────────┘           └────────┬────────────┘
-                           │                             │
-                    ┌──────▼────────────────┐    ┌───────▼─────────────┐
-                    │  Check Registration   │    │  Cleanup Partial    │
-                    │  (VMs in host pool?)  │    │  Resources          │
-                    └──────┬────────────────┘    │  KEEP Mappings      │
-                           │                     │  → Retry Next Run   │
-                  ┌────────▼────────┐            └─────────────────────┘
-                  │  All Registered?│
-                  └────┬────────┬───┘
-                   Yes │        │ No
-          ┌────────────┘        └─────────────┐
-          │                                   │
-    ┌─────▼──────────────┐        ┌───────────▼───────────┐
-    │  Clear Mappings    │        │  KEEP Mappings        │
-    │  Increment Success │        │  Status: Pending      │
-    │  (Progressive      │        │  Registration         │
-    │   Scale-Up)        │        │  → Check Next Run     │
-    └────────────────────┘        └───────────────────────┘
-
-```
-
-**Detailed Steps**:
-
-1. **VM Caching**: Fetch all VMs once at start and reuse throughout execution (~60% fewer API calls)
-2. **Lightweight Up-to-Date Check**: Fast pre-check to detect if pool already current:
-   - Check running/failed deployments
-   - Quick image version comparison (first mismatch exits loop)
-   - If up-to-date: Skip expensive operations and proceed to early exit path
-   - **Performance**: Up-to-date pools complete in ~10 seconds vs 30-60 seconds
-3. **Early Exit Path** (if pool up-to-date):
-  - Query the scaling plan and record exact-image validation evidence when it is enabled
-   - Skip replacement plan calculation
-  - Validate latest-image host health and scalable standby readiness
-   - Only perform tag cleanup when cycle complete
-   - Exit immediately
-4. **Discovery**: Enumerate all session hosts via AVD Host Pool API (only if work needed)
-5. **Tag Validation**: Filter to hosts with `IncludeInAutoReplace: true`
-6. **Target Count Determination**: Use an explicit count or persist the current count when an auto-detected replacement cycle begins
-7. **Image Version Check**: Compare each host's image to latest marketplace/gallery version
-8. **Scaling Plan Query** (if work needed): Query active scaling plan schedule for dynamic capacity target
-9. **Availability Safety Check**: Verify any existing newly-deployed hosts meet availability threshold before proceeding with new deletions
-9b. **Ghost Host Detection and Recovery**: Automatically detect and clean up "ghost hosts" - session hosts registered in host pool but with deleted VMs:
-    - **Detection method**: VM query returns 404 (only reliable indicator; Status='Unavailable' also applies to powered-off VMs)
-    - **Automatic recovery**: Remove Entra ID device (if enabled) → Remove Intune device (if enabled) → Remove stale host pool registration → Count as needing replacement
-    - **Protection**: Prevents false positives from powered-off VMs (only trust IsUnavailable flag set when VM query fails)
-10. **Capacity Calculation**: Determine max deletions respecting:
-    - `maxDeletionsPerCycle`: Upper limit per run
-    - `minimumCapacityPercentage`: Static fallback and active-hours safety floor when a scaling plan is available
-    - **Dynamic capacity from scaling plan** (phase-aware deletion throttling):
-      - **Peak/RampUp phases**: Uses max(configured minimum, scaling plan %) as floor (conservative during business hours)
-      - **RampDown/OffPeak phases**: Uses scaling plan % directly (more aggressive during off-hours)
-      - **Example**: 80% configured minimum + 20% scaling plan Peak → uses 80% (protects users)
-      - **Example**: 80% configured minimum + 10% scaling plan OffPeak → uses 10% (faster replacement)
-      - **Result**: Balances user capacity protection during peak hours with efficient replacement during off-hours
-11. **Drain Decision**: Mark old hosts for draining
-12. **Grace Period Tracking**: Monitor via `AutoReplacePendingDrainTimestamp` tag
-13. **Lazy Power State Loading**: Only query VM power states when hosts become eligible for deletion (not queried if pool up-to-date)
-14. **Pre-Deletion Capture**: Before deletion, save:
-    - Hostname (for reuse in new deployment)
-    - Dedicated host ID (if assigned)
-    - Dedicated host group ID (if assigned)
-    - Availability zones (if assigned)
-15. **Critical Deletion**: Delete session host + VM + disks + NIC + Entra/Intune devices
-    - **Failure handling**: If any deletion fails, halt deployment to prevent hostname conflicts
-    - **Success tracking**: Only reuse names from successfully deleted hosts
-16. **Cache Update**: Remove deleted VMs from cache (more efficient than re-querying all VMs)
-17. **Complete Deletion Verification**: Verify removal across all systems before proceeding:
-    - **VM deletion**: Poll Azure Resource Manager until 404 confirmed (up to 10 minutes by default)
-    - **Entra ID removal**: Query Microsoft Graph until device record removed
-    - **Intune removal**: Query Microsoft Graph until device record removed
-    - **Unified verification loop**: Checks all three systems together for each host until all confirmed
-    - **Graph propagation handling**: Accounts for delayed propagation (can lag VM deletion by 30+ seconds)
-    - **Per-host status logging**: Reports individual verification results after each check iteration
-    - **Polling interval**: Recheck incomplete systems every 30 seconds for up to 10 minutes by default
-18. **Deployment Submission**: Deploy replacement hosts:
-    - Reuse deleted hostnames (prevents name exhaustion)
-    - Reuse dedicated host assignments (prevents stranding hosts)
-    - Progressive scale-up (if enabled)
-19. **Post-Deployment Availability Check**: Verify newly deployed hosts reach Available status before next cycle
-20. **Failed Deployment Recovery and Host Tracking**: 
-    - **Before deletion**: Pending hostnames saved to Table Storage (`PendingHostMappings`)
-    - **After deployment failure**: Mappings persist (not cleared) with failed deployment cleanup
-    - **Registration verification**: Checks if deployed VMs actually register in host pool
-    - **Next run behavior**: 
-      - Blocks new deletions until pending hosts resolved
-      - Retries deployment using saved hostnames
-      - Only clears mappings after hosts successfully register
-    - **Protection**: Prevents capacity loss from deletion without successful replacement
-    - **Works independently**: Functions with or without progressive scale-up enabled
-21. **State Tracking**: Save deployment state including:
-    - `PendingHostMappings`: JSON object tracking deleted hosts awaiting deployment
-    - `ConsecutiveSuccesses`: Counter for progressive scale-up logic
-    - `CurrentPercentage`: Current batch size for gradual rollouts
-    - `LastDeploymentName`: Previous deployment for status checking
-    - `LastStatus`: Success, Failed, or PendingRegistration
-
-### Key Differences Between Modes
-
-| Aspect | SideBySide | DeleteFirst |
-| --- | --- | --- |
-| **Order of operations** | Deploy → Drain → Delete | Drain → Delete → Wait → Deploy |
-| **Hostname handling** | Generate new sequential names | Reuse deleted hostnames |
-| **Capacity during replacement** | 2x (old + new simultaneously) | <1x (deletions before deployments) |
-| **Dedicated host preservation** | No (new hosts on different hosts) | Yes (captures and reuses assignments) |
-| **Failure recovery** | Non-critical (names not reused) | Critical (saves pending names, blocks new deletions) |
-| **Registration verification** | Checks if hosts register | Checks if hosts register AND blocks deletions if pending |
-| **Deployment dependencies** | Independent operations | Deployment depends on successful deletion |
-| **Resource verification** | Not required | Polls Azure until VMs fully deleted |
-| **PendingHostMappings** | Not used | Always used (tracks deleted hosts awaiting deployment) |
-
-### Progressive Scale-Up Mechanics
-
-When `enableProgressiveScaleUp` is enabled, deployments start small and gradually increase:
-
-**Configuration**:
-
-- `initialDeploymentPercentage`: Starting batch size (e.g., 20%)
-- `scaleUpIncrementPercentage`: Amount to increase after successes (e.g., 40%)
-- `successfulRunsBeforeScaleUp`: Consecutive successes needed to scale up (default: 1)
-
-**Behavior**:
-
-- **New cycle detection**: Happens **before** replacement plan calculation to ensure reset state is used
-- **Cycle detected by**: Image version change (e.g., new gallery image published)
-- **New cycle starts**: Reset to initial percentage (e.g., 20%), clear consecutive success counter
-- **After successful deployment AND registration**: Increment consecutive success counter (hosts must actually register in host pool)
-- **After deployment without registration**: Keep pending mappings, do NOT increment counter, status = "PendingRegistration"
-- **Scale up trigger**: After N consecutive successes, increase percentage by increment
-- **Maximum**: Scale up to 100%
-- **After failure**: Reset to initial percentage and clear success counter
-
-**Example** (100 hosts to replace, 20% initial, 50% increment, 1 success required):
-
-1. **Run 1**: Deploy 20 hosts (20% of 100) → Success
-2. **Run 2**: Deploy 70 hosts (70% = 20% + 50%) → Success
-3. **Run 3**: Deploy 100 hosts (100% = capped at max, would be 120%) → Remaining 10 deployed
-4. **Run 4**: No more hosts to deploy, cycle complete
-
-**SideBySide mode constraint**: `maxDeploymentBatchSize` acts as ceiling. If percentage calculation exceeds this, uses batch size instead.
-
-**DeleteFirst mode constraint**: `maxDeletionsPerCycle` limits both deletions and subsequent deployments.
-
-**State persistence**: Deployment state (percentage, consecutive successes, pending hosts) saved to Table Storage.
-
-### Deployment State Persistence and Recovery (DeleteFirst Mode)
-
-**Critical for DeleteFirst mode**, the Session Host Replacer uses Azure Table Storage to track deleted hosts across function runs. This ensures hosts are never lost due to deployment failures or registration issues.
-
-**Problem Scenarios Without Persistence**:
-
-1. **Deployment Failure After Deletion**:
-   - Hosts 01, 02 deleted successfully
-   - Deployment fails (token issue, quota, ARM error)
-   - Next run: Function "forgets" 01, 02 were deleted
-   - Result: Capacity permanently lost, function starts deleting 03, 04 instead
-
-2. **Registration Failure After Deployment**:
-   - Hosts 01, 02 deleted and redeployed
-   - ARM deployment succeeds, but VMs never register (bad token, network issue, DSC failure)
-   - Next run: Hosts not in AVD host pool, function doesn't "see" them
-   - Result: Unmanaged VMs exist, capacity lost from host pool perspective
-
-**Solution: PendingHostMappings**
-
-A JSON field in the `sessionHostDeploymentState` Azure Table that tracks:
-
-- Hostnames of deleted hosts
-- Dedicated host assignments (HostId, HostGroupId)
-- Availability zones
-- Status: Deleted but awaiting successful deployment + registration
-
-**Lifecycle**:
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. Before Deletion: Save mappings to Table Storage              │
-│    PendingHostMappings = {"avd01": {...}, "avd02": {...}}      │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 2. Delete Hosts 01, 02 (Entra ID, Intune, VM cleanup)          │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 3a. Deployment Succeeds + VMs Register                          │
-│     → Verify hosts in AVD host pool                             │
-│     → Clear PendingHostMappings = '{}'                          │
-│     → Increment ConsecutiveSuccesses (progressive scale-up)     │
-└─────────────────────────────────────────────────────────────────┘
-                              OR
-┌─────────────────────────────────────────────────────────────────┐
-│ 3b. Deployment Fails                                             │
-│     → Cleanup partial resources                                  │
-│     → KEEP PendingHostMappings (don't clear)                    │
-│     → Block new deletions on next run                            │
-│     → Retry deployment with same hostnames                       │
-└─────────────────────────────────────────────────────────────────┘
-                              OR
-┌─────────────────────────────────────────────────────────────────┐
-│ 3c. Deployment Succeeds BUT VMs Don't Register                  │
-│     → Check session host list - hosts missing                    │
-│     → KEEP PendingHostMappings                                   │
-│     → Set LastStatus = 'PendingRegistration'                     │
-│     → Block new deletions until hosts register                   │
-│     → Don't increment ConsecutiveSuccesses                       │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Protection Mechanisms**:
-
-1. **Pre-Deletion Save**: Mappings must be written to Table Storage BEFORE any deletions occur; a read or write failure stops DeleteFirst processing
-2. **Persistence Through Failures**: Mappings NOT cleared on deployment failure
-3. **Registration Verification**: Checks if deployed VMs actually appear in host pool
-4. **Exact Retry Set**: Partial registration retries only the unresolved saved hostnames
-5. **Block New Deletions**: If unresolved hosts exist, prevents deleting more capacity:
-
-```text
-   Run 1: Delete 01, 02 → Deploy fails → Mappings kept
-   Run 2: Load mappings → 01, 02 not registered → BLOCK new deletions → Retry deployment
-   Run 3: Still not registered → BLOCK new deletions → Wait/investigate
-   Run N: 01, 02 now registered → Clear mappings → Resume normal operations
-   ```
-
-6. **Progressive Scale-Up Integration**: Only counts as "successful deployment" when hosts register
-
-**Table Storage Schema**:
-
-- **Table Name**: `sessionHostDeploymentState`
-- **Partition Key**: HostPoolName (e.g., "vdpool-prod-001")
-- **Row Key**: "DeploymentState"
-- **Field**: `PendingHostMappings` (JSON string)
-
-**Example PendingHostMappings JSON**:
-
-```json
-{
-  "avddemo01": {
-    "HostId": "/subscriptions/.../dedicatedHosts/host1",
-    "HostGroupId": "/subscriptions/.../hostGroups/group1",
-    "Zones": ["1"]
-  },
-  "avddemo02": {
-    "HostId": null,
-    "HostGroupId": null,
-    "Zones": []
-  }
-}
-```
-
-**Logging Examples**:
-
-```text
-INFO: Saved 2 host property mapping(s) to deployment state before deletion
-INFO: Loaded 2 pending host mapping(s) from previous run
-WARNING: Deployment succeeded but 2 host(s) not yet registered: avddemo01, avddemo02 - keeping mappings and NOT counting as successful run
-CRITICAL: 2 host(s) were previously deleted but not yet registered: avddemo01, avddemo02
-WARNING: BLOCKING new deletions until pending hosts are resolved (deployment failure or registration issue)
-INFO: All 2 pending host(s) successfully registered - clearing mappings
-```
-
-**Configuration**:
-
-- **Enabled**: Automatically for `ReplacementMode = 'DeleteFirst'` (regardless of progressive scale-up setting)
-- **Storage**: Uses Function App's storage account (no additional cost)
-- **Retention**: Persists until hosts successfully deploy and register
-- **Manual Reset**: Delete entity from `sessionHostDeploymentState` table if needed (rare)
-
-**Benefits**:
-
-- ✅ **Zero capacity loss** from deployment failures
-- ✅ **Automatic recovery** across function runs
-- ✅ **Registration validation** prevents silent failures
-- ✅ **Cascading protection** blocks new deletions until resolved
-- ✅ **Works independently** of progressive scale-up feature
-- ✅ **Dedicated host preservation** maintains assignments across failures
-
-**Best Practices**:
-
-- Monitor logs for "PendingRegistration" status (indicates registration issues)
-- Investigate if mappings persist across multiple runs (configuration/networking problem)
-- If device cleanup is enabled, ensure the corresponding Graph API permissions are granted
-- Verify registration token is valid and not expired
-
-### New Host Availability Safety Check
-
-The Session Host Replacer includes a critical safety mechanism that **prevents capacity loss** when new session hosts fail to register properly with the host pool.
-
-**Problem Scenario**:
-
-- New session hosts are deployed successfully (ARM deployment succeeds)
-- However, the hosts fail to become "Available" in AVD (bad image, config issues, VM extensions fail)
-- Without protection, the function would proceed to delete/shutdown old working hosts
-- **Result**: Significant capacity loss with no available hosts for users
-
-**Safety Mechanism**:
-
-The function performs an **availability health check** on newly deployed hosts before allowing any deletions or shutdowns:
-
-1. **Check Timing**: After deployment, before any delete/shutdown operations
-2. **Online Validation**: Requires `Status = Available`, `AllowNewSession = true`, and no failed AVD health checks to count as online ready capacity
-3. **Scaling-Aware Standby**: With an enabled, evaluable scaling plan, a stopped/deallocated host can count as ready only when it has exact-image validation evidence and no scaling exclusion tag
-4. **Readiness Floor**: Every latest-image host must be online healthy or validated scalable standby. At least one must be online healthy unless the active scaling-plan target is exactly `0%`
-5. **Strict Fallback**: Without a usable scaling plan, 100% of latest-image hosts must be online healthy
-6. **Action on Failure**:
-   - **SideBySide Mode**: Allows deployment to complete, but **blocks all deletions/shutdowns** until next run
-   - **DeleteFirst Mode**: **Halts the entire delete-deploy cycle** for current run
-7. **Metrics Logging**: Reports online healthy, scalable standby, and total ready counts
-
-**Status Check Details**:
-
-An `Available` host with no failed AVD health checks can establish fresh validation evidence even while it is in drain mode. It does not count as online ready capacity until `AllowNewSession = true`. `NeedsAssistance`, `Upgrading`, `UpgradeFailed`, `Unavailable`, and `NoHeartbeat` do not establish evidence or count as online healthy.
-
-Validation evidence is a SHA-256 token derived from the exact image definition and version and stored in the `AutoReplaceValidatedImage` tag by default. Healthy latest-image hosts record evidence whether or not a scaling plan is enabled. A host must complete one healthy validation pass for that exact image before it can later count as scalable standby. The function removes only a `ScalingPlanExclusion` tag whose value is `SessionHostReplacer`; administrator-owned exclusions are preserved and prevent standby eligibility.
-
-**SideBySide Mode Behavior**:
-
-```text
-Run 1: Deploy 10 new hosts -> 10 become online healthy
-  -> Exact-image validation evidence is recorded
-  -> Replacer-owned scaling exclusions are removed
-
-Run 2: Scaling plan keeps 4 hosts online and deallocates 6
-  -> 4 online healthy + 6 validated scalable standby = 10 ready
-  -> Safety check passes and replacement can continue
-```
-
-**DeleteFirst Mode Behavior**:
-
-```text
-Run 1: Drain and delete only the batch allowed by the phase-aware capacity floor
-  -> Deploy replacements and validate them online
-
-Run 2: Scaling plan deallocates validated replacements
-  -> Validated standby counts as ready
-  -> Existing DeleteFirst capacity and batch limits still cap further deletion
-```
-
-**Logging Examples**:
-
-```text
-INFO: NEW_HOST_VERIFICATION | OnlineHealthy: 4/10 | ScalableStandby: 6 | Ready: 10/10 (100%) | RequiredOnline: 1 | SafeToProceed: True
-```
-
-**Benefits**:
-
-- ✅ **Prevents capacity loss** from bad image deployments
-- ✅ **Automatic recovery** - resumes operations when hosts become healthy
-- ✅ **Scaling-aware readiness** - recognizes validated capacity that autoscale can start
-- ✅ **Fail-closed evidence** - unvalidated, unhealthy, or excluded hosts block replacement
-- ✅ **Dashboard visibility** - availability metrics logged for monitoring
-- ✅ **Works in both modes** - protects SideBySide and DeleteFirst equally
-
-**Best Practices**:
-
-- Keep the scaling plan enabled and assigned if stopped hosts should count as ready
-- Expect existing latest-image hosts to require one online healthy validation pass after upgrade
-- Monitor `NEW_HOST_VERIFICATION` logs for online, standby, and ready counts
-- Investigate when multiple runs show low availability (image/config issues)
-
-### Resiliency Test Harness
-
-`tests/SessionHostReplacer.Orchestration.Tests.ps1` invokes the actual timer control flow across
-multiple deterministic runs while supplying mocked cloud boundaries, replacement plans, and
-readiness results. The real planning and readiness implementations are exercised separately by
-`tests/SessionHostReplacer.Tests.ps1`.
-
-The current orchestration scenarios verify:
-
-- SideBySide retries a failed deployment and preserves old hosts until replacements are ready.
-- DeleteFirst recovers from a failed deployment even when no session hosts remain registered.
-- Partial registration retries only unresolved saved hostnames and never starts another deletion batch.
-- Recovery mappings are cleared after the final hosts register.
-- An unavailable pre-deletion state checkpoint and malformed recovery JSON both fail closed.
-- Asynchronous ARM failures clean up orphaned resources before exact-name retry; cleanup failure blocks redeployment.
-- Repeated `Running` status and ARM-discovered in-flight deployments block duplicate deletion and submission.
-- Partial Entra ID or Intune cleanup is retried and revalidated before hostname reuse.
-- Interruptions after host removal or after ARM accepts a deployment recover without another deletion or deployment.
-- ARM success with pending AVD registration waits without deleting device records or redeploying.
-- VM absence is revalidated before hostname reuse even when Entra ID and Intune cleanup are disabled.
-- Accepted DeleteFirst deployments require a state checkpoint; if that write fails, replacement VM presence blocks duplicate deployment.
-
-Run the focused resiliency suite with:
-
-```powershell
-Invoke-Pester -Script @(
-  '.\tests\SessionHostReplacer.Orchestration.Tests.ps1'
-  '.\tests\SessionHostReplacer.Tests.ps1'
-) -PassThru
-```
-
-This suite provides bounded assurance for the modeled transitions. Remaining failure-injection work
-includes drain notification failures, timer overlap, daylight-saving transitions, and Azure
-integration tests against an isolated host pool. A deployment that remains `Running` indefinitely
-fails closed and requires the ARM deployment to reach a terminal state or receive operator action.
+## Canonical Replacement Flow
+
+The [canonical Session Host Replacer flow](replacement-flow.md) is the authoritative
+reference for:
+
+- Shared inventory, image, scaling-plan, and readiness evaluation.
+- SideBySide deployment, validation, drain, retention, and removal sequencing.
+- DeleteFirst capacity floors, exact-name replacement, and single-host restrictions.
+- The 60-minute pre-RampUp, RampUp, and Peak destructive-work freeze.
+- Progressive batch growth and mode-specific ceilings.
+- Durable pending-host recovery after interruption, deployment failure, or delayed registration.
+- Final fresh-state deletion checks and definitive deletion verification.
+
+This README intentionally does not duplicate those state machines. It owns deployment,
+configuration, monitoring, maintenance, and troubleshooting guidance.
 
 ## Configuration
 
@@ -2365,6 +1739,49 @@ This pattern:
 - **Flexible Filtering**: View one region, multiple regions, or all regions
 - **Idempotent**: No conflicts when deploying to multiple regions
 - **Cost Efficient**: One workbook vs N (per region)
+
+### Reviewing and Updating an Existing Configuration
+
+The workbook's **Configuration and Effective Behavior** table translates the latest Function App
+settings and scaling-plan telemetry into operator-facing behavior. It shows whether replacement is
+currently permitted, whether destructive work is frozen, the active scaling phase and target, and
+the applicable mode-specific limits. The Function App link opens the deployed resource for further
+inspection.
+
+Use `Set-SessionHostReplacerConfiguration.ps1` to review or change supported operational settings:
+
+```powershell
+# Review the current configuration without changing it.
+.\Set-SessionHostReplacerConfiguration.ps1 `
+  -FunctionAppName <function-app-name> `
+  -ResourceGroupName <function-app-resource-group>
+
+# Preview a safer, smaller DeleteFirst batch.
+.\Set-SessionHostReplacerConfiguration.ps1 `
+  -FunctionAppName <function-app-name> `
+  -ResourceGroupName <function-app-resource-group> `
+  -MinimumCapacityPercentage 90 `
+  -MaxDeletionsPerCycle 2 `
+  -WhatIf
+```
+
+The script reads the complete app-settings collection, displays only supported non-secret
+configuration, validates mode-specific combinations, shows a before-and-after diff, and writes the
+complete collection back so unrelated Function App settings are preserved. App-setting changes
+restart the Function App.
+
+The script intentionally does not change replacement mode, timer schedule, identities, networking,
+device-cleanup permissions, template references, or other deployment resources. Change those
+through the Template Spec or Bicep deployment.
+
+> **Configuration source of truth:** A later Template Spec redeployment writes the parameter values
+> back to the Function App and can overwrite direct app-setting changes. Update the authoritative
+> deployment parameters to match any operational change that should persist across redeployments.
+
+Required permissions:
+
+- Review: `Microsoft.Web/sites/read` and `Microsoft.Web/sites/config/list/action`
+- Update: `Microsoft.Web/sites/config/write`
 
 ## Maintenance
 

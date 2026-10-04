@@ -421,14 +421,19 @@ The Session Host Replacer is an Azure Function add-on that monitors the Compute 
 - Marks outdated hosts as drain mode (no new sessions)
 - Waits for configurable grace period before removing hosts with active sessions
 - Deploys new hosts using the host pool's current configuration + latest gallery image
-- Validates new hosts register successfully before removing old ones
+- SideBySide validates replacement hosts before removing old ones; DeleteFirst persists recovery
+  state before removal and blocks further deletion until replacements register and become healthy
 - Cleans up Entra ID and Intune device records (DeleteFirst mode)
 - Supports SideBySide (zero-downtime) and DeleteFirst (cost-optimized) replacement strategies
 - Ringed rollout delay — configurable per-host-pool delay after a new image is detected, enabling validation before fleet-wide rollout
 
 **Setup:** Deploy the add-on once per host pool. The `hostPoolResourceId` output from Step 5 is the primary input.
 
-> See [Session Host Replacer Add-On](session-host-replacer.md) and [full add-on documentation](../deployments/add-ons/sessionHostReplacer/README.md) for deployment prerequisites, configuration, and replacement mode comparison.
+> See [Session Host Replacer Add-On](session-host-replacer.md) for the documentation map,
+> [full add-on documentation](../deployments/add-ons/sessionHostReplacer/README.md) for deployment
+> and configuration, and the
+> [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md) for
+> detailed lifecycle and recovery behavior.
 
 ### Manual approach: Set-SessionHostMaintenanceMode.ps1
 

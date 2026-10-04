@@ -4,77 +4,17 @@
 
 This document provides quick reference for deploying updates to an existing Session Host Replacer function and guidance for choosing deployment options.
 
-## Choosing Your Replacement Mode
+## Scope
 
-Before deploying, understand the two replacement strategies:
+This guide covers updating an existing Function App deployment and reviewing its operational
+settings. It does not redefine replacement behavior or duplicate the full first-deployment
+parameter reference.
 
-### SideBySide Mode (Recommended for Most)
+- Choose a mode and review parameters in [README.md](README.md#replacement-modes).
+- Review execution, scaling-phase, readiness, and recovery behavior in the
+  [canonical replacement flow](replacement-flow.md).
 
-- **Zero downtime** - new hosts added before old ones removed
-- **Higher temporary cost** - host pool temporarily doubles
-- **Shutdown retention option** - keep old hosts for rollback
-- **Best for**: Production environments, large pools, SLA requirements
-
-### DeleteFirst Mode (For Resource-Constrained Environments)
-
-- **Cost optimized** - no host pool doubling
-- **Temporary capacity reduction** - some hosts unavailable during replacement
-- **Hostname reuse** - always verifies VM absence and can optionally remove Entra ID and Intune records before reuse
-- **Best for**: Dev/test, cost-sensitive, IP/quota constrained, dedicated host environments
-
-See [README.md - Replacement Modes](README.md#replacement-modes) for detailed comparison.
-
-## Configuration Best Practices
-
-### SideBySide Mode Configuration
-
-```bicep
-// Basic zero-downtime setup
-replacementMode: 'SideBySide'
-targetSessionHostCount: 0  // Auto-detect for scaling plan compatibility
-drainGracePeriodHours: 24
-minimumDrainMinutes: 15    // Safety buffer for zero-session hosts
-maxDeploymentBatchSize: 100
-```
-
-**With Progressive Scale-Up (Large Pools)**:
-
-```bicep
-enableProgressiveScaleUp: true
-initialDeploymentPercentage: 10  // Start with 10%
-scaleUpIncrementPercentage: 20   // Increase by 20% after success
-successfulRunsBeforeScaleUp: 1   // Scale up after each success
-```
-
-**With Shutdown Retention (Rollback Capability)**:
-
-```bicep
-enableShutdownRetention: true
-shutdownRetentionDays: 3  // Keep old hosts shutdown for 3 days
-```
-
-**With Ringed Rollout (Validate Before Fleet-Wide)**:
-
-```bicep
-replaceSessionHostOnNewImageVersionDelayDays: 7  // Wait 7 days to validate new image
-```
-
-### DeleteFirst Mode Configuration
-
-```bicep
-replacementMode: 'DeleteFirst'
-targetSessionHostCount: 0   // Auto-detect at the start of each replacement cycle
-maxDeletionsPerCycle: 50    // Absolute blast-radius ceiling per cycle
-minimumCapacityPercentage: 80 // Static DeleteFirst floor; scaling plans retain at least one host and freeze before RampUp
-drainGracePeriodHours: 24
-minimumDrainMinutes: 15
-removeEntraDevice: true     // Recommended cleanup before hostname reuse
-removeIntuneDevice: true    // Recommended cleanup before hostname reuse
-```
-
-Graph API permissions are required only for the enabled Entra ID and Intune cleanup options. Disabling cleanup avoids those permissions but can leave stale directory records that interfere with rejoining a reused hostname.
-
-### Timer Schedule Guidance
+## Timer Schedule Guidance
 
 **Default** (Every 30 minutes):
 
@@ -177,6 +117,23 @@ Look for:
 - ✅ No module load errors
 - ✅ Expected configuration values loaded
 - ✅ No authentication failures
+
+## Review or Update Existing Operational Settings
+
+Use the repository-provided configuration command instead of editing unlabelled Function App
+environment variables directly:
+
+```powershell
+.\Set-SessionHostReplacerConfiguration.ps1 `
+    -FunctionAppName <function-app-name> `
+    -ResourceGroupName <function-app-resource-group>
+```
+
+Supply supported setting parameters and `-WhatIf` to preview a change. The command validates
+mode-specific settings, displays a diff, and preserves unrelated app settings. Replacement mode,
+timer schedule, identity, networking, device-cleanup permissions, and infrastructure changes must
+still be made through the Template Spec. Keep its parameter source synchronized because a later
+redeployment can overwrite direct operational changes.
 
 ## For Complete Documentation
 

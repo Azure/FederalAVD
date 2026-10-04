@@ -26,6 +26,13 @@ $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
 $enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
 $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice -AsBoolean
 $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean
+$functionAppSubscriptionId = if ($env:WEBSITE_OWNER_NAME) { ($env:WEBSITE_OWNER_NAME -split '\+')[0] } else { $null }
+$functionAppResourceId = if ($functionAppSubscriptionId -and $env:WEBSITE_RESOURCE_GROUP -and $env:WEBSITE_SITE_NAME) {
+    "/subscriptions/$functionAppSubscriptionId/resourceGroups/$($env:WEBSITE_RESOURCE_GROUP)/providers/Microsoft.Web/sites/$($env:WEBSITE_SITE_NAME)"
+}
+else {
+    'Unavailable'
+}
 $requiredGraphPermissions = @()
 if ($removeEntraDevice) {
     $requiredGraphPermissions += 'Device.ReadWrite.All'
@@ -54,7 +61,7 @@ $settingsLog = @{
     DynamicCapacityEnabled      = if ($replacementMode -eq 'DeleteFirst') { 'Yes' } else { 'N/A' }
 }
 
-Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled
+Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14} | FunctionAppResourceId: {15}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled, $functionAppResourceId
 
 # Acquire ARM access token
 try {

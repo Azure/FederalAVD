@@ -950,6 +950,8 @@ $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\mai
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
 $namingPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'
 $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
+$workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
+$configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1'
 $functionAppModulePath = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
 
 Describe 'Session Host Replacer storage CMK propagation sequencing' {
@@ -1025,6 +1027,64 @@ Describe 'Session Host Replacer centralized workbook placement' {
             Should Match 'selected Log Analytics workspace subscription and resource group'
         ($functionMonitoring.elements | Where-Object { $_.name -eq 'workbookInfoBox' }).options.text |
             Should Match 'same workspace reuse and update the same workbook'
+    }
+}
+
+Describe 'Session Host Replacer configuration management experience' {
+    BeforeAll {
+        $workbookTemplate = Get-Content -LiteralPath $workbookTemplatePath -Raw | ConvertFrom-Json
+        $workbookText = Get-Content -LiteralPath $workbookTemplatePath -Raw
+        $configurationScript = Get-Content -LiteralPath $configurationScriptPath -Raw
+        $runScript = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1') -Raw
+        $tokens = $null
+        $parseErrors = $null
+        $configurationAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $configurationScriptPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+    }
+
+    It 'shows effective scaling behavior and a Function App management link in the workbook' {
+        $workbookTemplate.version | Should Be 'Notebook/1.0'
+        $workbookText | Should Match 'Configuration and Effective Behavior'
+        $workbookText | Should Match 'New delete/deploy batches frozen; recovery continues'
+        $workbookText | Should Match 'Deployment and validation continue; old-host removal is frozen'
+        $workbookText | Should Match '"linkTarget": "ResourceOverview"'
+        $workbookText | Should Match 'Set-SessionHostReplacerConfiguration.ps1'
+    }
+
+    It 'logs the Function App resource ID used by the workbook link' {
+        $runScript | Should Match 'WEBSITE_OWNER_NAME'
+        $runScript | Should Match 'WEBSITE_RESOURCE_GROUP'
+        $runScript | Should Match 'FunctionAppResourceId: \{15\}'
+    }
+
+    It 'provides a syntactically valid guarded configuration script' {
+        $parseErrors.Count | Should Be 0
+        $configurationScript | Should Match 'SupportsShouldProcess'
+        $configurationScript | Should Match '/config/appsettings/list\?api-version='
+        $configurationScript | Should Match '/config/appsettings\?api-version='
+        $configurationScript | Should Match 'A future Template Spec redeployment can overwrite these values'
+    }
+
+    It 'does not allow infrastructure or replacement mode changes through the update script' {
+        $parameterNames = @($configurationAst.ParamBlock.Parameters | ForEach-Object {
+            $_.Name.VariablePath.UserPath
+        })
+
+        ($parameterNames -contains 'ReplacementMode') | Should Be $false
+        ($parameterNames -contains 'TimerSchedule') | Should Be $false
+        ($parameterNames -contains 'RemoveEntraDevice') | Should Be $false
+        ($parameterNames -contains 'RemoveIntuneDevice') | Should Be $false
+        $configurationScript | Should Match 'must be changed through\s+the Session Host Replacer Template Spec or Bicep deployment'
+    }
+
+    It 'blocks a one-host DeleteFirst target and preserves unrelated settings' {
+        $configurationScript | Should Match "DeleteFirst cannot replace a one-host target"
+        $configurationScript | Should Match '\$settings\.PSObject\.Properties\[\$change\.Setting\]'
+        $configurationScript | Should Match 'Add-Member -NotePropertyName \$change\.Setting'
+        $configurationScript | Should Match 'Body @\{ properties = \$settings \}'
     }
 }
 

@@ -1,8 +1,12 @@
 [**Home**](../../../README.md) | [**Session Host Replacer**](README.md) | [**Add-Ons**](../../../docs/add-ons.md)
 
-# Session Host Replacer Flow Diagrams
+# Canonical Session Host Replacer Flow
 
 These diagrams describe one timer invocation. A replacement cycle can span multiple invocations while deployments complete, users drain, or safety checks block further work.
+
+> **Canonical lifecycle reference:** This document owns the detailed replacement, readiness,
+> scaling-phase, and recovery behavior. The [add-on README](README.md) owns deployment,
+> configuration, monitoring, and troubleshooting guidance.
 
 ## Shared Evaluation
 
@@ -137,6 +141,38 @@ DeleteFirst-specific behavior:
 - Accepted deployments require a durable tracking-state write; VM presence remains the duplicate-deployment gate if that write fails.
 - Shutdown retention is always disabled.
 - Exact-name DeleteFirst replacement is blocked for a single-host target because it cannot preserve one available host.
+
+## Cross-Cutting Batch Progression
+
+When progressive scale-up is enabled, both modes begin with the configured percentage of the hosts
+still needed. After the configured number of successful deployment and registration runs, the
+percentage increases by the configured increment, up to 100%.
+
+- A new image version resets progression to the initial percentage.
+- ARM deployment success without AVD registration is not a successful run.
+- A failed deployment resets progression.
+- `MaxDeploymentBatchSize` caps SideBySide deployments.
+- `MaxDeletionsPerCycle` caps DeleteFirst deletion and matching replacement deployment.
+- Readiness, scaling-phase freezes, and the final fresh-state capacity check can reduce or defer a
+  calculated batch.
+
+## Durable Recovery State
+
+DeleteFirst saves `PendingHostMappings` to the `sessionHostDeploymentState` table before deleting a
+host. Each entry preserves the exact hostname and placement information required to recreate that
+host.
+
+The mapping remains until the replacement is deployed and registered:
+
+1. A state read or durable pre-deletion write failure blocks deletion.
+2. A failed or interrupted deployment leaves the mapping in place.
+3. The next invocation blocks new deletion and retries only unresolved names.
+4. Partial registration retries only names that remain unresolved.
+5. A successful ARM deployment waits for AVD registration without deleting or redeploying it.
+6. The mapping is cleared only after all pending hosts are registered.
+
+The stored positive auto-detected target remains authoritative during the cycle. Unresolved pending
+names count toward target reconstruction, and an empty pool cannot establish a new zero target.
 
 ## Drain Notification
 
