@@ -109,6 +109,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             VerificationResults = @{}
             DeploymentCalls = @()
             DeletionCalls = @()
+            DeletionSafetyCalls = @()
             CleanupCalls = @()
             DirectoryCleanupCalls = @()
             VerificationCalls = @()
@@ -223,6 +224,12 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 $ReplacementMode,
                 $ScalingPlanTarget
             )
+            $global:shrSimulation.DeletionSafetyCalls += [PSCustomObject]@{
+                Run = $global:shrSimulation.RunNumber
+                ReplacementMode = $ReplacementMode
+                Phase = $ScalingPlanTarget.Phase
+                CandidateCount = @($DeletionCandidates).Count
+            }
             [PSCustomObject]@{
                 SafeCandidates = @($DeletionCandidates)
                 OnlineHealthyHosts = @($SessionHosts | Where-Object {
@@ -374,6 +381,43 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Invoke-OrchestrationCycle -RunNumber 4
         $global:shrSimulation.DeletionCalls.Count | Should Be 1
         $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01', 'avd-02')
+    }
+
+    It 'SideBySide walks through readiness, final safety, and removal during Peak' {
+        $oldHosts = @($global:shrSimulation.Hosts)
+        $global:shrSimulation.ScalingPlanTarget = [PSCustomObject]@{
+            CapacityPercentage = 100
+            ScalingPlanName = 'weekday'
+            ScheduleName = 'weekday'
+            Phase = 'Peak'
+            Source = 'ScalingPlan'
+        }
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 0
+            PossibleSessionHostDeleteCount = 2
+            SessionHostsPendingDelete = $oldHosts
+            ExistingSessionHostNames = @($oldHosts.SessionHostName)
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 2
+        }
+        $global:shrSimulation.Readiness = [PSCustomObject]@{
+            TotalNewHosts = 2
+            AvailableCount = 2
+            AvailablePercentage = 100
+            SafeToProceed = $true
+            Message = 'Peak replacement capacity is online'
+        }
+
+        Invoke-OrchestrationCycle -RunNumber 1
+
+        $global:shrSimulation.DeletionSafetyCalls.Count | Should Be 1
+        $global:shrSimulation.DeletionSafetyCalls[0].ReplacementMode | Should Be 'SideBySide'
+        $global:shrSimulation.DeletionSafetyCalls[0].Phase | Should Be 'Peak'
+        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01', 'avd-02')
+        @($global:shrSimulation.Logs | Where-Object {
+            $_ -like 'DeleteFirst destructive replacement is frozen*'
+        }).Count | Should Be 0
     }
 
     It 'DeleteFirst does not start a new destructive batch during the pre-RampUp freeze' {

@@ -952,7 +952,7 @@ function Get-SessionHostDeletionSafety {
         -MinimumCapacityPercentage $MinimumCapacityPercentage `
         -ScalingPlanTarget $ScalingPlanTarget
 
-    if ($capacityPolicy.DestructiveOperationsFrozen) {
+    if ($ReplacementMode -eq 'DeleteFirst' -and $capacityPolicy.DestructiveOperationsFrozen) {
         return [PSCustomObject]@{
             SafeCandidates = @()
             OnlineHealthyHosts = 0
@@ -984,7 +984,26 @@ function Get-SessionHostDeletionSafety {
             $failedHealthChecks.Count -eq 0
     } | ForEach-Object { $_.SessionHostName })
 
-    $minimumOnlineHealthyHosts = if ($ReplacementMode -eq 'SideBySide') {
+    $minimumOnlineHealthyHosts = if ($ReplacementMode -eq 'SideBySide' -and
+        $ScalingPlanTarget -and
+        $ScalingPlanTarget.Source -eq 'ScalingPlan' -and
+        $null -ne $ScalingPlanTarget.CapacityPercentage) {
+        if ($TargetSessionHostCount -gt 0) {
+            [Math]::Min(
+                $TargetSessionHostCount,
+                [Math]::Max(
+                    1,
+                    [Math]::Ceiling(
+                        $TargetSessionHostCount * ([int]$ScalingPlanTarget.CapacityPercentage / 100.0)
+                    )
+                )
+            )
+        }
+        else {
+            0
+        }
+    }
+    elseif ($ReplacementMode -eq 'SideBySide') {
         if ($TargetSessionHostCount -gt 0) { 1 } else { 0 }
     }
     else {

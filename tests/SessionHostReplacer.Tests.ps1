@@ -294,6 +294,55 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.AvailableCount | Should Be 4
         $result.ScalableStandbyCount | Should Be 6
         $result.ReadyCount | Should Be 10
+        $result.RequiredOnlineCount | Should Be 4
+    }
+
+    It 'requires all latest-image hosts online during a 100-percent Peak target' {
+        $hosts = @(
+            1..4 | ForEach-Object { New-ReadinessHost -Index $_ }
+            5..10 | ForEach-Object {
+                $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
+                    AutoReplaceValidatedImage = $validatedImageToken
+                }
+                $global:sessionHostReplacerTestPowerStates[$sessionHost.ResourceId] = $true
+                $sessionHost
+            }
+        )
+
+        $result = Invoke-ReadinessCheck -SessionHosts $hosts -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 100
+            Phase = 'Peak'
+        })
+
+        $result.SafeToProceed | Should Be $false
+        $result.RequiredOnlineCount | Should Be 10
+        $result.AvailableCount | Should Be 4
+        $result.ScalableStandbyCount | Should Be 6
+    }
+
+    It 'allows validated standby at a zero-percent OffPeak target while retaining one online host' {
+        $hosts = @(
+            New-ReadinessHost -Index 1
+            2..4 | ForEach-Object {
+                $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
+                    AutoReplaceValidatedImage = $validatedImageToken
+                }
+                $global:sessionHostReplacerTestPowerStates[$sessionHost.ResourceId] = $true
+                $sessionHost
+            }
+        )
+
+        $result = Invoke-ReadinessCheck -SessionHosts $hosts -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 0
+            Phase = 'OffPeak'
+        })
+
+        $result.SafeToProceed | Should Be $true
+        $result.RequiredOnlineCount | Should Be 1
+        $result.AvailableCount | Should Be 1
+        $result.ScalableStandbyCount | Should Be 3
     }
 
     It 'keeps the original all-online requirement when no scaling plan is evaluable' {
@@ -956,6 +1005,111 @@ Describe 'Session Host Replacer final deletion safety' {
 
         $result.DestructiveOperationsFrozen | Should Be $true
         $result.SafeCandidates.Count | Should Be 0
+    }
+
+    It 'allows SideBySide removal before RampUp while preserving the raised online target' {
+        $hosts = @(
+            1..6 | ForEach-Object {
+                [PSCustomObject]@{
+                    SessionHostName = "avd-0$_"
+                    ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-0$_"
+                    Status = 'Available'
+                    AllowNewSession = $true
+                    IsUnavailable = $false
+                    SessionHostHealthCheckResults = @(
+                        [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+                    )
+                }
+            }
+        )
+
+        $result = Get-SessionHostDeletionSafety `
+            -ARMToken 'test-token' `
+            -SessionHosts $hosts `
+            -DeletionCandidates @($hosts | Select-Object -First 4) `
+            -TargetSessionHostCount 4 `
+            -MinimumCapacityPercentage 80 `
+            -ReplacementMode SideBySide `
+            -ScalingPlanTarget ([PSCustomObject]@{
+                Source = 'ScalingPlan'
+                CapacityPercentage = 50
+                Phase = 'OffPeak->RampUp (look-ahead)'
+                ScalingPlanName = 'weekday'
+            })
+
+        $result.DestructiveOperationsFrozen | Should Be $false
+        $result.MinimumOnlineHealthyHosts | Should Be 2
+        $result.SafeCandidates.Count | Should Be 4
+    }
+
+    It 'reduces SideBySide Peak removal when replacement capacity is not yet online' {
+        $hosts = @(
+            1..6 | ForEach-Object {
+                [PSCustomObject]@{
+                    SessionHostName = "avd-0$_"
+                    ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-0$_"
+                    Status = 'Available'
+                    AllowNewSession = $true
+                    IsUnavailable = $false
+                    SessionHostHealthCheckResults = @(
+                        [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+                    )
+                }
+            }
+        )
+
+        $result = Get-SessionHostDeletionSafety `
+            -ARMToken 'test-token' `
+            -SessionHosts $hosts `
+            -DeletionCandidates @($hosts | Select-Object -First 4) `
+            -TargetSessionHostCount 4 `
+            -MinimumCapacityPercentage 80 `
+            -ReplacementMode SideBySide `
+            -ScalingPlanTarget ([PSCustomObject]@{
+                Source = 'ScalingPlan'
+                CapacityPercentage = 100
+                Phase = 'Peak'
+                ScalingPlanName = 'weekday'
+            })
+
+        $result.DestructiveOperationsFrozen | Should Be $false
+        $result.MinimumOnlineHealthyHosts | Should Be 4
+        $result.SafeCandidates.Count | Should Be 2
+    }
+
+    It 'allows SideBySide OffPeak removal down to one online host at a zero-percent target' {
+        $hosts = @(
+            1..5 | ForEach-Object {
+                [PSCustomObject]@{
+                    SessionHostName = "avd-0$_"
+                    ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-0$_"
+                    Status = 'Available'
+                    AllowNewSession = $true
+                    IsUnavailable = $false
+                    SessionHostHealthCheckResults = @(
+                        [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+                    )
+                }
+            }
+        )
+
+        $result = Get-SessionHostDeletionSafety `
+            -ARMToken 'test-token' `
+            -SessionHosts $hosts `
+            -DeletionCandidates @($hosts | Select-Object -First 4) `
+            -TargetSessionHostCount 4 `
+            -MinimumCapacityPercentage 80 `
+            -ReplacementMode SideBySide `
+            -ScalingPlanTarget ([PSCustomObject]@{
+                Source = 'ScalingPlan'
+                CapacityPercentage = 0
+                Phase = 'OffPeak'
+                ScalingPlanName = 'weekday'
+            })
+
+        $result.DestructiveOperationsFrozen | Should Be $false
+        $result.MinimumOnlineHealthyHosts | Should Be 1
+        $result.SafeCandidates.Count | Should Be 4
     }
 }
 

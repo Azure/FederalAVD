@@ -660,7 +660,8 @@ session hosts in standard host pools.
   quota, and subnet requirements at the expense of a temporary capacity reduction
 - Graceful session draining with configurable grace period (default: 24 hours)
 - Progressive scale-up, configurable batch ceilings, and per-cycle deletion limits
-- Availability safety floor that always retains one usable host, plus a 60-minute pre-RampUp and active-hours destructive-work freeze when a scaling plan is enabled
+- Availability safety floors that preserve the active scaling target in `SideBySide`, plus a
+  60-minute pre-RampUp and active-hours destructive-work freeze for `DeleteFirst`
 - Optional shutdown retention for rapid rollback in `SideBySide` mode
 - Auto-detected target capacity or an explicit target session-host count
 - Dedicated-host assignment and hostname preservation in `DeleteFirst` mode

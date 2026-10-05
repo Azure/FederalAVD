@@ -33,8 +33,9 @@ SideBySide deploys and validates new hosts before removing old hosts.
 - Best availability and rollback options.
 - Requires temporary subnet, compute quota, and VM capacity for both generations.
 - Can retain deallocated old hosts for a configured rollback period.
-- Replacement deployment and validation can continue during the pre-RampUp, RampUp, and Peak
-  destructive-work freeze; old-host removal waits for RampDown or OffPeak.
+- Replacement deployment, validation, and capacity-safe removal can continue during every scaling
+  phase. Old hosts are removed only when the latest-image fleet and the final fresh-state check
+  preserve the active scaling-plan online target.
 
 ### DeleteFirst
 

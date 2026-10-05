@@ -76,7 +76,9 @@ flowchart TD
 SideBySide-specific behavior:
 
 - New hosts are deployed before old hosts are drained or removed.
-- Replacement deployment and validation can continue during the 60-minute pre-`RampUp`, `RampUp`, and `Peak` freeze, but removal of old hosts waits until `RampDown` or `OffPeak`.
+- Replacement deployment, validation, and capacity-safe old-host removal can continue during every
+  scaling phase. Before removal, the latest-image fleet must have the active scaling-plan percentage
+  online, and the final fresh-state check preserves that online target.
 - Failed readiness preserves the old hosts and waits for a later invocation.
 - During an active `0%` scaling period, at least one latest-image host must remain online ready; the other validated latest-image hosts may be scalable standby.
 - Shutdown retention is available only in this mode.
@@ -122,7 +124,9 @@ flowchart TD
 DeleteFirst-specific behavior:
 
 - The scaling plan remains enabled. Replacer-owned exclusion tags protect draining and newly deployed hosts while ordinary validated hosts remain available to autoscale.
-- New destructive batches freeze 60 minutes before `RampUp` and throughout `RampUp` and `Peak`. Deployment recovery, registration checks, health validation, and release of validated hosts to autoscale continue.
+- New destructive batches freeze 60 minutes before `RampUp` and throughout `RampUp` and `Peak`.
+  Deployment recovery, registration checks, health validation, and release of validated hosts to
+  autoscale continue.
 - During `RampDown` and `OffPeak`, the active scaling-plan target controls replacement pace, but at least one online healthy host remains. Without an evaluable scaling plan, the configured percentage is used and capped at target minus one so pools of two or more can progress.
 - Drained, unhealthy, unavailable, and scaled-down hosts do not authorize deletion of additional online healthy hosts. They remain eligible for replacement without consuming the online floor.
 - An active `0%` scaling target still retains one online healthy host.

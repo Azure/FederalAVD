@@ -753,7 +753,13 @@ function Test-NewSessionHostsAvailable {
 
     if ($scalingPlanUsable) {
         $newHostPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds @($newHosts.ResourceId)
-        $requiredOnlineCount = [Math]::Min($newHosts.Count, [Math]::Max(1, $MinimumAvailableCount))
+        $scalingPlanOnlineCount = [Math]::Ceiling(
+            $newHosts.Count * ([int]$ScalingPlanTarget.CapacityPercentage / 100.0)
+        )
+        $requiredOnlineCount = [Math]::Min(
+            $newHosts.Count,
+            [Math]::Max($MinimumAvailableCount, $scalingPlanOnlineCount)
+        )
 
         $onlineHealthyHosts = @()
         $scalableStandbyHosts = @()

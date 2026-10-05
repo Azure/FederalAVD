@@ -834,7 +834,8 @@ reference for:
 - Shared inventory, image, scaling-plan, and readiness evaluation.
 - SideBySide deployment, validation, drain, retention, and removal sequencing.
 - DeleteFirst capacity floors, exact-name replacement, and single-host restrictions.
-- The 60-minute pre-RampUp, RampUp, and Peak destructive-work freeze.
+- The DeleteFirst 60-minute pre-RampUp, RampUp, and Peak destructive-work freeze and SideBySide
+  active-target capacity checks.
 - Progressive batch growth and mode-specific ceilings.
 - Durable pending-host recovery after interruption, deployment failure, or delayed registration.
 - Final fresh-state deletion checks and definitive deletion verification.

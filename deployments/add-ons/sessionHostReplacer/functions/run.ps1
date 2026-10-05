@@ -599,11 +599,12 @@ if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
     }
 }
 
-$destructiveOperationsFrozen = $scalingPlanTarget -and
+$destructiveOperationsFrozen = $replacementMode -eq 'DeleteFirst' -and
+    $scalingPlanTarget -and
     $scalingPlanTarget.Source -eq 'ScalingPlan' -and
     ($scalingPlanTarget.Phase -in @('RampUp', 'Peak') -or $scalingPlanTarget.Phase -like '*->RampUp*')
 if ($destructiveOperationsFrozen) {
-    Write-LogEntry -Message "Destructive replacement is frozen during scaling phase '$($scalingPlanTarget.Phase)'. Deployment recovery and host validation will continue." -Level Warning
+    Write-LogEntry -Message "DeleteFirst destructive replacement is frozen during scaling phase '$($scalingPlanTarget.Phase)'. Deployment recovery and host validation will continue." -Level Warning
 }
 
 # If up to date, skip replacement planning and go straight to the early exit path.
