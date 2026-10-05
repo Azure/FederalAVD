@@ -1183,6 +1183,7 @@ $namingPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modul
 $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
 $workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
 $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1'
+$rollbackScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1'
 $functionAppModulePath = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
 
 Describe 'Session Host Replacer storage CMK propagation sequencing' {
@@ -1280,7 +1281,7 @@ Describe 'Session Host Replacer configuration management experience' {
         $workbookTemplate.version | Should Be 'Notebook/1.0'
         $workbookText | Should Match 'Configuration and Effective Behavior'
         $workbookText | Should Match 'New delete/deploy batches frozen; recovery continues'
-        $workbookText | Should Match 'Deployment and validation continue; old-host removal is frozen'
+        $workbookText | Should Match 'Capacity-safe SideBySide removal permitted; active scaling target applies'
         $workbookText | Should Match '"linkTarget": "ResourceOverview"'
         $workbookText | Should Match 'Set-SessionHostReplacerConfiguration.ps1'
     }
@@ -1316,6 +1317,52 @@ Describe 'Session Host Replacer configuration management experience' {
         $configurationScript | Should Match '\$settings\.PSObject\.Properties\[\$change\.Setting\]'
         $configurationScript | Should Match 'Add-Member -NotePropertyName \$change\.Setting'
         $configurationScript | Should Match 'Body @\{ properties = \$settings \}'
+    }
+}
+
+Describe 'Session Host Replacer rollback operator experience' {
+    BeforeAll {
+        $rollbackScript = Get-Content -LiteralPath $rollbackScriptPath -Raw
+        $tokens = $null
+        $parseErrors = $null
+        $rollbackAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $rollbackScriptPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+    }
+
+    It 'provides a syntactically valid fail-closed rollback script' {
+        $parseErrors.Count | Should Be 0
+        $rollbackScript | Should Match 'SupportsShouldProcess'
+        $rollbackScript | Should Match "Stop it first or rerun with -StopFunctionApp"
+        $rollbackScript | Should Match "ReplacementMode"
+        $rollbackScript | Should Match "EnableShutdownRetention"
+    }
+
+    It 'waits for AVD health before restoring session acceptance and tags' {
+        $healthPosition = $rollbackScript.IndexOf('Wait-SessionHostReady -SessionHostPath')
+        $allowSessionPosition = $rollbackScript.IndexOf('allowNewSession = $true')
+        $tagRemovalPosition = $rollbackScript.IndexOf("operation = 'Delete'", $allowSessionPosition)
+
+        $healthPosition | Should BeGreaterThan -1
+        $allowSessionPosition | Should BeGreaterThan $healthPosition
+        $tagRemovalPosition | Should BeGreaterThan $allowSessionPosition
+    }
+
+    It 'removes only replacer-owned scaling exclusions and opts restored hosts out of automation' {
+        $rollbackScript | Should Match "scalingExclusionValue -eq 'SessionHostReplacer'"
+        $rollbackScript | Should Match '\$includeInAutomationTagName = ''false'''
+        $rollbackScript | Should Match 'does not drain or remove the bad-image generation'
+    }
+
+    It 'does not expose a switch that restarts the Function App' {
+        $parameterNames = @($rollbackAst.ParamBlock.Parameters | ForEach-Object {
+            $_.Name.VariablePath.UserPath
+        })
+
+        ($parameterNames -contains 'StartFunctionApp') | Should Be $false
+        ($parameterNames -contains 'ResumeAutomation') | Should Be $false
     }
 }
 

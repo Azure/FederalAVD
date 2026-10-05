@@ -395,11 +395,18 @@ Customer-managed key (CMK) encryption is supported for the vault via `keyManagem
 **RTO:** Minutes — power on retained old session hosts.  
 **RPO:** Not applicable — user profile data is unaffected by session host replacement.
 
-When `deployScalingPlan = true` and Session Host Replacer is configured with `ShutdownRetention` mode, replaced (old-image) session hosts are powered off but retained for a configurable period (1-7 days) rather than deleted. If a new image is discovered to have issues, the fleet can be rolled back by:
+When Session Host Replacer uses `SideBySide` mode with shutdown retention enabled, replaced
+(old-image) session hosts are powered off but retained for a configurable period (1-7 days) rather
+than deleted. If a new image is discovered to have issues, initiate rollback with the guarded
+[`Invoke-SessionHostRollback.ps1`](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1)
+operator script. It stops the replacer, powers on selected retained hosts, waits for AVD health,
+restores session acceptance, removes replacer-owned retention controls, and opts restored hosts out
+of automation.
 
-1. Powering on the retained hosts
-2. Draining new hosts
-3. Removing new hosts after users have migrated back
+After restoration, validate user access, drain the bad-image hosts, establish the corrected
+known-good Compute Gallery version, remove the bad-image generation, explicitly opt the intended
+hosts back into automation, and restart the Function App. See the
+[complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 
 The **Ringed Rollout** setting (0-30 day delay) further limits blast radius by staging new image adoption across the fleet progressively, allowing validation in a subset of hosts before fleet-wide rollout.
 

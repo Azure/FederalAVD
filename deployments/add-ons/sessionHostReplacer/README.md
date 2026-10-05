@@ -843,6 +843,58 @@ reference for:
 This README intentionally does not duplicate those state machines. It owns deployment,
 configuration, monitoring, maintenance, and troubleshooting guidance.
 
+## Roll Back to Shutdown-Retention Hosts
+
+Shutdown retention preserves the old-image VMs and their AVD registrations, but rollback is an
+operator-controlled action. Do not only power on retained VMs: they remain drained, carry retention
+and scaling-exclusion tags, and still use an image older than the gallery version selected by the
+replacer.
+
+Use `Invoke-SessionHostRollback.ps1` to perform the guarded restoration:
+
+```powershell
+# Preview every retained host that would be restored.
+.\Invoke-SessionHostRollback.ps1 `
+  -FunctionAppName <function-app-name> `
+  -FunctionAppResourceGroupName <function-app-resource-group> `
+  -StopFunctionApp `
+  -WhatIf
+
+# Restore selected retained hosts.
+.\Invoke-SessionHostRollback.ps1 `
+  -FunctionAppName <function-app-name> `
+  -FunctionAppResourceGroupName <function-app-resource-group> `
+  -SessionHostName avd-001, avd-002 `
+  -StopFunctionApp `
+  -Confirm:$false `
+  -PassThru
+```
+
+The script:
+
+1. Fails closed unless the Function App is stopped, or stops it when `-StopFunctionApp` is supplied.
+2. Discovers the deployment settings and VMs carrying the configured shutdown-retention tag.
+3. Starts each selected VM and waits for `Available` status with no failed AVD health checks.
+4. Sets the configured automation opt-in tag to `false` before returning the host to service.
+5. Sets `AllowNewSession=true`.
+6. Removes the shutdown-retention tag and removes the scaling exclusion only when its value is
+   `SessionHostReplacer`.
+
+After restoration:
+
+1. Validate user access and capacity on the restored generation.
+2. Drain the bad-image generation and migrate or sign out its sessions.
+3. Establish the desired image state. Prefer publishing the corrected known-good image as a newer
+   Compute Gallery version. If intentionally making an older gallery version current, review
+   `AllowImageVersionRollback` before automation replaces hosts running the newer bad version.
+4. Remove the bad-image hosts through the approved operator process.
+5. Set the configured automation opt-in tag back to `true` only on hosts that should re-enter
+   replacement management.
+6. Start the Function App and monitor the workbook and traces for the next invocation.
+
+The script intentionally does not drain or delete the bad-image generation, alter gallery versions,
+re-enable host automation, or restart the Function App.
+
 ## Configuration
 
 ### Function App Runtime
@@ -1377,7 +1429,7 @@ $vm = Get-AzVM -ResourceGroupName "rg-sessionhosts" -Name "vm-001"
 $vm.Tags["AutoReplacePendingDrainTimestamp"]  # Should be ISO 8601 timestamp
 ```
 
-#### 11. Replacement Pauses Before RampUp or During Peak Hours
+#### 11. DeleteFirst Replacement Pauses Before RampUp or During Peak Hours
 
 **Symptoms:**
 
@@ -1385,7 +1437,9 @@ $vm.Tags["AutoReplacePendingDrainTimestamp"]  # Should be ISO 8601 timestamp
 - Running deployments and health validation continue
 - Validated hosts are released to autoscale
 
-**Cause:** The replacer freezes new destructive work 60 minutes before RampUp and throughout RampUp and Peak so the scaling plan can prepare and maintain user capacity.
+**Cause:** DeleteFirst freezes new destructive work 60 minutes before RampUp and throughout RampUp
+and Peak so the scaling plan can prepare and maintain user capacity. SideBySide continues when its
+latest-image readiness and final fresh-state checks preserve the active scaling target.
 
 **Explanation:**
 

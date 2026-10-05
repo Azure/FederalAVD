@@ -95,6 +95,18 @@ Replacement mode, timer schedule, identity, networking, permissions, and infrast
 Template Spec or Bicep deployment concerns. A later Template Spec redeployment can overwrite direct
 operational-setting changes unless its authoritative parameters are updated to match.
 
+### Shutdown-retention rollback
+
+Rollback is operator initiated; retained VMs are not restored automatically. Use the guarded
+[rollback script](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1) to stop
+the replacer, start selected retained hosts, validate AVD health, restore session acceptance, remove
+replacer-owned retention controls, and opt the restored hosts out of automation.
+
+The Function App remains stopped after restoration. Correct the Compute Gallery desired image,
+drain and remove the bad-image generation, explicitly opt the intended hosts back into automation,
+and then restart the Function App. Follow the
+[complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
+
 ## Related Documentation
 
 - [Add-Ons](add-ons.md)

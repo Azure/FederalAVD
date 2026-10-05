@@ -214,7 +214,7 @@ function Get-InterpretedConfiguration {
         'New delete/deploy batches freeze 60 minutes before RampUp through Peak; recovery continues.'
     }
     else {
-        'Deployment and validation continue; removal of old hosts freezes 60 minutes before RampUp through Peak.'
+        'Deployment, validation, and capacity-safe removal continue during every scaling phase.'
     }
 
     return [PSCustomObject][ordered]@{
