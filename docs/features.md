@@ -665,7 +665,10 @@ session hosts in standard host pools.
 - Auto-detected target capacity or an explicit target session-host count
 - Dedicated-host assignment and hostname preservation in `DeleteFirst` mode
 - Tag-based opt-in model for controlled automation
-- Optional Entra ID and Intune device cleanup
+- Entra device cleanup required for `DeleteFirst` replacement of Microsoft Entra joined hosts and
+  optional for domain-joined or hybrid-joined hosts
+- Optional Intune cleanup, highly recommended before `DeleteFirst` hostname reuse for
+  Intune-enrolled Entra-joined or hybrid-joined hosts
 - Template Spec integration for consistent deployments
 
 Session Host Replacer does not support automated host pools because Azure Virtual Desktop owns the

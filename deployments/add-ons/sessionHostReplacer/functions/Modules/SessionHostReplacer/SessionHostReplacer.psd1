@@ -30,6 +30,7 @@
         'Get-GraphEndpoint'
         'Get-AccessToken'
         'Read-FunctionAppSetting'
+        'Assert-DeviceCleanupConfiguration'
         'Write-LogEntry'
         'Invoke-AzureRestMethod'
         'Invoke-AzureRestMethodWithRetry'

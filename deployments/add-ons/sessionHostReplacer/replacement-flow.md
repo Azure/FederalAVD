@@ -134,7 +134,10 @@ DeleteFirst-specific behavior:
 - Recovery can redeploy exact unresolved names after an externally caused or legacy empty-pool incident, but new cycles do not intentionally create one.
 - VM deletion is revalidated before hostname reuse even when directory cleanup is disabled.
 - Only a definitive ARM `404` or `ResourceNotFound` confirms VM deletion; authorization, throttling, timeout, network, and service errors remain unresolved.
-- Required Entra ID or Intune cleanup is retried and revalidated before hostname reuse.
+- Entra device cleanup is mandatory for Microsoft Entra joined hosts because DeleteFirst reuses the exact hostname. The function fails closed before destructive work if that required cleanup is disabled.
+- Entra cleanup remains optional for domain-joined and Microsoft Entra hybrid joined hosts.
+- Intune cleanup is optional but highly recommended before hostname reuse for Intune-enrolled Microsoft Entra joined or hybrid-joined hosts to prevent stale or duplicate managed-device records.
+- Enabled Entra ID or Intune cleanup is retried and revalidated before hostname reuse.
 - A tracked or ARM-discovered running deployment blocks the invocation from deleting or deploying again.
 - A deployment that remains `Running` fails closed until ARM or an operator moves it to a terminal state.
 - A successful ARM deployment with pending AVD registration waits without cleanup or duplicate deployment.

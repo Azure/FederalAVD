@@ -26,6 +26,16 @@ $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
 $enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
 $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice -AsBoolean
 $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean
+$sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCultureIgnoreCase)
+$sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
+$identitySolution = [string]$sessionHostParameters.IdentitySolution
+Assert-DeviceCleanupConfiguration `
+    -ReplacementMode $replacementMode `
+    -IdentitySolution $identitySolution `
+    -RemoveEntraDevice $removeEntraDevice `
+    -RemoveIntuneDevice $removeIntuneDevice `
+    -IntuneEnrollment ([bool]$sessionHostParameters.IntuneEnrollment)
+
 $functionAppSubscriptionId = if ($env:WEBSITE_OWNER_NAME) { ($env:WEBSITE_OWNER_NAME -split '\+')[0] } else { $null }
 $functionAppResourceId = if ($functionAppSubscriptionId -and $env:WEBSITE_RESOURCE_GROUP -and $env:WEBSITE_SITE_NAME) {
     "/subscriptions/$functionAppSubscriptionId/resourceGroups/$($env:WEBSITE_RESOURCE_GROUP)/providers/Microsoft.Web/sites/$($env:WEBSITE_SITE_NAME)"
@@ -403,10 +413,6 @@ if ($failedDeployments.Count -gt 0) {
     Write-LogEntry -Message "Processing {0} failed deployments for cleanup" -StringValues $failedDeployments.Count
     Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -FailedDeployments $failedDeployments -RegisteredSessionHostNames $sessionHostsFiltered.SessionHostName -CachedVMs $cachedVMs
 }
-
-# Load session host parameters
-$sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCultureIgnoreCase)
-$sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
 
 # Get latest version of session host image
 Write-LogEntry -Message "Getting latest image version using Image Reference."

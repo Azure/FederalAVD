@@ -763,7 +763,7 @@
               "name": "deviceCleanupInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Device Cleanup Automation Overview\n\nDevice cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined to prevent accumulation of orphaned device records.\n\nRequired Microsoft Graph API Permissions\n\nGrant only the permission for each enabled cleanup target:\n- 'Device.ReadWrite.All' - Required for Entra ID device deletion\n- 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion\n\nAir-Gapped Cloud Limitations\n\nIntune is not currently available in Azure Government Secret or Azure Government Top Secret. Leave Intune cleanup disabled unless your environment support team confirms availability, and grant only permissions advertised by Microsoft Graph in that environment.",
+                "text": "Device Cleanup Automation Overview\n\nEntra device cleanup is required when Delete-First reuses names for Microsoft Entra joined session hosts. It remains optional for domain-joined and hybrid-joined hosts. Intune cleanup is optional but highly recommended before Delete-First hostname reuse for Intune-enrolled Entra-joined or hybrid-joined hosts.\n\nRequired Microsoft Graph API Permissions\n\nGrant only the permission for each enabled cleanup target:\n- 'Device.ReadWrite.All' - Required for Entra ID device deletion\n- 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion\n\nAir-Gapped Cloud Limitations\n\nIntune is not currently available in Azure Government Secret or Azure Government Top Secret. Leave Intune cleanup disabled unless your environment support team confirms availability, and grant only permissions advertised by Microsoft Graph in that environment.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
               }
@@ -772,20 +772,51 @@
               "name": "removeEntraDevice",
               "type": "Microsoft.Common.CheckBox",
               "label": "Remove Entra ID Device Records",
-              "toolTip": "Remove Entra ID device records when deleting session hosts.",
-              "defaultValue": true
+              "toolTip": "Remove Entra ID device records when deleting session hosts. Required for Delete-First replacement of Microsoft Entra joined hosts.",
+              "defaultValue": true,
+              "constraints": {
+                "required": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+                "validationMessage": "Entra device cleanup is required when Delete-First reuses names for Microsoft Entra joined session hosts."
+              }
             },
             {
               "name": "removeIntuneDevice",
               "type": "Microsoft.Common.CheckBox",
               "label": "Remove Intune Device Records",
-              "toolTip": "Remove Intune device records when deleting session hosts. Intune is not currently available in Azure Government Secret or Top Secret; leave disabled unless availability is confirmed for the target environment.",
+              "toolTip": "Remove Intune device records when deleting session hosts. Highly recommended before Delete-First hostname reuse for Intune-enrolled Entra-joined or hybrid-joined hosts. Intune is not currently available in Azure Government Secret or Top Secret; leave disabled unless availability is confirmed for the target environment.",
               "defaultValue": true
+            },
+            {
+              "name": "entraDeleteFirstCleanupInfoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+              "options": {
+                "style": "Warning",
+                "text": "Delete-First reuses session host names. Entra device cleanup is required for Microsoft Entra joined hosts and cannot be disabled for this combination."
+              }
+            },
+            {
+              "name": "entraIntuneCleanupRecommendationInfoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('hosts').management.intune, not(steps('replacerConfig').removeIntuneDevice))]",
+              "options": {
+                "style": "Warning",
+                "text": "Intune cleanup is highly recommended for these Intune-enrolled Microsoft Entra joined hosts. Reusing names without cleanup can leave stale or duplicate Intune managed-device records."
+              }
+            },
+            {
+              "name": "hybridIntuneCleanupRecommendationInfoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), not(steps('replacerConfig').removeIntuneDevice))]",
+              "options": {
+                "style": "Warning",
+                "text": "If these AD DS hosts are Microsoft Entra hybrid joined and enrolled in Intune, Intune cleanup is highly recommended before Delete-First hostname reuse to prevent stale or duplicate managed-device records."
+              }
             },
             {
               "name": "identityTypeHeader",
               "type": "Microsoft.Common.TextBlock",
-              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
               "options": {
                 "text": "Function App Managed Identity"
               }
@@ -793,7 +824,7 @@
             {
               "name": "identityTypeInfoBox",
               "type": "Microsoft.Common.InfoBox",
-              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
               "options": {
                 "text": "Choose the type of managed identity the function app will use for authentication. 'System-Assigned' is simpler (created automatically), while 'User-Assigned' allows pre-granting Graph permissions before deployment (required for immediate device cleanup in DeleteFirst mode).",
                 "style": "Info"
@@ -802,7 +833,7 @@
             {
               "name": "identityType",
               "type": "Microsoft.Common.DropDown",
-              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
               "label": "Managed Identity Type",
               "multiLine": true,
               "defaultValue": "System-Assigned",
@@ -826,7 +857,7 @@
             {
               "name": "sessionHostReplacerUserAssignedIdentitiesApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location)), or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+              "condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location)), or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
@@ -838,11 +869,11 @@
               "label": "User-Assigned Managed Identity",
               "filter": true,
               "multiLine": true,
-              "visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+              "visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
               "toolTip": "Select a User-Assigned Managed Identity in the Function App deployment region that has the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All). Microsoft.Web cannot attach an identity from another region.",
               "constraints": {
                 "allowedValues": "[map(filter(steps('replacerConfig').sessionHostReplacerUserAssignedIdentitiesApi.value, (identity) => equals(toLower(identity.location), toLower(steps('basics').location.name))), (identity) => parse(concat('{\"label\":\"', identity.name, '\",\"description\":\"Resource Group: ', first(skip(split(identity.id, '/'), 4)), ', Location: ', identity.location, '\",\"value\":\"', identity.id, '\"}')))]",
-                "required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]"
+                "required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned'))]"
               }
             }
           ]
@@ -3511,13 +3542,13 @@
         "tagPendingDrainTimestamp": "[steps('replacerConfig').tagPendingDrainTimestamp]",
         "tagScalingPlanExclusionTag": "[steps('replacerConfig').tagScalingPlanExclusionTag]",
         "tagValidatedImage": "[steps('replacerConfig').tagValidatedImage]",
-        "removeEntraDevice": "[steps('replacerConfig').removeEntraDevice]",
+        "removeEntraDevice": "[or(steps('replacerConfig').removeEntraDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
         "removeIntuneDevice": "[steps('replacerConfig').removeIntuneDevice]",
         "enableProgressiveScaleUp": "[steps('replacerConfig').enableProgressiveScaleUp]",
         "initialDeploymentPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').initialDeploymentPercentage, 10)]",
         "scaleUpIncrementPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').scaleUpIncrementPercentage, 20)]",
         "successfulRunsBeforeScaleUp": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').successfulRunsBeforeScaleUp, 1)]",
-        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
+        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
         "powerShellVersion": "[steps('infrastructure').powerShellVersion]",
         "existingAppServicePlanResourceId": "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]",
         "appServicePlanResourceGroupName": "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]",

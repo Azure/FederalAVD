@@ -236,10 +236,10 @@ param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
 @description('Optional. Tag name used to record successful AVD health validation for the exact deployed image. Default is AutoReplaceValidatedImage.')
 param tagValidatedImage string = 'AutoReplaceValidatedImage'
 
-@description('Optional. Whether to remove Entra ID device records when deleting session hosts. Default is true.')
+@description('Optional except for DeleteFirst replacement of Microsoft Entra joined hosts, where Entra device cleanup is always enabled before exact hostname reuse. For domain-joined or hybrid-joined hosts, Entra cleanup remains optional. Default is true.')
 param removeEntraDevice bool = true
 
-@description('Optional. Whether to remove Intune device records when deleting session hosts. Intune is not currently available in Azure Government Secret and Top Secret; leave this disabled unless availability is confirmed for the target environment. Default is true.')
+@description('Optional. Whether to remove Intune device records when deleting session hosts. Cleanup is highly recommended for Intune-enrolled Entra-joined and hybrid-joined hosts before DeleteFirst hostname reuse. Intune is not currently available in Azure Government Secret and Top Secret; leave this disabled unless availability is confirmed for the target environment. Default is true.')
 param removeIntuneDevice bool = true
 
 @description('Optional. Enable percentage-based progressive batching for both replacement modes. The function starts with a percentage of the remaining needed hosts and increases after successful deployment and registration. Mode-specific batch ceilings still apply. Default is false.')
@@ -503,6 +503,12 @@ var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtual
 var effectiveIdentifier = !empty(identifier) ? identifier : 'replacer'
 var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
 var effectiveEnableShutdownRetention = replacementMode == 'SideBySide' && enableShutdownRetention
+var isEntraJoined = contains([
+  'EntraId'
+  'EntraKerberos-Hybrid'
+  'EntraKerberos-CloudOnly'
+], identitySolution)
+var effectiveRemoveEntraDevice = removeEntraDevice || (replacementMode == 'DeleteFirst' && isEntraJoined)
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {
@@ -929,7 +935,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       [
         {
           name: 'RemoveEntraDevice'
-          value: string(removeEntraDevice)
+          value: string(effectiveRemoveEntraDevice)
         }
         {
           name: 'RemoveIntuneDevice'

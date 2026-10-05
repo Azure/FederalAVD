@@ -307,6 +307,46 @@ function Read-FunctionAppSetting {
     }        
 }
 
+function Assert-DeviceCleanupConfiguration {
+    <#
+    .SYNOPSIS
+        Validates identity-aware device cleanup requirements before replacement begins.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ReplacementMode,
+
+        [Parameter(Mandatory = $true)]
+        [string] $IdentitySolution,
+
+        [Parameter(Mandatory = $true)]
+        [bool] $RemoveEntraDevice,
+
+        [Parameter(Mandatory = $true)]
+        [bool] $RemoveIntuneDevice,
+
+        [Parameter()]
+        [bool] $IntuneEnrollment = $false
+    )
+
+    $isEntraJoined = $IdentitySolution -in @('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly')
+
+    if ($ReplacementMode -eq 'DeleteFirst' -and $isEntraJoined -and -not $RemoveEntraDevice) {
+        Write-LogEntry -Message "CRITICAL ERROR: Entra device cleanup is required for DeleteFirst replacement of Microsoft Entra joined session hosts." -Level Error
+        throw "RemoveEntraDevice must be enabled for DeleteFirst replacement of Microsoft Entra joined session hosts"
+    }
+
+    if ($ReplacementMode -eq 'DeleteFirst' -and -not $RemoveIntuneDevice) {
+        if ($isEntraJoined -and $IntuneEnrollment) {
+            Write-LogEntry -Message "Intune cleanup is disabled for Intune-enrolled Microsoft Entra joined hosts. Cleanup is highly recommended before DeleteFirst hostname reuse to prevent stale or duplicate managed-device records." -Level Warning
+        }
+        elseif ($IdentitySolution -eq 'ActiveDirectoryDomainServices') {
+            Write-LogEntry -Message "If these AD DS hosts are Microsoft Entra hybrid joined and enrolled in Intune, Intune cleanup is highly recommended before DeleteFirst hostname reuse to prevent stale or duplicate managed-device records." -Level Warning
+        }
+    }
+}
+
 #EndRegion Configuration Functions
 
 #Region Logging and Error Handling
@@ -854,4 +894,4 @@ function Get-VMPowerStates {
 #EndRegion VM Helper Functions
 
 # Export functions
-Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates
+Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Assert-DeviceCleanupConfiguration, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates

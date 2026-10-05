@@ -67,6 +67,83 @@ Describe 'Session Host Replacer shutdown retention form behavior' {
     }
 }
 
+Describe 'Session Host Replacer device cleanup requirements' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $configStep = $form.view.properties.steps | Where-Object { $_.name -eq 'replacerConfig' }
+        $removeEntraDevice = $configStep.elements | Where-Object { $_.name -eq 'removeEntraDevice' }
+        $entraCleanupInfo = $configStep.elements | Where-Object { $_.name -eq 'entraDeleteFirstCleanupInfoBox' }
+        $entraIntuneWarning = $configStep.elements | Where-Object { $_.name -eq 'entraIntuneCleanupRecommendationInfoBox' }
+        $hybridIntuneWarning = $configStep.elements | Where-Object { $_.name -eq 'hybridIntuneCleanupRecommendationInfoBox' }
+        $outputs = $form.view.outputs.parameters
+        $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
+        $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
+        $bicep = Get-Content -LiteralPath $bicepPath -Raw
+        $runScript = Get-Content -LiteralPath $runPath -Raw
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
+    }
+
+    It 'requires Entra cleanup in the form for DeleteFirst Entra-joined hosts' {
+        $requiredExpression = "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]"
+        $removeEntraDevice.constraints.required | Should Be $requiredExpression
+        $entraCleanupInfo.visible | Should Be $requiredExpression
+        $outputs.removeEntraDevice | Should Be "[or(steps('replacerConfig').removeEntraDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]"
+    }
+
+    It 'shows recommendation-only Intune warnings for Entra and hybrid join' {
+        $entraIntuneWarning.visible | Should Match "steps\('hosts'\)\.management\.intune"
+        $entraIntuneWarning.visible | Should Match "not\(steps\('replacerConfig'\)\.removeIntuneDevice\)"
+        $hybridIntuneWarning.visible | Should Match "ActiveDirectoryDomainServices"
+        $hybridIntuneWarning.visible | Should Match "not\(steps\('replacerConfig'\)\.removeIntuneDevice\)"
+    }
+
+    It 'forces the effective Entra cleanup setting in Bicep only for DeleteFirst Entra join' {
+        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| \(replacementMode == 'DeleteFirst' && isEntraJoined\)"
+        $bicep | Should Match "name: 'RemoveEntraDevice'\s+value: string\(effectiveRemoveEntraDevice\)"
+        $bicep | Should Match "name: 'RemoveIntuneDevice'\s+value: string\(removeIntuneDevice\)"
+    }
+
+    It 'fails closed at runtime if the required setting is manually disabled' {
+        foreach ($identitySolution in @('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly')) {
+            $thrownMessage = $null
+            try {
+                Assert-DeviceCleanupConfiguration `
+                    -ReplacementMode DeleteFirst `
+                    -IdentitySolution $identitySolution `
+                    -RemoveEntraDevice $false `
+                    -RemoveIntuneDevice $false
+            }
+            catch {
+                $thrownMessage = $_.Exception.Message
+            }
+
+            $thrownMessage | Should Match 'RemoveEntraDevice must be enabled'
+        }
+
+        $runScript | Should Match 'Assert-DeviceCleanupConfiguration'
+    }
+
+    It 'does not require Intune cleanup or Entra cleanup for hybrid join' {
+        {
+            Assert-DeviceCleanupConfiguration `
+                -ReplacementMode DeleteFirst `
+                -IdentitySolution ActiveDirectoryDomainServices `
+                -RemoveEntraDevice $false `
+                -RemoveIntuneDevice $false
+        } | Should Not Throw
+
+        {
+            Assert-DeviceCleanupConfiguration `
+                -ReplacementMode DeleteFirst `
+                -IdentitySolution EntraId `
+                -RemoveEntraDevice $true `
+                -RemoveIntuneDevice $false `
+                -IntuneEnrollment $true
+        } | Should Not Throw
+    }
+}
+
 Describe 'Session Host Replacer shutdown retention scaling protection' {
     BeforeAll {
         $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'

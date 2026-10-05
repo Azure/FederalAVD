@@ -59,7 +59,10 @@ for complete sequencing and failure behavior.
 - Scaling-aware readiness with exact-image validation evidence.
 - Replacer-owned scaling exclusions that do not overwrite administrator-owned exclusions.
 - Configurable drain notification, minimum drain time, and active-session grace period.
-- Optional Entra ID and Intune device cleanup.
+- Entra device cleanup required for DeleteFirst replacement of Microsoft Entra joined hosts and
+  optional for domain-joined or hybrid-joined hosts.
+- Optional Intune cleanup, highly recommended before DeleteFirst hostname reuse for Intune-enrolled
+  Entra-joined or hybrid-joined hosts.
 - Centralized Azure Monitor Workbook and alerting guidance.
 - Validated operational-setting updates through
   [Set-SessionHostReplacerConfiguration.ps1](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1).

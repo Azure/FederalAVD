@@ -147,6 +147,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                     id = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd'
                 }
                 Location = 'eastus'
+                IdentitySolution = 'ActiveDirectoryDomainServices'
+                IntuneEnrollment = $false
             }
         }
 
