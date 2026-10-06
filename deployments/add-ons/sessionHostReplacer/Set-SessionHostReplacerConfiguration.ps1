@@ -210,7 +210,10 @@ function Get-InterpretedConfiguration {
     $retention = $mode -eq 'SideBySide' -and
         [bool]::Parse((Get-SettingValue -Settings $Settings -Name 'EnableShutdownRetention' -Default 'false'))
 
-    $activeHoursBehavior = if ($mode -eq 'DeleteFirst') {
+    $activeHoursBehavior = if ($mode -eq 'MaintenanceWindow') {
+        'Idle until a one-time request is armed; autoscale must be disabled during the operation.'
+    }
+    elseif ($mode -eq 'DeleteFirst') {
         'New delete/deploy batches freeze 60 minutes before RampUp through Peak; recovery continues.'
     }
     else {
@@ -271,7 +274,7 @@ $settingsResponse = Invoke-ArmRequest -Method POST -Path "$functionAppResourceId
 $settings = $settingsResponse.properties
 if ($null -eq $settings -or
     [string]::IsNullOrWhiteSpace((Get-SettingValue -Settings $settings -Name 'HostPoolName')) -or
-    (Get-SettingValue -Settings $settings -Name 'ReplacementMode') -notin @('DeleteFirst', 'SideBySide')) {
+    (Get-SettingValue -Settings $settings -Name 'ReplacementMode') -notin @('DeleteFirst', 'SideBySide', 'MaintenanceWindow')) {
     throw "$FunctionAppName does not contain a recognizable Session Host Replacer configuration."
 }
 

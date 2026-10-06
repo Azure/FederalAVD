@@ -332,12 +332,12 @@ function Assert-DeviceCleanupConfiguration {
 
     $isEntraJoined = $IdentitySolution -in @('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly')
 
-    if ($ReplacementMode -eq 'DeleteFirst' -and $isEntraJoined -and -not $RemoveEntraDevice) {
-        Write-LogEntry -Message "CRITICAL ERROR: Entra device cleanup is required for DeleteFirst replacement of Microsoft Entra joined session hosts." -Level Error
-        throw "RemoveEntraDevice must be enabled for DeleteFirst replacement of Microsoft Entra joined session hosts"
+    if ($ReplacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and $isEntraJoined -and -not $RemoveEntraDevice) {
+        Write-LogEntry -Message "CRITICAL ERROR: Entra device cleanup is required for exact-name replacement of Microsoft Entra joined session hosts." -Level Error
+        throw "RemoveEntraDevice must be enabled for exact-name replacement of Microsoft Entra joined session hosts"
     }
 
-    if ($ReplacementMode -eq 'DeleteFirst' -and -not $RemoveIntuneDevice) {
+    if ($ReplacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and -not $RemoveIntuneDevice) {
         if ($isEntraJoined -and $IntuneEnrollment) {
             Write-LogEntry -Message "Intune cleanup is disabled for Intune-enrolled Microsoft Entra joined hosts. Cleanup is highly recommended before DeleteFirst hostname reuse to prevent stale or duplicate managed-device records." -Level Warning
         }

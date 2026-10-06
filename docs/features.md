@@ -658,6 +658,8 @@ session hosts in standard host pools.
   updates; capacity can temporarily double
 - `DeleteFirst` mode removes eligible hosts before adding replacements to reduce temporary cost,
   quota, and subnet requirements at the expense of a temporary capacity reduction
+- `MaintenanceWindow` mode runs only after a guarded one-time request, can notify and explicitly
+  sign out users, and supports an authorized full-pool outage including a one-host pool
 - Graceful session draining with configurable grace period (default: 24 hours)
 - Progressive scale-up, configurable batch ceilings, and per-cycle deletion limits
 - Availability safety floors that preserve the active scaling target in `SideBySide`, plus a
@@ -665,10 +667,12 @@ session hosts in standard host pools.
 - Optional shutdown retention for rapid rollback in `SideBySide` mode
 - Auto-detected target capacity or an explicit target session-host count
 - Dedicated-host assignment and hostname preservation in `DeleteFirst` mode
+- Exact-name and dedicated-host preservation in `MaintenanceWindow`, with autoscale disabled and
+  durable request replay protection
 - Tag-based opt-in model for controlled automation
-- Entra device cleanup required for `DeleteFirst` replacement of Microsoft Entra joined hosts and
-  optional for domain-joined or hybrid-joined hosts
-- Optional Intune cleanup, highly recommended before `DeleteFirst` hostname reuse for
+- Entra device cleanup required for exact-name `DeleteFirst` and `MaintenanceWindow` replacement of
+  Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts
+- Optional Intune cleanup, highly recommended before exact-name reuse for
   Intune-enrolled Entra-joined or hybrid-joined hosts
 - Template Spec integration for consistent deployments
 

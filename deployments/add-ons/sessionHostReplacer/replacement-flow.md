@@ -10,7 +10,7 @@ These diagrams describe one timer invocation. A replacement cycle can span multi
 
 ## Shared Evaluation
 
-Both replacement modes begin with the same inventory, image, planning, and validation steps.
+All replacement modes begin with the same inventory, image, planning, and validation steps.
 
 ```mermaid
 flowchart TD
@@ -27,6 +27,7 @@ flowchart TD
     K --> L{Replacement mode}
     L -- SideBySide --> SBS[SideBySide flow]
     L -- DeleteFirst --> DF[DeleteFirst flow]
+    L -- MaintenanceWindow --> MW[MaintenanceWindow flow]
 ```
 
 Exact-image evidence is written whenever a latest-image host has AVD status `Available` and no failed AVD health checks. Drain mode does not prevent evidence from being written.
@@ -148,6 +149,52 @@ DeleteFirst-specific behavior:
 - Accepted deployments require a durable tracking-state write; VM presence remains the duplicate-deployment gate if that write fails.
 - Shutdown retention is always disabled.
 - Exact-name DeleteFirst replacement is blocked for a single-host target because it cannot preserve one available host.
+
+## MaintenanceWindow
+
+MaintenanceWindow is a one-time, administrator-armed maintenance operation. The Function App remains
+idle until `Start-SessionHostMaintenanceReplacement.ps1` writes a request containing a unique request
+ID, exact approved image version, UTC start time, window duration, batch limit, notification delay,
+forced-sign-out authorization, and optional full-pool-outage authorization.
+
+```mermaid
+flowchart TD
+    A["Load request and durable state"] --> B{"Request already completed?"}
+    B -- Yes --> Z[Finish without replay]
+    B -- No --> C{"Window started?"}
+    C -- No --> Z
+    C -- Yes --> D{"Enabled scaling plan?"}
+    D -- Yes --> E["Fail closed; disable autoscale"]
+    D -- No --> F{"Approved image available?"}
+    F -- No --> E
+    F -- Yes --> G["Persist active request ID"]
+    G --> H["Select approved batch"]
+    H --> I["Drain and notify sessions"]
+    I --> J{"Notification delay elapsed?"}
+    J -- No --> Z
+    J -- Yes --> K["Call AVD session logoff"]
+    K --> L{"Zero sessions verified?"}
+    L -- No --> Z
+    L -- Yes --> M["Save exact-name mapping and delete"]
+    M --> N["Verify cleanup and redeploy"]
+    N --> O{"Window still open?"}
+    O -- Yes --> H
+    O -- No --> P["Start no new batch; finish recovery"]
+```
+
+MaintenanceWindow-specific behavior:
+
+- Durable request IDs prevent replay.
+- The exact approved image version is pinned into replacement deployment parameters.
+- Autoscale must be disabled. Failure to query scaling-plan state also fails closed.
+- The function explicitly calls the AVD user-session logoff operation and re-queries sessions;
+  deleting a VM does not substitute for logoff.
+- Notification delay is evaluated on timer invocations. With the default 30-minute timer, forced
+  sign-out can begin up to approximately 30 minutes after the requested delay elapses.
+- A full-pool outage, including one-host replacement, requires explicit authorization.
+- When the window closes, no new destructive batch starts. Already draining or deleted hosts
+  continue through exact-name recovery.
+- Shutdown retention is unavailable; use SideBySide when retained-host rollback is required.
 
 ## Cross-Cutting Batch Progression
 

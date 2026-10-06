@@ -50,6 +50,9 @@ function New-OrchestrationDeploymentState {
         LastImageVersion = '1.0.0'
         LastTotalToReplace = 10
         PendingHostMappings = '{}'
+        ActiveMaintenanceRequestId = ''
+        CompletedMaintenanceRequestId = ''
+        MaintenanceWindowEndUtc = ''
     }
 }
 
@@ -119,6 +122,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $global:shrSettings = @{
             ReplacementMode = 'SideBySide'
+            MaintenanceRequest = ''
             EnableShutdownRetention = $false
             MinimumDrainMinutes = 0
             DrainGracePeriodHours = 24
@@ -443,6 +447,70 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $global:shrSimulation.DeletionCalls.Count | Should Be 0
         $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+    }
+
+    It 'MaintenanceWindow performs no destructive work before the one-time window' {
+            $global:shrSimulation.Mode = 'MaintenanceWindow'
+            $global:shrSettings.ReplacementMode = 'MaintenanceWindow'
+            $global:shrSettings.MaintenanceRequest = @{
+                requestId = '11111111-1111-1111-1111-111111111111'
+                approvedImageVersion = '2.0.0'
+                scheduledDateTimeUtc = [datetime]::UtcNow.AddHours(2).ToString('o')
+                windowDurationMinutes = 240
+                maxVmsRemoved = 1
+                logOffDelayMinutes = 15
+                logOffMessage = 'Save your work.'
+                forceSignOut = $true
+                allowFullPoolOutage = $false
+            } | ConvertTo-Json -Compress
+
+            Invoke-OrchestrationCycle -RunNumber 1
+
+            $global:shrSimulation.DeletionCalls.Count | Should Be 0
+            $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+            $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId | Should Be ''
+        }
+
+    It 'MaintenanceWindow replaces a one-host pool only with explicit full-outage authorization' {
+            $global:shrSimulation.Mode = 'MaintenanceWindow'
+            $global:shrSettings.ReplacementMode = 'MaintenanceWindow'
+            $global:shrSettings.TargetSessionHostCount = 1
+            $global:shrSimulation.Hosts = @(New-OrchestrationTestHost -Name 'avd-01')
+            $global:shrSimulation.ScalingPlanTarget = [PSCustomObject]@{
+                CapacityPercentage = $null
+                ScalingPlanName = 'disabled-plan'
+                ScheduleName = $null
+                Phase = $null
+                Source = 'Disabled'
+            }
+            $global:shrSimulation.Plan = [PSCustomObject]@{
+                PossibleDeploymentsCount = 1
+                PossibleSessionHostDeleteCount = 1
+                SessionHostsPendingDelete = @($global:shrSimulation.Hosts)
+                ExistingSessionHostNames = @('avd-01')
+                TargetSessionHostCount = 1
+                TotalSessionHostsToReplace = 1
+            }
+            $global:shrSettings.MaintenanceRequest = @{
+                requestId = '22222222-2222-2222-2222-222222222222'
+                approvedImageVersion = '2.0.0'
+                scheduledDateTimeUtc = [datetime]::UtcNow.AddMinutes(-5).ToString('o')
+                windowDurationMinutes = 240
+                maxVmsRemoved = 1
+                logOffDelayMinutes = 0
+                logOffMessage = 'Save your work.'
+                forceSignOut = $true
+                allowFullPoolOutage = $true
+            } | ConvertTo-Json -Compress
+
+            Invoke-OrchestrationCycle -RunNumber 1
+
+            $global:shrSimulation.DeletionCalls.Count | Should Be 1
+            $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01')
+            $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+            $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
+            $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId |
+                Should Be '22222222-2222-2222-2222-222222222222'
     }
 
     It 'DeleteFirst recovers an empty pool, retries only unresolved names, and performs no further deletion' {
