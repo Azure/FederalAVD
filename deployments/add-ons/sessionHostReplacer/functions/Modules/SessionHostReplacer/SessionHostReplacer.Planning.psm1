@@ -776,7 +776,7 @@ function Get-SessionHostReplacementPlan {
         }
         else {
             # SideBySide mode: Only delete when overpopulated (more hosts than target)
-            $canDelete = $SessionHosts.Count - $TargetSessionHostCount
+            $canDelete = [Math]::Max($SessionHosts.Count - $TargetSessionHostCount, 0)
         }
     }
     

@@ -856,6 +856,7 @@ function Get-VMPowerStates {
         [string] $ARMToken,
         
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [array] $VMResourceIds,
         
         [Parameter()]

@@ -366,17 +366,21 @@ Describe 'Session Host Maintenance portal operation' {
         $publisher | Should Match "Purpose = 'session-host-maintenance'"
         $publisher | Should Match "FolderName = 'sessionHostMaintenance'"
 
-        $parameters = $workbook.items |
-            Where-Object { $_.name -eq 'parameters' } |
+        $configurationPage = $workbook.items | Where-Object { $_.name -eq 'configuration-page' }
+        $parameters = $configurationPage.content.items |
+            Where-Object { $_.name -eq 'maintenance-scheduler-parameters' } |
             Select-Object -ExpandProperty content |
             Select-Object -ExpandProperty parameters
         ($parameters | Where-Object { $_.name -eq 'MaintenanceTemplateSpec' }).query |
             Should Match 'Schedule AVD Session Host Maintenance'
 
-        $link = $workbook.items | Where-Object { $_.name -eq 'maintenance-scheduler-link' }
+        $link = $configurationPage.content.items |
+            Where-Object { $_.name -eq 'maintenance-scheduler-link' }
         $link.content.version | Should Be 'LinkItem/1.0'
+        $link.content.style | Should Be 'toolbar'
         $link.content.links[0].cellValue | Should Be '{MaintenanceTemplateSpec}'
         $link.content.links[0].linkTarget | Should Be 'ResourceOverview'
+        $link.content.links[0].style | Should Be 'primary'
     }
 }
 
@@ -462,6 +466,8 @@ Describe 'Session Host Replacer shutdown retention scaling protection' {
         $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
         $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
         $lifecyclePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.Lifecycle.psm1'
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
         $bicep = Get-Content -LiteralPath $bicepPath -Raw
         $runScript = Get-Content -LiteralPath $runPath -Raw
         $lifecycleScript = Get-Content -LiteralPath $lifecyclePath -Raw
@@ -472,6 +478,13 @@ Describe 'Session Host Replacer shutdown retention scaling protection' {
         $bicep | Should Match "name: 'EnableShutdownRetention'\s+value: string\(effectiveEnableShutdownRetention\)"
         $runScript | Should Match ([regex]::Escape('$enableShutdownRetention = $replacementMode -eq ''SideBySide'' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)'))
         $lifecycleScript | Should Match ([regex]::Escape('$EnableShutdownRetention = $ReplacementMode -eq ''SideBySide'' -and $EnableShutdownRetention'))
+    }
+
+    It 'accepts an empty retention VM list without querying Azure' {
+        $powerStates = Get-VMPowerStates -ARMToken 'test-token' -VMResourceIds @()
+
+        $powerStates.GetType().Name | Should Be 'Hashtable'
+        $powerStates.Count | Should Be 0
     }
 
     It 'excludes only retention-tagged hosts confirmed stopped or deallocated' {
@@ -832,6 +845,11 @@ Describe 'Session Host Replacer scaling-aware readiness contracts' {
         $runScript | Should Match '\$upToDateHostReadiness = Test-NewSessionHostsAvailable[\s\S]+-ScalingPlanTarget \$scalingPlanTarget'
     }
 
+    It 'bypasses the lightweight image-only exit when an explicit target differs from the managed host count' {
+        $runScript | Should Match '\$targetSessionHostCount -gt 0 -and \$sessionHostsFiltered\.Count -ne \$targetSessionHostCount'
+        $runScript | Should Match 'differs from explicit target \$targetSessionHostCount - proceeding with full processing'
+    }
+
     It 'wires the exact-image validation tag through Bicep and Form View' {
         $bicep | Should Match "param tagValidatedImage string = 'AutoReplaceValidatedImage'"
         $bicep | Should Match "name: 'Tag_ValidatedImage'\s+value: tagValidatedImage"
@@ -930,6 +948,49 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.PossibleDeploymentsCount | Should Be 10
         $plan.PossibleSessionHostDeleteCount | Should Be 0
         $plan.TotalSessionHostsToReplace | Should Be 10
+    }
+
+    It 'SideBySide grows an up-to-date pool to an explicit target without an image update' {
+        $currentHosts = 1..3 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "avd-$($_.ToString('00'))"
+                VMName = "avd-$($_.ToString('00'))"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$($_.ToString('00'))"
+                ImageDefinition = $latestImage.Definition
+                ImageVersion = $latestImage.Version
+                Status = 'Available'
+                AllowNewSession = $true
+                Sessions = 0
+                ShutdownTimestamp = $null
+                PendingDrainTimeStamp = $null
+                IsUnavailable = $false
+            }
+        }
+
+        $plan = Get-SessionHostReplacementPlan `
+            -ARMToken 'test-token' `
+            -SessionHosts $currentHosts `
+            -RunningDeployments @() `
+            -HostPoolName 'hp-test' `
+            -TargetSessionHostCount 5 `
+            -LatestImageVersion $latestImage `
+            -ReplaceSessionHostOnNewImageVersionDelayDays 0 `
+            -ReplacementMode SideBySide `
+            -DrainGracePeriodHours 24 `
+            -MinimumCapacityPercentage 80 `
+            -MaxDeletionsPerCycle 50 `
+            -EnableProgressiveScaleUp $false `
+            -ScalingPlanTarget $null `
+            -RemoveEntraDevice $false `
+            -RemoveIntuneDevice $false `
+            -HostPoolSubscriptionId 'test' `
+            -HostPoolResourceGroupName 'hosts' `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $plan.TargetSessionHostCount | Should Be 5
+        $plan.PossibleDeploymentsCount | Should Be 2
+        $plan.PossibleSessionHostDeleteCount | Should Be 0
+        $plan.TotalSessionHostsToReplace | Should Be 0
     }
 
     It 'SideBySide retires stale hosts when validated replacements are scaled to zero' {
@@ -1432,7 +1493,9 @@ Describe 'Session Host Replacer currently deploying metric' {
         $workbookPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
         $runScript = Get-Content -LiteralPath $runPath -Raw
         $workbook = Get-Content -LiteralPath $workbookPath -Raw | ConvertFrom-Json
-        $currentStatusQuery = ($workbook.items | Where-Object { $_.name -eq 'kpi-tiles' }).content.query
+        $operationsPage = $workbook.items | Where-Object { $_.name -eq 'operations-page' }
+        $currentStatusQuery = ($operationsPage.content.items |
+            Where-Object { $_.name -eq 'kpi-tiles' }).content.query
     }
 
     It 'counts session hosts in running ARM deployments instead of deployment records' {
@@ -1597,6 +1660,31 @@ Describe 'Session Host Replacer configuration management experience' {
         $workbookText | Should Match 'Capacity-safe SideBySide removal permitted; active scaling target applies'
         $workbookText | Should Match '"linkTarget": "ResourceOverview"'
         $workbookText | Should Match 'Set-SessionHostReplacerConfiguration.ps1'
+    }
+
+    It 'separates configuration from operations and uses compact primary visualizations' {
+        $pageNavigation = $workbookTemplate.items | Where-Object { $_.name -eq 'page-navigation' }
+        $pageParameter = $pageNavigation.content.parameters |
+            Where-Object { $_.name -eq 'DashboardPage' }
+        $pageParameter.query | Should Match '"operations", "Operations", true'
+        $pageParameter.query | Should Match '"configuration", "Configuration", false'
+        $pageParameter.value | Should Be 'operations'
+
+        $configurationPage = $workbookTemplate.items |
+            Where-Object { $_.name -eq 'configuration-page' }
+        $operationsPage = $workbookTemplate.items |
+            Where-Object { $_.name -eq 'operations-page' }
+        $configurationPage.conditionalVisibility.value | Should Be 'configuration'
+        $operationsPage.conditionalVisibility.value | Should Be 'operations'
+        (@($configurationPage.content.items.name) -contains 'config-table') | Should Be $true
+        (@($configurationPage.content.items.name) -contains 'maintenance-scheduler-parameters') |
+            Should Be $true
+        (@($operationsPage.content.items.name) -contains 'kpi-tiles') | Should Be $true
+
+        ($configurationPage.content.items |
+            Where-Object { $_.name -eq 'config-table' }).content.size | Should Be 1
+        ($operationsPage.content.items |
+            Where-Object { $_.name -eq 'kpi-tiles' }).content.size | Should Be 1
     }
 
     It 'logs the Function App resource ID used by the workbook link' {

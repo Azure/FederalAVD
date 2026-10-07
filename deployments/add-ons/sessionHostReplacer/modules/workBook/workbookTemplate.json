@@ -93,21 +93,6 @@
               "durationMs": 86400000
             },
             "label": "Time Range"
-          },
-          {
-            "id": "d2c5e846-3e94-4fbe-86c2-473689d90a56",
-            "version": "KqlParameterItem/1.0",
-            "name": "MaintenanceTemplateSpec",
-            "type": 5,
-            "isRequired": false,
-            "query": "resources\n| where type =~ 'microsoft.resources/templatespecs'\n| where tostring(properties.displayName) == 'Schedule AVD Session Host Maintenance'\n| order by name asc\n| project value = id, label = strcat(name, ' (', resourceGroup, ')'), selected = true",
-            "typeSettings": {
-              "additionalResourceOptions": [],
-              "showDefault": false
-            },
-            "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources",
-            "label": "Maintenance Scheduler"
           }
         ],
         "style": "pills",
@@ -117,6 +102,37 @@
       },
       "name": "parameters"
     },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "6dc0ef0d-d812-441e-afd8-84f10d420e98",
+            "version": "KqlParameterItem/1.0",
+            "name": "DashboardPage",
+            "type": 2,
+            "isRequired": true,
+            "query": "datatable(value:string, label:string, selected:bool) [\n    \"operations\", \"Operations\", true,\n    \"configuration\", \"Configuration\", false\n]",
+            "crossComponentResources": [
+              "{ApplicationInsights}"
+            ],
+            "queryType": 0,
+            "resourceType": "microsoft.insights/components",
+            "value": "operations",
+            "label": "Page"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "page-navigation"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
     {
       "type": 1,
       "content": {
@@ -129,7 +145,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "query": "let hostPoolFilter = '{HostPool}';\nlet settings = traces\n| where timestamp {TimeRange}\n| where message contains \"SETTINGS |\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend ReplacementMode = extract(@\"ReplacementMode: ([A-Za-z]+)\", 1, message)\n| extend MinimumDrainMinutes = extract(@\"MinimumDrainMinutes: (\\d+)\", 1, message)\n| extend DrainGracePeriodHours = extract(@\"DrainGracePeriodHours: (\\d+)\", 1, message)\n| extend MinimumCapacityPercent = extract(@\"MinimumCapacityPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MaxDeletionsPerCycle = extract(@\"MaxDeletionsPerCycle: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend EnableProgressiveScaleUp = extract(@\"EnableProgressiveScaleUp: ([A-Za-z]+)\", 1, message)\n| extend InitialDeploymentPercent = extract(@\"InitialDeploymentPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend ScaleUpIncrementPercent = extract(@\"ScaleUpIncrementPercent: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend SuccessfulRunsBeforeScaleUp = extract(@\"SuccessfulRunsBeforeScaleUp: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MaxDeploymentBatchSize = extract(@\"MaxDeploymentBatchSize: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend MinimumHostIndex = extract(@\"MinimumHostIndex: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend EnableShutdownRetention = extract(@\"EnableShutdownRetention: ([A-Za-z\\/]+)\", 1, message)\n| extend ShutdownRetentionDays = extract(@\"ShutdownRetentionDays: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend TargetSessionHostCount = extract(@\"TargetSessionHostCount: ([\\d\\/A-Za-z]+)\", 1, message)\n| extend FunctionAppResourceId = extract(@\"FunctionAppResourceId: ([^|]+)$\", 1, message)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project HostPoolName, ReplacementMode, MinimumDrainMinutes, DrainGracePeriodHours, MinimumCapacityPercent, MaxDeletionsPerCycle, EnableProgressiveScaleUp, InitialDeploymentPercent, ScaleUpIncrementPercent, SuccessfulRunsBeforeScaleUp, MaxDeploymentBatchSize, MinimumHostIndex, EnableShutdownRetention, ShutdownRetentionDays, TargetSessionHostCount, FunctionAppResourceId;\nlet scaling = traces\n| where timestamp {TimeRange}\n| where message contains \"Dynamic capacity from scaling plan:\" or message contains \"No active scaling plan schedule found\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend ScalingTarget = extract(@\"Dynamic capacity from scaling plan: (\\d+)%\", 1, message)\n| extend ScalingPhase = iff(message contains \"No active scaling plan schedule found\", \"Static fallback\", extract(@\"Phase: ([^)]+)\\)\", 1, message))\n| summarize arg_max(timestamp, *) by HostPoolName\n| project HostPoolName, ScalingTarget, ScalingPhase;\nsettings\n| join kind=leftouter scaling on HostPoolName\n| extend ScalingPhase = iff(isempty(ScalingPhase), \"Unknown\", ScalingPhase)\n| extend EffectiveBehavior = case(\n    ScalingPhase == \"Static fallback\" and ReplacementMode == \"DeleteFirst\", \"Static safety floor applies; replacement is not phase-frozen\",\n    ScalingPhase == \"Static fallback\", \"No evaluable scaling schedule; configured batch limits apply\",\n    ScalingPhase contains \"RampUp\" or ScalingPhase == \"Peak\", iff(ReplacementMode == \"DeleteFirst\", \"New delete/deploy batches frozen; recovery continues\", \"Capacity-safe SideBySide removal permitted; active scaling target applies\"),\n    ReplacementMode == \"DeleteFirst\", \"DeleteFirst replacement permitted; active scaling target and one-host floor apply\",\n    \"SideBySide deployment and old-host removal are permitted\")\n| project \n    ['Host Pool'] = HostPoolName,\n    ['Replacement Mode'] = ReplacementMode,\n    ['Scaling Phase'] = ScalingPhase,\n    ['Scaling Target'] = iff(isempty(ScalingTarget), \"N/A\", strcat(ScalingTarget, \"%\")),\n    ['Effective Behavior'] = EffectiveBehavior,\n    ['Min Drain (min)'] = MinimumDrainMinutes,\n    ['Grace Period (hrs)'] = DrainGracePeriodHours,\n    ['Target Count'] = case(TargetSessionHostCount == \"0\" or TargetSessionHostCount == \"Auto\", \"Auto-Detect\", TargetSessionHostCount),\n    ['Progressive Scale-Up'] = case(EnableProgressiveScaleUp == \"True\", strcat(\"✅ Enabled (\", InitialDeploymentPercent, \"% → +\", ScaleUpIncrementPercent, \"% every \", SuccessfulRunsBeforeScaleUp, \" success)\"), \"❌ Disabled\"),\n    ['Min Capacity %'] = case(ReplacementMode == \"DeleteFirst\", strcat(MinimumCapacityPercent, \"%\"), \"N/A\"),\n    ['Max Deletions/Cycle'] = case(ReplacementMode == \"DeleteFirst\", MaxDeletionsPerCycle, \"N/A\"),\n    ['Max Batch Size'] = case(ReplacementMode == \"SideBySide\", MaxDeploymentBatchSize, \"N/A\"),\n    ['Min Host Index'] = MinimumHostIndex,\n    ['Shutdown Retention'] = case(ReplacementMode == \"SideBySide\" and EnableShutdownRetention == \"True\", strcat(\"✅ Enabled (\", ShutdownRetentionDays, \" days)\"), ReplacementMode == \"SideBySide\" and EnableShutdownRetention != \"True\", \"❌ Disabled\", \"N/A\"),\n    ['Manage Function App'] = FunctionAppResourceId",
-        "size": 3,
+        "size": 1,
         "title": "Function App Settings",
         "timeContext": {
           "durationMs": 0
@@ -217,20 +233,64 @@
       "name": "config-management-guidance"
     },
     {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "d2c5e846-3e94-4fbe-86c2-473689d90a56",
+            "version": "KqlParameterItem/1.0",
+            "name": "MaintenanceTemplateSpec",
+            "type": 5,
+            "isRequired": false,
+            "query": "resources\n| where type =~ 'microsoft.resources/templatespecs'\n| where tostring(properties.displayName) == 'Schedule AVD Session Host Maintenance'\n| order by name asc\n| project value = id, label = strcat(name, ' (', resourceGroup, ')'), selected = true",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "label": "Maintenance Scheduler"
+          }
+        ],
+        "style": "pills",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources"
+      },
+      "name": "maintenance-scheduler-parameters"
+    },
+    {
       "type": 11,
       "content": {
         "version": "LinkItem/1.0",
+        "style": "toolbar",
         "links": [
           {
             "id": "c4a88038-7313-4387-a71e-cb67a693752c",
             "cellValue": "{MaintenanceTemplateSpec}",
             "linkTarget": "ResourceOverview",
-            "linkLabel": "Open maintenance scheduler"
+            "linkLabel": "Open maintenance scheduler",
+            "style": "primary"
           }
         ]
       },
       "name": "maintenance-scheduler-link"
+    }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "DashboardPage",
+        "comparison": "isEqualTo",
+        "value": "configuration"
+      },
+      "name": "configuration-page"
     },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
     {
       "type": 1,
       "content": {
@@ -243,7 +303,7 @@
       "content": {
         "version": "KqlItem/1.0",
         "query": "let hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend Enabled = toint(extract(@\"Enabled:\\s*(\\d+)\", 1, message))\n| extend Target = toint(extract(@\"Target:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| extend InDrain = toint(extract(@\"InDrain:\\s*(\\d+)\", 1, message))\n| extend PendingDelete = toint(extract(@\"PendingDelete:\\s*(\\d+)\", 1, message))\n| extend ShutdownRetention = toint(extract(@\"ShutdownRetention:\\s*(\\d+)\", 1, message))\n| extend ToDeployNow = toint(extract(@\"ToDeployNow:\\s*(\\d+)\", 1, message))\n| extend RunningDeployments = toint(extract(@\"RunningDeployments:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Deploying = coalesce(RunningDeployments, 0)\n| project \n    Column1 = 'Total Hosts', Value1 = Total,\n    Column2 = 'Enabled', Value2 = Enabled,\n    Column3 = 'Target', Value3 = Target,\n    Column4 = 'To Replace', Value4 = ToReplace,\n    Column5 = 'In Drain', Value5 = InDrain,\n    Column6 = 'Pending Delete', Value6 = PendingDelete,\n    Column7 = 'Shutdown Retention', Value7 = ShutdownRetention,\n    Column8 = 'To Deploy', Value8 = ToDeployNow,\n    Column9 = 'Currently Deploying', Value9 = Deploying\n| mv-expand Column = pack_array(Column1, Column2, Column3, Column4, Column5, Column6, Column7, Column8, Column9), Value = pack_array(Value1, Value2, Value3, Value4, Value5, Value6, Value7, Value8, Value9)\n| project Column = tostring(Column), Value = toint(Value)",
-        "size": 4,
+        "size": 1,
         "title": "Current Status",
         "timeContext": {
           "durationMs": 0
@@ -900,6 +960,15 @@
         "json": "---\n\n💡 **Tip:** Use the time range selector at the top to adjust the dashboard view. For more detailed analysis, click on any chart to explore the underlying data in Application Insights."
       },
       "name": "footer"
+    }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "DashboardPage",
+        "comparison": "isEqualTo",
+        "value": "operations"
+      },
+      "name": "operations-page"
     }
   ],
   "fallbackResourceIds": [

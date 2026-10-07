@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "7472562166501591384"
+      "templateHash": "3854845952503561599"
     }
   },
   "definitions": {
@@ -1519,8 +1519,6 @@
     "personalScalingActions": "[flatten(map(variables('scalingPlanPersonalSchedulesCustom'), lambda('schedule', createArray(lambdaVariables('schedule').rampUpActionOnDisconnect, lambdaVariables('schedule').rampUpActionOnLogoff, lambdaVariables('schedule').peakActionOnDisconnect, lambdaVariables('schedule').peakActionOnLogoff, lambdaVariables('schedule').rampDownActionOnDisconnect, lambdaVariables('schedule').rampDownActionOnLogoff, lambdaVariables('schedule').offPeakActionOnDisconnect, lambdaVariables('schedule').offPeakActionOnLogoff))))]",
     "personalScalingHibernateIsValid": "[if(or(or(or(not(parameters('deployScalingPlan')), not(contains(parameters('hostPoolType'), 'Personal'))), not(contains(variables('personalScalingActions'), 'Hibernate'))), and(and(parameters('hibernationEnabled'), not(parameters('deployFSLogixStorage'))), not(parameters('fslogixConfigureSessionHosts')))), true(), fail('Personal scaling Hibernate actions require VM hibernation and are not supported when FSLogix is deployed or configured.'))]",
     "scalingPlanConfigurationIsValid": "[and(and(and(and(variables('pooledScalingSchedulesAreValid'), variables('pooledScalingRampDownSettingsAreValid')), variables('personalScalingSchedulesAreValid')), variables('personalScalingWaitValuesAreValid')), variables('personalScalingHibernateIsValid'))]",
-    "exclusionTag": "[if(and(not(empty(parameters('scalingPlanExclusionTag'))), parameters('deployScalingPlan')), createObject('Microsoft.Compute/virtualMachines', createObject(format('{0}', parameters('scalingPlanExclusionTag')), '')), createObject())]",
-    "hostTags": "[if(not(empty(variables('exclusionTag'))), union(parameters('tags'), variables('exclusionTag')), parameters('tags'))]",
     "maxAvSetMembers": 200,
     "beginAvSetRange": "[div(parameters('sessionHostIndex'), variables('maxAvSetMembers'))]",
     "endAvSetRange": "[div(add(parameters('sessionHostCount'), parameters('sessionHostIndex')), variables('maxAvSetMembers'))]",
@@ -18511,7 +18509,7 @@
             "value": "[parameters('virtualMachineSubnetResourceId')]"
           },
           "tags": {
-            "value": "[variables('hostTags')]"
+            "value": "[parameters('tags')]"
           },
           "timeZone": {
             "value": "[parameters('virtualMachinesTimeZone')]"

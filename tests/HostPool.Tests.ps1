@@ -98,6 +98,14 @@ Describe 'Common host-pool UI form behavior' {
         $entraKerberosInfoBox = $automatedProfiles.elements | Where-Object { $_.name -eq 'entraKerberosInfoBox' }
     }
 
+    It 'configures the scaling plan exclusion tag without applying it to every session host' {
+        $standardBicep | Should Match 'scalingPlanExclusionTag: scalingPlanExclusionTag'
+        $standardBicep | Should Match 'tags: tags'
+        $standardBicep | Should Not Match "var exclusionTag ="
+        $standardBicep | Should Not Match "var hostTags ="
+        $standardBicep | Should Not Match 'tags: hostTags'
+    }
+
     It 'outputs a selected standard workspace without rechecking API results' {
         $standardOutputs.existingFeedWorkspaceResourceId | Should Be "[if(equals(steps('controlPlane').workspace.createOption, 'update'), steps('controlPlane').workspace.existingWorkspace, '')]"
         $standardOutputs.workspaceFriendlyName | Should Be "[if(equals(steps('controlPlane').workspace.createOption, 'update'), '', steps('controlPlane').naming.workspaceFriendlyName)]"

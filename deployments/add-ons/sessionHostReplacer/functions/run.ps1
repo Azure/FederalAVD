@@ -603,6 +603,12 @@ if ($runningDeployments.Count -gt 0 -or $failedDeployments.Count -gt 0) {
     $skipLightweightCheck = $true
 }
 
+# An explicit target is also a capacity objective, not only a replacement-cycle baseline.
+if ($targetSessionHostCount -gt 0 -and $sessionHostsFiltered.Count -ne $targetSessionHostCount) {
+    Write-LogEntry -Message "Lightweight check: Current managed host count $($sessionHostsFiltered.Count) differs from explicit target $targetSessionHostCount - proceeding with full processing" -Level Trace
+    $skipLightweightCheck = $true
+}
+
 # If no work in progress, perform quick image version check
 if (-not $skipLightweightCheck) {
     # Check if image is old enough to trigger replacements
