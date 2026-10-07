@@ -425,8 +425,9 @@ The Session Host Replacer is an Azure Function add-on that monitors the Compute 
   state before removal and blocks further deletion until replacements register and become healthy
 - Requires Entra device cleanup for DeleteFirst replacement of Microsoft Entra joined hosts;
   Intune cleanup remains optional but is highly recommended for enrolled Entra/hybrid hosts
-- Supports SideBySide (capacity-first), DeleteFirst (continuous cost-optimized), and
-  MaintenanceWindow (one-time notified forced-sign-out) replacement strategies
+- Supports SideBySide (capacity-first) and DeleteFirst (continuous cost-optimized), with a guarded
+  one-time maintenance override that expedites configured DeleteFirst behavior for notified forced
+  sign-out without changing the configured mode
 - Restores selected SideBySide shutdown-retention hosts through the guarded
   `Invoke-SessionHostRollback.ps1` operator workflow
 - Ringed rollout delay — configurable per-host-pool delay after a new image is detected, enabling validation before fleet-wide rollout

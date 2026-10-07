@@ -211,7 +211,9 @@ Describe 'Session Host Replacer maintenance request contract' {
         $errors.Count | Should Be 0
         $script | Should Match 'SupportsShouldProcess'
         $script | Should Match 'if \(-not \$ForceSignOut\)'
-        $script | Should Match "ReplacementMode'\) -ne 'MaintenanceWindow'"
+        $script | Should Match "ReplacementMode must be DeleteFirst"
+        $script | Should Match 'temporarily overrides its configured DeleteFirst behavior'
+        $script | Should Match 'shutdown-retention VMs exist'
         $script | Should Match 'properties = \$settings'
         $script | Should Match 'ReplaceExistingRequest'
     }
@@ -251,6 +253,133 @@ Describe 'Session Host Replacer shutdown retention form behavior' {
     }
 }
 
+Describe 'Session Host Maintenance portal operation' {
+    BeforeAll {
+        $operationRoot = Join-Path $repoRoot 'deployments\add-ons\sessionHostMaintenance'
+        $operationBicep = Get-Content -LiteralPath (Join-Path $operationRoot 'main.bicep') -Raw
+        $operationModule = Get-Content -LiteralPath (Join-Path $operationRoot 'modules\updateMaintenanceRequest.bicep') -Raw
+        $operationForm = Get-Content -LiteralPath (Join-Path $operationRoot 'uiFormDefinition.json') -Raw | ConvertFrom-Json
+        $publisher = Get-Content -LiteralPath (Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1') -Raw
+        $workbook = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json') -Raw | ConvertFrom-Json
+    }
+
+    It 'targets an existing Function App without redeploying the replacer' {
+        $operationBicep | Should Match "targetScope = 'subscription'"
+        $operationBicep | Should Match "scope: resourceGroup\(functionAppSubscriptionId, functionAppResourceGroupName\)"
+        $operationModule | Should Match "resource functionApp 'Microsoft.Web/sites@.*' existing"
+        $operationModule | Should Match "resource appSettings 'Microsoft.Web/sites/config@.*'"
+        $operationModule | Should Not Match "resource functionApp 'Microsoft.Web/sites@.*' ="
+    }
+
+    It 'preserves unrelated app settings and changes only the maintenance request' {
+        $operationModule | Should Match "list\('\$\{functionApp.id\}/config/appsettings'"
+        $operationModule | Should Match 'properties: union\(existingAppSettings, \{'
+        $operationModule | Should Match 'MaintenanceRequest: validationPassed \? string\(maintenanceRequest\)'
+    }
+
+    It 'fails closed for unsafe configuration and replacement attempts' {
+        $operationModule | Should Match "replacementMode != 'DeleteFirst'"
+        $operationModule | Should Match '!empty\(existingMaintenanceRequest\) && !replaceExistingRequest'
+        $operationModule | Should Match '!forceSignOut'
+        $operationModule | Should Match '!allowFullPoolOutage'
+        $operationModule | Should Match '!confirmNoShutdownRetention'
+        $operationModule | Should Match 'isEntraJoined && !removeEntraDevice'
+        $operationModule | Should Match 'configuredImageDefinitionResourceId'
+        $operationModule | Should Match 'approvedImageDefinitionResourceId'
+        $operationModule | Should Match 'does not match the replacer configuration'
+    }
+
+    It 'emits the runtime maintenance request contract' {
+        $requestBlock = [regex]::Match(
+            $operationModule,
+            '(?s)var maintenanceRequest = \{(?<Body>.*?)\r?\n\}'
+        ).Groups['Body'].Value
+        @(
+            [regex]::Matches($requestBlock, '(?m)^\s{2}([A-Za-z][A-Za-z0-9]+):') |
+                ForEach-Object { $_.Groups[1].Value }
+        ) | Should Be @(
+            'requestId'
+            'approvedImageVersion'
+            'scheduledDateTimeUtc'
+            'windowDurationMinutes'
+            'maxVmsRemoved'
+            'logOffDelayMinutes'
+            'logOffMessage'
+            'forceSignOut'
+            'allowFullPoolOutage'
+        )
+    }
+
+    It 'keeps Form View outputs aligned with operation parameters' {
+        $formParameterNames = @($operationForm.view.outputs.parameters.PSObject.Properties.Name)
+        $templateParameterNames = @(
+            [regex]::Matches($operationBicep, '(?m)^param\s+([A-Za-z0-9_]+)\s+') |
+                ForEach-Object { $_.Groups[1].Value }
+        )
+
+        foreach ($parameterName in $formParameterNames) {
+            @($templateParameterNames -contains $parameterName) | Should Be $true
+        }
+        foreach ($requiredParameterName in @(
+            'functionAppResourceId'
+            'approvedImageDefinitionResourceId'
+            'approvedImageVersion'
+            'scheduledDateTimeUtc'
+            'forceSignOut'
+            'allowFullPoolOutage'
+            'confirmNoShutdownRetention'
+        )) {
+            @($formParameterNames -contains $requiredParameterName) | Should Be $true
+        }
+        $operationForm.view.outputs.kind | Should Be 'Subscription'
+    }
+
+    It 'reads the configured image definition and lists approved gallery versions' {
+        $targetStep = $operationForm.view.properties.steps | Where-Object { $_.name -eq 'target' }
+        $scheduleStep = $operationForm.view.properties.steps | Where-Object { $_.name -eq 'schedule' }
+        $settingsApi = $targetStep.elements | Where-Object { $_.name -eq 'functionAppSettingsApi' }
+        $versionsApi = $scheduleStep.elements | Where-Object { $_.name -eq 'imageVersionsApi' }
+        $galleryVersion = $scheduleStep.elements | Where-Object { $_.name -eq 'approvedGalleryImageVersion' }
+
+        $settingsApi.request.method | Should Be 'POST'
+        $settingsApi.request.path | Should Match '/config/appsettings/list\?api-version='
+        $versionsApi.request.method | Should Be 'GET'
+        $versionsApi.request.path | Should Match '/versions\?api-version=2024-03-03'
+        $versionsApi.request.path | Should Match 'SessionHostParameters'
+        $versionsApi.request.transforms.list | Should Match 'excludeFromLatest'
+        $galleryVersion.type | Should Be 'Microsoft.Common.DropDown'
+        $galleryVersion.constraints.allowedValues | Should Be "[steps('schedule').imageVersionsApi.transformed.list]"
+        $operationForm.view.outputs.parameters.approvedImageDefinitionResourceId |
+            Should Match 'SessionHostParameters'
+    }
+
+    It 'requires destructive authorizations in the form and template' {
+        $allElements = @($operationForm.view.properties.steps.elements)
+        foreach ($controlName in @('forceSignOut', 'allowFullPoolOutage', 'confirmNoShutdownRetention')) {
+            $control = $allElements | Where-Object { $_.name -eq $controlName }
+            $control.type | Should Be 'Microsoft.Common.CheckBox'
+            $control.constraints.required | Should Be $true
+        }
+    }
+
+    It 'publishes and links the separate maintenance operation' {
+        $publisher | Should Match "Purpose = 'session-host-maintenance'"
+        $publisher | Should Match "FolderName = 'sessionHostMaintenance'"
+
+        $parameters = $workbook.items |
+            Where-Object { $_.name -eq 'parameters' } |
+            Select-Object -ExpandProperty content |
+            Select-Object -ExpandProperty parameters
+        ($parameters | Where-Object { $_.name -eq 'MaintenanceTemplateSpec' }).query |
+            Should Match 'Schedule AVD Session Host Maintenance'
+
+        $link = $workbook.items | Where-Object { $_.name -eq 'maintenance-scheduler-link' }
+        $link.content.version | Should Be 'LinkItem/1.0'
+        $link.content.links[0].cellValue | Should Be '{MaintenanceTemplateSpec}'
+        $link.content.links[0].linkTarget | Should Be 'ResourceOverview'
+    }
+}
+
 Describe 'Session Host Replacer device cleanup requirements' {
     BeforeAll {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
@@ -268,11 +397,11 @@ Describe 'Session Host Replacer device cleanup requirements' {
         Import-Module $modulePath -Force
     }
 
-    It 'requires Entra cleanup in the form for exact-name Entra-joined modes' {
+    It 'requires Entra cleanup in the form for configured DeleteFirst replacement' {
         $removeEntraDevice.constraints.required | Should Match "DeleteFirst"
-        $removeEntraDevice.constraints.required | Should Match "MaintenanceWindow"
+        $removeEntraDevice.constraints.required | Should Not Match "MaintenanceWindow"
         $entraCleanupInfo.visible | Should Match "DeleteFirst"
-        $outputs.removeEntraDevice | Should Match "MaintenanceWindow"
+        $outputs.removeEntraDevice | Should Not Match "MaintenanceWindow"
     }
 
     It 'shows recommendation-only Intune warnings for Entra and hybrid join' {
@@ -283,7 +412,7 @@ Describe 'Session Host Replacer device cleanup requirements' {
     }
 
     It 'forces the effective Entra cleanup setting in Bicep for exact-name Entra join' {
-        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| contains\(\['DeleteFirst', 'MaintenanceWindow'\], replacementMode\) && isEntraJoined"
+        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| replacementMode == 'DeleteFirst' && isEntraJoined"
         $bicep | Should Match "name: 'RemoveEntraDevice'\s+value: string\(effectiveRemoveEntraDevice\)"
         $bicep | Should Match "name: 'RemoveIntuneDevice'\s+value: string\(removeIntuneDevice\)"
     }
@@ -1482,8 +1611,8 @@ Describe 'Session Host Replacer configuration management experience' {
         $configurationScript | Should Match '/config/appsettings/list\?api-version='
         $configurationScript | Should Match '/config/appsettings\?api-version='
         $configurationScript | Should Match 'A future Template Spec redeployment can overwrite these values'
-        $configurationScript | Should Match "'DeleteFirst', 'SideBySide', 'MaintenanceWindow'"
-        $configurationScript | Should Match 'Idle until a one-time request is armed'
+        $configurationScript | Should Match "'DeleteFirst', 'SideBySide'"
+        $configurationScript | Should Match 'MaintenanceRequest'
     }
 
     It 'does not allow infrastructure or replacement mode changes through the update script' {

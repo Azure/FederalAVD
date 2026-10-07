@@ -9,8 +9,8 @@ if ($Timer.IsPastDue) {
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
 # Log configuration settings for workbook visibility
-$replacementMode = Read-FunctionAppSetting ReplacementMode
-$enableShutdownRetention = $replacementMode -eq 'SideBySide' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)
+$configuredReplacementMode = Read-FunctionAppSetting ReplacementMode
+$replacementMode = $configuredReplacementMode
 $minimumDrainMinutes = Read-FunctionAppSetting MinimumDrainMinutes
 $drainGracePeriodHours = Read-FunctionAppSetting DrainGracePeriodHours
 $minimumCapacityPercentage = Read-FunctionAppSetting MinimumCapacityPercentage
@@ -28,23 +28,59 @@ $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice -AsBoolean
 $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean
 $sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCultureIgnoreCase)
 $sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
-$maintenanceRequest = $null
-if ($replacementMode -eq 'MaintenanceWindow') {
-    $maintenanceRequestSetting = Read-FunctionAppSetting MaintenanceRequest
-    $maintenanceRequestJson = if ($maintenanceRequestSetting -is [string] -or
-        $null -eq $maintenanceRequestSetting) {
-        $maintenanceRequestSetting
+$maintenanceRequestSetting = Read-FunctionAppSetting MaintenanceRequest
+$maintenanceRequestJson = if ($maintenanceRequestSetting -is [string] -or
+    $null -eq $maintenanceRequestSetting) {
+    $maintenanceRequestSetting
+}
+else {
+    $maintenanceRequestSetting | ConvertTo-Json -Depth 10 -Compress
+}
+$maintenanceRequest = if ([string]::IsNullOrWhiteSpace($maintenanceRequestJson)) {
+    $null
+}
+else {
+    ConvertFrom-MaintenanceRequest -RequestJson $maintenanceRequestJson
+}
+$maintenanceDecision = $null
+$maintenanceRequestScheduled = $false
+$initialDeploymentState = Get-DeploymentState
+
+if (-not $maintenanceRequest -and
+    -not [string]::IsNullOrWhiteSpace($initialDeploymentState.ActiveMaintenanceRequestId)) {
+    throw "Maintenance request settings are missing while request '$($initialDeploymentState.ActiveMaintenanceRequestId)' is active."
+}
+
+if ($maintenanceRequest) {
+    if ($configuredReplacementMode -ne 'DeleteFirst') {
+        throw "Maintenance override requires configured ReplacementMode DeleteFirst. Found '$configuredReplacementMode'."
+    }
+
+    if ($initialDeploymentState.LastStatus -eq 'Error') {
+        throw 'Maintenance override cannot continue because deployment state could not be read.'
+    }
+
+    $maintenanceDecision = Get-MaintenanceExecutionDecision `
+        -Request $maintenanceRequest `
+        -DeploymentState $initialDeploymentState
+    Write-LogEntry -Message "MAINTENANCE_REQUEST | RequestId: $($maintenanceRequest.RequestId) | Status: $($maintenanceDecision.Status) | $($maintenanceDecision.Reason)"
+
+    if ($maintenanceDecision.Status -eq 'Scheduled') {
+        Write-LogEntry -Message "Normal $configuredReplacementMode replacement is suspended until the scheduled maintenance request starts." -Level Warning
+        $maintenanceRequestScheduled = $true
+    }
+    elseif ($maintenanceDecision.Status -in @('Expired', 'Completed')) {
+        Write-LogEntry -Message "Maintenance request status is $($maintenanceDecision.Status); resuming configured $configuredReplacementMode behavior."
+        $maintenanceRequest = $null
     }
     else {
-        $maintenanceRequestSetting | ConvertTo-Json -Depth 10 -Compress
-    }
-    $maintenanceRequest = ConvertFrom-MaintenanceRequest -RequestJson $maintenanceRequestJson
-    if ($maintenanceRequest) {
+        $replacementMode = 'MaintenanceWindow'
         $sessionHostParameters = Set-MaintenanceApprovedImageVersion `
             -SessionHostParameters $sessionHostParameters `
             -ApprovedImageVersion $maintenanceRequest.ApprovedImageVersion
     }
 }
+$enableShutdownRetention = $replacementMode -eq 'SideBySide' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)
 $identitySolution = [string]$sessionHostParameters.IdentitySolution
 Assert-DeviceCleanupConfiguration `
     -ReplacementMode $replacementMode `
@@ -71,7 +107,7 @@ $requiredGraphPermissionsText = $requiredGraphPermissions -join ', '
 
 # Build settings log with N/A for non-applicable values based on replacement mode
 $settingsLog = @{
-    ReplacementMode             = $replacementMode
+    ReplacementMode             = $configuredReplacementMode
     MinimumDrainMinutes         = $minimumDrainMinutes
     DrainGracePeriodHours       = $drainGracePeriodHours
     MinimumCapacityPercent      = if ($replacementMode -eq 'DeleteFirst') { "$minimumCapacityPercentage (static)" } else { 'N/A' }
@@ -89,6 +125,9 @@ $settingsLog = @{
 }
 
 Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14} | FunctionAppResourceId: {15}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled, $functionAppResourceId
+if ($replacementMode -eq 'MaintenanceWindow') {
+    Write-LogEntry -Message "Effective replacement behavior: MaintenanceWindow override (configured mode: $configuredReplacementMode)."
+}
 
 # Acquire ARM access token
 try {
@@ -112,6 +151,21 @@ $resourceManagerUri = Get-ResourceManagerUri
 $Uri = "$resourceManagerUri/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
 $cachedVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
 Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count
+
+if ($maintenanceRequest) {
+    $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
+    $retainedVMs = @(
+        $cachedVMs |
+            Where-Object {
+                $_.tags -and
+                $_.tags.PSObject.Properties.Name -contains $shutdownRetentionTag -and
+                -not [string]::IsNullOrWhiteSpace([string]$_.tags.$shutdownRetentionTag)
+            }
+    )
+    if ($retainedVMs.Count -gt 0) {
+        throw "Maintenance override cannot run while shutdown-retention VMs exist: $($retainedVMs.name -join ', '). Restore or remove them through the approved rollback or cleanup process before scheduling maintenance."
+    }
+}
 
 # Check for and cleanup expired shutdown VMs BEFORE fetching session hosts (so the list is already clean)
 if ($enableShutdownRetention) {
@@ -164,23 +218,11 @@ if ($enableProgressiveScaleUp -or $replacementMode -in @('DeleteFirst', 'Mainten
         throw "Delete-before-deploy mode cannot continue because deployment recovery state could not be read"
     }
 
-    if ($replacementMode -eq 'MaintenanceWindow') {
-        if (-not $maintenanceRequest) {
-            if (-not [string]::IsNullOrWhiteSpace($deploymentState.ActiveMaintenanceRequestId)) {
-                throw "Maintenance request settings are missing while request '$($deploymentState.ActiveMaintenanceRequestId)' is active."
-            }
-
-            Write-LogEntry -Message 'MaintenanceWindow mode is idle because no one-time MaintenanceRequest is scheduled.'
-            return
-        }
-
+    if ($maintenanceRequest) {
         $maintenanceDecision = Get-MaintenanceExecutionDecision `
             -Request $maintenanceRequest `
             -DeploymentState $deploymentState
         Write-LogEntry -Message "MAINTENANCE_REQUEST | RequestId: $($maintenanceRequest.RequestId) | Status: $($maintenanceDecision.Status) | $($maintenanceDecision.Reason)"
-        if ($maintenanceDecision.Status -in @('Scheduled', 'Expired', 'Completed')) {
-            return
-        }
     }
 
     if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
@@ -450,6 +492,11 @@ if ($failedDeployments.Count -gt 0) {
     Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -FailedDeployments $failedDeployments -RegisteredSessionHostNames $sessionHostsFiltered.SessionHostName -CachedVMs $cachedVMs
 }
 
+if ($maintenanceRequestScheduled -and $replacementMode -eq 'SideBySide') {
+    Write-LogEntry -Message 'SideBySide deployment monitoring and failed-deployment cleanup are complete. No new normal replacement work will start while the maintenance request is scheduled.' -Level Warning
+    return
+}
+
 # Get latest version of session host image
 Write-LogEntry -Message "Getting latest image version using Image Reference."
 try {
@@ -656,6 +703,16 @@ if ($replacementMode -eq 'MaintenanceWindow') {
     $maintenanceCanStartNewBatch = $maintenanceDecision.CanStartNewBatch
     if ([string]::IsNullOrWhiteSpace($deploymentState.ActiveMaintenanceRequestId) -and
         $maintenanceCanStartNewBatch) {
+        $existingPendingMappings = $deploymentState.PendingHostMappings -and
+            $deploymentState.PendingHostMappings -ne '{}'
+        $existingDrainingHosts = @(
+            $sessionHostsFiltered |
+                Where-Object { $_.PendingDrainTimeStamp }
+        )
+        if ($existingPendingMappings -or $existingDrainingHosts.Count -gt 0) {
+            throw 'Maintenance override cannot start while the configured replacement mode has pending deletion recovery or replacer-owned draining hosts. Remove the request, allow normal recovery to finish, and schedule a new request.'
+        }
+
         $deploymentState.ActiveMaintenanceRequestId = $maintenanceRequest.RequestId
         $deploymentState.MaintenanceWindowEndUtc = $maintenanceRequest.WindowEndUtc.ToString('o')
         $deploymentState.LastStatus = 'MaintenanceActive'
@@ -664,12 +721,21 @@ if ($replacementMode -eq 'MaintenanceWindow') {
     }
 }
 
-$destructiveOperationsFrozen = $replacementMode -eq 'DeleteFirst' -and
-    $scalingPlanTarget -and
-    $scalingPlanTarget.Source -eq 'ScalingPlan' -and
-    ($scalingPlanTarget.Phase -in @('RampUp', 'Peak') -or $scalingPlanTarget.Phase -like '*->RampUp*')
+$destructiveOperationsFrozen = $replacementMode -eq 'DeleteFirst' -and (
+    $maintenanceRequestScheduled -or (
+        $scalingPlanTarget -and
+        $scalingPlanTarget.Source -eq 'ScalingPlan' -and
+        ($scalingPlanTarget.Phase -in @('RampUp', 'Peak') -or $scalingPlanTarget.Phase -like '*->RampUp*')
+    )
+)
 if ($destructiveOperationsFrozen) {
-    Write-LogEntry -Message "DeleteFirst destructive replacement is frozen during scaling phase '$($scalingPlanTarget.Phase)'. Deployment recovery and host validation will continue." -Level Warning
+    $freezeReason = if ($maintenanceRequestScheduled) {
+        'a one-time maintenance request is scheduled'
+    }
+    else {
+        "scaling phase '$($scalingPlanTarget.Phase)'"
+    }
+    Write-LogEntry -Message "DeleteFirst destructive replacement is frozen because $freezeReason. Deployment recovery and host validation will continue." -Level Warning
 }
 
 # If up to date, skip replacement planning and go straight to the early exit path.
@@ -947,8 +1013,7 @@ else {
 # New cycle detection will now happen earlier in the flow, before replacement plan calculation
 
 # Check replacement mode to determine execution order
-$replacementMode = Read-FunctionAppSetting ReplacementMode
-Write-LogEntry -Message "Replacement Mode: {0}" -StringValues $replacementMode
+Write-LogEntry -Message "Effective Replacement Mode: {0}" -StringValues $replacementMode
 
 if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     # ================================================================================================

@@ -210,10 +210,7 @@ function Get-InterpretedConfiguration {
     $retention = $mode -eq 'SideBySide' -and
         [bool]::Parse((Get-SettingValue -Settings $Settings -Name 'EnableShutdownRetention' -Default 'false'))
 
-    $activeHoursBehavior = if ($mode -eq 'MaintenanceWindow') {
-        'Idle until a one-time request is armed; autoscale must be disabled during the operation.'
-    }
-    elseif ($mode -eq 'DeleteFirst') {
+    $activeHoursBehavior = if ($mode -eq 'DeleteFirst') {
         'New delete/deploy batches freeze 60 minutes before RampUp through Peak; recovery continues.'
     }
     else {
@@ -252,6 +249,14 @@ function Get-InterpretedConfiguration {
         }
         NewImageDelayDays = Get-SettingValue -Settings $Settings -Name 'ReplaceSessionHostOnNewImageVersionDelayDays'
         AllowImageVersionRollback = Get-SettingValue -Settings $Settings -Name 'AllowImageVersionRollback' -Default 'false'
+        MaintenanceRequest = if ([string]::IsNullOrWhiteSpace(
+            (Get-SettingValue -Settings $Settings -Name 'MaintenanceRequest')
+        )) {
+            'Not scheduled'
+        }
+        else {
+            'Scheduled, active, completed, or expired; inspect the workbook before replacing it'
+        }
     }
 }
 
@@ -274,7 +279,7 @@ $settingsResponse = Invoke-ArmRequest -Method POST -Path "$functionAppResourceId
 $settings = $settingsResponse.properties
 if ($null -eq $settings -or
     [string]::IsNullOrWhiteSpace((Get-SettingValue -Settings $settings -Name 'HostPoolName')) -or
-    (Get-SettingValue -Settings $settings -Name 'ReplacementMode') -notin @('DeleteFirst', 'SideBySide', 'MaintenanceWindow')) {
+    (Get-SettingValue -Settings $settings -Name 'ReplacementMode') -notin @('DeleteFirst', 'SideBySide')) {
     throw "$FunctionAppName does not contain a recognizable Session Host Replacer configuration."
 }
 

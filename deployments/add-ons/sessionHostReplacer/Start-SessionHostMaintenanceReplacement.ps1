@@ -5,7 +5,8 @@
 .DESCRIPTION
     Writes a guarded, non-secret maintenance request to the Session Host Replacer Function App.
     The request approves one image version and one UTC maintenance window. The Function App
-    consumes the request once and records its identity in durable deployment state.
+    temporarily overrides its configured DeleteFirst behavior, consumes the request once, records
+    its identity in durable deployment state, and then resumes continuous DeleteFirst operation.
 
     This command requires explicit authorization to sign out remaining users. A one-host pool or
     any other operation that can intentionally reduce available capacity to zero also requires
@@ -221,8 +222,51 @@ if ($null -eq $settings -or
     [string]::IsNullOrWhiteSpace((Get-SettingValue -Settings $settings -Name 'HostPoolName'))) {
     throw 'The Function App is not a recognizable Session Host Replacer deployment.'
 }
-if ((Get-SettingValue -Settings $settings -Name 'ReplacementMode') -ne 'MaintenanceWindow') {
-    throw 'The Function App ReplacementMode must be MaintenanceWindow before a request can be scheduled.'
+$replacementMode = Get-SettingValue -Settings $settings -Name 'ReplacementMode'
+if ($replacementMode -ne 'DeleteFirst') {
+    throw "The Function App ReplacementMode must be DeleteFirst. Found '$replacementMode'."
+}
+
+try {
+    $sessionHostParameters = Get-SettingValue -Settings $settings -Name 'SessionHostParameters' |
+        ConvertFrom-Json -ErrorAction Stop
+}
+catch {
+    throw "SessionHostParameters is missing or invalid: $($_.Exception.Message)"
+}
+
+$isEntraJoined = [string]$sessionHostParameters.IdentitySolution -in @(
+    'EntraId'
+    'EntraKerberos-Hybrid'
+    'EntraKerberos-CloudOnly'
+)
+$removeEntraDevice = $false
+if (-not [bool]::TryParse(
+    (Get-SettingValue -Settings $settings -Name 'RemoveEntraDevice'),
+    [ref]$removeEntraDevice
+)) {
+    throw 'RemoveEntraDevice must be a Boolean Function App setting.'
+}
+if ($isEntraJoined -and -not $removeEntraDevice) {
+    throw 'Maintenance replacement requires RemoveEntraDevice=true for Microsoft Entra joined hosts because hostnames are reused. Configure device cleanup and Graph permissions before scheduling the request.'
+}
+
+$virtualMachinesSubscriptionId = Get-SettingValue -Settings $settings -Name 'VirtualMachinesSubscriptionId'
+$virtualMachinesResourceGroupName = Get-SettingValue -Settings $settings -Name 'VirtualMachinesResourceGroupName'
+$shutdownRetentionTag = Get-SettingValue -Settings $settings -Name 'Tag_ShutdownTimestamp'
+$virtualMachinesResponse = Invoke-ArmRequest `
+    -Method GET `
+    -Path "/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
+$retainedVMs = @(
+    $virtualMachinesResponse.value |
+        Where-Object {
+            $_.tags -and
+            $_.tags.PSObject.Properties.Name -contains $shutdownRetentionTag -and
+            -not [string]::IsNullOrWhiteSpace([string]$_.tags.$shutdownRetentionTag)
+        }
+)
+if ($retainedVMs.Count -gt 0) {
+    throw "Maintenance replacement cannot be scheduled while shutdown-retention VMs exist: $($retainedVMs.name -join ', '). Restore or remove them through the approved rollback or cleanup process first."
 }
 
 $existingRequestProperty = $settings.PSObject.Properties['MaintenanceRequest']
@@ -252,6 +296,7 @@ $requestJson = $request | ConvertTo-Json -Compress
 
 $summary = [PSCustomObject][ordered]@{
     RequestId = $request.requestId
+    ConfiguredReplacementMode = $replacementMode
     ApprovedImageVersion = $ApprovedImageVersion
     ScheduledDateTimeUtc = $scheduledDateTimeUtc
     WindowEndUtc = $scheduledDateTimeUtc.AddMinutes($WindowDurationMinutes)

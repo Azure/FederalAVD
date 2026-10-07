@@ -93,6 +93,21 @@
               "durationMs": 86400000
             },
             "label": "Time Range"
+          },
+          {
+            "id": "d2c5e846-3e94-4fbe-86c2-473689d90a56",
+            "version": "KqlParameterItem/1.0",
+            "name": "MaintenanceTemplateSpec",
+            "type": 5,
+            "isRequired": false,
+            "query": "resources\n| where type =~ 'microsoft.resources/templatespecs'\n| where tostring(properties.displayName) == 'Schedule AVD Session Host Maintenance'\n| order by name asc\n| project value = id, label = strcat(name, ' (', resourceGroup, ')'), selected = true",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "label": "Maintenance Scheduler"
           }
         ],
         "style": "pills",
@@ -197,9 +212,24 @@
     {
       "type": 1,
       "content": {
-        "json": "> **Change configuration safely:** use `Set-SessionHostReplacerConfiguration.ps1` to review current operational settings, preview validated changes, and preserve unrelated Function App settings. Replacement mode, timer schedule, identity, networking, and deployment resources remain managed by the Template Spec."
+        "json": "> **Change configuration safely:** use `Set-SessionHostReplacerConfiguration.ps1` to review current operational settings, preview validated changes, and preserve unrelated Function App settings. Replacement mode, timer schedule, identity, networking, and deployment resources remain managed by the Template Spec.\n\n> **Schedule maintenance:** publish the **Schedule AVD Session Host Maintenance** Template Spec, select it from the **Maintenance Scheduler** parameter, and use the action below. The operation schedules an existing DeleteFirst replacer without redeploying it."
       },
       "name": "config-management-guidance"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "links": [
+          {
+            "id": "c4a88038-7313-4387-a71e-cb67a693752c",
+            "cellValue": "{MaintenanceTemplateSpec}",
+            "linkTarget": "ResourceOverview",
+            "linkLabel": "Open maintenance scheduler"
+          }
+        ]
+      },
+      "name": "maintenance-scheduler-link"
     },
     {
       "type": 1,

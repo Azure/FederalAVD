@@ -167,11 +167,10 @@ param deployWorkbook bool = true
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
 param workbookLocation string = location
 
-@description('Optional. Replacement mode strategy. SideBySide adds new hosts before deleting old ones. DeleteFirst continuously replaces idle hosts with a capacity floor. MaintenanceWindow remains idle until a one-time request is scheduled with Start-SessionHostMaintenanceReplacement.ps1, then can notify and forcibly sign out users during the approved window. Default is SideBySide.')
+@description('Optional. Replacement mode strategy. SideBySide adds new hosts before deleting old ones. DeleteFirst continuously replaces idle hosts with a capacity floor. A guarded one-time maintenance request can temporarily expedite a configured DeleteFirst replacer without redeployment. Default is SideBySide.')
 @allowed([
   'SideBySide'
   'DeleteFirst'
-  'MaintenanceWindow'
 ])
 param replacementMode string = 'SideBySide'
 
@@ -509,7 +508,7 @@ var isEntraJoined = contains([
   'EntraKerberos-Hybrid'
   'EntraKerberos-CloudOnly'
 ], identitySolution)
-var effectiveRemoveEntraDevice = removeEntraDevice || contains(['DeleteFirst', 'MaintenanceWindow'], replacementMode) && isEntraJoined
+var effectiveRemoveEntraDevice = removeEntraDevice || replacementMode == 'DeleteFirst' && isEntraJoined
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {

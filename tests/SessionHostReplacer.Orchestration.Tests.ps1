@@ -172,7 +172,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Mock Get-AccessToken { 'test-token' }
         Mock Invoke-AzureRestMethod {
             @($global:shrSimulation.Hosts | ForEach-Object {
-                [PSCustomObject]@{ name = $_.VMName; id = $_.ResourceId; tags = [PSCustomObject]@{} }
+                [PSCustomObject]@{ name = $_.VMName; id = $_.ResourceId; tags = [PSCustomObject]$_.Tags }
             })
         }
         Mock Get-SessionHosts { @($global:shrSimulation.Hosts) }
@@ -450,8 +450,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
     }
 
     It 'MaintenanceWindow performs no destructive work before the one-time window' {
-            $global:shrSimulation.Mode = 'MaintenanceWindow'
-            $global:shrSettings.ReplacementMode = 'MaintenanceWindow'
+            $global:shrSimulation.Mode = 'DeleteFirst'
+            $global:shrSettings.ReplacementMode = 'DeleteFirst'
             $global:shrSettings.MaintenanceRequest = @{
                 requestId = '11111111-1111-1111-1111-111111111111'
                 approvedImageVersion = '2.0.0'
@@ -463,17 +463,86 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 forceSignOut = $true
                 allowFullPoolOutage = $false
             } | ConvertTo-Json -Compress
+            $global:shrSimulation.Plan = [PSCustomObject]@{
+                PossibleDeploymentsCount = 1
+                PossibleSessionHostDeleteCount = 1
+                SessionHostsPendingDelete = @($global:shrSimulation.Hosts[0])
+                ExistingSessionHostNames = @($global:shrSimulation.Hosts.SessionHostName)
+                TargetSessionHostCount = 2
+                TotalSessionHostsToReplace = 1
+            }
 
             Invoke-OrchestrationCycle -RunNumber 1
 
             $global:shrSimulation.DeletionCalls.Count | Should Be 0
             $global:shrSimulation.DeploymentCalls.Count | Should Be 0
             $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId | Should Be ''
+            $global:shrSimulation.DeploymentState.CompletedMaintenanceRequestId | Should Be ''
         }
+
+    It 'rejects a maintenance request on a SideBySide replacer' {
+        $global:shrSettings.ReplacementMode = 'SideBySide'
+        $global:shrSettings.MaintenanceRequest = @{
+            requestId = '55555555-5555-5555-5555-555555555555'
+            approvedImageVersion = '2.0.0'
+            scheduledDateTimeUtc = [datetime]::UtcNow.AddMinutes(-5).ToString('o')
+            windowDurationMinutes = 240
+            maxVmsRemoved = 1
+            logOffDelayMinutes = 15
+            logOffMessage = 'Save your work.'
+            forceSignOut = $true
+            allowFullPoolOutage = $false
+        } | ConvertTo-Json -Compress
+
+        $caughtError = $null
+        try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $caughtError = $_ }
+        $caughtError.Exception.Message |
+            Should Be "Maintenance override requires configured ReplacementMode DeleteFirst. Found 'SideBySide'."
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+    }
+
+    It 'scheduled maintenance suspends new DeleteFirst batches but allows pending recovery' {
+        $global:shrSimulation.Mode = 'DeleteFirst'
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSettings.MaintenanceRequest = @{
+            requestId = '44444444-4444-4444-4444-444444444444'
+            approvedImageVersion = '2.0.0'
+            scheduledDateTimeUtc = [datetime]::UtcNow.AddHours(2).ToString('o')
+            windowDurationMinutes = 240
+            maxVmsRemoved = 1
+            logOffDelayMinutes = 15
+            logOffMessage = 'Save your work.'
+            forceSignOut = $true
+            allowFullPoolOutage = $false
+        } | ConvertTo-Json -Compress
+        $global:shrSimulation.Hosts = @()
+        $global:shrSimulation.DeploymentState.PendingHostMappings = @{
+            'avd-01' = @{
+                VMName = 'avd-01'
+                ResourceId = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-01'
+            }
+        } | ConvertTo-Json -Compress
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 1
+            PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @()
+            ExistingSessionHostNames = @()
+            TargetSessionHostCount = 1
+            TotalSessionHostsToReplace = 1
+        }
+
+        Invoke-OrchestrationCycle -RunNumber 1
+
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
+        $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId | Should Be ''
+    }
 
     It 'MaintenanceWindow replaces a one-host pool only with explicit full-outage authorization' {
             $global:shrSimulation.Mode = 'MaintenanceWindow'
-            $global:shrSettings.ReplacementMode = 'MaintenanceWindow'
+            $global:shrSettings.ReplacementMode = 'DeleteFirst'
             $global:shrSettings.TargetSessionHostCount = 1
             $global:shrSimulation.Hosts = @(New-OrchestrationTestHost -Name 'avd-01')
             $global:shrSimulation.ScalingPlanTarget = [PSCustomObject]@{
@@ -511,6 +580,63 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
             $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId |
                 Should Be '22222222-2222-2222-2222-222222222222'
+    }
+
+    It 'resumes the configured mode after a maintenance request completes' {
+        $requestId = '33333333-3333-3333-3333-333333333333'
+        $global:shrSimulation.Mode = 'DeleteFirst'
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSettings.MaintenanceRequest = @{
+            requestId = $requestId
+            approvedImageVersion = '2.0.0'
+            scheduledDateTimeUtc = [datetime]::UtcNow.AddMinutes(-30).ToString('o')
+            windowDurationMinutes = 240
+            maxVmsRemoved = 1
+            logOffDelayMinutes = 15
+            logOffMessage = 'Save your work.'
+            forceSignOut = $true
+            allowFullPoolOutage = $false
+        } | ConvertTo-Json -Compress
+        $global:shrSimulation.DeploymentState.CompletedMaintenanceRequestId = $requestId
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 1
+            PossibleSessionHostDeleteCount = 1
+            SessionHostsPendingDelete = @($global:shrSimulation.Hosts[0])
+            ExistingSessionHostNames = @($global:shrSimulation.Hosts.SessionHostName)
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 1
+        }
+
+        Invoke-OrchestrationCycle -RunNumber 1
+
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
+        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+    }
+
+    It 'blocks maintenance while a shutdown-retention VM exists' {
+        $global:shrSimulation.Mode = 'MaintenanceWindow'
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSimulation.Hosts[0].Tags = @{
+            AutoReplaceShutdownTimestamp = '2026-10-01T00:00:00Z'
+        }
+        $global:shrSettings.MaintenanceRequest = @{
+            requestId = '66666666-6666-6666-6666-666666666666'
+            approvedImageVersion = '2.0.0'
+            scheduledDateTimeUtc = [datetime]::UtcNow.AddMinutes(-5).ToString('o')
+            windowDurationMinutes = 240
+            maxVmsRemoved = 1
+            logOffDelayMinutes = 15
+            logOffMessage = 'Save your work.'
+            forceSignOut = $true
+            allowFullPoolOutage = $false
+        } | ConvertTo-Json -Compress
+
+        $caughtError = $null
+        try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $caughtError = $_ }
+        $caughtError.Exception.Message | Should Match 'shutdown-retention VMs exist'
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
     }
 
     It 'DeleteFirst recovers an empty pool, retries only unresolved names, and performs no further deletion' {

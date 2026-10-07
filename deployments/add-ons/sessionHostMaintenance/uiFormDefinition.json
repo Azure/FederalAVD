@@ -1,0 +1,307 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "Schedule Session Host Maintenance Replacement",
+      "steps": [
+        {
+          "name": "target",
+          "label": "Target Replacer",
+          "elements": [
+            {
+              "name": "resourceScope",
+              "type": "Microsoft.Common.ResourceScope",
+              "subscription": {
+                "resourceProviders": [
+                  "Microsoft.Web/sites"
+                ]
+              },
+              "location": {
+                "label": "Deployment Region",
+                "toolTip": "Region used to record this subscription-level operation deployment.",
+                "resourceTypes": [
+                  "Microsoft.Resources/deployments"
+                ]
+              }
+            },
+            {
+              "name": "operationInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "This is an operational request, not a Session Host Replacer redeployment. It schedules a one-time accelerated replacement on an existing replacer and leaves its configured continuous mode unchanged."
+              }
+            },
+            {
+              "name": "functionApp",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Session Host Replacer Function App",
+              "resourceType": "Microsoft.Web/sites",
+              "toolTip": "Select the Function App deployed by the Session Host Replacer. The operation validates that it is configured for DeleteFirst replacement.",
+              "scope": {
+                "subscriptionId": "[steps('target').resourceScope.subscription.id]"
+              },
+              "constraints": {
+                "required": true
+              }
+            },
+            {
+              "name": "functionAppSettingsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('target').functionApp))]",
+              "request": {
+                "method": "POST",
+                "path": "[concat(steps('target').functionApp.id, '/config/appsettings/list?api-version=2024-04-01')]",
+                "body": {}
+              }
+            },
+            {
+              "name": "deleteFirstWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Maintenance replacement is supported only for DeleteFirst replacers. Scheduling is blocked when a request is already populated, Entra device cleanup is not configured for an Entra-joined pool, or the required outage acknowledgements are not selected."
+              }
+            },
+            {
+              "name": "invalidReplacerWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(not(empty(steps('target').functionApp)), not(equals(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'ReplacementMode'), ''), 'DeleteFirst')))]",
+              "options": {
+                "style": "Error",
+                "text": "The selected Function App is not configured for DeleteFirst maintenance replacement. Select a DeleteFirst Session Host Replacer."
+              }
+            }
+          ]
+        },
+        {
+          "name": "schedule",
+          "label": "Maintenance Schedule",
+          "elements": [
+            {
+              "name": "galleryImageInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[not(empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')))]",
+              "options": {
+                "style": "Info",
+                "text": "The form read the configured Compute Gallery image definition from the selected replacer. Select the exact published version approved for this maintenance operation."
+              }
+            },
+            {
+              "name": "imageVersionsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(join(take(split(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), ''), '/'), 11), '/'), '/versions?api-version=2024-03-03')]",
+                "transforms": {
+                  "list": "value[?properties.publishingProfile.excludeFromLatest != `true`]|sort_by(@, &name)|reverse(@)|[*].{label:name, value:name, description:properties.publishingProfile.publishedDate}"
+                }
+              }
+            },
+            {
+              "name": "approvedGalleryImageVersion",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Approved Image Version",
+              "placeholder": "Select an exact image version",
+              "toolTip": "Versions excluded from latest-image selection are omitted.",
+              "multiLine": true,
+              "filter": true,
+              "visible": "[not(empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')))]",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[steps('schedule').imageVersionsApi.transformed.list]"
+              }
+            },
+            {
+              "name": "marketplaceImageInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(not(empty(steps('target').functionApp)), empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')))]",
+              "options": {
+                "style": "Info",
+                "text": "The selected replacer uses a Marketplace image. Enter the exact Marketplace version approved for this maintenance operation."
+              }
+            },
+            {
+              "name": "approvedMarketplaceImageVersion",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Approved Image Version",
+              "placeholder": "1.2.3",
+              "toolTip": "Enter the exact Marketplace image version approved for this maintenance operation.",
+              "visible": "[and(not(empty(steps('target').functionApp)), empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')))]",
+              "constraints": {
+                "required": true,
+                "regex": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                "validationMessage": "Enter a non-empty image version using letters, numbers, periods, underscores, or hyphens."
+              }
+            },
+            {
+              "name": "scheduledDateTimeUtc",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Start Date and Time (UTC)",
+              "placeholder": "2026-04-18T22:00:00Z",
+              "toolTip": "Enter a future UTC timestamp in ISO 8601 format. The replacer begins the operation on its first timer invocation at or after this time.",
+              "constraints": {
+                "required": true,
+                "regex": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+                "validationMessage": "Use UTC ISO 8601 format: yyyy-MM-ddTHH:mm:ssZ."
+              }
+            },
+            {
+              "name": "timerPrecisionInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "The request is timer-driven. With the default 30-minute cadence, work can begin up to approximately one timer interval after the requested start time, and forced sign-out can begin up to approximately one cadence after the configured notification delay."
+              }
+            },
+            {
+              "name": "windowDurationMinutes",
+              "type": "Microsoft.Common.Slider",
+              "label": "Maintenance Window (minutes)",
+              "toolTip": "Maximum time in which the maintenance operation may start new replacement work. Recovery of already removed hosts can continue after the window closes.",
+              "min": 30,
+              "max": 1440,
+              "defaultValue": 240,
+              "showStepMarkers": false,
+              "constraints": {
+                "required": true
+              }
+            },
+            {
+              "name": "maxVmsRemoved",
+              "type": "Microsoft.Common.Slider",
+              "label": "Maximum VMs Removed per Batch",
+              "toolTip": "Maximum number of session-host VMs removed before their exact-name replacements are deployed and validated.",
+              "min": 1,
+              "max": 1000,
+              "defaultValue": 1,
+              "showStepMarkers": false,
+              "constraints": {
+                "required": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "users",
+          "label": "User Sign-Out",
+          "elements": [
+            {
+              "name": "userWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Maintenance can notify connected users, forcibly sign them out, and intentionally reduce available capacity to zero. Schedule this only in an approved outage window."
+              }
+            },
+            {
+              "name": "logOffDelayMinutes",
+              "type": "Microsoft.Common.Slider",
+              "label": "Notification Delay (minutes)",
+              "toolTip": "Time allowed after notifying connected users before the replacer forcibly signs out remaining sessions.",
+              "min": 0,
+              "max": 60,
+              "defaultValue": 15,
+              "showStepMarkers": false,
+              "constraints": {
+                "required": true
+              }
+            },
+            {
+              "name": "logOffMessage",
+              "type": "Microsoft.Common.TextBox",
+              "label": "User Notification Message",
+              "defaultValue": "Scheduled maintenance is replacing this session host. Save your work and sign out before the maintenance countdown ends.",
+              "toolTip": "Message sent to connected users before forced sign-out.",
+              "constraints": {
+                "required": true,
+                "regex": "^[\\s\\S]{1,260}$",
+                "validationMessage": "Enter a message containing no more than 260 characters."
+              }
+            },
+            {
+              "name": "forceSignOut",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Authorize forced sign-out after the notification delay",
+              "toolTip": "Required. The scheduling deployment fails unless this authorization is selected.",
+              "constraints": {
+                "required": true,
+                "validationMessage": "Authorize forced sign-out to schedule this maintenance operation."
+              }
+            },
+            {
+              "name": "allowFullPoolOutage",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Authorize a full host pool outage",
+              "toolTip": "Required. Maintenance may intentionally reduce the host pool to zero available session hosts.",
+              "constraints": {
+                "required": true,
+                "validationMessage": "Authorize a full host pool outage to schedule this maintenance operation."
+              }
+            }
+          ]
+        },
+        {
+          "name": "safety",
+          "label": "Safety Checks",
+          "elements": [
+            {
+              "name": "retentionWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Do not schedule maintenance while shutdown-retained rollback VMs exist. The runtime checks again and fails closed rather than deleting retained rollback capacity."
+              }
+            },
+            {
+              "name": "confirmNoShutdownRetention",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "I confirmed that no shutdown-retained rollback VMs exist",
+              "toolTip": "Required. Review the replacer-managed VM resource group before scheduling.",
+              "constraints": {
+                "required": true,
+                "validationMessage": "Confirm that no shutdown-retained rollback VMs exist."
+              }
+            },
+            {
+              "name": "replaceExistingRequest",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Replace the existing populated maintenance request",
+              "toolTip": "Leave cleared for normal scheduling. Select only after reviewing the existing request and its completed, expired, or pending status."
+            },
+            {
+              "name": "existingRequestInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[steps('safety').replaceExistingRequest]",
+              "options": {
+                "style": "Warning",
+                "text": "Replacing a populated request changes the replay-protected operation record. Confirm that the prior request is completed or intentionally abandoned before continuing."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "kind": "Subscription",
+      "location": "[steps('target').resourceScope.location.name]",
+      "subscriptionId": "[steps('target').resourceScope.subscription.id]",
+      "parameters": {
+        "functionAppResourceId": "[steps('target').functionApp.id]",
+        "approvedImageDefinitionResourceId": "[if(empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')), '', join(take(split(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), ''), '/'), 11), '/'))]",
+        "approvedImageVersion": "[if(empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')), steps('schedule').approvedMarketplaceImageVersion, steps('schedule').approvedGalleryImageVersion)]",
+        "scheduledDateTimeUtc": "[steps('schedule').scheduledDateTimeUtc]",
+        "windowDurationMinutes": "[steps('schedule').windowDurationMinutes]",
+        "maxVmsRemoved": "[steps('schedule').maxVmsRemoved]",
+        "logOffDelayMinutes": "[steps('users').logOffDelayMinutes]",
+        "logOffMessage": "[steps('users').logOffMessage]",
+        "forceSignOut": "[steps('users').forceSignOut]",
+        "allowFullPoolOutage": "[steps('users').allowFullPoolOutage]",
+        "confirmNoShutdownRetention": "[steps('safety').confirmNoShutdownRetention]",
+        "replaceExistingRequest": "[steps('safety').replaceExistingRequest]"
+      }
+    }
+  }
+}

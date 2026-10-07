@@ -433,7 +433,7 @@
               "name": "replacementMode",
               "type": "Microsoft.Common.DropDown",
               "label": "Replacement Mode",
-              "toolTip": "Side-by-Side continuously adds capacity before removal. Delete-First continuously replaces idle hosts while preserving a capacity floor. Maintenance Window remains idle until an administrator schedules a one-time request with the repository PowerShell command; it can notify and forcibly sign out users, and it can authorize a full-pool outage.",
+              "toolTip": "Side-by-Side continuously adds capacity before removal. Delete-First continuously replaces idle hosts while preserving a capacity floor. A guarded one-time maintenance request can temporarily expedite a configured Delete-First replacer without redeploying it.",
               "defaultValue": "Side-by-Side (Add then Delete)",
               "constraints": {
                 "required": true,
@@ -445,21 +445,8 @@
                   {
                     "label": "Delete-First (Delete then Add)",
                     "value": "DeleteFirst"
-                  },
-                  {
-                    "label": "Maintenance Window (One-Time)",
-                    "value": "MaintenanceWindow"
                   }
                 ]
-              }
-            },
-            {
-              "name": "maintenanceWindowWarning",
-              "type": "Microsoft.Common.InfoBox",
-              "visible": "[equals(steps('replacerConfig').replacementMode, 'MaintenanceWindow')]",
-              "options": {
-                "style": "Warning",
-                "text": "Maintenance Window mode does not replace hosts continuously. After deployment, use Start-SessionHostMaintenanceReplacement.ps1 to approve an exact image version, UTC window, batch limit, user notification delay, forced sign-out, and any full-pool outage. Autoscale must be disabled before the request starts. Do not redeploy this template while a maintenance request is active."
               }
             },
             {
@@ -491,8 +478,7 @@
               "showStepMarkers": false,
               "constraints": {
                 "required": true
-              },
-              "visible": "[not(equals(steps('replacerConfig').replacementMode, 'MaintenanceWindow'))]"
+              }
             },
             {
               "name": "minimumDrainMinutes",
@@ -789,7 +775,7 @@
               "toolTip": "Remove Entra ID device records when deleting session hosts. Required for exact-name Delete-First and Maintenance Window replacement of Microsoft Entra joined hosts.",
               "defaultValue": true,
               "constraints": {
-                "required": "[and(or(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('replacerConfig').replacementMode, 'MaintenanceWindow')), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+                "required": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
                 "validationMessage": "Entra device cleanup is required when an exact-name mode reuses names for Microsoft Entra joined session hosts."
               }
             },
@@ -803,7 +789,7 @@
             {
               "name": "entraDeleteFirstCleanupInfoBox",
               "type": "Microsoft.Common.InfoBox",
-              "visible": "[and(or(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('replacerConfig').replacementMode, 'MaintenanceWindow')), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+              "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
               "options": {
                 "style": "Warning",
                 "text": "Delete-First and Maintenance Window reuse session host names. Entra device cleanup is required for Microsoft Entra joined hosts and cannot be disabled for these combinations."
@@ -3556,13 +3542,13 @@
         "tagPendingDrainTimestamp": "[steps('replacerConfig').tagPendingDrainTimestamp]",
         "tagScalingPlanExclusionTag": "[steps('replacerConfig').tagScalingPlanExclusionTag]",
         "tagValidatedImage": "[steps('replacerConfig').tagValidatedImage]",
-        "removeEntraDevice": "[or(steps('replacerConfig').removeEntraDevice, and(or(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('replacerConfig').replacementMode, 'MaintenanceWindow')), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
+        "removeEntraDevice": "[or(steps('replacerConfig').removeEntraDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
         "removeIntuneDevice": "[steps('replacerConfig').removeIntuneDevice]",
         "enableProgressiveScaleUp": "[steps('replacerConfig').enableProgressiveScaleUp]",
         "initialDeploymentPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').initialDeploymentPercentage, 10)]",
         "scaleUpIncrementPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').scaleUpIncrementPercentage, 20)]",
         "successfulRunsBeforeScaleUp": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').successfulRunsBeforeScaleUp, 1)]",
-        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(or(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('replacerConfig').replacementMode, 'MaintenanceWindow')), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
+        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
         "powerShellVersion": "[steps('infrastructure').powerShellVersion]",
         "existingAppServicePlanResourceId": "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]",
         "appServicePlanResourceGroupName": "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]",
