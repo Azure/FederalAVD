@@ -778,7 +778,7 @@ function Test-NewSessionHostsAvailable {
         [string] $ResourceManagerUri = (Get-ResourceManagerUri)
     )
     
-    Write-LogEntry -Message "Verifying new session hosts are available before proceeding with old host removal"
+    Write-LogEntry -Message "Verifying latest-image session host readiness before proceeding with old host removal"
     
     # Identify new hosts (hosts on the latest image version)
     $newHosts = $SessionHosts | Where-Object { 
@@ -787,18 +787,19 @@ function Test-NewSessionHostsAvailable {
     }
     
     if (-not $newHosts -or $newHosts.Count -eq 0) {
-        Write-LogEntry -Message "No new session hosts found on latest image version - replacement readiness is not established" -Level Warning
+        Write-LogEntry -Message "No session hosts are on the latest image version yet - replacement hosts must be deployed before old hosts can be removed"
         return [PSCustomObject]@{
-            AllAvailable      = $false
-            AvailableCount    = 0
-            TotalNewHosts     = 0
-            UnavailableHosts  = @()
-            SafeToProceed     = $false
-            Message           = "No new hosts to verify"
+            AllAvailable       = $false
+            AvailableCount     = 0
+            AvailablePercentage = 0
+            TotalNewHosts      = 0
+            UnavailableHosts   = @()
+            SafeToProceed      = $false
+            Message            = "No latest-image hosts are available to verify"
         }
     }
     
-    Write-LogEntry -Message "Found {0} new session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
+    Write-LogEntry -Message "Found {0} session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
 
     $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
     $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
@@ -922,7 +923,7 @@ function Test-NewSessionHostsAvailable {
                     ValidatedForImage = [bool]$isValidatedForImage
                 }
                 $unreadyHosts += $unreadyHost
-                Write-LogEntry -Message "New host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Warning
+                Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Warning
             }
         }
 
@@ -986,7 +987,7 @@ function Test-NewSessionHostsAvailable {
                 FailedHealthCheckCount = $failedHealthChecks.Count
             }
             $unavailableHosts += $unavailableHost
-            Write-LogEntry -Message "New host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Warning
+            Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Warning
         }
     }
     

@@ -913,7 +913,7 @@ function Get-SessionHostReplacementPlan {
         }
     }
     elseif ($sessionHostsToReplace.Count -gt 0) {
-        Write-LogEntry -Message "We need to delete $($sessionHostsToReplace.Count) session hosts but we don't have enough session hosts in the host pool."
+        Write-LogEntry -Message "$($sessionHostsToReplace.Count) session host(s) still require replacement, but none can be removed this cycle until replacement capacity is available."
     }
     else {
         Write-LogEntry -Message "We do not need to delete any session hosts"

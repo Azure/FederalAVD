@@ -597,6 +597,8 @@ Describe 'Session Host Replacer scaling-aware readiness' {
 
         $result.SafeToProceed | Should Be $false
         $result.TotalNewHosts | Should Be 0
+        $result.AvailablePercentage | Should Be 0
+        $result.Message | Should Be 'No latest-image hosts are available to verify'
     }
 
     It 'counts validated stopped hosts as scalable standby for the shared mode-independent check' {
