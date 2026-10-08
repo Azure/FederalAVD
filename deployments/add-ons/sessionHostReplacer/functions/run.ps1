@@ -1566,7 +1566,12 @@ else {
 $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
 
 # Calculate deploying VM count accounting for ARM deployments and deployments submitted this run
-$currentlyDeploying = [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
+$currentlyDeploying = if ($runningDeployments) {
+    [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
+}
+else {
+    0
+}
 $remainingToDeploy = $hostPoolReplacementPlan.PossibleDeploymentsCount
 if ($deploymentResult) {
     # A deployment was just submitted this run, so it's now running

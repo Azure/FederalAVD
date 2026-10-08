@@ -623,6 +623,26 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.RequiredOnlineCount | Should Be 4
     }
 
+    It 'counts a validated powered-off host as scalable standby when AVD reports Unavailable' {
+        $onlineHost = New-ReadinessHost -Index 1
+        $standbyHost = New-ReadinessHost -Index 2 -Status 'Unavailable' -Tags @{
+            AutoReplaceValidatedImage = $validatedImageToken
+        }
+        $global:sessionHostReplacerTestPowerStates[$standbyHost.ResourceId] = $true
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($onlineHost, $standbyHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 10
+            Phase = 'RampDown'
+        })
+
+        $result.SafeToProceed | Should Be $true
+        $result.AvailableCount | Should Be 1
+        $result.ScalableStandbyCount | Should Be 1
+        $result.ReadyCount | Should Be 2
+        $result.UnavailableHosts.Count | Should Be 0
+    }
+
     It 'requires all latest-image hosts online during a 100-percent Peak target' {
         $hosts = @(
             1..4 | ForEach-Object { New-ReadinessHost -Index $_ }
@@ -1498,8 +1518,21 @@ Describe 'Session Host Replacer currently deploying metric' {
             Where-Object { $_.name -eq 'kpi-tiles' }).content.query
     }
 
-    It 'counts session hosts in running ARM deployments instead of deployment records' {
-        $runScript | Should Match '\$currentlyDeploying = \[int\]\(\(\$runningDeployments \| ForEach-Object \{ @\(\$_.SessionHostNames\)\.Count \} \| Measure-Object -Sum\)\.Sum\)'
+    It 'counts session hosts in running ARM deployments without treating null as a deployment' {
+        $runScript | Should Match '\$currentlyDeploying = if \(\$runningDeployments\)'
+        $runScript | Should Match '\[int\]\(\(\$runningDeployments \| ForEach-Object \{ @\(\$_.SessionHostNames\)\.Count \} \| Measure-Object -Sum\)\.Sum\)'
+        $runScript | Should Match 'else \{\s+0\s+\}'
+
+        $runningDeployments = $null
+        $currentlyDeploying = if ($runningDeployments) {
+            [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
+        }
+        else {
+            0
+        }
+        $currentlyDeploying += 2
+
+        $currentlyDeploying | Should Be 2
     }
 
     It 'uses RunningDeployments from the latest metrics event' {
@@ -1685,6 +1718,18 @@ Describe 'Session Host Replacer configuration management experience' {
             Where-Object { $_.name -eq 'config-table' }).content.size | Should Be 1
         ($operationsPage.content.items |
             Where-Object { $_.name -eq 'kpi-tiles' }).content.size | Should Be 1
+    }
+
+    It 'populates the host-pool dropdown from actual AVD host-pool resources' {
+        $globalParameters = $workbookTemplate.items |
+            Where-Object { $_.name -eq 'parameters' }
+        $hostPoolParameter = $globalParameters.content.parameters |
+            Where-Object { $_.name -eq 'HostPool' }
+
+        $hostPoolParameter.queryType | Should Be 1
+        $hostPoolParameter.resourceType | Should Be 'microsoft.resourcegraph/resources'
+        $hostPoolParameter.query | Should Match "type =~ 'microsoft\.desktopvirtualization/hostpools'"
+        $hostPoolParameter.query | Should Not Match 'traces|extract'
     }
 
     It 'logs the Function App resource ID used by the workbook link' {

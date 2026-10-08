@@ -42,16 +42,13 @@
             "name": "HostPool",
             "type": 2,
             "isRequired": true,
-            "query": "traces\n| where timestamp > ago(30d)\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where HostPoolName !in ('bool', 'string', 'int', 'object', 'array')\n| distinct HostPoolName\n| order by HostPoolName asc\n| project value = HostPoolName, label = HostPoolName, selected = false\n| union (datatable(value:string, label:string, selected:bool) [\n    \"*\", \"All Host Pools\", true\n])",
-            "crossComponentResources": [
-              "{ApplicationInsights}"
-            ],
+            "query": "resources\n| where type =~ 'microsoft.desktopvirtualization/hostpools'\n| distinct name\n| project value = name, label = name, selected = false\n| union (datatable(value:string, label:string, selected:bool) [\n    \"*\", \"All Host Pools\", true\n])\n| order by selected desc, label asc",
             "typeSettings": {
               "additionalResourceOptions": [],
               "showDefault": false
             },
-            "queryType": 0,
-            "resourceType": "microsoft.insights/components",
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
             "value": "*",
             "label": "Host Pool"
           },

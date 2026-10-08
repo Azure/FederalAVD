@@ -905,7 +905,6 @@ function Test-NewSessionHostsAvailable {
             $isValidatedForImage = $TagValidatedImage -and
                 $newHost.Tags[$TagValidatedImage] -eq $validatedImageToken
             $isScalableStandby = $newHostPowerStates[$newHost.ResourceId] -and
-                $newHost.Status -eq 'Shutdown' -and
                 -not $hasScalingExclusion -and
                 $isValidatedForImage
 
